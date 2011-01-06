@@ -1,0 +1,248 @@
+.Language=English,English
+.PluginContents=Multimedia Viewer
+
+@Contents
+$^#Multimedia viewer v1.07.8#
+
+^ ~What's new?~@whatsnew@
+
+^ ---
+
+^ ~About plugin~@About@
+
+^ ~Setup~@Setup@
+
+^ ~Configuration~@Configure@
+
+^ ~Controls~@Controls@
+
+^ ~Authors~@Authors@
+
+^ ---
+
+^ 29.10.2009
+@About
+$^#About plugin#
+
+    This plugin allows you to view pictures, video and listen audio without leaving FAR or
+launching any external programs. However, it works in windowed mode only.
+
+    Plugin works with pictures via ~GFL graphic library (http://www.xnview.com)~@http://www.xnview.com@.
+    Direct link to library (~~6M):
+    ~http://download.xnview.com/GflSDK-win.zip~@http://download.xnview.com/GflSDK-win.zip@.
+    You may download essential part of GFL v3.11 (~~500K) here:
+    ~http://code.google.com/p/conemu-maximus5/downloads~@http://code.google.com/p/conemu-maximus5/downloads/list?q=Summary%3AGFL@.
+
+    Library file might be named #libgfl311.dll#. You may choose GFL library location via registry
+(look at #gfl.reg# for example). If plugin by any reason can't use the library, it will
+show a short description about the problem (it is possible to disable this warning).
+The current version of GFL library must be at least 3.11. Be carefull using the newer
+versions of library: they may contain changes, making plugin working impossible.
+
+    #IMPORTANT!!!# Do read chapter ~Setup~@Setup@!
+
+@Setup
+$^#Multimedia viewer v1.07.8 - setup#
+
+ Note! Minimal #FAR Manager# version plugin supports:
+    Ansi:     #1.75 build 2479# or later
+    Unicode:  #2.0  build 1017# or later
+
+    1. You #MUST# delete all previous versions of this plugin, probably named Pic and PictureViewer, and remove
+all macroses and file associations used to activate plugin as well.
+    2. Create subfolder #Multimedia Viewer# in folder Plugins and copy files from archive there.
+    3. During the first start plugin will ask you to specify a hotkey for it. Go to plugins menu by pressing F11,
+place cursor over "Multimedia viewer" and press F4. Then specify any hotkey. It is #NECESSARY# for plugin automatic
+activation!!!
+    4. Restart FAR!
+    5. Go to plugin ~configuration~@Configure@ and configure it.
+
+    After all steps done plugin will automatically activate in internal FAR viewer and QuickView if viewing file
+that contains any relevant data.
+
+^To ~contents~@Contents@
+
+@Configure
+$^#Multimedia viewer v1.07.8 - configuration#
+
+ #[x] Autorun in viewer# - if checked, plugin will be activated automatically every time you started viewer.
+
+ #[x] Preload graphic library# - if selected, graphic library will be loaded
+at the plugin start and will not be unloaded until the FAR closing. It takes about 1Œ RAM, but during intensive disk working can greatly
+increase picture drawing speed.
+
+ #[x] Enable bilinear resize# - if selected, plugin takes a little more memory and time to draw the
+picture, but picture quality is better.
+
+ #[x] Fit image to window# - if selected, image will be zoomed to fit the window
+
+ #[x] Do not set volume at start# - if selected, plugin will not set last used volume whet playback is started.
+This option is usefull for NT4 and Win95/98 users.
+
+ #Draw delay for Win9x (ms)# - (Win9x only) if you see only blank screen during viewing picture, try to
+increase this value.
+
+ #[x] Seek to keyframes# - faster, but less accurate seek.
+
+ #Seek interval (sec)# - interval for seeking forward and backward
+
+ #List of video files extensions# - plugin will search video and audio data in these files.
+
+ #List of audio files extensions# - plugin will search audio data in these files (don't fill background).
+
+ #List of graphic files extensions# - plugin will search graphic data in these files.
+
+^To ~contents~@Contents@
+
+@Controls
+$^#Multimedia viewer v1.07.8 - controls#
+
+    Activating plugin from plugins menu (F11) will show the controls menu when any video or audio played.
+It is recommended to specify a hotkey via macroses for basic controls (like Fit to window, Seek forward, backward,
+volume control, ~jump to time~@Jump@)).
+
+^To ~contents~@Contents@
+
+@Jump
+$^#Multimedia viewer v1.07.8 - jump to time#
+
+    You can type the time you want to jump to. It can be typed three ways: one, two or three numbers separated
+with one of these chars in brackets: [:, ]. If there are three numbers, than first number will be hours, second
+will be minutes and third will be seconds. If there are two numbers, than first number will be minutes
+and second - seconds. If there is only one number - it will be the seconds.
+
+    #h# - hours
+    #m# - minutes
+    #s# - seconds
+
+For example:
+
+    #1 10 20# - jump to 1 hour 10 minutes 20 seconds
+    #1,10:20# - jump to 1 hour 10 minutes 20 seconds
+    #1:10:20# - jump to 1 hour 10 minutes 20 seconds
+    #1h10m20# - jump to 1 hour 10 minutes 20 seconds
+    #70m20#   - jump to 1 hour 10 minutes 20 seconds
+    #70 20#   - jump to 1 hour 10 minutes 20 seconds
+    #4220#    - jump to 1 hour 10 minutes 20 seconds
+    #1h#      - jump to 1 hour
+    #70m#     - jump to 1 hour 10 minutes
+
+    #1F10-20# - MISTAKE!!!
+
+^To ~contents~@Contents@
+
+@Authors
+$^#Multimedia viewer v1.07.8 - authors#
+
+  Plugin was written by these people:
+
+ #Sergey Oblomov# (mailto:hoopoepg@@mail.ru)
+ #Eugene Mironchuk# (2:4635/99 aka 2:4635/100 mailto:lazy@@hotbox.ru)
+ #Maximus5# (mailto:MaxMoysyuk@@mtu-net.ru)
+
+^To ~contents~@Contents@
+
+@whatsnew
+$^#Multimedia viewer v1.07.8 - What's new?#
+
+#1.07.8 (changes by Maximus5)#
+      * Progress percent, current time, duration in Audio-files, too.
+      * Extension restrictions fails after first call plugin from menu.
+      * Plugin hotkey required now only for macroses (F11 ...).
+      * Valid 'Jump to...' processing in ConEmu required build 100530.
+
+#1.07.7 (changes by Maximus5)#
+      + Call from plugin menu in panels starts file under cursor.
+      + New plugin menu (video/audio) item 'Volume mute', macro files was updated.
+      + Command line prefix "mmview:", extension lists in that case are ignored.
+      + Option for allowing "CtrlShiftF3". Disabled by default.
+      + Information in console window title: progress percent, current time, duration.
+      + Processed combinations in FullScreen: AltLeft,CtrlLeft/PgUp,AltRight,CtrlAltRight/PgDn,Home,End,Space,Up,Down,M,F.
+      + Far2 /w supported.
+
+#1.07.6 (changes by Maximus5)#
+      * Incorrect 'Can't find Viewer window!'.
+
+#1.07.5 (changes by Maximus5)#
+      * First plugin menu call was skipped in Unicode version.
+      * ConEmu updates.
+
+#1.07.4 (changes by Maximus5)#
+      * List of audio-files extensions addad to configure dialog (not background filling).
+      * FullScreen switching from menu and macroses. Macro default is AltF.
+      * DblClick on pictures leads focus loose.
+      * "Multimedia Viewer: Detecting media..." while detecting media.
+      * Positioning fixed in maximized window mode.
+
+#1.07.3 (changes by Maximus5)#
+      * Callplugin supports Picture mode.
+      * Eliminating delays in ConEmu, autotabs enabled.
+      * Far2, CallPlugin macro does not hide video now (rewind, etc.).
+
+#1.07.2 (changes by Maximus5)#
+      * Fixed ConEmu loosing focus on plugin activation.
+      * Picture is hiding on plugin menu.
+      * 'Stop' command in plugin menu (Picture view mode).
+
+#1.07.1 (changes by Maximus5)#
+      * FullScreen switching by left dblclick; turn FullScreen off - Esc
+      * QView fixed
+      * *.hlf fixes
+
+#1.07 (changes by Maximus5)#
+      * Stupid error message on GFL library missing and viewing picture
+      * You may choose GFL library location via registry (GflPathFileName)
+      * English help fixes from Anton.Sinitsin
+      * Filling background with black color (Popup window, color is not selectable yet)
+      * Pictures are drawing now in Popup window (works in conemu too)
+      * Autohiding of video/picture on focus loose (viewer/far)
+
+#1.05.1 (changes by Maximus5)#
+
+      * Compiled in VS2008
+      * x86 FAR 1.7x & FAR 2.x
+      * ConEmu support
+      * Don't show GFL loading warning
+      * List of graphic files extensions
+      * On render errors of files with KNOWN extensions
+        message is shown by F3 also
+      * Plugin is disabled in telnet
+      * Do not set volume at start
+        [Added configure option for systems that can't mix sound]
+      ? Fixed hang on zero-length files
+      * On VFW_E_CANNOT_RENDER - try another way...
+      * FAR2.x macros -> callplugin, hotkey is still required internally
+      * VersionInfo in dll
+
+#1.05.?#
+      - Restored work with files larger than 1G
+
+#1.05#
+      - Fixed losing focus during video playback on some machines.
+      - Fixed wrong image positioning when window size is not multiple of font size.
+      - Hotkey detection is fully rewritten.
+
+#1.04#
+      - Blocked work with files larger that 1G to prevent plugin crash
+
+#1.03#
+      - Plugin crashes when started manually from fullscreen mode.
+
+#1.02#
+      - When called "Jump to time" dialog, screen was cleared even when played only audio.
+      * Changed "Jump to time".
+
+#1.01#
+      - Couldn't find hotkey if far started with /p key.
+
+#1.0#
+      + First Release.
+
+-------------------------
+
+ #-#  Bug fixed
+ #+#  New feature
+ #*#  Minor change
+ #!#  Major change
+
+^To ~contents~@Contents@

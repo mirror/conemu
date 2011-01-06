@@ -1,0 +1,20 @@
+!if exists(../make_vc_defs)
+!include ../make_vc_defs
+!endif
+
+NAME = pvdWMF
+OUTNAME = WMF
+
+USERCPP=/D_NO_EXEPTION_=1
+
+# $(OBJDIR)\PVD1Helper.obj - тут не нужен. пока это SelfDraw
+LINK_OBJS = $(OBJDIR)\pvdWMF.obj $(OBJDIR)\PVD2Helper.obj $(OBJDIR)\PVD_CRT.obj
+
+
+!include ..\makefile_vc_def_inc
+
+!include ..\makefile_vc_target_inc
+
+$(OBJDIR)\pvdWMF.obj: pvdWMF.cpp ..\PictureViewPlugin.h
+
+#$(OBJDIR)\PVD2Helper.obj: ..\PVD2Helper.cpp

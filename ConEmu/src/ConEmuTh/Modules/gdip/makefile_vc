@@ -1,0 +1,18 @@
+!if exists(../make_vc_defs)
+!include ../make_vc_defs
+!endif
+
+NAME = gdip
+OUTNAME = gdi+
+
+USERCPP=/D_NO_EXEPTION_=1
+
+LINK_OBJS = $(OBJDIR)\gdip.obj
+
+USERLIBS = 
+
+!include ..\makefile_vc_def_inc
+
+!include ..\makefile_vc_target_inc
+
+$(OBJDIR)\gdip.obj: gdip.cpp ..\ThumbSDK.h MStream.h

@@ -1,0 +1,73 @@
+REGEDIT4
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView]
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltDown]
+"Sequence"="F11 v a"
+"Description"="MV Volume Down"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltUp]
+"Sequence"="F11 v q"
+"Description"="MV Volume Up"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltM]
+"Sequence"="F11 v m"
+"Description"="MV Volume Mute"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltLeft]
+"Sequence"="F11 v 4"
+"Description"="MV Back"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltRight]
+"Sequence"="F11 v 2"
+"Description"="MV Forward"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltJ]
+"Sequence"="F11 v j"
+"Description"="MV Jump to time"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\Multiply]
+"Sequence"="F11 v 1"
+"Description"="MV Fit or not to window"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\Space]
+"Sequence"="F11 v 8"
+"Description"="MV Pause/Play"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\CtrlSpace]
+"Sequence"="F11 v 9"
+"Description"="MV Stop"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltHome]
+"Sequence"="F11 v 6"
+"Description"="MV Home"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltEnd]
+"Sequence"="F11 v 7"
+"Description"="MV End"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltPgUp]
+"Sequence"="F11 v 3"
+"Description"="MV Fast Forward"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltPgDn]
+"Sequence"="F11 v 5"
+"Description"="MV Fast Back"
+"DisableOutput"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Far\KeyMacros\QView\AltF]
+"Sequence"="F11 v 0"
+"Description"="MV Fullscreen"
+"DisableOutput"=dword:00000001

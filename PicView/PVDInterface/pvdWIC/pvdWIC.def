@@ -1,0 +1,23 @@
+LIBRARY
+EXPORTS
+; Version 2 (self)
+	pvdInit2
+	pvdExit2
+	pvdPluginInfo2
+	pvdFileOpen2
+	pvdPageInfo2
+	pvdPageDecode2
+	pvdPageFree2
+	pvdFileClose2
+	pvdTranslateError2
+	pvdGetFormats2
+	pvdReloadConfig2
+; Version 1 (via wrapper)
+	pvdInit
+	pvdExit
+	pvdPluginInfo
+	pvdFileOpen
+	pvdPageInfo
+	pvdPageDecode
+	pvdPageFree
+	pvdFileClose

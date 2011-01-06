@@ -1,0 +1,10 @@
+REGEDIT4
+
+[HKEY_CURRENT_USER\Software\Far2\Plugins\MultimediaViewer]
+;; You may specify on full path file name
+;"GflPathFileName"="%FARHOME%\\Plugins\\Multimedia Viewer\\libgfl311.dll"
+;; When you have installed PictureView plugin
+;"GflPathFileName"="%FARHOME%\\Plugins\\PictureView\\libgfl311.dll"
+
+;; Or, only file name (plugin'll try to load this file from it's own directory, or from %PATH%)
+;"GflPathFileName"="libgfl311.dll"

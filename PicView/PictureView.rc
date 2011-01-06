@@ -1,0 +1,40 @@
+#define VS_VERSION_INFO                 1
+#ifdef WIN64
+	#define S_BITS "x64"
+#else
+	#define S_BITS "x86"
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 2,0,0,25
+ PRODUCTVERSION 2,0,0,25
+ FILEFLAGSMASK 0x17L
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILESUBTYPE 0x0L
+ FILEOS 0x4L
+ FILETYPE 0x2L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041904b0"
+        BEGIN
+            VALUE "FileDescription", "PictureView"
+            VALUE "FileVersion", "2.0 (mod25#1661" S_BITS ")"
+            VALUE "LegalCopyright", "© Skakov Pavel, 2009. © Maximus5, 2009-2010"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x419, 1200
+    END
+END
+/////////////////////////////////////////////////////////////////////////////

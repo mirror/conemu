@@ -1,0 +1,12 @@
+This project can be built using Delphi 2009, 2010.
+
+Required libraries:
+
+1) FastMM, http://sourceforge.net/projects/fastmm/files/
+2) G32, http://graphics32.org/wiki/
+3) BESEN http://besen.sourceforge.net/
+
+Install required libraries to some separate folders, open PanelColorer.dproj in Delphi,
+adjust unit search paths to point to these library folders, and you're done.
+
+See readme.txt for required FAR and ConEmu versions.

@@ -1,0 +1,11 @@
+EXPORTS
+	ClosePlugin=ClosePlugin@4
+	Configure=Configure@4
+	ExitFAR=ExitFAR@0
+	GetMinFarVersion=GetMinFarVersion@0
+	GetPluginInfo=GetPluginInfo@4
+	OpenFilePlugin=OpenFilePlugin@12
+	OpenPlugin=OpenPlugin@8
+	ProcessEditorEvent=ProcessEditorEvent@8
+	ProcessViewerEvent=ProcessViewerEvent@8
+	SetStartupInfo=SetStartupInfo@4

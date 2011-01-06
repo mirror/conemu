@@ -1,0 +1,2 @@
+Get tools from here: http://farmanager.com/svn/trunk/unicode_far/tools/
+

@@ -1,0 +1,75 @@
+FAR Selector
+(c) 2010 Maximus5
+
+About
+==============
+Данный плагин позволяет открывать папки и позиционировать
+курсор на файл используя одну копию Far Manager.
+
+
+Requirements
+==============
+Минимальная поддерживаемая версия FAR 2 build 1007.
+
+
+Installation
+==============
+1. Распакуйте архив в папку с far.exe;
+2. Замените вызовы far.exe на FarS.exe.
+
+
+How it works?
+==============
+При запуске FarS.exe ищет открытые и доступные копии FAR.EXE.
+Недоступный - значит нет активных панелей (в данный момент выполняется
+какая-либо консольная команда, активен редактор/вьювер, или диалог...).
+
+Если доступных копий нет вообще - запускается новый FAR.EXE, или
+новая вкладка в ConEmu если он найден в той же папке, что и FAR.EXE.
+Если ConEmu не запущен, но файл ConEmu.exe (или ConEmu64.exe) найден
+в подпапке "ConEmu" или рядом с FAR.EXE - запускается не FAR.EXE,
+а ConEmu с ключом "/single".
+
+Если доступные копии есть - дальнейшее поведение зависит от настройки:
+-----------------------------------------------------
+[HKEY_CURRENT_USER\Software\Far2\Plugins\FarSelector]
+"Autoselect"=hex:01
+-----------------------------------------------------
+Если 00 - открывается диалог выбора копии с информацией о папках на панелях.
+Иначе - параметры сразу передаются в первую (активную) копию FAR.EXE.
+
+Применяются параметры макросом вроде:
+$If (Shell) panel.SetPath("C:\\Program Files\\far\\","far.exe") CtrlPgDn $End
+
+CtrlPgDn "нажимается" только для первого файла (активная панель).
+Добавление CtrlPgDn в макрос можно отключить в настройке плагина.
+
+
+Licence
+==============
+Copyright (c) 2010, Maximus5 <ConEmu.Maximus5@gmail.com>
+
+Permission to use, copy, modify, and distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+Changelog
+==============
+v1.2
+* Issue 282: Start up without args, Russian lng resources.
+* New ConEmu structure supported.
+
+v1.1
+* Plugins prefixes in command line.
+
+v1.0
+* First version.

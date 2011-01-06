@@ -1,0 +1,15 @@
+// sample user config file that overrides panel color
+// (copy this file to 'user.js' and place it into the same folder as 'config.js')
+// see config.js for more explanation on constants, variables and usage examples
+
+WTYPE_PANELS = 1;
+
+clRed     = 0xffff0000;
+clFuchsia = 0xffff00ff;
+
+function main() {
+  if (windowType == WTYPE_PANELS) {
+    if (path.indexOf('D:') == 0) { backgroundColor = clRed; return }
+    if (path.indexOf('E:') == 0) { backgroundColor = clLime; return }
+  }
+}

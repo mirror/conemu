@@ -1,0 +1,7 @@
+// sample user config file that disables usage meter in file panels
+// (copy this file to 'user.js' and place it into the same folder as 'config.js')
+// see config.js for more explanation on constants, variables and usage examples
+
+function main() {
+  usageMeterVisible = false;
+}

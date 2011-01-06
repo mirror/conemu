@@ -1,0 +1,12 @@
+  Этот плагин позволит вам просматривать
+картинки, видео и прослушивать аудио, не
+выходя из FAR'a.
+  Перед устанокой  прочтите, пожалуйста,
+справку, так как там не всё очевидно!
+  Требуется FAR 2.0 build 1017 или выше.
+
+Plugin works with pictures via GFL graphic library (http://www.xnview.com).
+Direct link to library (~~6M):
+http://download.xnview.com/GflSDK-win.zip
+You may download essential part of GFL v3.11 (~~500K) here:
+http://code.google.com/p/conemu-maximus5/downloads/list?q=Summary%3AGFL

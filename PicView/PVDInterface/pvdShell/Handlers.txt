@@ -1,0 +1,16 @@
+Thumbnail image handler IThumbnailProvider {E357FCCD-A995-4576-B01F-234630154E96} 
+Infotip handler IQueryInfo {00021500-0000-0000-C000-000000000046} 
+Shell link (ANSI ) IShellLinkA {000214EE-0000-0000-C000-000000000046} 
+Shell link (UNICODE) IShellLinkW {000214F9-0000-0000-C000-000000000046} 
+Structured storage IStorage {0000000B-0000-0000-C000-000000000046} 
+
+
+ASSOCSTR_SHELLEXTENSION
+Internet Explorer version 6 or later. For an object that has a Shell
+extension associated with it, you can use this to retrieve the class
+identifier (CLSID) of that Shell extension object by passing a string
+representation of the IID of the interface you want to retrieve as the
+pwszExtra parameter of IQueryAssociations::GetString. For example, if you
+want to retrieve a handler that implements the IExtractImage interface, you
+would specify "{BB2E617C-0920-11d1-9A0B-00C04FC2D6C1}", which is the IID of
+IExtractImage.

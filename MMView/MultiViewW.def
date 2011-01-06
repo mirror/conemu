@@ -1,0 +1,11 @@
+EXPORTS
+	OpenPluginW = OpenPlugin
+	GetPluginInfoW = GetPluginInfo
+	SetStartupInfoW = SetStartupInfo
+	GetMinFarVersionW = GetMinFarVersion
+	ExitFarW = ExitFar
+	ConfigureW = Configure
+	ProcessViewerEventW = ProcessViewerEvent
+	ProcessSynchroEventW
+	ProcessEditorEventW = ProcessEditorEvent
+

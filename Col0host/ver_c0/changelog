@@ -1,0 +1,11 @@
+* Some PE Files was skipped.
+
+* IsBadReadPtr was eliminated.
+* MapViewOfFile only for required part of PE file.
+
+* Разрешена обработка расширений com и pvd.
+
+* [IA64] для образов Itanium platform.
+* Пытаемся обрабатывать файлы, открытые другими приложениями (FILE_SHARE_READ, FILE_SHARE_READ|FILE_SHARE_WRITE, 0).
+
+* [s32] вместо [x32] (и т.п.) для PE файлов с цифровой подписью.

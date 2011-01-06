@@ -1,0 +1,304 @@
+﻿#hpp file name
+FarWDS_Lang.h
+#number of languages
+2
+#id:0 language file name, language name, language description
+..\FarWDS_ru.lng Russian "Russian (Русский)"
+#id:1 language file name, language name, language description
+..\FarWDS_en.lng English "English"
+
+#head of the hpp file
+hhead:
+hhead:#pragma once
+hhead:
+
+#tail of the hpp file
+#htail:
+#htail:
+#and so on as much as needed
+
+#--------------------------------------------------------------------
+#now come the lng feeds
+#--------------------------------------------------------------------
+#first comes the text name from the enum which can be preceded with
+#comments that will go to the hpp file
+#h://This comment will appear before MYes
+#he://This comment will appear after MYes
+#MYes
+#now come the lng lines for all the languages in the order defined
+#above, they can be preceded with comments as shown below
+#l://This comment will appear in all the lng files before the lng line
+#le://This comment will appear in all the lng files after the lng line
+#ls://This comment will appear only in Russian lng file before the lng line
+#lse://This comment will appear only in Russian lng file after the lng line
+#"Да"
+#ls://This comment will appear only in English lng file before the lng line
+#lse://This comment will appear only in English lng file after the lng line
+#"Yes"
+#ls://This comment will appear only in Czech lng file before the lng line
+#lse://This comment will appear only in Czech lng file after the lng line
+#upd:"Ano"
+#
+#lng lines marked with "upd:" will cause a warning to be printed to the
+#screen reminding that this line should be updated/translated
+
+
+WDSPluginName=0
+l:// Plugin title
+"Windows Search"
+"Windows Search"
+
+WDSColTitle
+l:// Panel modes
+"Имя"
+"Name"
+
+WDSMenuSearch
+l:// Menu items
+"&Поиск..."
+"&Search..."
+
+WDSMenuViewDocText
+"Содержимое документа (&Viewer)"
+"Document source (&Viewer)"
+
+WDSMenuEditDocText
+"Содержимое документа (&Editor)"
+"Document source (&Editor)"
+
+WDSMenuConfigure
+"Настроить &Windows Search..."
+"Configure &Windows Search.."
+
+WDSMenuFolderProps
+"&Проверить индексирование каталога..."
+"&Check catalog indexing..."
+
+WDSMenuSearchStatus
+"Показать &состояние индекса..."
+"Show inde&x status..."
+
+WDSDlgMasks
+l:// Dialog items
+"&Маска файла:"
+"A file &mask:"
+
+WDSDlgText
+"Искать &текст (System.Search.Contents):"
+"&Search text (System.Search.Contents):"
+
+WDSDlgTextAnyField
+"Искать текст в &любом поле:"
+"Search text in &any field:"
+
+WDSDlgBtnFind
+"&Искать"
+"&Find"
+
+WDSDlgBtnCancel
+"Отмена"
+"Cancel"
+
+WDSDlgBtnClose
+"Закрыть"
+"Close"
+
+WDSDlgBtnAddToIndex
+"Добавить в индекс"
+"Add to index"
+
+WDSDlgBtnDelFromIndex
+"Удалить из индекса"
+"Remove from index"
+
+WDSStatusInitialize
+l:// Progress statuses
+"Инициализация..."
+"Initializing..."
+
+WDSStatusSearch
+"Выполняем поиск..."
+"Executing search..."
+
+WDSStatusDocsFound
+"Найдено документов: %i"
+"Documents found: %i"
+
+WDSStatusSendToPanel
+"Передаем найденное в панель: %i/%i"
+"Sending to panel: %i/%i"
+
+WDSStatusExtracting
+"Извлечение содержимого документа..."
+"Extracting document source..."
+
+WDSKeyView
+"WПросм"
+"WView"
+
+WDSKeyEdit
+"WРед"
+"WEdit"
+
+WDSErrMessage
+l:// Error messages
+"Windows Search\nПри выполнении функции %s\nпроизошла ошибка 0x%08X %s\n%s"
+"Windows Search\nFunction fails %s\nError code 0x%08X %s\n%s"
+
+WDSConfirmStop
+"Windows Search\nПрервать поиск?"
+"Windows Search\nStop search?"
+
+WDSConfirmStopSend
+"Windows Search\nПрервать передачу в панель?"
+"Windows Search\nStop sending to panel?"
+
+WDSErrCantCreateFile
+"Windows Search\nНе удалось создать временный файл:\n%s\nКод ошибки: %i"
+"Windows Search\nCan't create temporary file:\n%s\nError code: %i"
+
+WDSErrCantWriteFile
+"Windows Search\nОшибка записи во временный файл:\n%s\nКод ошибки: %i"
+"Windows Search\nCan't write temporary file:\n%s\nError code: %i"
+
+WDSErrCantFilter
+"Windows Search\nНе удалось извлечь содержимое файла:\n%s\nКод ошибки: 0x%08X\n%s"
+"Windows Search\nCan't extract document source:\n%s\nError code: 0x%08X\n%s"
+
+WDSErrCantExecute
+"Windows Search\nНе удалось выполнить команду:\n%s\n%s\nКод ошибки: %i"
+"Windows Search\nCan't execute command:\n%s\n%s\nКод ошибки: %i"
+
+WDSLblEngineVer
+l:// Status formats
+"Engine: %-21s  Version:  %s"
+"Engine: %-21s  Version:  %s"
+
+WDSLblIndex
+"Index:  %s"
+"Index:  %s"
+
+WDSLblDocuments
+"Documents indexed:   %-8i   Queued:  %-8i   High priority:  %i"
+"Documents indexed:   %-8i   Queued:  %-8i   High priority:  %i"
+
+WDSLblSpeed
+"Speed (doc/min):     %-8s     Left:  %s"
+"Speed (doc/min):     %-8s     Left:  %s"
+
+WDSLblLastUrl
+"Last indexed URL:    "
+"Last indexed URL:    "
+
+WDSLblStatus
+"Catalog status:      "
+"Catalog status:      "
+
+WDSItemNotFound
+"Файл/папка отсутсвует!"
+"File/folder not found!"
+
+WDSAttibEnabled
+"Атрибут: Индексирование разрешено"
+"Attribute: Indexing enabled"
+
+WDSAttibDisabled
+"Атрибут: Индексирование ЗАПРЕЩЕНО"
+"Attribute: Indexing DISABLED"
+
+WDSFolderIndexing
+"Папка включена в индекс"
+"Folder included in index"
+
+WDSFolderNotIndexing
+"Папка НЕ включена в индекс"
+"Folder NOT included in index"
+
+WDS_CATALOG_STATUS_IDLE
+l:// Index statuses
+"Индекс актуален; индексация не требуется. Поиск может быть выполнен."
+"Index is current; no indexing needed. Queries can be processed."
+
+WDS_CATALOG_STATUS_PAUSED
+"Индексация приостановлена. Поиск может быть выполнен."
+"Indexer is paused. Queries can be processed."
+
+WDS_CATALOG_PAUSED_REASON_NONE
+"Не приостановлена."
+"Not paused."
+
+WDS_CATALOG_PAUSED_REASON_HIGH_IO
+"Высокая активность ввода/вывода (I/O)."
+"Paused due to high input/output (I/O)."
+
+WDS_CATALOG_PAUSED_REASON_HIGH_CPU
+"Высокая загрузка процессора."
+"Paused due to high CPU usage."
+
+WDS_CATALOG_PAUSED_REASON_HIGH_NTF_RATE
+"Большое количество ошибок (NTF rate)."
+"Paused due to high NTF rate."
+
+WDS_CATALOG_PAUSED_REASON_LOW_BATTERY
+"Села батарея."
+"Paused due to low battery."
+
+WDS_CATALOG_PAUSED_REASON_LOW_MEMORY
+"Недостаточно памяти."
+"Paused due to low memory."
+
+WDS_CATALOG_PAUSED_REASON_LOW_DISK
+"Недостаточно места на диске."
+"Paused due to low disk space."
+
+WDS_CATALOG_PAUSED_REASON_DELAYED_RECOVERY
+"Требуется отложенное востановление."
+"Paused due to need for delayed recovery."
+
+WDS_CATALOG_PAUSED_REASON_USER_ACTIVE
+"Приостановлено из-за активности пользователя."
+"Paused due to user activity."
+
+WDS_CATALOG_PAUSED_REASON_EXTERNAL
+"Приостановлено по запросу."
+"Paused by external request."
+
+WDS_CATALOG_PAUSED_REASON_UPGRADING
+"Выполняется обновление."
+"Paused by upgrading."
+
+WDS_CATALOG_STATUS_RECOVERING
+"Восстановление индекса; поиск и индесация могут выполняться."
+"Index is recovering; queries and indexing are processed while in this state."
+
+WDS_CATALOG_STATUS_FULL_CRAWL
+"Выполняется полная переиндексация всех документов."
+"Indexer is currently executing a full crawl and will index everything."
+
+WDS_CATALOG_STATUS_FULL_CRAWL2
+"Поиск может быть выполнен во время индексации."
+"Queries can be processed while indexing."
+
+WDS_CATALOG_STATUS_INCREMENTAL_CRAWL
+"Выполняется полная проверка документов на предмет изменений."
+"Indexer is preforming a crawl to see if anything has changed or requires indexing."
+
+WDS_CATALOG_STATUS_INCREMENTAL_CRAWL2
+"Поиск может быть выполнен во время индексации."
+"Queries can be processed while indexing."
+
+WDS_CATALOG_STATUS_PROCESSING_NOTIFICATIONS
+"Индексатор обрабатывает очередь уведомлений."
+"Indexer is processing the notification queue."
+
+WDS_CATALOG_STATUS_PROCESSING_NOTIFICATIONS2
+"Ожидание завершения приоритетной операции."
+"This is done before resuming any crawl."
+
+WDS_CATALOG_STATUS_SHUTTING_DOWN
+"Индексатор выключается, индексирование не производится."
+"Indexer is shutting down and is not indexing."
+
+WDS_CATALOG_STATUS_SHUTTING_DOWN2
+"Поиск не может быть выполнен."
+"Indexer can't be queried."

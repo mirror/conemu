@@ -1,0 +1,49 @@
+------------------------------------------
+GFL SDK v2.82
+
+Copyright (c) 1991-2008 Pierre-E Gougelet
+All Rights Reserved.
+
+E-Mail: webmaster@xnview.com
+WWW:    http://www.xnview.com
+------------------------------------------
+
+
+Informations about Plugins (windows only) :
+===========================================
+
+  * Xdjvu.dll   : Allows to read to read AT&Ts DjVu format. 
+
+  * Xfpx.dll    : Allows to read/write FlashPix files.
+
+  * Xjbig.dll   : Allows to read/write "Joint Bi-level Image experts Group" format.
+
+  * Xjp2.dll    : Allows to read/write JPEG-2000 JP2 File Format 
+                  & JPEG-2000 Code Stream.
+  
+  * Xjpegls.dll : Allows to read JPEG lossless format.
+ 
+  * Xjng.dll + mng.dll : Allows to read JNG format.
+
+  * Xsusie.dll  : Allows to use Susie's plugins.
+
+
+JBIG reading/writing:
+-------------------
+  You need to purchase a license because JBIG is a patented format. 
+  More information is available on http://www.ibm.com and http://www.jpeg.org/
+
+
+Copyright:
+---------
+
+  DjVu - http://www.djvu.att.com/open
+    (c) AT&T Corp
+
+  JasPer - http://www.ece.ubc.ca/~mdadams/jasper/
+    Copyright (c) 1999-2000, Image Power, Inc. and the University of British 
+Columbia, Canada.
+
+    Copyright (c) 2001 Michael David Adams.
+
+

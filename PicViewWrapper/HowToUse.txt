@@ -1,0 +1,13 @@
+How to use PictureView in FAR 1.7x started under ConEmu
+
+1. Download original plugin from: http://forum.farmanager.com/download/file.php?id=875
+2. Unpack it to %FARHOME%\Plugins\PictureView
+3. Rename file "0PictureView.dll" to "0PictureView.dl_"
+4. Rename file "PicViewWrapper.dll" to "0PictureView.dll"
+5. Enjoy
+
+PS. Some comments about original plugin.
+a) GFL interface requires libgfl267.dll. You may, on yours head, try to use other GFL
+   versions (3.11 for example) by renaming libgfl311.dll to libgfl267.dll. This file
+   must be placed in the plugin folder, or anywhere in %PATH% folders.
+b) ACDSee interface does not works with *.apl version higher than 5.0.67.0.

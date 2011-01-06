@@ -1,0 +1,6 @@
+EXPORTS
+	ExitFARW = ExitFARW
+	GetPluginInfoW = GetPluginInfoW
+	OpenPluginW = OpenPluginW
+	SetStartupInfoW = SetStartupInfoW
+	ProcessEditorEventW = ProcessEditorEventW
