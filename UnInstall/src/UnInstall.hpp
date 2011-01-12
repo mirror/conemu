@@ -636,24 +636,32 @@ int ExecuteEntry(int Sel, int Action, bool LowPriority)
   ZeroMemory(&pi, sizeof(pi));
 
   TCHAR cmd_line[MAX_PATH*2+1], cmd_file[MAX_PATH+1], cmd_parm[MAX_PATH*2+1];
-  LPCTSTR pszString = p[Sel].Keys[UninstallString];
+  
+  LPCTSTR pszString = NULL;
+  
   if ((Action == Action_ModifyWait) || (Action == Action_Modify))
     pszString = p[Sel].Keys[ModifyPath];
-  else if ((Action == Action_RepairWait) || (Action == Action_Repair))
-    pszString = NULL;
+  //else if ((Action == Action_RepairWait) || (Action == Action_Repair))
+  //  pszString = NULL;
+  else if ((Action == Action_UninstallWait) || (Action == Action_Uninstall))
+  {
+    if (!p[Sel].WindowsInstaller)
+      pszString = p[Sel].Keys[UninstallString];
+  }
+    
   if (pszString && !*pszString)
     pszString = NULL;
 
 
   if (p[Sel].WindowsInstaller && !(!Opt.ForceMsiUse && pszString))
   {
-    TCHAR szCode[5];
+    TCHAR szCode[6];
     if ((Action == Action_UninstallWait) || (Action == Action_Uninstall))
-      StringCchCopy(szCode, ARRAYSIZE(szCode), _T(" /x"));
+      StringCchCopy(szCode, ARRAYSIZE(szCode), _T(" /x "));
     else if ((Action == Action_RepairWait) || (Action == Action_Repair))
-      StringCchCopy(szCode, ARRAYSIZE(szCode), _T(" /f"));
+      StringCchCopy(szCode, ARRAYSIZE(szCode), _T(" /fa "));
     else //if ((Action == Action_ModifyWait) || (Action == Action_Modify))
-      StringCchCopy(szCode, ARRAYSIZE(szCode), _T(" /i"));
+      StringCchCopy(szCode, ARRAYSIZE(szCode), _T(" /i "));
     // Äëÿ CreateProcess
     StringCchCopy(cmd_line, ARRAYSIZE(cmd_line), _T("msiexec"));
     StringCchCat(cmd_line, ARRAYSIZE(cmd_line), szCode);
@@ -1040,7 +1048,7 @@ void ReadRegistry()
       Opt.RunLowPriority=0;
   SetRegKey(HKCU,_T(""),_T("RunLowPriority"),(DWORD) Opt.RunLowPriority);
 
-  if (GetRegKey(HKCU,_T(""),_T("ForceMsiUse"),Opt.ForceMsiUse,1))
+  if (GetRegKey(HKCU,_T(""),_T("ForceMsiUse"),Opt.ForceMsiUse,0))
 	  if ((Opt.ForceMsiUse<0) || (Opt.ForceMsiUse>1))
 		  Opt.ForceMsiUse=0;
   SetRegKey(HKCU,_T(""),_T("ForceMsiUse"),(DWORD) Opt.ForceMsiUse);
