@@ -238,9 +238,9 @@ begin
    end;
    inc(p);
   end;
-  FreeEnvironmentStringsW(pointer(p));
+  FreeEnvironmentStringsW(pp);
  end;
- pp:=pointer(GetCommandLineW);
+ pp:=GetCommandLineW;
  if assigned(pp) then begin
   p:=pp;
   while assigned(p) and (p^<>#0) do begin

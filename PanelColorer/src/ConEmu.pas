@@ -198,7 +198,10 @@ implementation
 
 function GetConEmuHWND(FarHwnd: HWND; abRoot: Boolean): HWND;
 begin
-  Result := CEAPI.GetFarHWND2(1);
+  if @CEAPI.GetFarHWND2<>nil then
+    Result := CEAPI.GetFarHWND2(1)
+  else
+    Result := 0;
 end;
 
 // Trigger background redraw in the main thread

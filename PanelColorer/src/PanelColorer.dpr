@@ -90,6 +90,7 @@ var
   FEnabled: Boolean = false;
   FFarInitialized: Boolean = false;
   FCEInitialized: Boolean = false;
+  FCEStarted: Boolean = false;
   FCEWrongVersion: Boolean = false;
   FRegistered: Boolean = false;
   FOptEnabled: Boolean = false;
@@ -315,9 +316,9 @@ end;
 //------------------------------------------------------------------------------
 function UpdateConEmuBackground : Boolean;
 //------------------------------------------------------------------------------
-var
-  memStream : TMemoryStream;
-  res : TSetBackgroundResult;
+//var
+//  memStream : TMemoryStream;
+//  res : TSetBackgroundResult;
 begin
   Result := false;
   if not IsUnderConEmu then Exit;
@@ -549,12 +550,86 @@ begin
   end;
 end;
 
-//------------------------------------------------------------------------------
-procedure SetStartupInfoW(var psi: TPluginStartupInfo); stdcall;
+procedure StartupConEmu();
 var
   eStr: WideString; //TFarStr;
+begin
+  if FCEInitialized then
+    FConEmuHWND := GetConEmuHWND(FFarHWND, false)
+  else
+    FConEmuHWND := 0;
+
+  Log(Format('FConEmuHWND = 0x%x', [FConEmuHWND]));
+
+  if (FConEmuHWND = 0) then
+  begin
+    if FEnabled then
+      DebugShowError('ConEmu environment not found');
+    Exit;
+  end;
+
+  if NOT FCEStarted then begin
+    FCEStarted := true;
+    FBmp32 := TBitmap32.Create;
+    FBmp32.Font.Style := [fsBold];
+
+    FImageCache := TImageCache.Create;
+
+    Log('Image objects created');
+
+    FDiskInfoCache := TDiskInfoCache.Create;
+
+    Log('Disk info cache object created');
+
+    try
+      FBaseConfig := TScriptConfig.Create(FPluginFolder + CONST_BASE_CONFIG_FILENAME);
+    except
+      on E:Exception do
+        DebugShowError(Format('Base script compilation error: %s', [E.Message]));
+    end;
+
+    try
+      FUserConfig := TScriptConfig.Create(FPluginFolder + CONST_USER_CONFIG_FILENAME);
+    except
+      on E:Exception do
+        DebugShowError(Format('User script compilation error: %s', [E.Message]));
+    end;
+
+    Log('Scripts loaded');
+
+    FOldWindowType := -1; // set negative windpw type to force backround style to reload once
+    FOldWindowPos := 0;
+    FOldSymWidth := 0;
+    FOldSymHeight := 0;
+    FReferencePeekString := '';
+    FOldWindowIsHidden := false;
+
+    ZeroMemory(@FOldClientRect, SizeOf(FOldClientRect));
+    ZeroMemory(@FOldLeftPanel, SizeOf(FOldLeftPanel));
+    ZeroMemory(@FOldRightPanel, SizeOf(FOldRightPanel));
+
+  end;
+
+  //FWatcherThread := TWatcherThread.Create(not FEnabled);
+  //FWatcherThread.FreeOnTerminate := false;
+  if FCEInitialized then begin
+    DoTheJob;
+  end else if FCEWrongVersion then begin
+    eStr := 'Panel Colorer' + #10 + 'Unsupported ConEmu version';
+    FARAPI.Message(FARAPI.ModuleNumber, FMSG_ALLINONE or FMSG_MB_OK or FMSG_WARNING, nil, PPCharArray(PFarChar(eStr)), 0, 0);
+  end;
+
+  Log('Watcher thread created');
+end;
+
+//------------------------------------------------------------------------------
+procedure SetStartupInfoW(var psi: TPluginStartupInfo); stdcall;
+//var
+//  eStr: WideString; //TFarStr;
 //------------------------------------------------------------------------------
 begin
+  //MessageBox(0, 'SetStartupInfoW', 'PanelColorer', 0);
+
   FDesktopPath := GetDesktopFolder;
   if (FDesktopPath = '') then FDesktopPath := 'C:';
 
@@ -591,65 +666,14 @@ begin
   FConEmuBackgroundImagePath := FDesktopPath + '\PanelColorer.bmp';
 
   //TODO: Переделать. Выполнять в OnConEmuLoaded
-  FConEmuHWND := GetConEmuHWND(FFarHWND, false);
+  if FCEInitialized then
+    FConEmuHWND := GetConEmuHWND(FFarHWND, false)
+  else
+    FConEmuHWND := 0;
 
   Log(Format('FConEmuHWND = 0x%x', [FConEmuHWND]));
 
-  if (FConEmuHWND = 0) then
-  begin
-    if FEnabled then
-      DebugShowError('ConEmu environment not found');
-    Exit;
-  end;
-
-  FBmp32 := TBitmap32.Create;
-  FBmp32.Font.Style := [fsBold];
-
-  FImageCache := TImageCache.Create;
-
-  Log('Image objects created');
-
-  FDiskInfoCache := TDiskInfoCache.Create;
-
-  Log('Disk info cache object created');
-
-  try
-    FBaseConfig := TScriptConfig.Create(FPluginFolder + CONST_BASE_CONFIG_FILENAME);
-  except
-    on E:Exception do
-      DebugShowError(Format('Base script compilation error: %s', [E.Message]));
-  end;
-
-  try
-    FUserConfig := TScriptConfig.Create(FPluginFolder + CONST_USER_CONFIG_FILENAME);
-  except
-    on E:Exception do
-      DebugShowError(Format('User script compilation error: %s', [E.Message]));
-  end;
-
-  Log('Scripts loaded');
-
-  FOldWindowType := -1; // set negative windpw type to force backround style to reload once
-  FOldWindowPos := 0;
-  FOldSymWidth := 0;
-  FOldSymHeight := 0;
-  FReferencePeekString := '';
-  FOldWindowIsHidden := false;
-
-  ZeroMemory(@FOldClientRect, SizeOf(FOldClientRect));
-  ZeroMemory(@FOldLeftPanel, SizeOf(FOldLeftPanel));
-  ZeroMemory(@FOldRightPanel, SizeOf(FOldRightPanel));
-
-  //FWatcherThread := TWatcherThread.Create(not FEnabled);
-  //FWatcherThread.FreeOnTerminate := false;
-  if FCEInitialized then begin
-    DoTheJob;
-  end else if FCEWrongVersion then begin
-    eStr := 'Panel Colorer' + #10 + 'Unsupported ConEmu version';
-    FARAPI.Message(FARAPI.ModuleNumber, FMSG_ALLINONE or FMSG_MB_OK or FMSG_WARNING, nil, PPCharArray(PFarChar(eStr)), 0, 0);
-  end;
-
-  Log('Watcher thread created');
+  StartupConEmu();
 end;
 
 //------------------------------------------------------------------------------
@@ -1692,7 +1716,8 @@ begin
   end;
   *)
   if FRegistered then begin
-    ConEmuUnRegister();
+    if FCEInitialized then
+      ConEmuUnRegister();
     FRegistered := false;
   end;
   //UpdateConEmuBackground; // clear background
@@ -1720,6 +1745,7 @@ end;
 procedure OnConEmuLoaded(var csi: TConEmuLoadedArg); stdcall;
 //------------------------------------------------------------------------------
 begin
+  //MessageBox(0, 'OnConEmuLoaded', 'PanelColorer', 0);
   FCEWrongVersion := false;
   if csi.cbSize < SizeOf(CEAPI) then begin
     FCEInitialized := false;
@@ -1732,6 +1758,8 @@ begin
       FCEWrongVersion := true;
     end else begin
       FCEInitialized := (CEAPI.bLoaded<>0) and (CEAPI.bGuiActive<>0);
+      if FCEInitialized then
+        StartupConEmu();
     end;
     if FFarInitialized and FCEInitialized then begin
       DoTheJob;
