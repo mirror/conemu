@@ -1758,7 +1758,7 @@ begin
       FCEWrongVersion := true;
     end else begin
       FCEInitialized := (CEAPI.bLoaded<>0) and (CEAPI.bGuiActive<>0);
-      if FCEInitialized then
+      if FCEInitialized and FFarInitialized then
         StartupConEmu();
     end;
     if FFarInitialized and FCEInitialized then begin

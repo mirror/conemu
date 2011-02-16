@@ -42,8 +42,8 @@
 			<DCC_DebugInformation>false</DCC_DebugInformation>
 		</PropertyGroup>
 		<PropertyGroup Condition="'$(Cfg_2)'!=''">
-			<DCC_ExeOutput>T:\VCProject\FarPlugin\ConEmu\Maximus5\src.help\background\110214\Far2\Plugins\PanelColorer\</DCC_ExeOutput>
-			<DCC_DependencyCheckOutputName>..\..\..\..\..\Maximus5\src.help\background\110214\Far2\Plugins\PanelColorer\PanelColorer.dll</DCC_DependencyCheckOutputName>
+			<DCC_ExeOutput>T:\VCProject\FarPlugin\ConEmu\Maximus5\src.help\background\110215\Plugins\PanelColorer\</DCC_ExeOutput>
+			<DCC_DependencyCheckOutputName>..\..\..\..\..\Maximus5\src.help\background\110215\Plugins\PanelColorer\PanelColorer.dll</DCC_DependencyCheckOutputName>
 			<DCC_DebugInfoInExe>true</DCC_DebugInfoInExe>
 			<DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
 		</PropertyGroup>
