@@ -133,7 +133,7 @@ void ExitFARW995(void)
 	}
 }
 
-int ShowMessage995(LPCWSTR asMsg, int aiButtons)
+int ShowMessageW995(LPCWSTR asMsg, int aiButtons)
 {
 	if (!InfoW995 || !InfoW995->Message)
 		return -1;
@@ -142,16 +142,16 @@ int ShowMessage995(LPCWSTR asMsg, int aiButtons)
 	                         (const wchar_t * const *)asMsg, 0, aiButtons);
 }
 
-int ShowMessage995(int aiMsg, int aiButtons)
+int ShowMessageW995(int aiMsg, int aiButtons)
 {
 	if (!InfoW995 || !InfoW995->Message || !InfoW995->GetMsg)
 		return -1;
 
-	return ShowMessage995(
+	return ShowMessageW995(
 	           (LPCWSTR)InfoW995->GetMsg(InfoW995->ModuleNumber,aiMsg), aiButtons);
 }
 
-LPCWSTR GetMsg995(int aiMsg)
+LPCWSTR GetMsgW995(int aiMsg)
 {
 	if (!InfoW995 || !InfoW995->GetMsg)
 		return L"";
@@ -160,7 +160,7 @@ LPCWSTR GetMsg995(int aiMsg)
 }
 
 // Warning, напрямую НЕ вызывать. Пользоваться "общей" PostMacro
-void PostMacro995(wchar_t* asMacro)
+void PostMacroW995(wchar_t* asMacro)
 {
 	if (!InfoW995 || !InfoW995->AdvControl)
 		return;
@@ -179,7 +179,7 @@ void PostMacro995(wchar_t* asMacro)
 	InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_KEYMACRO, (void*)&mcr);
 }
 
-int ShowPluginMenu995()
+int ShowPluginMenuW995()
 {
 	if (!InfoW995)
 		return -1;
@@ -219,7 +219,7 @@ int ShowPluginMenu995()
 	return nRc;
 }
 
-BOOL IsMacroActive995()
+BOOL IsMacroActiveW995()
 {
 	if (!InfoW995) return FALSE;
 
@@ -233,7 +233,7 @@ BOOL IsMacroActive995()
 }
 
 
-void LoadPanelItemInfo995(CeFullPanelInfo* pi, int nItem)
+void LoadPanelItemInfoW995(CeFullPanelInfo* pi, int nItem)
 {
 	//HANDLE hPanel = pi->hPanel;
 	HANDLE hPanel = pi->Focus ? PANEL_ACTIVE : PANEL_PASSIVE;
@@ -452,7 +452,7 @@ BOOL LoadPanelInfo995(BOOL abActive)
 	return TRUE;
 }
 
-void ReloadPanelsInfo995()
+void ReloadPanelsInfoW995()
 {
 	if (!InfoW995) return;
 
@@ -461,7 +461,7 @@ void ReloadPanelsInfo995()
 	LoadPanelInfo995(FALSE);
 }
 
-void SetCurrentPanelItem995(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
+void SetCurrentPanelItemW995(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
 {
 	if (!InfoW995) return;
 
@@ -505,7 +505,7 @@ void SetCurrentPanelItem995(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
 //	return TRUE;
 //}
 
-BOOL CheckPanelSettings995(BOOL abSilence)
+BOOL CheckPanelSettingsW995(BOOL abSilence)
 {
 	if (!InfoW995)
 		return FALSE;
@@ -531,14 +531,14 @@ BOOL CheckPanelSettings995(BOOL abSilence)
 	return TRUE;
 }
 
-void ExecuteInMainThread995(ConEmuThSynchroArg* pCmd)
+void ExecuteInMainThreadW995(ConEmuThSynchroArg* pCmd)
 {
 	if (!InfoW995) return;
 
 	InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_SYNCHRO, pCmd);
 }
 
-void GetFarRect995(SMALL_RECT* prcFarRect)
+void GetFarRectW995(SMALL_RECT* prcFarRect)
 {
 	if (!InfoW995) return;
 
@@ -550,7 +550,7 @@ void GetFarRect995(SMALL_RECT* prcFarRect)
 }
 
 // Использовать только ACTL_GETSHORTWINDOWINFO. С ней проблем с синхронизацией быть не должно
-bool CheckFarPanels995()
+bool CheckFarPanelsW995()
 {
 	if (!InfoW995 || !InfoW995->AdvControl) return false;
 

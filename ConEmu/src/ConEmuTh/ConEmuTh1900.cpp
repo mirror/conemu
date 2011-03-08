@@ -28,7 +28,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <windows.h>
 #pragma warning( disable : 4995 )
-#include "..\common\pluginW1867.hpp" // Far3
+#include "..\common\pluginW1900.hpp" // Far3
 #pragma warning( default : 4995 )
 #include "ConEmuTh.h"
 #include "../ConEmu/version.h" // Far3
@@ -41,8 +41,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SHOW_DEBUG_EVENTS
 #endif
 
-struct PluginStartupInfo *InfoW1867=NULL;
-struct FarStandardFunctions *FSFW1867=NULL;
+struct PluginStartupInfo *InfoW1900=NULL;
+struct FarStandardFunctions *FSFW1900=NULL;
 
 GUID guid_ConEmuTh = { /* bd454d48-448e-46cc-909d-b6cf789c2d65 */
     0xbd454d48,
@@ -86,7 +86,7 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
 	Info->Author = L"ConEmu.Maximus5@gmail.com";
 }
 
-void GetPluginInfoW1867(void *piv)
+void GetPluginInfoW1900(void *piv)
 {
 	PluginInfo *pi = (PluginInfo*)piv;
 	memset(pi, 0, sizeof(PluginInfo));
@@ -104,20 +104,20 @@ void GetPluginInfoW1867(void *piv)
 }
 
 
-void SetStartupInfoW1867(void *aInfo)
+void SetStartupInfoW1900(void *aInfo)
 {
-	::InfoW1867 = (PluginStartupInfo*)calloc(sizeof(PluginStartupInfo),1);
-	::FSFW1867 = (FarStandardFunctions*)calloc(sizeof(FarStandardFunctions),1);
+	::InfoW1900 = (PluginStartupInfo*)calloc(sizeof(PluginStartupInfo),1);
+	::FSFW1900 = (FarStandardFunctions*)calloc(sizeof(FarStandardFunctions),1);
 
-	if (::InfoW1867 == NULL || ::FSFW1867 == NULL)
+	if (::InfoW1900 == NULL || ::FSFW1900 == NULL)
 		return;
 
-	*::InfoW1867 = *((struct PluginStartupInfo*)aInfo);
-	*::FSFW1867 = *((struct PluginStartupInfo*)aInfo)->FSF;
-	::InfoW1867->FSF = ::FSFW1867;
+	*::InfoW1900 = *((struct PluginStartupInfo*)aInfo);
+	*::FSFW1900 = *((struct PluginStartupInfo*)aInfo)->FSF;
+	::InfoW1900->FSF = ::FSFW1900;
 
 	DWORD nFarVer = 0;
-	if (InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETFARVERSION, &nFarVer))
+	if (InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETFARVERSION, &nFarVer))
 	{
 		if (HIBYTE(HIWORD(nFarVer)) == 3)
 		{
@@ -131,69 +131,69 @@ void SetStartupInfoW1867(void *aInfo)
 		}
 	}
 
-	//int nLen = lstrlenW(InfoW1867->RootKey)+16;
+	//int nLen = lstrlenW(InfoW1900->RootKey)+16;
 	//if (gszRootKey) free(gszRootKey);
 	//gszRootKey = (wchar_t*)calloc(nLen,2);
-	//lstrcpyW(gszRootKey, InfoW1867->RootKey);
+	//lstrcpyW(gszRootKey, InfoW1900->RootKey);
 	//WCHAR* pszSlash = gszRootKey+lstrlenW(gszRootKey)-1;
 	//if (*pszSlash != L'\\') *(++pszSlash) = L'\\';
 	//lstrcpyW(pszSlash+1, L"ConEmuTh\\");
 }
 
 extern BOOL gbInfoW_OK;
-HANDLE WINAPI OpenPanelW(int OpenFrom,const GUID* Guid,INT_PTR Data)
+HANDLE WINAPI OpenW(const struct OpenInfo *Info)
 {
 	if (!gbInfoW_OK)
 		return INVALID_HANDLE_VALUE;
 
-	return OpenPluginWcmn(OpenFrom, Data);
+	return OpenPluginWcmn(Info->OpenFrom, Info->Data);
 }
 
-void ExitFARW1867(void)
+void ExitFARW1900(void)
 {
-	if (InfoW1867)
+	if (InfoW1900)
 	{
-		free(InfoW1867);
-		InfoW1867=NULL;
+		free(InfoW1900);
+		InfoW1900=NULL;
 	}
 
-	if (FSFW1867)
+	if (FSFW1900)
 	{
-		free(FSFW1867);
-		FSFW1867=NULL;
+		free(FSFW1900);
+		FSFW1900=NULL;
 	}
 }
 
-int ShowMessage1867(LPCWSTR asMsg, int aiButtons)
+int ShowMessageW1900(LPCWSTR asMsg, int aiButtons)
 {
-	if (!InfoW1867 || !InfoW1867->Message)
+	if (!InfoW1900 || !InfoW1900->Message)
 		return -1;
 
-	return InfoW1867->Message(&guid_ConEmuTh, FMSG_ALLINONE1867|FMSG_MB_OK|FMSG_WARNING, NULL,
+	return InfoW1900->Message(&guid_ConEmuTh, FMSG_ALLINONE1900|FMSG_MB_OK|FMSG_WARNING, NULL,
 	                         (const wchar_t * const *)asMsg, 0, aiButtons);
 }
 
-int ShowMessage1867(int aiMsg, int aiButtons)
+int ShowMessageW1900(int aiMsg, int aiButtons)
 {
-	if (!InfoW1867 || !InfoW1867->Message || !InfoW1867->GetMsg)
+	if (!InfoW1900 || !InfoW1900->Message || !InfoW1900->GetMsg)
 		return -1;
 
-	return ShowMessage1867(
-	           (LPCWSTR)InfoW1867->GetMsg(&guid_ConEmuTh,aiMsg), aiButtons);
+	return ShowMessageW1900(
+	           (LPCWSTR)InfoW1900->GetMsg(&guid_ConEmuTh,aiMsg), aiButtons);
 }
 
-LPCWSTR GetMsg1867(int aiMsg)
+LPCWSTR GetMsgW1900(int aiMsg)
 {
-	if (!InfoW1867 || !InfoW1867->GetMsg)
+	if (!InfoW1900 || !InfoW1900->GetMsg)
 		return L"";
 
-	return InfoW1867->GetMsg(&guid_ConEmuTh,aiMsg);
+	return InfoW1900->GetMsg(&guid_ConEmuTh,aiMsg);
 }
 
 // Warning, напрямую НЕ вызывать. Пользоваться "общей" PostMacro
-void PostMacro1867(wchar_t* asMacro)
+void PostMacroW1900(wchar_t* asMacro)
 {
-	if (!InfoW1867 || !InfoW1867->AdvControl)
+	if (!InfoW1900 || !InfoW1900->AdvControl)
 		return;
 
 	//ActlKeyMacro mcr;
@@ -208,18 +208,18 @@ void PostMacro1867(wchar_t* asMacro)
 	}
 
 	mcr.SequenceText = asMacro;
-	InfoW1867->MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, (INT_PTR)&mcr);
+	InfoW1900->MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, (INT_PTR)&mcr);
 }
 
-int ShowPluginMenu1867()
+int ShowPluginMenuW1900()
 {
-	if (!InfoW1867)
+	if (!InfoW1900)
 		return -1;
 
 	FarMenuItem items[] =
 	{
-		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW1867->GetMsg(&guid_ConEmuTh,CEMenuThumbnails)},
-		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW1867->GetMsg(&guid_ConEmuTh,CEMenuTiles)},
+		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW1900->GetMsg(&guid_ConEmuTh,CEMenuThumbnails)},
+		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW1900->GetMsg(&guid_ConEmuTh,CEMenuTiles)},
 	};
 	int nCount = sizeof(items)/sizeof(items[0]);
 	CeFullPanelInfo* pi = IsThumbnailsActive(TRUE);
@@ -244,18 +244,18 @@ int ShowPluginMenu1867()
 		}
 	}
 
-	int nRc = InfoW1867->Menu(&guid_ConEmuTh, -1,-1, 0,
+	int nRc = InfoW1900->Menu(&guid_ConEmuTh, -1,-1, 0,
 	                         FMENU_AUTOHIGHLIGHT|FMENU_CHANGECONSOLETITLE|FMENU_WRAPMODE,
-	                         InfoW1867->GetMsg(&guid_ConEmuTh,2),
+	                         InfoW1900->GetMsg(&guid_ConEmuTh,2),
 	                         NULL, NULL, NULL, NULL, (FarMenuItem*)items, nCount);
 	return nRc;
 }
 
-BOOL IsMacroActive1867()
+BOOL IsMacroActiveW1900()
 {
-	if (!InfoW1867) return FALSE;
+	if (!InfoW1900) return FALSE;
 
-	INT_PTR liRc = InfoW1867->MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
+	INT_PTR liRc = InfoW1900->MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
 
 	if (liRc == MACROSTATE_NOMACRO)
 		return FALSE;
@@ -264,11 +264,11 @@ BOOL IsMacroActive1867()
 }
 
 
-void LoadPanelItemInfo1867(CeFullPanelInfo* pi, int nItem)
+void LoadPanelItemInfoW1900(CeFullPanelInfo* pi, int nItem)
 {
 	//HANDLE hPanel = pi->hPanel;
 	HANDLE hPanel = pi->Focus ? PANEL_ACTIVE : PANEL_PASSIVE;
-	INT_PTR nSize = InfoW1867->Control(hPanel, FCTL_GETPANELITEM, nItem, NULL);
+	INT_PTR nSize = InfoW1900->Control(hPanel, FCTL_GETPANELITEM, nItem, NULL);
 	//PluginPanelItem *ppi = (PluginPanelItem*)malloc(nMaxSize);
 	//if (!ppi)
 	//	return;
@@ -285,7 +285,7 @@ void LoadPanelItemInfo1867(CeFullPanelInfo* pi, int nItem)
 
 	if (ppi)
 	{
-		nSize = InfoW1867->Control(hPanel, FCTL_GETPANELITEM, nItem, (LONG_PTR)ppi);
+		nSize = InfoW1900->Control(hPanel, FCTL_GETPANELITEM, nItem, (LONG_PTR)ppi);
 	}
 	else
 	{
@@ -370,14 +370,14 @@ void LoadPanelItemInfo1867(CeFullPanelInfo* pi, int nItem)
 	//// ppi не освобождаем - это ссылка на pi->pFarTmpBuf
 }
 
-BOOL LoadPanelInfo1867(BOOL abActive)
+BOOL LoadPanelInfoW1900(BOOL abActive)
 {
-	if (!InfoW1867) return FALSE;
+	if (!InfoW1900) return FALSE;
 
 	CeFullPanelInfo* pcefpi = NULL;
 	PanelInfo pi = {0};
 	HANDLE hPanel = abActive ? PANEL_ACTIVE : PANEL_PASSIVE;
-	int nRc = InfoW1867->Control(hPanel, FCTL_GETPANELINFO, 0, (LONG_PTR)&pi);
+	int nRc = InfoW1900->Control(hPanel, FCTL_GETPANELINFO, 0, (LONG_PTR)&pi);
 
 	if (!nRc)
 	{
@@ -422,11 +422,11 @@ BOOL LoadPanelInfo1867(BOOL abActive)
 	pcefpi->IsFilePanel = (pi.PanelType == PTYPE_FILEPANEL);
 	// Настройки интерфейса
 	pcefpi->nFarInterfaceSettings = gnFarInterfaceSettings =
-	                                    (DWORD)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETINTERFACESETTINGS, 0);
+	                                    (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETINTERFACESETTINGS, 0);
 	pcefpi->nFarPanelSettings = gnFarPanelSettings =
-	                                (DWORD)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETPANELSETTINGS, 0);
+	                                (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETPANELSETTINGS, 0);
 	// Цвета фара
-	int nColorSize = (int)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETARRAYCOLOR, NULL);
+	int nColorSize = (int)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETARRAYCOLOR, NULL);
 
 	if ((pcefpi->nFarColors == NULL) || (nColorSize > pcefpi->nMaxFarColors))
 	{
@@ -436,9 +436,9 @@ BOOL LoadPanelInfo1867(BOOL abActive)
 		pcefpi->nMaxFarColors = nColorSize;
 	}
 
-	nColorSize = (int)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETARRAYCOLOR, pcefpi->nFarColors);
+	nColorSize = (int)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETARRAYCOLOR, pcefpi->nFarColors);
 	// Текущая папка панели
-	int nSize = (int)InfoW1867->Control(hPanel, FCTL_GETPANELDIR, 0, 0);
+	int nSize = (int)InfoW1900->Control(hPanel, FCTL_GETPANELDIR, 0, 0);
 
 	if (nSize)
 	{
@@ -448,7 +448,7 @@ BOOL LoadPanelInfo1867(BOOL abActive)
 			pcefpi->pszPanelDir = (wchar_t*)calloc(pcefpi->nMaxPanelDir,2);
 		}
 
-		nSize = InfoW1867->Control(hPanel, FCTL_GETPANELDIR, nSize, (LONG_PTR)pcefpi->pszPanelDir);
+		nSize = InfoW1900->Control(hPanel, FCTL_GETPANELDIR, nSize, (LONG_PTR)pcefpi->pszPanelDir);
 
 		if (!nSize)
 		{
@@ -483,24 +483,24 @@ BOOL LoadPanelInfo1867(BOOL abActive)
 	return TRUE;
 }
 
-void ReloadPanelsInfo1867()
+void ReloadPanelsInfoW1900()
 {
-	if (!InfoW1867) return;
+	if (!InfoW1900) return;
 
 	// в FAR2 все просто
-	LoadPanelInfo1867(TRUE);
-	LoadPanelInfo1867(FALSE);
+	LoadPanelInfoW1900(TRUE);
+	LoadPanelInfoW1900(FALSE);
 }
 
-void SetCurrentPanelItem1867(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
+void SetCurrentPanelItemW1900(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
 {
-	if (!InfoW1867) return;
+	if (!InfoW1900) return;
 
 	// В Far2 можно быстро проверить валидность индексов
 	HANDLE hPanel = NULL;
 	PanelInfo piActive = {0}, piPassive = {0}, *pi = NULL;
 	TODO("Проверять текущую видимость панелей?");
-	InfoW1867->Control(PANEL_ACTIVE,  FCTL_GETPANELINFO, 0, (LONG_PTR)&piActive);
+	InfoW1900->Control(PANEL_ACTIVE,  FCTL_GETPANELINFO, 0, (LONG_PTR)&piActive);
 
 	if ((piActive.Flags & PFLAGS_PANELLEFT) == (abLeftPanel ? PFLAGS_PANELLEFT : 0))
 	{
@@ -508,7 +508,7 @@ void SetCurrentPanelItem1867(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
 	}
 	else
 	{
-		InfoW1867->Control(PANEL_PASSIVE, FCTL_GETPANELINFO, 0, (LONG_PTR)&piPassive);
+		InfoW1900->Control(PANEL_PASSIVE, FCTL_GETPANELINFO, 0, (LONG_PTR)&piPassive);
 		pi = &piPassive; hPanel = PANEL_PASSIVE;
 	}
 
@@ -527,24 +527,24 @@ void SetCurrentPanelItem1867(BOOL abLeftPanel, UINT anTopItem, UINT anCurItem)
 
 	// Обновляем панель
 	PanelRedrawInfo pri = {anCurItem, anTopItem};
-	InfoW1867->Control(hPanel, FCTL_REDRAWPANEL, 0, (LONG_PTR)&pri);
+	InfoW1900->Control(hPanel, FCTL_REDRAWPANEL, 0, (LONG_PTR)&pri);
 }
 
-//BOOL IsLeftPanelActive1867()
+//BOOL IsLeftPanelActiveW1900()
 //{
-//	WARNING("TODO: IsLeftPanelActive1867");
+//	WARNING("TODO: IsLeftPanelActiveW1900");
 //	return TRUE;
 //}
 
-BOOL CheckPanelSettings1867(BOOL abSilence)
+BOOL CheckPanelSettingsW1900(BOOL abSilence)
 {
-	if (!InfoW1867)
+	if (!InfoW1900)
 		return FALSE;
 
 	gnFarPanelSettings =
-	    (DWORD)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETPANELSETTINGS, 0);
+	    (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETPANELSETTINGS, 0);
 	gnFarInterfaceSettings =
-	    (DWORD)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETINTERFACESETTINGS, 0);
+	    (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETINTERFACESETTINGS, 0);
 
 	if (!(gnFarPanelSettings & FPS_SHOWCOLUMNTITLES))
 	{
@@ -552,8 +552,8 @@ BOOL CheckPanelSettings1867(BOOL abSilence)
 		// [x] Показывать заголовки колонок [x] Показывать суммарную информацию
 		if (!abSilence)
 		{
-			InfoW1867->Message(&guid_ConEmuTh, FMSG_ALLINONE1867|FMSG_MB_OK|FMSG_WARNING|FMSG_LEFTALIGN1867, NULL,
-			                  (const wchar_t * const *)InfoW1867->GetMsg(&guid_ConEmuTh,CEInvalidPanelSettings), 0, 0);
+			InfoW1900->Message(&guid_ConEmuTh, FMSG_ALLINONE1900|FMSG_MB_OK|FMSG_WARNING|FMSG_LEFTALIGN1900, NULL,
+			                  (const wchar_t * const *)InfoW1900->GetMsg(&guid_ConEmuTh,CEInvalidPanelSettings), 0, 0);
 		}
 
 		return FALSE;
@@ -562,48 +562,48 @@ BOOL CheckPanelSettings1867(BOOL abSilence)
 	return TRUE;
 }
 
-void ExecuteInMainThread1867(ConEmuThSynchroArg* pCmd)
+void ExecuteInMainThreadW1900(ConEmuThSynchroArg* pCmd)
 {
-	if (!InfoW1867) return;
+	if (!InfoW1900) return;
 
-	InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_SYNCHRO, pCmd);
+	InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_SYNCHRO, pCmd);
 }
 
-void GetFarRect1867(SMALL_RECT* prcFarRect)
+void GetFarRectW1900(SMALL_RECT* prcFarRect)
 {
-	if (!InfoW1867) return;
+	if (!InfoW1900) return;
 
 	_ASSERTE(ACTL_GETFARRECT!=32);
-	if (!InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETFARRECT, prcFarRect))
+	if (!InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETFARRECT, prcFarRect))
 	{
 		prcFarRect->Left = prcFarRect->Right = prcFarRect->Top = prcFarRect->Bottom = 0;
 	}
 }
 
 // Использовать только ACTL_GETSHORTWINDOWINFO. С ней проблем с синхронизацией быть не должно
-bool CheckFarPanels1867()
+bool CheckFarPanelsW1900()
 {
-	if (!InfoW1867 || !InfoW1867->AdvControl) return false;
+	if (!InfoW1900 || !InfoW1900->AdvControl) return false;
 
 	WindowType wt = {sizeof(WindowType)};
 	bool lbPanelsActive = false;
 	//_ASSERTE(GetCurrentThreadId() == gnMainThreadId); -- ACTL_GETWINDOWTYPE - thread safe
-	INT_PTR iRc = InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWTYPE, (LPVOID)&wt);
+	INT_PTR iRc = InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWTYPE, (LPVOID)&wt);
 	lbPanelsActive = (iRc != 0) && (wt.Type == WTYPE_PANELS);
 	return lbPanelsActive;
 }
 
 // Возникали проблемы с синхронизацией в FAR2 -> FindFile
-//bool CheckWindows1867()
+//bool CheckWindowsW1900()
 //{
-//	if (!InfoW1867 || !InfoW1867->AdvControl) return false;
+//	if (!InfoW1900 || !InfoW1900->AdvControl) return false;
 //
 //	bool lbPanelsActive = false;
-//	int nCount = (int)InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWCOUNT, NULL);
+//	int nCount = (int)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWCOUNT, NULL);
 //	WindowInfo wi = {0};
 //
 //	wi.Pos = -1;
-//	INT_PTR iRc = InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWINFO, (LPVOID)&wi);
+//	INT_PTR iRc = InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWINFO, (LPVOID)&wi);
 //	if (wi.Type == WTYPE_PANELS) {
 //		lbPanelsActive = (wi.Current != 0);
 //	}
@@ -619,7 +619,7 @@ bool CheckFarPanels1867()
 //	//	wi.Pos = i;
 //	//	wi.TypeName = szTypeName; wi.TypeNameSize = sizeofarray(szTypeName); szTypeName[0] = 0;
 //	//	wi.Name = szName; wi.NameSize = sizeofarray(szName); szName[0] = 0;
-//	//	INT_PTR iRc = InfoW1867->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWINFO, (LPVOID)&wi);
+//	//	INT_PTR iRc = InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETWINDOWINFO, (LPVOID)&wi);
 //	//	if (iRc) {
 //	//		StringCchPrintf(szInfo, countof(szInfo), L"%s%i: {%s-%s} %s\n",
 //	//			wi.Current ? L"*" : L"",
@@ -640,46 +640,48 @@ bool CheckFarPanels1867()
 //	return lbPanelsActive;
 //}
 
-BOOL SettingsLoadW1867(LPCWSTR pszName, DWORD* pValue)
+BOOL SettingsLoadW1900(LPCWSTR pszName, DWORD* pValue)
 {
 	BOOL lbValue = FALSE;
 	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_ConEmuTh, INVALID_HANDLE_VALUE};
 	FarSettingsItem fsi = {0};
-	if (InfoW1867->SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, (INT_PTR)&sc))
+	if (InfoW1900->SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, (INT_PTR)&sc))
 	{
-		DWORD nValue = *pValue;
+		//DWORD nValue = *pValue;
 		fsi.Name = pszName;
 		fsi.Type = FST_DATA;
-		fsi.Data.Size = sizeof(nValue); 
-		fsi.Data.Data = &nValue;
-		if (InfoW1867->SettingsControl(sc.Handle, SCTL_GET, 0, (INT_PTR)&fsi))
-			*pValue = nValue;
+		//fsi.Data.Size = sizeof(nValue); 
+		//fsi.Data.Data = &nValue;
+		if (InfoW1900->SettingsControl(sc.Handle, SCTL_GET, 0, (INT_PTR)&fsi) && (fsi.Data.Size == sizeof(DWORD)))
+		{
+			*pValue = *((DWORD*)fsi.Data.Data);
+		}
 
-		InfoW1867->SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+		InfoW1900->SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
 	}
 	return lbValue;
 }
-void SettingsSaveW1867(LPCWSTR pszName, DWORD* pValue)
+void SettingsSaveW1900(LPCWSTR pszName, DWORD* pValue)
 {
-	if (!InfoW1867)
+	if (!InfoW1900)
 		return;
 
 	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_ConEmuTh, INVALID_HANDLE_VALUE};
 	FarSettingsItem fsi = {0};
-	if (InfoW1867->SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, (INT_PTR)&sc))
+	if (InfoW1900->SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, (INT_PTR)&sc))
 	{
 		DWORD nValue = *pValue;
 		fsi.Name = pszName;
 		fsi.Type = FST_DATA;
 		fsi.Data.Size = sizeof(nValue); 
 		fsi.Data.Data = &nValue;
-		InfoW1867->SettingsControl(sc.Handle, SCTL_SET, 0, (INT_PTR)&fsi);
+		InfoW1900->SettingsControl(sc.Handle, SCTL_SET, 0, (INT_PTR)&fsi);
 
-		InfoW1867->SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+		InfoW1900->SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
 	}
 }
 
-void SettingsLoadOtherW1867(void)
+void SettingsLoadOtherW1900(void)
 {
 	WARNING("Как появится PanelTabs для Far3 - переделать чтение его настроек в GUID");
 }
