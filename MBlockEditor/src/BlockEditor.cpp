@@ -1,8 +1,36 @@
-// BlockEditor.cpp : Defines the entry point for the DLL application.
-//
+//TODO: Глюкавит ShiftTab
+
+/*
+Copyright (c) 2008-2011 Maximus5
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. The name of the authors may not be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ''AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 
 #include <windows.h>
 #include <TCHAR.h>
+#include "Version.h"
 #include "BlockEditorRes.h"
 
 #define _FAR_NO_NAMELESS_UNIONS
@@ -24,6 +52,21 @@
 //#include "/VCProject/MLib/MLibDef.h"
 #endif
 
+#if FAR_UNICODE>=1906
+GUID guid_BlockEditor = { /* 05E884B0-8603-4B35-A4D2-9CEAD36A4B68 */
+	0x05E884B0,
+	0x8603,
+	0x4B35,
+	{0xA4, 0xD2, 0x9C, 0xEA, 0xD3, 0x6A, 0x4B, 0x68}
+};
+
+GUID guid_BlockEditorPluginMenu = { /* 186dd20d-43e9-4a39-8d4b-9e74e9c5b7a1 */                                                  
+    0x186dd20d,                                                                                               
+    0x43e9,                                                                                                   
+    0x4a39,                                                                                                   
+    {0x8d, 0x4b, 0x9e, 0x74, 0xe9, 0xc5, 0xb7, 0xa1}                                                          
+};
+#endif
 
 #ifndef MDEBUG
 #define MCHKHEAP
@@ -58,8 +101,9 @@ BOOL APIENTRY DllMain( HANDLE hModule,
     return TRUE;
 }
 
-
+#ifndef _UNICODE
 DWORD gdwFarVersion = MAKEFARVERSION(1,70,70);
+#endif
 PluginStartupInfo psi;
 
 void WINAPI SetStartupInfoW(struct PluginStartupInfo *Info)
@@ -67,24 +111,38 @@ void WINAPI SetStartupInfoW(struct PluginStartupInfo *Info)
 	memset(&psi, 0, sizeof(psi));
 	memmove(&psi, Info, Info->StructSize);
   
-	#if FAR_UNICODE>=1906
-		error
-	#else
-	gdwFarVersion = (DWORD)psi.AdvControl(psi.ModuleNumber, ACTL_GETFARVERSION, NULL);
+	#ifndef _UNICODE
+		gdwFarVersion = (DWORD)psi.AdvControl(psi.ModuleNumber, ACTL_GETFARVERSION, NULL);
 	#endif
 }
 
 #if FAR_UNICODE>=1906
+	void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
+	{
+		//static wchar_t szTitle[16]; _wcscpy_c(szTitle, L"ConEmu");
+		//static wchar_t szDescr[64]; _wcscpy_c(szTitle, L"ConEmu support for Far Manager");
+		//static wchar_t szAuthr[64]; _wcscpy_c(szTitle, L"ConEmu.Maximus5@gmail.com");
+		
+		Info->StructSize = sizeof(GlobalInfo);
+		Info->MinFarVersion = FARMANAGERVERSION;
 
+		// Build: YYMMDDX (YY - две цифры года, MM - месяц, DD - день, X - 0 и выше-номер подсборки)
+		Info->Version = MAKEFARVERSION(MVV_1,MVV_2,MVV_3,((MVV_1 % 100)*100000) + (MVV_2*1000) + (MVV_3*10) + (MVV_4 % 10));
+		
+		Info->Guid = guid_BlockEditor;
+		Info->Title = L"MBlockEditor";
+		Info->Description = L"Tabulate and comment in the Editor";
+		Info->Author = L"ConEmu.Maximus5@gmail.com";
+	}
 #else
-int WINAPI GetMinFarVersionW()
-{
-  #ifdef _UNICODE
-  return MAKEFARVERSION(2,0,1017);
-  #else
-  return MAKEFARVERSION(1,70,146);
-  #endif
-}
+	int WINAPI GetMinFarVersionW()
+	{
+	  #ifdef _UNICODE
+	  return MAKEFARVERSION(2,0,1017);
+	  #else
+	  return MAKEFARVERSION(1,70,146);
+	  #endif
+	}
 #endif
 
 
@@ -92,6 +150,10 @@ int WINAPI GetMinFarVersionW()
 void WINAPI GetPluginInfoW( struct PluginInfo *Info )
 {
     memset(Info, 0, sizeof(PluginInfo));
+    
+    #if FAR_UNICODE>=1906
+    Info->StructSize = sizeof(struct PluginInfo);
+    #endif
 
     MCHKHEAP;
 
@@ -108,10 +170,20 @@ void WINAPI GetPluginInfoW( struct PluginInfo *Info )
     MCHKHEAP;
 
     Info->Flags = PF_DISABLEPANELS | PF_EDITOR;
+
+#ifdef _UNICODE
+	#if FAR_UNICODE>=1906
+		Info->PluginMenu.Guids = &guid_BlockEditorPluginMenu;
+		Info->PluginMenu.Strings = szMenu;
+		Info->PluginMenu.Count = 1;
+	#else
+	    Info->PluginMenuStrings = szMenu;
+	    Info->PluginMenuStringsNumber = 1;
+		Info->Reserved = 1296198763; //'MBlk';
+	#endif
+#else
     Info->PluginMenuStrings = szMenu;
     Info->PluginMenuStringsNumber = 1;
-#ifdef _UNICODE
-	Info->Reserved = 1296198763; //'MBlk';
 #endif
 }
 
@@ -134,224 +206,170 @@ enum EWorkMode
 	ewmLastInternal = ewmUncommentStream
 };
 
-HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
+#if FAR_UNICODE>=1906
+HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item);
+HANDLE WINAPI OpenW(const struct OpenInfo *Info)
 {
-    
-    EditorGetString egs;
-    EditorInfo ei = {0};
-    EditorSetString ess;
-    EditorSelect es;
-	int nMode = ewmUndefined;
-
-    MCHKHEAP;
-
-    psi.EditorControl(ECTL_GETINFO,&ei);
-    //if (ei.BlockType == BTYPE_NONE)
-    //    return INVALID_HANDLE_VALUE;
-    es.BlockType = ei.BlockType;
-
-    //TODO: Если выделения нет, и хотят Tab/ShiftTab можно переслать в ФАР
-    //ACTL_POSTKEYSEQUENCE TAB/требуемое количество BS
-
-
-    MCHKHEAP;
-    //CStaticMenu lmMenu(_ATOT(szMsgBlockEditorPlugin));
-
-    /*lmMenu.AddMenuItem ( _T("&1 Tabulate right") );
-    lmMenu.AddMenuItem ( _T("&2 Tabulate left") );
-    lmMenu.AddMenuItem ( _T("&3 Comment") );
-    lmMenu.AddMenuItem ( _T("&4 UnComment") );*/
-    //psi.Menu(
-
-#ifdef _UNICODE
-	if (((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO) && (Item >= ewmFirst && Item <= ewmLastValidCall))
-	{
-		nMode = (int)Item;
-	}
+	return OpenPluginW(Info->OpenFrom, Info->Data);
+}
 #endif
 
-
-	if (nMode == ewmUndefined)
-	{
-		FarMenuItem pItems[] =
-		{
-			{_T("&1 Tabulate right"),0,0,0},
-			{_T("&2 Tabulate left"),0,0,0},
-			{_T("&3 Comment auto"),0,0,0},
-			{_T("&4 UnComment"),0,0,0},
-			{_T("&5 Comment block"),0,0,0},
-			{_T("&6 Comment stream"),0,0,0}
-		};
-
-		MCHKHEAP;
-
-		//int nMode = lmMenu.DoModal();
-		nMode = psi.Menu ( psi.ModuleNumber,
-			-1, -1, 0, FMENU_WRAPMODE,
-			_T(szMsgBlockEditorPlugin),NULL,NULL,
-			0, NULL, pItems, ARRAYSIZE(pItems) );
-		if (nMode < 0)
-			return INVALID_HANDLE_VALUE;
-		nMode++;
-	}
-    MCHKHEAP;
-
-    if (nMode < ewmFirst || nMode > ewmLastValidCall)
-        return INVALID_HANDLE_VALUE;
-
-	#ifdef _UNICODE
-	EditorUndoRedo eur = {EUR_BEGIN};
-	psi.EditorControl(ECTL_UNDOREDO,&eur);
-
-	int nLen = psi.EditorControl(ECTL_GETFILENAME,NULL);
-	wchar_t *pszFileName = (wchar_t*)calloc(nLen+1,2);
-	psi.EditorControl(ECTL_GETFILENAME,pszFileName);
+int EditCtrl(int Cmd, void* Parm)
+{
+	int iRc;
+	#if FAR_UNICODE>=1906
+	iRc = psi.EditorControl(-1, (EDITOR_CONTROL_COMMANDS)Cmd, 0, (INT_PTR)Parm);
 	#else
-	LPCSTR pszFileName = ei.FileName;
+	iRc = psi.EditorControl(Cmd, Parm);
 	#endif
+	return iRc;
+}
 
-	BOOL lbSkipNonSpace = TRUE;
-    LPCTSTR psComment = _T("//"), psCommentBegin = NULL, psCommentEnd = NULL;
-	int nCommentBeginLen = 0, nCommentEndLen = 0;
-	TCHAR szComment[100] = {0}, szCommentBegin[100] = {0}, szCommentEnd[100] = {0}, szTemp[16] = {0};
-    if ((nMode >= ewmCommentFirst && nMode <= ewmCommentLast) && pszFileName)
-	{
-    	// CommentFromBegin
-    	HKEY hk = 0;
-		TCHAR szKey[MAX_PATH];
-		lstrcpy(szKey, psi.RootKey); 
-		if (lstrlen(szKey) < (MAX_PATH - 15))
+HANDLE OpenKey(LPCTSTR pszSubKey)
+{
+	HANDLE hKey = NULL;
+	#if FAR_UNICODE>=1906
+
+		FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_BlockEditor, INVALID_HANDLE_VALUE};
+		FarSettingsItem fsi = {0};
+		BOOL lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, (INT_PTR)&sc) != 0;
+		if (lbKeyOpened)
+			hKey = sc.Handle;
+
+	#else
+	
+		TCHAR* pszKey = NULL;
+		int nLen = (pszSubKey ? lstrlen(pszSubKey) : 0) + 2 + lstrlen(psi.RootKey);
+		pszKey = (TCHAR*)calloc(nLen, sizeof(TCHAR));
+		lstrcpy(pszKey, psi.RootKey); 
+		lstrcat(pszKey, _T("\\"));
+		lstrcat(pszKey, pszSubKey);
+		
+		if (RegOpenKeyEx(HKEY_CURRENT_USER, pszKey, 0, KEY_READ, (HKEY*)&hKey) != 0)
+			hKey = NULL;
+			
+		free(pszKey);
+		
+	#endif
+	return hKey;
+}
+
+void CloseKey(HANDLE& hKey)
+{
+	#if FAR_UNICODE>=1906
+		psi.SettingsControl(hKey, SCTL_FREE, 0, 0);
+	#else
+		if (hKey)
+			RegCloseKey((HKEY)hKey);
+	#endif
+	hKey = NULL;
+}
+
+BOOL QueryValue(HANDLE hKey, LPCTSTR pszName, LPTSTR pszValue, int cchValueMax)
+{
+	BOOL lbRc = FALSE;
+	#if FAR_UNICODE>=1906
+		FarSettingsItem fsi = {0};
+		fsi.Name = pszName;
+		fsi.Type = FST_STRING;
+		if (psi.SettingsControl(hKey, SCTL_GET, 0, (INT_PTR)&fsi))
 		{
-			lstrcat(szKey, _T("\\MBlockEditor"));
-
-			//[HKEY_CURRENT_USER\Software\Far2\Plugins\MBlockEditor]
-			//;; value "off" means 'comments are inserted at first non-space symbol'
-			//;; value "on"  means '... inserted at the line beginning'
-			//"CommentFromBegin"="off"
-			if (RegOpenKeyEx(HKEY_CURRENT_USER, szKey, 0, KEY_READ, &hk) == 0)
-			{
-				DWORD dwSize;
-				if (RegQueryValueEx(hk, _T("CommentFromBegin"), NULL, NULL, (LPBYTE)szTemp, &(dwSize=sizeof(szTemp))) == 0)
-				{
-					if (szTemp[0] && dwSize < sizeof(szTemp))
-					{
-						lbSkipNonSpace = lstrcmpi(szTemp, _T("on")) != 0;
-					}
-				}
-				RegCloseKey(hk); hk = NULL;
-			}
+			lstrcpynW(pszValue, fsi.String, cchValueMax-1);
+			lbRc = TRUE;
 		}
-    
-        LPCTSTR psExt = _tcsrchr(pszFileName, _T('.'));
-        if (psExt)
+		else
 		{
-			if (lstrlen(szKey) < (MAX_PATH - 2 - lstrlen(psExt)))
-			{
-				lstrcat(szKey, _T("\\"));
-				lstrcat(szKey, psExt);
-				
-				if (RegOpenKeyEx(HKEY_CURRENT_USER, szKey, 0, KEY_READ, &hk) == 0)
-				{
-					DWORD dwSize, dwSize2;
-					// May be overrided for each extension
-					if (RegQueryValueEx(hk, _T("CommentFromBegin"), NULL, NULL, (LPBYTE)szTemp, &(dwSize=sizeof(szTemp))) == 0)
-					{
-						if (szTemp[0] && dwSize < sizeof(szTemp))
-						{
-							lbSkipNonSpace = lstrcmpi(szTemp, _T("on")) != 0;
-						}
-					}
-					// Настройка "блочного" комментирования (на каждой строке)
-					if (RegQueryValueEx(hk, _T("Comment"), NULL, NULL, (LPBYTE)szComment, &(dwSize=sizeof(szComment))) == 0)
-					{
-						// Чтобы можно было запретить "блочный" комментарий (для html например)
-						// нужно указать "Comment"=""
-						if (/*szComment[0] &&*/ dwSize < sizeof(szComment))
-						{
-							psComment = szComment;
-							// Имеет приоритет над встроенным в программу
-							psExt = NULL;
-						}
-					}
-					// Комментирование может быть и "потоковое" (начало и конец выделения)
-					if (!RegQueryValueEx(hk, _T("CommentBegin"), NULL, NULL, (LPBYTE)szCommentBegin, &(dwSize=sizeof(szCommentBegin))) &&
-						!RegQueryValueEx(hk, _T("CommentEnd"), NULL, NULL, (LPBYTE)szCommentEnd, &(dwSize2=sizeof(szCommentEnd))))
-					{
-						if (szCommentBegin[0] && dwSize < sizeof(szCommentBegin)
-							&& szCommentEnd[0] && dwSize2 < sizeof(szCommentEnd))
-						{
-							psCommentBegin = szCommentBegin;
-							psCommentEnd = szCommentEnd;
-							// Имеет приоритет над встроенным в программу
-							psExt = NULL;
-						}
-					}
-					RegCloseKey(hk); hk = NULL;
-				}
-			}
-		}			
-
-		if (psExt)
+			*pszValue = 0; *(pszValue+1) = 0;
+		}
+	#else
+		DWORD dwSize = cchValueMax*sizeof(*pszValue);
+		DWORD dwResult = dwSize-2*sizeof(TCHAR);
+		if ((RegQueryValueEx((HKEY)hKey, pszName, NULL, NULL, (LPBYTE)pszValue, &dwResult) == 0)
+			&& dwResult < dwSize) // ASCIIZ
 		{
-            if (_tcsicmp(psExt, _T(".bat"))==0 || _tcsicmp(psExt, _T(".cmd"))==0)
-			{
-                psComment = _T("rem ");
-            }
-			else if (_tcsicmp(psExt, _T(".sql"))==0)
-			{
-                psComment = _T("--");
-            }
-			else if (_tcsicmp(psExt, _T(".bas"))==0 || _tcsicmp(psExt, _T(".vbs"))==0)
-			{
-                psComment = _T("'");
-			}
-			else if (_tcsicmp(psExt, _T(".cpp"))==0 || _tcsicmp(psExt, _T(".c"))==0 || _tcsicmp(psExt, _T(".cxx"))==0 ||
-				_tcsicmp(psExt, _T(".hpp"))==0 || _tcsicmp(psExt, _T(".h"))==0 || _tcsicmp(psExt, _T(".hxx"))==0)
-			{
-				psCommentBegin = _T("/*");
-				psCommentEnd = _T("*/");
-			}
-			else if (_tcsicmp(psExt, _T(".htm"))==0 || _tcsicmp(psExt, _T(".html"))==0 || _tcsicmp(psExt, _T(".xml"))==0)
-			{
-				psCommentBegin = _T("<!--");
-				psCommentEnd = _T("-->");
-				psComment = _T("");
-			}
-        }
-    }
-
-
-	#ifdef _UNICODE
-	if (pszFileName)
-	{
-		free(pszFileName); pszFileName = NULL;
-	}
+			lbRc = TRUE;
+		}
+		else
+		{
+			*pszValue = 0; *(pszValue+1) = 0;
+		}
 	#endif
+	if (lbRc)
+	{
+		TCHAR* psz = _tcschr(pszValue, L'\n');
+		while (psz)
+		{
+			*psz = 0;
+			psz = _tcschr(psz+1, L'\n');
+		}
+	}
+	return lbRc;
+}
 
+void SetMenuItem(FarMenuItem* pItems, int nIdx, LPCTSTR pszBegin, LPCTSTR pszEnd)
+{
+	#ifdef _UNICODE
+	wchar_t* psz = (wchar_t*)calloc(64,sizeof(wchar_t));
+	pItems[nIdx].Text = psz;
+	#else
+	char* psz = pItems[nIdx].Text;
+	#endif
+	
+	#define MENU_PART 4
+	
+	if (nIdx < 9)
+		wsprintf(psz, _T("&%i. "), nIdx+1);
+	else if (nIdx == 9)
+		lstrcpy(psz, _T("&0. "));
+	else
+		lstrcpy(psz, _T("   "));
+	
+	int iStart = lstrlen(psz);
+	int i = iStart;
+	lstrcpyn(psz+i, pszBegin, MENU_PART+1 /*+1 т.к. включая \0*/);
+	i = lstrlen(psz);
+	int iFin = iStart+MENU_PART+1;
+	while (i < iFin)
+		psz[i++] = _T(' ');
+	psz[i] = 0;
+	if (pszEnd)
+		lstrcpyn(psz+i, pszEnd, MENU_PART+1 /*+1 т.к. включая \0*/);
+	i = lstrlen(psz);
+	iFin = iStart+MENU_PART*2+2;
+	while (i < iFin)
+		psz[i++] = _T(' ');
+	psz[i] = 0;
+	lstrcat(psz, pszEnd ? _T("Stream") : _T("Block"));
+}
 
-    if (ei.TabSize<1) ei.TabSize=1;
-    BOOL lbExpandTabs = (ei.Options & (EOPT_EXPANDALLTABS|EOPT_EXPANDONLYNEWTABS))!=0;
+/* global variables */
+EditorGetString egs;
+EditorInfo ei;
+EditorSetString ess;
+EditorSelect es;
+int nMode;
+BOOL lbSkipNonSpace, lbSkipCommentMenu;
+LPCTSTR psComment, psCommentBegin, psCommentEnd;
+int nCommentBeginLen, nCommentEndLen;
+BOOL lbExpandTabs;
+int nStartLine;
+int nEndLine;
+int Y1, Y2;
+int X1, X2;
+bool lbCurLineShifted;
+int nInsertSlash;
+int nMaxStrLen;
+bool lbStartChanged, lbEndChanged; // измнены ли первая и последняя строки выделения?
+bool lbMultiComment;
+/* end of global variables */
 
-    MCHKHEAP;
-
-    int nStartLine = (ei.BlockType == BTYPE_NONE) ? ei.CurLine : ei.BlockStartLine;
-    int nEndLine = nStartLine;
-    //int nEmptyLine = -1;
-    int Y1 = nStartLine, Y2 = -1;
-    int X1 = 0, X2 = -1;
-	bool lbCurLineShifted = false;
-    int nInsertSlash = -1;
-    int nMaxStrLen = 0;
-	bool lbStartChanged = true, lbEndChanged = true; // измнены ли первая и последняя строки выделения?
-
-    MCHKHEAP;
-
-	// Пробежаться по выделению, определить максимальную длину строки
+void FindMaxStringLen()
+{
     for (egs.StringNumber = nStartLine;
          egs.StringNumber < ei.TotalLines;
          egs.StringNumber++)
     {
-        psi.EditorControl(ECTL_GETSTRING,&egs);
+        EditCtrl(ECTL_GETSTRING,&egs);
 
         MCHKHEAP;
 
@@ -420,55 +438,62 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	if (X1 > 0)
 	{
 		egs.StringNumber = Y1;
-		if (psi.EditorControl(ECTL_GETSTRING,&egs) && X1 > egs.StringLength)
+		if (EditCtrl(ECTL_GETSTRING,&egs) && X1 > egs.StringLength)
 			X1 = egs.StringLength;
 	}
 	if (X2 > 0)
 	{
 		egs.StringNumber = Y2;
-		if (psi.EditorControl(ECTL_GETSTRING,&egs) && X2 > egs.StringLength)
+		if (EditCtrl(ECTL_GETSTRING,&egs) && X2 > egs.StringLength)
 			X2 = egs.StringLength;
 	}
+}
 
-    MCHKHEAP;
-
+BOOL PrepareCommentParams()
+{
 	if (nMode == ewmCommentAuto)
 	{
 		if (psCommentBegin && *psCommentBegin
-			&& psCommentEnd && *psCommentEnd 
-			&& ((X1 >= 0 && X2 >= 0) && (X1 || X2)))
+			&& psCommentEnd && *psCommentEnd)
 		{
-			// Если есть из чего выбирать - проверить, а не захватывает ли X2 всю строку?
-			if (!X1 && X2 && psComment && *psComment)
+			if ((ei.BlockType != BTYPE_NONE) && (!psComment || !*psComment))
 			{
-				egs.StringNumber = Y2;
-		        if (psi.EditorControl(ECTL_GETSTRING,&egs)
-					&& egs.StringLength == X2)
-				{
-					// Раз захватывает всю строку целиком - выбираем "блочное" комментирование
-					nMode = ewmCommentBlock;
-				}
+				nMode = ewmCommentStream;
 			}
-			if (nMode == ewmCommentAuto)
-				nMode = ewmCommentStream;
-		}
-		else if ((nMode == ewmCommentAuto) && (ei.BlockType == BTYPE_NONE)
-			&& (!psComment || !*psComment))
-		{
-			egs.StringNumber = ei.CurLine;
-			if (psi.EditorControl(ECTL_GETSTRING,&egs) && egs.StringLength)
+			else if (((X1 >= 0 && X2 >= 0) && (X1 || X2)))
 			{
-				X1 = 0;
-				X2 = egs.StringLength;
-				if (lbSkipNonSpace)
+				// Если есть из чего выбирать - проверить, а не захватывает ли X2 всю строку?
+				if (!X1 && X2 && psComment && *psComment)
 				{
-					while (X1 < X2 && X1 < ei.CurPos &&
-						(egs.StringText[X1] == _T(' ') || egs.StringText[X1] == _T('\t')))
-						X1++;
+					egs.StringNumber = Y2;
+					if (EditCtrl(ECTL_GETSTRING,&egs)
+						&& egs.StringLength == X2)
+					{
+						// Раз захватывает всю строку целиком - выбираем "блочное" комментирование
+						nMode = ewmCommentBlock;
+					}
 				}
-				Y1 = Y2 = ei.CurLine;
-				nMode = ewmCommentStream;
-				ei.BlockType = BTYPE_STREAM;
+				if (nMode == ewmCommentAuto)
+					nMode = ewmCommentStream;
+			}
+			if ((nMode == ewmCommentAuto) && (ei.BlockType == BTYPE_NONE)
+				&& (!psComment || !*psComment))
+			{
+				egs.StringNumber = ei.CurLine;
+				if (EditCtrl(ECTL_GETSTRING,&egs) && egs.StringLength)
+				{
+					X1 = 0;
+					X2 = egs.StringLength;
+					if (lbSkipNonSpace)
+					{
+						while (X1 < X2 && X1 < ei.CurPos &&
+							(egs.StringText[X1] == _T(' ') || egs.StringText[X1] == _T('\t')))
+							X1++;
+					}
+					Y1 = Y2 = ei.CurLine;
+					nMode = ewmCommentStream;
+					ei.BlockType = BTYPE_STREAM;
+				}
 			}
 		}
 		
@@ -491,37 +516,166 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	{
 		nCommentBeginLen = nCommentEndLen = lstrlen(psComment);
 	}
-	if ((nMode == ewmCommentBlock) && (nMode == ewmCommentStream))
+
+	if ((nMode == ewmCommentBlock) || (nMode == ewmCommentStream))
 	{
-		if (nCommentBeginLen || nCommentEndLen)
-			return INVALID_HANDLE_VALUE;
+		if (nCommentBeginLen<1)
+			return FALSE;
+		// Проверка, может быть настроено несколько допустимых комментариев?
+		if (nMode == ewmCommentBlock)
+			lbMultiComment = (psComment[nCommentBeginLen+1] != 0);
+		else
+			lbMultiComment = (psCommentBegin[nCommentBeginLen+1] != 0);
+		// Дать пользователю выбрать, чем комментировать
+		if (lbMultiComment && !lbSkipCommentMenu)
+		{
+			// Выбирать будем и блочные и потоковые
+			int nCount = 0;
+			LPCTSTR psz = psComment;
+			while (psz && *psz)
+			{
+				nCount ++;
+				psz += lstrlen(psz)+1;
+			}
+			psz = psCommentBegin;
+			while (psz && *psz)
+			{
+				nCount ++;
+				psz += lstrlen(psz)+1;
+			}
+			if (!nCount)
+				return FALSE;
+			// Сформировать меню
+			FarMenuItem* pItems = (FarMenuItem*)calloc(nCount, sizeof(FarMenuItem));
+			//#if FAR_UNICODE>=1906
+			//FarMenuItem pItems[] =
+			//{
+			//	{0, L"&1 Tabulate right"},
+			//};
+			//#else
+			//FarMenuItem pItems[] =
+			//{
+			//	{_T("&1 Tabulate right")},
+			//};
+			//#endif
+			int nBlockBegin = -1;
+			int nStreamBegin = -1;
+			nCount = 0;
+			FarMenuItem* pCur = NULL;
+			if (psComment && *psComment)
+			{
+				psz = psComment;
+				nBlockBegin = nCount;
+				while (*psz)
+				{
+					if (!pCur && (nMode == ewmCommentBlock))
+						pCur = pItems+nCount;
+					SetMenuItem(pItems, nCount, psz, NULL);
+					nCount ++;
+					psz += lstrlen(psz)+1;
+				}
+			}
+			if (psCommentBegin && *psCommentBegin)
+			{
+				psz = psCommentBegin;
+				LPCTSTR pszEnd = psCommentEnd;
+				nStreamBegin = nCount;
+				while (*psz)
+				{
+					if (!pCur && (nMode == ewmCommentStream))
+						pCur = pItems+nCount;
+					SetMenuItem(pItems, nCount, psz, pszEnd);
+					nCount ++;
+					psz += lstrlen(psz)+1;
+					if (*pszEnd)
+						pszEnd += lstrlen(pszEnd)+1;
+				}
+			}
+			if (pCur)
+			{
+				#if FAR_UNICODE>=1900
+				pCur->Flags |= MIF_SELECTED;
+				#else
+				pCur->Selected = TRUE;
+				#endif
+			}
+
+			int nSel = -1;
+			#if FAR_UNICODE>=1900
+			nSel = psi.Menu(&guid_BlockEditor,
+				-1,-1, 0, /*FMENU_CHANGECONSOLETITLE|*/FMENU_WRAPMODE,
+				_T(szMsgBlockEditorPlugin), NULL, NULL,
+				NULL, NULL, pItems, nCount);
+			#else
+			nSel = psi.Menu(psi.ModuleNumber,
+				-1, -1, 0, FMENU_WRAPMODE,
+				_T(szMsgBlockEditorPlugin),NULL,NULL,
+				0, NULL, pItems, nCount);
+			#endif
+			#ifdef _UNICODE
+			for (int i = 0; i < nCount; i++)
+			{
+				if (pItems[i].Text)
+					free((void*)pItems[i].Text);
+			}
+			#endif
+			free(pItems);
+			if (nSel < 0)
+				return FALSE;
+			// Смотрим, что юзер выбрал
+			if (nStreamBegin != -1 && nSel >= nStreamBegin)
+			{
+				nMode = ewmCommentStream;
+				nSel -= nStreamBegin;
+				// Указатель на выбранный комментарий
+				while ((nSel--) > 0)
+				{
+					if (*psCommentBegin)
+						psCommentBegin += lstrlen(psCommentBegin)+1;
+					if (*psCommentEnd)
+						psCommentEnd += lstrlen(psCommentEnd)+1;
+				}
+				nCommentBeginLen = lstrlen(psCommentBegin);
+				nCommentEndLen = lstrlen(psCommentEnd);
+			}
+			else if (nBlockBegin != -1 && nSel >= nBlockBegin)
+			{
+				nMode = ewmCommentBlock;
+				nSel -= nBlockBegin;
+				// Указатель на выбранный комментарий
+				while ((nSel--) > 0)
+				{
+					if (*psComment)
+						psComment += lstrlen(psComment)+1;
+				}
+				nCommentBeginLen = nCommentEndLen = lstrlen(psComment);
+			}
+			else
+			{
+				InvalidOp();
+				return FALSE;
+			}
+			if (!nCommentBeginLen)
+				return FALSE;
+		}
 	}
+	return TRUE;
+}
 
-
-    nMaxStrLen += 10+ei.TabSize; // с запасом на символы комментирования
-	if (psCommentBegin && psCommentEnd)
-		nMaxStrLen += lstrlen(psCommentBegin) + lstrlen(psCommentEnd);
-	if (psComment)
-		nMaxStrLen += lstrlen(psComment);
-
-    MCHKHEAP;
-
-    if (ei.BlockType == BTYPE_NONE)
-        X1 = ei.CurPos;
-
-
+BOOL DoTabRight()
+{
 	// Поехали
     TCHAR* lsText = (TCHAR*)calloc(nMaxStrLen,sizeof(TCHAR));
-	bool lbFirstUncommented = false;
+    if (!lsText) return FALSE;
     MCHKHEAP;
     for (egs.StringNumber = nStartLine;
          egs.StringNumber <= nEndLine;
          egs.StringNumber++)
     {
         MCHKHEAP;
-        psi.EditorControl(ECTL_GETSTRING,&egs);
+        EditCtrl(ECTL_GETSTRING,&egs);
         
-        if (nMode == ewmTabulateRight)
+        //if (nMode == ewmTabulateRight)
 		{
             MCHKHEAP;
             if (*egs.StringText==0) continue;
@@ -545,7 +699,34 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 				lbCurLineShifted = true;
 
         }
-		else if (nMode == ewmTabulateLeft)
+
+        MCHKHEAP;
+		ess.StringLength = lstrlen(egs.StringText);
+		ess.StringText = (TCHAR*)egs.StringText;
+		ess.StringNumber = egs.StringNumber;
+		ess.StringEOL = (TCHAR*)egs.StringEOL;
+		EditCtrl(ECTL_SETSTRING,&ess);
+        MCHKHEAP;
+    }
+    free(lsText);
+    return TRUE;
+}
+
+BOOL DoTabLeft()
+{
+	// Поехали
+    TCHAR* lsText = (TCHAR*)calloc(nMaxStrLen,sizeof(TCHAR));
+    if (!lsText) return FALSE;
+    MCHKHEAP;
+    for (egs.StringNumber = nStartLine;
+         egs.StringNumber <= nEndLine;
+         egs.StringNumber++)
+    {
+        MCHKHEAP;
+        EditCtrl(ECTL_GETSTRING,&egs);
+        
+		
+		//if (nMode == ewmTabulateLeft)
 		{
             if (*egs.StringText==0) continue;
             MCHKHEAP;
@@ -578,7 +759,160 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
             //lstrcpy(lsText, egs.StringText);
 
         }
-		else if (nMode == ewmCommentBlock || nMode == ewmCommentStream)
+
+        MCHKHEAP;
+		ess.StringLength = lstrlen(egs.StringText);
+		ess.StringText = (TCHAR*)egs.StringText;
+		ess.StringNumber = egs.StringNumber;
+		ess.StringEOL = (TCHAR*)egs.StringEOL;
+		EditCtrl(ECTL_SETSTRING,&ess);
+        MCHKHEAP;
+    }
+    free(lsText);
+    return TRUE;
+}
+
+void SetCommentDefaults(LPCTSTR psExt)
+{
+    if (_tcsicmp(psExt, _T(".bat"))==0 || _tcsicmp(psExt, _T(".cmd"))==0)
+	{
+        psComment = _T("rem \0REM \0");
+        lbSkipNonSpace = FALSE;
+		lbSkipCommentMenu = TRUE;
+    }
+	else if (_tcsicmp(psExt, _T(".sql"))==0)
+	{
+        psComment = _T("--");
+		psCommentBegin = _T("/*");
+		psCommentEnd = _T("*/");
+		lbSkipNonSpace = FALSE;
+    }
+	else if (_tcsicmp(psExt, _T(".bas"))==0 || _tcsicmp(psExt, _T(".vbs"))==0)
+	{
+        psComment = _T("'");
+	}
+	else if (_tcsicmp(psExt, _T(".cpp"))==0 || _tcsicmp(psExt, _T(".c"))==0 || _tcsicmp(psExt, _T(".cxx"))==0 ||
+		_tcsicmp(psExt, _T(".hpp"))==0 || _tcsicmp(psExt, _T(".h"))==0 || _tcsicmp(psExt, _T(".hxx"))==0)
+	{
+		psCommentBegin = _T("/*");
+		psCommentEnd = _T("*/");
+	}
+	else if (_tcsicmp(psExt, _T(".htm"))==0 || _tcsicmp(psExt, _T(".html"))==0 || _tcsicmp(psExt, _T(".xml"))==0)
+	{
+		psCommentBegin = _T("<!--");
+		psCommentEnd = _T("-->");
+		psComment = _T("");
+	}
+	else if (_tcsicmp(psExt, _T(".php"))==0)
+	{
+		psCommentBegin = _T("<!--\0/*\0");
+		psCommentEnd = _T("-->\0*/\0");
+		psComment = _T("//\0#\0");
+	}
+}
+
+void LoadCommentSettings(LPCTSTR pszFileName, TCHAR (&szComment)[100], TCHAR (&szCommentBegin)[100], TCHAR (&szCommentEnd)[100])
+{
+	// CommentFromBegin
+	HANDLE hk = 0;
+	TCHAR szTemp[16] = {0};
+	TCHAR szKey[MAX_PATH];
+	//lstrcpy(szKey, psi.RootKey); 
+	//if (lstrlen(szKey) < (MAX_PATH - 15))
+	//{
+	lstrcpy(szKey, _T("MBlockEditor"));
+
+	//[HKEY_CURRENT_USER\Software\Far2\Plugins\MBlockEditor]
+	//;; value "off" means 'comments are inserted at first non-space symbol'
+	//;; value "on"  means '... inserted at the line beginning'
+	//"CommentFromBegin"="off"
+	if ((hk = OpenKey(szKey)) != NULL)
+	{
+		//DWORD dwSize;
+		if (QueryValue(hk, _T("CommentFromBegin"), szTemp, ARRAYSIZE(szTemp)))
+		{
+			if (*szTemp)
+				lbSkipNonSpace = lstrcmpi(szTemp, _T("on")) != 0;
+		}
+		CloseKey(hk);
+	}
+	//}
+
+    LPCTSTR psExt = _tcsrchr(pszFileName, _T('.'));
+    if (psExt)
+	{
+		if ((lstrlen(szKey) + 2 + lstrlen(psExt)) < MAX_PATH)
+		{
+			lstrcat(szKey, _T("\\"));
+			lstrcat(szKey, psExt);
+			
+			if ((hk = OpenKey(szKey)) != NULL)
+			{
+				//DWORD dwSize, dwSize2;
+				// May be overrided for each extension
+				if (QueryValue(hk, _T("CommentFromBegin"), szTemp, ARRAYSIZE(szTemp)))
+				{
+					if (*szTemp)
+					{
+						lbSkipNonSpace = lstrcmpi(szTemp, _T("on")) != 0;
+					}
+				}
+				// Для "множественного" комментирования может быть запрещен показ меню
+				if (QueryValue(hk, _T("CommentSkipMenu"), szTemp, ARRAYSIZE(szTemp)))
+				{
+					if (*szTemp)
+					{
+						lbSkipCommentMenu = lstrcmpi(szTemp, _T("on")) == 0;
+					}
+				}
+				// Настройка "блочного" комментирования (на каждой строке)
+				if (QueryValue(hk, _T("Comment"), szComment, ARRAYSIZE(szComment)))
+				{
+					// Чтобы можно было запретить "блочный" комментарий (для html например)
+					// нужно указать "Comment"=""
+					//if (*szComment)
+					//{
+					psComment = szComment;
+					// Имеет приоритет над встроенным в программу
+					psExt = NULL;
+					//}
+				}
+				// Комментирование может быть и "потоковое" (начало и конец выделения)
+				if (QueryValue(hk, _T("CommentBegin"), szCommentBegin, ARRAYSIZE(szCommentBegin)) &&
+					QueryValue(hk, _T("CommentEnd"), szCommentEnd, ARRAYSIZE(szCommentEnd)))
+				{
+					if (*szCommentBegin && *szCommentEnd)
+					{
+						psCommentBegin = szCommentBegin;
+						psCommentEnd = szCommentEnd;
+						// Имеет приоритет над встроенным в программу
+						psExt = NULL;
+					}
+				}
+				CloseKey(hk);
+			}
+		}
+	}			
+
+	// Если НЕ NULL - значит в настройках плагина ничего прописано не было
+	if (psExt)
+		SetCommentDefaults(psExt);
+}
+
+BOOL DoComment()
+{
+	// Поехали
+    TCHAR* lsText = (TCHAR*)calloc(nMaxStrLen,sizeof(TCHAR));
+    if (!lsText) return FALSE;
+    MCHKHEAP;
+    for (egs.StringNumber = nStartLine;
+         egs.StringNumber <= nEndLine;
+         egs.StringNumber++)
+    {
+        MCHKHEAP;
+        EditCtrl(ECTL_GETSTRING,&egs);
+        
+		//if (nMode == ewmCommentBlock || nMode == ewmCommentStream)
 		{
             MCHKHEAP;
             int nPos = 0, nIdx = 0; BOOL lbSpace=FALSE;
@@ -593,6 +927,11 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
                 else
                     nPos += ei.TabSize;
             }
+			// Чтобы после комментирования курсор встал на первый символ ПОСЛЕ комментария (//)
+			if ((ei.CurPos < nIdx) && (ei.BlockType == BTYPE_NONE) /*&& (nMode == ewmCommentBlock)*/)
+			{
+				ei.CurPos = nIdx;
+			}
 
             MCHKHEAP;
 
@@ -635,12 +974,13 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 				else if (nMode == ewmCommentStream)
 				{
 					size_t n = 0;
+					int nStartLnX1 = X1 ? X1 : nIdx;
 					if (egs.StringNumber == nStartLine)
 					{
-						if (X1)
+						if (nStartLnX1)
 						{
-							memcpy(lsText+n, egs.StringText, X1*sizeof(TCHAR));
-							n += X1;
+							memcpy(lsText+n, egs.StringText, nStartLnX1*sizeof(TCHAR));
+							n += nStartLnX1;
 						}
 						memcpy(lsText+n, psCommentBegin, nCommentBeginLen*sizeof(TCHAR));
 						n += nCommentBeginLen;
@@ -650,13 +990,21 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 					{
 						if (egs.StringNumber == nStartLine)
 						{
-							if (X2 <= X1)
+							if (Y1 == Y2)
 							{
-								InvalidOp();
-								break;
+								if (X2 <= nStartLnX1)
+								{
+									InvalidOp();
+									break;
+								}
+								memcpy(lsText+n, egs.StringText+nStartLnX1, (X2 - nStartLnX1)*sizeof(TCHAR));
+								n += (X2 - nStartLnX1);
 							}
-							memcpy(lsText+n, egs.StringText+X1, (X2 - X1)*sizeof(TCHAR));
-							n += (X2 - X1);
+							else
+							{
+								lstrcpy(lsText+n, egs.StringText+nStartLnX1);
+								n += lstrlen(egs.StringText+nStartLnX1);
+							}
 						}
 						else
 						{
@@ -680,7 +1028,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 					else
 					{
 						if (egs.StringNumber == nStartLine)
-							lstrcpy(lsText+n, egs.StringText+X1);
+							lstrcpy(lsText+n, egs.StringText+nStartLnX1);
 						else
 							lstrcpy(lsText+n, egs.StringText);
 					}
@@ -719,7 +1067,46 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 					lbCurLineShifted = true;
 			}
         }
-		else if (nMode == ewmUncommentAuto || nMode == ewmUncommentBlock || nMode == ewmUncommentStream)
+
+        MCHKHEAP;
+		ess.StringLength = lstrlen(egs.StringText);
+		ess.StringText = (TCHAR*)egs.StringText;
+		ess.StringNumber = egs.StringNumber;
+		ess.StringEOL = (TCHAR*)egs.StringEOL;
+		EditCtrl(ECTL_SETSTRING,&ess);
+        MCHKHEAP;
+    }
+    free(lsText);
+    return TRUE;
+}
+
+BOOL DoUnComment()
+{
+	// Поехали
+    TCHAR* lsText = (TCHAR*)calloc(nMaxStrLen,sizeof(TCHAR));
+    if (!lsText) return FALSE;
+	bool lbFirstUncommented = false;
+	LPCTSTR pszBlockComment = psComment; // сохранить, для перебора
+
+	//lbMultiComment - Может быть настроено несколько типов комментариев
+	if (nMode != ewmUncommentAuto)
+	{
+		if (nMode == ewmCommentBlock)
+			lbMultiComment = (psComment[lstrlen(psComment)+1] != 0);
+		else
+			lbMultiComment = (psCommentBegin[lstrlen(psCommentBegin)+1] != 0);
+	}
+
+    MCHKHEAP;
+    for (egs.StringNumber = nStartLine;
+         egs.StringNumber <= nEndLine;
+         egs.StringNumber++)
+    {
+        MCHKHEAP;
+        if (!EditCtrl(ECTL_GETSTRING,&egs))
+			break;
+        
+		//if (nMode == ewmUncommentAuto || nMode == ewmUncommentBlock || nMode == ewmUncommentStream)
 		{
 			// Убрать комментарий
             if (*egs.StringText==0)
@@ -737,24 +1124,93 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 			if (nMode == ewmUncommentAuto)
 			{
 				if (psComment && *psComment && !psCommentBegin)
+				{
 					nMode = ewmUncommentBlock;
+					lbMultiComment = (psComment[lstrlen(psComment)+1] != 0);
+				}
 				else if (psCommentBegin && psCommentEnd && !(psComment && *psComment))
+				{
 					nMode = ewmUncommentStream;
+					lbMultiComment = (psCommentBegin[lstrlen(psCommentBegin)+1] != 0);
+				}
 				else
 				{
 					// Нужно опеределить, какой комментарий используется в блоке :(
-					LPCTSTR pszTest = egs.StringText;
-					if (egs.StringNumber == nStartLine && X1 >= 0)
-						pszTest += X1;
-					while (*pszTest == _T(' ') || *pszTest == _T('\t'))
-						pszTest++;
-					if (_tcsncmp(pszTest, psCommentBegin, lstrlen(psCommentBegin)) == 0)
-						nMode = ewmUncommentStream;
-					else if ((pszTest - egs.StringText) >= lstrlen(psCommentBegin)
-						&& _tcsncmp(pszTest-lstrlen(psCommentBegin), psCommentBegin, lstrlen(psCommentBegin)) == 0)
-						nMode = ewmUncommentStream;
+					LPCTSTR pszTest;
+					LPCTSTR pszBegin = psCommentBegin, pszEnd = psCommentEnd;
+					// Сравнить с началом блока
+					if (nMode == ewmUncommentAuto)
+					{
+						pszTest = egs.StringText;
+						if (egs.StringNumber == nStartLine && X1 >= 0)
+							pszTest += X1;
+						while (*pszTest == _T(' ') || *pszTest == _T('\t'))
+							pszTest++;
+						pszBegin = psCommentBegin; pszEnd = psCommentEnd;
+						while (*pszBegin && nMode != ewmUncommentStream)
+						{
+							int nBegin = lstrlen(pszBegin);
+							if (_tcsncmp(pszTest, pszBegin, nBegin) == 0)
+							{
+								nMode = ewmUncommentStream;
+								break;
+							}
+							// Следующий
+							pszBegin += lstrlen(pszBegin)+1;
+							if (*pszEnd)
+								pszEnd += lstrlen(pszEnd)+1;
+						}
+					}
+					if (nMode == ewmUncommentAuto)
+					{
+						pszTest = egs.StringText;
+						if (egs.StringNumber == nStartLine && X1 >= 0)
+							pszTest += X1;
+						// Поскольку здесь мы ищем "назад", то пропуск пробелов будет ошибкой
+						// -- while (*pszTest == _T(' ') || *pszTest == _T('\t')) pszTest++;
+						pszBegin = psCommentBegin; pszEnd = psCommentEnd;
+						while (*pszBegin && nMode != ewmUncommentStream)
+						{
+							int nBegin = lstrlen(pszBegin);
+							for (int i = nBegin; i >= 1; i--)
+							{
+								if ((pszTest - egs.StringText) >= i
+									&& _tcsncmp(pszTest-i, pszBegin, nBegin) == 0)
+								{
+									nMode = ewmUncommentStream;
+									if (!lbFirstUncommented)
+									{
+										ei.CurPos -= i;
+										X1 -= i;
+									}
+									break;
+								}
+							}
+							if (nMode == ewmUncommentStream)
+								break; // ибо for :(
+							// Следующий
+							pszBegin += lstrlen(pszBegin)+1;
+							if (*pszEnd)
+								pszEnd += lstrlen(pszEnd)+1;
+						}
+					}
+					if (nMode == ewmUncommentStream)
+					{
+						//if (lbMultiComment) -- если был Auto - то lbMultiComment не был установлен, но и не надо, тип комментарования уже выбрали
+						//{
+
+						// Мог изменится "активный" тип комментирования
+						lbMultiComment = false;
+						psCommentBegin = pszBegin; psCommentEnd = pszEnd;
+						// Длины - обновляются ниже, строго всегда
+
+						//}
+					}
 					else
+					{
 						nMode = ewmUncommentBlock;
+						lbMultiComment = (psComment[lstrlen(psComment)+1] != 0);
+					}
 				}
 				if (nMode == ewmUncommentStream)
 				{
@@ -764,6 +1220,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 				else
 				{
 					nCommentBeginLen = nCommentEndLen = lstrlen(psComment);
+					// если lbMultiComment - нужно будет еще выбрать тип комментирования и обновить длины
 				}
 			}
 
@@ -790,14 +1247,80 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 							pszTest++;
 						if (_tcsncmp(pszTest, psCommentBegin, nCommentBeginLen) == 0)
 							psComm = pszTest;
-						else if ((pszTest - egs.StringText) >= nCommentBeginLen
-							&& _tcsncmp(pszTest-nCommentBeginLen, psCommentBegin, nCommentBeginLen) == 0)
-							psComm = pszTest-nCommentBeginLen;
+						// Это по идее не нужно, т.к. X1 подкорректирован выше
+						//else if ((pszTest - egs.StringText) >= nCommentBeginLen
+						//	&& _tcsncmp(pszTest-nCommentBeginLen, psCommentBegin, nCommentBeginLen) == 0)
+						//	psComm = pszTest-nCommentBeginLen;
 					}
 				}
 				
 				if (!psComm)
-					psComm = _tcsstr(egs.StringText, psCommCurr);
+				{
+					if (nMode == ewmUncommentBlock)
+					{
+						LPCTSTR pszTest = egs.StringText;
+						while (*pszTest == _T(' ') || *pszTest == _T('\t'))
+							pszTest++;
+						if (lbMultiComment)
+						{
+							LPCTSTR pszMulti = pszBlockComment;
+							while (*pszMulti)
+							{
+								if (_tcsncmp(pszTest, pszMulti, lstrlen(pszMulti)) == 0)
+								{
+									psComm = pszTest;
+									psCommCurr = psComment = pszMulti;
+									nCommentBeginLen = nCommentEndLen = lstrlen(pszMulti);
+									break;
+								}		
+								pszMulti += lstrlen(pszMulti)+1;
+							}
+						}
+						else
+						{
+							if (_tcsncmp(pszTest, psCommCurr, lstrlen(psCommCurr)) == 0)
+								psComm = pszTest;
+						}		
+						// Если таки не с начала строки, но есть в середине - поставить туда курсор?
+						if (!psComm && (es.BlockType == BTYPE_NONE))
+						{
+							if (lbMultiComment)
+							{
+								LPCTSTR pszMulti = pszBlockComment;
+								while (*pszMulti)
+								{
+									if ((psComm = _tcsstr(egs.StringText, pszMulti)) != NULL)
+									{
+										psCommCurr = psComment = pszMulti;
+										nCommentBeginLen = nCommentEndLen = lstrlen(pszMulti);
+										break;
+									}		
+									pszMulti += lstrlen(pszMulti)+1;
+								}
+							}
+							else
+							{
+								psComm = _tcsstr(egs.StringText, psCommCurr);
+							}		
+							if (psComm)
+							{
+								EditorSetPosition esp;
+								esp.CurLine = -1;
+								esp.CurTabPos = -1;
+								esp.TopScreenLine = -1;
+								esp.LeftPos = -1;
+								esp.CurPos = (int)(psComm - egs.StringText);
+								esp.Overtype=-1;
+								EditCtrl(ECTL_SETPOSITION,&esp);
+								psComm = NULL; // но не убирать, а то "http://www..."
+							}
+						}
+					}
+					else
+					{
+						psComm = _tcsstr(egs.StringText, psCommCurr);
+					}
+				}
 
 				if (!psComm)
 				{
@@ -840,6 +1363,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 					{
 						size_t n = 0;
 						LPCTSTR pszNextPart = egs.StringText;
+						LPCTSTR pszEndComm = NULL;
 						if (!lbFirstUncommented && (psComm >= egs.StringText))
 						{
 							if (psComm > egs.StringText)
@@ -856,7 +1380,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 							else
 								psComm += nCommentBeginLen;
 							// нужно отбросить и закрывающий коментатор
-							LPCTSTR pszEndComm = egs.StringText + X2;
+							pszEndComm = egs.StringText + X2;
 							if (_tcsncmp(pszEndComm, psCommentEnd, nCommentEndLen) == 0)
 							{
 								// OK, выделение НЕ включало закрывающий коментатор
@@ -879,6 +1403,10 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 								{
 									pszEndComm = _tcsstr(egs.StringText, psCommentEnd);
 								}
+								// Если выделения нет, убираем потоковый комментарий, и на этой строке закрывающего нет - 
+								// то искать вниз до упора
+								if (!pszEndComm && (ei.BlockType == BTYPE_NONE) && (nEndLine < ei.TotalLines))
+									nEndLine++;
 							}
 							if (pszEndComm)
 							{
@@ -905,7 +1433,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 						}
 						if (egs.StringNumber == nEndLine) // БЕЗ else - может быть однострочное выделение
 						{
-							if (X2 || Y1==Y2)
+							if ((X2 || Y1==Y2) && (pszEndComm && (pszEndComm - egs.StringText) < X2))
 								X2 -= nCommentEndLen;
 							if (Y1 == Y2)
 								X2 -= nCommentBeginLen;
@@ -923,15 +1451,334 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 			}
         }
 
-
         MCHKHEAP;
 		ess.StringLength = lstrlen(egs.StringText);
 		ess.StringText = (TCHAR*)egs.StringText;
 		ess.StringNumber = egs.StringNumber;
 		ess.StringEOL = (TCHAR*)egs.StringEOL;
-		psi.EditorControl(ECTL_SETSTRING,&ess);
+		EditCtrl(ECTL_SETSTRING,&ess);
         MCHKHEAP;
     }
+    free(lsText);
+    return TRUE;
+}
+
+void Reselect()
+{
+	if (nMode <= ewmLastInternal && es.BlockType != BTYPE_NONE)
+    {
+		if (es.BlockType==BTYPE_STREAM)
+		{
+			es.BlockStartLine = min(Y2,Y1);
+			es.BlockStartPos = (Y1 == Y2) ? (min(X1,X2)) : ((Y1 < Y2) ? X1 : X2);
+
+			// небольшая коррекция, если позиции равны
+			if(X1 == X2)
+				es.BlockStartPos += (Y1 < Y2) ? 1: -1;
+
+			es.BlockHeight = max(Y1,Y2)-min(Y1,Y2)+1;
+
+			if (Y1 < Y2)
+				es.BlockWidth = X2-X1/*+1*/;
+			else if (Y1 > Y2)
+				es.BlockWidth = X1-X2+1;
+			else if (Y1 == Y2)
+				es.BlockWidth = max(X1,X2)-min(X1,X2);
+
+			if(X1 == X2)
+			{
+				if(Y1 < Y2)
+					es.BlockStartPos--;
+				else
+					es.BlockStartPos++;
+			}
+		}
+		else
+		{
+			//#ifndef _UNICODE
+			// В FAR 1.7x build 2479 возникала проблема если
+			// TAB не заменяется проблами и идет выделение верт.блока
+			// gdwFarVersion == 0x09af014b
+			if (!lbExpandTabs)
+			{
+				EditorConvertPos ecp;
+				ecp.StringNumber = Y1; ecp.SrcPos = ecp.DestPos = X1;
+				if (EditCtrl(ECTL_REALTOTAB, &ecp))
+					X1 = ecp.DestPos;
+				ecp.SrcPos = ecp.DestPos = X2;
+				if (EditCtrl(ECTL_REALTOTAB, &ecp))
+					X2 = ecp.DestPos;
+			}
+			//#endif
+
+			es.BlockStartLine=min(Y2,Y1);
+			es.BlockStartPos=(Y1==Y2) ? (min(X1,X2)) : (Y1 < Y2?X1:X2);
+			
+			// небольшая коррекция, если позиции равны
+			if(X1 == X2)
+				es.BlockStartPos+=(Y1 < Y2?1:-1);
+			
+			es.BlockHeight=max(Y1,Y2)-min(Y1,Y2)+1;
+			
+			if(Y1 < Y2)
+				es.BlockWidth=X2-X1/*+1*/;
+			else if(Y1 > Y2)
+				es.BlockWidth=X1-X2+1;
+			else if (Y1 == Y2)
+				es.BlockWidth=max(X1,X2)-min(X1,X2);
+			
+			if(X1 == X2)
+			{
+				if(Y1 < Y2)
+					es.BlockStartPos--;
+				else
+					es.BlockStartPos++;
+			}
+		}
+
+        MCHKHEAP;
+        EditCtrl(ECTL_SELECT,(void*)&es);
+    }
+}
+
+void UpdateCursorPos()
+{
+	if (nMode <= ewmLastInternal && lbCurLineShifted)
+	{
+		EditorSetPosition esp;
+		esp.CurLine = -1;
+		esp.CurPos = esp.CurTabPos = -1;
+		esp.TopScreenLine = -1;
+		esp.LeftPos = -1;
+		switch (nMode)
+		{
+		case ewmTabulateRight:
+			esp.CurTabPos = ei.CurTabPos+ei.TabSize;
+			break;
+		case ewmTabulateLeft:
+			esp.CurTabPos = max(0,ei.CurTabPos-ei.TabSize);
+			break;
+		case ewmCommentBlock:
+			//WARNING: для потоковых комментариев - доработать
+			esp.CurPos = ei.CurPos+lstrlen(psComment);
+			break;
+		case ewmCommentStream:
+			//WARNING: для потоковых комментариев - доработать
+			//esp.CurPos = ei.CurPos+lstrlen(psCommentBegin);
+			if ((Y1 == Y2) && (X2 == (ei.CurPos+nCommentBeginLen+nCommentEndLen)))
+				esp.CurPos = ei.CurPos + nCommentBeginLen + nCommentEndLen;
+			else if (Y1 == ei.CurLine)
+				esp.CurPos = ei.CurPos + ((ei.CurPos > X1 && (ei.BlockType != BTYPE_NONE)) ? nCommentBeginLen : 0);
+			else if (Y2 == ei.CurLine)
+				esp.CurPos = ei.CurPos + ((ei.CurPos >= X2 && (ei.BlockType != BTYPE_NONE)) ? nCommentEndLen : 0);
+			else
+				esp.CurPos = ei.CurPos;
+			break;
+		case ewmUncommentBlock:
+			esp.CurPos = max(0,ei.CurPos-lstrlen(psComment));
+			break;
+		case ewmUncommentStream:
+			//WARNING: для потоковых комментариев - доработать
+			//esp.CurPos = max(0,ei.CurPos-lstrlen(psCommentBegin));
+			if ((Y1 == Y2) && (ei.CurPos >= (X2+nCommentBeginLen+nCommentEndLen)))
+				esp.CurPos = ei.CurPos - nCommentBeginLen - nCommentEndLen;
+			else if (Y1 == ei.CurLine)
+			{
+				if (ei.CurPos >= (X1+nCommentBeginLen))
+					esp.CurPos = ei.CurPos - nCommentBeginLen;
+				else
+					esp.CurPos = ei.CurPos;
+			}
+			else if (Y2 == ei.CurLine)
+				esp.CurPos = ei.CurPos - nCommentEndLen;
+			else
+				esp.CurPos = ei.CurPos;
+			if (esp.CurPos < 0)
+				esp.CurPos = 0;
+			break;
+		default:
+			esp.CurTabPos = ei.CurTabPos;
+		}
+
+		if (esp.CurPos > 0)
+		{
+			egs.StringNumber = ei.CurLine;
+			if (EditCtrl(ECTL_GETSTRING,&egs) && esp.CurPos > egs.StringLength)
+				esp.CurPos = egs.StringLength;
+		}
+
+		esp.Overtype=-1;
+		
+		//TODO: сдвиг курсора при обычной табуляции
+		EditCtrl(ECTL_SETPOSITION,&esp);
+	}
+}
+
+HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
+{
+    
+    memset(&egs, 0, sizeof(egs));
+    memset(&ei, 0, sizeof(ei));
+    memset(&ess, 0, sizeof(ess));
+    memset(&es, 0, sizeof(es));
+	nMode = ewmUndefined;
+
+    MCHKHEAP;
+
+    EditCtrl(ECTL_GETINFO,&ei);
+    //if (ei.BlockType == BTYPE_NONE)
+    //    return INVALID_HANDLE_VALUE;
+    es.BlockType = ei.BlockType;
+
+    //TODO: Если выделения нет, и хотят Tab/ShiftTab можно переслать в ФАР
+    //ACTL_POSTKEYSEQUENCE TAB/требуемое количество BS
+
+
+    MCHKHEAP;
+    //CStaticMenu lmMenu(_ATOT(szMsgBlockEditorPlugin));
+
+    /*lmMenu.AddMenuItem ( _T("&1 Tabulate right") );
+    lmMenu.AddMenuItem ( _T("&2 Tabulate left") );
+    lmMenu.AddMenuItem ( _T("&3 Comment") );
+    lmMenu.AddMenuItem ( _T("&4 UnComment") );*/
+    //psi.Menu(
+
+#ifdef _UNICODE
+	if (((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO) && (Item >= ewmFirst && Item <= ewmLastValidCall))
+	{
+		nMode = (int)Item;
+	}
+#endif
+
+
+	if (nMode == ewmUndefined)
+	{
+		#if FAR_UNICODE>=1906
+		FarMenuItem pItems[] =
+		{
+			{0, L"&1 Tabulate right"},
+			{0, L"&2 Tabulate left"},
+			{0, L"&3 Comment auto"},
+			{0, L"&4 UnComment"},
+			{0, L"&5 Comment block"},
+			{0, L"&6 Comment stream"}
+		};
+		#else
+		FarMenuItem pItems[] =
+		{
+			{_T("&1 Tabulate right")},
+			{_T("&2 Tabulate left")},
+			{_T("&3 Comment auto")},
+			{_T("&4 UnComment")},
+			{_T("&5 Comment block")},
+			{_T("&6 Comment stream")}
+		};
+		#endif
+
+		MCHKHEAP;
+
+		//int nMode = lmMenu.DoModal();
+		#if FAR_UNICODE>=1900
+		nMode = psi.Menu(&guid_BlockEditor,
+			-1,-1, 0, /*FMENU_CHANGECONSOLETITLE|*/FMENU_WRAPMODE,
+			_T(szMsgBlockEditorPlugin), NULL, NULL,
+			NULL, NULL, pItems, ARRAYSIZE(pItems));
+		#else
+		nMode = psi.Menu(psi.ModuleNumber,
+			-1, -1, 0, FMENU_WRAPMODE,
+			_T(szMsgBlockEditorPlugin),NULL,NULL,
+			0, NULL, pItems, ARRAYSIZE(pItems) );
+		#endif
+		if (nMode < 0)
+			return INVALID_HANDLE_VALUE;
+		nMode++;
+	}
+    MCHKHEAP;
+
+    if (nMode < ewmFirst || nMode > ewmLastValidCall)
+        return INVALID_HANDLE_VALUE;
+
+	#ifdef _UNICODE
+	EditorUndoRedo eur = {EUR_BEGIN};
+	EditCtrl(ECTL_UNDOREDO,&eur);
+
+	int nLen = EditCtrl(ECTL_GETFILENAME,NULL);
+	wchar_t *pszFileName = (wchar_t*)calloc(nLen+1,2);
+	EditCtrl(ECTL_GETFILENAME,pszFileName);
+	#else
+	LPCSTR pszFileName = ei.FileName;
+	#endif
+
+	lbSkipNonSpace = TRUE;
+	lbSkipCommentMenu = FALSE;
+    psComment = _T("//");
+    psCommentBegin = NULL;
+    psCommentEnd = NULL;
+	nCommentBeginLen = 0;
+	nCommentEndLen = 0;
+	// Обязательно инициализируем все 0-ми, т.к. может быть MSZ
+	TCHAR szComment[100] = {0}, szCommentBegin[100] = {0}, szCommentEnd[100] = {0};
+    if ((nMode >= ewmCommentFirst && nMode <= ewmCommentLast) && pszFileName)
+    	LoadCommentSettings(pszFileName, szComment, szCommentBegin, szCommentEnd);
+
+
+	#ifdef _UNICODE
+	if (pszFileName)
+	{
+		free(pszFileName); pszFileName = NULL;
+	}
+	#endif
+
+
+    if (ei.TabSize<1) ei.TabSize=1;
+    lbExpandTabs = (ei.Options & (EOPT_EXPANDALLTABS|EOPT_EXPANDONLYNEWTABS))!=0;
+
+    MCHKHEAP;
+
+    nStartLine = (ei.BlockType == BTYPE_NONE) ? ei.CurLine : ei.BlockStartLine;
+    nEndLine = nStartLine;
+    //int nEmptyLine = -1;
+    Y1 = nStartLine; Y2 = -1;
+    X1 = 0; X2 = -1;
+	lbCurLineShifted = false;
+    nInsertSlash = -1;
+    nMaxStrLen = 0;
+	lbStartChanged = true; lbEndChanged = true; // измнены ли первая и последняя строки выделения?
+	lbMultiComment = false;
+
+    MCHKHEAP;
+
+	// Пробежаться по выделению, определить максимальную длину строки
+	FindMaxStringLen();
+
+    MCHKHEAP;
+
+    if (!PrepareCommentParams())
+    	return INVALID_HANDLE_VALUE;
+
+
+    nMaxStrLen += 10+ei.TabSize; // с запасом на символы комментирования
+	if (psCommentBegin && psCommentEnd)
+		nMaxStrLen += lstrlen(psCommentBegin) + lstrlen(psCommentEnd);
+	if (psComment)
+		nMaxStrLen += lstrlen(psComment);
+
+    MCHKHEAP;
+
+    if (ei.BlockType == BTYPE_NONE)
+        X1 = ei.CurPos;
+
+
+	// Поехали
+	if (nMode == ewmTabulateRight)
+		DoTabRight();
+	else if (nMode == ewmTabulateLeft)
+		DoTabLeft();
+	else if (nMode == ewmCommentBlock || nMode == ewmCommentStream)
+		DoComment();
+	else if (nMode == ewmUncommentAuto || nMode == ewmUncommentBlock || nMode == ewmUncommentStream)
+		DoUnComment();
+	
 
 	if (X1<0)
 	{
@@ -971,156 +1818,16 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	//}
 
     MCHKHEAP;
-	
-	if (nMode <= ewmLastInternal && lbCurLineShifted)
-	{
-		EditorSetPosition esp;
-		esp.CurLine = -1;
-		esp.CurPos = esp.CurTabPos = -1;
-		esp.TopScreenLine = -1;
-		esp.LeftPos = -1;
-		switch (nMode)
-		{
-		case ewmTabulateRight:
-			esp.CurTabPos = ei.CurTabPos+ei.TabSize;
-			break;
-		case ewmTabulateLeft:
-			esp.CurTabPos = max(0,ei.CurTabPos-ei.TabSize);
-			break;
-		case ewmCommentBlock:
-			//WARNING: для потоковых комментариев - доработать
-			esp.CurPos = ei.CurPos+lstrlen(psComment);
-			break;
-		case ewmCommentStream:
-			//WARNING: для потоковых комментариев - доработать
-			//esp.CurPos = ei.CurPos+lstrlen(psCommentBegin);
-			if ((Y1 == Y2) && (X2 == (ei.CurPos+nCommentBeginLen+nCommentEndLen)))
-				esp.CurPos = ei.CurPos + nCommentBeginLen + nCommentEndLen;
-			else if (Y1 == ei.CurLine)
-				esp.CurPos = ei.CurPos + nCommentBeginLen;
-			else if (Y2 == ei.CurLine)
-				esp.CurPos = ei.CurPos + nCommentEndLen;
-			else
-				esp.CurPos = ei.CurPos;
-			break;
-		case ewmUncommentBlock:
-			//WARNING: для потоковых комментариев - доработать
-			esp.CurPos = max(0,ei.CurPos-lstrlen(psComment));
-			break;
-		case ewmUncommentStream:
-			//WARNING: для потоковых комментариев - доработать
-			//esp.CurPos = max(0,ei.CurPos-lstrlen(psCommentBegin));
-			if ((Y1 == Y2) && (ei.CurPos >= (X2+nCommentBeginLen+nCommentEndLen)))
-				esp.CurPos = ei.CurPos - nCommentBeginLen - nCommentEndLen;
-			else if (Y1 == ei.CurLine)
-			{
-				if (ei.CurPos >= X1)
-					esp.CurPos = ei.CurPos - nCommentBeginLen;
-				else
-					esp.CurPos = ei.CurPos;
-			}
-			else if (Y2 == ei.CurLine)
-				esp.CurPos = ei.CurPos - nCommentEndLen;
-			else
-				esp.CurPos = ei.CurPos;
-			if (esp.CurPos < 0)
-				esp.CurPos = 0;
-			break;
-		default:
-			esp.CurTabPos = ei.CurTabPos;
-		}
 
-		if (esp.CurPos > 0)
-		{
-			egs.StringNumber = ei.CurLine;
-			if (psi.EditorControl(ECTL_GETSTRING,&egs) && esp.CurPos > egs.StringLength)
-				esp.CurPos = egs.StringLength;
-		}
+	// Подвинуть курсор
+	UpdateCursorPos();	
 
-		esp.Overtype=-1;
-		
-		//TODO: сдвиг курсора при обычной табуляции
-		psi.EditorControl(ECTL_SETPOSITION,&esp);
-	}
-
-	if (nMode <= ewmLastInternal && es.BlockType != BTYPE_NONE)
-    {
-		if (es.BlockType==BTYPE_STREAM)
-		{
-			es.BlockStartLine = min(Y2,Y1);
-			es.BlockStartPos = (Y1 == Y2) ? (min(X1,X2)) : ((Y1 < Y2) ? X1 : X2);
-
-			// небольшая коррекция, если позиции равны
-			if(X1 == X2)
-				es.BlockStartPos += (Y1 < Y2) ? 1: -1;
-
-			es.BlockHeight = max(Y1,Y2)-min(Y1,Y2)+1;
-
-			if (Y1 < Y2)
-				es.BlockWidth = X2-X1/*+1*/;
-			else if (Y1 > Y2)
-				es.BlockWidth = X1-X2+1;
-			else if (Y1 == Y2)
-				es.BlockWidth = max(X1,X2)-min(X1,X2);
-
-			if(X1 == X2)
-			{
-				if(Y1 < Y2)
-					es.BlockStartPos--;
-				else
-					es.BlockStartPos++;
-			}
-		}
-		else
-		{
-			//#ifndef _UNICODE
-			// В FAR 1.7x build 2479 возникала проблема если
-			// TAB не заменяется проблами и идет выделение верт.блока
-			// gdwFarVersion == 0x09af014b
-			if (!lbExpandTabs)
-			{
-				EditorConvertPos ecp;
-				ecp.StringNumber = Y1; ecp.SrcPos = ecp.DestPos = X1;
-				if (psi.EditorControl(ECTL_REALTOTAB, &ecp))
-					X1 = ecp.DestPos;
-				ecp.SrcPos = ecp.DestPos = X2;
-				if (psi.EditorControl(ECTL_REALTOTAB, &ecp))
-					X2 = ecp.DestPos;
-			}
-			//#endif
-
-			es.BlockStartLine=min(Y2,Y1);
-			es.BlockStartPos=(Y1==Y2) ? (min(X1,X2)) : (Y1 < Y2?X1:X2);
-			
-			// небольшая коррекция, если позиции равны
-			if(X1 == X2)
-				es.BlockStartPos+=(Y1 < Y2?1:-1);
-			
-			es.BlockHeight=max(Y1,Y2)-min(Y1,Y2)+1;
-			
-			if(Y1 < Y2)
-				es.BlockWidth=X2-X1/*+1*/;
-			else if(Y1 > Y2)
-				es.BlockWidth=X1-X2+1;
-			else if (Y1 == Y2)
-				es.BlockWidth=max(X1,X2)-min(X1,X2);
-			
-			if(X1 == X2)
-			{
-				if(Y1 < Y2)
-					es.BlockStartPos--;
-				else
-					es.BlockStartPos++;
-			}
-		}
-
-        MCHKHEAP;
-        psi.EditorControl(ECTL_SELECT,(void*)&es);
-    }
+	// Обновить выделение
+	Reselect();
 
 	#ifdef _UNICODE
 	eur.Command = EUR_END;
-	psi.EditorControl(ECTL_UNDOREDO,&eur);
+	EditCtrl(ECTL_UNDOREDO,&eur);
 	#endif
 
     MCHKHEAP;

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="BlockEditor"
 	ProjectGUID="{0AB1EEB6-1ED0-4450-AB57-859EC9B16F04}"
 	RootNamespace="BlockEditor"
@@ -87,7 +87,7 @@
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditor.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -181,12 +181,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="E:\Far\Plugins\BlockEditor\BlockEditor.dll"
+				OutputFile="\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far1x64\Plugins\BlockEditor\BlockEditorA x64.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditor.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -285,7 +285,7 @@
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditorW.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(TargetDir)/BlockEditorW.pdb"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -384,7 +384,7 @@
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditorW.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -478,11 +478,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="../ReleaseW/BlockEditorW.dll"
+				OutputFile="../Release/BlockEditorW.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditorW.def"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -576,11 +577,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="../ReleaseW/BlockEditorW x64.dll"
+				OutputFile="../Release/BlockEditorW x64.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditorW.def"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -674,11 +676,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="../ReleaseA/BlockEditorA.dll"
+				OutputFile="../Release/BlockEditorA.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditor.def"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -772,11 +775,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="../ReleaseA/BlockEditorA x64.dll"
+				OutputFile="../Release/BlockEditorA x64.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditor.def"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -870,12 +874,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far2x86\Plugins\BlockEditor\BlockEditorW3.dll"
+				OutputFile="\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far3x86\Plugins\BlockEditor\BlockEditorW3.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditorW3.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -969,12 +973,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="F:\VCProject\FarPlugin\#FAR180\Plugins\BlockEditor\BlockEditor.dll"
+				OutputFile="\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far3x64\Plugins\BlockEditor\BlockEditorW x64.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
-				ModuleDefinitionFile=".\BlockEditorW.def"
+				ModuleDefinitionFile=".\BlockEditorW3.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -1012,7 +1016,7 @@
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="false"
-			CharacterSet="2"
+			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -1037,11 +1041,11 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				Optimization="0"
+				Optimization="2"
 				PreprocessorDefinitions="FAR_UNICODE=1906;_UNICODE;WIN32;_DEBUG;_WINDOWS;_USRDLL;BlockEditor_EXPORTS"
 				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
+				BasicRuntimeChecks="0"
+				RuntimeLibrary="0"
 				StructMemberAlignment="0"
 				UsePrecompiledHeader="0"
 				PrecompiledHeaderThrough=""
@@ -1051,7 +1055,7 @@
 				ProgramDataBaseFileName="$(IntDir)/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
-				DebugInformationFormat="4"
+				DebugInformationFormat="3"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -1068,12 +1072,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="../ReleaseW/BlockEditorW3.dll"
-				LinkIncremental="2"
+				OutputFile="../Release/BlockEditorW3.dll"
+				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\BlockEditorW3.def"
-				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -1111,7 +1115,7 @@
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="false"
-			CharacterSet="2"
+			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -1136,11 +1140,11 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				Optimization="0"
+				Optimization="2"
 				PreprocessorDefinitions="FAR_UNICODE=1906;_UNICODE;WIN32;_DEBUG;_WINDOWS;_USRDLL;BlockEditor_EXPORTS"
 				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
+				BasicRuntimeChecks="0"
+				RuntimeLibrary="0"
 				StructMemberAlignment="0"
 				UsePrecompiledHeader="0"
 				PrecompiledHeaderThrough=""
@@ -1167,12 +1171,12 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib"
-				OutputFile="../ReleaseW/BlockEditorW3 x64.dll"
-				LinkIncremental="2"
+				OutputFile="../Release/BlockEditorW3 x64.dll"
+				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				ModuleDefinitionFile=".\BlockEditor.def"
-				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(IntDir)/BlockEditor.pdb"
+				ModuleDefinitionFile=".\BlockEditorW3.def"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/BlockEditor.lib"
@@ -1361,6 +1365,22 @@
 						Name="VCCustomBuildTool"
 					/>
 				</FileConfiguration>
+				<FileConfiguration
+					Name="ReleaseW3|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="ReleaseW3|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="BlockEditorW.def"
@@ -1398,6 +1418,22 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="DebugW3|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="DebugW3|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="ReleaseW3|Win32"
 					ExcludedFromBuild="true"
 					>
@@ -1407,6 +1443,74 @@
 				</FileConfiguration>
 				<FileConfiguration
 					Name="ReleaseW3|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\BlockEditorW3.def"
+				>
+				<FileConfiguration
+					Name="DebugA|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="DebugA|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="DebugW|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="DebugW|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="ReleaseW|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="ReleaseW|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="ReleaseA|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="ReleaseA|x64"
 					ExcludedFromBuild="true"
 					>
 					<Tool

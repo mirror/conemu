@@ -8,6 +8,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include <windows.h>
+#include "version.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -35,11 +36,13 @@ END
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
     "#include <windows.h>\r\n"
+    "#include ""version.h""\r\n"
     "\0"
 END
 
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
+    "#include ""resource2.rc""\r\n"
     "\r\n"
     "\0"
 END
@@ -53,42 +56,42 @@ END
 // Version
 //
 
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,9
- PRODUCTVERSION 1,0,0,9
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
-#endif
- FILEOS 0x40004L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "000004b0"
-        BEGIN
-            VALUE "Comments", "MaxMoysyuk@mtu-net.ru\0"
-            VALUE "CompanyName", "Maxim Moysyuk, http://forum.farmanager.com/viewtopic.php?t=3658\0"
-            VALUE "FileDescription", "BlockEditor\0"
-            VALUE "FileVersion", "1.0.0.9\0"
-            VALUE "InternalName", "BlockEditor\0"
-            VALUE "LegalCopyright", "Copyright © 2008-2011\0"
-            VALUE "LegalTrademarks", "\0"
-            VALUE "OriginalFilename", "BlockEditor.dll\0"
-            VALUE "PrivateBuild", "\0"
-            VALUE "ProductName", "BlockEditor\0"
-            VALUE "ProductVersion", "1.0.0.9\0"
-            VALUE "SpecialBuild", "\0"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x0, 1200
-    END
-END
+//VS_VERSION_INFO VERSIONINFO
+// FILEVERSION 1,0,0,9
+// PRODUCTVERSION 1,0,0,9
+// FILEFLAGSMASK 0x3fL
+//#ifdef _DEBUG
+// FILEFLAGS 0x1L
+//#else
+// FILEFLAGS 0x0L
+//#endif
+// FILEOS 0x40004L
+// FILETYPE 0x2L
+// FILESUBTYPE 0x0L
+//BEGIN
+//    BLOCK "StringFileInfo"
+//    BEGIN
+//        BLOCK "000004b0"
+//        BEGIN
+//            VALUE "Comments", "MaxMoysyuk@mtu-net.ru\0"
+//            VALUE "CompanyName", "Maxim Moysyuk, http://forum.farmanager.com/viewtopic.php?t=3658\0"
+//            VALUE "FileDescription", "BlockEditor\0"
+//            VALUE "FileVersion", "1.0.0.9\0"
+//            VALUE "InternalName", "BlockEditor\0"
+//            VALUE "LegalCopyright", "Copyright © 2008-2011\0"
+//            VALUE "LegalTrademarks", "\0"
+//            VALUE "OriginalFilename", "BlockEditor.dll\0"
+//            VALUE "PrivateBuild", "\0"
+//            VALUE "ProductName", "BlockEditor\0"
+//            VALUE "ProductVersion", "1.0.0.9\0"
+//            VALUE "SpecialBuild", "\0"
+//        END
+//    END
+//    BLOCK "VarFileInfo"
+//    BEGIN
+//        VALUE "Translation", 0x0, 1200
+//    END
+//END
 
 #endif    // !_MAC
 
@@ -102,6 +105,7 @@ END
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
+#include "resource2.rc"
 
 
 /////////////////////////////////////////////////////////////////////////////
