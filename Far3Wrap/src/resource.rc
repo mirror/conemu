@@ -53,8 +53,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,0
- PRODUCTVERSION 1,0,0,0
+ FILEVERSION 1,1,1988,0
+ PRODUCTVERSION 1,1,1988,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -70,11 +70,11 @@ BEGIN
         BLOCK "000004b0"
         BEGIN
             VALUE "FileDescription", "Far2->Far3 plugin wrapper"
-            VALUE "FileVersion", "1.0"
+            VALUE "FileVersion", "1.1 #1988"
             VALUE "LegalCopyright", "(C) 2011 Maximus5"
             VALUE "OriginalFilename", "Far3Wrap.dll"
             VALUE "ProductName", "Far3 wrapper"
-            VALUE "ProductVersion", "1.0"
+            VALUE "ProductVersion", "1.1 #1988"
         END
     END
     BLOCK "VarFileInfo"
