@@ -1218,7 +1218,23 @@ FARMESSAGE FarMessage_2_3(const int Msg2, const int Param1, LONG_PTR& Param2)
 		case Far2::DN_DRAWDIALOG: Msg3 = DN_DRAWDIALOG; break;
 
 		case Far2::DM_GETDLGITEM:
+			if (Param2)
+			{
+				static FarGetDialogItem p3;
+				ZeroStruct(p3);
+				Param2 = (LONG_PTR)&p3;
+			}
+			Msg3 = DM_GETDLGITEM;
+			break;
 		case Far2::DM_GETDLGITEMSHORT:
+			if (Param2)
+			{
+				static FarDialogItem p3;
+				ZeroStruct(p3);
+				Param2 = (LONG_PTR)&p3;
+			}
+			Msg3 = DM_GETDLGITEMSHORT;
+			break;
 		case Far2::DM_SETDLGITEM:
 		case Far2::DM_SETDLGITEMSHORT:
 		case Far2::DN_EDITCHANGE:
@@ -1231,13 +1247,13 @@ FARMESSAGE FarMessage_2_3(const int Msg2, const int Param1, LONG_PTR& Param2)
 			{
 				const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 				static FarDialogItem p3;
-				memset(&p3, 0, sizeof(p3));
+				ZeroStruct(p3);
 				FarDialogItem_2_3(p2, &p3, &wpi->m_ListItems3);
 				Param2 = (LONG_PTR)&p3;
 				switch (Msg2)
 				{
-				case Far2::DM_GETDLGITEM: Msg3 = DM_GETDLGITEM; break;
-				case Far2::DM_GETDLGITEMSHORT: Msg3 = DM_GETDLGITEMSHORT; break;
+				//case Far2::DM_GETDLGITEM: Msg3 = DM_GETDLGITEM; break;
+				//case Far2::DM_GETDLGITEMSHORT: Msg3 = DM_GETDLGITEMSHORT; break;
 				case Far2::DM_SETDLGITEM: Msg3 = DM_SETDLGITEM; break;
 				case Far2::DM_SETDLGITEMSHORT: Msg3 = DM_SETDLGITEMSHORT; break;
 				case Far2::DN_EDITCHANGE: Msg3 = DN_EDITCHANGE; break;
@@ -1612,7 +1628,11 @@ Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Pa
 		case DN_DRAWDIALOG: Msg2 = Far2::DN_DRAWDIALOG; break;
 
 		case DM_GETDLGITEM:
+			_ASSERTE(Msg3!=DM_GETDLGITEM);
+			break;
 		case DM_GETDLGITEMSHORT:
+			_ASSERTE(Msg3!=DM_GETDLGITEMSHORT);
+			break;
 		case DM_SETDLGITEM:
 		case DM_SETDLGITEMSHORT:
 		case DN_DRAWDLGITEM:
@@ -1630,8 +1650,8 @@ Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Pa
 				Param2 = &p2;
 				switch (Msg3)
 				{
-				case DM_GETDLGITEM: Msg2 = Far2::DM_GETDLGITEM; break;
-				case DM_GETDLGITEMSHORT: Msg2 = Far2::DM_GETDLGITEMSHORT; break;
+				//case DM_GETDLGITEM: Msg2 = Far2::DM_GETDLGITEM; break;
+				//case DM_GETDLGITEMSHORT: Msg2 = Far2::DM_GETDLGITEMSHORT; break;
 				case DM_SETDLGITEM: Msg2 = Far2::DM_SETDLGITEM; break;
 				case DM_SETDLGITEMSHORT: Msg2 = Far2::DM_SETDLGITEMSHORT; break;
 				case DN_DRAWDLGITEM: Msg2 = Far2::DN_DRAWDLGITEM; break;
@@ -1660,7 +1680,7 @@ Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Pa
 	return Msg2;
 }
 
-void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2)
+void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc)
 {
 	if (Param2 == OrgParam2 || !Param2 || !OrgParam2)
 	{
@@ -1670,8 +1690,13 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 	switch (Msg2)
 	{
 	case Far2::DM_GETDLGITEM:
+		{
+			_ASSERTE(Msg2!=Far2::DM_GETDLGITEM);
+		}
+		break;
 	case Far2::DM_GETDLGITEMSHORT:
 		{
+			_ASSERTE(Msg2!=Far2::DM_GETDLGITEMSHORT);
 			const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 			FarDialogItem* p3 = (FarDialogItem*)OrgParam2;
 			FarDialogItem_2_3(p2, p3, &wpi->m_ListItems3);
@@ -1724,7 +1749,7 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 	}
 }
 
-void FarMessageParam_3_2(const int Msg3, const int Param1, const LONG_PTR Param2, LONG_PTR OrgParam2)
+void FarMessageParam_3_2(HANDLE hDlg3, const int Msg3, const int Param1, const LONG_PTR Param2, LONG_PTR OrgParam2, LONG_PTR& lRc)
 {
 	if (Param2 == OrgParam2 || !Param2 || !OrgParam2)
 	{
@@ -1734,6 +1759,19 @@ void FarMessageParam_3_2(const int Msg3, const int Param1, const LONG_PTR Param2
 	switch (Msg3)
 	{
 	case DM_GETDLGITEM:
+		if (lRc > 0)
+		{
+			Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
+			FarGetDialogItem item = {sizeof(lRc)};
+			item.Item = (FarDialogItem*)calloc(lRc, 1);
+			lRc = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &item);
+			if (lRc > 0)
+			{
+				FarDialogItem_3_2(item.Item, p2, &wpi->m_ListItems2);
+			}
+			free(item.Item);
+		}
+		break;
 	case DM_GETDLGITEMSHORT:
 		{
 			const FarDialogItem* p3 = (const FarDialogItem*)Param2;
@@ -1982,7 +2020,7 @@ LONG_PTR WINAPI WrapPluginInfo::FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param
 		FARMESSAGE Msg3 = FarMessage_2_3(Msg, Param1, Param2);
 		lRc = psi3.DefDlgProc(hDlg3, Msg3, Param1, (void*)Param2);
 		if (Param2 && Param2 != OrgParam2)
-			FarMessageParam_3_2(Msg, Param1, Param2, OrgParam2);
+			FarMessageParam_3_2(hDlg3, Msg, Param1, Param2, OrgParam2, lRc);
 	}
 	else
 	{
@@ -2001,7 +2039,7 @@ LONG_PTR WINAPI WrapPluginInfo::FarApiSendDlgMessage(HANDLE hDlg, int Msg, int P
 		FARMESSAGE Msg3 = FarMessage_2_3(Msg, Param1, Param2);
 		lRc = psi3.SendDlgMessage(hDlg3, Msg3, Param1, (void*)Param2);
 		if (Param2 && Param2 != OrgParam2)
-			FarMessageParam_3_2(Msg, Param1, Param2, OrgParam2);
+			FarMessageParam_3_2(hDlg3, Msg, Param1, Param2, OrgParam2, lRc);
 	}
 	else
 	{
@@ -2287,44 +2325,45 @@ int WINAPI WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1
 			else if (nItemSize)
 			{
 				Far2::PluginPanelItem* p2 = (Far2::PluginPanelItem*)Param2;
-				PluginPanelItem* p3 = (PluginPanelItem*)malloc(nItemSize);
-				if (p3)
+				FarGetPluginPanelItem p3 = {nItemSize};
+				p3.Item = (PluginPanelItem*)malloc(nItemSize);
+				if (p3.Item)
 				{
-					iRc = psi3.PanelControl(hPlugin, Cmd3, Param1, p3);
+					iRc = psi3.PanelControl(hPlugin, Cmd3, Param1, &p3);
 					if (iRc)
 					{
-						PluginPanelItem_3_2(p3, p2);
+						PluginPanelItem_3_2(p3.Item, p2);
 						// Обработка строк
 						wchar_t* psz = (wchar_t*)(((LPBYTE)p2)+sizeof(*p2));
-						if (p3->FileName)
+						if (p3.Item->FileName)
 						{
 							p2->FindData.lpwszFileName = psz;
-							lstrcpy(psz, p3->FileName);
+							lstrcpy(psz, p3.Item->FileName);
 							psz += lstrlen(psz)+1;
 						}
-						if (p3->AlternateFileName)
+						if (p3.Item->AlternateFileName)
 						{
 							p2->FindData.lpwszAlternateFileName = psz;
-							lstrcpy(psz, p3->AlternateFileName);
+							lstrcpy(psz, p3.Item->AlternateFileName);
 							psz += lstrlen(psz)+1;
 						}
-						if (p3->Description)
+						if (p3.Item->Description)
 						{
 							p2->Description = psz;
-							lstrcpy(psz, p3->Description);
+							lstrcpy(psz, p3.Item->Description);
 							psz += lstrlen(psz)+1;
 						}
-						if (p3->Owner)
+						if (p3.Item->Owner)
 						{
 							p2->Owner = psz;
-							lstrcpy(psz, p3->Owner);
+							lstrcpy(psz, p3.Item->Owner);
 							psz += lstrlen(psz)+1;
 						}
 						//TODO: CustomColumnData/CustomColumnNumber
 						p2->CustomColumnData = NULL;
 						p2->CustomColumnNumber = 0;
 					}
-					free(p3);
+					free(p3.Item);
 				}
 			}
 		}
@@ -3983,7 +4022,7 @@ INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 		Far2::FarMessagesProc Msg2 = FarMessage_3_2(Msg, Param1, Param2);
 		lRc = p->m_DlgProc((HANDLE)p, Msg2, Param1, (LONG_PTR)Param2);
 		if (Param2 && Param2 != OrgParam2)
-			FarMessageParam_2_3(Msg, Param1, Param2, OrgParam2);
+			FarMessageParam_2_3(Msg, Param1, Param2, OrgParam2, lRc);
 	}
 	else
 	{
