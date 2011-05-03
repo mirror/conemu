@@ -1,3 +1,5 @@
+//TODO: При ошибках загрузки плагина не ругаться сразу (MessageBox), а запомнить текст ошибки, 
+// и пометить плагин ошибочным в списке плагинов (например, "RQP - Wrapper Failed")
 
 /*
 Copyright (c) 2011 Maximus5
@@ -32,6 +34,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <TCHAR.h>
 #include <map>
 #include <crtdbg.h>
+
+#define ZeroStruct(s) memset(&s, 0, sizeof(s))
 
 #define LOG_COMMANDS
 #ifdef LOG_COMMANDS
@@ -179,7 +183,188 @@ PluginStartupInfo psi3;
 FarStandardFunctions FSF3;
 Far2::PluginStartupInfo psi2;
 Far2::FarStandardFunctions FSF2;
+
+struct Far2Dialog;
 struct WrapPluginInfo;
+
+struct WrapPluginInfo
+{
+	HMODULE hDll;
+	wchar_t PluginDll[MAX_PATH+1], IniFile[MAX_PATH+1];
+	wchar_t File[64];
+	wchar_t Title[MAX_PATH+1], Desc[256], Author[256];
+	wchar_t RegRoot[1024];
+	VersionInfo Version;
+	GUID guid_Plugin, guid_Dialogs;
+	int nPluginMenu; GUID* guids_PluginMenu;
+	int nPluginDisks; GUID* guids_PluginDisks;
+	int nPluginConfig; GUID* guids_PluginConfig;
+	Far2::PluginInfo Info;
+	InfoPanelLine *InfoLines; size_t InfoLinesNumber; // Far3
+	PanelMode     *PanelModesArray; size_t PanelModesNumber; // Far3
+	KeyBarTitles   KeyBar; // Far3
+	KeyBarLabel    KeyBarLabels[7*12];
+	Far2::FarList m_ListItems2;
+	FarList m_ListItems3;
+
+	AnalyseInfo* pAnalyze;
+	//;; 1 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW
+	//;; 2 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW & ClosePluginW [& OpenFilePluginW]
+	int AnalyzeMode;
+
+	int OldPutFilesParams;
+
+	std::map<PluginPanelItem*,Far2::PluginPanelItem*> MapPanelItems;
+
+	Far2Dialog* LastFar2Dlg;
+	std::map<Far2Dialog*,HANDLE> MapDlg_2_3;
+	std::map<HANDLE,Far2Dialog*> MapDlg_3_2;
+
+
+	WrapPluginInfo();
+	~WrapPluginInfo();
+
+	void UnloadPlugin();
+	void ClearProcAddr();
+
+	KeyBarTitles* KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar);
+
+
+	// Changed functions
+	static LONG_PTR WINAPI FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
+	static LONG_PTR WINAPI FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
+	static BOOL WINAPI FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags);
+	static HANDLE WINAPI FarApiSaveScreen(int X1, int Y1, int X2, int Y2);
+	static void WINAPI FarApiRestoreScreen(HANDLE hScreen);
+	static void WINAPI FarApiText(int X, int Y, int Color, const wchar_t *Str);
+	static int WINAPI FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage);
+	static int WINAPI FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage);
+	static int WINAPI FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber);
+	static int WINAPI FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber);
+	static HANDLE WINAPI FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param);
+	static int WINAPI FarApiDialogRun(HANDLE hDlg);
+	static void WINAPI FarApiDialogFree(HANDLE hDlg);
+	static int WINAPI FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2);
+	static int WINAPI FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber);
+	static void WINAPI FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber);
+	static int WINAPI FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber);
+	static void WINAPI FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber);
+	static int WINAPI FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath);
+	static const wchar_t* WINAPI FarApiGetMsg(INT_PTR PluginNumber, int MsgId);
+	static INT_PTR WINAPI FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param);
+	static int WINAPI FarApiViewerControl(int Command, void *Param);
+	static int WINAPI FarApiEditorControl(int Command, void *Param);
+	static int WINAPI FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags);
+	static int WINAPI FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
+	static int WINAPI FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
+	static int WINAPI FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param);
+	//struct int WINAPIV FARSTDSPRINTF(wchar_t *Buffer,const wchar_t *Format,...);
+	//struct int WINAPIV FARSTDSNPRINTF(wchar_t *Buffer,size_t Sizebuf,const wchar_t *Format,...);
+	//struct int WINAPIV FARSTDSSCANF(const wchar_t *Buffer, const wchar_t *Format,...);
+	//struct void WINAPI FARSTDQSORT(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
+	//struct void WINAPI FARSTDQSORTEX(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam);
+	//struct void   *WINAPI FARSTDBSEARCH(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
+	static int WINAPI FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size);
+	//struct int WINAPI FARSTDGETNUMBEROFLINKS(const wchar_t *Name);
+	//struct int WINAPI FARSTDATOI(const wchar_t *s);
+	//struct __int64 WINAPI FARSTDATOI64(const wchar_t *s);
+	//struct wchar_t   *WINAPI FARSTDITOA64(__int64 value, wchar_t *string, int radix);
+	//struct wchar_t   *WINAPI FARSTDITOA(int value, wchar_t *string, int radix);
+	//struct wchar_t   *WINAPI FARSTDLTRIM(wchar_t *Str);
+	//struct wchar_t   *WINAPI FARSTDRTRIM(wchar_t *Str);
+	//struct wchar_t   *WINAPI FARSTDTRIM(wchar_t *Str);
+	//struct wchar_t   *WINAPI FARSTDTRUNCSTR(wchar_t *Str,int MaxLength);
+	//struct wchar_t   *WINAPI FARSTDTRUNCPATHSTR(wchar_t *Str,int MaxLength);
+	//struct wchar_t   *WINAPI FARSTDQUOTESPACEONLY(wchar_t *Str);
+	//struct const wchar_t*WINAPI FARSTDPOINTTONAME(const wchar_t *Path);
+	static int WINAPI FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize);
+	//struct BOOL WINAPI FARSTDADDENDSLASH(wchar_t *Path);
+	//struct int WINAPI FARSTDCOPYTOCLIPBOARD(const wchar_t *Data);
+	//struct wchar_t *WINAPI FARSTDPASTEFROMCLIPBOARD(void);
+	//struct int WINAPI FARSTDINPUTRECORDTOKEY(const INPUT_RECORD *r);
+	//struct int WINAPI FARSTDLOCALISLOWER(wchar_t Ch);
+	//struct int WINAPI FARSTDLOCALISUPPER(wchar_t Ch);
+	//struct int WINAPI FARSTDLOCALISALPHA(wchar_t Ch);
+	//struct int WINAPI FARSTDLOCALISALPHANUM(wchar_t Ch);
+	//struct wchar_t WINAPI FARSTDLOCALUPPER(wchar_t LowerChar);
+	//struct wchar_t WINAPI FARSTDLOCALLOWER(wchar_t UpperChar);
+	//struct void WINAPI FARSTDLOCALUPPERBUF(wchar_t *Buf,int Length);
+	//struct void WINAPI FARSTDLOCALLOWERBUF(wchar_t *Buf,int Length);
+	//struct void WINAPI FARSTDLOCALSTRUPR(wchar_t *s1);
+	//struct void WINAPI FARSTDLOCALSTRLWR(wchar_t *s1);
+	//struct int WINAPI FARSTDLOCALSTRICMP(const wchar_t *s1,const wchar_t *s2);
+	//struct int WINAPI FARSTDLOCALSTRNICMP(const wchar_t *s1,const wchar_t *s2,int n);
+	static wchar_t* WINAPI FarStdXlat(wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
+	static void WINAPI FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
+	static int WINAPI FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix);
+	static int WINAPI FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags);
+	static int WINAPI FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags);
+	static int WINAPI FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize);
+	static int WINAPI FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize);
+	static DWORD WINAPI FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer);
+
+
+	// Exported Function
+	typedef int    (WINAPI* _AnalyseW)(const struct AnalyseInfo *Info);
+	_AnalyseW AnalyseW;
+	typedef void   (WINAPI* _ClosePluginW)(HANDLE hPlugin);
+	_ClosePluginW ClosePluginW;
+	typedef int    (WINAPI* _CompareW)(HANDLE hPlugin,const Far2::PluginPanelItem *Item1,const Far2::PluginPanelItem *Item2,unsigned int Mode);
+	_CompareW CompareW;
+	typedef int    (WINAPI* _ConfigureW)(int ItemNumber);
+	_ConfigureW ConfigureW;
+	typedef int    (WINAPI* _DeleteFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
+	_DeleteFilesW DeleteFilesW;
+	typedef void   (WINAPI* _ExitFARW)(void);
+	_ExitFARW ExitFARW;
+	typedef void   (WINAPI* _FreeFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber);
+	_FreeFindDataW FreeFindDataW;
+	typedef void   (WINAPI* _FreeVirtualFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber);
+	_FreeVirtualFindDataW FreeVirtualFindDataW;
+	typedef int    (WINAPI* _GetFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int Move,const wchar_t **DestPath,int OpMode);
+	_GetFilesW GetFilesW;
+	typedef int    (WINAPI* _GetFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
+	_GetFindDataW GetFindDataW;
+	typedef int    (WINAPI* _GetMinFarVersionW)(void);
+	_GetMinFarVersionW GetMinFarVersionW;
+	typedef void   (WINAPI* _GetOpenPluginInfoW)(HANDLE hPlugin,Far2::OpenPluginInfo *Info);
+	_GetOpenPluginInfoW GetOpenPluginInfoW;
+	typedef void   (WINAPI* _GetPluginInfoW)(Far2::PluginInfo *Info);
+	_GetPluginInfoW GetPluginInfoW;
+	typedef int    (WINAPI* _GetVirtualFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem **pPanelItem,int *pItemsNumber,const wchar_t *Path);
+	_GetVirtualFindDataW GetVirtualFindDataW;
+	typedef int    (WINAPI* _MakeDirectoryW)(HANDLE hPlugin,const wchar_t **Name,int OpMode);
+	_MakeDirectoryW MakeDirectoryW;
+	typedef HANDLE (WINAPI* _OpenFilePluginW)(const wchar_t *Name,const unsigned char *Data,int DataSize,int OpMode);
+	_OpenFilePluginW OpenFilePluginW;
+	typedef HANDLE (WINAPI* _OpenPluginW)(int OpenFrom,INT_PTR Item);
+	_OpenPluginW OpenPluginW;
+	typedef int    (WINAPI* _ProcessDialogEventW)(int Event,void *Param);
+	_ProcessDialogEventW ProcessDialogEventW;
+	typedef int    (WINAPI* _ProcessEditorEventW)(int Event,void *Param);
+	_ProcessEditorEventW ProcessEditorEventW;
+	typedef int    (WINAPI* _ProcessEditorInputW)(const INPUT_RECORD *Rec);
+	_ProcessEditorInputW ProcessEditorInputW;
+	typedef int    (WINAPI* _ProcessEventW)(HANDLE hPlugin,int Event,void *Param);
+	_ProcessEventW ProcessEventW;
+	typedef int    (WINAPI* _ProcessHostFileW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
+	_ProcessHostFileW ProcessHostFileW;
+	typedef int    (WINAPI* _ProcessKeyW)(HANDLE hPlugin,int Key,unsigned int ControlState);
+	_ProcessKeyW ProcessKeyW;
+	typedef int    (WINAPI* _ProcessSynchroEventW)(int Event,void *Param);
+	_ProcessSynchroEventW ProcessSynchroEventW;
+	typedef int    (WINAPI* _ProcessViewerEventW)(int Event,void *Param);
+	_ProcessViewerEventW ProcessViewerEventW;
+	typedef int    (WINAPI* _PutFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int Move,const wchar_t *SrcPath,int OpMode);
+	typedef int    (WINAPI* _PutFilesOldW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int Move,int OpMode);
+	_PutFilesW PutFilesW;
+	typedef int    (WINAPI* _SetDirectoryW)(HANDLE hPlugin,const wchar_t *Dir,int OpMode);
+	_SetDirectoryW SetDirectoryW;
+	typedef int    (WINAPI* _SetFindListW)(HANDLE hPlugin,const Far2::PluginPanelItem *PanelItem,int ItemsNumber);
+	_SetFindListW SetFindListW;
+	typedef void   (WINAPI* _SetStartupInfoW)(const Far2::PluginStartupInfo *Info);
+	_SetStartupInfoW SetStartupInfoW;
+};
 WrapPluginInfo* wpi = NULL;
 
 int OpMode_3_2(OPERATION_MODES OpMode3)
@@ -581,8 +766,30 @@ FarDialogItemFlags FarDialogItemFlags_2_3(DWORD Flags2)
 	return Flags3;
 }
 
-void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3)
+void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3)
 {
+	//TODO: конвертация флагов
+	p3->Flags = p2->Flags;
+	p3->Text = p2->Text;
+	p3->Reserved[0] = p2->Reserved[0];
+	p3->Reserved[1] = p2->Reserved[1];
+	p3->Reserved[2] = p2->Reserved[2];
+}
+
+void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2)
+{
+	//TODO: конвертация флагов
+	p2->Flags = p3->Flags;
+	p2->Text = p3->Text;
+	p2->Reserved[0] = p3->Reserved[0];
+	p2->Reserved[1] = p3->Reserved[1];
+	p2->Reserved[2] = p3->Reserved[2];
+}
+
+void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3)
+{
+	p3->Reserved = 0;
+
 	p3->Type = DialogItemTypes_2_3(p2->Type);
 	p3->X1 = p2->X1;
 	p3->Y1 = p2->Y1;
@@ -608,9 +815,27 @@ void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3)
 	}
 	else if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
 	{
-		//TODO:
-		_ASSERTE(p2->Param.ListItems == NULL);
-		//p3->ListItems = p2->Param.ListItems;
+		if (pList3->Items)
+		{
+			free(pList3->Items);
+			pList3->Items = NULL;
+		}
+		if (p2->Param.ListItems != NULL)
+		{
+			int nItems = p2->Param.ListItems->ItemsNumber;
+			pList3->ItemsNumber = nItems;
+			if (p2->Param.ListItems > 0)
+			{
+				pList3->Items = (FarListItem*)calloc(nItems,sizeof(FarListItem));
+				const Far2::FarListItem* pi2 = p2->Param.ListItems->Items;
+				FarListItem* pi3 = pList3->Items;
+				for (int j = 0; j < nItems; j++, pi2++, pi3++)
+				{
+					FarListItem_2_3(pi2, pi3);
+				}
+			}
+			p3->ListItems = pList3;
+		}
 	}
 	else if (p3->Type == DI_USERCONTROL)
 	{
@@ -622,8 +847,10 @@ void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3)
 	}
 }
 
-void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2)
+void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2, Far2::FarList *pList2)
 {
+	p2->Param.Reserved = 0;
+
 	p2->Type = DialogItemTypes_3_2(p3->Type);
 	p2->X1 = p3->X1;
 	p2->Y1 = p3->Y1;
@@ -647,9 +874,27 @@ void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2)
 	}
 	else if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
 	{
-		//TODO:
-		_ASSERTE(p3->ListItems == NULL);
-		//p2->ListItems = p3->Param.ListItems;
+		if (pList2->Items)
+		{
+			free(pList2->Items);
+			pList2->Items = NULL;
+		}
+		if (p3->ListItems != NULL)
+		{
+			int nItems = p3->ListItems->ItemsNumber;
+			pList2->ItemsNumber = nItems;
+			if (p3->ListItems > 0)
+			{
+				pList2->Items = (Far2::FarListItem*)calloc(nItems,sizeof(FarListItem));
+				const FarListItem* pi3 = p3->ListItems->Items;
+				Far2::FarListItem* pi2 = pList2->Items;
+				for (int j = 0; j < nItems; j++, pi2++, pi3++)
+				{
+					FarListItem_3_2(pi3, pi2);
+				}
+			}
+			p2->Param.ListItems = pList2;
+		}
 	}
 	else if (p3->Type == DI_USERCONTROL)
 	{
@@ -661,25 +906,6 @@ void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2)
 	}
 }
 
-void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3)
-{
-	//TODO: конвертация флагов
-	p3->Flags = p2->Flags;
-	p3->Text = p2->Text;
-	p3->Reserved[0] = p2->Reserved[0];
-	p3->Reserved[1] = p2->Reserved[1];
-	p3->Reserved[2] = p2->Reserved[2];
-}
-
-void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2)
-{
-	//TODO: конвертация флагов
-	p2->Flags = p3->Flags;
-	p2->Text = p3->Text;
-	p2->Reserved[0] = p3->Reserved[0];
-	p2->Reserved[1] = p3->Reserved[1];
-	p2->Reserved[2] = p3->Reserved[2];
-}
 
 int gnMsg_2 = 0, gnParam1_2 = 0, gnParam1_3 = 0;
 FARMESSAGE gnMsg_3 = DM_FIRST;
@@ -1006,7 +1232,7 @@ FARMESSAGE FarMessage_2_3(const int Msg2, const int Param1, LONG_PTR& Param2)
 				const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 				static FarDialogItem p3;
 				memset(&p3, 0, sizeof(p3));
-				FarDialogItem_2_3(p2, &p3);
+				FarDialogItem_2_3(p2, &p3, &wpi->m_ListItems3);
 				Param2 = (LONG_PTR)&p3;
 				switch (Msg2)
 				{
@@ -1400,7 +1626,7 @@ Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Pa
 				const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 				static Far2::FarDialogItem p2;
 				memset(&p2, 0, sizeof(p2));
-				FarDialogItem_3_2(p3, &p2);
+				FarDialogItem_3_2(p3, &p2, &wpi->m_ListItems2);
 				Param2 = &p2;
 				switch (Msg3)
 				{
@@ -1448,7 +1674,7 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 		{
 			const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 			FarDialogItem* p3 = (FarDialogItem*)OrgParam2;
-			FarDialogItem_2_3(p2, p3);
+			FarDialogItem_2_3(p2, p3, &wpi->m_ListItems3);
 		}
 		break;
 	case Far2::DM_LISTGETITEM:
@@ -1512,7 +1738,7 @@ void FarMessageParam_3_2(const int Msg3, const int Param1, const LONG_PTR Param2
 		{
 			const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 			Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-			FarDialogItem_3_2(p3, p2);
+			FarDialogItem_3_2(p3, p2, &wpi->m_ListItems2);
 		}
 		break;
 	case DM_LISTGETITEM:
@@ -1561,7 +1787,7 @@ void FarMessageParam_3_2(const int Msg3, const int Param1, const LONG_PTR Param2
 		}
 		break;
 	}
-}
+};
 
 struct Far2Dialog
 {
@@ -1573,6 +1799,7 @@ struct Far2Dialog
     wchar_t *m_HelpTopic;
     Far2::FarDialogItem *m_Items2;
     FarDialogItem *m_Items3;
+    FarList *mp_ListInit3;
     UINT m_ItemsNumber;
     DWORD m_Flags;
     Far2::FARWINDOWPROC m_DlgProc;
@@ -1591,1014 +1818,101 @@ struct Far2Dialog
 	~Far2Dialog();
 };
 
-struct WrapPluginInfo
+
+void WrapPluginInfo::UnloadPlugin()
 {
-	HMODULE hDll;
-	wchar_t PluginDll[MAX_PATH+1], IniFile[MAX_PATH+1];
-	wchar_t File[64];
-	wchar_t Title[MAX_PATH+1], Desc[256], Author[256];
-	wchar_t RegRoot[1024];
-	VersionInfo Version;
-	GUID guid_Plugin, guid_Dialogs;
-	int nPluginMenu; GUID* guids_PluginMenu;
-	int nPluginDisks; GUID* guids_PluginDisks;
-	int nPluginConfig; GUID* guids_PluginConfig;
-	Far2::PluginInfo Info;
-	InfoPanelLine *InfoLines; size_t InfoLinesNumber; // Far3
-	PanelMode     *PanelModesArray; size_t PanelModesNumber; // Far3
-	KeyBarTitles   KeyBar; // Far3
-	KeyBarLabel    KeyBarLabels[7*12];
-	
-	AnalyseInfo* pAnalyze;
-	//;; 1 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW
-	//;; 2 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW & ClosePluginW [& OpenFilePluginW]
-	int AnalyzeMode;
-
-	int OldPutFilesParams;
-	
-	std::map<PluginPanelItem*,Far2::PluginPanelItem*> MapPanelItems;
-	
-	Far2Dialog* LastFar2Dlg;
-	std::map<Far2Dialog*,HANDLE> MapDlg_2_3;
-	std::map<HANDLE,Far2Dialog*> MapDlg_3_2;
-
-	void UnloadPlugin()
+	if (hDll)
 	{
-		if (hDll)
-		{
-			FreeLibrary(hDll);
-			hDll = NULL;
-		}
-		ClearProcAddr();
-	}
-	
-	~WrapPluginInfo()
-	{
-		if (guids_PluginMenu)
-			free(guids_PluginMenu);
-		if (guids_PluginDisks)
-			free(guids_PluginDisks);
-		if (guids_PluginConfig)
-			free(guids_PluginConfig);
-		if (pAnalyze)
-			free(pAnalyze);
-		if (InfoLines)
-			free(InfoLines);
-		if (PanelModesArray)
-			free(PanelModesArray);
-		_ASSERTE(KeyBar.Labels==KeyBarLabels);
-	}
-
-	void ClearProcAddr()
-	{
-		AnalyseW = NULL;
-		ClosePluginW = NULL;
-		CompareW = NULL;
-		ConfigureW = NULL;
-		DeleteFilesW = NULL;
-		ExitFARW = NULL;
-		FreeFindDataW = NULL;
-		FreeVirtualFindDataW = NULL;
-		GetFilesW = NULL;
-		GetFindDataW = NULL;
-		GetMinFarVersionW = NULL;
-		GetOpenPluginInfoW = NULL;
-		GetPluginInfoW = NULL;
-		GetVirtualFindDataW = NULL;
-		MakeDirectoryW = NULL;
-		OpenFilePluginW = NULL;
-		OpenPluginW = NULL;
-		ProcessDialogEventW = NULL;
-		ProcessEditorEventW = NULL;
-		ProcessEditorInputW = NULL;
-		ProcessEventW = NULL;
-		ProcessHostFileW = NULL;
-		ProcessKeyW = NULL;
-		ProcessSynchroEventW = NULL;
-		ProcessViewerEventW = NULL;
-		PutFilesW = NULL;
-		SetDirectoryW = NULL;
-		SetFindListW  = NULL;
-		SetStartupInfoW = NULL;
-	}
-
-	WrapPluginInfo()
-	{
+		FreeLibrary(hDll);
 		hDll = NULL;
-		PluginDll[0] = IniFile[0] = Title[0] = Desc[0] = Author[0] = RegRoot[0] = File[0] = 0;
-		memset(&Version, 0, sizeof(Version));
-		memset(&guid_Plugin, 0, sizeof(guid_Plugin));
-		memset(&guid_Dialogs, 0, sizeof(guid_Dialogs));
-		nPluginMenu = nPluginDisks = nPluginConfig = 0;
-		guids_PluginMenu = guids_PluginDisks = guids_PluginConfig = NULL;
-		memset(&Info, 0, sizeof(Info));
-		InfoLines = NULL; InfoLinesNumber = 0;
-		PanelModesArray = NULL; PanelModesNumber = 0;
-		KeyBar.CountLabels = 0; KeyBar.Labels = KeyBarLabels;
-		LastFar2Dlg = NULL;
-		OldPutFilesParams = 0;
-		AnalyzeMode = 2;
+	}
+	ClearProcAddr();
+}
 
-		ClearProcAddr();
-		pAnalyze = NULL;
-	};
-	
-	// Exported Function
-	typedef int    (WINAPI* _AnalyseW)(const struct AnalyseInfo *Info);
-	_AnalyseW AnalyseW;
-	typedef void   (WINAPI* _ClosePluginW)(HANDLE hPlugin);
-	_ClosePluginW ClosePluginW;
-	typedef int    (WINAPI* _CompareW)(HANDLE hPlugin,const Far2::PluginPanelItem *Item1,const Far2::PluginPanelItem *Item2,unsigned int Mode);
-	_CompareW CompareW;
-	typedef int    (WINAPI* _ConfigureW)(int ItemNumber);
-	_ConfigureW ConfigureW;
-	typedef int    (WINAPI* _DeleteFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
-	_DeleteFilesW DeleteFilesW;
-	typedef void   (WINAPI* _ExitFARW)(void);
-	_ExitFARW ExitFARW;
-	typedef void   (WINAPI* _FreeFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber);
-	_FreeFindDataW FreeFindDataW;
-	typedef void   (WINAPI* _FreeVirtualFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber);
-	_FreeVirtualFindDataW FreeVirtualFindDataW;
-	typedef int    (WINAPI* _GetFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int Move,const wchar_t **DestPath,int OpMode);
-	_GetFilesW GetFilesW;
-	typedef int    (WINAPI* _GetFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
-	_GetFindDataW GetFindDataW;
-	typedef int    (WINAPI* _GetMinFarVersionW)(void);
-	_GetMinFarVersionW GetMinFarVersionW;
-	typedef void   (WINAPI* _GetOpenPluginInfoW)(HANDLE hPlugin,Far2::OpenPluginInfo *Info);
-	_GetOpenPluginInfoW GetOpenPluginInfoW;
-	typedef void   (WINAPI* _GetPluginInfoW)(Far2::PluginInfo *Info);
-	_GetPluginInfoW GetPluginInfoW;
-	typedef int    (WINAPI* _GetVirtualFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem **pPanelItem,int *pItemsNumber,const wchar_t *Path);
-	_GetVirtualFindDataW GetVirtualFindDataW;
-	typedef int    (WINAPI* _MakeDirectoryW)(HANDLE hPlugin,const wchar_t **Name,int OpMode);
-	_MakeDirectoryW MakeDirectoryW;
-	typedef HANDLE (WINAPI* _OpenFilePluginW)(const wchar_t *Name,const unsigned char *Data,int DataSize,int OpMode);
-	_OpenFilePluginW OpenFilePluginW;
-	typedef HANDLE (WINAPI* _OpenPluginW)(int OpenFrom,INT_PTR Item);
-	_OpenPluginW OpenPluginW;
-	typedef int    (WINAPI* _ProcessDialogEventW)(int Event,void *Param);
-	_ProcessDialogEventW ProcessDialogEventW;
-	typedef int    (WINAPI* _ProcessEditorEventW)(int Event,void *Param);
-	_ProcessEditorEventW ProcessEditorEventW;
-	typedef int    (WINAPI* _ProcessEditorInputW)(const INPUT_RECORD *Rec);
-	_ProcessEditorInputW ProcessEditorInputW;
-	typedef int    (WINAPI* _ProcessEventW)(HANDLE hPlugin,int Event,void *Param);
-	_ProcessEventW ProcessEventW;
-	typedef int    (WINAPI* _ProcessHostFileW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
-	_ProcessHostFileW ProcessHostFileW;
-	typedef int    (WINAPI* _ProcessKeyW)(HANDLE hPlugin,int Key,unsigned int ControlState);
-	_ProcessKeyW ProcessKeyW;
-	typedef int    (WINAPI* _ProcessSynchroEventW)(int Event,void *Param);
-	_ProcessSynchroEventW ProcessSynchroEventW;
-	typedef int    (WINAPI* _ProcessViewerEventW)(int Event,void *Param);
-	_ProcessViewerEventW ProcessViewerEventW;
-	typedef int    (WINAPI* _PutFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int Move,const wchar_t *SrcPath,int OpMode);
-	typedef int    (WINAPI* _PutFilesOldW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int Move,int OpMode);
-	_PutFilesW PutFilesW;
-	typedef int    (WINAPI* _SetDirectoryW)(HANDLE hPlugin,const wchar_t *Dir,int OpMode);
-	_SetDirectoryW SetDirectoryW;
-	typedef int    (WINAPI* _SetFindListW)(HANDLE hPlugin,const Far2::PluginPanelItem *PanelItem,int ItemsNumber);
-	_SetFindListW SetFindListW;
-	typedef void   (WINAPI* _SetStartupInfoW)(const Far2::PluginStartupInfo *Info);
-	_SetStartupInfoW SetStartupInfoW;
-	
-	// Changed functions
-	static LONG_PTR WINAPI FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+WrapPluginInfo::~WrapPluginInfo()
+{
+	if (m_ListItems2.Items)
 	{
-		LOG_CMD(L"psi2.DefDlgProc(%i,%i,%i)",Msg,Param1,Param2);
-		LONG_PTR lRc = 0;
-		HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg];
-		if (hDlg3)
-		{
-			LONG_PTR OrgParam2 = Param2;
-			FARMESSAGE Msg3 = FarMessage_2_3(Msg, Param1, Param2);
-			lRc = psi3.DefDlgProc(hDlg3, Msg3, Param1, (void*)Param2);
-			if (Param2 && Param2 != OrgParam2)
-				FarMessageParam_3_2(Msg, Param1, Param2, OrgParam2);
-		}
-		else
-		{
-			_ASSERTE(hDlg3!=NULL);
-		}
-		return lRc;
+		free(m_ListItems2.Items);
+		m_ListItems2.Items = NULL;
 	}
-	static LONG_PTR WINAPI FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+	if (m_ListItems3.Items)
 	{
-		LOG_CMD(L"psi2.SendDlgMessage(%i,%i,%i)",Msg,Param1,Param2);
-		LONG_PTR lRc = 0;
-		HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg];
-		if (hDlg3)
-		{
-			LONG_PTR OrgParam2 = Param2;
-			FARMESSAGE Msg3 = FarMessage_2_3(Msg, Param1, Param2);
-			lRc = psi3.SendDlgMessage(hDlg3, Msg3, Param1, (void*)Param2);
-			if (Param2 && Param2 != OrgParam2)
-				FarMessageParam_3_2(Msg, Param1, Param2, OrgParam2);
-		}
-		else
-		{
-			_ASSERTE(hDlg3!=NULL);
-		}
-		return lRc;
+		free(m_ListItems3.Items);
+		m_ListItems3.Items = NULL;
 	}
-	static BOOL WINAPI FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags)
-	{
-		LOG_CMD(L"psi2.ShowHelp",0,0,0);
-		FARHELPFLAGS Flags3 = 0
-			| ((Flags & Far2::FHELP_NOSHOWERROR) ? FHELP_NOSHOWERROR : 0)
-			| ((Flags & Far2::FHELP_FARHELP) ? FHELP_FARHELP : 0)
-			| ((Flags & Far2::FHELP_CUSTOMFILE) ? FHELP_CUSTOMFILE : 0)
-			| ((Flags & Far2::FHELP_CUSTOMPATH) ? FHELP_CUSTOMPATH : 0)
-			| ((Flags & Far2::FHELP_USECONTENTS) ? FHELP_USECONTENTS : 0);
-		int iRc = psi3.ShowHelp(ModuleName, Topic, Flags3);
-		return iRc;
-	}
-	static HANDLE WINAPI FarApiSaveScreen(int X1, int Y1, int X2, int Y2)
-	{
-		LOG_CMD(L"psi2.SaveScreen",0,0,0);
-		return psi3.SaveScreen(X1,Y1,X2,Y2);
-	}
-	static void WINAPI FarApiRestoreScreen(HANDLE hScreen)
-	{
-		LOG_CMD(L"psi2.RestoreScreen",0,0,0);
-		psi3.RestoreScreen(hScreen);
-	}
-	static void WINAPI FarApiText(int X, int Y, int Color, const wchar_t *Str)
-	{
-		LOG_CMD(L"psi2.Text",0,0,0);
-		psi3.Text(X,Y,Color,Str);
-	}
-	static int WINAPI FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage)
-	{
-		LOG_CMD(L"psi2.Editor",0,0,0);
-		EDITOR_FLAGS Flags3 = 0
-			| ((Flags & Far2::EF_NONMODAL) ? EF_NONMODAL : 0)
-			| ((Flags & Far2::EF_CREATENEW) ? EF_CREATENEW : 0)
-			| ((Flags & Far2::EF_ENABLE_F6) ? EF_ENABLE_F6 : 0)
-			| ((Flags & Far2::EF_DISABLEHISTORY) ? EF_DISABLEHISTORY : 0)
-			| ((Flags & Far2::EF_DELETEONCLOSE) ? EF_DELETEONCLOSE : 0)
-			| ((Flags & Far2::EF_IMMEDIATERETURN) ? EF_IMMEDIATERETURN : 0)
-			| ((Flags & Far2::EF_DELETEONLYFILEONCLOSE) ? EF_DELETEONLYFILEONCLOSE : 0);
-		int iRc = psi3.Editor(FileName, Title, X1,Y1,X2,Y2, Flags3, StartLine, StartChar, CodePage);
-		return iRc;
-	}
-	static int WINAPI FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage)
-	{
-		LOG_CMD(L"psi2.Viewer",0,0,0);
-		VIEWER_FLAGS Flags3 = 0
-			| ((Flags & Far2::VF_NONMODAL) ? VF_NONMODAL : 0)
-			| ((Flags & Far2::VF_DELETEONCLOSE) ? VF_DELETEONCLOSE : 0)
-			| ((Flags & Far2::VF_ENABLE_F6) ? VF_ENABLE_F6 : 0)
-			| ((Flags & Far2::VF_DISABLEHISTORY) ? VF_DISABLEHISTORY : 0)
-			| ((Flags & Far2::VF_IMMEDIATERETURN) ? VF_IMMEDIATERETURN : 0)
-			| ((Flags & Far2::VF_DELETEONLYFILEONCLOSE) ? VF_DELETEONLYFILEONCLOSE : 0);
-		int iRc = psi3.Viewer(FileName, Title, X1,Y1,X2,Y2, Flags3, CodePage);
-		return iRc;
-	};
-	static int WINAPI FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber)
-	{
-		LOG_CMD(L"psi2.Menu",0,0,0);
-		int iRc = -1;
-		FarMenuItem *pItems3 = NULL;
-		FarKey *pBreak3 = NULL;
-		
-		if (Item && ItemsNumber > 0)
-		{
-			pItems3 = (FarMenuItem*)calloc(ItemsNumber, sizeof(*pItems3));
-			if (!(Flags & Far2::FMENU_USEEXT))
-			{
-				const Far2::FarMenuItem* p2 = Item;
-				FarMenuItem* p3 = pItems3;
-				for (int i = 0; i < ItemsNumber; i++, p2++, p3++)
-				{
-					p3->Text = p2->Text;
-					p3->Flags = 0
-						| (p2->Selected ? MIF_SELECTED : 0)
-						| (p2->Checked ? MIF_CHECKED : 0)
-						| (p2->Separator ? MIF_SEPARATOR : 0);
-				}
-			}
-			else
-			{
-				const Far2::FarMenuItemEx* p2 = (const Far2::FarMenuItemEx*)Item;
-				FarMenuItem* p3 = pItems3;
-				for (int i = 0; i < ItemsNumber; i++, p2++, p3++)
-				{
-					p3->Text = p2->Text;
-					p3->Flags = 0
-						| ((p2->Flags & Far2::MIF_SELECTED) ? MIF_SELECTED : 0)
-						| ((p2->Flags & Far2::MIF_CHECKED) ? MIF_CHECKED : 0)
-						| ((p2->Flags & Far2::MIF_SEPARATOR) ? MIF_SEPARATOR : 0)
-						| ((p2->Flags & Far2::MIF_DISABLE) ? MIF_DISABLE : 0)
-						| ((p2->Flags & Far2::MIF_GRAYED) ? MIF_GRAYED : 0)
-						| ((p2->Flags & Far2::MIF_HIDDEN) ? MIF_HIDDEN : 0);
-					p3->AccelKey = p2->AccelKey;
-					p3->Reserved = p2->Reserved;
-					p3->UserData = p2->UserData;
-				}
-			}
-			
-			if (BreakKeys)
-			{
-				int cnt = 0;
-				for (int i = 0; BreakKeys[i]; i++)
-					cnt++;
-				pBreak3 = (FarKey*)calloc(cnt+1, sizeof(*pBreak3));
-				for (int i = 0; BreakKeys[i]; i++)
-				{
-					pBreak3[i].VirtualKeyCode = LOWORD(BreakKeys[i]);
-					pBreak3[i].ControlKeyState = 0
-						| ((HIWORD(BreakKeys[i]) & Far2::PKF_CONTROL) ? LEFT_CTRL_PRESSED : 0)
-						| ((HIWORD(BreakKeys[i]) & Far2::PKF_ALT) ? LEFT_ALT_PRESSED : 0)
-						| ((HIWORD(BreakKeys[i]) & Far2::PKF_SHIFT) ? SHIFT_PRESSED : 0);
-				}
-			}
-			
-			FARMENUFLAGS Flags3 = 0
-				| ((Flags & Far2::FMENU_SHOWAMPERSAND) ? FMENU_SHOWAMPERSAND : 0)
-				| ((Flags & Far2::FMENU_WRAPMODE) ? FMENU_WRAPMODE : 0)
-				| ((Flags & Far2::FMENU_AUTOHIGHLIGHT) ? FMENU_AUTOHIGHLIGHT : 0)
-				| ((Flags & Far2::FMENU_REVERSEAUTOHIGHLIGHT) ? FMENU_REVERSEAUTOHIGHLIGHT : 0)
-				| ((Flags & Far2::FMENU_CHANGECONSOLETITLE) ? FMENU_CHANGECONSOLETITLE : 0);
-			
-			iRc = psi3.Menu(&wpi->guid_Plugin, X, Y, MaxHeight, Flags3,
-					Title, Bottom, HelpTopic, pBreak3, BreakCode, pItems3, ItemsNumber);
-		}
-		
-		if (pItems3)
-			free(pItems3);
-		if (pBreak3)
-			free(pBreak3);
-		return iRc;
-	};
-	static int WINAPI FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber)
-	{
-		LOG_CMD(L"psi2.Message",0,0,0);
-		int iRc = -1;
+	if (guids_PluginMenu)
+		free(guids_PluginMenu);
+	if (guids_PluginDisks)
+		free(guids_PluginDisks);
+	if (guids_PluginConfig)
+		free(guids_PluginConfig);
+	if (pAnalyze)
+		free(pAnalyze);
+	if (InfoLines)
+		free(InfoLines);
+	if (PanelModesArray)
+		free(PanelModesArray);
+	_ASSERTE(KeyBar.Labels==KeyBarLabels);
+}
 
-		DWORD Far3Flags = 0
-			| ((Flags & Far2::FMSG_WARNING) ? FMSG_WARNING : 0)
-			| ((Flags & Far2::FMSG_ERRORTYPE) ? FMSG_ERRORTYPE : 0)
-			| ((Flags & Far2::FMSG_KEEPBACKGROUND) ? FMSG_KEEPBACKGROUND : 0)
-			| ((Flags & Far2::FMSG_LEFTALIGN) ? FMSG_LEFTALIGN : 0)
-			| ((Flags & Far2::FMSG_ALLINONE) ? FMSG_ALLINONE : 0);
-			
-		if ((Flags & 0x000F0000) == Far2::FMSG_MB_OK)
-			Far3Flags |= FMSG_MB_OK;
-		else if ((Flags & 0x000F0000) == Far2::FMSG_MB_OKCANCEL)
-			Far3Flags |= FMSG_MB_OKCANCEL;
-		else if ((Flags & 0x000F0000) == Far2::FMSG_MB_ABORTRETRYIGNORE)
-			Far3Flags |= FMSG_MB_ABORTRETRYIGNORE;
-		else if ((Flags & 0x000F0000) == Far2::FMSG_MB_YESNO)
-			Far3Flags |= FMSG_MB_YESNO;
-		else if ((Flags & 0x000F0000) == Far2::FMSG_MB_YESNOCANCEL)
-			Far3Flags |= FMSG_MB_YESNOCANCEL;
-		else if ((Flags & 0x000F0000) == Far2::FMSG_MB_RETRYCANCEL)
-			Far3Flags |= FMSG_MB_RETRYCANCEL;
-		
-		iRc = psi3.Message(&wpi->guid_Plugin, Far3Flags, 
-    				HelpTopic, Items, ItemsNumber, ButtonsNumber);
-    	return iRc;
-	};
-	static HANDLE WINAPI FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param)
-	{
-		LOG_CMD(L"psi2.DialogInit",0,0,0);
-		Far2Dialog *p = new Far2Dialog(X1, Y1, X2, Y2,
-	    	HelpTopic, Item, ItemsNumber, Flags, DlgProc, Param,
-	    	wpi->guid_Plugin, wpi->guid_Dialogs);
-		return (HANDLE)p;
-	};
-	static int WINAPI FarApiDialogRun(HANDLE hDlg)
-	{
-		LOG_CMD(L"psi2.DialogRun",0,0,0);
-		Far2Dialog *p = (Far2Dialog*)hDlg;
-		if (!p)
-			return -1;
-		return p->RunDlg();
-	}
-	static void WINAPI FarApiDialogFree(HANDLE hDlg)
-	{
-		LOG_CMD(L"psi2.DialogFree",0,0,0);
-		Far2Dialog *p = (Far2Dialog*)hDlg;
-		if (!p)
-			return;
-		delete p;
-	};
-	static int WINAPI FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2)
-	{
-		LOG_CMD(L"psi2.Control(%i,%i,%i)",Command, Param1, Param2);
-		//TODO: Конвертация параметров!
-		int iRc = 0;
-		switch (Command)
-		{
-		case Far2::FCTL_CLOSEPLUGIN: iRc = psi3.PanelControl(hPlugin, FCTL_CLOSEPANEL, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETPANELINFO:
-			{
-				Far2::PanelInfo* p2 = (Far2::PanelInfo*)Param2;
-				PanelInfo p3 = {sizeof(PanelInfo)};
-				iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELINFO, Param1, &p3);
-				if (iRc)
-				{
-					memset(p2, 0, sizeof(*p2));
-					//TODO: конвертация типа
-					p2->PanelType = p3.PanelType;
-					p2->Plugin = (p3.Flags & PFLAGS_PLUGIN) == PFLAGS_PLUGIN;
-					p2->PanelRect = p3.PanelRect;
-					p2->ItemsNumber = p3.ItemsNumber;
-					p2->SelectedItemsNumber = p3.SelectedItemsNumber;
-					p2->CurrentItem = p3.CurrentItem;
-					p2->TopPanelItem = p3.TopPanelItem;
-					p2->Visible = (p3.Flags & PFLAGS_VISIBLE) == PFLAGS_VISIBLE;
-					p2->Focus = (p3.Flags & PFLAGS_FOCUS) == PFLAGS_FOCUS;
-					//TODO: конвертация режима
-					p2->ViewMode = p3.ViewMode;
-					p2->ShortNames = (p3.Flags & PFLAGS_ALTERNATIVENAMES) == PFLAGS_ALTERNATIVENAMES;
-					p2->SortMode = p3.SortMode;
-					//TODO: конвертация флагов
-					p2->Flags = p3.Flags & 0x1FF;
-				}
-			}
-			break;
-		case Far2::FCTL_UPDATEPANEL: iRc = psi3.PanelControl(hPlugin, FCTL_UPDATEPANEL, Param1, (void*)Param2); break;
-		case Far2::FCTL_REDRAWPANEL: iRc = psi3.PanelControl(hPlugin, FCTL_REDRAWPANEL, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCMDLINE: iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETCMDLINE: iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINE, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_SETSELECTION, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETVIEWMODE: iRc = psi3.PanelControl(hPlugin, FCTL_SETVIEWMODE, Param1, (void*)Param2); break;
-		case Far2::FCTL_INSERTCMDLINE: iRc = psi3.PanelControl(hPlugin, FCTL_INSERTCMDLINE, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETUSERSCREEN: iRc = psi3.PanelControl(hPlugin, FCTL_SETUSERSCREEN, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETPANELDIR: iRc = psi3.PanelControl(hPlugin, FCTL_SETPANELDIR, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETCMDLINEPOS: iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINEPOS, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCMDLINEPOS: iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINEPOS, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETSORTMODE: iRc = psi3.PanelControl(hPlugin, FCTL_SETSORTMODE, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETSORTORDER: iRc = psi3.PanelControl(hPlugin, FCTL_SETSORTORDER, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCMDLINESELECTEDTEXT:
-			{
-				CmdLineSelect sel = {0};
-				int iSel = psi3.PanelControl(hPlugin, FCTL_GETCMDLINESELECTION, 0, &sel);
-				int nLen = ((sel.SelEnd > sel.SelStart)
-						? (sel.SelEnd - sel.SelStart + 1)
-						: (sel.SelStart - sel.SelEnd + 1));
-				if (Param2 == 0)
-				{
-					iRc = (nLen+1) * sizeof(wchar_t);
-				}
-				else
-				{
-					int nCmdLen = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, 0, NULL);
-					wchar_t* psz = (wchar_t*)calloc(nCmdLen+1,sizeof(wchar_t));
-					nCmdLen = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, nCmdLen, psz);
-					lstrcpyn((wchar_t*)Param2, psz+((sel.SelEnd > sel.SelStart) ? sel.SelStart : sel.SelEnd),
-						min((nLen+1),Param1));
-					iRc = TRUE;
-				}
-			}
-			break;
-		case Far2::FCTL_SETCMDLINESELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINESELECTION, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCMDLINESELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINESELECTION, Param1, (void*)Param2); break;
-		case Far2::FCTL_CHECKPANELSEXIST: iRc = psi3.PanelControl(hPlugin, FCTL_CHECKPANELSEXIST, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETNUMERICSORT: iRc = psi3.PanelControl(hPlugin, FCTL_SETNUMERICSORT, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETUSERSCREEN: iRc = psi3.PanelControl(hPlugin, FCTL_GETUSERSCREEN, Param1, (void*)Param2); break;
-		case Far2::FCTL_ISACTIVEPANEL:
-			iRc = psi3.PanelControl(hPlugin, FCTL_ISACTIVEPANEL, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETPANELITEM: //iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELITEM, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETSELECTEDPANELITEM: //iRc = psi3.PanelControl(hPlugin, FCTL_GETSELECTEDPANELITEM, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCURRENTPANELITEM: //iRc = psi3.PanelControl(hPlugin, FCTL_GETCURRENTPANELITEM, Param1, (void*)Param2); break;
-			{
-				int Cmd3 = (Command == Far2::FCTL_GETPANELITEM) ? FCTL_GETPANELITEM :
-						   (Command == Far2::FCTL_GETSELECTEDPANELITEM) ? FCTL_GETSELECTEDPANELITEM :
-						   (Command == Far2::FCTL_GETCURRENTPANELITEM) ? FCTL_GETCURRENTPANELITEM : 0;
-				_ASSERTE(Cmd3!=0);
-				size_t nItemSize = psi3.PanelControl(hPlugin, FCTL_GETPANELITEM, Param1, NULL);
-				if (Param2 == NULL)
-				{
-					_ASSERTE(sizeof(PluginPanelItem)>=sizeof(Far2::PluginPanelItem));
-					iRc = nItemSize;
-				}
-				else if (nItemSize)
-				{
-					Far2::PluginPanelItem* p2 = (Far2::PluginPanelItem*)Param2;
-					PluginPanelItem* p3 = (PluginPanelItem*)malloc(nItemSize);
-					if (p3)
-					{
-						iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELITEM, Param1, p3);
-						if (iRc)
-						{
-							PluginPanelItem_3_2(p3, p2);
-							// Обработка строк
-							wchar_t* psz = (wchar_t*)(((LPBYTE)p2)+sizeof(*p2));
-							if (p3->FileName)
-							{
-								p2->FindData.lpwszFileName = psz;
-								lstrcpy(psz, p3->FileName);
-								psz += lstrlen(psz)+1;
-							}
-							if (p3->AlternateFileName)
-							{
-								p2->FindData.lpwszAlternateFileName = psz;
-								lstrcpy(psz, p3->AlternateFileName);
-								psz += lstrlen(psz)+1;
-							}
-							if (p3->Description)
-							{
-								p2->Description = psz;
-								lstrcpy(psz, p3->Description);
-								psz += lstrlen(psz)+1;
-							}
-							if (p3->Owner)
-							{
-								p2->Owner = psz;
-								lstrcpy(psz, p3->Owner);
-								psz += lstrlen(psz)+1;
-							}
-							//TODO: CustomColumnData/CustomColumnNumber
-							p2->CustomColumnData = NULL;
-							p2->CustomColumnNumber = 0;
-						}
-						free(p3);
-					}
-				}
-			}
-			break;
-		case Far2::FCTL_GETPANELDIR: iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELDIR, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCOLUMNTYPES: iRc = psi3.PanelControl(hPlugin, FCTL_GETCOLUMNTYPES, Param1, (void*)Param2); break;
-		case Far2::FCTL_GETCOLUMNWIDTHS: iRc = psi3.PanelControl(hPlugin, FCTL_GETCOLUMNWIDTHS, Param1, (void*)Param2); break;
-		case Far2::FCTL_BEGINSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_BEGINSELECTION, Param1, (void*)Param2); break;
-		case Far2::FCTL_ENDSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_ENDSELECTION, Param1, (void*)Param2); break;
-		case Far2::FCTL_CLEARSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_CLEARSELECTION, Param1, (void*)Param2); break;
-		case Far2::FCTL_SETDIRECTORIESFIRST: iRc = psi3.PanelControl(hPlugin, FCTL_SETDIRECTORIESFIRST, Param1, (void*)Param2); break;
-		}
-		return iRc;
-	};
-	static int WINAPI FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber)
-	{
-		LOG_CMD(L"psi2.GetDirList",0,0,0);
-		//TODO:
-		return 0;
-	};
-	static void WINAPI FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber)
-	{
-		LOG_CMD(L"psi2.FreeDirList",0,0,0);
-		//TODO:
-	};
-	static int WINAPI FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber)
-	{
-		LOG_CMD(L"psi2.GetPluginDirList",0,0,0);
-		//TODO:
-		return 0;
-	};
-	static void WINAPI FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber)
-	{
-		LOG_CMD(L"psi2.FreePluginDirList",0,0,0);
-		//TODO:
-	};
-	static int WINAPI FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath)
-	{
-		LOG_CMD(L"psi2.CmdName",0,0,0);
-		wchar_t* pszFile = (wchar_t*)(SkipPath ? FSF3.PointToName(String) : String);
-		int iRc = FSF3.ProcessName(Pattern, pszFile, 0, PN_CMPNAME);
-		return iRc;
-	};
-	static const wchar_t* WINAPI FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
-	{
-		LOG_CMD(L"psi2.GetMsg(%i)",MsgId,0,0);
-		if (wpi && ((INT_PTR)wpi->hDll) == PluginNumber)
-			return psi3.GetMsg(&wpi->guid_Plugin, MsgId);
-		return L"";
-	};
-	static INT_PTR WINAPI FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param)
-	{
-		LOG_CMD(L"psi2.AdvControl(%i)",Command,0,0);
-		INT_PTR iRc = 0;
-		if (((INT_PTR)wpi->hDll) != ModuleNumber)
-		{
-			_ASSERTE(((INT_PTR)wpi->hDll) == ModuleNumber);
-			iRc = 0;
-		}
-		else switch (Command)
-		{
-		case Far2::ACTL_GETFARVERSION:
-			{
-				VersionInfo vi = {0};
-				iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARMANAGERVERSION, 0, &vi);
-				if (iRc)
-				{
-					*((DWORD*)Param) = MAKEFARVERSION2(vi.Major, vi.Minor, vi.Build);
-				}
-				break;
-			}
-		case Far2::ACTL_GETSYSWORDDIV: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSYSWORDDIV, 0, Param); break;
-		case Far2::ACTL_WAITKEY: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_WAITKEY, 0, Param); break;
-		case Far2::ACTL_GETCOLOR: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCOLOR, 0, Param); break;
-		case Far2::ACTL_GETARRAYCOLOR: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETARRAYCOLOR, 0, Param); break;
-		case Far2::ACTL_EJECTMEDIA: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_EJECTMEDIA, 0, Param); break;
-		case Far2::ACTL_KEYMACRO:
-			{
-				if (Param)
-				{
-					Far2::ActlKeyMacro* p2 = (Far2::ActlKeyMacro*)Param;
-					//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_KEYMACRO, Param);
-					switch (p2->Command)
-					{
-					case Far2::MCMD_LOADALL:
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_LOADALL, 0, 0);
-						break;
-					case Far2::MCMD_SAVEALL:
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_LOADALL, 0, 0);
-						break;
-					case Far2::MCMD_POSTMACROSTRING:
-						{
-							MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
-							mcr.SequenceText = p2->Param.PlainText.SequenceText;
-							mcr.Flags = 0
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
-							psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
-						}
-						break;
-					case Far2::MCMD_CHECKMACRO:
-						{
-							MacroCheckMacroText mcr = {{sizeof(MacroCheckMacroText)}};
-							mcr.Text.SequenceText = p2->Param.PlainText.SequenceText;
-							mcr.Text.Flags = 0
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
-								| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
-							iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
-							p2->Param.MacroResult.ErrCode = mcr.Result.ErrCode;
-							p2->Param.MacroResult.ErrPos = mcr.Result.ErrPos;
-							p2->Param.MacroResult.ErrSrc = mcr.Result.ErrSrc;
-						}
-						break;
-					case Far2::MCMD_GETSTATE:
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
-						break;
-					case 6/*Far2::MCMD_GETAREA*/:
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
-						break;
-					}
-				}
-				break;
-			}
-		case Far2::ACTL_POSTKEYSEQUENCE:
-			//TODO: Нужно переделать на MCTL_SENDSTRING
-			_ASSERTE(Command != Far2::ACTL_POSTKEYSEQUENCE);
-			break;
-		case Far2::ACTL_GETWINDOWINFO: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWINFO, 0, Param); break;
-		case Far2::ACTL_GETWINDOWCOUNT: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWCOUNT, 0, Param); break;
-		case Far2::ACTL_SETCURRENTWINDOW: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETCURRENTWINDOW, 0, Param); break;
-		case Far2::ACTL_COMMIT: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_COMMIT, 0, Param); break;
-		case Far2::ACTL_GETFARHWND: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARHWND, 0, Param); break;
-		case Far2::ACTL_GETSYSTEMSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSYSTEMSETTINGS, 0, Param); break;
-		case Far2::ACTL_GETPANELSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETPANELSETTINGS, 0, Param); break;
-		case Far2::ACTL_GETINTERFACESETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETINTERFACESETTINGS, 0, Param); break;
-		case Far2::ACTL_GETCONFIRMATIONS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCONFIRMATIONS, 0, Param); break;
-		case Far2::ACTL_GETDESCSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETDESCSETTINGS, 0, Param); break;
-		case Far2::ACTL_SETARRAYCOLOR: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETARRAYCOLOR, 0, Param); break;
-		case Far2::ACTL_GETPLUGINMAXREADDATA: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
-		case Far2::ACTL_GETDIALOGSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETDIALOGSETTINGS, 0, Param); break;
-		case Far2::ACTL_GETSHORTWINDOWINFO:
-			{
-				Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
-				if (p2->Pos == -1)
-				{
-					memset(p2, 0, sizeof(*p2));
-					p2->Pos = -1;
-					//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSHORTWINDOWINFO, Param);
-					INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
-					switch(nArea)
-					{
-						case MACROAREA_SHELL:
-						case MACROAREA_INFOPANEL:
-						case MACROAREA_QVIEWPANEL:
-						case MACROAREA_TREEPANEL:
-							p2->Type = WTYPE_PANELS;
-						case MACROAREA_VIEWER:
-							p2->Type = WTYPE_VIEWER;
-						case MACROAREA_EDITOR:
-							p2->Type = WTYPE_EDITOR;
-						case MACROAREA_DIALOG:
-						case MACROAREA_SEARCH:
-						case MACROAREA_DISKS:
-						case MACROAREA_FINDFOLDER:
-						case MACROAREA_AUTOCOMPLETION:
-							p2->Type = WTYPE_DIALOG;
-						case MACROAREA_HELP:
-							p2->Type = WTYPE_HELP;
-						case MACROAREA_MAINMENU:
-						case MACROAREA_MENU:
-						case MACROAREA_USERMENU:
-							p2->Type = WTYPE_VMENU;
-						//case MACROAREA_OTHER: // Grabber
-						//	return -1;
-					}
-				}
-			}
-			break;
-		case Far2::ACTL_REDRAWALL:
-			iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_REDRAWALL, 0, Param); break;
-		case Far2::ACTL_SYNCHRO:
-			iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SYNCHRO, 0, Param); break;
-		case Far2::ACTL_SETPROGRESSSTATE: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETPROGRESSSTATE, 0, Param); break;
-		case Far2::ACTL_SETPROGRESSVALUE: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETPROGRESSVALUE, 0, Param); break;
-		case Far2::ACTL_QUIT: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_QUIT, 0, Param); break;
-		case Far2::ACTL_GETFARRECT:
-			iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARRECT, 0, Param); break;
-		case Far2::ACTL_GETCURSORPOS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCURSORPOS, 0, Param); break;
-		case Far2::ACTL_SETCURSORPOS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETCURSORPOS, 0, Param); break;
-		}
-		return iRc;
-	};
-	static int WINAPI FarApiViewerControl(int Command, void *Param)
-	{
-		LOG_CMD(L"psi2.ViewerControl",0,0,0);
-		int nRc = 0; //psi3.ViewerControl(-1, Command, 0, Param);
-		//TODO: Для некоторых функций нужна конвертация аргументов
-		switch (Command)
-		{
-		case Far2::VCTL_GETINFO: nRc = psi3.ViewerControl(-1, VCTL_GETINFO, 0, (void*)Param); break;
-		case Far2::VCTL_QUIT: nRc = psi3.ViewerControl(-1, VCTL_QUIT, 0, (void*)Param); break;
-		case Far2::VCTL_REDRAW: nRc = psi3.ViewerControl(-1, VCTL_REDRAW, 0, (void*)Param); break;
-		case Far2::VCTL_SETKEYBAR: nRc = psi3.ViewerControl(-1, VCTL_SETKEYBAR, 0, (void*)Param); break;
-		case Far2::VCTL_SETPOSITION: nRc = psi3.ViewerControl(-1, VCTL_SETPOSITION, 0, (void*)Param); break;
-		case Far2::VCTL_SELECT: nRc = psi3.ViewerControl(-1, VCTL_SELECT, 0, (void*)Param); break;
-		case Far2::VCTL_SETMODE: nRc = psi3.ViewerControl(-1, VCTL_SETMODE, 0, (void*)Param); break;
-		}
-		return nRc;
-	};
-	static int WINAPI FarApiEditorControl(int Command, void *Param)
-	{
-		LOG_CMD(L"psi2.EditorControl",0,0,0);
-		int nRc = 0; //psi3.EditorControl(-1, Command, 0, Param);
-		//TODO: Для некоторых функций нужна конвертация аргументов
-		switch (Command)
-		{
-		case Far2::ECTL_GETSTRING: nRc = psi3.EditorControl(-1, ECTL_GETSTRING, 0, (void*)Param); break;
-		case Far2::ECTL_SETSTRING: nRc = psi3.EditorControl(-1, ECTL_SETSTRING, 0, (void*)Param); break;
-		case Far2::ECTL_INSERTSTRING: nRc = psi3.EditorControl(-1, ECTL_INSERTSTRING, 0, (void*)Param); break;
-		case Far2::ECTL_DELETESTRING: nRc = psi3.EditorControl(-1, ECTL_DELETESTRING, 0, (void*)Param); break;
-		case Far2::ECTL_DELETECHAR: nRc = psi3.EditorControl(-1, ECTL_DELETECHAR, 0, (void*)Param); break;
-		case Far2::ECTL_INSERTTEXT: nRc = psi3.EditorControl(-1, ECTL_INSERTTEXT, 0, (void*)Param); break;
-		case Far2::ECTL_GETINFO: nRc = psi3.EditorControl(-1, ECTL_GETINFO, 0, (void*)Param); break;
-		case Far2::ECTL_SETPOSITION: nRc = psi3.EditorControl(-1, ECTL_SETPOSITION, 0, (void*)Param); break;
-		case Far2::ECTL_SELECT: nRc = psi3.EditorControl(-1, ECTL_SELECT, 0, (void*)Param); break;
-		case Far2::ECTL_REDRAW: nRc = psi3.EditorControl(-1, ECTL_REDRAW, 0, (void*)Param); break;
-		case Far2::ECTL_TABTOREAL: nRc = psi3.EditorControl(-1, ECTL_TABTOREAL, 0, (void*)Param); break;
-		case Far2::ECTL_REALTOTAB: nRc = psi3.EditorControl(-1, ECTL_REALTOTAB, 0, (void*)Param); break;
-		case Far2::ECTL_EXPANDTABS: nRc = psi3.EditorControl(-1, ECTL_EXPANDTABS, 0, (void*)Param); break;
-		case Far2::ECTL_SETTITLE: nRc = psi3.EditorControl(-1, ECTL_SETTITLE, 0, (void*)Param); break;
-		case Far2::ECTL_READINPUT: nRc = psi3.EditorControl(-1, ECTL_READINPUT, 0, (void*)Param); break;
-		case Far2::ECTL_PROCESSINPUT: nRc = psi3.EditorControl(-1, ECTL_PROCESSINPUT, 0, (void*)Param); break;
-		case Far2::ECTL_ADDCOLOR: nRc = psi3.EditorControl(-1, ECTL_ADDCOLOR, 0, (void*)Param); break;
-		case Far2::ECTL_GETCOLOR: nRc = psi3.EditorControl(-1, ECTL_GETCOLOR, 0, (void*)Param); break;
-		case Far2::ECTL_SAVEFILE: nRc = psi3.EditorControl(-1, ECTL_SAVEFILE, 0, (void*)Param); break;
-		case Far2::ECTL_QUIT: nRc = psi3.EditorControl(-1, ECTL_QUIT, 0, (void*)Param); break;
-		case Far2::ECTL_SETKEYBAR: nRc = psi3.EditorControl(-1, ECTL_SETKEYBAR, 0, (void*)Param); break;
-		case Far2::ECTL_PROCESSKEY: nRc = psi3.EditorControl(-1, ECTL_PROCESSKEY, 0, (void*)Param); break;
-		case Far2::ECTL_SETPARAM: nRc = psi3.EditorControl(-1, ECTL_SETPARAM, 0, (void*)Param); break;
-		case Far2::ECTL_GETBOOKMARKS: nRc = psi3.EditorControl(-1, ECTL_GETBOOKMARKS, 0, (void*)Param); break;
-		case Far2::ECTL_TURNOFFMARKINGBLOCK: nRc = psi3.EditorControl(-1, ECTL_TURNOFFMARKINGBLOCK, 0, (void*)Param); break;
-		case Far2::ECTL_DELETEBLOCK: nRc = psi3.EditorControl(-1, ECTL_DELETEBLOCK, 0, (void*)Param); break;
-		case Far2::ECTL_ADDSTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_ADDSTACKBOOKMARK, 0, (void*)Param); break;
-		case Far2::ECTL_PREVSTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_PREVSTACKBOOKMARK, 0, (void*)Param); break;
-		case Far2::ECTL_NEXTSTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_NEXTSTACKBOOKMARK, 0, (void*)Param); break;
-		case Far2::ECTL_CLEARSTACKBOOKMARKS: nRc = psi3.EditorControl(-1, ECTL_CLEARSTACKBOOKMARKS, 0, (void*)Param); break;
-		case Far2::ECTL_DELETESTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_DELETESTACKBOOKMARK, 0, (void*)Param); break;
-		case Far2::ECTL_GETSTACKBOOKMARKS: nRc = psi3.EditorControl(-1, ECTL_GETSTACKBOOKMARKS, 0, (void*)Param); break;
-		case Far2::ECTL_UNDOREDO: nRc = psi3.EditorControl(-1, ECTL_UNDOREDO, 0, (void*)Param); break;
-		case Far2::ECTL_GETFILENAME: nRc = psi3.EditorControl(-1, ECTL_GETFILENAME, 0, (void*)Param); break;
-		}
-		return nRc;
-	};
-	static int WINAPI FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags)
-	{
-		LOG_CMD(L"psi2.InputBox",0,0,0);
-		//TODO: Флаги
-		int nRc = psi3.InputBox(&wpi->guid_Plugin, Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
-		return nRc;
-	};
-	static int WINAPI FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
-	{
-		LOG_CMD(L"psi2.PluginsControl",0,0,0);
-		int nRc = 0; //psi3.PluginsControl(hHandle, Command, Param1, Param2);
-		switch (Command)
-		{
-		case Far2::PCTL_LOADPLUGIN:
-			nRc = psi3.PluginsControl(hHandle, PCTL_LOADPLUGIN, Param1, (void*)Param2); break;
-		case Far2::PCTL_UNLOADPLUGIN:
-			nRc = psi3.PluginsControl(hHandle, PCTL_UNLOADPLUGIN, Param1, (void*)Param2); break;
-		case 2/*Far2::PCTL_FORCEDLOADPLUGIN*/:
-			nRc = psi3.PluginsControl(hHandle, PCTL_FORCEDLOADPLUGIN, Param1, (void*)Param2); break;
-		}
-		return nRc;
-	};
-	static int WINAPI FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
-	{
-		LOG_CMD(L"psi2.FileFilterControl",0,0,0);
-		int nRc = 0; //psi3.FileFilterControl(hHandle, Command, Param1, Param2);
-		switch (Command)
-		{
-		case Far2::FFCTL_CREATEFILEFILTER:
-			nRc = psi3.FileFilterControl(hHandle, FFCTL_CREATEFILEFILTER, Param1, (void*)Param2); break;
-		case Far2::FFCTL_FREEFILEFILTER:
-			nRc = psi3.FileFilterControl(hHandle, FFCTL_FREEFILEFILTER, Param1, (void*)Param2); break;
-		case Far2::FFCTL_OPENFILTERSMENU:
-			nRc = psi3.FileFilterControl(hHandle, FFCTL_OPENFILTERSMENU, Param1, (void*)Param2); break;
-		case Far2::FFCTL_STARTINGTOFILTER:
-			nRc = psi3.FileFilterControl(hHandle, FFCTL_STARTINGTOFILTER, Param1, (void*)Param2); break;
-		case Far2::FFCTL_ISFILEINFILTER:
-			nRc = psi3.FileFilterControl(hHandle, FFCTL_ISFILEINFILTER, Param1, (void*)Param2); break;
-		}
-		return nRc;
-	};
-	static int WINAPI FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param)
-	{
-		LOG_CMD(L"psi2.RegExpControl",0,0,0);
-		int nRc = 0; //psi3.RegExpControl(hHandle, Command, 0, (void*)Param);
-		switch (Command)
-		{
-		case Far2::RECTL_CREATE:
-			nRc = psi3.RegExpControl(hHandle, RECTL_CREATE, 0, (void*)Param); break;
-		case Far2::RECTL_FREE:
-			nRc = psi3.RegExpControl(hHandle, RECTL_FREE, 0, (void*)Param); break;
-		case Far2::RECTL_COMPILE:
-			nRc = psi3.RegExpControl(hHandle, RECTL_COMPILE, 0, (void*)Param); break;
-		case Far2::RECTL_OPTIMIZE:
-			nRc = psi3.RegExpControl(hHandle, RECTL_OPTIMIZE, 0, (void*)Param); break;
-		case Far2::RECTL_MATCHEX:
-			nRc = psi3.RegExpControl(hHandle, RECTL_MATCHEX, 0, (void*)Param); break;
-		case Far2::RECTL_SEARCHEX:
-			nRc = psi3.RegExpControl(hHandle, RECTL_SEARCHEX, 0, (void*)Param); break;
-		case Far2::RECTL_BRACKETSCOUNT:
-			nRc = psi3.RegExpControl(hHandle, RECTL_BRACKETSCOUNT, 0, (void*)Param); break;
-		}
-		return nRc;
-	};
-	//struct int WINAPIV FARSTDSPRINTF(wchar_t *Buffer,const wchar_t *Format,...);
-	//struct int WINAPIV FARSTDSNPRINTF(wchar_t *Buffer,size_t Sizebuf,const wchar_t *Format,...);
-	//struct int WINAPIV FARSTDSSCANF(const wchar_t *Buffer, const wchar_t *Format,...);
-	//struct void WINAPI FARSTDQSORT(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
-	//struct void WINAPI FARSTDQSORTEX(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam);
-	//struct void   *WINAPI FARSTDBSEARCH(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
-	static int WINAPI FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size)
-	{
-		LOG_CMD(L"fsf2.GetFileOwner",0,0,0);
-		__int64 nRc = FSF3.GetFileOwner(Computer, Name, Owner, Size);
-		return (int)nRc;
-	};
-	//struct int WINAPI FARSTDGETNUMBEROFLINKS(const wchar_t *Name);
-	//struct int WINAPI FARSTDATOI(const wchar_t *s);
-	//struct __int64 WINAPI FARSTDATOI64(const wchar_t *s);
-	//struct wchar_t   *WINAPI FARSTDITOA64(__int64 value, wchar_t *string, int radix);
-	//struct wchar_t   *WINAPI FARSTDITOA(int value, wchar_t *string, int radix);
-	//struct wchar_t   *WINAPI FARSTDLTRIM(wchar_t *Str);
-	//struct wchar_t   *WINAPI FARSTDRTRIM(wchar_t *Str);
-	//struct wchar_t   *WINAPI FARSTDTRIM(wchar_t *Str);
-	//struct wchar_t   *WINAPI FARSTDTRUNCSTR(wchar_t *Str,int MaxLength);
-	//struct wchar_t   *WINAPI FARSTDTRUNCPATHSTR(wchar_t *Str,int MaxLength);
-	//struct wchar_t   *WINAPI FARSTDQUOTESPACEONLY(wchar_t *Str);
-	//struct const wchar_t*WINAPI FARSTDPOINTTONAME(const wchar_t *Path);
-	static int WINAPI FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize)
-	{
-		LOG_CMD(L"fsf2.GetPathRoot",0,0,0);
-		__int64 nRc = FSF3.GetPathRoot(Path, Root, DestSize);
-		return (int)nRc;
-	};
-	//struct BOOL WINAPI FARSTDADDENDSLASH(wchar_t *Path);
-	//struct int WINAPI FARSTDCOPYTOCLIPBOARD(const wchar_t *Data);
-	//struct wchar_t *WINAPI FARSTDPASTEFROMCLIPBOARD(void);
-	//struct int WINAPI FARSTDINPUTRECORDTOKEY(const INPUT_RECORD *r);
-	//struct int WINAPI FARSTDLOCALISLOWER(wchar_t Ch);
-	//struct int WINAPI FARSTDLOCALISUPPER(wchar_t Ch);
-	//struct int WINAPI FARSTDLOCALISALPHA(wchar_t Ch);
-	//struct int WINAPI FARSTDLOCALISALPHANUM(wchar_t Ch);
-	//struct wchar_t WINAPI FARSTDLOCALUPPER(wchar_t LowerChar);
-	//struct wchar_t WINAPI FARSTDLOCALLOWER(wchar_t UpperChar);
-	//struct void WINAPI FARSTDLOCALUPPERBUF(wchar_t *Buf,int Length);
-	//struct void WINAPI FARSTDLOCALLOWERBUF(wchar_t *Buf,int Length);
-	//struct void WINAPI FARSTDLOCALSTRUPR(wchar_t *s1);
-	//struct void WINAPI FARSTDLOCALSTRLWR(wchar_t *s1);
-	//struct int WINAPI FARSTDLOCALSTRICMP(const wchar_t *s1,const wchar_t *s2);
-	//struct int WINAPI FARSTDLOCALSTRNICMP(const wchar_t *s1,const wchar_t *s2,int n);
-	static wchar_t* WINAPI FarStdXlat(wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
-	{
-		LOG_CMD(L"fsf2.XLat",0,0,0);
-		wchar_t* pszRc = FSF3.XLat(Line, StartPos, EndPos, Flags);
-		return pszRc;
-	};
-	static void WINAPI FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
-	{
-		LOG_CMD(L"fsf2.RecursiveSearch",0,0,0);
-		//FSF3.RecursiveSearch(InitDir, Mask, Func, Flags, Param);
-		//TODO:
-	};
-	static int WINAPI FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix)
-	{
-		LOG_CMD(L"fsf2.MkTemp",0,0,0);
-		__int64 nRc = FSF3.MkTemp(Dest, size, Prefix);
-		return (int)nRc;
-	};
-	static int WINAPI FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags)
-	{
-		LOG_CMD(L"fsf2.ProcessName",0,0,0);
-		__int64 nRc = FSF3.ProcessName(param1, param2, size, flags);
-		return (int)nRc;
-	};
-	static int WINAPI FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags)
-	{
-		LOG_CMD(L"fsf2.MkLink",0,0,0);
-		LINK_TYPE Type3 = (LINK_TYPE)(Flags & 7);
-		MKLINK_FLAGS Flags3 = (MKLINK_FLAGS)(Flags & 0x30000);
-		BOOL nRc = FSF3.MkLink(Src, Dest, Type3, Flags3);
-		return nRc;
-	};
-	static int WINAPI FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize)
-	{
-		LOG_CMD(L"fsf2.ConvertPath",0,0,0);
-		__int64 nRc = 0;
-		switch (Mode)
-		{
-		case Far2::CPM_FULL:
-			nRc = FSF3.ConvertPath(CPM_FULL, Src, Dest, DestSize); break;
-		case Far2::CPM_REAL:
-			nRc = FSF3.ConvertPath(CPM_REAL, Src, Dest, DestSize); break;
-		case Far2::CPM_NATIVE:
-			nRc = FSF3.ConvertPath(CPM_NATIVE, Src, Dest, DestSize); break;
-		}
-		return (int)nRc;
-	};
-	static int WINAPI FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize)
-	{
-		LOG_CMD(L"fsf2.GetReparsePointInfo",0,0,0);
-		__int64 nRc = FSF3.GetReparsePointInfo(Src, Dest, DestSize);
-		return (int)nRc;
-	};
-	static DWORD WINAPI FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer)
-	{
-		LOG_CMD(L"fsf2.GetCurrentDirectory",0,0,0);
-		size_t nRc = FSF3.GetCurrentDirectory(Size, Buffer);
-		return (DWORD)nRc;
-	};
+void WrapPluginInfo::ClearProcAddr()
+{
+	AnalyseW = NULL;
+	ClosePluginW = NULL;
+	CompareW = NULL;
+	ConfigureW = NULL;
+	DeleteFilesW = NULL;
+	ExitFARW = NULL;
+	FreeFindDataW = NULL;
+	FreeVirtualFindDataW = NULL;
+	GetFilesW = NULL;
+	GetFindDataW = NULL;
+	GetMinFarVersionW = NULL;
+	GetOpenPluginInfoW = NULL;
+	GetPluginInfoW = NULL;
+	GetVirtualFindDataW = NULL;
+	MakeDirectoryW = NULL;
+	OpenFilePluginW = NULL;
+	OpenPluginW = NULL;
+	ProcessDialogEventW = NULL;
+	ProcessEditorEventW = NULL;
+	ProcessEditorInputW = NULL;
+	ProcessEventW = NULL;
+	ProcessHostFileW = NULL;
+	ProcessKeyW = NULL;
+	ProcessSynchroEventW = NULL;
+	ProcessViewerEventW = NULL;
+	PutFilesW = NULL;
+	SetDirectoryW = NULL;
+	SetFindListW  = NULL;
+	SetStartupInfoW = NULL;
+}
+
+WrapPluginInfo::WrapPluginInfo()
+{
+	hDll = NULL;
+	PluginDll[0] = IniFile[0] = Title[0] = Desc[0] = Author[0] = RegRoot[0] = File[0] = 0;
+	memset(&Version, 0, sizeof(Version));
+	memset(&guid_Plugin, 0, sizeof(guid_Plugin));
+	memset(&guid_Dialogs, 0, sizeof(guid_Dialogs));
+	nPluginMenu = nPluginDisks = nPluginConfig = 0;
+	guids_PluginMenu = guids_PluginDisks = guids_PluginConfig = NULL;
+	memset(&Info, 0, sizeof(Info));
+	InfoLines = NULL; InfoLinesNumber = 0;
+	PanelModesArray = NULL; PanelModesNumber = 0;
+	KeyBar.CountLabels = 0; KeyBar.Labels = KeyBarLabels;
+	LastFar2Dlg = NULL;
+	OldPutFilesParams = 0;
+	AnalyzeMode = 2;
+	ZeroStruct(m_ListItems2); ZeroStruct(m_ListItems3);
+
+	ClearProcAddr();
+	pAnalyze = NULL;
 };
 
-InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber)
-{
-	if (wpi && wpi->InfoLines)
-	{
-		free(wpi->InfoLines);
-		wpi->InfoLines = NULL;
-	}
-	wpi->PanelModesNumber = 0;
-	if (InfoLines && InfoLinesNumber > 0)
-	{	
-		wpi->InfoLines = (InfoPanelLine*)calloc(InfoLinesNumber, sizeof(*wpi->InfoLines));
-		for (int i = 0; i < InfoLinesNumber; i++)
-		{
-			wpi->InfoLines[i].Text = InfoLines[i].Text;
-			wpi->InfoLines[i].Data = InfoLines[i].Data;
-			wpi->InfoLines[i].Separator = InfoLines[i].Separator;
-		}
-		wpi->PanelModesNumber = InfoLinesNumber;
-	}
-	return wpi->InfoLines;
-}
 
-PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber)
-{
-	if (wpi && wpi->PanelModesArray)
-	{
-		free(wpi->PanelModesArray);
-		wpi->PanelModesArray = NULL;
-	}
-	wpi->PanelModesNumber = 0;
-	if (PanelModesArray && PanelModesNumber > 0)
-	{
-		wpi->PanelModesArray = (PanelMode*)calloc(PanelModesNumber, sizeof(*wpi->PanelModesArray));
-		for (int i = 0; i < PanelModesNumber; i++)
-		{
-			wpi->PanelModesArray[i].StructSize = sizeof(*wpi->PanelModesArray);
-			wpi->PanelModesArray[i].ColumnTypes = PanelModesArray[i].ColumnTypes;
-			wpi->PanelModesArray[i].ColumnWidths = PanelModesArray[i].ColumnWidths;
-			wpi->PanelModesArray[i].ColumnTitles = PanelModesArray[i].ColumnTitles;
-			wpi->PanelModesArray[i].StatusColumnTypes = PanelModesArray[i].StatusColumnTypes;
-			wpi->PanelModesArray[i].StatusColumnWidths = PanelModesArray[i].StatusColumnWidths;
-			wpi->PanelModesArray[i].Flags = 
-				(PanelModesArray[i].FullScreen ? PMFLAGS_FULLSCREEN : 0) |
-				(PanelModesArray[i].DetailedStatus ? PMFLAGS_DETAILEDSTATUS : 0) |
-				(PanelModesArray[i].AlignExtensions ? PMFLAGS_ALIGNEXTENSIONS : 0) |
-				(PanelModesArray[i].CaseConversion ? PMFLAGS_CASECONVERSION : 0);
-		}
-		wpi->PanelModesNumber = PanelModesNumber;
-	}
-	return wpi->PanelModesArray;
-}
-
-KeyBarTitles* KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
+KeyBarTitles* WrapPluginInfo::KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
 {
 	wpi->KeyBar.CountLabels = 0;
 
@@ -2654,6 +1968,1022 @@ KeyBarTitles* KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
 	}
 	return &wpi->KeyBar;
 }
+
+
+// Changed functions
+LONG_PTR WINAPI WrapPluginInfo::FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+{
+	LOG_CMD(L"psi2.DefDlgProc(%i,%i,%i)",Msg,Param1,Param2);
+	LONG_PTR lRc = 0;
+	HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg];
+	if (hDlg3)
+	{
+		LONG_PTR OrgParam2 = Param2;
+		FARMESSAGE Msg3 = FarMessage_2_3(Msg, Param1, Param2);
+		lRc = psi3.DefDlgProc(hDlg3, Msg3, Param1, (void*)Param2);
+		if (Param2 && Param2 != OrgParam2)
+			FarMessageParam_3_2(Msg, Param1, Param2, OrgParam2);
+	}
+	else
+	{
+		_ASSERTE(hDlg3!=NULL);
+	}
+	return lRc;
+}
+LONG_PTR WINAPI WrapPluginInfo::FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+{
+	LOG_CMD(L"psi2.SendDlgMessage(%i,%i,%i)",Msg,Param1,Param2);
+	LONG_PTR lRc = 0;
+	HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg];
+	if (hDlg3)
+	{
+		LONG_PTR OrgParam2 = Param2;
+		FARMESSAGE Msg3 = FarMessage_2_3(Msg, Param1, Param2);
+		lRc = psi3.SendDlgMessage(hDlg3, Msg3, Param1, (void*)Param2);
+		if (Param2 && Param2 != OrgParam2)
+			FarMessageParam_3_2(Msg, Param1, Param2, OrgParam2);
+	}
+	else
+	{
+		_ASSERTE(hDlg3!=NULL);
+	}
+	return lRc;
+}
+BOOL WINAPI WrapPluginInfo::FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags)
+{
+	LOG_CMD(L"psi2.ShowHelp",0,0,0);
+	FARHELPFLAGS Flags3 = 0
+		| ((Flags & Far2::FHELP_NOSHOWERROR) ? FHELP_NOSHOWERROR : 0)
+		| ((Flags & Far2::FHELP_FARHELP) ? FHELP_FARHELP : 0)
+		| ((Flags & Far2::FHELP_CUSTOMFILE) ? FHELP_CUSTOMFILE : 0)
+		| ((Flags & Far2::FHELP_CUSTOMPATH) ? FHELP_CUSTOMPATH : 0)
+		| ((Flags & Far2::FHELP_USECONTENTS) ? FHELP_USECONTENTS : 0);
+	int iRc = psi3.ShowHelp(ModuleName, Topic, Flags3);
+	return iRc;
+}
+HANDLE WINAPI WrapPluginInfo::FarApiSaveScreen(int X1, int Y1, int X2, int Y2)
+{
+	LOG_CMD(L"psi2.SaveScreen",0,0,0);
+	return psi3.SaveScreen(X1,Y1,X2,Y2);
+}
+void WINAPI WrapPluginInfo::FarApiRestoreScreen(HANDLE hScreen)
+{
+	LOG_CMD(L"psi2.RestoreScreen",0,0,0);
+	psi3.RestoreScreen(hScreen);
+}
+void WINAPI WrapPluginInfo::FarApiText(int X, int Y, int Color, const wchar_t *Str)
+{
+	LOG_CMD(L"psi2.Text",0,0,0);
+	psi3.Text(X,Y,Color,Str);
+}
+int WINAPI WrapPluginInfo::FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage)
+{
+	LOG_CMD(L"psi2.Editor",0,0,0);
+	EDITOR_FLAGS Flags3 = 0
+		| ((Flags & Far2::EF_NONMODAL) ? EF_NONMODAL : 0)
+		| ((Flags & Far2::EF_CREATENEW) ? EF_CREATENEW : 0)
+		| ((Flags & Far2::EF_ENABLE_F6) ? EF_ENABLE_F6 : 0)
+		| ((Flags & Far2::EF_DISABLEHISTORY) ? EF_DISABLEHISTORY : 0)
+		| ((Flags & Far2::EF_DELETEONCLOSE) ? EF_DELETEONCLOSE : 0)
+		| ((Flags & Far2::EF_IMMEDIATERETURN) ? EF_IMMEDIATERETURN : 0)
+		| ((Flags & Far2::EF_DELETEONLYFILEONCLOSE) ? EF_DELETEONLYFILEONCLOSE : 0);
+	int iRc = psi3.Editor(FileName, Title, X1,Y1,X2,Y2, Flags3, StartLine, StartChar, CodePage);
+	return iRc;
+}
+int WINAPI WrapPluginInfo::FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage)
+{
+	LOG_CMD(L"psi2.Viewer",0,0,0);
+	VIEWER_FLAGS Flags3 = 0
+		| ((Flags & Far2::VF_NONMODAL) ? VF_NONMODAL : 0)
+		| ((Flags & Far2::VF_DELETEONCLOSE) ? VF_DELETEONCLOSE : 0)
+		| ((Flags & Far2::VF_ENABLE_F6) ? VF_ENABLE_F6 : 0)
+		| ((Flags & Far2::VF_DISABLEHISTORY) ? VF_DISABLEHISTORY : 0)
+		| ((Flags & Far2::VF_IMMEDIATERETURN) ? VF_IMMEDIATERETURN : 0)
+		| ((Flags & Far2::VF_DELETEONLYFILEONCLOSE) ? VF_DELETEONLYFILEONCLOSE : 0);
+	int iRc = psi3.Viewer(FileName, Title, X1,Y1,X2,Y2, Flags3, CodePage);
+	return iRc;
+};
+int WINAPI WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber)
+{
+	LOG_CMD(L"psi2.Menu",0,0,0);
+	int iRc = -1;
+	FarMenuItem *pItems3 = NULL;
+	FarKey *pBreak3 = NULL;
+	
+	if (Item && ItemsNumber > 0)
+	{
+		pItems3 = (FarMenuItem*)calloc(ItemsNumber, sizeof(*pItems3));
+		if (!(Flags & Far2::FMENU_USEEXT))
+		{
+			const Far2::FarMenuItem* p2 = Item;
+			FarMenuItem* p3 = pItems3;
+			for (int i = 0; i < ItemsNumber; i++, p2++, p3++)
+			{
+				p3->Text = p2->Text;
+				p3->Flags = 0
+					| (p2->Selected ? MIF_SELECTED : 0)
+					| (p2->Checked ? MIF_CHECKED : 0)
+					| (p2->Separator ? MIF_SEPARATOR : 0);
+			}
+		}
+		else
+		{
+			const Far2::FarMenuItemEx* p2 = (const Far2::FarMenuItemEx*)Item;
+			FarMenuItem* p3 = pItems3;
+			for (int i = 0; i < ItemsNumber; i++, p2++, p3++)
+			{
+				p3->Text = p2->Text;
+				p3->Flags = 0
+					| ((p2->Flags & Far2::MIF_SELECTED) ? MIF_SELECTED : 0)
+					| ((p2->Flags & Far2::MIF_CHECKED) ? MIF_CHECKED : 0)
+					| ((p2->Flags & Far2::MIF_SEPARATOR) ? MIF_SEPARATOR : 0)
+					| ((p2->Flags & Far2::MIF_DISABLE) ? MIF_DISABLE : 0)
+					| ((p2->Flags & Far2::MIF_GRAYED) ? MIF_GRAYED : 0)
+					| ((p2->Flags & Far2::MIF_HIDDEN) ? MIF_HIDDEN : 0);
+				p3->AccelKey = p2->AccelKey;
+				p3->Reserved = p2->Reserved;
+				p3->UserData = p2->UserData;
+			}
+		}
+		
+		if (BreakKeys)
+		{
+			int cnt = 0;
+			for (int i = 0; BreakKeys[i]; i++)
+				cnt++;
+			pBreak3 = (FarKey*)calloc(cnt+1, sizeof(*pBreak3));
+			for (int i = 0; BreakKeys[i]; i++)
+			{
+				pBreak3[i].VirtualKeyCode = LOWORD(BreakKeys[i]);
+				pBreak3[i].ControlKeyState = 0
+					| ((HIWORD(BreakKeys[i]) & Far2::PKF_CONTROL) ? LEFT_CTRL_PRESSED : 0)
+					| ((HIWORD(BreakKeys[i]) & Far2::PKF_ALT) ? LEFT_ALT_PRESSED : 0)
+					| ((HIWORD(BreakKeys[i]) & Far2::PKF_SHIFT) ? SHIFT_PRESSED : 0);
+			}
+		}
+		
+		FARMENUFLAGS Flags3 = 0
+			| ((Flags & Far2::FMENU_SHOWAMPERSAND) ? FMENU_SHOWAMPERSAND : 0)
+			| ((Flags & Far2::FMENU_WRAPMODE) ? FMENU_WRAPMODE : 0)
+			| ((Flags & Far2::FMENU_AUTOHIGHLIGHT) ? FMENU_AUTOHIGHLIGHT : 0)
+			| ((Flags & Far2::FMENU_REVERSEAUTOHIGHLIGHT) ? FMENU_REVERSEAUTOHIGHLIGHT : 0)
+			| ((Flags & Far2::FMENU_CHANGECONSOLETITLE) ? FMENU_CHANGECONSOLETITLE : 0);
+		
+		iRc = psi3.Menu(&wpi->guid_Plugin, X, Y, MaxHeight, Flags3,
+				Title, Bottom, HelpTopic, pBreak3, BreakCode, pItems3, ItemsNumber);
+	}
+	
+	if (pItems3)
+		free(pItems3);
+	if (pBreak3)
+		free(pBreak3);
+	return iRc;
+};
+int WINAPI WrapPluginInfo::FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber)
+{
+	LOG_CMD(L"psi2.Message",0,0,0);
+	int iRc = -1;
+
+	DWORD Far3Flags = 0
+		| ((Flags & Far2::FMSG_WARNING) ? FMSG_WARNING : 0)
+		| ((Flags & Far2::FMSG_ERRORTYPE) ? FMSG_ERRORTYPE : 0)
+		| ((Flags & Far2::FMSG_KEEPBACKGROUND) ? FMSG_KEEPBACKGROUND : 0)
+		| ((Flags & Far2::FMSG_LEFTALIGN) ? FMSG_LEFTALIGN : 0)
+		| ((Flags & Far2::FMSG_ALLINONE) ? FMSG_ALLINONE : 0);
+		
+	if ((Flags & 0x000F0000) == Far2::FMSG_MB_OK)
+		Far3Flags |= FMSG_MB_OK;
+	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_OKCANCEL)
+		Far3Flags |= FMSG_MB_OKCANCEL;
+	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_ABORTRETRYIGNORE)
+		Far3Flags |= FMSG_MB_ABORTRETRYIGNORE;
+	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_YESNO)
+		Far3Flags |= FMSG_MB_YESNO;
+	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_YESNOCANCEL)
+		Far3Flags |= FMSG_MB_YESNOCANCEL;
+	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_RETRYCANCEL)
+		Far3Flags |= FMSG_MB_RETRYCANCEL;
+	
+	iRc = psi3.Message(&wpi->guid_Plugin, Far3Flags, 
+				HelpTopic, Items, ItemsNumber, ButtonsNumber);
+	return iRc;
+};
+HANDLE WINAPI WrapPluginInfo::FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param)
+{
+	LOG_CMD(L"psi2.DialogInit",0,0,0);
+	Far2Dialog *p = new Far2Dialog(X1, Y1, X2, Y2,
+    	HelpTopic, Item, ItemsNumber, Flags, DlgProc, Param,
+    	wpi->guid_Plugin, wpi->guid_Dialogs);
+	return (HANDLE)p;
+};
+int WINAPI WrapPluginInfo::FarApiDialogRun(HANDLE hDlg)
+{
+	LOG_CMD(L"psi2.DialogRun",0,0,0);
+	Far2Dialog *p = (Far2Dialog*)hDlg;
+	if (!p)
+		return -1;
+	return p->RunDlg();
+}
+void WINAPI WrapPluginInfo::FarApiDialogFree(HANDLE hDlg)
+{
+	LOG_CMD(L"psi2.DialogFree",0,0,0);
+	Far2Dialog *p = (Far2Dialog*)hDlg;
+	if (!p)
+		return;
+	delete p;
+};
+int WINAPI WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2)
+{
+	LOG_CMD(L"psi2.Control(%i,%i,%i)",Command, Param1, Param2);
+	//TODO: Конвертация параметров!
+	int iRc = 0;
+	switch (Command)
+	{
+	case Far2::FCTL_CLOSEPLUGIN: iRc = psi3.PanelControl(hPlugin, FCTL_CLOSEPANEL, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETPANELINFO:
+		{
+			Far2::PanelInfo* p2 = (Far2::PanelInfo*)Param2;
+			PanelInfo p3 = {sizeof(PanelInfo)};
+			iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELINFO, Param1, &p3);
+			if (iRc)
+			{
+				memset(p2, 0, sizeof(*p2));
+				//TODO: конвертация типа
+				p2->PanelType = p3.PanelType;
+				p2->Plugin = (p3.Flags & PFLAGS_PLUGIN) == PFLAGS_PLUGIN;
+				p2->PanelRect = p3.PanelRect;
+				p2->ItemsNumber = p3.ItemsNumber;
+				p2->SelectedItemsNumber = p3.SelectedItemsNumber;
+				p2->CurrentItem = p3.CurrentItem;
+				p2->TopPanelItem = p3.TopPanelItem;
+				p2->Visible = (p3.Flags & PFLAGS_VISIBLE) == PFLAGS_VISIBLE;
+				p2->Focus = (p3.Flags & PFLAGS_FOCUS) == PFLAGS_FOCUS;
+				//TODO: конвертация режима
+				p2->ViewMode = p3.ViewMode;
+				p2->ShortNames = (p3.Flags & PFLAGS_ALTERNATIVENAMES) == PFLAGS_ALTERNATIVENAMES;
+				p2->SortMode = p3.SortMode;
+				//TODO: конвертация флагов
+				p2->Flags = p3.Flags & 0x1FF;
+			}
+		}
+		break;
+	case Far2::FCTL_UPDATEPANEL: iRc = psi3.PanelControl(hPlugin, FCTL_UPDATEPANEL, Param1, (void*)Param2); break;
+	case Far2::FCTL_REDRAWPANEL: iRc = psi3.PanelControl(hPlugin, FCTL_REDRAWPANEL, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCMDLINE: iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETCMDLINE: iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINE, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_SETSELECTION, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETVIEWMODE: iRc = psi3.PanelControl(hPlugin, FCTL_SETVIEWMODE, Param1, (void*)Param2); break;
+	case Far2::FCTL_INSERTCMDLINE: iRc = psi3.PanelControl(hPlugin, FCTL_INSERTCMDLINE, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETUSERSCREEN: iRc = psi3.PanelControl(hPlugin, FCTL_SETUSERSCREEN, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETPANELDIR: iRc = psi3.PanelControl(hPlugin, FCTL_SETPANELDIR, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETCMDLINEPOS: iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINEPOS, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCMDLINEPOS: iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINEPOS, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETSORTMODE: iRc = psi3.PanelControl(hPlugin, FCTL_SETSORTMODE, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETSORTORDER: iRc = psi3.PanelControl(hPlugin, FCTL_SETSORTORDER, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCMDLINESELECTEDTEXT:
+		{
+			CmdLineSelect sel = {0};
+			int iSel = psi3.PanelControl(hPlugin, FCTL_GETCMDLINESELECTION, 0, &sel);
+			int nLen = ((sel.SelEnd > sel.SelStart)
+					? (sel.SelEnd - sel.SelStart + 1)
+					: (sel.SelStart - sel.SelEnd + 1));
+			if (Param2 == 0)
+			{
+				iRc = (nLen+1) * sizeof(wchar_t);
+			}
+			else
+			{
+				int nCmdLen = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, 0, NULL);
+				wchar_t* psz = (wchar_t*)calloc(nCmdLen+1,sizeof(wchar_t));
+				nCmdLen = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, nCmdLen, psz);
+				lstrcpyn((wchar_t*)Param2, psz+((sel.SelEnd > sel.SelStart) ? sel.SelStart : sel.SelEnd),
+					min((nLen+1),Param1));
+				iRc = TRUE;
+			}
+		}
+		break;
+	case Far2::FCTL_SETCMDLINESELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINESELECTION, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCMDLINESELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINESELECTION, Param1, (void*)Param2); break;
+	case Far2::FCTL_CHECKPANELSEXIST: iRc = psi3.PanelControl(hPlugin, FCTL_CHECKPANELSEXIST, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETNUMERICSORT: iRc = psi3.PanelControl(hPlugin, FCTL_SETNUMERICSORT, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETUSERSCREEN: iRc = psi3.PanelControl(hPlugin, FCTL_GETUSERSCREEN, Param1, (void*)Param2); break;
+	case Far2::FCTL_ISACTIVEPANEL:
+		iRc = psi3.PanelControl(hPlugin, FCTL_ISACTIVEPANEL, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETPANELITEM: //iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELITEM, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETSELECTEDPANELITEM: //iRc = psi3.PanelControl(hPlugin, FCTL_GETSELECTEDPANELITEM, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCURRENTPANELITEM: //iRc = psi3.PanelControl(hPlugin, FCTL_GETCURRENTPANELITEM, Param1, (void*)Param2); break;
+		{
+			FILE_CONTROL_COMMANDS Cmd3 = (Command == Far2::FCTL_GETPANELITEM) ? FCTL_GETPANELITEM :
+					   (Command == Far2::FCTL_GETSELECTEDPANELITEM) ? FCTL_GETSELECTEDPANELITEM :
+					   (Command == Far2::FCTL_GETCURRENTPANELITEM) ? FCTL_GETCURRENTPANELITEM 
+					   : (FILE_CONTROL_COMMANDS)0;
+			_ASSERTE(Cmd3!=(FILE_CONTROL_COMMANDS)0);
+			size_t nItemSize = psi3.PanelControl(hPlugin, Cmd3, Param1, NULL);
+			if (Param2 == NULL)
+			{
+				_ASSERTE(sizeof(PluginPanelItem)>=sizeof(Far2::PluginPanelItem));
+				iRc = nItemSize;
+			}
+			else if (nItemSize)
+			{
+				Far2::PluginPanelItem* p2 = (Far2::PluginPanelItem*)Param2;
+				PluginPanelItem* p3 = (PluginPanelItem*)malloc(nItemSize);
+				if (p3)
+				{
+					iRc = psi3.PanelControl(hPlugin, Cmd3, Param1, p3);
+					if (iRc)
+					{
+						PluginPanelItem_3_2(p3, p2);
+						// Обработка строк
+						wchar_t* psz = (wchar_t*)(((LPBYTE)p2)+sizeof(*p2));
+						if (p3->FileName)
+						{
+							p2->FindData.lpwszFileName = psz;
+							lstrcpy(psz, p3->FileName);
+							psz += lstrlen(psz)+1;
+						}
+						if (p3->AlternateFileName)
+						{
+							p2->FindData.lpwszAlternateFileName = psz;
+							lstrcpy(psz, p3->AlternateFileName);
+							psz += lstrlen(psz)+1;
+						}
+						if (p3->Description)
+						{
+							p2->Description = psz;
+							lstrcpy(psz, p3->Description);
+							psz += lstrlen(psz)+1;
+						}
+						if (p3->Owner)
+						{
+							p2->Owner = psz;
+							lstrcpy(psz, p3->Owner);
+							psz += lstrlen(psz)+1;
+						}
+						//TODO: CustomColumnData/CustomColumnNumber
+						p2->CustomColumnData = NULL;
+						p2->CustomColumnNumber = 0;
+					}
+					free(p3);
+				}
+			}
+		}
+		break;
+	case Far2::FCTL_GETPANELDIR: iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELDIR, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCOLUMNTYPES: iRc = psi3.PanelControl(hPlugin, FCTL_GETCOLUMNTYPES, Param1, (void*)Param2); break;
+	case Far2::FCTL_GETCOLUMNWIDTHS: iRc = psi3.PanelControl(hPlugin, FCTL_GETCOLUMNWIDTHS, Param1, (void*)Param2); break;
+	case Far2::FCTL_BEGINSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_BEGINSELECTION, Param1, (void*)Param2); break;
+	case Far2::FCTL_ENDSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_ENDSELECTION, Param1, (void*)Param2); break;
+	case Far2::FCTL_CLEARSELECTION: iRc = psi3.PanelControl(hPlugin, FCTL_CLEARSELECTION, Param1, (void*)Param2); break;
+	case Far2::FCTL_SETDIRECTORIESFIRST: iRc = psi3.PanelControl(hPlugin, FCTL_SETDIRECTORIESFIRST, Param1, (void*)Param2); break;
+	}
+	return iRc;
+};
+int WINAPI WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber)
+{
+	LOG_CMD(L"psi2.GetDirList",0,0,0);
+	//TODO:
+	return 0;
+};
+void WINAPI WrapPluginInfo::FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber)
+{
+	LOG_CMD(L"psi2.FreeDirList",0,0,0);
+	//TODO:
+};
+int WINAPI WrapPluginInfo::FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber)
+{
+	LOG_CMD(L"psi2.GetPluginDirList",0,0,0);
+	//TODO:
+	return 0;
+};
+void WINAPI WrapPluginInfo::FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber)
+{
+	LOG_CMD(L"psi2.FreePluginDirList",0,0,0);
+	//TODO:
+};
+int WINAPI WrapPluginInfo::FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath)
+{
+	LOG_CMD(L"psi2.CmdName",0,0,0);
+	wchar_t* pszFile = (wchar_t*)(SkipPath ? FSF3.PointToName(String) : String);
+	int iRc = FSF3.ProcessName(Pattern, pszFile, 0, PN_CMPNAME);
+	return iRc;
+};
+const wchar_t* WINAPI WrapPluginInfo::FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
+{
+	LOG_CMD(L"psi2.GetMsg(%i)",MsgId,0,0);
+	if (wpi && ((INT_PTR)wpi->hDll) == PluginNumber)
+		return psi3.GetMsg(&wpi->guid_Plugin, MsgId);
+	return L"";
+};
+INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param)
+{
+	LOG_CMD(L"psi2.AdvControl(%i)",Command,0,0);
+	INT_PTR iRc = 0;
+	if (((INT_PTR)wpi->hDll) != ModuleNumber)
+	{
+		_ASSERTE(((INT_PTR)wpi->hDll) == ModuleNumber);
+		iRc = 0;
+	}
+	else switch (Command)
+	{
+	case Far2::ACTL_GETFARVERSION:
+		{
+			VersionInfo vi = {0};
+			iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARMANAGERVERSION, 0, &vi);
+			if (iRc)
+			{
+				*((DWORD*)Param) = MAKEFARVERSION2(vi.Major, vi.Minor, vi.Build);
+			}
+			break;
+		}
+	case Far2::ACTL_GETSYSWORDDIV: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSYSWORDDIV, 0, Param); break;
+	case Far2::ACTL_WAITKEY: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_WAITKEY, 0, Param); break;
+	case Far2::ACTL_GETCOLOR: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCOLOR, 0, Param); break;
+	case Far2::ACTL_GETARRAYCOLOR: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETARRAYCOLOR, 0, Param); break;
+	case Far2::ACTL_EJECTMEDIA: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_EJECTMEDIA, 0, Param); break;
+	case Far2::ACTL_KEYMACRO:
+		{
+			if (Param)
+			{
+				Far2::ActlKeyMacro* p2 = (Far2::ActlKeyMacro*)Param;
+				//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_KEYMACRO, Param);
+				switch (p2->Command)
+				{
+				case Far2::MCMD_LOADALL:
+					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_LOADALL, 0, 0);
+					break;
+				case Far2::MCMD_SAVEALL:
+					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_LOADALL, 0, 0);
+					break;
+				case Far2::MCMD_POSTMACROSTRING:
+					{
+						MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
+						mcr.SequenceText = p2->Param.PlainText.SequenceText;
+						mcr.Flags = 0
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
+						psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+					}
+					break;
+				case Far2::MCMD_CHECKMACRO:
+					{
+						MacroCheckMacroText mcr = {{sizeof(MacroCheckMacroText)}};
+						mcr.Text.SequenceText = p2->Param.PlainText.SequenceText;
+						mcr.Text.Flags = 0
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
+							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
+						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
+						p2->Param.MacroResult.ErrCode = mcr.Result.ErrCode;
+						p2->Param.MacroResult.ErrPos = mcr.Result.ErrPos;
+						p2->Param.MacroResult.ErrSrc = mcr.Result.ErrSrc;
+					}
+					break;
+				case Far2::MCMD_GETSTATE:
+					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
+					break;
+				case 6/*Far2::MCMD_GETAREA*/:
+					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
+					break;
+				}
+			}
+			break;
+		}
+	case Far2::ACTL_POSTKEYSEQUENCE:
+		//TODO: Нужно переделать на MCTL_SENDSTRING
+		_ASSERTE(Command != Far2::ACTL_POSTKEYSEQUENCE);
+		break;
+	case Far2::ACTL_GETWINDOWINFO: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWINFO, 0, Param); break;
+	case Far2::ACTL_GETWINDOWCOUNT: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWCOUNT, 0, Param); break;
+	case Far2::ACTL_SETCURRENTWINDOW: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETCURRENTWINDOW, 0, Param); break;
+	case Far2::ACTL_COMMIT: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_COMMIT, 0, Param); break;
+	case Far2::ACTL_GETFARHWND: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARHWND, 0, Param); break;
+	case Far2::ACTL_GETSYSTEMSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSYSTEMSETTINGS, 0, Param); break;
+	case Far2::ACTL_GETPANELSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETPANELSETTINGS, 0, Param); break;
+	case Far2::ACTL_GETINTERFACESETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETINTERFACESETTINGS, 0, Param); break;
+	case Far2::ACTL_GETCONFIRMATIONS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCONFIRMATIONS, 0, Param); break;
+	case Far2::ACTL_GETDESCSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETDESCSETTINGS, 0, Param); break;
+	case Far2::ACTL_SETARRAYCOLOR: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETARRAYCOLOR, 0, Param); break;
+	case Far2::ACTL_GETPLUGINMAXREADDATA: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
+	case Far2::ACTL_GETDIALOGSETTINGS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETDIALOGSETTINGS, 0, Param); break;
+	case Far2::ACTL_GETSHORTWINDOWINFO:
+		{
+			Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
+			if (p2->Pos == -1)
+			{
+				memset(p2, 0, sizeof(*p2));
+				p2->Pos = -1;
+				//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSHORTWINDOWINFO, Param);
+				INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
+				switch(nArea)
+				{
+					case MACROAREA_SHELL:
+					case MACROAREA_INFOPANEL:
+					case MACROAREA_QVIEWPANEL:
+					case MACROAREA_TREEPANEL:
+						p2->Type = WTYPE_PANELS;
+					case MACROAREA_VIEWER:
+						p2->Type = WTYPE_VIEWER;
+					case MACROAREA_EDITOR:
+						p2->Type = WTYPE_EDITOR;
+					case MACROAREA_DIALOG:
+					case MACROAREA_SEARCH:
+					case MACROAREA_DISKS:
+					case MACROAREA_FINDFOLDER:
+					case MACROAREA_AUTOCOMPLETION:
+						p2->Type = WTYPE_DIALOG;
+					case MACROAREA_HELP:
+						p2->Type = WTYPE_HELP;
+					case MACROAREA_MAINMENU:
+					case MACROAREA_MENU:
+					case MACROAREA_USERMENU:
+						p2->Type = WTYPE_VMENU;
+					//case MACROAREA_OTHER: // Grabber
+					//	return -1;
+				}
+			}
+		}
+		break;
+	case Far2::ACTL_REDRAWALL:
+		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_REDRAWALL, 0, Param); break;
+	case Far2::ACTL_SYNCHRO:
+		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SYNCHRO, 0, Param); break;
+	case Far2::ACTL_SETPROGRESSSTATE: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETPROGRESSSTATE, 0, Param); break;
+	case Far2::ACTL_SETPROGRESSVALUE: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETPROGRESSVALUE, 0, Param); break;
+	case Far2::ACTL_QUIT: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_QUIT, 0, Param); break;
+	case Far2::ACTL_GETFARRECT:
+		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARRECT, 0, Param); break;
+	case Far2::ACTL_GETCURSORPOS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCURSORPOS, 0, Param); break;
+	case Far2::ACTL_SETCURSORPOS: iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETCURSORPOS, 0, Param); break;
+	}
+	return iRc;
+};
+int WINAPI WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
+{
+	LOG_CMD(L"psi2.ViewerControl",0,0,0);
+	int nRc = 0; //psi3.ViewerControl(-1, Command, 0, Param);
+	//TODO: Для некоторых функций нужна конвертация аргументов
+	switch (Command)
+	{
+	case Far2::VCTL_GETINFO:
+		{
+			Far2::ViewerInfo* p2 = (Far2::ViewerInfo*)Param;
+			ViewerInfo p3 = {sizeof(ViewerInfo)};
+			p3.ViewerID = p2->ViewerID;
+			nRc = psi3.ViewerControl(-1, VCTL_GETINFO, 0, &p3);
+			p2->ViewerID = p3.ViewerID;
+			p2->FileName = p3.FileName;
+			p2->FileSize = p3.FileSize;
+			p2->FilePos = p3.FilePos;
+			p2->WindowSizeX = p3.WindowSizeX;
+			p2->WindowSizeY = p3.WindowSizeY;
+			p2->Options = p3.Options;
+			p2->TabSize = p3.TabSize;
+			p2->CurMode.CodePage = p3.CurMode.CodePage;
+			p2->CurMode.Wrap = p3.CurMode.Wrap;
+			p2->CurMode.WordWrap = p3.CurMode.WordWrap;
+			p2->CurMode.Hex = p3.CurMode.Hex;
+			p2->LeftPos = p3.LeftPos;
+		}
+		break;
+	case Far2::VCTL_QUIT: nRc = psi3.ViewerControl(-1, VCTL_QUIT, 0, (void*)Param); break;
+	case Far2::VCTL_REDRAW: nRc = psi3.ViewerControl(-1, VCTL_REDRAW, 0, (void*)Param); break;
+	case Far2::VCTL_SETKEYBAR:
+		{
+			KeyBarTitles* p3 = (KeyBarTitles*)Param;
+			if (Param && (Param != (void*)-1))
+			{
+				const Far2::KeyBarTitles* p2 = (const Far2::KeyBarTitles*)Param;
+				p3 = wpi->KeyBarTitles_2_3(p2);
+			}
+			nRc = psi3.ViewerControl(-1, VCTL_SETKEYBAR, 0, p3);
+		}
+		break;
+	case Far2::VCTL_SETPOSITION:
+		{
+			const Far2::ViewerSetPosition* p2 = (const Far2::ViewerSetPosition*)Param;
+			//TODO: Конвертация флагов
+			ViewerSetPosition p3 = {(VIEWER_SETPOS_FLAGS)p2->Flags};
+			_ASSERTE(p3.Flags == (VIEWER_SETPOS_FLAGS)p2->Flags); // добавят cbStructSize?
+			p3.StartPos = p2->StartPos;
+			p3.LeftPos = p2->LeftPos;
+			nRc = psi3.ViewerControl(-1, VCTL_SETPOSITION, 0, &p3);
+		}
+		break;
+	case Far2::VCTL_SELECT:
+		_ASSERTE(sizeof(Far2::ViewerSelect)==sizeof(ViewerSelect));
+		nRc = psi3.ViewerControl(-1, VCTL_SELECT, 0, (void*)Param);
+		break;
+	case Far2::VCTL_SETMODE:
+		{
+			const Far2::ViewerSetMode* p2 = (const Far2::ViewerSetMode*)Param;
+			//TODO: Конвертация типа
+			ViewerSetMode p3 = {(VIEWER_SETMODE_TYPES)p2->Type};
+			_ASSERTE(p3.Type == (VIEWER_SETMODE_TYPES)p2->Type); // добавят cbStructSize?
+			p3.wszParam = p2->Param.wszParam; // наиболее толстый из union
+			//TODO: Конвертация флагов
+			p3.Flags = p2->Flags;
+			nRc = psi3.ViewerControl(-1, VCTL_SETMODE, 0, &p3);
+		}
+		break;
+	}
+	return nRc;
+};
+int WINAPI WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
+{
+	LOG_CMD0(L"psi2.EditorControl(%i)",Command,0,0);
+	int nRc = 0; //psi3.EditorControl(-1, Command, 0, Param);
+	//TODO: Для некоторых функций нужна конвертация аргументов
+	switch (Command)
+	{
+	case Far2::ECTL_GETSTRING:
+		_ASSERTE(sizeof(Far2::EditorGetString)==sizeof(EditorGetString));
+		nRc = psi3.EditorControl(-1, ECTL_GETSTRING, 0, (void*)Param);
+		break;
+	case Far2::ECTL_SETSTRING:
+		_ASSERTE(sizeof(Far2::EditorSetString)==sizeof(EditorSetString));
+		nRc = psi3.EditorControl(-1, ECTL_SETSTRING, 0, (void*)Param);
+		break;
+	case Far2::ECTL_INSERTSTRING:
+		nRc = psi3.EditorControl(-1, ECTL_INSERTSTRING, 0, (void*)Param);
+		break;
+	case Far2::ECTL_DELETESTRING:
+		nRc = psi3.EditorControl(-1, ECTL_DELETESTRING, 0, (void*)Param);
+		break;
+	case Far2::ECTL_DELETECHAR:
+		nRc = psi3.EditorControl(-1, ECTL_DELETECHAR, 0, (void*)Param);
+		break;
+	case Far2::ECTL_INSERTTEXT:
+		nRc = psi3.EditorControl(-1, ECTL_INSERTTEXT, 0, (void*)Param);
+		break;
+	case Far2::ECTL_GETINFO:
+		{
+			Far2::EditorInfo* p2 = (Far2::EditorInfo*)Param;
+			EditorInfo p3 = {0};
+			p3.EditorID = p2->EditorID;
+			nRc = psi3.EditorControl(-1, ECTL_GETINFO, 0, &p3);
+			p2->EditorID = p3.EditorID;
+			p2->WindowSizeX = p3.WindowSizeX;
+			p2->WindowSizeY = p3.WindowSizeY;
+			p2->TotalLines = p3.TotalLines;
+			p2->CurLine = p3.CurLine;
+			p2->CurPos = p3.CurPos;
+			p2->CurTabPos = p3.CurTabPos;
+			p2->TopScreenLine = p3.TopScreenLine;
+			p2->LeftPos = p3.LeftPos;
+			p2->Overtype = p3.Overtype;
+			p2->BlockType = p3.BlockType;
+			p2->BlockStartLine = p3.BlockStartLine;
+			p2->Options = p3.Options;
+			p2->TabSize = p3.TabSize;
+			p2->BookMarkCount = p3.BookMarkCount;
+			p2->CurState = p3.CurState;
+			p2->CodePage = p3.CodePage;
+		}
+		break;
+	case Far2::ECTL_SETPOSITION:
+		_ASSERTE(sizeof(Far2::EditorSetPosition)==sizeof(EditorSetPosition));
+		nRc = psi3.EditorControl(-1, ECTL_SETPOSITION, 0, (void*)Param);
+		break;
+	case Far2::ECTL_SELECT:
+		_ASSERTE(sizeof(Far2::EditorSelect)==sizeof(EditorSelect));
+		nRc = psi3.EditorControl(-1, ECTL_SELECT, 0, (void*)Param);
+		break;
+	case Far2::ECTL_REDRAW: nRc = psi3.EditorControl(-1, ECTL_REDRAW, 0, (void*)Param); break;
+	case Far2::ECTL_TABTOREAL:
+		_ASSERTE(sizeof(Far2::EditorConvertPos)==sizeof(EditorConvertPos));
+		nRc = psi3.EditorControl(-1, ECTL_TABTOREAL, 0, (void*)Param);
+		break;
+	case Far2::ECTL_REALTOTAB:
+		_ASSERTE(sizeof(Far2::EditorConvertPos)==sizeof(EditorConvertPos));
+		nRc = psi3.EditorControl(-1, ECTL_REALTOTAB, 0, (void*)Param);
+		break;
+	case Far2::ECTL_EXPANDTABS: nRc = psi3.EditorControl(-1, ECTL_EXPANDTABS, 0, (void*)Param); break;
+	case Far2::ECTL_SETTITLE: nRc = psi3.EditorControl(-1, ECTL_SETTITLE, 0, (void*)Param); break;
+	case Far2::ECTL_READINPUT: nRc = psi3.EditorControl(-1, ECTL_READINPUT, 0, (void*)Param); break;
+	case Far2::ECTL_PROCESSINPUT: nRc = psi3.EditorControl(-1, ECTL_PROCESSINPUT, 0, (void*)Param); break;
+	case Far2::ECTL_ADDCOLOR:
+		{
+			const Far2::EditorColor* p2 = (const Far2::EditorColor*)Param;
+			EditorColor p3 = {sizeof(EditorColor)};
+			p3.StringNumber = p2->StringNumber;
+			p3.ColorItem = p2->ColorItem;
+			p3.StartPos = p2->StartPos;
+			p3.EndPos = p2->EndPos;
+			p3.Color.Flags = FMSG_FG_4BIT|FMSG_BG_4BIT;
+			p3.Color.ForegroundColor = p2->Color & 0xF;
+			p3.Color.BackgroundColor = (p2->Color & 0xF0) >> 4;
+			nRc = psi3.EditorControl(-1, ECTL_ADDCOLOR, 0, &p3);
+		}
+		break;
+	case Far2::ECTL_GETCOLOR:
+		{
+			Far2::EditorColor* p2 = (Far2::EditorColor*)Param;
+			EditorColor p3 = {sizeof(EditorColor)};
+			p3.StringNumber = p2->StringNumber;
+			p3.ColorItem = p2->ColorItem;
+			p3.StartPos = p2->StartPos;
+			p3.EndPos = p2->EndPos;
+			p3.Color.Flags = FMSG_FG_4BIT|FMSG_BG_4BIT;
+			nRc = psi3.EditorControl(-1, ECTL_GETCOLOR, 0, &p3);
+			if (nRc)
+			{
+				_ASSERTE(p3.Color.Flags == (FMSG_FG_4BIT|FMSG_BG_4BIT));
+				p2->Color = (p3.Color.ForegroundColor & 0xF) | ((p3.Color.BackgroundColor & 0xF) << 4);
+			}
+		}
+		break;
+	case Far2::ECTL_SAVEFILE:
+		_ASSERTE(sizeof(Far2::EditorSaveFile)==sizeof(EditorSaveFile));
+		nRc = psi3.EditorControl(-1, ECTL_SAVEFILE, 0, (void*)Param);
+		break;
+	case Far2::ECTL_QUIT: nRc = psi3.EditorControl(-1, ECTL_QUIT, 0, (void*)Param); break;
+	case Far2::ECTL_SETKEYBAR:
+		{
+			KeyBarTitles* p3 = (KeyBarTitles*)Param;
+			if (Param && (Param != (void*)-1))
+			{
+				const Far2::KeyBarTitles* p2 = (const Far2::KeyBarTitles*)Param;
+				p3 = wpi->KeyBarTitles_2_3(p2);
+			}
+			nRc = psi3.EditorControl(-1, ECTL_SETKEYBAR, 0, p3);
+		}
+		break;
+	case Far2::ECTL_PROCESSKEY: nRc = psi3.EditorControl(-1, ECTL_PROCESSKEY, 0, (void*)Param); break;
+	case Far2::ECTL_SETPARAM:
+		{
+			const Far2::EditorSetParameter* p2 = (const Far2::EditorSetParameter*)Param;
+			EditorSetParameter p3 = {(EDITOR_SETPARAMETER_TYPES)-1};
+			p3.wszParam = p2->Param.wszParam; // наиболее "объемный" из union
+			//TODO: Конвертация флагов?
+			p3.Flags = p2->Flags;
+			p3.Size = p2->Size;
+			switch (p2->Type)
+			{
+			case Far2::ESPT_TABSIZE: p3.Type = ESPT_TABSIZE; break;
+			case Far2::ESPT_EXPANDTABS: p3.Type = ESPT_EXPANDTABS; break;
+			case Far2::ESPT_AUTOINDENT: p3.Type = ESPT_AUTOINDENT; break;
+			case Far2::ESPT_CURSORBEYONDEOL: p3.Type = ESPT_CURSORBEYONDEOL; break;
+			case Far2::ESPT_CHARCODEBASE: p3.Type = ESPT_CHARCODEBASE; break;
+			case Far2::ESPT_CODEPAGE: p3.Type = ESPT_CODEPAGE; break;
+			case Far2::ESPT_SAVEFILEPOSITION: p3.Type = ESPT_SAVEFILEPOSITION; break;
+			case Far2::ESPT_LOCKMODE: p3.Type = ESPT_LOCKMODE; break;
+			case Far2::ESPT_SETWORDDIV: p3.Type = ESPT_SETWORDDIV; break;
+			case Far2::ESPT_GETWORDDIV: p3.Type = ESPT_GETWORDDIV; break;
+			case Far2::ESPT_SHOWWHITESPACE: p3.Type = ESPT_SHOWWHITESPACE; break;
+			case Far2::ESPT_SETBOM: p3.Type = ESPT_SETBOM; break;
+			}
+			if (p3.Type != (EDITOR_SETPARAMETER_TYPES)-1)
+				nRc = psi3.EditorControl(-1, ECTL_SETPARAM, 0, &p3);
+		}
+		break;
+	case Far2::ECTL_GETBOOKMARKS: nRc = psi3.EditorControl(-1, ECTL_GETBOOKMARKS, 0, (void*)Param); break;
+	case Far2::ECTL_TURNOFFMARKINGBLOCK: nRc = psi3.EditorControl(-1, ECTL_TURNOFFMARKINGBLOCK, 0, (void*)Param); break;
+	case Far2::ECTL_DELETEBLOCK: nRc = psi3.EditorControl(-1, ECTL_DELETEBLOCK, 0, (void*)Param); break;
+	case Far2::ECTL_ADDSTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_ADDSTACKBOOKMARK, 0, (void*)Param); break;
+	case Far2::ECTL_PREVSTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_PREVSTACKBOOKMARK, 0, (void*)Param); break;
+	case Far2::ECTL_NEXTSTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_NEXTSTACKBOOKMARK, 0, (void*)Param); break;
+	case Far2::ECTL_CLEARSTACKBOOKMARKS: nRc = psi3.EditorControl(-1, ECTL_CLEARSTACKBOOKMARKS, 0, (void*)Param); break;
+	case Far2::ECTL_DELETESTACKBOOKMARK: nRc = psi3.EditorControl(-1, ECTL_DELETESTACKBOOKMARK, 0, (void*)Param); break;
+	case Far2::ECTL_GETSTACKBOOKMARKS: nRc = psi3.EditorControl(-1, ECTL_GETSTACKBOOKMARKS, 0, (void*)Param); break;
+	case Far2::ECTL_UNDOREDO:
+		{
+			const Far2::EditorUndoRedo* p2 = (const Far2::EditorUndoRedo*)Param;
+			EditorUndoRedo p3 = {(EDITOR_UNDOREDO_COMMANDS)0};
+			//TODO: Конвертация команды
+			p3.Command = (EDITOR_UNDOREDO_COMMANDS)p2->Command;
+			nRc = psi3.EditorControl(-1, ECTL_UNDOREDO, 0, &p3);
+		}
+		break;
+	case Far2::ECTL_GETFILENAME: nRc = psi3.EditorControl(-1, ECTL_GETFILENAME, 0, (void*)Param); break;
+	}
+	return nRc;
+};
+int WINAPI WrapPluginInfo::FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags)
+{
+	LOG_CMD(L"psi2.InputBox",0,0,0);
+	//TODO: Флаги
+	int nRc = psi3.InputBox(&wpi->guid_Plugin, Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
+	return nRc;
+};
+int WINAPI WrapPluginInfo::FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
+{
+	LOG_CMD(L"psi2.PluginsControl",0,0,0);
+	int nRc = 0; //psi3.PluginsControl(hHandle, Command, Param1, Param2);
+	switch (Command)
+	{
+	case Far2::PCTL_LOADPLUGIN:
+		nRc = psi3.PluginsControl(hHandle, PCTL_LOADPLUGIN, Param1, (void*)Param2); break;
+	case Far2::PCTL_UNLOADPLUGIN:
+		nRc = psi3.PluginsControl(hHandle, PCTL_UNLOADPLUGIN, Param1, (void*)Param2); break;
+	case 2/*Far2::PCTL_FORCEDLOADPLUGIN*/:
+		nRc = psi3.PluginsControl(hHandle, PCTL_FORCEDLOADPLUGIN, Param1, (void*)Param2); break;
+	}
+	return nRc;
+};
+int WINAPI WrapPluginInfo::FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
+{
+	LOG_CMD(L"psi2.FileFilterControl",0,0,0);
+	int nRc = 0; //psi3.FileFilterControl(hHandle, Command, Param1, Param2);
+	switch (Command)
+	{
+	case Far2::FFCTL_CREATEFILEFILTER:
+		nRc = psi3.FileFilterControl(hHandle, FFCTL_CREATEFILEFILTER, Param1, (void*)Param2); break;
+	case Far2::FFCTL_FREEFILEFILTER:
+		nRc = psi3.FileFilterControl(hHandle, FFCTL_FREEFILEFILTER, Param1, (void*)Param2); break;
+	case Far2::FFCTL_OPENFILTERSMENU:
+		nRc = psi3.FileFilterControl(hHandle, FFCTL_OPENFILTERSMENU, Param1, (void*)Param2); break;
+	case Far2::FFCTL_STARTINGTOFILTER:
+		nRc = psi3.FileFilterControl(hHandle, FFCTL_STARTINGTOFILTER, Param1, (void*)Param2); break;
+	case Far2::FFCTL_ISFILEINFILTER:
+		nRc = psi3.FileFilterControl(hHandle, FFCTL_ISFILEINFILTER, Param1, (void*)Param2); break;
+	}
+	return nRc;
+};
+int WINAPI WrapPluginInfo::FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param)
+{
+	LOG_CMD(L"psi2.RegExpControl",0,0,0);
+	int nRc = 0; //psi3.RegExpControl(hHandle, Command, 0, (void*)Param);
+	switch (Command)
+	{
+	case Far2::RECTL_CREATE:
+		nRc = psi3.RegExpControl(hHandle, RECTL_CREATE, 0, (void*)Param); break;
+	case Far2::RECTL_FREE:
+		nRc = psi3.RegExpControl(hHandle, RECTL_FREE, 0, (void*)Param); break;
+	case Far2::RECTL_COMPILE:
+		nRc = psi3.RegExpControl(hHandle, RECTL_COMPILE, 0, (void*)Param); break;
+	case Far2::RECTL_OPTIMIZE:
+		nRc = psi3.RegExpControl(hHandle, RECTL_OPTIMIZE, 0, (void*)Param); break;
+	case Far2::RECTL_MATCHEX:
+		nRc = psi3.RegExpControl(hHandle, RECTL_MATCHEX, 0, (void*)Param); break;
+	case Far2::RECTL_SEARCHEX:
+		nRc = psi3.RegExpControl(hHandle, RECTL_SEARCHEX, 0, (void*)Param); break;
+	case Far2::RECTL_BRACKETSCOUNT:
+		nRc = psi3.RegExpControl(hHandle, RECTL_BRACKETSCOUNT, 0, (void*)Param); break;
+	}
+	return nRc;
+};
+//struct int WINAPIV FARSTDSPRINTF(wchar_t *Buffer,const wchar_t *Format,...);
+//struct int WINAPIV FARSTDSNPRINTF(wchar_t *Buffer,size_t Sizebuf,const wchar_t *Format,...);
+//struct int WINAPIV FARSTDSSCANF(const wchar_t *Buffer, const wchar_t *Format,...);
+//struct void WINAPI FARSTDQSORT(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
+//struct void WINAPI FARSTDQSORTEX(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam);
+//struct void   *WINAPI FARSTDBSEARCH(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
+int WINAPI WrapPluginInfo::FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size)
+{
+	LOG_CMD(L"fsf2.GetFileOwner",0,0,0);
+	__int64 nRc = FSF3.GetFileOwner(Computer, Name, Owner, Size);
+	return (int)nRc;
+};
+//struct int WINAPI FARSTDGETNUMBEROFLINKS(const wchar_t *Name);
+//struct int WINAPI FARSTDATOI(const wchar_t *s);
+//struct __int64 WINAPI FARSTDATOI64(const wchar_t *s);
+//struct wchar_t   *WINAPI FARSTDITOA64(__int64 value, wchar_t *string, int radix);
+//struct wchar_t   *WINAPI FARSTDITOA(int value, wchar_t *string, int radix);
+//struct wchar_t   *WINAPI FARSTDLTRIM(wchar_t *Str);
+//struct wchar_t   *WINAPI FARSTDRTRIM(wchar_t *Str);
+//struct wchar_t   *WINAPI FARSTDTRIM(wchar_t *Str);
+//struct wchar_t   *WINAPI FARSTDTRUNCSTR(wchar_t *Str,int MaxLength);
+//struct wchar_t   *WINAPI FARSTDTRUNCPATHSTR(wchar_t *Str,int MaxLength);
+//struct wchar_t   *WINAPI FARSTDQUOTESPACEONLY(wchar_t *Str);
+//struct const wchar_t*WINAPI FARSTDPOINTTONAME(const wchar_t *Path);
+int WINAPI WrapPluginInfo::FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize)
+{
+	LOG_CMD(L"fsf2.GetPathRoot",0,0,0);
+	__int64 nRc = FSF3.GetPathRoot(Path, Root, DestSize);
+	return (int)nRc;
+};
+//struct BOOL WINAPI FARSTDADDENDSLASH(wchar_t *Path);
+//struct int WINAPI FARSTDCOPYTOCLIPBOARD(const wchar_t *Data);
+//struct wchar_t *WINAPI FARSTDPASTEFROMCLIPBOARD(void);
+//struct int WINAPI FARSTDINPUTRECORDTOKEY(const INPUT_RECORD *r);
+//struct int WINAPI FARSTDLOCALISLOWER(wchar_t Ch);
+//struct int WINAPI FARSTDLOCALISUPPER(wchar_t Ch);
+//struct int WINAPI FARSTDLOCALISALPHA(wchar_t Ch);
+//struct int WINAPI FARSTDLOCALISALPHANUM(wchar_t Ch);
+//struct wchar_t WINAPI FARSTDLOCALUPPER(wchar_t LowerChar);
+//struct wchar_t WINAPI FARSTDLOCALLOWER(wchar_t UpperChar);
+//struct void WINAPI FARSTDLOCALUPPERBUF(wchar_t *Buf,int Length);
+//struct void WINAPI FARSTDLOCALLOWERBUF(wchar_t *Buf,int Length);
+//struct void WINAPI FARSTDLOCALSTRUPR(wchar_t *s1);
+//struct void WINAPI FARSTDLOCALSTRLWR(wchar_t *s1);
+//struct int WINAPI FARSTDLOCALSTRICMP(const wchar_t *s1,const wchar_t *s2);
+//struct int WINAPI FARSTDLOCALSTRNICMP(const wchar_t *s1,const wchar_t *s2,int n);
+wchar_t* WINAPI WrapPluginInfo::FarStdXlat(wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
+{
+	LOG_CMD(L"fsf2.XLat",0,0,0);
+	wchar_t* pszRc = FSF3.XLat(Line, StartPos, EndPos, Flags);
+	return pszRc;
+};
+void WINAPI WrapPluginInfo::FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
+{
+	LOG_CMD(L"fsf2.RecursiveSearch",0,0,0);
+	//FSF3.RecursiveSearch(InitDir, Mask, Func, Flags, Param);
+	//TODO:
+};
+int WINAPI WrapPluginInfo::FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix)
+{
+	LOG_CMD(L"fsf2.MkTemp",0,0,0);
+	__int64 nRc = FSF3.MkTemp(Dest, size, Prefix);
+	return (int)nRc;
+};
+int WINAPI WrapPluginInfo::FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags)
+{
+	LOG_CMD(L"fsf2.ProcessName",0,0,0);
+	__int64 nRc = FSF3.ProcessName(param1, param2, size, flags);
+	return (int)nRc;
+};
+int WINAPI WrapPluginInfo::FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags)
+{
+	LOG_CMD(L"fsf2.MkLink",0,0,0);
+	LINK_TYPE Type3 = (LINK_TYPE)(Flags & 7);
+	MKLINK_FLAGS Flags3 = (MKLINK_FLAGS)(Flags & 0x30000);
+	BOOL nRc = FSF3.MkLink(Src, Dest, Type3, Flags3);
+	return nRc;
+};
+int WINAPI WrapPluginInfo::FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize)
+{
+	LOG_CMD(L"fsf2.ConvertPath",0,0,0);
+	__int64 nRc = 0;
+	switch (Mode)
+	{
+	case Far2::CPM_FULL:
+		nRc = FSF3.ConvertPath(CPM_FULL, Src, Dest, DestSize); break;
+	case Far2::CPM_REAL:
+		nRc = FSF3.ConvertPath(CPM_REAL, Src, Dest, DestSize); break;
+	case Far2::CPM_NATIVE:
+		nRc = FSF3.ConvertPath(CPM_NATIVE, Src, Dest, DestSize); break;
+	}
+	return (int)nRc;
+};
+int WINAPI WrapPluginInfo::FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize)
+{
+	LOG_CMD(L"fsf2.GetReparsePointInfo",0,0,0);
+	__int64 nRc = FSF3.GetReparsePointInfo(Src, Dest, DestSize);
+	return (int)nRc;
+};
+DWORD WINAPI WrapPluginInfo::FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer)
+{
+	LOG_CMD(L"fsf2.GetCurrentDirectory",0,0,0);
+	size_t nRc = FSF3.GetCurrentDirectory(Size, Buffer);
+	return (DWORD)nRc;
+};
+
+InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber)
+{
+	if (wpi && wpi->InfoLines)
+	{
+		free(wpi->InfoLines);
+		wpi->InfoLines = NULL;
+	}
+	wpi->PanelModesNumber = 0;
+	if (InfoLines && InfoLinesNumber > 0)
+	{	
+		wpi->InfoLines = (InfoPanelLine*)calloc(InfoLinesNumber, sizeof(*wpi->InfoLines));
+		for (int i = 0; i < InfoLinesNumber; i++)
+		{
+			wpi->InfoLines[i].Text = InfoLines[i].Text;
+			wpi->InfoLines[i].Data = InfoLines[i].Data;
+			wpi->InfoLines[i].Separator = InfoLines[i].Separator;
+		}
+		wpi->PanelModesNumber = InfoLinesNumber;
+	}
+	return wpi->InfoLines;
+}
+
+PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber)
+{
+	if (wpi && wpi->PanelModesArray)
+	{
+		free(wpi->PanelModesArray);
+		wpi->PanelModesArray = NULL;
+	}
+	wpi->PanelModesNumber = 0;
+	if (PanelModesArray && PanelModesNumber > 0)
+	{
+		wpi->PanelModesArray = (PanelMode*)calloc(PanelModesNumber, sizeof(*wpi->PanelModesArray));
+		for (int i = 0; i < PanelModesNumber; i++)
+		{
+			wpi->PanelModesArray[i].StructSize = sizeof(*wpi->PanelModesArray);
+			wpi->PanelModesArray[i].ColumnTypes = PanelModesArray[i].ColumnTypes;
+			wpi->PanelModesArray[i].ColumnWidths = PanelModesArray[i].ColumnWidths;
+			wpi->PanelModesArray[i].ColumnTitles = PanelModesArray[i].ColumnTitles;
+			wpi->PanelModesArray[i].StatusColumnTypes = PanelModesArray[i].StatusColumnTypes;
+			wpi->PanelModesArray[i].StatusColumnWidths = PanelModesArray[i].StatusColumnWidths;
+			wpi->PanelModesArray[i].Flags = 
+				(PanelModesArray[i].FullScreen ? PMFLAGS_FULLSCREEN : 0) |
+				(PanelModesArray[i].DetailedStatus ? PMFLAGS_DETAILEDSTATUS : 0) |
+				(PanelModesArray[i].AlignExtensions ? PMFLAGS_ALIGNEXTENSIONS : 0) |
+				(PanelModesArray[i].CaseConversion ? PMFLAGS_CASECONVERSION : 0);
+		}
+		wpi->PanelModesNumber = PanelModesNumber;
+	}
+	return wpi->PanelModesArray;
+}
+
 
 void LoadPluginInfo()
 {
@@ -2758,10 +3088,28 @@ BOOL LoadPlugin(BOOL abSilent)
 	
 	if (wpi && wpi->hDll == NULL)
 	{
+		wchar_t szOldDir[MAX_PATH] = {0};
+		GetCurrentDirectory(ARRAYSIZE(szOldDir), szOldDir);
+		wchar_t* pszSlash = wcsrchr(wpi->PluginDll, L'\\');
+		if (pszSlash)
+		{
+			*pszSlash = 0;
+			SetCurrentDirectory(wpi->PluginDll);
+			*pszSlash = L'\\';
+		}
 		wpi->hDll = LoadLibrary(wpi->PluginDll);
+		DWORD dwErr = GetLastError();
+		if (pszSlash)
+			SetCurrentDirectory(szOldDir);
 		if (wpi && wpi->hDll == NULL)
 		{
 			//TODO: Обработка ошибок загрузки
+			wchar_t szInfo[1024] = {0};
+			wsprintf(szInfo, L"Plugin loading failed!\n%s\nErrCode=0x%08X\n", wpi->PluginDll, dwErr);
+			FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwErr,
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), szInfo+lstrlen(szInfo),
+				ARRAYSIZE(szInfo)-lstrlen(szInfo) - 1, NULL);
+			MessageBox(NULL, szInfo, L"Far3Wrapper", MB_ICONSTOP|MB_SYSTEMMODAL);
 		}
 		else
 		{
@@ -3094,7 +3442,30 @@ HANDLE WINAPI OpenW(const OpenInfo *Info)
 	}
 
 	if (wpi && wpi->OpenPluginW)
-		h = wpi->OpenPluginW(Far2::OPEN_FROMMACRO, Info->Data);
+	{
+		switch (Info->OpenFrom & OPEN_FROM_MASK)
+		{
+		case OPEN_LEFTDISKMENU:
+		case OPEN_RIGHTDISKMENU:
+			h = wpi->OpenPluginW(Far2::OPEN_DISKMENU, Info->Data); break;
+		case OPEN_PLUGINSMENU:
+			h = wpi->OpenPluginW(Far2::OPEN_PLUGINSMENU, Info->Data); break;
+		case OPEN_FINDLIST:
+			h = wpi->OpenPluginW(Far2::OPEN_FINDLIST, Info->Data); break;
+		case OPEN_SHORTCUT:
+			h = wpi->OpenPluginW(Far2::OPEN_SHORTCUT, Info->Data); break;
+		case OPEN_COMMANDLINE:
+			h = wpi->OpenPluginW(Far2::OPEN_COMMANDLINE, Info->Data); break;
+		case OPEN_EDITOR:
+			h = wpi->OpenPluginW(Far2::OPEN_EDITOR, Info->Data); break;
+		case OPEN_VIEWER:
+			h = wpi->OpenPluginW(Far2::OPEN_VIEWER, Info->Data); break;
+		case OPEN_FILEPANEL:
+			h = wpi->OpenPluginW(Far2::OPEN_FILEPANEL, Info->Data); break;
+		case OPEN_DIALOG:
+			h = wpi->OpenPluginW(Far2::OPEN_DIALOG, Info->Data); break;
+		}
+	}
 trap:
 	return h;
 }
@@ -3335,7 +3706,7 @@ void   WINAPI GetOpenPanelInfoW(OpenPanelInfo *Info)
 		Info->StartPanelMode = ofi.StartPanelMode;
 		Info->StartSortMode = SortMode_2_3(ofi.StartSortMode);
 		Info->StartSortOrder = ofi.StartSortOrder;
-		Info->KeyBar = KeyBarTitles_2_3(ofi.KeyBar);
+		Info->KeyBar = wpi->KeyBarTitles_2_3(ofi.KeyBar);
 		Info->ShortcutData = ofi.ShortcutData;
 		Info->FreeSize = 0;
 	}
@@ -3362,7 +3733,7 @@ int    WINAPI ProcessDialogEventW(int Event,void *Param)
 }
 int    WINAPI ProcessEditorEventW(int Event,void *Param)
 {
-	LOG_CMD(L"ProcessEditorEventW",0,0,0);
+	LOG_CMD0(L"ProcessEditorEventW(%i)",Event,0,0);
 	int iRc = 0;
 	if (wpi && wpi->ProcessEditorEventW)
 		iRc = wpi->ProcessEditorEventW(Event, Param);
@@ -3371,8 +3742,10 @@ int    WINAPI ProcessEditorEventW(int Event,void *Param)
 int    WINAPI ProcessEditorInputW(const INPUT_RECORD *Rec)
 {
 	LOG_CMD(L"ProcessEditorInputW",0,0,0);
-	//TODO:
-	return 0;
+	int iRc = 0;
+	if (wpi && wpi->ProcessEditorInputW)
+		iRc = wpi->ProcessEditorInputW(Rec);
+	return iRc;
 }
 int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param)
 {
@@ -3536,7 +3909,7 @@ Far2Dialog::Far2Dialog(int X1, int Y1, int X2, int Y2,
     DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param,
     GUID PluginGuid, GUID DefGuid)
 {
-	hDlg3 = NULL; m_Items3 = NULL;
+	hDlg3 = NULL; m_Items3 = NULL; mp_ListInit3 = NULL;
 	m_PluginGuid = PluginGuid;
 	
     m_X1 = X1; m_Y1 = Y1; m_X2 = X2; m_Y2 = Y2;
@@ -3573,6 +3946,15 @@ Far2Dialog::~Far2Dialog()
 		free(m_Items2);
 		m_Items2 = NULL;
 	}
+	if (mp_ListInit3)
+	{
+		for (UINT i = 0; i < m_ItemsNumber; i++)
+		{
+			if (mp_ListInit3[i].Items)
+				free(mp_ListInit3[i].Items);
+		}
+		free(mp_ListInit3);
+	}
 	if (m_Items3)
 	{
 		free(m_Items3);
@@ -3582,9 +3964,11 @@ Far2Dialog::~Far2Dialog()
 
 void Far2Dialog::FreeDlg()
 {
+	wpi->MapDlg_2_3.erase(this);
 	if (hDlg3 != NULL)
 	{
 		psi3.DialogFree(hDlg3);
+		wpi->MapDlg_3_2.erase(hDlg3);
 		hDlg3 = NULL;
 	}
 }
@@ -3637,47 +4021,63 @@ int Far2Dialog::RunDlg()
 	if (!m_Items3 && m_Items2 && m_ItemsNumber > 0)
 	{
 		m_Items3 = (FarDialogItem*)calloc(m_ItemsNumber, sizeof(*m_Items3));
+		if (!mp_ListInit3)
+			mp_ListInit3 = (FarList*)calloc(m_ItemsNumber,sizeof(FarList));
 		Far2::FarDialogItem *p2 = m_Items2;
 		FarDialogItem *p3 = m_Items3;
 		for (UINT i = 0; i < m_ItemsNumber; i++, p2++, p3++)
 		{
-			p3->Type = DialogItemTypes_2_3(p2->Type);
-			p3->X1 = p2->X1;
-			p3->Y1 = p2->Y1;
-			p3->X2 = p2->X2;
-			p3->Y2 = p2->Y2;
+			FarDialogItem_2_3(p2, p3, mp_ListInit3+i);
+			//p3->Type = DialogItemTypes_2_3(p2->Type);
+			//p3->X1 = p2->X1;
+			//p3->Y1 = p2->Y1;
+			//p3->X2 = p2->X2;
+			//p3->Y2 = p2->Y2;
 
-			p3->Flags = FarDialogItemFlags_2_3(p2->Flags);
-			if (p2->DefaultButton)
-				p3->Flags |= DIF_DEFAULTBUTTON;
-			if (p2->Focus)
-				p3->Flags |= DIF_FOCUS;
+			//p3->Flags = FarDialogItemFlags_2_3(p2->Flags);
+			//if (p2->DefaultButton)
+			//	p3->Flags |= DIF_DEFAULTBUTTON;
+			//if (p2->Focus)
+			//	p3->Flags |= DIF_FOCUS;
 
-			p3->Data = p2->PtrData;
-			p3->MaxLength = p2->MaxLen;
+			//p3->Data = p2->PtrData;
+			//p3->MaxLength = p2->MaxLen;
 
-			if (p3->Type == DI_EDIT)
-			{
-				p3->History = p2->Param.History;
-			}
-			else if (p3->Type == DI_FIXEDIT)
-			{
-				p3->Mask = p2->Param.Mask;
-			}
-			else if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
-			{
-				//TODO:
-				_ASSERTE(p2->Param.ListItems == NULL);
-				//p3->ListItems = p2->Param.ListItems;
-			}
-			else if (p3->Type == DI_USERCONTROL)
-			{
-				p3->VBuf = p2->Param.VBuf;
-			}
-			else
-			{
-				p3->Reserved = p2->Param.Reserved;
-			}
+			//if (p3->Type == DI_EDIT)
+			//{
+			//	p3->History = p2->Param.History;
+			//}
+			//else if (p3->Type == DI_FIXEDIT)
+			//{
+			//	p3->Mask = p2->Param.Mask;
+			//}
+			//else if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
+			//{
+			//	if (p2->Param.ListItems != NULL)
+			//	{
+			//		int nItems = p2->Param.ListItems->ItemsNumber;
+			//		mp_ListInit3[i].ItemsNumber = nItems;
+			//		if (p2->Param.ListItems > 0)
+			//		{
+			//			mp_ListInit3[i].Items = (FarListItem*)calloc(nItems,sizeof(FarListItem));
+			//			const Far2::FarListItem* pi2 = p2->Param.ListItems->Items;
+			//			FarListItem* pi3 = mp_ListInit3[i].Items;
+			//			for (int j = 0; j < nItems; j++, pi2++, pi3++)
+			//			{
+			//				FarListItem_2_3(pi2, pi3);
+			//			}
+			//		}
+			//		p3->ListItems = (mp_ListInit3 + i);
+			//	}
+			//}
+			//else if (p3->Type == DI_USERCONTROL)
+			//{
+			//	p3->VBuf = p2->Param.VBuf;
+			//}
+			//else
+			//{
+			//	p3->Reserved = p2->Param.Reserved;
+			//}
 		}
 	}
 
@@ -3704,7 +4104,20 @@ int Far2Dialog::RunDlg()
 		wpi->LastFar2Dlg = this;
 		iRc = psi3.DialogRun(hDlg3);
 
-		wpi->MapDlg_2_3.erase(this);
+		// Некоторые параметры нужно перекинуть обратно в версию 2
+		if (m_Items3 && m_Items2 && m_ItemsNumber > 0)
+		{
+			Far2::FarDialogItem *p2 = m_Items2;
+			FarDialogItem *p3 = m_Items3;
+			for (UINT i = 0; i < m_ItemsNumber; i++, p2++, p3++)
+			{
+				p2->Param.Reserved = p3->Reserved;
+			}
+
+		}
+
+		// Освобождаем - в DialogFree
+		//wpi->MapDlg_2_3.erase(this);
 		//for (std::map<Far2Dialog*,HANDLE>::iterator i1 = wpi->MapDlg_2_3.begin();
 		//	 i1 != wpi->MapDlg_2_3.end(); i++)
 		//{
@@ -3714,7 +4127,7 @@ int Far2Dialog::RunDlg()
 		//		break;
 		//	}
 		//}
-		wpi->MapDlg_3_2.erase(hDlg3);
+		//wpi->MapDlg_3_2.erase(hDlg3);
 		//for (std::map<HANDLE,Far2Dialog*>::iterator i2 = wpi->MapDlg_3_2.begin();
 		//	 i2 != wpi->MapDlg_3_2.end(); i++)
 		//{
