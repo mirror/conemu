@@ -1,0 +1,21 @@
+ver 1.4.2025
+[%] Исправлен ACTL_GETFARVERSION (падал AltHistory)
+[%] Работает OpenW(OPEN_DIALOG), aka DialogTools
+[%] Работает ProcessDialogEventW, aka DlgSelect
+[%] Работает ACTL_GETWINDOWINFO
+[%] Исправлен DM_GETDLGITEM
+
+ver 1.3.2020
+[*] Far3 build 2020
+
+ver 1.3
+[%] Работает расцветка в редакторе (другие 'редакторные' функции)
+[%] Исправлено падение при закрытии некоторых диалогов
+[%] Добавлена обработка DI_COMBOBOX & DI_LISTBOX
+
+ver 1.2
+[%] Не вызывалось меню плагина
+[%] Не загружался rqp
+
+ver 1.1
+First public version )
