@@ -1,3 +1,8 @@
+ver 1.5.2026
+[%] Правки в DialogApi
+[+] FarApi(Get|Free)DirList, FarApi(Get|Free)PluginDirList
+[+] FarRecursiveSearch
+
 ver 1.4.2025
 [%] Исправлен ACTL_GETFARVERSION (падал AltHistory)
 [%] Работает OpenW(OPEN_DIALOG), aka DialogTools
