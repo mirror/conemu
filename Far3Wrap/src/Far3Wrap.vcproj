@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9,00"
+	Version="9.00"
 	Name="Far3Wrap"
 	ProjectGUID="{7E9CF007-1CAE-477B-859A-82C8B3D9D638}"
 	RootNamespace="Far3Wrap"
@@ -468,6 +468,10 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl"
 			>
+			<File
+				RelativePath=".\Far3Wrap.h"
+				>
+			</File>
 			<File
 				RelativePath=".\farkeys.hpp"
 				>

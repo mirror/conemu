@@ -36,6 +36,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <windows.h>
 #include <rpc.h>
 #include <TCHAR.h>
+#include <malloc.h>
 #include <map>
 #include <crtdbg.h>
 #include <TlHelp32.h>
@@ -121,9 +122,6 @@ namespace Far2
 //};
 
 
-#include <malloc.h>
-#include <TChar.h>
-
 
 GUID guid_DefPlugin = { /* 3a446422-cc89-4d74-87f9-a5e0db2c4486 */                                                  
     0x3a446422,                                                                                               
@@ -186,10 +184,10 @@ HMODULE ghInstance = NULL;
 //	HANDLE WINAPI OpenW(const OpenInfo *Info);
 //	int    WINAPI ProcessDialogEventW(int Event,void *Param);
 //	int    WINAPI ProcessEditorEventW(int Event,void *Param);
-//	int    WINAPI ProcessEditorInputW(const INPUT_RECORD *Rec);
+//	int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Rec);
 //	int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param);
 //	int    WINAPI ProcessHostFileW(const ProcessHostFileInfo *Info);
-//	int    WINAPI ProcessKeyW(HANDLE hPanel,const INPUT_RECORD *Rec);
+//	int    WINAPI ProcessKeyW(HANDLE hPanel,const struct ProcessPanelInputInfo *Rec);
 //	int    WINAPI ProcessSynchroEventW(int Event,void *Param);
 //	int    WINAPI ProcessViewerEventW(int Event,void *Param);
 //	int    WINAPI PutFilesW(const PutFilesInfo *Info);
@@ -257,6 +255,8 @@ struct WrapPluginInfo
 	void ClearProcAddr();
 
 	KeyBarTitles* KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar);
+
+	//static int WINAPI SeekForPlugin(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param);
 
 
 	// Changed functions
@@ -339,7 +339,7 @@ struct WrapPluginInfo
 	static DWORD WINAPI FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer);
 
 
-	// Exported Function
+	// Exported Far2(!) Function
 	typedef int    (WINAPI* _AnalyseW)(const struct AnalyseInfo *Info);
 	_AnalyseW AnalyseW;
 	typedef void   (WINAPI* _ClosePluginW)(HANDLE hPlugin);
@@ -399,6 +399,7 @@ struct WrapPluginInfo
 	_SetFindListW SetFindListW;
 	typedef void   (WINAPI* _SetStartupInfoW)(const Far2::PluginStartupInfo *Info);
 	_SetStartupInfoW SetStartupInfoW;
+	// End of Exported Far2(!) Function
 };
 WrapPluginInfo* wpi = NULL;
 
@@ -612,7 +613,7 @@ void PluginPanelItem_3_2(const PluginPanelItem* p3, Far2::PluginPanelItem* p2)
 	p2->CRC32 = p3->CRC32;
 }
 
-void PluginPanelItem_3_2(const struct PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2)
+void PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2)
 {
 	p2->dwFileAttributes = p3->FileAttributes;
 	p2->ftCreationTime = p3->CreationTime;
@@ -622,6 +623,19 @@ void PluginPanelItem_3_2(const struct PluginPanelItem *p3, Far2::FAR_FIND_DATA* 
 	p2->nPackSize = p3->PackSize;
 	p2->lpwszFileName = p3->FileName;
 	p2->lpwszAlternateFileName = p3->AlternateFileName;
+}
+void PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPanelItem *p3)
+{
+	memset(p3, 0, sizeof(*p3));
+	p3->FileAttributes = p2->dwFileAttributes;
+	p3->CreationTime = p2->ftCreationTime;
+	p3->LastAccessTime = p2->ftLastAccessTime;
+	p3->LastWriteTime = p2->ftLastWriteTime;
+	p3->ChangeTime = p2->ftLastWriteTime;
+	p3->FileSize = p2->nFileSize;
+	p3->PackSize = p2->nPackSize;
+	p3->FileName = p2->lpwszFileName;
+	p3->AlternateFileName = p2->lpwszAlternateFileName;
 }
 Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber)
 {
@@ -2367,6 +2381,10 @@ WrapPluginInfo::WrapPluginInfo()
 	pAnalyze = NULL;
 };
 
+//int WrapPluginInfo::SeekForPlugin(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param)
+//{
+//	return TRUE; // продолжить поиск
+//}
 
 KeyBarTitles* WrapPluginInfo::KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
 {
@@ -3423,7 +3441,13 @@ int WINAPI WrapPluginInfo::FarApiFileFilterControl(HANDLE hHandle, int Command, 
 	case Far2::FFCTL_STARTINGTOFILTER:
 		nRc = psi3.FileFilterControl(hHandle, FFCTL_STARTINGTOFILTER, Param1, (void*)Param2); break;
 	case Far2::FFCTL_ISFILEINFILTER:
-		nRc = psi3.FileFilterControl(hHandle, FFCTL_ISFILEINFILTER, Param1, (void*)Param2); break;
+		{
+			Far2::FAR_FIND_DATA* p2 = (Far2::FAR_FIND_DATA*)Param2;
+			PluginPanelItem p3;
+			PluginPanelItem_2_3(p2, &p3);
+			nRc = psi3.FileFilterControl(hHandle, FFCTL_ISFILEINFILTER, Param1, (void*)&p3);
+		}
+		break;
 	}
 	return nRc;
 };
@@ -3622,6 +3646,14 @@ PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModes
 	return wpi->PanelModesArray;
 }
 
+LPCWSTR FormatGuid(GUID* guid, wchar_t* tmp)
+{
+	wsprintf(tmp, L"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+		guid->Data1, guid->Data2, guid->Data3,
+		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
+		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
+	return tmp;
+}
 
 void LoadPluginInfo()
 {
@@ -3635,8 +3667,14 @@ void LoadPluginInfo()
 	
 	if (GetModuleFileName(ghInstance, szSelf, ARRAYSIZE(szSelf)-4))
 	{
+		GUID tmpGuid = {0}; wchar_t szTmp[64];
+		HANDLE hIniFile = NULL;
+		BOOL lbNewIniFile = FALSE;
 		lstrcpy(szIni, szSelf);
+		wchar_t* pszSelfName = wcsrchr(szSelf, L'\\');
+		if (pszSelfName) pszSelfName++; else pszSelfName = szSelf;
 		wchar_t* pszSlash = wcsrchr(szIni, L'\\');
+		wchar_t* pszFilePtr = NULL;
 		if (!pszSlash) pszSlash = szIni;
 		wchar_t* pszDot = wcsrchr(pszSlash, L'.');
 		if (pszDot)
@@ -3644,64 +3682,155 @@ void LoadPluginInfo()
 		lstrcat(szIni, L".ini");
 		lstrcpy(wpi->IniFile, szIni);
 
+		
 		lstrcpy(wpi->PluginDll, szSelf);
 		pszSlash = wcsrchr(wpi->PluginDll, L'\\');
-		if (pszSlash) pszSlash++; else pszSlash = wpi->PluginDll;
-		if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszSlash, ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll), szIni))
-			wpi->PluginDll[0] = 0;
+		//if (pszSlash) pszSlash++; else pszSlash = wpi->PluginDll;
+		pszFilePtr = pszSlash ? (pszSlash+1) : wpi->PluginDll;
+		hIniFile = CreateFile(szIni, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+		if (hIniFile == INVALID_HANDLE_VALUE)
+		{
+			hIniFile = CreateFile(szIni, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (hIniFile != INVALID_HANDLE_VALUE)
+			{
+				CloseHandle(hIniFile);
+				// OK, создали, теперь нужно сформировать информацию по старому плагину
+				lbNewIniFile = TRUE;
+				//if (pszSlash) *pszSlash = 0;
+				//FSF3.FarRecursiveSearch(wpi->PluginDll, L"*.dll", WrapPluginInfo::SeekForPlugin,
+				//	(FRSMODE)0, wpi);
+				//if (pszSlash) *pszSlash = L'\\';
+			}
+		}
 		else
-			lstrcpyn(wpi->File, pszSlash, ARRAYSIZE(wpi->File));
-			
-		wpi->AnalyzeMode = GetPrivateProfileInt(L"Plugin", L"AnalyzeMode", 2, szIni);
-		if (wpi->AnalyzeMode != 1 && wpi->AnalyzeMode != 2)
-			wpi->AnalyzeMode = 2;
+		{
+			CloseHandle(hIniFile);
+		}
 
-		wpi->OldPutFilesParams = GetPrivateProfileInt(L"Plugin", L"OldPutFilesParams", 0, szIni);
-		if (wpi->OldPutFilesParams != 0 && wpi->OldPutFilesParams != 1)
-			wpi->OldPutFilesParams = 0;
-		
-		if (GetPrivateProfileString(L"Plugin", L"Title", L"Sample Far3 plugin", szTemp, ARRAYSIZE(szTemp), szIni))
-			lstrcpyn(wpi->Title, szTemp, ARRAYSIZE(wpi->Title));
-		if (GetPrivateProfileString(L"Plugin", L"Description", L"Far2->Far3 plugin wrapper", szTemp, ARRAYSIZE(szTemp), szIni))
-			lstrcpyn(wpi->Desc, szTemp, ARRAYSIZE(wpi->Desc));
-		if (GetPrivateProfileString(L"Plugin", L"Author", L"Maximus5", szTemp, ARRAYSIZE(szTemp), szIni))
-			lstrcpyn(wpi->Author, szTemp, ARRAYSIZE(wpi->Author));
-		if (GetPrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szTemp, ARRAYSIZE(szTemp), szIni))
-			lstrcpyn(wpi->RegRoot, szTemp, ARRAYSIZE(wpi->RegRoot));
-		if (GetPrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szTemp, ARRAYSIZE(szTemp), szIni))
+		if (!lbNewIniFile)
 		{
-			//TODO: Обработка версии
-		}
-		GUID guid;
-		if (GetPrivateProfileString(L"Plugin", L"GUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
-		{
-			if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
-				wpi->guid_Plugin = guid;
+			if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszFilePtr, ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll), szIni))
+			{
+				//wpi->PluginDll[0] = 0;
+				lbNewIniFile = TRUE;
+			}
 			else
-				wpi->guid_Plugin = guid_DefPlugin;
+				lstrcpyn(wpi->File, pszFilePtr, ARRAYSIZE(wpi->File));
 		}
-		//if (GetPrivateProfileString(L"Plugin", L"MenuGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
-		//{
-		//	if (UuidFromStringW(szTemp, &guid) == RPC_S_OK)
-		//		wpi->guid_PluginMenu = guid;
-		//	else
-		//		wpi->guid_PluginMenu = ::guid_DefPluginMenu;
-		//}
-		//if (GetPrivateProfileString(L"Plugin", L"ConfigGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
-		//{
-		//	if (UuidFromStringW(szTemp, &guid) == RPC_S_OK)
-		//		wpi->guid_PluginConfigMenu = guid;
-		//	else
-		//		wpi->guid_PluginConfigMenu = ::guid_DefPluginConfigMenu;
-		//}
-		if (GetPrivateProfileString(L"Plugin", L"DialogsGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+
+		if (lbNewIniFile)
 		{
-			if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
-				wpi->guid_Dialogs = guid;
+			
+			WIN32_FIND_DATA fnd;
+			HMODULE hTestDll = NULL;
+			FARPROC lpSetStartupInfoW = NULL, lpGetGlobalInfoW = NULL; // просто для информации, звать их нельзя
+			HANDLE hFind = NULL;
+			for (int i = 0; !hTestDll && i <= 1; i++)
+			{
+				lstrcpy(pszFilePtr, i ? L"*.dl_" : L"*.dll");
+				hFind = FindFirstFile(wpi->PluginDll, &fnd);
+				if (hFind && (hFind != INVALID_HANDLE_VALUE))
+				{
+					*pszFilePtr = 0;
+					int nLen = ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll);
+					do {
+						if ((fnd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+							continue;
+						if (lstrcmpi(pszSelfName, fnd.cFileName) == 0)
+							continue; // это мы
+						lstrcpy(pszFilePtr, fnd.cFileName);
+						hTestDll = LoadLibraryEx(wpi->PluginDll, NULL, DONT_RESOLVE_DLL_REFERENCES|LOAD_WITH_ALTERED_SEARCH_PATH);
+						if (hTestDll)
+						{
+							lpSetStartupInfoW = GetProcAddress(hTestDll, "SetStartupInfoW");
+							lpGetGlobalInfoW = GetProcAddress(hTestDll, "GetGlobalInfoW");
+							FreeLibrary(hTestDll);
+							if (lpSetStartupInfoW && !lpGetGlobalInfoW)
+								break; // Да, это Far2 плагин!
+							hTestDll = NULL; // продолжаем поиск
+						}
+					} while (FindNextFile(hFind, &fnd));
+					FindClose(hFind);
+				}
+			}
+
+			if (hTestDll)
+			{
+				lstrcpyn(wpi->File, pszFilePtr, ARRAYSIZE(wpi->File));
+				// OK, Инициализируем .ini файл
+				DWORD dwErr = 0;
+				BOOL lb = WritePrivateProfileString(L"Plugin", L"PluginFile", pszFilePtr, szIni);
+				if (!lb)
+					dwErr = GetLastError();
+				lb = WritePrivateProfileString(L"Plugin", L"AnalyzeMode", L"2", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"OldPutFilesParams", L"0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Title", pszFilePtr, szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Description", pszFilePtr, szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Author", L"<Unknown>", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szIni);
+				// Начальные GUID-ы
+				UuidCreate(&tmpGuid);
+				lb = WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&tmpGuid, szTmp), szIni);
+				UuidCreate(&tmpGuid);
+				lb = WritePrivateProfileString(L"Plugin", L"DialogsGUID", FormatGuid(&tmpGuid, szTmp), szIni);
+			}
 			else
-				wpi->guid_Dialogs = ::guid_DefDialogs;
+			{
+				wpi->File[0] = 0;
+			}
 		}
-		lbRc = TRUE;
+
+		if (hIniFile && (hIniFile != INVALID_HANDLE_VALUE))
+		{
+			//if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszFilePtr, ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll), szIni))
+			//	wpi->PluginDll[0] = 0;
+			//else
+			//	lstrcpyn(wpi->File, pszFilePtr, ARRAYSIZE(wpi->File));
+
+			wpi->AnalyzeMode = GetPrivateProfileInt(L"Plugin", L"AnalyzeMode", 2, szIni);
+			if (wpi->AnalyzeMode != 1 && wpi->AnalyzeMode != 2)
+				wpi->AnalyzeMode = 2;
+
+			wpi->OldPutFilesParams = GetPrivateProfileInt(L"Plugin", L"OldPutFilesParams", 0, szIni);
+			if (wpi->OldPutFilesParams != 0 && wpi->OldPutFilesParams != 1)
+				wpi->OldPutFilesParams = 0;
+			
+			if (GetPrivateProfileString(L"Plugin", L"Title", L"Sample Far3 plugin", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(wpi->Title, szTemp, ARRAYSIZE(wpi->Title));
+			if (GetPrivateProfileString(L"Plugin", L"Description", L"Far2->Far3 plugin wrapper", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(wpi->Desc, szTemp, ARRAYSIZE(wpi->Desc));
+			if (GetPrivateProfileString(L"Plugin", L"Author", L"Maximus5", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(wpi->Author, szTemp, ARRAYSIZE(wpi->Author));
+			if (GetPrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(wpi->RegRoot, szTemp, ARRAYSIZE(wpi->RegRoot));
+			if (GetPrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				//TODO: Обработка версии
+			}
+			GUID guid;
+			if (GetPrivateProfileString(L"Plugin", L"GUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
+					wpi->guid_Plugin = guid;
+				else
+				{
+					UuidCreate(&wpi->guid_Plugin);
+					WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&wpi->guid_Plugin, szTmp), szIni);
+				}
+			}
+			if (GetPrivateProfileString(L"Plugin", L"DialogsGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
+					wpi->guid_Dialogs = guid;
+				else
+				{
+					UuidCreate(&wpi->guid_Dialogs);
+					WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&wpi->guid_Dialogs, szTmp), szIni);
+				}
+			}
+			lbRc = TRUE;
+		}
 	}
 	
 	if (!lbRc)
@@ -3710,10 +3839,12 @@ void LoadPluginInfo()
 		lstrcpy(wpi->Desc, L"Far2->Far3 plugin wrapper");
 		lstrcpy(wpi->Author, L"Maximus5");
 		lstrcpy(wpi->RegRoot, L"Software\\Far Manager\\Plugins");
-		wpi->guid_Plugin = guid_DefPlugin;
+		UuidCreate(&wpi->guid_Plugin);
+		UuidCreate(&wpi->guid_Dialogs);
+		//wpi->guid_Plugin = guid_DefPlugin;
 		//wpi->guid_PluginMenu = ::guid_DefPluginMenu;
 		//wpi->guid_PluginConfigMenu = ::guid_DefPluginConfigMenu;
-		wpi->guid_Dialogs = ::guid_DefDialogs;
+		//wpi->guid_Dialogs = ::guid_DefDialogs;
 	}
 }
 
@@ -3726,19 +3857,27 @@ BOOL LoadPlugin(BOOL abSilent)
 	
 	if (wpi && wpi->hDll == NULL)
 	{
-		wchar_t szOldDir[MAX_PATH] = {0};
-		GetCurrentDirectory(ARRAYSIZE(szOldDir), szOldDir);
-		wchar_t* pszSlash = wcsrchr(wpi->PluginDll, L'\\');
-		if (pszSlash)
-		{
-			*pszSlash = 0;
-			SetCurrentDirectory(wpi->PluginDll);
-			*pszSlash = L'\\';
-		}
-		wpi->hDll = LoadLibrary(wpi->PluginDll);
+		//wchar_t szOldDir[MAX_PATH] = {0};
+		//GetCurrentDirectory(ARRAYSIZE(szOldDir), szOldDir);
+		//wchar_t* pszSlash = wcsrchr(wpi->PluginDll, L'\\');
+		//if (pszSlash)
+		//{
+		//	*pszSlash = 0;
+		//	SetCurrentDirectory(wpi->PluginDll);
+		//	*pszSlash = L'\\';
+		//}
+#ifdef _DEBUG
+		if (wcschr(wpi->PluginDll, L'*'))
+			ругнуться, что "Plugin module not found: \n" wpi->PluginDll
+		else
+#endif
+		if (wcschr(wpi->PluginDll, L'\\'))
+			wpi->hDll = LoadLibraryEx(wpi->PluginDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+		else
+			wpi->hDll = LoadLibrary(wpi->PluginDll);
 		DWORD dwErr = GetLastError();
-		if (pszSlash)
-			SetCurrentDirectory(szOldDir);
+		//if (pszSlash)
+		//	SetCurrentDirectory(szOldDir);
 		if (wpi && wpi->hDll == NULL)
 		{
 			//TODO: Обработка ошибок загрузки
@@ -3835,7 +3974,7 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 		memset(&FSF2, 0, sizeof(FSF2));
 
 		wpi = NULL;
-		LoadPluginInfo();
+		LoadPluginInfo(); // может сейчас не будем, выполним в SetStartupInfoW?
     }
     if (ul_reason_for_call == DLL_PROCESS_DETACH)
     {
@@ -4040,10 +4179,17 @@ void WINAPI GetPluginInfoW(PluginInfo *Info)
     			for (int i = 1; i <= Menus[k].Count; i++)
     			{
     				wsprintf(szValName, Menus[k].Fmt, i);
-    				if (!GetPrivateProfileString(L"Plugin", szValName, L"", szGUID, ARRAYSIZE(szGUID), wpi->IniFile))
-    					break;
-    				if (UuidFromStringW((RPC_WSTR)szGUID, &guid) != RPC_S_OK)
-    					break;
+					BOOL lbGot = FALSE;
+					szGUID[0] = 0;
+    				lbGot = (GetPrivateProfileString(L"Plugin", szValName, L"", szGUID, ARRAYSIZE(szGUID), wpi->IniFile)
+						&& (UuidFromStringW((RPC_WSTR)szGUID, &guid) == RPC_S_OK));
+    				if (!lbGot)
+					{
+						RPC_STATUS hr = UuidCreate(&guid);
+						if (FAILED(hr))
+							break;
+						WritePrivateProfileString(L"Plugin", szValName, FormatGuid(&guid, szGUID), wpi->IniFile);
+					}
     				// OK
     				(*Menus[k].Guids)[i-1] = guid;
     				(*Menus[k].GuidCount)++;
@@ -4462,12 +4608,13 @@ int    WINAPI ProcessEditorEventW(int Event,void *Param)
 		iRc = wpi->ProcessEditorEventW(Event, Param);
 	return iRc;
 }
-int    WINAPI ProcessEditorInputW(const INPUT_RECORD *Rec)
+int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info)
 {
 	LOG_CMD(L"ProcessEditorInputW",0,0,0);
 	int iRc = 0;
+	_ASSERTE(Info->StructSize==sizeof(*Info));
 	if (wpi && wpi->ProcessEditorInputW)
-		iRc = wpi->ProcessEditorInputW(Rec);
+		iRc = wpi->ProcessEditorInputW(&Info->Rec);
 	return iRc;
 }
 int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param)
@@ -4491,21 +4638,28 @@ int    WINAPI ProcessHostFileW(const ProcessHostFileInfo *Info)
 	}
 	return iRc;
 }
-int    WINAPI ProcessKeyW(HANDLE hPanel,const INPUT_RECORD *Rec)
+int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
 {
-	LOG_CMD(L"ProcessKeyW(%s,0x%X,0x%X)",(Rec->EventType==KEY_EVENT?L"Key":L"???"),Rec->Event.KeyEvent.wVirtualKeyCode,Rec->Event.KeyEvent.dwControlKeyState);
+	LOG_CMD(L"ProcessPanelInputW(%s,0x%X,0x%X)",(Info->Rec->EventType==KEY_EVENT?L"Key":L"???"),Info->Rec->Event.KeyEvent.wVirtualKeyCode,Info->Rec->Event.KeyEvent.dwControlKeyState);
+	_ASSERTE(Info->StructSize == sizeof(*Info));
 	int iRc = 0;
 	if (wpi && wpi->ProcessKeyW)
 	{
-		int Key2 = FarKey_3_2(Rec);
+		int Key2 = FarKey_3_2(&Info->Rec);
 		DWORD FShift = Key2 & 0x7F000000; // старший бит используется в других целях!
 		DWORD ControlState =
 			(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
 			(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
 			(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0);
-		iRc = wpi->ProcessKeyW(hPanel, Key2 & 0x0003FFFF, ControlState);
+		//DWORD PreProcess = (Info->Flags & PKIF_PREPROCESS) ? Far2::PKF_PREPROCESS : 0;
+		iRc = wpi->ProcessKeyW(hPanel, (Key2 & 0x0003FFFF) /*| PreProcess*/, ControlState);
 	}
 	return iRc;
+}
+int    WINAPI ProcessConsoleInputW(ProcessConsoleInputInfo *Info)
+{
+	//TODO: А здесь можно бы кинуть в Far2 то что раньше было PKF_PREPROCESS
+	return 0;
 }
 int    WINAPI ProcessSynchroEventW(int Event,void *Param)
 {

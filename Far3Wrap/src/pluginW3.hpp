@@ -5,7 +5,7 @@
 /*
   plugin.hpp
 
-  Plugin API for Far Manager 3.0 build 2026
+  Plugin API for Far Manager 3.0 build 2027
 */
 
 /*
@@ -43,7 +43,7 @@ other possible license with no implications from the above license on them.
 #define FARMANAGERVERSION_MAJOR 3
 #define FARMANAGERVERSION_MINOR 0
 #define FARMANAGERVERSION_REVISION 0
-#define FARMANAGERVERSION_BUILD 2026
+#define FARMANAGERVERSION_BUILD 2027
 
 #ifndef RC_INVOKED
 
@@ -2138,7 +2138,6 @@ enum OPENFROM
 	OPEN_FROMMACROSTRING    = 0x00020000,
 };
 
-
 enum FAR_EVENTS
 {
 	FE_CHANGEVIEWMODE =0,
@@ -2260,6 +2259,25 @@ struct DeleteFilesInfo
 	OPERATION_MODES OpMode;
 };
 
+struct ProcessPanelInputInfo
+{
+	size_t StructSize;
+	INPUT_RECORD Rec;
+};
+
+struct ProcessEditorInputInfo
+{
+	size_t StructSize;
+	INPUT_RECORD Rec;
+};
+
+struct ProcessConsoleInputInfo
+{
+	size_t StructSize;
+	const INPUT_RECORD *RecIn;
+	INPUT_RECORD *RecOut;
+};
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -2284,10 +2302,12 @@ extern "C"
 	HANDLE WINAPI OpenW(const struct OpenInfo *Info);
 	int    WINAPI ProcessDialogEventW(int Event,void *Param);
 	int    WINAPI ProcessEditorEventW(int Event,void *Param);
-	int    WINAPI ProcessEditorInputW(const INPUT_RECORD *Rec);
+	int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info);
 	int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param);
 	int    WINAPI ProcessHostFileW(const struct ProcessHostFileInfo *Info);
-	int    WINAPI ProcessKeyW(HANDLE hPanel,const INPUT_RECORD *Rec);
+	int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
+	int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info);
+
 	int    WINAPI ProcessSynchroEventW(int Event,void *Param);
 	int    WINAPI ProcessViewerEventW(int Event,void *Param);
 	int    WINAPI PutFilesW(const struct PutFilesInfo *Info);
