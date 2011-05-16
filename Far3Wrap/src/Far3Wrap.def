@@ -1,25 +1,2 @@
 EXPORTS
-	GetGlobalInfoW
-	SetStartupInfoW
-	GetPluginInfoW
-	OpenW
-	ExitFARW
-	ConfigureW
-	ClosePanelW
-	AnalyseW
-	SetDirectoryW
-	ProcessSynchroEventW
-	MakeDirectoryW
-	GetOpenPanelInfoW
-	GetFindDataW
-	FreeFindDataW
-	GetFilesW
-	DeleteFilesW
-	CompareW
-	PutFilesW
-	ProcessViewerEventW
-	ProcessEditorEventW
-	ProcessEventW
-	ProcessHostFileW
-	ProcessPanelInputW
-	ProcessDialogEventW
+	InitPlugin

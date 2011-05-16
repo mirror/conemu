@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Far3Wrap", "src\Far3Wrap.vcproj", "{7E9CF007-1CAE-477B-859A-82C8B3D9D638}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Loader", "src\Loader.vcproj", "{9AFD16D2-FFEF-40D9-998B-5D5FAEE51372}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		DebugW3|Win32 = DebugW3|Win32
@@ -19,6 +21,11 @@ Global
 		{7E9CF007-1CAE-477B-859A-82C8B3D9D638}.ReleaseW3|Win32.Build.0 = ReleaseW3|Win32
 		{7E9CF007-1CAE-477B-859A-82C8B3D9D638}.ReleaseW3|x64.ActiveCfg = ReleaseW3|x64
 		{7E9CF007-1CAE-477B-859A-82C8B3D9D638}.ReleaseW3|x64.Build.0 = ReleaseW3|x64
+		{9AFD16D2-FFEF-40D9-998B-5D5FAEE51372}.DebugW3|Win32.ActiveCfg = DebugW3|Win32
+		{9AFD16D2-FFEF-40D9-998B-5D5FAEE51372}.DebugW3|x64.ActiveCfg = DebugW3|x64
+		{9AFD16D2-FFEF-40D9-998B-5D5FAEE51372}.DebugW3|x64.Build.0 = DebugW3|x64
+		{9AFD16D2-FFEF-40D9-998B-5D5FAEE51372}.ReleaseW3|Win32.ActiveCfg = ReleaseW3|Win32
+		{9AFD16D2-FFEF-40D9-998B-5D5FAEE51372}.ReleaseW3|x64.ActiveCfg = ReleaseW3|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

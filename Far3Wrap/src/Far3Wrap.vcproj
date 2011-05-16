@@ -82,7 +82,7 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib Rpcrt4.lib"
-				OutputFile="\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far3x86\Plugins\Far3Wrap\Far3Wrap.dll"
+				OutputFile="\Far3\Far3Wrap.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile="Far3Wrap.def"
@@ -115,7 +115,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far3x86\Plugins\UpdateWrap.cmd"
+				CommandLine=""
 			/>
 		</Configuration>
 		<Configuration
@@ -264,7 +264,7 @@
 				ProgramDataBaseFileName="$(IntDir)/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -285,7 +285,7 @@
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile="Far3Wrap.def"
-				GenerateDebugInformation="false"
+				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
@@ -363,7 +363,7 @@
 				ProgramDataBaseFileName="$(IntDir)/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -384,7 +384,7 @@
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile="Far3Wrap.def"
-				GenerateDebugInformation="false"
+				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
@@ -477,11 +477,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\LogCmd.h"
+				>
+			</File>
+			<File
 				RelativePath=".\pluginW.hpp"
 				>
 			</File>
 			<File
 				RelativePath=".\pluginW3.hpp"
+				>
+			</File>
+			<File
+				RelativePath=".\SetExport.h"
 				>
 			</File>
 		</Filter>
@@ -526,6 +534,10 @@
 				</FileConfiguration>
 			</File>
 		</Filter>
+		<File
+			RelativePath=".\!ToDo.txt"
+			>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>

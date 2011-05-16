@@ -38,306 +38,409 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <TCHAR.h>
 #include <malloc.h>
 #include <map>
+#include <vector>
 #include <crtdbg.h>
 #include <TlHelp32.h>
 #include "version.h"
+#include "SetExport.h"
 
 #define ZeroStruct(s) memset(&s, 0, sizeof(s))
+//TODO
+#define InvalidOp()
 
-bool gbIgnoreAssertStruct = false;
-void AssertStructSize(size_t s3, size_t s2, LPCWSTR sName,
-					  LPCSTR sFile, int nLine)
-{
-	if (gbIgnoreAssertStruct)
-		return;
-	wchar_t szDbgInfo[255], szTitle[64], szFile[64];
-	LPCSTR pszName = sFile ? strrchr(sFile, '\\') : "???.cpp";
-	if (!pszName) pszName = sFile;
-	MultiByteToWideChar(CP_ACP, 0, pszName, -1, szFile, ARRAYSIZE(szFile));
-	wsprintf(szDbgInfo, L"Invalid struct %s size\nFar2: %u, Far3: %u\nFile: %s, Line: %u\nPress <Cancel> to stop buzzing",
-		sName, (DWORD)s2, (DWORD)s3, szFile, nLine);
-	wsprintf(szTitle, L"Far3Wrapper %u.%u #%u", MVV_1,MVV_2,MVV_3);
-	if (MessageBox(NULL, szDbgInfo, szTitle, MB_OKCANCEL|MB_ICONSTOP|MB_SYSTEMMODAL) == IDCANCEL)
-		gbIgnoreAssertStruct = true;
-}
-#define ASSERTSTRUCT(s) { if (sizeof(Far2::s)!=sizeof(s)) AssertStructSize(sizeof(s), sizeof(Far2::s), L#s, __FILE__, __LINE__); }
-#define ASSERTSTRUCTGT(s) { if (sizeof(Far2::s)>sizeof(s)) AssertStructSize(sizeof(s), sizeof(Far2::s), L#s, __FILE__, __LINE__); }
 
+//#define ASSERTSTRUCT(s) { if (sizeof(Far2::s)!=sizeof(s)) AssertStructSize(sizeof(s), sizeof(Far2::s), L#s, __FILE__, __LINE__); }
+//#define ASSERTSTRUCTGT(s) { if (sizeof(Far2::s)>sizeof(s)) AssertStructSize(sizeof(s), sizeof(Far2::s), L#s, __FILE__, __LINE__); }
+#include "Assert3.h"
+
+
+// class LogCmd, LOG_CMD, LOG_CMD0
 #define LOG_COMMANDS
-#ifdef LOG_COMMANDS
-	class LogCmd
-	{
-		public:
-		LPCWSTR pszInfo;
-		wchar_t szFile[64];
-		public:
-		void Dump(LPCWSTR asFmt)
-		{
-			wchar_t szFull[1024];
-			SYSTEMTIME st; GetLocalTime(&st); DWORD nTID = GetCurrentThreadId();
-			wsprintf(szFull, asFmt, szFile, nTID, st.wHour, st.wMinute, st.wSecond, pszInfo);
-			OutputDebugString(szFull);
-		};
-		LogCmd(LPCWSTR asFunc, LPWSTR asFile)
-		{
-			pszInfo = asFunc;
-			lstrcpyn(szFile, asFile, ARRAYSIZE(szFile));
-			Dump(L"%s:T%u(%u:%02u:%02u) %s\n");
-		}
-		~LogCmd()
-		{
-			Dump(L"%s:T%u(%u:%02u:%02u) -end- %s\n");
-		};
-	};
-	#define LOG_CMD_(f,a1,a2,a3) \
-		wchar_t szInfo[512]; wsprintf(szInfo, f, a1,a2,a3); \
-		LogCmd llLogCmd(szInfo, wpi ? wpi->File : L"<wpi==NULL>");
-	#define LOG_CMD(f,a1,a2,a3)  // LOG_CMD_(f,a1,a2,a3)
-	#define LOG_CMD0(f,a1,a2,a3) // LOG_CMD_(f,a1,a2,a3)
-#else
-	#define LOG_CMD(f,a1,a2,a3)
-	#define LOG_CMD0(f,a1,a2,a3)
-#endif
+#include "LogCmd.h"
 
+
+// Far2 & Far3 plugin API's
 #define _FAR_NO_NAMELESS_UNIONS
 
 namespace Far2
 {
-//int gi1 = 0;
 #undef __PLUGIN_HPP__
 #include "pluginW.hpp"
 #undef __FARKEYS_HPP__
 #include "farkeys.hpp"
-//int gi2 = 0;
 };
 
 //namespace Far3
 //{
-//int gi1 = 0;
 #undef __PLUGIN_HPP__
 #include "pluginW3.hpp"
 #undef __FARKEYS_HPP__
 #include "farkeys3.hpp"
-//int gi2 = 0;
 //};
 
+#include "Far3Wrap.h"
 
-
-GUID guid_DefPlugin = { /* 3a446422-cc89-4d74-87f9-a5e0db2c4486 */                                                  
-    0x3a446422,                                                                                               
-    0xcc89,                                                                                                   
-    0x4d74,                                                                                                   
-    {0x87, 0xf9, 0xa5, 0xe0, 0xdb, 0x2c, 0x44, 0x86}                                                          
-};
-
-GUID guid_DefPluginMenu = { /* d96d46a6-3a38-435c-ad74-a70cfd1719a7 */                                                  
-    0xd96d46a6,                                                                                               
-    0x3a38,                                                                                                   
-    0x435c,                                                                                                   
-    {0xad, 0x74, 0xa7, 0x0c, 0xfd, 0x17, 0x19, 0xa7}                                                          
-};
-
-GUID guid_DefPluginDiskMenu = { /* 925bb55c-edf6-47f8-aed9-1aa66fbf0d69 */
-    0x925bb55c,
-    0xedf6,
-    0x47f8,
-    {0xae, 0xd9, 0x1a, 0xa6, 0x6f, 0xbf, 0x0d, 0x69}
-};
-
-GUID guid_DefPluginConfigMenu = { /* 7c0d344e-8030-49f0-81df-f776ef95dde0 */                                                  
-    0x7c0d344e,                                                                                               
-    0x8030,                                                                                                   
-    0x49f0,                                                                                                   
-    {0x81, 0xdf, 0xf7, 0x76, 0xef, 0x95, 0xdd, 0xe0}                                                          
-};
-
-GUID guid_DefDialogs = { /* c0f2566f-358e-4c81-9947-55cf8bebe103 */
-    0xc0f2566f,
-    0x358e,
-    0x4c81,
-    {0x99, 0x47, 0x55, 0xcf, 0x8b, 0xeb, 0xe1, 0x03}
-};
-
-
-#define InvalidOp()
-
-HMODULE ghInstance = NULL;
-
-//#if defined(__GNUC__)
-//extern "C"{
-//	BOOL   WINAPI DllMain( HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved );
-//	int    WINAPI AnalyseW(const AnalyseInfo *Info);
-//	void   WINAPI ClosePanelW(HANDLE hPanel);
-//	int    WINAPI CompareW(const CompareInfo *Info);
-//	int    WINAPI ConfigureW(const GUID* Guid);
-//	int    WINAPI DeleteFilesW(const DeleteFilesInfo *Info);
-//	void   WINAPI ExitFARW(void);
-//	void   WINAPI FreeFindDataW(const FreeFindDataInfo *Info);
-//	void   WINAPI FreeVirtualFindDataW(const FreeFindDataInfo *Info);
-//	int    WINAPI GetFilesW(GetFilesInfo *Info);
-//	int    WINAPI GetFindDataW(GetFindDataInfo *Info);
-//	void   WINAPI GetGlobalInfoW(GlobalInfo *Info);
-//	void   WINAPI GetOpenPanelInfoW(OpenPanelInfo *Info);
-//	void   WINAPI GetPluginInfoW(PluginInfo *Info);
-//	int    WINAPI GetVirtualFindDataW(GetVirtualFindDataInfo *Info);
-//	int    WINAPI MakeDirectoryW(MakeDirectoryInfo *Info);
-//	HANDLE WINAPI OpenW(const OpenInfo *Info);
-//	int    WINAPI ProcessDialogEventW(int Event,void *Param);
-//	int    WINAPI ProcessEditorEventW(int Event,void *Param);
-//	int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Rec);
-//	int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param);
-//	int    WINAPI ProcessHostFileW(const ProcessHostFileInfo *Info);
-//	int    WINAPI ProcessKeyW(HANDLE hPanel,const struct ProcessPanelInputInfo *Rec);
-//	int    WINAPI ProcessSynchroEventW(int Event,void *Param);
-//	int    WINAPI ProcessViewerEventW(int Event,void *Param);
-//	int    WINAPI PutFilesW(const PutFilesInfo *Info);
-//	int    WINAPI SetDirectoryW(const SetDirectoryInfo *Info);
-//	int    WINAPI SetFindListW(const SetFindListInfo *Info);
-//	void   WINAPI SetStartupInfoW(const PluginStartupInfo *Info);
-//};
-//#endif
-
-//void f1()
-//{
-//	gi1 = 0;
-//}
-
-BOOL lbPsi2 = FALSE;
-PluginStartupInfo psi3;
-FarStandardFunctions FSF3;
-Far2::PluginStartupInfo psi2;
-Far2::FarStandardFunctions FSF2;
+HMODULE ghFar3Wrap = NULL;
 DWORD gnMainThreadId = 0;
 
-struct Far2Dialog;
+
+
 struct WrapPluginInfo;
+
+struct Far2Dialog
+{
+	// Far3
+	HANDLE hDlg3;
+	WrapPluginInfo* wpi;
+	
+	// Far2
+    int m_X1, m_Y1, m_X2, m_Y2;
+    wchar_t *m_HelpTopic;
+    Far2::FarDialogItem *m_Items2;
+    FarDialogItem *m_Items3;
+    FarList *mp_ListInit3;
+    UINT m_ItemsNumber;
+    DWORD m_Flags;
+    Far2::FARWINDOWPROC m_DlgProc;
+    LONG_PTR m_Param;
+    BOOL m_GuidChecked;
+    GUID m_PluginGuid, m_Guid, m_DefGuid;
+    
+    void FreeDlg();
+	static INT_PTR WINAPI Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2);
+    int RunDlg();
+    
+	Far2Dialog(WrapPluginInfo* pwpi,
+		int X1, int Y1, int X2, int Y2,
+	    const wchar_t *HelpTopic, Far2::FarDialogItem *Items, UINT ItemsNumber,
+	    DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param,
+	    GUID PluginGuid, GUID DefGuid);
+	~Far2Dialog();
+};
+
+std::map<Far2Dialog*,HANDLE> MapDlg_2_3;
+std::map<HANDLE,Far2Dialog*> MapDlg_3_2;
+
+enum AbsentLoaderFunctions3
+{
+	ALF3_Analyse            = 0x0001,
+	ALF3_Open               = 0x0002,
+	ALF3_Configure          = 0x0004,
+	ALF3_Compare            = 0x0008,
+	ALF3_GetFiles           = 0x0010,
+	ALF3_PutFiles           = 0x0020,
+	ALF3_FindData           = 0x0040,
+	ALF3_VirtualFindData    = 0x0080,
+	ALF3_ProcessHostFile    = 0x0100,
+	ALF3_ProcessDialogEvent = 0x0200,
+	ALF3_ProcessEditorEvent = 0x0400,
+	ALF3_ProcessEditorInput = 0x0800,
+	ALF3_ProcessViewerEvent = 0x1000,
+	ALF3_SetFindList        = 0x2000,
+	ALF3_CustomData         = 0x4000,
+};
+
+struct WrapUpdateFunctions
+{
+	DWORD mn_OldAbsentFunctions, mn_NewAbsentFunctions; // set of AbsentLoaderFunctions3
+	wchar_t ms_Loader[MAX_PATH+1], ms_IniFile[MAX_PATH+1];
+};
+
+std::vector<WrapUpdateFunctions> UpdateFunc;
 
 struct WrapPluginInfo
 {
-	HMODULE hDll;
-	wchar_t PluginDll[MAX_PATH+1], IniFile[MAX_PATH+1];
-	wchar_t File[64];
-	wchar_t Title[MAX_PATH+1], Desc[256], Author[256];
-	wchar_t RegRoot[1024];
-	VersionInfo Version;
-	GUID guid_Plugin, guid_Dialogs;
-	int nPluginMenu; GUID* guids_PluginMenu;
-	int nPluginDisks; GUID* guids_PluginDisks;
-	int nPluginConfig; GUID* guids_PluginConfig;
-	Far2::PluginInfo Info;
-	InfoPanelLine *InfoLines; size_t InfoLinesNumber; // Far3
-	PanelMode     *PanelModesArray; size_t PanelModesNumber; // Far3
-	KeyBarTitles   KeyBar; // Far3
-	KeyBarLabel    KeyBarLabels[7*12];
+	// Instance variables
+	HMODULE mh_Loader; // Loader.dll / Loader64.dll
+	HMODULE mh_Dll;    // HMODULE собственно плагина
+	DWORD mn_OldAbsentFunctions, mn_NewAbsentFunctions; // set of AbsentLoaderFunctions3
+	wchar_t* m_ErrorInfo; // In-pointer, Out-error text (used for Loader)
+	int m_ErrorInfoMax; // max size of ErrorInfo in wchar_t (used for Loader)
+	wchar_t ms_PluginDll[MAX_PATH+1], ms_IniFile[MAX_PATH+1];
+	wchar_t ms_File[64];
+	wchar_t ms_Title[MAX_PATH+1], ms_Desc[256], ms_Author[256];
+	wchar_t ms_RegRoot[1024];
+	VersionInfo m_Version;
+	GUID mguid_Plugin, mguid_Dialogs;
+	int mn_PluginMenu; GUID* mguids_PluginMenu;
+	int mn_PluginDisks; GUID* mguids_PluginDisks;
+	int mn_PluginConfig; GUID* mguids_PluginConfig;
+	Far2::PluginInfo m_Info;
+	InfoPanelLine *m_InfoLines; size_t m_InfoLinesNumber; // Far3
+	PanelMode     *m_PanelModesArray; size_t m_PanelModesNumber; // Far3
+	KeyBarTitles   m_KeyBar; // Far3
+	KeyBarLabel    m_KeyBarLabels[7*12];
 	Far2::FarList m_ListItems2;
 	FarList m_ListItems3;
 
-	AnalyseInfo* pAnalyze;
+	AnalyseInfo* mp_Analyze;
 	//;; 1 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW
 	//;; 2 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW & ClosePluginW [& OpenFilePluginW]
-	int AnalyzeMode;
+	int m_AnalyzeMode;
 
-	int OldPutFilesParams;
+	int m_OldPutFilesParams;
 
-	std::map<PluginPanelItem*,Far2::PluginPanelItem*> MapPanelItems;
+	Far2Dialog* m_LastFar2Dlg;
 
-	Far2Dialog* LastFar2Dlg;
-	std::map<Far2Dialog*,HANDLE> MapDlg_2_3;
-	std::map<HANDLE,Far2Dialog*> MapDlg_3_2;
+	std::map<PluginPanelItem*,Far2::PluginPanelItem*> m_MapPanelItems;
+	std::map<Far2::FAR_FIND_DATA*,PluginPanelItem*> m_MapDirList;
+	std::map<Far2::PluginPanelItem*,PluginPanelItem*> m_MapPlugDirList;
 
-	std::map<Far2::FAR_FIND_DATA*,PluginPanelItem*> MapDirList;
-	std::map<Far2::PluginPanelItem*,PluginPanelItem*> MapPlugDirList;
+	int gnMsg_2 /*= 0*/, gnParam1_2 /*= 0*/, gnParam1_3 /*= 0*/;
+	FARMESSAGE gnMsg_3 /*= DM_FIRST*/;
+	FARMESSAGE gnMsgKey_3 /*= DM_FIRST*/, gnMsgClose_3 /*= DM_FIRST*/;
+	LONG_PTR gnParam2_2 /*= 0*/;
+	void* gpParam2_3 /*= NULL*/;
+	FarListItem* gpListItems3 /*= NULL*/; INT_PTR gnListItemsMax3 /*= 0*/;
+	Far2::FarListItem* gpListItems2 /*= NULL*/; UINT_PTR gnListItemsMax2 /*= 0*/;
+	FarGetDialogItem m_GetDlgItem;
 
-	WrapPluginInfo();
+	BOOL lbPsi2 /*= FALSE*/;
+	BOOL lbPsi3;
+	PluginStartupInfo psi3;
+	FarStandardFunctions FSF3;
+	Far2::PluginStartupInfo psi2;
+	Far2::FarStandardFunctions FSF2;
+
+
+	Far2::FARAPIADVCONTROL FarApiAdvControlExp;
+	Far2::FARAPICMPNAME FarApiCmpNameExp;
+	Far2::FARAPICONTROL FarApiControlExp;
+	Far2::FARAPIDEFDLGPROC FarApiDefDlgProcExp;
+	Far2::FARAPIDIALOGFREE FarApiDialogFreeExp;
+	Far2::FARAPIDIALOGINIT FarApiDialogInitExp;
+	Far2::FARAPIDIALOGRUN FarApiDialogRunExp;
+	Far2::FARAPIEDITOR FarApiEditorExp;
+	Far2::FARAPIEDITORCONTROL FarApiEditorControlExp;
+	Far2::FARAPIFILEFILTERCONTROL FarApiFileFilterControlExp;
+	Far2::FARAPIFREEDIRLIST FarApiFreeDirListExp;
+	Far2::FARAPIFREEPLUGINDIRLIST FarApiFreePluginDirListExp;
+	Far2::FARAPIGETDIRLIST FarApiGetDirListExp;
+	Far2::FARAPIGETMSG FarApiGetMsgExp;
+	Far2::FARAPIGETPLUGINDIRLIST FarApiGetPluginDirListExp;
+	Far2::FARAPIINPUTBOX FarApiInputBoxExp;
+	Far2::FARAPIMENU FarApiMenuExp;
+	Far2::FARAPIMESSAGE FarApiMessageExp;
+	Far2::FARAPIPLUGINSCONTROL FarApiPluginsControlExp;
+	Far2::FARAPIREGEXPCONTROL FarApiRegExpControlExp;
+	Far2::FARAPIRESTORESCREEN FarApiRestoreScreenExp;
+	Far2::FARAPISAVESCREEN FarApiSaveScreenExp;
+	Far2::FARAPISENDDLGMESSAGE FarApiSendDlgMessageExp;
+	Far2::FARAPISHOWHELP FarApiShowHelpExp;
+	Far2::FARAPITEXT FarApiTextExp;
+	Far2::FARAPIVIEWER FarApiViewerExp;
+	Far2::FARAPIVIEWERCONTROL FarApiViewerControlExp;
+	Far2::FARCONVERTPATH FarConvertPathExp;
+	Far2::FARGETCURRENTDIRECTORY FarGetCurrentDirectoryExp;
+	Far2::FARGETREPARSEPOINTINFO FarGetReparsePointInfoExp;
+	Far2::FARSTDGETFILEOWNER FarStdGetFileOwnerExp;
+	Far2::FARSTDGETPATHROOT FarStdGetPathRootExp;
+	Far2::FARSTDMKLINK FarStdMkLinkExp;
+	Far2::FARSTDMKTEMP FarStdMkTempExp;
+	Far2::FARSTDPROCESSNAME FarStdProcessNameExp;
+	Far2::FARSTDRECURSIVESEARCH FarStdRecursiveSearchExp;
+	Far2::FARSTDXLAT FarStdXlatExp;
+
+
+/* ******************************** */
+
+	// Ctors
+	WrapPluginInfo(Far3WrapFunctions *pInfo2);
 	~WrapPluginInfo();
+
+	BOOL LoadPlugin(BOOL abSilent);
+	void LoadPluginInfo();
 
 	void UnloadPlugin();
 	void ClearProcAddr();
 
 	KeyBarTitles* KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar);
 
-	//static int WINAPI SeekForPlugin(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param);
+	static int OpMode_3_2(OPERATION_MODES OpMode3);
+	static int OpenFrom_3_2(OPENFROM OpenFrom3);
+	static OPENPANELINFO_FLAGS OpenPanelInfoFlags_2_3(DWORD Flags2);
+	static Far2::OPENPLUGININFO_SORTMODES SortMode_3_2(OPENPANELINFO_SORTMODES Mode3);
+	static OPENPANELINFO_SORTMODES SortMode_2_3(/*Far2::OPENPLUGININFO_SORTMODES*/int Mode2);
+	static PLUGINPANELITEMFLAGS PluginPanelItemFlags_2_3(DWORD Flags2);
+	static DWORD PluginPanelItemFlags_3_2(PLUGINPANELITEMFLAGS Flags3);
+	static void PluginPanelItem_2_3(const Far2::PluginPanelItem* p2, PluginPanelItem* p3);
+	PluginPanelItem* PluginPanelItems_2_3(const Far2::PluginPanelItem* pItems, int ItemsNumber);
+	static void PluginPanelItem_3_2(const PluginPanelItem* p3, Far2::PluginPanelItem* p2);
+	static void PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2);
+	static void PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPanelItem *p3);
+	Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber);
+	void FarKey_2_3(int Key2, INPUT_RECORD *r);
+	DWORD FarKey_3_2(const INPUT_RECORD *Rec);
+	static FARDIALOGITEMTYPES DialogItemTypes_2_3(int ItemType2);
+	static int DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3);
+	static DWORD FarDialogItemFlags_3_2(FarDialogItemFlags Flags3);
+	static FarDialogItemFlags FarDialogItemFlags_2_3(DWORD Flags2);
+	void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3);
+	void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2);
+	void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3);
+	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2);
+	LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2, const int Param1, LONG_PTR Param2);
+	Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Param2);
+	void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc);
+	InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber);
+	PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber);
+	static LPCWSTR FormatGuid(GUID* guid, wchar_t* tmp);
 
 
-	// Changed functions
-	static LONG_PTR WINAPI FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
-	static LONG_PTR WINAPI FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
-	static BOOL WINAPI FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags);
-	static HANDLE WINAPI FarApiSaveScreen(int X1, int Y1, int X2, int Y2);
-	static void WINAPI FarApiRestoreScreen(HANDLE hScreen);
-	static void WINAPI FarApiText(int X, int Y, int Color, const wchar_t *Str);
-	static int WINAPI FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage);
-	static int WINAPI FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage);
-	static int WINAPI FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber);
-	static int WINAPI FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber);
-	static HANDLE WINAPI FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param);
-	static int WINAPI FarApiDialogRun(HANDLE hDlg);
-	static void WINAPI FarApiDialogFree(HANDLE hDlg);
-	static int WINAPI FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2);
-	static int WINAPI FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber);
-	static void WINAPI FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber);
-	static int WINAPI FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber);
-	static void WINAPI FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber);
-	static int WINAPI FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath);
-	static const wchar_t* WINAPI FarApiGetMsg(INT_PTR PluginNumber, int MsgId);
-	static INT_PTR WINAPI FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param);
-	static int WINAPI FarApiViewerControl(int Command, void *Param);
-	static int WINAPI FarApiEditorControl(int Command, void *Param);
-	static int WINAPI FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags);
-	static int WINAPI FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
-	static int WINAPI FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
-	static int WINAPI FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param);
-	//struct int WINAPIV FARSTDSPRINTF(wchar_t *Buffer,const wchar_t *Format,...);
-	//struct int WINAPIV FARSTDSNPRINTF(wchar_t *Buffer,size_t Sizebuf,const wchar_t *Format,...);
-	//struct int WINAPIV FARSTDSSCANF(const wchar_t *Buffer, const wchar_t *Format,...);
-	//struct void WINAPI FARSTDQSORT(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
-	//struct void WINAPI FARSTDQSORTEX(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam);
-	//struct void   *WINAPI FARSTDBSEARCH(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
-	static int WINAPI FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size);
-	//struct int WINAPI FARSTDGETNUMBEROFLINKS(const wchar_t *Name);
-	//struct int WINAPI FARSTDATOI(const wchar_t *s);
-	//struct __int64 WINAPI FARSTDATOI64(const wchar_t *s);
-	//struct wchar_t   *WINAPI FARSTDITOA64(__int64 value, wchar_t *string, int radix);
-	//struct wchar_t   *WINAPI FARSTDITOA(int value, wchar_t *string, int radix);
-	//struct wchar_t   *WINAPI FARSTDLTRIM(wchar_t *Str);
-	//struct wchar_t   *WINAPI FARSTDRTRIM(wchar_t *Str);
-	//struct wchar_t   *WINAPI FARSTDTRIM(wchar_t *Str);
-	//struct wchar_t   *WINAPI FARSTDTRUNCSTR(wchar_t *Str,int MaxLength);
-	//struct wchar_t   *WINAPI FARSTDTRUNCPATHSTR(wchar_t *Str,int MaxLength);
-	//struct wchar_t   *WINAPI FARSTDQUOTESPACEONLY(wchar_t *Str);
-	//struct const wchar_t*WINAPI FARSTDPOINTTONAME(const wchar_t *Path);
-	static int WINAPI FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize);
-	//struct BOOL WINAPI FARSTDADDENDSLASH(wchar_t *Path);
-	//struct int WINAPI FARSTDCOPYTOCLIPBOARD(const wchar_t *Data);
-	//struct wchar_t *WINAPI FARSTDPASTEFROMCLIPBOARD(void);
-	//struct int WINAPI FARSTDINPUTRECORDTOKEY(const INPUT_RECORD *r);
-	//struct int WINAPI FARSTDLOCALISLOWER(wchar_t Ch);
-	//struct int WINAPI FARSTDLOCALISUPPER(wchar_t Ch);
-	//struct int WINAPI FARSTDLOCALISALPHA(wchar_t Ch);
-	//struct int WINAPI FARSTDLOCALISALPHANUM(wchar_t Ch);
-	//struct wchar_t WINAPI FARSTDLOCALUPPER(wchar_t LowerChar);
-	//struct wchar_t WINAPI FARSTDLOCALLOWER(wchar_t UpperChar);
-	//struct void WINAPI FARSTDLOCALUPPERBUF(wchar_t *Buf,int Length);
-	//struct void WINAPI FARSTDLOCALLOWERBUF(wchar_t *Buf,int Length);
-	//struct void WINAPI FARSTDLOCALSTRUPR(wchar_t *s1);
-	//struct void WINAPI FARSTDLOCALSTRLWR(wchar_t *s1);
-	//struct int WINAPI FARSTDLOCALSTRICMP(const wchar_t *s1,const wchar_t *s2);
-	//struct int WINAPI FARSTDLOCALSTRNICMP(const wchar_t *s1,const wchar_t *s2,int n);
-	static wchar_t* WINAPI FarStdXlat(wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
+/* ******************************** */
+
+	static void   WINAPI SetStartupInfoWrap(struct WrapPluginInfo* wpi, PluginStartupInfo *Info);
+	       void          SetStartupInfoW3  (PluginStartupInfo *Info);
+	static void   WINAPI GetGlobalInfoWrap(struct WrapPluginInfo* wpi, GlobalInfo *Info);
+	       void          GetGlobalInfoW3  (GlobalInfo *Info);
+	static void   WINAPI GetPluginInfoWrap(struct WrapPluginInfo* wpi, PluginInfo *Info);
+	       void          GetPluginInfoW3  (PluginInfo *Info);
+	static HANDLE WINAPI OpenWrap(struct WrapPluginInfo* wpi, const OpenInfo *Info);
+	       HANDLE        OpenW3  (const OpenInfo *Info);
+	static int    WINAPI AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
+	       int           AnalyseW3  (const AnalyseInfo *Info);
+	static void   WINAPI ClosePanelWrap(struct WrapPluginInfo* wpi, HANDLE hPanel);
+	       void          ClosePanelW3  (HANDLE hPanel);
+	static int    WINAPI CompareWrap(struct WrapPluginInfo* wpi, const CompareInfo *Info);
+	       int           CompareW3  (const CompareInfo *Info);
+	static int    WINAPI ConfigureWrap(struct WrapPluginInfo* wpi, const GUID* Guid);
+	       int           ConfigureW3  (const GUID* Guid);
+	static int    WINAPI DeleteFilesWrap(struct WrapPluginInfo* wpi, const DeleteFilesInfo *Info);
+	       int           DeleteFilesW3  (const DeleteFilesInfo *Info);
+	static void   WINAPI ExitFARWrap(struct WrapPluginInfo* wpi);
+	       void          ExitFARW3  (void);
+	static void   WINAPI FreeVirtualFindDataWrap(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info);
+	       void          FreeVirtualFindDataW3  (const FreeFindDataInfo *Info);
+	static int    WINAPI GetFilesWrap(struct WrapPluginInfo* wpi, GetFilesInfo *Info);
+	       int           GetFilesW3  (GetFilesInfo *Info);
+	static int    WINAPI GetFindDataWrap(struct WrapPluginInfo* wpi, GetFindDataInfo *Info);
+	       int           GetFindDataW3  (GetFindDataInfo *Info);
+	static void   WINAPI FreeFindDataWrap(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info);
+	       void          FreeFindDataW3  (const FreeFindDataInfo *Info);
+	static void   WINAPI GetOpenPanelInfoWrap(struct WrapPluginInfo* wpi, OpenPanelInfo *Info);
+	       void          GetOpenPanelInfoW3  (OpenPanelInfo *Info);
+	static int    WINAPI GetVirtualFindDataWrap(struct WrapPluginInfo* wpi, GetVirtualFindDataInfo *Info);
+	       int           GetVirtualFindDataW3  (GetVirtualFindDataInfo *Info);
+	static int    WINAPI MakeDirectoryWrap(struct WrapPluginInfo* wpi, MakeDirectoryInfo *Info);
+	       int           MakeDirectoryW3  (MakeDirectoryInfo *Info);
+	static int    WINAPI ProcessDialogEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
+	       int           ProcessDialogEventW3  (int Event,void *Param);
+	static int    WINAPI ProcessEditorEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
+	       int           ProcessEditorEventW3  (int Event,void *Param);
+	static int    WINAPI ProcessEditorInputWrap(struct WrapPluginInfo* wpi, const ProcessEditorInputInfo *Info);
+	       int           ProcessEditorInputW3  (const ProcessEditorInputInfo *Info);
+	static int    WINAPI ProcessEventWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,int Event,void *Param);
+	       int           ProcessEventW3  (HANDLE hPanel,int Event,void *Param);
+	static int    WINAPI ProcessHostFileWrap(struct WrapPluginInfo* wpi, const ProcessHostFileInfo *Info);
+	       int           ProcessHostFileW3  (const ProcessHostFileInfo *Info);
+	static int    WINAPI ProcessPanelInputWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
+	       int           ProcessPanelInputW3  (HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
+	static int    WINAPI ProcessConsoleInputWrap(struct WrapPluginInfo* wpi, ProcessConsoleInputInfo *Info);
+	       int           ProcessConsoleInputW3  (ProcessConsoleInputInfo *Info);
+	static int    WINAPI ProcessSynchroEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
+	       int           ProcessSynchroEventW3  (int Event,void *Param);
+	static int    WINAPI ProcessViewerEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
+	       int           ProcessViewerEventW3  (int Event,void *Param);
+	static int    WINAPI PutFilesWrap(struct WrapPluginInfo* wpi, const PutFilesInfo *Info);
+	       int           PutFilesW3  (const PutFilesInfo *Info);
+	static int    WINAPI SetDirectoryWrap(struct WrapPluginInfo* wpi, const SetDirectoryInfo *Info);
+	       int           SetDirectoryW3  (const SetDirectoryInfo *Info);
+	static int    WINAPI SetFindListWrap(struct WrapPluginInfo* wpi, const SetFindListInfo *Info);
+	       int           SetFindListW3  (const SetFindListInfo *Info);
+	static int    WINAPI GetCustomDataWrap(struct WrapPluginInfo* wpi, const wchar_t *FilePath, wchar_t **CustomData);
+	       int    WINAPI GetCustomDataW3  (const wchar_t *FilePath, wchar_t **CustomData);
+	static void   WINAPI FreeCustomDataWrap(struct WrapPluginInfo* wpi, wchar_t *CustomData);
+	       void   WINAPI FreeCustomDataW3  (wchar_t *CustomData);
+
+
+/* ******************************** */
+
+	// Some internal typedefs
 	struct RecSearchUserFnArg
 	{
 		Far2::FRSUSERFUNC UserFn2;
 		void *Param2;
 	};
 	static int WINAPI RecSearchUserFn(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param);
-	static void WINAPI FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
-	static int WINAPI FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix);
-	static int WINAPI FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags);
-	static int WINAPI FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags);
-	static int WINAPI FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize);
-	static int WINAPI FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize);
-	static DWORD WINAPI FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer);
 
+	// Changed functions
+	static LONG_PTR WINAPI FarApiDefDlgProcWrap(WrapPluginInfo* wpi, HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
+	       LONG_PTR        FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
+	static LONG_PTR WINAPI FarApiSendDlgMessageWrap(WrapPluginInfo* wpi, HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
+	       LONG_PTR        FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
+	static BOOL WINAPI FarApiShowHelpWrap(WrapPluginInfo* wpi, const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags);
+	       BOOL        FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags);
+	static HANDLE WINAPI FarApiSaveScreenWrap(WrapPluginInfo* wpi, int X1, int Y1, int X2, int Y2);
+	       HANDLE        FarApiSaveScreen(int X1, int Y1, int X2, int Y2);
+	static void WINAPI FarApiRestoreScreenWrap(WrapPluginInfo* wpi, HANDLE hScreen);
+	       void        FarApiRestoreScreen(HANDLE hScreen);
+	static void WINAPI FarApiTextWrap(WrapPluginInfo* wpi, int X, int Y, int Color, const wchar_t *Str);
+	       void        FarApiText(int X, int Y, int Color, const wchar_t *Str);
+	static int WINAPI FarApiEditorWrap(WrapPluginInfo* wpi, const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage);
+	       int        FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage);
+	static int WINAPI FarApiViewerWrap(WrapPluginInfo* wpi, const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage);
+	       int        FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage);
+	static int WINAPI FarApiMenuWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber);
+	       int        FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber);
+	static int WINAPI FarApiMessageWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber);
+	       int        FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber);
+	static HANDLE WINAPI FarApiDialogInitWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param);
+	       HANDLE        FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param);
+	static int WINAPI FarApiDialogRunWrap(WrapPluginInfo* wpi, HANDLE hDlg);
+	       int        FarApiDialogRun(HANDLE hDlg);
+	static void WINAPI FarApiDialogFreeWrap(WrapPluginInfo* wpi, HANDLE hDlg);
+	       void        FarApiDialogFree(HANDLE hDlg);
+	static int WINAPI FarApiControlWrap(WrapPluginInfo* wpi, HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2);
+	       int        FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2);
+	static int WINAPI FarApiGetDirListWrap(WrapPluginInfo* wpi, const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber);
+	       int        FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber);
+	static void WINAPI FarApiFreeDirListWrap(WrapPluginInfo* wpi, struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber);
+	       void        FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber);
+	static int WINAPI FarApiGetPluginDirListWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber);
+	       int        FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber);
+	static void WINAPI FarApiFreePluginDirListWrap(WrapPluginInfo* wpi, struct Far2::PluginPanelItem *PanelItem, int nItemsNumber);
+	       void        FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber);
+	static int WINAPI FarApiCmpNameWrap(WrapPluginInfo* wpi, const wchar_t *Pattern, const wchar_t *String, int SkipPath);
+	       int        FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath);
+	static LPCWSTR WINAPI FarApiGetMsgWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, int MsgId);
+	       LPCWSTR        FarApiGetMsg(INT_PTR PluginNumber, int MsgId);
+	static INT_PTR WINAPI FarApiAdvControlWrap(WrapPluginInfo* wpi, INT_PTR ModuleNumber, int Command, void *Param);
+	       INT_PTR        FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param);
+	static int WINAPI FarApiViewerControlWrap(WrapPluginInfo* wpi, int Command, void *Param);
+	       int        FarApiViewerControl(int Command, void *Param);
+	static int WINAPI FarApiEditorControlWrap(WrapPluginInfo* wpi, int Command, void *Param);
+	       int        FarApiEditorControl(int Command, void *Param);
+	static int WINAPI FarApiInputBoxWrap(WrapPluginInfo* wpi, const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags);
+	       int        FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags);
+	static int WINAPI FarApiPluginsControlWrap(WrapPluginInfo* wpi, HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
+	       int        FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
+	static int WINAPI FarApiFileFilterControlWrap(WrapPluginInfo* wpi, HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
+	       int        FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2);
+	static int WINAPI FarApiRegExpControlWrap(WrapPluginInfo* wpi, HANDLE hHandle, int Command, LONG_PTR Param);
+	       int        FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param);
+	static int WINAPI FarStdGetFileOwnerWrap(WrapPluginInfo* wpi, const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size);
+	       int        FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size);
+	static int WINAPI FarStdGetPathRootWrap(WrapPluginInfo* wpi, const wchar_t *Path,wchar_t *Root, int DestSize);
+	       int        FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize);
+	static wchar_t* WINAPI FarStdXlatWrap(WrapPluginInfo* wpi, wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
+	       wchar_t*        FarStdXlatW3(wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
+	static void WINAPI FarStdRecursiveSearchWrap(WrapPluginInfo* wpi, const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
+	       void        FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
+	static int WINAPI FarStdMkTempWrap(WrapPluginInfo* wpi, wchar_t *Dest, DWORD size, const wchar_t *Prefix);
+	       int        FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix);
+	static int WINAPI FarStdProcessNameWrap(WrapPluginInfo* wpi, const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags);
+	       int        FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags);
+	static int WINAPI FarStdMkLinkWrap(WrapPluginInfo* wpi, const wchar_t *Src,const wchar_t *Dest,DWORD Flags);
+	       int        FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags);
+	static int WINAPI FarConvertPathWrap(WrapPluginInfo* wpi, enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize);
+	       int        FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize);
+	static int WINAPI FarGetReparsePointInfoWrap(WrapPluginInfo* wpi, const wchar_t *Src, wchar_t *Dest,int DestSize);
+	       int        FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize);
+	static DWORD WINAPI FarGetCurrentDirectoryWrap(WrapPluginInfo* wpi, DWORD Size,wchar_t* Buffer);
+	       DWORD        FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer);
+
+
+/* ******************************** */
 
 	// Exported Far2(!) Function
 	typedef int    (WINAPI* _AnalyseW)(const struct AnalyseInfo *Info);
@@ -399,11 +502,594 @@ struct WrapPluginInfo
 	_SetFindListW SetFindListW;
 	typedef void   (WINAPI* _SetStartupInfoW)(const Far2::PluginStartupInfo *Info);
 	_SetStartupInfoW SetStartupInfoW;
+	typedef int (WINAPI* _GetCustomDataW)(const wchar_t *FilePath, wchar_t **CustomData);
+	_GetCustomDataW GetCustomDataW;
+	typedef void (WINAPI* _FreeCustomDataW)(wchar_t *CustomData);
+	_FreeCustomDataW FreeCustomDataW;
 	// End of Exported Far2(!) Function
 };
-WrapPluginInfo* wpi = NULL;
+//WrapPluginInfo* wpi = NULL;
 
-int OpMode_3_2(OPERATION_MODES OpMode3)
+
+WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
+{
+	mh_Loader = pInfo2->hLoader;
+	mh_Dll = NULL;
+	mn_OldAbsentFunctions = mn_NewAbsentFunctions = 0;
+	ms_PluginDll[0] = ms_IniFile[0] = ms_Title[0] = ms_Desc[0] = ms_Author[0] = ms_RegRoot[0] = ms_File[0] = 0;
+	memset(&m_Version, 0, sizeof(m_Version));
+	memset(&mguid_Plugin, 0, sizeof(mguid_Plugin));
+	memset(&mguid_Dialogs, 0, sizeof(mguid_Dialogs));
+	mn_PluginMenu = mn_PluginDisks = mn_PluginConfig = 0;
+	mguids_PluginMenu = mguids_PluginDisks = mguids_PluginConfig = NULL;
+	memset(&m_Info, 0, sizeof(m_Info));
+	m_InfoLines = NULL; m_InfoLinesNumber = 0;
+	m_PanelModesArray = NULL; m_PanelModesNumber = 0;
+	m_KeyBar.CountLabels = 0; m_KeyBar.Labels = m_KeyBarLabels;
+	m_LastFar2Dlg = NULL;
+	m_OldPutFilesParams = 0;
+	m_AnalyzeMode = 2;
+	ZeroStruct(m_ListItems2); ZeroStruct(m_ListItems3);
+	ZeroStruct(m_GetDlgItem);
+
+	gnMsg_2 = 0; gnParam1_2 = 0; gnParam1_3 = 0;
+	gnMsg_3 = DM_FIRST;
+	gnMsgKey_3 = DM_FIRST; gnMsgClose_3 = DM_FIRST;
+	gnParam2_2 = 0;
+	gpParam2_3 = NULL;
+	gpListItems3 = NULL; gnListItemsMax3 = 0;
+	gpListItems2 = NULL; gnListItemsMax2 = 0;
+
+	lbPsi2 = FALSE;
+	lbPsi3 = FALSE;
+	ZeroStruct(psi3);
+	ZeroStruct(FSF3);
+	ZeroStruct(psi2);
+	ZeroStruct(FSF2);
+
+	ClearProcAddr();
+	mp_Analyze = NULL;
+
+	m_ErrorInfo = pInfo2->ErrorInfo;
+	m_ErrorInfoMax = pInfo2->ErrorInfoMax;
+
+	#undef SET_FN
+	#define SET_FN(n) n##Exp = pInfo2->n
+	SET_FN(FarApiAdvControl);
+	SET_FN(FarApiCmpName);
+	SET_FN(FarApiControl);
+	SET_FN(FarApiDefDlgProc);
+	SET_FN(FarApiDialogFree);
+	SET_FN(FarApiDialogInit);
+	SET_FN(FarApiDialogRun);
+	SET_FN(FarApiEditor);
+	SET_FN(FarApiEditorControl);
+	SET_FN(FarApiFileFilterControl);
+	SET_FN(FarApiFreeDirList);
+	SET_FN(FarApiFreePluginDirList);
+	SET_FN(FarApiGetDirList);
+	SET_FN(FarApiGetMsg);
+	SET_FN(FarApiGetPluginDirList);
+	SET_FN(FarApiInputBox);
+	SET_FN(FarApiMenu);
+	SET_FN(FarApiMessage);
+	SET_FN(FarApiPluginsControl);
+	SET_FN(FarApiRegExpControl);
+	SET_FN(FarApiRestoreScreen);
+	SET_FN(FarApiSaveScreen);
+	SET_FN(FarApiSendDlgMessage);
+	SET_FN(FarApiShowHelp);
+	SET_FN(FarApiText);
+	SET_FN(FarApiViewer);
+	SET_FN(FarApiViewerControl);
+	SET_FN(FarConvertPath);
+	SET_FN(FarGetCurrentDirectory);
+	SET_FN(FarGetReparsePointInfo);
+	SET_FN(FarStdGetFileOwner);
+	SET_FN(FarStdGetPathRoot);
+	SET_FN(FarStdMkLink);
+	SET_FN(FarStdMkTemp);
+	SET_FN(FarStdProcessName);
+	SET_FN(FarStdRecursiveSearch);
+	SET_FN(FarStdXlat);
+	#undef SET_FN
+};
+
+WrapPluginInfo::~WrapPluginInfo()
+{
+	if (m_ListItems2.Items)
+	{
+		free(m_ListItems2.Items);
+		m_ListItems2.Items = NULL;
+	}
+	if (m_ListItems3.Items)
+	{
+		free(m_ListItems3.Items);
+		m_ListItems3.Items = NULL;
+	}
+	if (mguids_PluginMenu)
+		free(mguids_PluginMenu);
+	if (mguids_PluginDisks)
+		free(mguids_PluginDisks);
+	if (mguids_PluginConfig)
+		free(mguids_PluginConfig);
+	if (mp_Analyze)
+		free(mp_Analyze);
+	if (m_InfoLines)
+		free(m_InfoLines);
+	if (m_PanelModesArray)
+		free(m_PanelModesArray);
+	_ASSERTE(m_KeyBar.Labels==m_KeyBarLabels);
+	if (m_GetDlgItem.Item)
+		free(m_GetDlgItem.Item);
+}
+
+void WrapPluginInfo::LoadPluginInfo()
+{
+	BOOL lbRc = FALSE;
+	wchar_t szSelf[MAX_PATH+1]; szSelf[0] = 0;
+	wchar_t szIni[MAX_PATH+1], szTemp[2048];
+	
+	if (GetModuleFileName(mh_Loader, szSelf, ARRAYSIZE(szSelf)-4))
+	{
+		GUID tmpGuid = {0}; wchar_t szTmp[64];
+		HANDLE hIniFile = NULL;
+		BOOL lbNewIniFile = FALSE;
+		lstrcpy(szIni, szSelf);
+		wchar_t* pszSelfName = wcsrchr(szSelf, L'\\');
+		if (pszSelfName) pszSelfName++; else pszSelfName = szSelf;
+		wchar_t* pszSlash = wcsrchr(szIni, L'\\');
+		wchar_t* pszFilePtr = NULL;
+		if (!pszSlash) pszSlash = szIni;
+		wchar_t* pszDot = wcsrchr(pszSlash, L'.');
+		if (pszDot)
+			*pszDot = 0;
+		lstrcat(szIni, L".ini");
+		lstrcpy(ms_IniFile, szIni);
+
+		
+		lstrcpy(ms_PluginDll, szSelf);
+		pszSlash = wcsrchr(ms_PluginDll, L'\\');
+		//if (pszSlash) pszSlash++; else pszSlash = PluginDll;
+		pszFilePtr = pszSlash ? (pszSlash+1) : ms_PluginDll;
+		hIniFile = CreateFile(szIni, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+		if (hIniFile == INVALID_HANDLE_VALUE)
+		{
+			hIniFile = CreateFile(szIni, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (hIniFile != INVALID_HANDLE_VALUE)
+			{
+				CloseHandle(hIniFile);
+				// OK, создали, теперь нужно сформировать информацию по старому плагину
+				lbNewIniFile = TRUE;
+				//if (pszSlash) *pszSlash = 0;
+				//FSF3.FarRecursiveSearch(PluginDll, L"*.dll", WrapPluginInfo::SeekForPlugin,
+				//	(FRSMODE)0, this);
+				//if (pszSlash) *pszSlash = L'\\';
+			}
+		}
+		else
+		{
+			CloseHandle(hIniFile);
+		}
+
+		if (!lbNewIniFile)
+		{
+			if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszFilePtr, ARRAYSIZE(ms_PluginDll)-lstrlen(ms_PluginDll), szIni))
+			{
+				//PluginDll[0] = 0;
+				lbNewIniFile = TRUE;
+			}
+			else
+				lstrcpyn(ms_File, pszFilePtr, ARRAYSIZE(ms_File));
+		}
+
+		if (lbNewIniFile)
+		{
+			
+			WIN32_FIND_DATA fnd;
+			HMODULE hTestDll = NULL;
+			FARPROC lpSetStartupInfoW = NULL, lpGetGlobalInfoW = NULL; // просто для информации, звать их нельзя
+			HANDLE hFind = NULL;
+			for (int i = 0; !hTestDll && i <= 1; i++)
+			{
+				lstrcpy(pszFilePtr, i ? L"*.dl_" : L"*.dll");
+				hFind = FindFirstFile(ms_PluginDll, &fnd);
+				if (hFind && (hFind != INVALID_HANDLE_VALUE))
+				{
+					*pszFilePtr = 0;
+					int nLen = ARRAYSIZE(ms_PluginDll)-lstrlen(ms_PluginDll);
+					do {
+						if ((fnd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+							continue;
+						if (lstrcmpi(pszSelfName, fnd.cFileName) == 0)
+							continue; // это мы
+						lstrcpy(pszFilePtr, fnd.cFileName);
+						hTestDll = LoadLibraryEx(ms_PluginDll, NULL, DONT_RESOLVE_DLL_REFERENCES|LOAD_WITH_ALTERED_SEARCH_PATH);
+						if (hTestDll)
+						{
+							lpSetStartupInfoW = GetProcAddress(hTestDll, "SetStartupInfoW");
+							lpGetGlobalInfoW = GetProcAddress(hTestDll, "GetGlobalInfoW");
+							FreeLibrary(hTestDll);
+							if (lpSetStartupInfoW && !lpGetGlobalInfoW)
+								break; // Да, это Far2 плагин!
+							hTestDll = NULL; // продолжаем поиск
+						}
+					} while (FindNextFile(hFind, &fnd));
+					FindClose(hFind);
+				}
+			}
+
+			if (hTestDll)
+			{
+				lstrcpyn(ms_File, pszFilePtr, ARRAYSIZE(ms_File));
+				// OK, Инициализируем .ini файл
+				DWORD dwErr = 0;
+				BOOL lb = WritePrivateProfileString(L"Plugin", L"PluginFile", pszFilePtr, szIni);
+				if (!lb)
+					dwErr = GetLastError();
+				lb = WritePrivateProfileString(L"Plugin", L"DisabledFunctions", L"0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"AnalyzeMode", L"2", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"OldPutFilesParams", L"0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Title", pszFilePtr, szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Description", pszFilePtr, szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Author", L"<Unknown>", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szIni);
+				// Начальные GUID-ы
+				UuidCreate(&tmpGuid);
+				lb = WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&tmpGuid, szTmp), szIni);
+				UuidCreate(&tmpGuid);
+				lb = WritePrivateProfileString(L"Plugin", L"DialogsGUID", FormatGuid(&tmpGuid, szTmp), szIni);
+			}
+			else
+			{
+				ms_File[0] = 0;
+			}
+		}
+
+		if (hIniFile && (hIniFile != INVALID_HANDLE_VALUE))
+		{
+			//if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszFilePtr, ARRAYSIZE(PluginDll)-lstrlen(PluginDll), szIni))
+			//	PluginDll[0] = 0;
+			//else
+			//	lstrcpyn(File, pszFilePtr, ARRAYSIZE(File));
+
+			mn_OldAbsentFunctions = GetPrivateProfileInt(L"Plugin", L"DisabledFunctions", 0, szIni);
+
+			m_AnalyzeMode = GetPrivateProfileInt(L"Plugin", L"AnalyzeMode", 2, szIni);
+			if (m_AnalyzeMode != 1 && m_AnalyzeMode != 2)
+				m_AnalyzeMode = 2;
+
+			m_OldPutFilesParams = GetPrivateProfileInt(L"Plugin", L"OldPutFilesParams", 0, szIni);
+			if (m_OldPutFilesParams != 0 && m_OldPutFilesParams != 1)
+				m_OldPutFilesParams = 0;
+			
+			if (GetPrivateProfileString(L"Plugin", L"Title", L"Sample Far3 plugin", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(ms_Title, szTemp, ARRAYSIZE(ms_Title));
+			if (GetPrivateProfileString(L"Plugin", L"Description", L"Far2->Far3 plugin wrapper", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(ms_Desc, szTemp, ARRAYSIZE(ms_Desc));
+			if (GetPrivateProfileString(L"Plugin", L"Author", L"Maximus5", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(ms_Author, szTemp, ARRAYSIZE(ms_Author));
+			if (GetPrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(ms_RegRoot, szTemp, ARRAYSIZE(ms_RegRoot));
+			if (GetPrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				//TODO: Обработка версии
+			}
+			GUID guid;
+			if (GetPrivateProfileString(L"Plugin", L"GUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
+					mguid_Plugin = guid;
+				else
+				{
+					UuidCreate(&mguid_Plugin);
+					WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&mguid_Plugin, szTmp), szIni);
+				}
+			}
+			if (GetPrivateProfileString(L"Plugin", L"DialogsGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
+					mguid_Dialogs = guid;
+				else
+				{
+					UuidCreate(&mguid_Dialogs);
+					WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&mguid_Dialogs, szTmp), szIni);
+				}
+			}
+			lbRc = TRUE;
+		}
+	}
+	
+	if (!lbRc)
+	{
+		lstrcpyn(ms_Title, szSelf[0] ? szSelf : L"Far3Wrap", ARRAYSIZE(ms_Title));
+		lstrcpy(ms_Desc, L"Far2->Far3 plugin wrapper");
+		lstrcpy(ms_Author, L"Maximus5");
+		lstrcpy(ms_RegRoot, L"Software\\Far Manager\\Plugins");
+		UuidCreate(&mguid_Plugin);
+		UuidCreate(&mguid_Dialogs);
+		//mguid_Plugin = guid_DefPlugin;
+		//guid_PluginMenu = ::guid_DefPluginMenu;
+		//guid_PluginConfigMenu = ::guid_DefPluginConfigMenu;
+		//guid_Dialogs = ::guid_DefDialogs;
+	}
+}
+
+BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
+{
+	#ifdef _DEBUG
+	void *p1 = NULL, *p2 = NULL;
+	#endif
+
+	if (!*ms_PluginDll)
+	{
+		return FALSE;
+	}
+	
+	if (mh_Dll == NULL)
+	{
+		//wchar_t szOldDir[MAX_PATH] = {0};
+		//GetCurrentDirectory(ARRAYSIZE(szOldDir), szOldDir);
+		//wchar_t* pszSlash = wcsrchr(PluginDll, L'\\');
+		//if (pszSlash)
+		//{
+		//	*pszSlash = 0;
+		//	SetCurrentDirectory(PluginDll);
+		//	*pszSlash = L'\\';
+		//}
+		DWORD dwErr = 0;
+		wchar_t szInfo[1024] = {0};
+
+		if (wcschr(ms_PluginDll, L'*'))
+			wsprintf(szInfo, L"Far3Wrap\nPlugin module not found: \n%s", ms_PluginDll);
+		else
+		{
+			if (wcschr(ms_PluginDll, L'\\'))
+				mh_Dll = LoadLibraryEx(ms_PluginDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+			else
+				mh_Dll = LoadLibrary(ms_PluginDll);
+			dwErr = GetLastError();
+		}
+		//if (pszSlash)
+		//	SetCurrentDirectory(szOldDir);
+		if (mh_Dll == NULL)
+		{
+			//TODO: Обработка ошибок загрузки
+			if (szInfo[0] == 0)
+			{
+				wsprintf(szInfo, L"Far3Wrap\nPlugin loading failed!\n%s\nErrCode=0x%08X\n", ms_PluginDll, dwErr);
+				FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwErr,
+					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), szInfo+lstrlen(szInfo),
+					ARRAYSIZE(szInfo)-lstrlen(szInfo) - 1, NULL);
+			}
+			if (abSilent)
+			{
+				if (m_ErrorInfo && m_ErrorInfoMax > 0)
+					lstrcpyn(m_ErrorInfo, szInfo, m_ErrorInfoMax);
+			}
+			else
+			{
+				MessageBox(NULL, szInfo, L"Far3Wrapper", MB_ICONSTOP|MB_SYSTEMMODAL);
+			}
+		}
+		else
+		{
+			AnalyseW = (WrapPluginInfo::_AnalyseW)GetProcAddress(mh_Dll, "AnalyseW");
+			ClosePluginW = (WrapPluginInfo::_ClosePluginW)GetProcAddress(mh_Dll, "ClosePluginW");
+			CompareW = (WrapPluginInfo::_CompareW)GetProcAddress(mh_Dll, "CompareW");
+			ConfigureW = (WrapPluginInfo::_ConfigureW)GetProcAddress(mh_Dll, "ConfigureW");
+			DeleteFilesW = (WrapPluginInfo::_DeleteFilesW)GetProcAddress(mh_Dll, "DeleteFilesW");
+			ExitFARW = (WrapPluginInfo::_ExitFARW)GetProcAddress(mh_Dll, "ExitFARW");
+			FreeFindDataW = (WrapPluginInfo::_FreeFindDataW)GetProcAddress(mh_Dll, "FreeFindDataW");
+			FreeVirtualFindDataW = (WrapPluginInfo::_FreeVirtualFindDataW)GetProcAddress(mh_Dll, "FreeVirtualFindDataW");
+			GetFilesW = (WrapPluginInfo::_GetFilesW)GetProcAddress(mh_Dll, "GetFilesW");
+			GetFindDataW = (WrapPluginInfo::_GetFindDataW)GetProcAddress(mh_Dll, "GetFindDataW");
+			GetMinFarVersionW = (WrapPluginInfo::_GetMinFarVersionW)GetProcAddress(mh_Dll, "GetMinFarVersionW");
+			GetOpenPluginInfoW = (WrapPluginInfo::_GetOpenPluginInfoW)GetProcAddress(mh_Dll, "GetOpenPluginInfoW");
+			GetPluginInfoW = (WrapPluginInfo::_GetPluginInfoW)GetProcAddress(mh_Dll, "GetPluginInfoW");
+			GetVirtualFindDataW = (WrapPluginInfo::_GetVirtualFindDataW)GetProcAddress(mh_Dll, "GetVirtualFindDataW");
+			MakeDirectoryW = (WrapPluginInfo::_MakeDirectoryW)GetProcAddress(mh_Dll, "MakeDirectoryW");
+			OpenFilePluginW = (WrapPluginInfo::_OpenFilePluginW)GetProcAddress(mh_Dll, "OpenFilePluginW");
+			OpenPluginW = (WrapPluginInfo::_OpenPluginW)GetProcAddress(mh_Dll, "OpenPluginW");
+			ProcessDialogEventW = (WrapPluginInfo::_ProcessDialogEventW)GetProcAddress(mh_Dll, "ProcessDialogEventW");
+			ProcessEditorEventW = (WrapPluginInfo::_ProcessEditorEventW)GetProcAddress(mh_Dll, "ProcessEditorEventW");
+			ProcessEditorInputW = (WrapPluginInfo::_ProcessEditorInputW)GetProcAddress(mh_Dll, "ProcessEditorInputW");
+			ProcessEventW = (WrapPluginInfo::_ProcessEventW)GetProcAddress(mh_Dll, "ProcessEventW");
+			ProcessHostFileW = (WrapPluginInfo::_ProcessHostFileW)GetProcAddress(mh_Dll, "ProcessHostFileW");
+			ProcessKeyW = (WrapPluginInfo::_ProcessKeyW)GetProcAddress(mh_Dll, "ProcessKeyW");
+			ProcessSynchroEventW = (WrapPluginInfo::_ProcessSynchroEventW)GetProcAddress(mh_Dll, "ProcessSynchroEventW");
+			ProcessViewerEventW = (WrapPluginInfo::_ProcessViewerEventW)GetProcAddress(mh_Dll, "ProcessViewerEventW");
+			PutFilesW = (WrapPluginInfo::_PutFilesW)GetProcAddress(mh_Dll, "PutFilesW");
+			SetDirectoryW = (WrapPluginInfo::_SetDirectoryW)GetProcAddress(mh_Dll, "SetDirectoryW");
+			SetFindListW = (WrapPluginInfo::_SetFindListW)GetProcAddress(mh_Dll, "SetFindListW");
+			SetStartupInfoW = (WrapPluginInfo::_SetStartupInfoW)GetProcAddress(mh_Dll, "SetStartupInfoW");
+			GetCustomDataW = (WrapPluginInfo::_GetCustomDataW)GetProcAddress(mh_Dll, "GetCustomDataW");
+			FreeCustomDataW = (WrapPluginInfo::_FreeCustomDataW)GetProcAddress(mh_Dll, "FreeCustomDataW");
+
+			//TODO: Если экспортируемые функции из mh_Loader не совпадают с mn_OldAbsentFunctions - обновить (сбросить mn_OldAbsentFunctions в 0)
+			mn_NewAbsentFunctions = 0;
+			if (!(AnalyseW||OpenFilePluginW))
+				mn_NewAbsentFunctions |= ALF3_Analyse;
+			if (!(OpenPluginW||OpenFilePluginW))
+				mn_NewAbsentFunctions |= ALF3_Open;
+			if (!ConfigureW)
+				mn_NewAbsentFunctions |= ALF3_Configure;
+			if (!CompareW)
+				mn_NewAbsentFunctions |= ALF3_Compare;
+			if (!GetFilesW)
+				mn_NewAbsentFunctions |= ALF3_GetFiles;
+			if (!PutFilesW)
+				mn_NewAbsentFunctions |= ALF3_PutFiles;
+			if (!GetFindDataW)
+				mn_NewAbsentFunctions |= ALF3_FindData;
+			if (!GetVirtualFindDataW)
+				mn_NewAbsentFunctions |= ALF3_VirtualFindData;
+			if (!ProcessHostFileW)
+				mn_NewAbsentFunctions |= ALF3_ProcessHostFile;
+			if (!ProcessDialogEventW)
+				mn_NewAbsentFunctions |= ALF3_ProcessDialogEvent;
+			if (!ProcessEditorEventW)
+				mn_NewAbsentFunctions |= ALF3_ProcessEditorEvent;
+			if (!ProcessEditorInputW)
+				mn_NewAbsentFunctions |= ALF3_ProcessEditorInput;
+			if (!ProcessViewerEventW)
+				mn_NewAbsentFunctions |= ALF3_ProcessViewerEvent;
+			if (!SetFindListW)
+				mn_NewAbsentFunctions |= ALF3_SetFindList;
+			if (!GetCustomDataW)
+				mn_NewAbsentFunctions |= ALF3_CustomData;
+
+
+#if 0
+			int nIdx = 0;
+			ExportFunc strNull[64] = {{NULL}};
+			#undef SET_EXP
+			#define SET_EXP_(n,s) if (!n) { strNull[nIdx].Name = s; strNull[nIdx].OldAddress = GetProcAddress(mh_Loader, s); nIdx++; }
+			#define SET_EXP(n) SET_EXP_(n,#n)
+			SET_EXP(ConfigureW);
+			SET_EXP_((AnalyseW||OpenFilePluginW),"AnalyseW");
+			SET_EXP_(ProcessKeyW, "ProcessPanelInputW");
+			SET_EXP(ProcessDialogEventW);
+			SET_EXP(ProcessEditorEventW);
+			SET_EXP(ProcessViewerEventW);
+			SET_EXP(GetFilesW);
+			SET_EXP(PutFilesW);
+			SET_EXP(DeleteFilesW);
+			SET_EXP(GetFindDataW);
+			SET_EXP(FreeFindDataW);
+			SET_EXP(GetVirtualFindDataW);
+			SET_EXP(FreeVirtualFindDataW);
+			SET_EXP(SetDirectoryW);
+			SET_EXP(SetFindListW);
+			SET_EXP(GetCustomDataW);
+			SET_EXP(FreeCustomDataW);
+			SET_EXP_((OpenPluginW||OpenFilePluginW), "OpenW");
+			#undef SET_EXP
+			#ifdef _DEBUG
+			p1 = GetProcAddress(mh_Loader, "SetFindListW");
+			#endif
+			ChangeExports(strNull, mh_Loader);
+			#ifdef _DEBUG
+			p2 = GetProcAddress(mh_Loader, "SetFindListW");
+			#endif
+#endif
+		}
+	}
+	
+	return (mh_Dll != NULL);
+}
+
+void WrapPluginInfo::ClearProcAddr()
+{
+	AnalyseW = NULL;
+	ClosePluginW = NULL;
+	CompareW = NULL;
+	ConfigureW = NULL;
+	DeleteFilesW = NULL;
+	ExitFARW = NULL;
+	FreeFindDataW = NULL;
+	FreeVirtualFindDataW = NULL;
+	GetFilesW = NULL;
+	GetFindDataW = NULL;
+	GetMinFarVersionW = NULL;
+	GetOpenPluginInfoW = NULL;
+	GetPluginInfoW = NULL;
+	GetVirtualFindDataW = NULL;
+	MakeDirectoryW = NULL;
+	OpenFilePluginW = NULL;
+	OpenPluginW = NULL;
+	ProcessDialogEventW = NULL;
+	ProcessEditorEventW = NULL;
+	ProcessEditorInputW = NULL;
+	ProcessEventW = NULL;
+	ProcessHostFileW = NULL;
+	ProcessKeyW = NULL;
+	ProcessSynchroEventW = NULL;
+	ProcessViewerEventW = NULL;
+	PutFilesW = NULL;
+	SetDirectoryW = NULL;
+	SetFindListW  = NULL;
+	SetStartupInfoW = NULL;
+	GetCustomDataW = NULL;
+	FreeCustomDataW = NULL;
+}
+
+void WrapPluginInfo::UnloadPlugin()
+{
+	if (mh_Dll)
+	{
+		FreeLibrary(mh_Dll);
+		mh_Dll = NULL;
+	}
+	ClearProcAddr();
+}
+
+
+
+LPCWSTR WrapPluginInfo::FormatGuid(GUID* guid, wchar_t* tmp)
+{
+	wsprintf(tmp, L"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+		guid->Data1, guid->Data2, guid->Data3,
+		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
+		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
+	return tmp;
+}
+
+InfoPanelLine* WrapPluginInfo::InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber)
+{
+	if (m_InfoLines)
+	{
+		free(m_InfoLines);
+		m_InfoLines = NULL;
+	}
+	m_InfoLinesNumber = 0;
+	if (InfoLines && InfoLinesNumber > 0)
+	{	
+		m_InfoLines = (InfoPanelLine*)calloc(InfoLinesNumber, sizeof(*InfoLines));
+		for (int i = 0; i < InfoLinesNumber; i++)
+		{
+			m_InfoLines[i].Text = InfoLines[i].Text;
+			m_InfoLines[i].Data = InfoLines[i].Data;
+			m_InfoLines[i].Separator = InfoLines[i].Separator;
+		}
+		m_InfoLinesNumber = InfoLinesNumber;
+	}
+	return m_InfoLines;
+}
+
+PanelMode* WrapPluginInfo::PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber)
+{
+	if (m_PanelModesArray)
+	{
+		free(m_PanelModesArray);
+		m_PanelModesArray = NULL;
+	}
+	m_PanelModesNumber = 0;
+	if (PanelModesArray && PanelModesNumber > 0)
+	{
+		m_PanelModesArray = (PanelMode*)calloc(PanelModesNumber, sizeof(*PanelModesArray));
+		for (int i = 0; i < PanelModesNumber; i++)
+		{
+			m_PanelModesArray[i].StructSize = sizeof(*PanelModesArray);
+			m_PanelModesArray[i].ColumnTypes = PanelModesArray[i].ColumnTypes;
+			m_PanelModesArray[i].ColumnWidths = PanelModesArray[i].ColumnWidths;
+			m_PanelModesArray[i].ColumnTitles = PanelModesArray[i].ColumnTitles;
+			m_PanelModesArray[i].StatusColumnTypes = PanelModesArray[i].StatusColumnTypes;
+			m_PanelModesArray[i].StatusColumnWidths = PanelModesArray[i].StatusColumnWidths;
+			m_PanelModesArray[i].Flags = 
+				(PanelModesArray[i].FullScreen ? PMFLAGS_FULLSCREEN : 0) |
+				(PanelModesArray[i].DetailedStatus ? PMFLAGS_DETAILEDSTATUS : 0) |
+				(PanelModesArray[i].AlignExtensions ? PMFLAGS_ALIGNEXTENSIONS : 0) |
+				(PanelModesArray[i].CaseConversion ? PMFLAGS_CASECONVERSION : 0);
+		}
+		m_PanelModesNumber = PanelModesNumber;
+	}
+	return m_PanelModesArray;
+}
+
+
+int WrapPluginInfo::OpMode_3_2(OPERATION_MODES OpMode3)
 {
 	int OpMode2 = 0;
 	if (OpMode3 & OPM_SILENT)
@@ -428,7 +1114,7 @@ int OpMode_3_2(OPERATION_MODES OpMode3)
 //{
 //}
 
-int OpenFrom_3_2(OPENFROM OpenFrom3)
+int WrapPluginInfo::OpenFrom_3_2(OPENFROM OpenFrom3)
 {
 	int OpenFrom2 = 0;
 	
@@ -463,7 +1149,7 @@ int OpenFrom_3_2(OPENFROM OpenFrom3)
 	return OpenFrom2;
 }
 
-OPENPANELINFO_FLAGS OpenPanelInfoFlags_2_3(DWORD Flags2)
+OPENPANELINFO_FLAGS WrapPluginInfo::OpenPanelInfoFlags_2_3(DWORD Flags2)
 {
 	OPENPANELINFO_FLAGS Flags3 = OPIF_NONE;
 	
@@ -486,7 +1172,7 @@ OPENPANELINFO_FLAGS OpenPanelInfoFlags_2_3(DWORD Flags2)
 	return Flags3;
 }
 
-Far2::OPENPLUGININFO_SORTMODES SortMode_3_2(OPENPANELINFO_SORTMODES Mode3)
+Far2::OPENPLUGININFO_SORTMODES WrapPluginInfo::SortMode_3_2(OPENPANELINFO_SORTMODES Mode3)
 {
 	Far2::OPENPLUGININFO_SORTMODES Mode2 = Far2::SM_DEFAULT;
 	switch (Mode3)
@@ -509,7 +1195,7 @@ Far2::OPENPLUGININFO_SORTMODES SortMode_3_2(OPENPANELINFO_SORTMODES Mode3)
 	return Mode2;
 }
 
-OPENPANELINFO_SORTMODES SortMode_2_3(/*Far2::OPENPLUGININFO_SORTMODES*/int Mode2)
+OPENPANELINFO_SORTMODES WrapPluginInfo::SortMode_2_3(/*Far2::OPENPLUGININFO_SORTMODES*/int Mode2)
 {
 	OPENPANELINFO_SORTMODES Mode3 = SM_DEFAULT;
 	switch (Mode2)
@@ -532,7 +1218,7 @@ OPENPANELINFO_SORTMODES SortMode_2_3(/*Far2::OPENPLUGININFO_SORTMODES*/int Mode2
 	return Mode3;
 }
 
-PLUGINPANELITEMFLAGS PluginPanelItemFlags_2_3(DWORD Flags2)
+PLUGINPANELITEMFLAGS WrapPluginInfo::PluginPanelItemFlags_2_3(DWORD Flags2)
 {
 	PLUGINPANELITEMFLAGS Flags3 = PPIF_NONE;
 	if (Flags2 & Far2::PPIF_PROCESSDESCR)
@@ -544,7 +1230,7 @@ PLUGINPANELITEMFLAGS PluginPanelItemFlags_2_3(DWORD Flags2)
 	return Flags3;
 }
 
-DWORD PluginPanelItemFlags_3_2(PLUGINPANELITEMFLAGS Flags3)
+DWORD WrapPluginInfo::PluginPanelItemFlags_3_2(PLUGINPANELITEMFLAGS Flags3)
 {
 	DWORD Flags2 = 0;
 	if (Flags3 & PPIF_PROCESSDESCR)
@@ -556,7 +1242,7 @@ DWORD PluginPanelItemFlags_3_2(PLUGINPANELITEMFLAGS Flags3)
 	return Flags2;
 }
 
-void PluginPanelItem_2_3(const Far2::PluginPanelItem* p2, PluginPanelItem* p3)
+void WrapPluginInfo::PluginPanelItem_2_3(const Far2::PluginPanelItem* p2, PluginPanelItem* p3)
 {
 	p3->FileAttributes = p2->FindData.dwFileAttributes;
 	p3->CreationTime = p2->FindData.ftCreationTime;
@@ -577,7 +1263,7 @@ void PluginPanelItem_2_3(const Far2::PluginPanelItem* p2, PluginPanelItem* p3)
 	p3->CRC32 = p2->CRC32;
 }
 
-PluginPanelItem* PluginPanelItems_2_3(const Far2::PluginPanelItem* pItems, int ItemsNumber)
+PluginPanelItem* WrapPluginInfo::PluginPanelItems_2_3(const Far2::PluginPanelItem* pItems, int ItemsNumber)
 {
 	PluginPanelItem* p3 = NULL;
 	if (pItems && ItemsNumber > 0)
@@ -592,7 +1278,7 @@ PluginPanelItem* PluginPanelItems_2_3(const Far2::PluginPanelItem* pItems, int I
 	return p3;
 }
 
-void PluginPanelItem_3_2(const PluginPanelItem* p3, Far2::PluginPanelItem* p2)
+void WrapPluginInfo::PluginPanelItem_3_2(const PluginPanelItem* p3, Far2::PluginPanelItem* p2)
 {
 	p2->FindData.dwFileAttributes = p3->FileAttributes;
 	p2->FindData.ftCreationTime = p3->CreationTime;
@@ -613,7 +1299,7 @@ void PluginPanelItem_3_2(const PluginPanelItem* p3, Far2::PluginPanelItem* p2)
 	p2->CRC32 = p3->CRC32;
 }
 
-void PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2)
+void WrapPluginInfo::PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2)
 {
 	p2->dwFileAttributes = p3->FileAttributes;
 	p2->ftCreationTime = p3->CreationTime;
@@ -624,7 +1310,8 @@ void PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2)
 	p2->lpwszFileName = p3->FileName;
 	p2->lpwszAlternateFileName = p3->AlternateFileName;
 }
-void PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPanelItem *p3)
+
+void WrapPluginInfo::PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPanelItem *p3)
 {
 	memset(p3, 0, sizeof(*p3));
 	p3->FileAttributes = p2->dwFileAttributes;
@@ -637,7 +1324,8 @@ void PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPanelItem *p3)
 	p3->FileName = p2->lpwszFileName;
 	p3->AlternateFileName = p2->lpwszAlternateFileName;
 }
-Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber)
+
+Far2::PluginPanelItem* WrapPluginInfo::PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber)
 {
 	Far2::PluginPanelItem* p2 = NULL;
 	if (pItems && ItemsNumber > 0)
@@ -654,13 +1342,13 @@ Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int I
 	return p2;
 }
 
-void FarKey_2_3(int Key2, INPUT_RECORD *r)
+void WrapPluginInfo::FarKey_2_3(int Key2, INPUT_RECORD *r)
 {
 	memset(r, 0, sizeof(INPUT_RECORD));
 	FSF3.FarKeyToInputRecord(Key2, r);
 }
 
-DWORD FarKey_3_2(const INPUT_RECORD *Rec)
+DWORD WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 {
 	DWORD Key2 = 0;
 
@@ -731,7 +1419,7 @@ DWORD FarKey_3_2(const INPUT_RECORD *Rec)
 	return Key2;
 }
 
-FARDIALOGITEMTYPES DialogItemTypes_2_3(int ItemType2)
+FARDIALOGITEMTYPES WrapPluginInfo::DialogItemTypes_2_3(int ItemType2)
 {
 	FARDIALOGITEMTYPES ItemType3 = DI_TEXT;
 	switch (ItemType2)
@@ -753,7 +1441,7 @@ FARDIALOGITEMTYPES DialogItemTypes_2_3(int ItemType2)
 	return ItemType3;
 }
 
-int DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3)
+int WrapPluginInfo::DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3)
 {
 	int ItemType2 = DI_TEXT;
 	switch (ItemType3)
@@ -775,7 +1463,7 @@ int DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3)
 	return ItemType2;
 }
 
-DWORD FarDialogItemFlags_3_2(FarDialogItemFlags Flags3)
+DWORD WrapPluginInfo::FarDialogItemFlags_3_2(FarDialogItemFlags Flags3)
 {
 	_ASSERTE(Far2::DIF_COLORMASK == DIF_COLORMASK);
 	DWORD Flags2 = (DWORD)(Flags3 & DIF_COLORMASK);
@@ -832,7 +1520,7 @@ DWORD FarDialogItemFlags_3_2(FarDialogItemFlags Flags3)
 	return Flags2;
 }
 
-FarDialogItemFlags FarDialogItemFlags_2_3(DWORD Flags2)
+FarDialogItemFlags WrapPluginInfo::FarDialogItemFlags_2_3(DWORD Flags2)
 {
 	_ASSERTE(Far2::DIF_COLORMASK == DIF_COLORMASK);
 	FarDialogItemFlags Flags3 = (Flags2 & Far2::DIF_COLORMASK);
@@ -889,7 +1577,7 @@ FarDialogItemFlags FarDialogItemFlags_2_3(DWORD Flags2)
 	return Flags3;
 }
 
-void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3)
+void WrapPluginInfo::FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3)
 {
 	//TODO: конвертация флагов
 	p3->Flags = p2->Flags;
@@ -899,7 +1587,7 @@ void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3)
 	p3->Reserved[2] = p2->Reserved[2];
 }
 
-void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2)
+void WrapPluginInfo::FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2)
 {
 	//TODO: конвертация флагов
 	p2->Flags = p3->Flags;
@@ -909,7 +1597,7 @@ void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2)
 	p2->Reserved[2] = p3->Reserved[2];
 }
 
-void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3)
+void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3)
 {
 	p3->Reserved = 0;
 
@@ -970,7 +1658,7 @@ void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList
 	}
 }
 
-void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2, Far2::FarList *pList2)
+void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2)
 {
 	p2->Param.Reserved = 0;
 
@@ -984,16 +1672,28 @@ void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2, Far2::F
 	p2->DefaultButton = (p3->Flags & DIF_DEFAULTBUTTON) == DIF_DEFAULTBUTTON;
 	p2->Focus = (p3->Flags & DIF_FOCUS) == DIF_FOCUS;
 
+	//#define CpyDlgStr(dst,src) \
+	//if (!nAllocated3 || ((LPBYTE)p3->src) < ((LPBYTE)p3) || ((LPBYTE)p3->src) >= (((LPBYTE)p3)+nAllocated3))
+	//	p2->dst = p3->src;
+	//else
+	//{
+	//	p2->dst = (wchar_t*)(((LPBYTE)p2) + (((LPBYTE)p3->src) - ((LPBYTE)p3)));
+	//	lstrcpy((wchar_t*)p2->dst, p3->src);
+	//}
+
 	p2->PtrData = p3->Data;
+	//CpyDlgStr(PtrData,Data);
 	p2->MaxLen = p3->MaxLength;
 
 	if (p3->Type == DI_EDIT)
 	{
 		p2->Param.History = p3->History;
+		//CpyDlgStr(Param.History, History);
 	}
 	else if (p3->Type == DI_FIXEDIT)
 	{
 		p2->Param.Mask = p3->Mask;
+		//CpyDlgStr(Param.Mask, Mask);
 	}
 	else if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
 	{
@@ -1030,15 +1730,15 @@ void FarDialogItem_3_2(const FarDialogItem *p3, Far2::FarDialogItem *p2, Far2::F
 }
 
 
-int gnMsg_2 = 0, gnParam1_2 = 0, gnParam1_3 = 0;
-FARMESSAGE gnMsg_3 = DM_FIRST;
-FARMESSAGE gnMsgKey_3 = DM_FIRST, gnMsgClose_3 = DM_FIRST;
-LONG_PTR gnParam2_2 = 0;
-void* gpParam2_3 = NULL;
-FarListItem* gpListItems3 = NULL; INT_PTR gnListItemsMax3 = 0;
-Far2::FarListItem* gpListItems2 = NULL; UINT_PTR gnListItemsMax2 = 0;
+//int gnMsg_2 = 0, gnParam1_2 = 0, gnParam1_3 = 0;
+//FARMESSAGE gnMsg_3 = DM_FIRST;
+//FARMESSAGE gnMsgKey_3 = DM_FIRST, gnMsgClose_3 = DM_FIRST;
+//LONG_PTR gnParam2_2 = 0;
+//void* gpParam2_3 = NULL;
+//FarListItem* gpListItems3 = NULL; INT_PTR gnListItemsMax3 = 0;
+//Far2::FarListItem* gpListItems2 = NULL; UINT_PTR gnListItemsMax2 = 0;
 
-LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2, const int Param1, LONG_PTR Param2)
+LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2, const int Param1, LONG_PTR Param2)
 {
 	if (!hDlg2)
 	{
@@ -1046,7 +1746,7 @@ LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2
 		return 0;
 	}
 	LONG_PTR lRc = 0;
-	HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg2];
+	HANDLE hDlg3 = MapDlg_2_3[(Far2Dialog*)hDlg2];
 	if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	{
 		hDlg3 = hDlg2;
@@ -1493,7 +2193,7 @@ LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2
 				const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 				//static FarDialogItem p3;
 				ZeroStruct(fdi3);
-				FarDialogItem_2_3(p2, &fdi3, &wpi->m_ListItems3);
+				FarDialogItem_2_3(p2, &fdi3, &m_ListItems3);
 				Param2 = (LONG_PTR)&fdi3;
 				switch (Msg2)
 				{
@@ -1571,21 +2271,28 @@ LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2
 				if (lRc > 0)
 				{
 					Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-					FarGetDialogItem item = {lRc};
-					item.Item = (FarDialogItem*)calloc(lRc, 1);
-					lRc = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &item);
+					//_ASSERTE(sizeof(Far2::FarDialogItem)>=sizeof(FarDialogItem));
+					//FarGetDialogItem item = {lRc};
+					if (!m_GetDlgItem.Item || ((INT_PTR)m_GetDlgItem.Size < lRc))
+					{
+						if (m_GetDlgItem.Item)
+							free(m_GetDlgItem.Item);
+						m_GetDlgItem.Size = lRc;
+						m_GetDlgItem.Item = (FarDialogItem*)calloc(lRc, 1);
+					}
+					lRc = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &m_GetDlgItem);
 					if (lRc > 0)
 					{
-						FarDialogItem_3_2(item.Item, p2, &wpi->m_ListItems2);
+						FarDialogItem_3_2(m_GetDlgItem.Item, /*m_GetDlgItem.Size,*/ p2, &m_ListItems2);
 					}
-					free(item.Item);
+					//free(item.Item);
 				}
 				break;
 			case DM_GETDLGITEMSHORT:
 				{
 					const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 					Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-					FarDialogItem_3_2(p3, p2, &wpi->m_ListItems2);
+					FarDialogItem_3_2(p3, /*0,*/ p2, &m_ListItems2);
 				}
 				break;
 			case DM_LISTGETITEM:
@@ -1640,7 +2347,7 @@ LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2
 	return lRc;
 }
 
-Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Param2)
+Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int Param1, void*& Param2)
 {
 	Far2::FarMessagesProc Msg2 = Far2::DM_FIRST;
 	//if (Msg3 < DM_USER)
@@ -2058,7 +2765,7 @@ Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Pa
 				const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 				static Far2::FarDialogItem p2;
 				memset(&p2, 0, sizeof(p2));
-				FarDialogItem_3_2(p3, &p2, &wpi->m_ListItems2);
+				FarDialogItem_3_2(p3, /*0,*/ &p2, &m_ListItems2);
 				Param2 = &p2;
 				switch (Msg3)
 				{
@@ -2112,7 +2819,7 @@ Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Pa
 	return Msg2;
 }
 
-void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc)
+void WrapPluginInfo::FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc)
 {
 	if (Param2 == OrgParam2 || !Param2 || !OrgParam2)
 	{
@@ -2131,7 +2838,7 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 			_ASSERTE(Msg2!=Far2::DM_GETDLGITEMSHORT);
 			const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 			FarDialogItem* p3 = (FarDialogItem*)OrgParam2;
-			FarDialogItem_2_3(p2, p3, &wpi->m_ListItems3);
+			FarDialogItem_2_3(p2, p3, &m_ListItems3);
 		}
 		break;
 	case Far2::DM_LISTGETITEM:
@@ -2199,7 +2906,7 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 //			lRc = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &item);
 //			if (lRc > 0)
 //			{
-//				FarDialogItem_3_2(item.Item, p2, &wpi->m_ListItems2);
+//				FarDialogItem_3_2(item.Item, p2, &m_ListItems2);
 //			}
 //			free(item.Item);
 //		}
@@ -2208,7 +2915,7 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 //		{
 //			const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 //			Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-//			FarDialogItem_3_2(p3, p2, &wpi->m_ListItems2);
+//			FarDialogItem_3_2(p3, p2, &m_ListItems2);
 //		}
 //		break;
 //	case DM_LISTGETITEM:
@@ -2259,136 +2966,13 @@ void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, v
 //	}
 //};
 
-struct Far2Dialog
-{
-	// Far3
-	HANDLE hDlg3;
-	
-	// Far2
-    int m_X1, m_Y1, m_X2, m_Y2;
-    wchar_t *m_HelpTopic;
-    Far2::FarDialogItem *m_Items2;
-    FarDialogItem *m_Items3;
-    FarList *mp_ListInit3;
-    UINT m_ItemsNumber;
-    DWORD m_Flags;
-    Far2::FARWINDOWPROC m_DlgProc;
-    LONG_PTR m_Param;
-    BOOL m_GuidChecked;
-    GUID m_PluginGuid, m_Guid, m_DefGuid;
-    
-    void FreeDlg();
-	static INT_PTR WINAPI Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2);
-    int RunDlg();
-    
-	Far2Dialog(int X1, int Y1, int X2, int Y2,
-	    const wchar_t *HelpTopic, Far2::FarDialogItem *Items, UINT ItemsNumber,
-	    DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param,
-	    GUID PluginGuid, GUID DefGuid);
-	~Far2Dialog();
-};
 
 
-void WrapPluginInfo::UnloadPlugin()
-{
-	if (hDll)
-	{
-		FreeLibrary(hDll);
-		hDll = NULL;
-	}
-	ClearProcAddr();
-}
 
-WrapPluginInfo::~WrapPluginInfo()
-{
-	if (m_ListItems2.Items)
-	{
-		free(m_ListItems2.Items);
-		m_ListItems2.Items = NULL;
-	}
-	if (m_ListItems3.Items)
-	{
-		free(m_ListItems3.Items);
-		m_ListItems3.Items = NULL;
-	}
-	if (guids_PluginMenu)
-		free(guids_PluginMenu);
-	if (guids_PluginDisks)
-		free(guids_PluginDisks);
-	if (guids_PluginConfig)
-		free(guids_PluginConfig);
-	if (pAnalyze)
-		free(pAnalyze);
-	if (InfoLines)
-		free(InfoLines);
-	if (PanelModesArray)
-		free(PanelModesArray);
-	_ASSERTE(KeyBar.Labels==KeyBarLabels);
-}
-
-void WrapPluginInfo::ClearProcAddr()
-{
-	AnalyseW = NULL;
-	ClosePluginW = NULL;
-	CompareW = NULL;
-	ConfigureW = NULL;
-	DeleteFilesW = NULL;
-	ExitFARW = NULL;
-	FreeFindDataW = NULL;
-	FreeVirtualFindDataW = NULL;
-	GetFilesW = NULL;
-	GetFindDataW = NULL;
-	GetMinFarVersionW = NULL;
-	GetOpenPluginInfoW = NULL;
-	GetPluginInfoW = NULL;
-	GetVirtualFindDataW = NULL;
-	MakeDirectoryW = NULL;
-	OpenFilePluginW = NULL;
-	OpenPluginW = NULL;
-	ProcessDialogEventW = NULL;
-	ProcessEditorEventW = NULL;
-	ProcessEditorInputW = NULL;
-	ProcessEventW = NULL;
-	ProcessHostFileW = NULL;
-	ProcessKeyW = NULL;
-	ProcessSynchroEventW = NULL;
-	ProcessViewerEventW = NULL;
-	PutFilesW = NULL;
-	SetDirectoryW = NULL;
-	SetFindListW  = NULL;
-	SetStartupInfoW = NULL;
-}
-
-WrapPluginInfo::WrapPluginInfo()
-{
-	hDll = NULL;
-	PluginDll[0] = IniFile[0] = Title[0] = Desc[0] = Author[0] = RegRoot[0] = File[0] = 0;
-	memset(&Version, 0, sizeof(Version));
-	memset(&guid_Plugin, 0, sizeof(guid_Plugin));
-	memset(&guid_Dialogs, 0, sizeof(guid_Dialogs));
-	nPluginMenu = nPluginDisks = nPluginConfig = 0;
-	guids_PluginMenu = guids_PluginDisks = guids_PluginConfig = NULL;
-	memset(&Info, 0, sizeof(Info));
-	InfoLines = NULL; InfoLinesNumber = 0;
-	PanelModesArray = NULL; PanelModesNumber = 0;
-	KeyBar.CountLabels = 0; KeyBar.Labels = KeyBarLabels;
-	LastFar2Dlg = NULL;
-	OldPutFilesParams = 0;
-	AnalyzeMode = 2;
-	ZeroStruct(m_ListItems2); ZeroStruct(m_ListItems3);
-
-	ClearProcAddr();
-	pAnalyze = NULL;
-};
-
-//int WrapPluginInfo::SeekForPlugin(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param)
-//{
-//	return TRUE; // продолжить поиск
-//}
 
 KeyBarTitles* WrapPluginInfo::KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
 {
-	wpi->KeyBar.CountLabels = 0;
+	m_KeyBar.CountLabels = 0;
 
 	if (KeyBar)
 	{
@@ -2415,13 +2999,13 @@ KeyBarTitles* WrapPluginInfo::KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
 		{
 			if (src[i].Titles) cnt += 12;
 		}
-		_ASSERTE(cnt<=ARRAYSIZE(wpi->KeyBarLabels));
+		_ASSERTE(cnt<=ARRAYSIZE(m_KeyBarLabels));
 		
-		wpi->KeyBar.CountLabels = 0;
+		m_KeyBar.CountLabels = 0;
 		
 		if (cnt > 0)
 		{
-			KeyBarLabel *p = wpi->KeyBar.Labels;
+			KeyBarLabel *p = m_KeyBar.Labels;
 			for (int i = 0; i < ARRAYSIZE(src); i++)
 			{
 				if (!src[i].Titles)
@@ -2437,20 +3021,20 @@ KeyBarTitles* WrapPluginInfo::KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar)
 					p++;
 				}
 			}
-			wpi->KeyBar.CountLabels = p - wpi->KeyBar.Labels;
+			m_KeyBar.CountLabels = p - m_KeyBar.Labels;
 		}
 	}
-	return &wpi->KeyBar;
+	return &m_KeyBar;
 }
 
 
 // Changed functions
-LONG_PTR WINAPI WrapPluginInfo::FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+LONG_PTR WrapPluginInfo::FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
 {
 	LOG_CMD(L"psi2.DefDlgProc(%i,%i,%i)",Msg,Param1,Param2);
 	LONG_PTR lRc = CallDlgProc_2_3(psi3.DefDlgProc, hDlg, Msg, Param1, Param2);
 	return lRc;
-	//HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg];
+	//HANDLE hDlg3 = MapDlg_2_3[(Far2Dialog*)hDlg];
 	//if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	//	hDlg3 = hDlg;
 	//if (hDlg3)
@@ -2468,12 +3052,12 @@ LONG_PTR WINAPI WrapPluginInfo::FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param
 	//}
 	//return lRc;
 }
-LONG_PTR WINAPI WrapPluginInfo::FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+LONG_PTR WrapPluginInfo::FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
 {
 	LOG_CMD(L"psi2.SendDlgMessage(%i,%i,%i)",Msg,Param1,Param2);
 	LONG_PTR lRc = CallDlgProc_2_3(psi3.SendDlgMessage, hDlg, Msg, Param1, Param2);
 	return lRc;
-	//HANDLE hDlg3 = wpi->MapDlg_2_3[(Far2Dialog*)hDlg];
+	//HANDLE hDlg3 = MapDlg_2_3[(Far2Dialog*)hDlg];
 	//if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	//	hDlg3 = hDlg;
 	//if (hDlg3)
@@ -2491,7 +3075,7 @@ LONG_PTR WINAPI WrapPluginInfo::FarApiSendDlgMessage(HANDLE hDlg, int Msg, int P
 	//}
 	//return lRc;
 }
-BOOL WINAPI WrapPluginInfo::FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags)
+BOOL WrapPluginInfo::FarApiShowHelp(const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags)
 {
 	LOG_CMD(L"psi2.ShowHelp",0,0,0);
 	FARHELPFLAGS Flags3 = 0
@@ -2503,22 +3087,22 @@ BOOL WINAPI WrapPluginInfo::FarApiShowHelp(const wchar_t *ModuleName, const wcha
 	int iRc = psi3.ShowHelp(ModuleName, Topic, Flags3);
 	return iRc;
 }
-HANDLE WINAPI WrapPluginInfo::FarApiSaveScreen(int X1, int Y1, int X2, int Y2)
+HANDLE WrapPluginInfo::FarApiSaveScreen(int X1, int Y1, int X2, int Y2)
 {
 	LOG_CMD(L"psi2.SaveScreen",0,0,0);
 	return psi3.SaveScreen(X1,Y1,X2,Y2);
 }
-void WINAPI WrapPluginInfo::FarApiRestoreScreen(HANDLE hScreen)
+void WrapPluginInfo::FarApiRestoreScreen(HANDLE hScreen)
 {
 	LOG_CMD(L"psi2.RestoreScreen",0,0,0);
 	psi3.RestoreScreen(hScreen);
 }
-void WINAPI WrapPluginInfo::FarApiText(int X, int Y, int Color, const wchar_t *Str)
+void WrapPluginInfo::FarApiText(int X, int Y, int Color, const wchar_t *Str)
 {
 	LOG_CMD(L"psi2.Text",0,0,0);
 	psi3.Text(X,Y,Color,Str);
 }
-int WINAPI WrapPluginInfo::FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage)
+int WrapPluginInfo::FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage)
 {
 	LOG_CMD(L"psi2.Editor",0,0,0);
 	EDITOR_FLAGS Flags3 = 0
@@ -2532,7 +3116,7 @@ int WINAPI WrapPluginInfo::FarApiEditor(const wchar_t *FileName, const wchar_t *
 	int iRc = psi3.Editor(FileName, Title, X1,Y1,X2,Y2, Flags3, StartLine, StartChar, CodePage);
 	return iRc;
 }
-int WINAPI WrapPluginInfo::FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage)
+int WrapPluginInfo::FarApiViewer(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage)
 {
 	LOG_CMD(L"psi2.Viewer",0,0,0);
 	VIEWER_FLAGS Flags3 = 0
@@ -2545,7 +3129,7 @@ int WINAPI WrapPluginInfo::FarApiViewer(const wchar_t *FileName, const wchar_t *
 	int iRc = psi3.Viewer(FileName, Title, X1,Y1,X2,Y2, Flags3, CodePage);
 	return iRc;
 };
-int WINAPI WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber)
+int WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber)
 {
 	LOG_CMD(L"psi2.Menu",0,0,0);
 	int iRc = -1;
@@ -2611,7 +3195,7 @@ int WINAPI WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int Ma
 			| ((Flags & Far2::FMENU_REVERSEAUTOHIGHLIGHT) ? FMENU_REVERSEAUTOHIGHLIGHT : 0)
 			| ((Flags & Far2::FMENU_CHANGECONSOLETITLE) ? FMENU_CHANGECONSOLETITLE : 0);
 		
-		iRc = psi3.Menu(&wpi->guid_Plugin, X, Y, MaxHeight, Flags3,
+		iRc = psi3.Menu(&mguid_Plugin, X, Y, MaxHeight, Flags3,
 				Title, Bottom, HelpTopic, pBreak3, BreakCode, pItems3, ItemsNumber);
 	}
 	
@@ -2621,7 +3205,7 @@ int WINAPI WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int Ma
 		free(pBreak3);
 	return iRc;
 };
-int WINAPI WrapPluginInfo::FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber)
+int WrapPluginInfo::FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber)
 {
 	LOG_CMD(L"psi2.Message",0,0,0);
 	int iRc = -1;
@@ -2646,19 +3230,19 @@ int WINAPI WrapPluginInfo::FarApiMessage(INT_PTR PluginNumber, DWORD Flags, cons
 	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_RETRYCANCEL)
 		Far3Flags |= FMSG_MB_RETRYCANCEL;
 	
-	iRc = psi3.Message(&wpi->guid_Plugin, Far3Flags, 
+	iRc = psi3.Message(&mguid_Plugin, Far3Flags, 
 				HelpTopic, Items, ItemsNumber, ButtonsNumber);
 	return iRc;
 };
-HANDLE WINAPI WrapPluginInfo::FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param)
+HANDLE WrapPluginInfo::FarApiDialogInit(INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param)
 {
 	LOG_CMD(L"psi2.DialogInit",0,0,0);
-	Far2Dialog *p = new Far2Dialog(X1, Y1, X2, Y2,
+	Far2Dialog *p = new Far2Dialog(this, X1, Y1, X2, Y2,
     	HelpTopic, Item, ItemsNumber, Flags, DlgProc, Param,
-    	wpi->guid_Plugin, wpi->guid_Dialogs);
+    	mguid_Plugin, mguid_Dialogs);
 	return (HANDLE)p;
 };
-int WINAPI WrapPluginInfo::FarApiDialogRun(HANDLE hDlg)
+int WrapPluginInfo::FarApiDialogRun(HANDLE hDlg)
 {
 	LOG_CMD(L"psi2.DialogRun",0,0,0);
 	Far2Dialog *p = (Far2Dialog*)hDlg;
@@ -2666,7 +3250,7 @@ int WINAPI WrapPluginInfo::FarApiDialogRun(HANDLE hDlg)
 		return -1;
 	return p->RunDlg();
 }
-void WINAPI WrapPluginInfo::FarApiDialogFree(HANDLE hDlg)
+void WrapPluginInfo::FarApiDialogFree(HANDLE hDlg)
 {
 	LOG_CMD(L"psi2.DialogFree",0,0,0);
 	Far2Dialog *p = (Far2Dialog*)hDlg;
@@ -2674,7 +3258,7 @@ void WINAPI WrapPluginInfo::FarApiDialogFree(HANDLE hDlg)
 		return;
 	delete p;
 };
-int WINAPI WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2)
+int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2)
 {
 	LOG_CMD(L"psi2.Control(%i,%i,%i)",Command, Param1, Param2);
 	//TODO: Конвертация параметров!
@@ -2848,9 +3432,9 @@ int WINAPI WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1
 	}
 	return iRc;
 };
-//std::map<Far2::FAR_FIND_DATA*,PluginPanelItem*> MapDirList;
-//std::map<Far2::PluginPanelItem*,PluginPanelItem*> MapPlugDirList;
-int WINAPI WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber)
+//std::map<Far2::FAR_FIND_DATA*,PluginPanelItem*> m_MapDirList;
+//std::map<Far2::PluginPanelItem*,PluginPanelItem*> m_MapPlugDirList;
+int WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber)
 {
 	LOG_CMD(L"psi2.GetDirList",0,0,0);
 	PluginPanelItem* p3 = NULL;
@@ -2866,7 +3450,7 @@ int WINAPI WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR
 		}
 		else
 		{
-			wpi->MapDirList[*pPanelItem] = p3;
+			m_MapDirList[*pPanelItem] = p3;
 			for (int i = *pItemsNumber; (i--) > 0;)
 			{
 				PluginPanelItem_3_2(p3+i, (*pPanelItem)+i);
@@ -2875,21 +3459,21 @@ int WINAPI WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR
 	}
 	return iRc;
 };
-void WINAPI WrapPluginInfo::FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber)
+void WrapPluginInfo::FarApiFreeDirList(struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber)
 {
 	LOG_CMD(L"psi2.FreeDirList",0,0,0);
-	PluginPanelItem* p3 = wpi->MapDirList[PanelItem];
+	PluginPanelItem* p3 = m_MapDirList[PanelItem];
 	if (p3)
 		psi3.FreeDirList(p3, nItemsNumber);
-	wpi->MapDirList.erase(PanelItem);
+	m_MapDirList.erase(PanelItem);
 	free(PanelItem);
 };
-int WINAPI WrapPluginInfo::FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber)
+int WrapPluginInfo::FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber)
 {
 	_ASSERTE(PluginNumber == psi2.ModuleNumber);
 	LOG_CMD(L"psi2.GetPluginDirList",0,0,0);
 	PluginPanelItem* p3 = NULL;
-	int iRc = psi3.GetPluginDirList(&wpi->guid_Plugin, hPlugin, Dir, &p3, pItemsNumber);
+	int iRc = psi3.GetPluginDirList(&mguid_Plugin, hPlugin, Dir, &p3, pItemsNumber);
 	if (iRc)
 	{
 		*pPanelItem = (Far2::PluginPanelItem*)calloc(sizeof(Far2::PluginPanelItem),*pItemsNumber);
@@ -2901,7 +3485,7 @@ int WINAPI WrapPluginInfo::FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE h
 		}
 		else
 		{
-			wpi->MapPlugDirList[*pPanelItem] = p3;
+			m_MapPlugDirList[*pPanelItem] = p3;
 			for (int i = *pItemsNumber; (i--) > 0;)
 			{
 				PluginPanelItem_3_2(p3+i, (*pPanelItem)+i);
@@ -2910,36 +3494,36 @@ int WINAPI WrapPluginInfo::FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE h
 	}
 	return iRc;
 };
-void WINAPI WrapPluginInfo::FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber)
+void WrapPluginInfo::FarApiFreePluginDirList(struct Far2::PluginPanelItem *PanelItem, int nItemsNumber)
 {
 	LOG_CMD(L"psi2.FreePluginDirList",0,0,0);
-	PluginPanelItem* p3 = wpi->MapPlugDirList[PanelItem];
+	PluginPanelItem* p3 = m_MapPlugDirList[PanelItem];
 	if (p3)
 		psi3.FreePluginDirList(p3, nItemsNumber);
-	wpi->MapPlugDirList.erase(PanelItem);
+	m_MapPlugDirList.erase(PanelItem);
 	free(PanelItem);
 };
-int WINAPI WrapPluginInfo::FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath)
+int WrapPluginInfo::FarApiCmpName(const wchar_t *Pattern, const wchar_t *String, int SkipPath)
 {
 	LOG_CMD(L"psi2.CmdName",0,0,0);
 	wchar_t* pszFile = (wchar_t*)(SkipPath ? FSF3.PointToName(String) : String);
 	int iRc = FSF3.ProcessName(Pattern, pszFile, 0, PN_CMPNAME);
 	return iRc;
 };
-const wchar_t* WINAPI WrapPluginInfo::FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
+LPCWSTR WrapPluginInfo::FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
 {
 	LOG_CMD(L"psi2.GetMsg(%i)",MsgId,0,0);
-	if (wpi && ((INT_PTR)wpi->hDll) == PluginNumber)
-		return psi3.GetMsg(&wpi->guid_Plugin, MsgId);
+	if (((INT_PTR)mh_Dll) == PluginNumber)
+		return psi3.GetMsg(&mguid_Plugin, MsgId);
 	return L"";
 };
-INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param)
+INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param)
 {
 	LOG_CMD(L"psi2.AdvControl(%i)",Command,0,0);
 	INT_PTR iRc = 0;
-	if (((INT_PTR)wpi->hDll) != ModuleNumber)
+	if (((INT_PTR)mh_Dll) != ModuleNumber)
 	{
-		_ASSERTE(((INT_PTR)wpi->hDll) == ModuleNumber);
+		_ASSERTE(((INT_PTR)mh_Dll) == ModuleNumber);
 		iRc = 0;
 	}
 	else switch (Command)
@@ -2947,7 +3531,7 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 	case Far2::ACTL_GETFARVERSION:
 		{
 			VersionInfo vi = {0};
-			iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARMANAGERVERSION, 0, &vi);
+			iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETFARMANAGERVERSION, 0, &vi);
 			if (iRc)
 			{
 				DWORD ver = MAKEFARVERSION2(vi.Major, vi.Minor, vi.Build);
@@ -2958,23 +3542,23 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 			break;
 		}
 	case Far2::ACTL_GETSYSWORDDIV:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSYSWORDDIV, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETSYSWORDDIV, 0, Param); break;
 	case Far2::ACTL_WAITKEY:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_WAITKEY, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_WAITKEY, 0, Param); break;
 	case Far2::ACTL_GETCOLOR:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCOLOR, (int)(INT_PTR)Param, NULL); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETCOLOR, (int)(INT_PTR)Param, NULL); break;
 	case Far2::ACTL_GETARRAYCOLOR:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETARRAYCOLOR, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETARRAYCOLOR, 0, Param); break;
 	case Far2::ACTL_EJECTMEDIA:
 		ASSERTSTRUCT(ActlEjectMedia);
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_EJECTMEDIA, 0, Param);
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_EJECTMEDIA, 0, Param);
 		break;
 	case Far2::ACTL_KEYMACRO:
 		{
 			if (Param)
 			{
 				Far2::ActlKeyMacro* p2 = (Far2::ActlKeyMacro*)Param;
-				//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_KEYMACRO, Param);
+				//iRc = psi3.AdvControl(&mguid_Plugin, ACTL_KEYMACRO, Param);
 				switch (p2->Command)
 				{
 				case Far2::MCMD_LOADALL:
@@ -3025,14 +3609,14 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 		_ASSERTE(Command != Far2::ACTL_POSTKEYSEQUENCE);
 		break;
 	case Far2::ACTL_GETWINDOWINFO:
-		//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWINFO, 0, Param);
+		//iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWINFO, 0, Param);
 		{
 			Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
 			WindowInfo wi = {sizeof(WindowInfo)};
 			wi.Pos = p2->Pos;
 			wi.TypeName = p2->TypeName; wi.TypeNameSize = p2->TypeNameSize;
 			wi.Name = p2->Name; wi.NameSize = p2->NameSize;
-			iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWINFO, 0, &wi);
+			iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWINFO, 0, &wi);
 			if (iRc)
 			{
 				p2->Pos = wi.Pos;
@@ -3045,29 +3629,29 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 		}
 		break;
 	case Far2::ACTL_GETWINDOWCOUNT:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWCOUNT, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWCOUNT, 0, Param); break;
 	case Far2::ACTL_SETCURRENTWINDOW:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETCURRENTWINDOW, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETCURRENTWINDOW, 0, Param); break;
 	case Far2::ACTL_COMMIT:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_COMMIT, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_COMMIT, 0, Param); break;
 	case Far2::ACTL_GETFARHWND:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARHWND, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETFARHWND, 0, Param); break;
 	case Far2::ACTL_GETSYSTEMSETTINGS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSYSTEMSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETSYSTEMSETTINGS, 0, Param); break;
 	case Far2::ACTL_GETPANELSETTINGS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETPANELSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETPANELSETTINGS, 0, Param); break;
 	case Far2::ACTL_GETINTERFACESETTINGS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETINTERFACESETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETINTERFACESETTINGS, 0, Param); break;
 	case Far2::ACTL_GETCONFIRMATIONS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCONFIRMATIONS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETCONFIRMATIONS, 0, Param); break;
 	case Far2::ACTL_GETDESCSETTINGS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETDESCSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETDESCSETTINGS, 0, Param); break;
 	case Far2::ACTL_SETARRAYCOLOR:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETARRAYCOLOR, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETARRAYCOLOR, 0, Param); break;
 	case Far2::ACTL_GETPLUGINMAXREADDATA:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
 	case Far2::ACTL_GETDIALOGSETTINGS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETDIALOGSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETDIALOGSETTINGS, 0, Param); break;
 	case Far2::ACTL_GETSHORTWINDOWINFO:
 		{
 			Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
@@ -3078,7 +3662,7 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 				//BUGBUG: Поскольку ACTL_GETWINDOWINFO нифига не ThreadSafe - юзаем MCTL_GETAREA
 				if (GetCurrentThreadId() != gnMainThreadId)
 				{
-					//iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETSHORTWINDOWINFO, Param);
+					//iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETSHORTWINDOWINFO, Param);
 					INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
 					switch(nArea)
 					{
@@ -3111,7 +3695,7 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 				{
 					WindowInfo wi = {sizeof(WindowInfo)};
 					wi.Pos = p2->Pos;
-					iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETWINDOWINFO, 0, &wi);
+					iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWINFO, 0, &wi);
 					if (iRc)
 					{
 						p2->Pos = wi.Pos;
@@ -3126,25 +3710,25 @@ INT_PTR WINAPI WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Comman
 		}
 		break;
 	case Far2::ACTL_REDRAWALL:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_REDRAWALL, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_REDRAWALL, 0, Param); break;
 	case Far2::ACTL_SYNCHRO:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SYNCHRO, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SYNCHRO, 0, Param); break;
 	case Far2::ACTL_SETPROGRESSSTATE:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETPROGRESSSTATE, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETPROGRESSSTATE, 0, Param); break;
 	case Far2::ACTL_SETPROGRESSVALUE:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETPROGRESSVALUE, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETPROGRESSVALUE, 0, Param); break;
 	case Far2::ACTL_QUIT:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_QUIT, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_QUIT, 0, Param); break;
 	case Far2::ACTL_GETFARRECT:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETFARRECT, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETFARRECT, 0, Param); break;
 	case Far2::ACTL_GETCURSORPOS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_GETCURSORPOS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETCURSORPOS, 0, Param); break;
 	case Far2::ACTL_SETCURSORPOS:
-		iRc = psi3.AdvControl(&wpi->guid_Plugin, ACTL_SETCURSORPOS, 0, Param); break;
+		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETCURSORPOS, 0, Param); break;
 	}
 	return iRc;
 };
-int WINAPI WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
+int WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 {
 	LOG_CMD(L"psi2.ViewerControl",0,0,0);
 	int nRc = 0; //psi3.ViewerControl(-1, Command, 0, Param);
@@ -3182,7 +3766,7 @@ int WINAPI WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 			if (Param && (Param != (void*)-1))
 			{
 				const Far2::KeyBarTitles* p2 = (const Far2::KeyBarTitles*)Param;
-				p3 = wpi->KeyBarTitles_2_3(p2);
+				p3 = KeyBarTitles_2_3(p2);
 			}
 			nRc = psi3.ViewerControl(-1, VCTL_SETKEYBAR, 0, p3);
 		}
@@ -3217,7 +3801,7 @@ int WINAPI WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 	}
 	return nRc;
 };
-int WINAPI WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
+int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 {
 	LOG_CMD0(L"psi2.EditorControl(%i)",Command,0,0);
 	int nRc = 0; //psi3.EditorControl(-1, Command, 0, Param);
@@ -3338,7 +3922,7 @@ int WINAPI WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 			if (Param && (Param != (void*)-1))
 			{
 				const Far2::KeyBarTitles* p2 = (const Far2::KeyBarTitles*)Param;
-				p3 = wpi->KeyBarTitles_2_3(p2);
+				p3 = KeyBarTitles_2_3(p2);
 			}
 			nRc = psi3.EditorControl(-1, ECTL_SETKEYBAR, 0, p3);
 		}
@@ -3404,14 +3988,14 @@ int WINAPI WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 	}
 	return nRc;
 };
-int WINAPI WrapPluginInfo::FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags)
+int WrapPluginInfo::FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags)
 {
 	LOG_CMD(L"psi2.InputBox",0,0,0);
 	//TODO: Флаги
-	int nRc = psi3.InputBox(&wpi->guid_Plugin, Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
+	int nRc = psi3.InputBox(&mguid_Plugin, Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
 	return nRc;
 };
-int WINAPI WrapPluginInfo::FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
+int WrapPluginInfo::FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
 {
 	LOG_CMD(L"psi2.PluginsControl",0,0,0);
 	int nRc = 0; //psi3.PluginsControl(hHandle, Command, Param1, Param2);
@@ -3426,7 +4010,7 @@ int WINAPI WrapPluginInfo::FarApiPluginsControl(HANDLE hHandle, int Command, int
 	}
 	return nRc;
 };
-int WINAPI WrapPluginInfo::FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
+int WrapPluginInfo::FarApiFileFilterControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
 {
 	LOG_CMD(L"psi2.FileFilterControl",0,0,0);
 	int nRc = 0; //psi3.FileFilterControl(hHandle, Command, Param1, Param2);
@@ -3451,7 +4035,7 @@ int WINAPI WrapPluginInfo::FarApiFileFilterControl(HANDLE hHandle, int Command, 
 	}
 	return nRc;
 };
-int WINAPI WrapPluginInfo::FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param)
+int WrapPluginInfo::FarApiRegExpControl(HANDLE hHandle, int Command, LONG_PTR Param)
 {
 	LOG_CMD(L"psi2.RegExpControl",0,0,0);
 	int nRc = 0; //psi3.RegExpControl(hHandle, Command, 0, (void*)Param);
@@ -3480,7 +4064,7 @@ int WINAPI WrapPluginInfo::FarApiRegExpControl(HANDLE hHandle, int Command, LONG
 //struct void WINAPI FARSTDQSORT(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
 //struct void WINAPI FARSTDQSORTEX(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam);
 //struct void   *WINAPI FARSTDBSEARCH(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
-int WINAPI WrapPluginInfo::FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size)
+int WrapPluginInfo::FarStdGetFileOwner(const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size)
 {
 	LOG_CMD(L"fsf2.GetFileOwner",0,0,0);
 	__int64 nRc = FSF3.GetFileOwner(Computer, Name, Owner, Size);
@@ -3498,7 +4082,7 @@ int WINAPI WrapPluginInfo::FarStdGetFileOwner(const wchar_t *Computer,const wcha
 //struct wchar_t   *WINAPI FARSTDTRUNCPATHSTR(wchar_t *Str,int MaxLength);
 //struct wchar_t   *WINAPI FARSTDQUOTESPACEONLY(wchar_t *Str);
 //struct const wchar_t*WINAPI FARSTDPOINTTONAME(const wchar_t *Path);
-int WINAPI WrapPluginInfo::FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize)
+int WrapPluginInfo::FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize)
 {
 	LOG_CMD(L"fsf2.GetPathRoot",0,0,0);
 	__int64 nRc = FSF3.GetPathRoot(Path, Root, DestSize);
@@ -3520,20 +4104,20 @@ int WINAPI WrapPluginInfo::FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, 
 //struct void WINAPI FARSTDLOCALSTRLWR(wchar_t *s1);
 //struct int WINAPI FARSTDLOCALSTRICMP(const wchar_t *s1,const wchar_t *s2);
 //struct int WINAPI FARSTDLOCALSTRNICMP(const wchar_t *s1,const wchar_t *s2,int n);
-wchar_t* WINAPI WrapPluginInfo::FarStdXlat(wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
+wchar_t* WrapPluginInfo::FarStdXlatW3(wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
 {
 	LOG_CMD(L"fsf2.XLat",0,0,0);
 	wchar_t* pszRc = FSF3.XLat(Line, StartPos, EndPos, Flags);
 	return pszRc;
 };
-int WINAPI WrapPluginInfo::RecSearchUserFn(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param)
+int WrapPluginInfo::RecSearchUserFn(const struct PluginPanelItem *FData, const wchar_t *FullName, void *Param)
 {
 	RecSearchUserFnArg* p = (RecSearchUserFnArg*)Param;
 	Far2::FAR_FIND_DATA ffd;
 	PluginPanelItem_3_2(FData, &ffd);
 	return p->UserFn2(&ffd, FullName, p->Param2);
 }
-void WINAPI WrapPluginInfo::FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
+void WrapPluginInfo::FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
 {
 	LOG_CMD(L"fsf2.RecursiveSearch",0,0,0);
 	RecSearchUserFnArg arg = {Func, Param};
@@ -3546,19 +4130,19 @@ void WINAPI WrapPluginInfo::FarStdRecursiveSearch(const wchar_t *InitDir,const w
 		Flags3 |= FRS_SCANSYMLINK;
 	FSF3.FarRecursiveSearch(InitDir, Mask, RecSearchUserFn, Flags3, &arg);
 };
-int WINAPI WrapPluginInfo::FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix)
+int WrapPluginInfo::FarStdMkTemp(wchar_t *Dest, DWORD size, const wchar_t *Prefix)
 {
 	LOG_CMD(L"fsf2.MkTemp",0,0,0);
 	__int64 nRc = FSF3.MkTemp(Dest, size, Prefix);
 	return (int)nRc;
 };
-int WINAPI WrapPluginInfo::FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags)
+int WrapPluginInfo::FarStdProcessName(const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags)
 {
 	LOG_CMD(L"fsf2.ProcessName",0,0,0);
 	__int64 nRc = FSF3.ProcessName(param1, param2, size, flags);
 	return (int)nRc;
 };
-int WINAPI WrapPluginInfo::FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags)
+int WrapPluginInfo::FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,DWORD Flags)
 {
 	LOG_CMD(L"fsf2.MkLink",0,0,0);
 	LINK_TYPE Type3 = (LINK_TYPE)(Flags & 7);
@@ -3566,7 +4150,7 @@ int WINAPI WrapPluginInfo::FarStdMkLink(const wchar_t *Src,const wchar_t *Dest,D
 	BOOL nRc = FSF3.MkLink(Src, Dest, Type3, Flags3);
 	return nRc;
 };
-int WINAPI WrapPluginInfo::FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize)
+int WrapPluginInfo::FarConvertPath(enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize)
 {
 	LOG_CMD(L"fsf2.ConvertPath",0,0,0);
 	__int64 nRc = 0;
@@ -3581,418 +4165,36 @@ int WINAPI WrapPluginInfo::FarConvertPath(enum Far2::CONVERTPATHMODES Mode, cons
 	}
 	return (int)nRc;
 };
-int WINAPI WrapPluginInfo::FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize)
+int WrapPluginInfo::FarGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest,int DestSize)
 {
 	LOG_CMD(L"fsf2.GetReparsePointInfo",0,0,0);
 	__int64 nRc = FSF3.GetReparsePointInfo(Src, Dest, DestSize);
 	return (int)nRc;
 };
-DWORD WINAPI WrapPluginInfo::FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer)
+DWORD WrapPluginInfo::FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer)
 {
 	LOG_CMD(L"fsf2.GetCurrentDirectory",0,0,0);
 	size_t nRc = FSF3.GetCurrentDirectory(Size, Buffer);
 	return (DWORD)nRc;
 };
 
-InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber)
-{
-	if (wpi && wpi->InfoLines)
-	{
-		free(wpi->InfoLines);
-		wpi->InfoLines = NULL;
-	}
-	wpi->PanelModesNumber = 0;
-	if (InfoLines && InfoLinesNumber > 0)
-	{	
-		wpi->InfoLines = (InfoPanelLine*)calloc(InfoLinesNumber, sizeof(*wpi->InfoLines));
-		for (int i = 0; i < InfoLinesNumber; i++)
-		{
-			wpi->InfoLines[i].Text = InfoLines[i].Text;
-			wpi->InfoLines[i].Data = InfoLines[i].Data;
-			wpi->InfoLines[i].Separator = InfoLines[i].Separator;
-		}
-		wpi->PanelModesNumber = InfoLinesNumber;
-	}
-	return wpi->InfoLines;
-}
-
-PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber)
-{
-	if (wpi && wpi->PanelModesArray)
-	{
-		free(wpi->PanelModesArray);
-		wpi->PanelModesArray = NULL;
-	}
-	wpi->PanelModesNumber = 0;
-	if (PanelModesArray && PanelModesNumber > 0)
-	{
-		wpi->PanelModesArray = (PanelMode*)calloc(PanelModesNumber, sizeof(*wpi->PanelModesArray));
-		for (int i = 0; i < PanelModesNumber; i++)
-		{
-			wpi->PanelModesArray[i].StructSize = sizeof(*wpi->PanelModesArray);
-			wpi->PanelModesArray[i].ColumnTypes = PanelModesArray[i].ColumnTypes;
-			wpi->PanelModesArray[i].ColumnWidths = PanelModesArray[i].ColumnWidths;
-			wpi->PanelModesArray[i].ColumnTitles = PanelModesArray[i].ColumnTitles;
-			wpi->PanelModesArray[i].StatusColumnTypes = PanelModesArray[i].StatusColumnTypes;
-			wpi->PanelModesArray[i].StatusColumnWidths = PanelModesArray[i].StatusColumnWidths;
-			wpi->PanelModesArray[i].Flags = 
-				(PanelModesArray[i].FullScreen ? PMFLAGS_FULLSCREEN : 0) |
-				(PanelModesArray[i].DetailedStatus ? PMFLAGS_DETAILEDSTATUS : 0) |
-				(PanelModesArray[i].AlignExtensions ? PMFLAGS_ALIGNEXTENSIONS : 0) |
-				(PanelModesArray[i].CaseConversion ? PMFLAGS_CASECONVERSION : 0);
-		}
-		wpi->PanelModesNumber = PanelModesNumber;
-	}
-	return wpi->PanelModesArray;
-}
-
-LPCWSTR FormatGuid(GUID* guid, wchar_t* tmp)
-{
-	wsprintf(tmp, L"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
-		guid->Data1, guid->Data2, guid->Data3,
-		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
-		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
-	return tmp;
-}
-
-void LoadPluginInfo()
-{
-	if (wpi)
-		return; // уже
-		
-	BOOL lbRc = FALSE;
-	wchar_t szSelf[MAX_PATH+1]; szSelf[0] = 0;
-	wchar_t szIni[MAX_PATH+1], szTemp[2048];
-	wpi = new WrapPluginInfo;
-	
-	if (GetModuleFileName(ghInstance, szSelf, ARRAYSIZE(szSelf)-4))
-	{
-		GUID tmpGuid = {0}; wchar_t szTmp[64];
-		HANDLE hIniFile = NULL;
-		BOOL lbNewIniFile = FALSE;
-		lstrcpy(szIni, szSelf);
-		wchar_t* pszSelfName = wcsrchr(szSelf, L'\\');
-		if (pszSelfName) pszSelfName++; else pszSelfName = szSelf;
-		wchar_t* pszSlash = wcsrchr(szIni, L'\\');
-		wchar_t* pszFilePtr = NULL;
-		if (!pszSlash) pszSlash = szIni;
-		wchar_t* pszDot = wcsrchr(pszSlash, L'.');
-		if (pszDot)
-			*pszDot = 0;
-		lstrcat(szIni, L".ini");
-		lstrcpy(wpi->IniFile, szIni);
-
-		
-		lstrcpy(wpi->PluginDll, szSelf);
-		pszSlash = wcsrchr(wpi->PluginDll, L'\\');
-		//if (pszSlash) pszSlash++; else pszSlash = wpi->PluginDll;
-		pszFilePtr = pszSlash ? (pszSlash+1) : wpi->PluginDll;
-		hIniFile = CreateFile(szIni, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-		if (hIniFile == INVALID_HANDLE_VALUE)
-		{
-			hIniFile = CreateFile(szIni, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-			if (hIniFile != INVALID_HANDLE_VALUE)
-			{
-				CloseHandle(hIniFile);
-				// OK, создали, теперь нужно сформировать информацию по старому плагину
-				lbNewIniFile = TRUE;
-				//if (pszSlash) *pszSlash = 0;
-				//FSF3.FarRecursiveSearch(wpi->PluginDll, L"*.dll", WrapPluginInfo::SeekForPlugin,
-				//	(FRSMODE)0, wpi);
-				//if (pszSlash) *pszSlash = L'\\';
-			}
-		}
-		else
-		{
-			CloseHandle(hIniFile);
-		}
-
-		if (!lbNewIniFile)
-		{
-			if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszFilePtr, ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll), szIni))
-			{
-				//wpi->PluginDll[0] = 0;
-				lbNewIniFile = TRUE;
-			}
-			else
-				lstrcpyn(wpi->File, pszFilePtr, ARRAYSIZE(wpi->File));
-		}
-
-		if (lbNewIniFile)
-		{
-			
-			WIN32_FIND_DATA fnd;
-			HMODULE hTestDll = NULL;
-			FARPROC lpSetStartupInfoW = NULL, lpGetGlobalInfoW = NULL; // просто для информации, звать их нельзя
-			HANDLE hFind = NULL;
-			for (int i = 0; !hTestDll && i <= 1; i++)
-			{
-				lstrcpy(pszFilePtr, i ? L"*.dl_" : L"*.dll");
-				hFind = FindFirstFile(wpi->PluginDll, &fnd);
-				if (hFind && (hFind != INVALID_HANDLE_VALUE))
-				{
-					*pszFilePtr = 0;
-					int nLen = ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll);
-					do {
-						if ((fnd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-							continue;
-						if (lstrcmpi(pszSelfName, fnd.cFileName) == 0)
-							continue; // это мы
-						lstrcpy(pszFilePtr, fnd.cFileName);
-						hTestDll = LoadLibraryEx(wpi->PluginDll, NULL, DONT_RESOLVE_DLL_REFERENCES|LOAD_WITH_ALTERED_SEARCH_PATH);
-						if (hTestDll)
-						{
-							lpSetStartupInfoW = GetProcAddress(hTestDll, "SetStartupInfoW");
-							lpGetGlobalInfoW = GetProcAddress(hTestDll, "GetGlobalInfoW");
-							FreeLibrary(hTestDll);
-							if (lpSetStartupInfoW && !lpGetGlobalInfoW)
-								break; // Да, это Far2 плагин!
-							hTestDll = NULL; // продолжаем поиск
-						}
-					} while (FindNextFile(hFind, &fnd));
-					FindClose(hFind);
-				}
-			}
-
-			if (hTestDll)
-			{
-				lstrcpyn(wpi->File, pszFilePtr, ARRAYSIZE(wpi->File));
-				// OK, Инициализируем .ini файл
-				DWORD dwErr = 0;
-				BOOL lb = WritePrivateProfileString(L"Plugin", L"PluginFile", pszFilePtr, szIni);
-				if (!lb)
-					dwErr = GetLastError();
-				lb = WritePrivateProfileString(L"Plugin", L"AnalyzeMode", L"2", szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"OldPutFilesParams", L"0", szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"Title", pszFilePtr, szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"Description", pszFilePtr, szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"Author", L"<Unknown>", szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szIni);
-				// Начальные GUID-ы
-				UuidCreate(&tmpGuid);
-				lb = WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&tmpGuid, szTmp), szIni);
-				UuidCreate(&tmpGuid);
-				lb = WritePrivateProfileString(L"Plugin", L"DialogsGUID", FormatGuid(&tmpGuid, szTmp), szIni);
-			}
-			else
-			{
-				wpi->File[0] = 0;
-			}
-		}
-
-		if (hIniFile && (hIniFile != INVALID_HANDLE_VALUE))
-		{
-			//if (!GetPrivateProfileString(L"Plugin", L"PluginFile", L"", pszFilePtr, ARRAYSIZE(wpi->PluginDll)-lstrlen(wpi->PluginDll), szIni))
-			//	wpi->PluginDll[0] = 0;
-			//else
-			//	lstrcpyn(wpi->File, pszFilePtr, ARRAYSIZE(wpi->File));
-
-			wpi->AnalyzeMode = GetPrivateProfileInt(L"Plugin", L"AnalyzeMode", 2, szIni);
-			if (wpi->AnalyzeMode != 1 && wpi->AnalyzeMode != 2)
-				wpi->AnalyzeMode = 2;
-
-			wpi->OldPutFilesParams = GetPrivateProfileInt(L"Plugin", L"OldPutFilesParams", 0, szIni);
-			if (wpi->OldPutFilesParams != 0 && wpi->OldPutFilesParams != 1)
-				wpi->OldPutFilesParams = 0;
-			
-			if (GetPrivateProfileString(L"Plugin", L"Title", L"Sample Far3 plugin", szTemp, ARRAYSIZE(szTemp), szIni))
-				lstrcpyn(wpi->Title, szTemp, ARRAYSIZE(wpi->Title));
-			if (GetPrivateProfileString(L"Plugin", L"Description", L"Far2->Far3 plugin wrapper", szTemp, ARRAYSIZE(szTemp), szIni))
-				lstrcpyn(wpi->Desc, szTemp, ARRAYSIZE(wpi->Desc));
-			if (GetPrivateProfileString(L"Plugin", L"Author", L"Maximus5", szTemp, ARRAYSIZE(szTemp), szIni))
-				lstrcpyn(wpi->Author, szTemp, ARRAYSIZE(wpi->Author));
-			if (GetPrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szTemp, ARRAYSIZE(szTemp), szIni))
-				lstrcpyn(wpi->RegRoot, szTemp, ARRAYSIZE(wpi->RegRoot));
-			if (GetPrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szTemp, ARRAYSIZE(szTemp), szIni))
-			{
-				//TODO: Обработка версии
-			}
-			GUID guid;
-			if (GetPrivateProfileString(L"Plugin", L"GUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
-			{
-				if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
-					wpi->guid_Plugin = guid;
-				else
-				{
-					UuidCreate(&wpi->guid_Plugin);
-					WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&wpi->guid_Plugin, szTmp), szIni);
-				}
-			}
-			if (GetPrivateProfileString(L"Plugin", L"DialogsGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
-			{
-				if (UuidFromStringW((RPC_WSTR)szTemp, &guid) == RPC_S_OK)
-					wpi->guid_Dialogs = guid;
-				else
-				{
-					UuidCreate(&wpi->guid_Dialogs);
-					WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&wpi->guid_Dialogs, szTmp), szIni);
-				}
-			}
-			lbRc = TRUE;
-		}
-	}
-	
-	if (!lbRc)
-	{
-		lstrcpyn(wpi->Title, szSelf[0] ? szSelf : L"Far3Wrap", ARRAYSIZE(wpi->Title));
-		lstrcpy(wpi->Desc, L"Far2->Far3 plugin wrapper");
-		lstrcpy(wpi->Author, L"Maximus5");
-		lstrcpy(wpi->RegRoot, L"Software\\Far Manager\\Plugins");
-		UuidCreate(&wpi->guid_Plugin);
-		UuidCreate(&wpi->guid_Dialogs);
-		//wpi->guid_Plugin = guid_DefPlugin;
-		//wpi->guid_PluginMenu = ::guid_DefPluginMenu;
-		//wpi->guid_PluginConfigMenu = ::guid_DefPluginConfigMenu;
-		//wpi->guid_Dialogs = ::guid_DefDialogs;
-	}
-}
-
-BOOL LoadPlugin(BOOL abSilent)
-{
-	if (!wpi || !*wpi->PluginDll)
-	{
-		return FALSE;
-	}
-	
-	if (wpi && wpi->hDll == NULL)
-	{
-		//wchar_t szOldDir[MAX_PATH] = {0};
-		//GetCurrentDirectory(ARRAYSIZE(szOldDir), szOldDir);
-		//wchar_t* pszSlash = wcsrchr(wpi->PluginDll, L'\\');
-		//if (pszSlash)
-		//{
-		//	*pszSlash = 0;
-		//	SetCurrentDirectory(wpi->PluginDll);
-		//	*pszSlash = L'\\';
-		//}
-#ifdef _DEBUG
-		if (wcschr(wpi->PluginDll, L'*'))
-			ругнуться, что "Plugin module not found: \n" wpi->PluginDll
-		else
-#endif
-		if (wcschr(wpi->PluginDll, L'\\'))
-			wpi->hDll = LoadLibraryEx(wpi->PluginDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-		else
-			wpi->hDll = LoadLibrary(wpi->PluginDll);
-		DWORD dwErr = GetLastError();
-		//if (pszSlash)
-		//	SetCurrentDirectory(szOldDir);
-		if (wpi && wpi->hDll == NULL)
-		{
-			//TODO: Обработка ошибок загрузки
-			wchar_t szInfo[1024] = {0};
-			wsprintf(szInfo, L"Plugin loading failed!\n%s\nErrCode=0x%08X\n", wpi->PluginDll, dwErr);
-			FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwErr,
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), szInfo+lstrlen(szInfo),
-				ARRAYSIZE(szInfo)-lstrlen(szInfo) - 1, NULL);
-			MessageBox(NULL, szInfo, L"Far3Wrapper", MB_ICONSTOP|MB_SYSTEMMODAL);
-		}
-		else
-		{
-			wpi->AnalyseW = (WrapPluginInfo::_AnalyseW)GetProcAddress(wpi->hDll, "AnalyseW");
-			wpi->ClosePluginW = (WrapPluginInfo::_ClosePluginW)GetProcAddress(wpi->hDll, "ClosePluginW");
-			wpi->CompareW = (WrapPluginInfo::_CompareW)GetProcAddress(wpi->hDll, "CompareW");
-			wpi->ConfigureW = (WrapPluginInfo::_ConfigureW)GetProcAddress(wpi->hDll, "ConfigureW");
-			wpi->DeleteFilesW = (WrapPluginInfo::_DeleteFilesW)GetProcAddress(wpi->hDll, "DeleteFilesW");
-			wpi->ExitFARW = (WrapPluginInfo::_ExitFARW)GetProcAddress(wpi->hDll, "ExitFARW");
-			wpi->FreeFindDataW = (WrapPluginInfo::_FreeFindDataW)GetProcAddress(wpi->hDll, "FreeFindDataW");
-			wpi->FreeVirtualFindDataW = (WrapPluginInfo::_FreeVirtualFindDataW)GetProcAddress(wpi->hDll, "FreeVirtualFindDataW");
-			wpi->GetFilesW = (WrapPluginInfo::_GetFilesW)GetProcAddress(wpi->hDll, "GetFilesW");
-			wpi->GetFindDataW = (WrapPluginInfo::_GetFindDataW)GetProcAddress(wpi->hDll, "GetFindDataW");
-			wpi->GetMinFarVersionW = (WrapPluginInfo::_GetMinFarVersionW)GetProcAddress(wpi->hDll, "GetMinFarVersionW");
-			wpi->GetOpenPluginInfoW = (WrapPluginInfo::_GetOpenPluginInfoW)GetProcAddress(wpi->hDll, "GetOpenPluginInfoW");
-			wpi->GetPluginInfoW = (WrapPluginInfo::_GetPluginInfoW)GetProcAddress(wpi->hDll, "GetPluginInfoW");
-			wpi->GetVirtualFindDataW = (WrapPluginInfo::_GetVirtualFindDataW)GetProcAddress(wpi->hDll, "GetVirtualFindDataW");
-			wpi->MakeDirectoryW = (WrapPluginInfo::_MakeDirectoryW)GetProcAddress(wpi->hDll, "MakeDirectoryW");
-			wpi->OpenFilePluginW = (WrapPluginInfo::_OpenFilePluginW)GetProcAddress(wpi->hDll, "OpenFilePluginW");
-			wpi->OpenPluginW = (WrapPluginInfo::_OpenPluginW)GetProcAddress(wpi->hDll, "OpenPluginW");
-			wpi->ProcessDialogEventW = (WrapPluginInfo::_ProcessDialogEventW)GetProcAddress(wpi->hDll, "ProcessDialogEventW");
-			wpi->ProcessEditorEventW = (WrapPluginInfo::_ProcessEditorEventW)GetProcAddress(wpi->hDll, "ProcessEditorEventW");
-			wpi->ProcessEditorInputW = (WrapPluginInfo::_ProcessEditorInputW)GetProcAddress(wpi->hDll, "ProcessEditorInputW");
-			wpi->ProcessEventW = (WrapPluginInfo::_ProcessEventW)GetProcAddress(wpi->hDll, "ProcessEventW");
-			wpi->ProcessHostFileW = (WrapPluginInfo::_ProcessHostFileW)GetProcAddress(wpi->hDll, "ProcessHostFileW");
-			wpi->ProcessKeyW = (WrapPluginInfo::_ProcessKeyW)GetProcAddress(wpi->hDll, "ProcessKeyW");
-			wpi->ProcessSynchroEventW = (WrapPluginInfo::_ProcessSynchroEventW)GetProcAddress(wpi->hDll, "ProcessSynchroEventW");
-			wpi->ProcessViewerEventW = (WrapPluginInfo::_ProcessViewerEventW)GetProcAddress(wpi->hDll, "ProcessViewerEventW");
-			wpi->PutFilesW = (WrapPluginInfo::_PutFilesW)GetProcAddress(wpi->hDll, "PutFilesW");
-			wpi->SetDirectoryW = (WrapPluginInfo::_SetDirectoryW)GetProcAddress(wpi->hDll, "SetDirectoryW");
-			wpi->SetFindListW = (WrapPluginInfo::_SetFindListW)GetProcAddress(wpi->hDll, "SetFindListW");
-			wpi->SetStartupInfoW = (WrapPluginInfo::_SetStartupInfoW)GetProcAddress(wpi->hDll, "SetStartupInfoW");
-		}
-	}
-	
-	return (wpi->hDll != NULL);
-}
-
-// Плагин может быть вызван в первый раз из фоновой нити (диалог поиска при поиске в архивах)
-// Поэтому простой "gnMainThreadId = GetCurrentThreadId();" не прокатит. Нужно искать первую нить процесса!
-DWORD GetMainThreadId()
-{
-	DWORD nThreadID = 0;
-	DWORD nProcID = GetCurrentProcessId();
-	HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-	if (h != INVALID_HANDLE_VALUE)
-	{
-		THREADENTRY32 ti = {sizeof(THREADENTRY32)};
-		if (Thread32First(h, &ti))
-		{
-			do {
-				// Нужно найти ПЕРВУЮ нить процесса
-				if (ti.th32OwnerProcessID == nProcID) {
-					nThreadID = ti.th32ThreadID;
-					break;
-				}
-			} while (Thread32Next(h, &ti));
-		}
-		CloseHandle(h);
-	}
-
-	// Нехорошо. Должна быть найдена. Вернем хоть что-то (текущую нить)
-	if (!nThreadID) {
-		_ASSERTE(nThreadID!=0);
-		nThreadID = GetCurrentThreadId();
-	}
-	return nThreadID;
-}
 
 
-BOOL APIENTRY DllMain( HANDLE hModule, 
-                       DWORD  ul_reason_for_call, 
-                       LPVOID lpReserved
-                     )
-{
-    if (ghInstance == NULL)
-    {
-		ghInstance = (HMODULE)hModule;
-		gnMainThreadId = GetMainThreadId();
-
-		lbPsi2 = FALSE;
-		memset(&psi3, 0, sizeof(psi3));
-		memset(&psi2, 0, sizeof(psi2));
-		memset(&FSF3, 0, sizeof(FSF3));
-		memset(&FSF2, 0, sizeof(FSF2));
-
-		wpi = NULL;
-		LoadPluginInfo(); // может сейчас не будем, выполним в SetStartupInfoW?
-    }
-    if (ul_reason_for_call == DLL_PROCESS_DETACH)
-    {
-    	if (wpi)
-    	{
-    		delete wpi;
-    		wpi = NULL;
-    	}
-    }
-    return TRUE;
-}
 
 
-void WINAPI SetStartupInfoW(PluginStartupInfo *Info)
+
+
+
+
+
+
+
+void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 {
 	memmove(&psi3, Info, sizeof(psi3));
 	memmove(&FSF3, Info->FSF, sizeof(FSF3));
 	psi3.FSF = &FSF3;
+	lbPsi3 = TRUE;
 	
 	LoadPluginInfo();
 	
@@ -4038,72 +4240,72 @@ void WINAPI SetStartupInfoW(PluginStartupInfo *Info)
 	FSF2.TruncPathStr = FSF3.TruncPathStr;
 	FSF2.QuoteSpaceOnly = FSF3.QuoteSpaceOnly;
 	FSF2.PointToName = FSF3.PointToName;
-	FSF2.GetPathRoot = WrapPluginInfo::FarStdGetPathRoot;
+	FSF2.GetPathRoot = WrapPluginInfo::FarStdGetPathRootExp;
 	FSF2.AddEndSlash = FSF3.AddEndSlash;
 	FSF2.CopyToClipboard = FSF3.CopyToClipboard;
 	FSF2.PasteFromClipboard = FSF3.PasteFromClipboard;
 	FSF2.FarKeyToName = FSF3.FarKeyToName;
 	FSF2.FarNameToKey = FSF3.FarNameToKey;
 	FSF2.FarInputRecordToKey = FSF3.FarInputRecordToKey;
-	FSF2.XLat = WrapPluginInfo::FarStdXlat;
-	FSF2.GetFileOwner = WrapPluginInfo::FarStdGetFileOwner;
+	FSF2.XLat = WrapPluginInfo::FarStdXlatExp;
+	FSF2.GetFileOwner = WrapPluginInfo::FarStdGetFileOwnerExp;
 	FSF2.GetNumberOfLinks = FSF3.GetNumberOfLinks;
-	FSF2.FarRecursiveSearch = WrapPluginInfo::FarStdRecursiveSearch;
-	FSF2.MkTemp = WrapPluginInfo::FarStdMkTemp;
+	FSF2.FarRecursiveSearch = WrapPluginInfo::FarStdRecursiveSearchExp;
+	FSF2.MkTemp = WrapPluginInfo::FarStdMkTempExp;
 	FSF2.DeleteBuffer = FSF3.DeleteBuffer;
-	FSF2.ProcessName = WrapPluginInfo::FarStdProcessName;
-	FSF2.MkLink = WrapPluginInfo::FarStdMkLink;
-	FSF2.ConvertPath = WrapPluginInfo::FarConvertPath;
-	FSF2.GetReparsePointInfo = WrapPluginInfo::FarGetReparsePointInfo;
-	FSF2.GetCurrentDirectory = WrapPluginInfo::FarGetCurrentDirectory;
+	FSF2.ProcessName = WrapPluginInfo::FarStdProcessNameExp;
+	FSF2.MkLink = WrapPluginInfo::FarStdMkLinkExp;
+	FSF2.ConvertPath = WrapPluginInfo::FarConvertPathExp;
+	FSF2.GetReparsePointInfo = WrapPluginInfo::FarGetReparsePointInfoExp;
+	FSF2.GetCurrentDirectory = WrapPluginInfo::FarGetCurrentDirectoryExp;
 	
 	// *** PluginStartupInfo ***
 	psi2.StructSize = sizeof(psi2);
-	psi2.ModuleName = wpi->PluginDll;
-	psi2.ModuleNumber = (INT_PTR)wpi->hDll;
-	psi2.RootKey = wpi->RegRoot;
-	psi2.Menu = WrapPluginInfo::FarApiMenu;
-	psi2.Message = WrapPluginInfo::FarApiMessage;
-	psi2.GetMsg = WrapPluginInfo::FarApiGetMsg;
-	psi2.Control = WrapPluginInfo::FarApiControl;
-	psi2.SaveScreen = WrapPluginInfo::FarApiSaveScreen;
-	psi2.RestoreScreen = WrapPluginInfo::FarApiRestoreScreen;
-	psi2.GetDirList = WrapPluginInfo::FarApiGetDirList;
-	psi2.GetPluginDirList = WrapPluginInfo::FarApiGetPluginDirList;
-	psi2.FreeDirList = WrapPluginInfo::FarApiFreeDirList;
-	psi2.FreePluginDirList = WrapPluginInfo::FarApiFreePluginDirList;
-	psi2.Viewer = WrapPluginInfo::FarApiViewer;
-	psi2.Editor = WrapPluginInfo::FarApiEditor;
-	psi2.CmpName = WrapPluginInfo::FarApiCmpName;
-	psi2.Text = WrapPluginInfo::FarApiText;
-	psi2.EditorControl = WrapPluginInfo::FarApiEditorControl;
+	psi2.ModuleName = ms_PluginDll;
+	psi2.ModuleNumber = (INT_PTR)mh_Dll;
+	psi2.RootKey = ms_RegRoot;
+	psi2.Menu = WrapPluginInfo::FarApiMenuExp;
+	psi2.Message = WrapPluginInfo::FarApiMessageExp;
+	psi2.GetMsg = WrapPluginInfo::FarApiGetMsgExp;
+	psi2.Control = WrapPluginInfo::FarApiControlExp;
+	psi2.SaveScreen = WrapPluginInfo::FarApiSaveScreenExp;
+	psi2.RestoreScreen = WrapPluginInfo::FarApiRestoreScreenExp;
+	psi2.GetDirList = WrapPluginInfo::FarApiGetDirListExp;
+	psi2.GetPluginDirList = WrapPluginInfo::FarApiGetPluginDirListExp;
+	psi2.FreeDirList = WrapPluginInfo::FarApiFreeDirListExp;
+	psi2.FreePluginDirList = WrapPluginInfo::FarApiFreePluginDirListExp;
+	psi2.Viewer = WrapPluginInfo::FarApiViewerExp;
+	psi2.Editor = WrapPluginInfo::FarApiEditorExp;
+	psi2.CmpName = WrapPluginInfo::FarApiCmpNameExp;
+	psi2.Text = WrapPluginInfo::FarApiTextExp;
+	psi2.EditorControl = WrapPluginInfo::FarApiEditorControlExp;
 
 	psi2.FSF = &FSF2;
 
-	psi2.ShowHelp = WrapPluginInfo::FarApiShowHelp;
-	psi2.AdvControl = WrapPluginInfo::FarApiAdvControl;
-	psi2.InputBox = WrapPluginInfo::FarApiInputBox;
-	psi2.DialogInit = WrapPluginInfo::FarApiDialogInit;
-	psi2.DialogRun = WrapPluginInfo::FarApiDialogRun;
-	psi2.DialogFree = WrapPluginInfo::FarApiDialogFree;
+	psi2.ShowHelp = WrapPluginInfo::FarApiShowHelpExp;
+	psi2.AdvControl = WrapPluginInfo::FarApiAdvControlExp;
+	psi2.InputBox = WrapPluginInfo::FarApiInputBoxExp;
+	psi2.DialogInit = WrapPluginInfo::FarApiDialogInitExp;
+	psi2.DialogRun = WrapPluginInfo::FarApiDialogRunExp;
+	psi2.DialogFree = WrapPluginInfo::FarApiDialogFreeExp;
 
-	psi2.SendDlgMessage = WrapPluginInfo::FarApiSendDlgMessage;
-	psi2.DefDlgProc = WrapPluginInfo::FarApiDefDlgProc;
+	psi2.SendDlgMessage = WrapPluginInfo::FarApiSendDlgMessageExp;
+	psi2.DefDlgProc = WrapPluginInfo::FarApiDefDlgProcExp;
 	//DWORD_PTR              Reserved;
-	psi2.ViewerControl = WrapPluginInfo::FarApiViewerControl;
-	psi2.PluginsControl = WrapPluginInfo::FarApiPluginsControl;
-	psi2.FileFilterControl = WrapPluginInfo::FarApiFileFilterControl;
-	psi2.RegExpControl = WrapPluginInfo::FarApiRegExpControl;
+	psi2.ViewerControl = WrapPluginInfo::FarApiViewerControlExp;
+	psi2.PluginsControl = WrapPluginInfo::FarApiPluginsControlExp;
+	psi2.FileFilterControl = WrapPluginInfo::FarApiFileFilterControlExp;
+	psi2.RegExpControl = WrapPluginInfo::FarApiRegExpControlExp;
 
 	lbPsi2 = TRUE;
 	
-	if (wpi && wpi->SetStartupInfoW && lbPsi2)
+	if (SetStartupInfoW && lbPsi2)
 	{
-		wpi->SetStartupInfoW(&psi2);
+		SetStartupInfoW(&psi2);
 	}
 }
 
-void WINAPI GetGlobalInfoW(GlobalInfo *Info)
+void WrapPluginInfo::GetGlobalInfoW3(GlobalInfo *Info)
 {
 	//LOG_CMD(L"GetGlobalInfoW",0,0,0);
 	LoadPluginInfo();
@@ -4111,46 +4313,50 @@ void WINAPI GetGlobalInfoW(GlobalInfo *Info)
 	Info->StructSize = sizeof(GlobalInfo);
 	Info->MinFarVersion = FARMANAGERVERSION;
 
-	Info->Version = wpi->Version;
-	Info->Guid = wpi->guid_Plugin;
-	Info->Title = wpi->Title;
-	Info->Description = wpi->Desc;
-	Info->Author = wpi->Author;
+	Info->Version = m_Version;
+	Info->Guid = mguid_Plugin;
+	Info->Title = ms_Title;
+	Info->Description = ms_Desc;
+	Info->Author = ms_Author;
 }
 
 
 
-void WINAPI GetPluginInfoW(PluginInfo *Info)
+void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 {
     memset(Info, 0, sizeof(PluginInfo));
     
 	Info->StructSize = sizeof(*Info);
 
-    if (wpi && wpi->GetPluginInfoW)
+	//_ASSERTE(lbPsi2 && lbPsi3);
+	OutputDebugString(L"GetPluginInfoW3 called before SetStartupInfoW3\n");
+
+    if (GetPluginInfoW && lbPsi2)
     {
     	LOG_CMD(L"GetPluginInfoW",0,0,0);
-		wpi->Info.StructSize = sizeof(wpi->Info);
-    	wpi->GetPluginInfoW(&wpi->Info);
+		ZeroStruct(m_Info);
+		m_Info.StructSize = sizeof(m_Info);
+    	GetPluginInfoW(&m_Info);
     	
-    	if (wpi && wpi->Info.Flags & Far2::PF_PRELOAD)
+    	if (m_Info.Flags & Far2::PF_PRELOAD)
     		Info->Flags |= PF_PRELOAD;
-    	if (wpi && wpi->Info.Flags & Far2::PF_DISABLEPANELS)
+    	if (m_Info.Flags & Far2::PF_DISABLEPANELS)
     		Info->Flags |= PF_DISABLEPANELS;
-    	if (wpi && wpi->Info.Flags & Far2::PF_EDITOR)
+    	if (m_Info.Flags & Far2::PF_EDITOR)
     		Info->Flags |= PF_EDITOR;
-    	if (wpi && wpi->Info.Flags & Far2::PF_VIEWER)
+    	if (m_Info.Flags & Far2::PF_VIEWER)
     		Info->Flags |= PF_VIEWER;
-    	if (wpi && wpi->Info.Flags & Far2::PF_FULLCMDLINE)
+    	if (m_Info.Flags & Far2::PF_FULLCMDLINE)
     		Info->Flags |= PF_FULLCMDLINE;
-    	if (wpi && wpi->Info.Flags & Far2::PF_DIALOG)
+    	if (m_Info.Flags & Far2::PF_DIALOG)
     		Info->Flags |= PF_DIALOG;
 
 		//if (GetPrivateProfileString(L"Plugin", L"MenuGUID", L"", szTemp, ARRAYSIZE(szTemp), szIni))
 		//{
 		//	if (
-		//		wpi->guid_PluginMenu = guid;
+		//		guid_PluginMenu = guid;
 		//	else
-		//		wpi->guid_PluginMenu = ::guid_DefPluginMenu;
+		//		guid_PluginMenu = ::guid_DefPluginMenu;
 		//}
 
 		wchar_t szValName[64], szGUID[128]; GUID guid;
@@ -4158,12 +4364,12 @@ void WINAPI GetPluginInfoW(PluginInfo *Info)
 				 PluginMenuItem *Menu; int* GuidCount; GUID** Guids; }
 			Menus[] = 
 		{
-			{L"PluginMenuGUID%i", wpi->Info.PluginMenuStringsNumber, wpi->Info.PluginMenuStrings, 
-				&Info->PluginMenu, &wpi->nPluginMenu, &wpi->guids_PluginMenu},
-			{L"DiskMenuGUID%i", wpi->Info.DiskMenuStringsNumber, wpi->Info.DiskMenuStrings, 
-				&Info->DiskMenu, &wpi->nPluginDisks, &wpi->guids_PluginDisks},
-			{L"PluginConfigGUID%i", wpi->Info.PluginConfigStringsNumber, wpi->Info.PluginConfigStrings, 
-				&Info->PluginConfig, &wpi->nPluginConfig, &wpi->guids_PluginConfig}
+			{L"PluginMenuGUID%i", m_Info.PluginMenuStringsNumber, m_Info.PluginMenuStrings, 
+				&Info->PluginMenu, &mn_PluginMenu, &mguids_PluginMenu},
+			{L"DiskMenuGUID%i", m_Info.DiskMenuStringsNumber, m_Info.DiskMenuStrings, 
+				&Info->DiskMenu, &mn_PluginDisks, &mguids_PluginDisks},
+			{L"PluginConfigGUID%i", m_Info.PluginConfigStringsNumber, m_Info.PluginConfigStrings, 
+				&Info->PluginConfig, &mn_PluginConfig, &mguids_PluginConfig}
 		};
 		for (int k = 0; k < ARRAYSIZE(Menus); k++)
 		{
@@ -4181,14 +4387,14 @@ void WINAPI GetPluginInfoW(PluginInfo *Info)
     				wsprintf(szValName, Menus[k].Fmt, i);
 					BOOL lbGot = FALSE;
 					szGUID[0] = 0;
-    				lbGot = (GetPrivateProfileString(L"Plugin", szValName, L"", szGUID, ARRAYSIZE(szGUID), wpi->IniFile)
+    				lbGot = (GetPrivateProfileString(L"Plugin", szValName, L"", szGUID, ARRAYSIZE(szGUID), ms_IniFile)
 						&& (UuidFromStringW((RPC_WSTR)szGUID, &guid) == RPC_S_OK));
     				if (!lbGot)
 					{
 						RPC_STATUS hr = UuidCreate(&guid);
 						if (FAILED(hr))
 							break;
-						WritePrivateProfileString(L"Plugin", szValName, FormatGuid(&guid, szGUID), wpi->IniFile);
+						WritePrivateProfileString(L"Plugin", szValName, FormatGuid(&guid, szGUID), ms_IniFile);
 					}
     				// OK
     				(*Menus[k].Guids)[i-1] = guid;
@@ -4219,21 +4425,21 @@ void WINAPI GetPluginInfoW(PluginInfo *Info)
 		//int PluginConfigStringsNumber;
 		// -->struct PluginMenuItem PluginConfig;
 		
-		Info->CommandPrefix = wpi->Info.CommandPrefix;
+		Info->CommandPrefix = m_Info.CommandPrefix;
     }
 }
 
-HANDLE WINAPI OpenW(const OpenInfo *Info)
+HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 {
 	LOG_CMD(L"OpenW(0x%08X)", (DWORD)Info->OpenFrom,0,0);
 	HANDLE h = INVALID_HANDLE_VALUE;
 
 	int nPluginItemNumber = 0;
-	if (Info->Guid && memcmp(Info->Guid, &GUID_NULL, sizeof(GUID)) && wpi->guids_PluginMenu)
+	if (Info->Guid && memcmp(Info->Guid, &GUID_NULL, sizeof(GUID)) && mguids_PluginMenu)
 	{
-		for (int i = 0; i < wpi->nPluginMenu; i++)
+		for (int i = 0; i < mn_PluginMenu; i++)
 		{
-			if (memcmp(Info->Guid, wpi->guids_PluginMenu+i, sizeof(GUID)) == 0)
+			if (memcmp(Info->Guid, mguids_PluginMenu+i, sizeof(GUID)) == 0)
 			{
 				nPluginItemNumber = i;
 				break;
@@ -4243,70 +4449,70 @@ HANDLE WINAPI OpenW(const OpenInfo *Info)
 
 	if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_ANALYSE)
 	{
-		if (wpi && wpi->AnalyseW)
+		if (AnalyseW)
 		{
 			// В принципе, в Far2 была такая функция, так что если плаг ее экспортит - зовем
-			h = wpi->OpenPluginW(OpenFrom_3_2(Info->OpenFrom), Info->Data);
+			h = OpenPluginW(OpenFrom_3_2(Info->OpenFrom), Info->Data);
 			goto trap;
 		}
-		if (!wpi->pAnalyze || !wpi->OpenFilePluginW)
+		if (!mp_Analyze || !OpenFilePluginW)
 			goto trap;
-		h = wpi->OpenFilePluginW(wpi->pAnalyze->FileName,
-				(const unsigned char*)wpi->pAnalyze->Buffer,
-				wpi->pAnalyze->BufferSize,
-				OpMode_3_2(wpi->pAnalyze->OpMode));
+		h = OpenFilePluginW(mp_Analyze->FileName,
+				(const unsigned char*)mp_Analyze->Buffer,
+				mp_Analyze->BufferSize,
+				OpMode_3_2(mp_Analyze->OpMode));
 		goto trap;
 	}
-	else if (wpi && wpi->pAnalyze)
+	else if (mp_Analyze)
 	{
-		free(wpi->pAnalyze);
-		wpi->pAnalyze = NULL;
+		free(mp_Analyze);
+		mp_Analyze = NULL;
 	}
 	
 	if ((Info->OpenFrom & OPEN_FROMMACRO_MASK))
 	{
-		if (wpi && wpi->Info.Reserved 
+		if (m_Info.Reserved 
 			&& (((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACRO)
 				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING))
-		    && wpi->OpenPluginW)
+		    && OpenPluginW)
 		{
-			h = wpi->OpenPluginW(Far2::OPEN_FROMMACRO, Info->Data);
+			h = OpenPluginW(Far2::OPEN_FROMMACRO, Info->Data);
 		}
 		goto trap;
 	}
 
-	if (wpi && wpi->OpenPluginW)
+	if (OpenPluginW)
 	{
 		switch (Info->OpenFrom & OPEN_FROM_MASK)
 		{
 		case OPEN_LEFTDISKMENU:
 		case OPEN_RIGHTDISKMENU:
-			h = wpi->OpenPluginW(Far2::OPEN_DISKMENU, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_DISKMENU, Info->Data); break;
 		case OPEN_PLUGINSMENU:
-			h = wpi->OpenPluginW(Far2::OPEN_PLUGINSMENU, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_PLUGINSMENU, Info->Data); break;
 		case OPEN_FINDLIST:
-			h = wpi->OpenPluginW(Far2::OPEN_FINDLIST, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_FINDLIST, Info->Data); break;
 		case OPEN_SHORTCUT:
-			h = wpi->OpenPluginW(Far2::OPEN_SHORTCUT, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_SHORTCUT, Info->Data); break;
 		case OPEN_COMMANDLINE:
-			h = wpi->OpenPluginW(Far2::OPEN_COMMANDLINE, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_COMMANDLINE, Info->Data); break;
 		case OPEN_EDITOR:
-			h = wpi->OpenPluginW(Far2::OPEN_EDITOR, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_EDITOR, Info->Data); break;
 		case OPEN_VIEWER:
-			h = wpi->OpenPluginW(Far2::OPEN_VIEWER, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_VIEWER, Info->Data); break;
 		case OPEN_FILEPANEL:
-			h = wpi->OpenPluginW(Far2::OPEN_FILEPANEL, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_FILEPANEL, Info->Data); break;
 		case OPEN_DIALOG:
 			{
 				const OpenDlgPluginData* p3 = (OpenDlgPluginData*)Info->Data;
 				Far2::OpenDlgPluginData p2 = {nPluginItemNumber};
 				if (p3)
 				{
-					Far2Dialog* p = wpi->MapDlg_3_2[p3->hDlg];
+					Far2Dialog* p = MapDlg_3_2[p3->hDlg];
 					// Может быть NULL, если это диалог НЕ из этого плагина
 					p2.hDlg = p ? ((HANDLE)p) : p3->hDlg;
 				}
-				h = wpi->OpenPluginW(Far2::OPEN_DIALOG, (INT_PTR)&p2);
+				h = OpenPluginW(Far2::OPEN_DIALOG, (INT_PTR)&p2);
 			}
 			break;
 		}
@@ -4315,99 +4521,97 @@ trap:
 	return h;
 }
 
-int    WINAPI AnalyseW(const AnalyseInfo *Info)
+int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 {
 	LOG_CMD(L"AnalyseW",0,0,0);
-	if (!wpi)
-		return FALSE;
-	if (wpi && wpi->AnalyseW)
-		return wpi->AnalyseW(Info);
-	if (wpi && wpi->pAnalyze)
+	if (AnalyseW)
+		return AnalyseW(Info);
+	if (mp_Analyze)
 	{
-		free(wpi->pAnalyze);
-		wpi->pAnalyze = NULL;
+		free(mp_Analyze);
+		mp_Analyze = NULL;
 	}
-	if (!wpi->OpenFilePluginW)
+	if (!OpenFilePluginW)
 		return FALSE;
-	size_t nNewSize = sizeof(*wpi->pAnalyze) + Info->BufferSize
+	size_t nNewSize = sizeof(*mp_Analyze) + Info->BufferSize
 			+ ((Info->FileName ? lstrlen(Info->FileName) : 0)+1)*sizeof(wchar_t);
-	wpi->pAnalyze = (AnalyseInfo*)malloc(nNewSize);
-	if (!wpi->pAnalyze)
+	mp_Analyze = (AnalyseInfo*)malloc(nNewSize);
+	if (!mp_Analyze)
 		return FALSE;
-	LPBYTE ptr = (LPBYTE)wpi->pAnalyze;
-	memmove(ptr, Info, sizeof(wpi->pAnalyze));
-	ptr += sizeof(wpi->pAnalyze);
+	LPBYTE ptr = (LPBYTE)mp_Analyze;
+	memmove(ptr, Info, sizeof(mp_Analyze));
+	ptr += sizeof(mp_Analyze);
 	if (Info->BufferSize && Info->Buffer)
 	{
 		memmove(ptr, Info->Buffer, Info->BufferSize);
-		wpi->pAnalyze->Buffer = ptr;
+		mp_Analyze->Buffer = ptr;
 		ptr += Info->BufferSize;
 	}
 	else
 	{
-		wpi->pAnalyze->Buffer = NULL;
+		mp_Analyze->Buffer = NULL;
 	}
 	if (Info->FileName)
 	{
 		lstrcpy((LPWSTR)ptr, Info->FileName);
-		wpi->pAnalyze->FileName = (LPCWSTR)ptr;
+		mp_Analyze->FileName = (LPCWSTR)ptr;
 	}
 	else
-		wpi->pAnalyze->FileName = NULL;
+		mp_Analyze->FileName = NULL;
 	
-	HANDLE h = wpi->OpenFilePluginW(wpi->pAnalyze->FileName,
-		(const unsigned char*)wpi->pAnalyze->Buffer,
-		wpi->pAnalyze->BufferSize,
+	HANDLE h = OpenFilePluginW(mp_Analyze->FileName,
+		(const unsigned char*)mp_Analyze->Buffer,
+		mp_Analyze->BufferSize,
 		OpMode_3_2(Info->OpMode));
 	if (h && h != INVALID_HANDLE_VALUE && ((INT_PTR)h) != -2)
 	{
-		if (wpi && wpi->AnalyzeMode == 1)
+		if (m_AnalyzeMode == 1)
 		{
 			//TODO: Не закрывать. только вопрос - когда его можно будет закрыть, если OpenW НЕ будет вызван?
 		}
 	
 		//TODO: Хорошо бы оптимизнуть, и не открывать файл два раза подряд, но непонятно
 		//TODO: в какой момент можно закрыть Far2 плагин, если до OpenW дело не дошло...
-		if (wpi && wpi->ClosePluginW)
-			wpi->ClosePluginW(h);
+		if (ClosePluginW)
+			ClosePluginW(h);
 		return TRUE;
 	}
 	return 0;
 }
-void   WINAPI ClosePanelW(HANDLE hPanel)
+void   WrapPluginInfo::ClosePanelW3(HANDLE hPanel)
 {
 	LOG_CMD(L"ClosePanelW",0,0,0);
-	if (wpi && wpi->ClosePluginW)
-		wpi->ClosePluginW(hPanel);
+	if (ClosePluginW)
+		ClosePluginW(hPanel);
 }
-int    WINAPI CompareW(const CompareInfo *Info)
+int    WrapPluginInfo::CompareW3(const CompareInfo *Info)
 {
 	LOG_CMD(L"CompareW",0,0,0);
 	int iRc = -2;
-	if (wpi && wpi->CompareW)
+	if (CompareW)
 	{
 		Far2::PluginPanelItem Item1 = {{0}};
 		Far2::PluginPanelItem Item2 = {{0}};
 		PluginPanelItem_3_2(Info->Item1, &Item1);
 		PluginPanelItem_3_2(Info->Item2, &Item2);
-		iRc = wpi->CompareW(Info->hPanel, &Item1, &Item2, SortMode_3_2(Info->Mode));
+		iRc = CompareW(Info->hPanel, &Item1, &Item2, SortMode_3_2(Info->Mode));
 	}
 	return iRc;
 }
-int    WINAPI ConfigureW(const GUID* Guid)
+int    WrapPluginInfo::ConfigureW3(const GUID* Guid)
 {
 	LOG_CMD(L"ConfigureW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->ConfigureW)
+	if (ConfigureW)
 	{
-		if (wpi && wpi->nPluginConfig > 0 && wpi->guids_PluginConfig)
+		if (mn_PluginConfig > 0 && mguids_PluginConfig)
 		{
-			for (int i = 0; i < wpi->nPluginConfig; i++)
+			for (int i = 0; i < mn_PluginConfig; i++)
 			{
 				if (memcmp(Guid, &GUID_NULL, sizeof(GUID)) == 0 ||
-					memcmp(Guid, wpi->guids_PluginConfig+i, sizeof(GUID)) == 0)
+					memcmp(Guid, mguids_PluginConfig+i, sizeof(GUID)) == 0)
 				{
-					iRc = wpi->ConfigureW(i);
+					iRc = ConfigureW(i);
 					break;
 				}
 			}
@@ -4415,67 +4619,73 @@ int    WINAPI ConfigureW(const GUID* Guid)
 	}
 	return iRc;
 }
-int    WINAPI DeleteFilesW(const DeleteFilesInfo *Info)
+int    WrapPluginInfo::DeleteFilesW3(const DeleteFilesInfo *Info)
 {
 	LOG_CMD(L"DeleteFilesW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->DeleteFilesW)
+	if (DeleteFilesW)
 	{
 		Far2::PluginPanelItem *p2 = PluginPanelItems_3_2(Info->PanelItem, Info->ItemsNumber);
 		if (p2)
 		{
-			iRc = wpi->DeleteFilesW(Info->hPanel, p2, Info->ItemsNumber, OpMode_3_2(Info->OpMode));
+			iRc = DeleteFilesW(Info->hPanel, p2, Info->ItemsNumber, OpMode_3_2(Info->OpMode));
 			free(p2);
 		}
 	}
 	return iRc;
 }
-void   WINAPI ExitFARW(void)
+void   WrapPluginInfo::ExitFARW3(void)
 {
 	LOG_CMD(L"ExitFARW",0,0,0);
-	if (wpi)
+	if (ExitFARW)
+		ExitFARW();
+	UnloadPlugin();
+	// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
+	if (mn_OldAbsentFunctions != mn_NewAbsentFunctions && *ms_PluginDll)
 	{
-		if (wpi->ExitFARW)
-			wpi->ExitFARW();
-		wpi->UnloadPlugin();
-		delete wpi;
-		wpi = NULL;
+		WrapUpdateFunctions upd = {mn_OldAbsentFunctions, mn_NewAbsentFunctions};
+		if (GetModuleFileName(mh_Loader, upd.ms_Loader, ARRAYSIZE(upd.ms_Loader)))
+		{
+			lstrcpy(upd.ms_IniFile, ms_IniFile);
+			UpdateFunc.push_back(upd);
+		}
 	}
+	delete this;
 }
-void   WINAPI FreeVirtualFindDataW(const FreeFindDataInfo *Info)
+void   WrapPluginInfo::FreeVirtualFindDataW3(const FreeFindDataInfo *Info)
 {
 	LOG_CMD(L"FreeVirtualFindDataW",0,0,0);
 	//TODO:
 }
-int    WINAPI GetFilesW(GetFilesInfo *Info)
+int    WrapPluginInfo::GetFilesW3(GetFilesInfo *Info)
 {
 	LOG_CMD(L"GetFilesW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->GetFilesW)
+	if (GetFilesW)
 	{
 		Far2::PluginPanelItem *p2 = PluginPanelItems_3_2(Info->PanelItem, Info->ItemsNumber);
 		if (p2)
 		{
-			iRc = wpi->GetFilesW(Info->hPanel, p2, Info->ItemsNumber, Info->Move, &Info->DestPath, OpMode_3_2(Info->OpMode));
+			iRc = GetFilesW(Info->hPanel, p2, Info->ItemsNumber, Info->Move, &Info->DestPath, OpMode_3_2(Info->OpMode));
 			free(p2);
 		}
 	}
 	return iRc;
 }
-int    WINAPI GetFindDataW(GetFindDataInfo *Info)
+int    WrapPluginInfo::GetFindDataW3(GetFindDataInfo *Info)
 {
 	LOG_CMD(L"GetFindDataW",0,0,0);
 	//GetFindDataW(HANDLE hPlugin,Far2::PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
-	if (!wpi->GetFindDataW)
+	if (!GetFindDataW)
 		return 0;
 	Far2::PluginPanelItem *pPanelItem = NULL;
 	int ItemsNumber = 0;
-	int iRc = wpi->GetFindDataW(Info->hPanel, &pPanelItem, &ItemsNumber, OpMode_3_2(Info->OpMode));
+	int iRc = GetFindDataW(Info->hPanel, &pPanelItem, &ItemsNumber, OpMode_3_2(Info->OpMode));
 	if (iRc && ItemsNumber > 0)
 	{
 		Info->PanelItem = PluginPanelItems_2_3(pPanelItem, ItemsNumber);
 		Info->ItemsNumber = ItemsNumber;
-		wpi->MapPanelItems[Info->PanelItem] = pPanelItem;
+		m_MapPanelItems[Info->PanelItem] = pPanelItem;
 		//PluginPanelItem* p3 = Info->PanelItem;
 		//Far2::PluginPanelItem* p2 = pPanelItem;
 		//for (int i = 0; i < ItemsNumber; i++, p2++, p3++)
@@ -4501,38 +4711,38 @@ int    WINAPI GetFindDataW(GetFindDataInfo *Info)
 	}
 	return iRc;
 }
-void   WINAPI FreeFindDataW(const FreeFindDataInfo *Info)
+void   WrapPluginInfo::FreeFindDataW3(const FreeFindDataInfo *Info)
 {
 	LOG_CMD(L"FreeFindDataW",0,0,0);
 	if (Info->PanelItem)
 	{
-		if (wpi && wpi->FreeFindDataW)
+		if (FreeFindDataW)
 		{
-			Far2::PluginPanelItem *pPanelItem = wpi->MapPanelItems[Info->PanelItem];
+			Far2::PluginPanelItem *pPanelItem = m_MapPanelItems[Info->PanelItem];
 			if (pPanelItem)
-				wpi->FreeFindDataW(Info->hPanel, pPanelItem, Info->ItemsNumber);
+				FreeFindDataW(Info->hPanel, pPanelItem, Info->ItemsNumber);
 		}
 		free(Info->PanelItem);
 		
-		wpi->MapPanelItems.erase(Info->PanelItem);
+		m_MapPanelItems.erase(Info->PanelItem);
 		//std::map<PluginPanelItem*,Far2::PluginPanelItem*>::iterator iter;
-		//for (iter = wpi->MapPanelItems.begin( ); iter!=wpi->MapPanelItems.end( ); iter++)
+		//for (iter = MapPanelItems.begin( ); iter!=MapPanelItems.end( ); iter++)
 		//{
 		//	if (iter->first == Info->PanelItem)
 		//	{
-		//		wpi->MapPanelItems.erase(iter);
+		//		MapPanelItems.erase(iter);
 		//		break;
 		//	}
 		//}
 	}
 }
-void   WINAPI GetOpenPanelInfoW(OpenPanelInfo *Info)
+void   WrapPluginInfo::GetOpenPanelInfoW3(OpenPanelInfo *Info)
 {
 	LOG_CMD(L"GetOpenPluginInfoW",0,0,0);
-	if (wpi && wpi->GetOpenPluginInfoW)
+	if (GetOpenPluginInfoW)
 	{
 		Far2::OpenPluginInfo ofi = {sizeof(Far2::OpenPluginInfo)};
-		wpi->GetOpenPluginInfoW(Info->hPanel, &ofi);
+		GetOpenPluginInfoW(Info->hPanel, &ofi);
 		
 		//memset(Info, 0, sizeof(*Info));
 		//Info->StructSize = sizeof(*Info);
@@ -4543,38 +4753,38 @@ void   WINAPI GetOpenPanelInfoW(OpenPanelInfo *Info)
 		Info->Format = ofi.Format;
 		Info->PanelTitle = ofi.PanelTitle;
 		Info->InfoLines = InfoLines_2_3(ofi.InfoLines, ofi.InfoLinesNumber);
-		Info->InfoLinesNumber = wpi->InfoLinesNumber;
+		Info->InfoLinesNumber = m_InfoLinesNumber;
 		Info->DescrFiles = ofi.DescrFiles;
 		Info->DescrFilesNumber = ofi.DescrFilesNumber;
 		Info->PanelModesArray = PanelModes_2_3(ofi.PanelModesArray, ofi.PanelModesNumber);
-		Info->PanelModesNumber = wpi->PanelModesNumber;
+		Info->PanelModesNumber = m_PanelModesNumber;
 		Info->StartPanelMode = ofi.StartPanelMode;
 		Info->StartSortMode = SortMode_2_3(ofi.StartSortMode);
 		Info->StartSortOrder = ofi.StartSortOrder;
-		Info->KeyBar = wpi->KeyBarTitles_2_3(ofi.KeyBar);
+		Info->KeyBar = KeyBarTitles_2_3(ofi.KeyBar);
 		Info->ShortcutData = ofi.ShortcutData;
 		Info->FreeSize = 0;
 	}
 }
-int    WINAPI GetVirtualFindDataW(GetVirtualFindDataInfo *Info)
+int    WrapPluginInfo::GetVirtualFindDataW3(GetVirtualFindDataInfo *Info)
 {
 	LOG_CMD(L"GetVirtualFindDataW",0,0,0);
 	//TODO:
 	return 0;
 }
-int    WINAPI MakeDirectoryW(MakeDirectoryInfo *Info)
+int    WrapPluginInfo::MakeDirectoryW3(MakeDirectoryInfo *Info)
 {
 	LOG_CMD(L"MakeDirectoryW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->MakeDirectoryW)
-		iRc = wpi->MakeDirectoryW(Info->hPanel, &Info->Name, OpMode_3_2(Info->OpMode));
+	if (MakeDirectoryW)
+		iRc = MakeDirectoryW(Info->hPanel, &Info->Name, OpMode_3_2(Info->OpMode));
 	return iRc;
 }
-int    WINAPI ProcessDialogEventW(int Event,void *Param)
+int    WrapPluginInfo::ProcessDialogEventW3(int Event,void *Param)
 {
 	LOG_CMD0(L"ProcessDialogEventW",0,0,0);
 	int lRc = 0;
-	if (wpi && wpi->ProcessDialogEventW)
+	if (ProcessDialogEventW)
 	{
 		Far2::DIALOG_EVENTS Event2 = Far2::DE_DLGPROCINIT;
 		switch (Event)
@@ -4593,57 +4803,57 @@ int    WINAPI ProcessDialogEventW(int Event,void *Param)
 		p2.Msg = FarMessage_3_2(p3->Msg, p2.Param1, (void*&)p2.Param2);
 		if (p2.Msg != DM_FIRST)
 		{
-			lRc = wpi->ProcessDialogEventW(Event2, &p2);
+			lRc = ProcessDialogEventW(Event2, &p2);
 			if (lRc)
 				p3->Result = p2.Result;
 		}
 	}
 	return lRc;
 }
-int    WINAPI ProcessEditorEventW(int Event,void *Param)
+int    WrapPluginInfo::ProcessEditorEventW3(int Event,void *Param)
 {
 	LOG_CMD0(L"ProcessEditorEventW(%i)",Event,0,0);
 	int iRc = 0;
-	if (wpi && wpi->ProcessEditorEventW)
-		iRc = wpi->ProcessEditorEventW(Event, Param);
+	if (ProcessEditorEventW)
+		iRc = ProcessEditorEventW(Event, Param);
 	return iRc;
 }
-int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info)
+int    WrapPluginInfo::ProcessEditorInputW3(const ProcessEditorInputInfo *Info)
 {
 	LOG_CMD(L"ProcessEditorInputW",0,0,0);
 	int iRc = 0;
 	_ASSERTE(Info->StructSize==sizeof(*Info));
-	if (wpi && wpi->ProcessEditorInputW)
-		iRc = wpi->ProcessEditorInputW(&Info->Rec);
+	if (ProcessEditorInputW)
+		iRc = ProcessEditorInputW(&Info->Rec);
 	return iRc;
 }
-int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param)
+int    WrapPluginInfo::ProcessEventW3(HANDLE hPanel,int Event,void *Param)
 {
 	LOG_CMD0(L"ProcessEventW(%i)",Event,0,0);
 	int iRc = 0;
-	if (wpi && wpi->ProcessEventW)
-		iRc = wpi->ProcessEventW(hPanel, Event, Param);
+	if (ProcessEventW)
+		iRc = ProcessEventW(hPanel, Event, Param);
 	return iRc;
 }
-int    WINAPI ProcessHostFileW(const ProcessHostFileInfo *Info)
+int    WrapPluginInfo::ProcessHostFileW3(const ProcessHostFileInfo *Info)
 {
 	LOG_CMD(L"ProcessHostFileW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->ProcessHostFileW)
+	if (ProcessHostFileW)
 	{
 		Far2::PluginPanelItem *p2 = PluginPanelItems_3_2(Info->PanelItem, Info->ItemsNumber);
-		iRc = wpi->ProcessHostFileW(Info->hPanel, p2, Info->ItemsNumber, OpMode_3_2(Info->OpMode));
+		iRc = ProcessHostFileW(Info->hPanel, p2, Info->ItemsNumber, OpMode_3_2(Info->OpMode));
 		if (p2)
 			free(p2);
 	}
 	return iRc;
 }
-int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
+int    WrapPluginInfo::ProcessPanelInputW3(HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
 {
-	LOG_CMD(L"ProcessPanelInputW(%s,0x%X,0x%X)",(Info->Rec->EventType==KEY_EVENT?L"Key":L"???"),Info->Rec->Event.KeyEvent.wVirtualKeyCode,Info->Rec->Event.KeyEvent.dwControlKeyState);
+	LOG_CMD(L"ProcessPanelInputW(%s,0x%X,0x%X)",(Info->Rec.EventType==KEY_EVENT?L"Key":L"???"),Info->Rec.Event.KeyEvent.wVirtualKeyCode,Info->Rec.Event.KeyEvent.dwControlKeyState);
 	_ASSERTE(Info->StructSize == sizeof(*Info));
 	int iRc = 0;
-	if (wpi && wpi->ProcessKeyW)
+	if (ProcessKeyW)
 	{
 		int Key2 = FarKey_3_2(&Info->Rec);
 		DWORD FShift = Key2 & 0x7F000000; // старший бит используется в других целях!
@@ -4652,42 +4862,42 @@ int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInf
 			(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
 			(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0);
 		//DWORD PreProcess = (Info->Flags & PKIF_PREPROCESS) ? Far2::PKF_PREPROCESS : 0;
-		iRc = wpi->ProcessKeyW(hPanel, (Key2 & 0x0003FFFF) /*| PreProcess*/, ControlState);
+		iRc = ProcessKeyW(hPanel, (Key2 & 0x0003FFFF) /*| PreProcess*/, ControlState);
 	}
 	return iRc;
 }
-int    WINAPI ProcessConsoleInputW(ProcessConsoleInputInfo *Info)
+int    WrapPluginInfo::ProcessConsoleInputW3(ProcessConsoleInputInfo *Info)
 {
 	//TODO: А здесь можно бы кинуть в Far2 то что раньше было PKF_PREPROCESS
 	return 0;
 }
-int    WINAPI ProcessSynchroEventW(int Event,void *Param)
+int    WrapPluginInfo::ProcessSynchroEventW3(int Event,void *Param)
 {
 	LOG_CMD(L"ProcessSynchroEventW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->ProcessSynchroEventW)
-		iRc = wpi->ProcessSynchroEventW(Event, Param);
+	if (ProcessSynchroEventW)
+		iRc = ProcessSynchroEventW(Event, Param);
 	return iRc;
 }
-int    WINAPI ProcessViewerEventW(int Event,void *Param)
+int    WrapPluginInfo::ProcessViewerEventW3(int Event,void *Param)
 {
 	LOG_CMD(L"ProcessViewerEventW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->ProcessViewerEventW)
-		iRc = wpi->ProcessViewerEventW(Event, Param);
+	if (ProcessViewerEventW)
+		iRc = ProcessViewerEventW(Event, Param);
 	return iRc;
 }
-int    WINAPI PutFilesW(const PutFilesInfo *Info)
+int    WrapPluginInfo::PutFilesW3(const PutFilesInfo *Info)
 {
 	LOG_CMD(L"PutFilesW",0,0,0);
 	int iRc = 0;
-	if (wpi && wpi->PutFilesW)
+	if (PutFilesW)
 	{
 		Far2::PluginPanelItem *p2 = PluginPanelItems_3_2(Info->PanelItem, Info->ItemsNumber);
 		if (p2)
 		{
-			if (!wpi->OldPutFilesParams)
-				iRc = wpi->PutFilesW(Info->hPanel, p2, Info->ItemsNumber, Info->Move, Info->SrcPath, OpMode_3_2(Info->OpMode));
+			if (!m_OldPutFilesParams)
+				iRc = PutFilesW(Info->hPanel, p2, Info->ItemsNumber, Info->Move, Info->SrcPath, OpMode_3_2(Info->OpMode));
 			else
 			{
 				wchar_t szOldPath[MAX_PATH]; szOldPath[0] = 0;
@@ -4697,7 +4907,7 @@ int    WINAPI PutFilesW(const PutFilesInfo *Info)
 					// Тут будет облом на "длинных" или "неправильных" путях
 					SetCurrentDirectory(Info->SrcPath);
 				}
-				iRc = ((WrapPluginInfo::_PutFilesOldW)wpi->PutFilesW)(Info->hPanel, p2, Info->ItemsNumber, Info->Move, OpMode_3_2(Info->OpMode));
+				iRc = ((WrapPluginInfo::_PutFilesOldW)PutFilesW)(Info->hPanel, p2, Info->ItemsNumber, Info->Move, OpMode_3_2(Info->OpMode));
 				if (szOldPath[0])
 					SetCurrentDirectory(szOldPath);
 			}
@@ -4706,36 +4916,332 @@ int    WINAPI PutFilesW(const PutFilesInfo *Info)
 	}
 	return iRc;
 }
-int    WINAPI SetDirectoryW(const SetDirectoryInfo *Info)
+int    WrapPluginInfo::SetDirectoryW3(const SetDirectoryInfo *Info)
 {
 	int iRc = 0;
 	LOG_CMD(L"SetDirectoryW",0,0,0);
-	if (wpi && wpi->SetDirectoryW)
-		iRc = wpi->SetDirectoryW(Info->hPanel, Info->Dir, OpMode_3_2(Info->OpMode));
+	if (SetDirectoryW)
+		iRc = SetDirectoryW(Info->hPanel, Info->Dir, OpMode_3_2(Info->OpMode));
 	return iRc;
 }
-int    WINAPI SetFindListW(const SetFindListInfo *Info)
+int    WrapPluginInfo::SetFindListW3(const SetFindListInfo *Info)
 {
-	LOG_CMD(L"SetFindListW",0,0,0);
-	//TODO:
-	return 0;
+	LOG_CMD(L"SetFindListW(count=%u)",(DWORD)Info->ItemsNumber,0,0);
+	int iRc = 0;
+	if (SetFindListW)
+	{
+		Far2::PluginPanelItem *p2 = PluginPanelItems_3_2(Info->PanelItem, Info->ItemsNumber);
+		if (p2)
+		{
+			iRc = SetFindListW(Info->hPanel, p2, Info->ItemsNumber);
+			free(p2);
+		}
+	}
+	return iRc;
+}
+int    WrapPluginInfo::GetCustomDataW3(const wchar_t *FilePath, wchar_t **CustomData)
+{
+	int iRc = 0;
+	if (GetCustomDataW)
+		iRc = GetCustomDataW(FilePath, CustomData);
+	return iRc;
+}
+void   WrapPluginInfo::FreeCustomDataW3(wchar_t *CustomData)
+{
+	if (FreeCustomDataW)
+		FreeCustomDataW(CustomData);
 }
 
-//int EditCtrl(int Cmd, void* Parm)
-//{
-//	int iRc;
-//	iRc = psi.EditorControl(-1, (EDITOR_CONTROL_COMMANDS)Cmd, 0, (INT_PTR)Parm);
-//	return iRc;
-//}
+
+/* *** */
+void WrapPluginInfo::SetStartupInfoWrap(struct WrapPluginInfo* wpi, PluginStartupInfo *Info)
+{
+	wpi->SetStartupInfoW3(Info);
+}
+void WrapPluginInfo::GetGlobalInfoWrap(struct WrapPluginInfo* wpi, GlobalInfo *Info)
+{
+	wpi->GetGlobalInfoW3(Info);
+}
+void WrapPluginInfo::GetPluginInfoWrap(struct WrapPluginInfo* wpi, PluginInfo *Info)
+{
+	wpi->GetPluginInfoW3(Info);
+}
+HANDLE WrapPluginInfo::OpenWrap(struct WrapPluginInfo* wpi, const OpenInfo *Info)
+{
+	return wpi->OpenW3(Info);
+}
+int    WrapPluginInfo::AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info)
+{
+	return wpi->AnalyseW3(Info);
+}
+void   WrapPluginInfo::ClosePanelWrap(struct WrapPluginInfo* wpi, HANDLE hPanel)
+{
+	return wpi->ClosePanelW3(hPanel);
+}
+int    WrapPluginInfo::CompareWrap(struct WrapPluginInfo* wpi, const CompareInfo *Info)
+{
+	return wpi->CompareW3(Info);
+}
+int    WrapPluginInfo::ConfigureWrap(struct WrapPluginInfo* wpi, const GUID* Guid)
+{
+	return wpi->ConfigureW3(Guid);
+}
+int    WrapPluginInfo::DeleteFilesWrap(struct WrapPluginInfo* wpi, const DeleteFilesInfo *Info)
+{
+	return wpi->DeleteFilesW3(Info);
+}
+void   WrapPluginInfo::ExitFARWrap(struct WrapPluginInfo* wpi)
+{
+	return wpi->ExitFARW3();
+}
+void   WrapPluginInfo::FreeVirtualFindDataWrap(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info)
+{
+	return wpi->FreeVirtualFindDataW3(Info);
+}
+int    WrapPluginInfo::GetFilesWrap(struct WrapPluginInfo* wpi, GetFilesInfo *Info)
+{
+	return wpi->GetFilesW3(Info);
+}
+int    WrapPluginInfo::GetFindDataWrap(struct WrapPluginInfo* wpi, GetFindDataInfo *Info)
+{
+	return wpi->GetFindDataW3(Info);
+}
+void   WrapPluginInfo::FreeFindDataWrap(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info)
+{
+	return wpi->FreeFindDataW3(Info);
+}
+void   WrapPluginInfo::GetOpenPanelInfoWrap(struct WrapPluginInfo* wpi, OpenPanelInfo *Info)
+{
+	return wpi->GetOpenPanelInfoW3(Info);
+}
+int    WrapPluginInfo::GetVirtualFindDataWrap(struct WrapPluginInfo* wpi, GetVirtualFindDataInfo *Info)
+{
+	return wpi->GetVirtualFindDataW3(Info);
+}
+int    WrapPluginInfo::MakeDirectoryWrap(struct WrapPluginInfo* wpi, MakeDirectoryInfo *Info)
+{
+	return wpi->MakeDirectoryW3(Info);
+}
+int    WrapPluginInfo::ProcessDialogEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+{
+	return wpi->ProcessDialogEventW3(Event, Param);
+}
+int    WrapPluginInfo::ProcessEditorEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+{
+	return wpi->ProcessEditorEventW3(Event, Param);
+}
+int    WrapPluginInfo::ProcessEditorInputWrap(struct WrapPluginInfo* wpi, const ProcessEditorInputInfo *Info)
+{
+	return wpi->ProcessEditorInputW3(Info);
+}
+int    WrapPluginInfo::ProcessEventWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,int Event,void *Param)
+{
+	return wpi->ProcessEventW3(hPanel, Event, Param);
+}
+int    WrapPluginInfo::ProcessHostFileWrap(struct WrapPluginInfo* wpi, const ProcessHostFileInfo *Info)
+{
+	return wpi->ProcessHostFileW3(Info);
+}
+int    WrapPluginInfo::ProcessPanelInputWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
+{
+	return wpi->ProcessPanelInputW3(hPanel, Info);
+}
+int    WrapPluginInfo::ProcessConsoleInputWrap(struct WrapPluginInfo* wpi, ProcessConsoleInputInfo *Info)
+{
+	return wpi->ProcessConsoleInputW3(Info);
+}
+int    WrapPluginInfo::ProcessSynchroEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+{
+	return wpi->ProcessSynchroEventW3(Event, Param);
+}
+int    WrapPluginInfo::ProcessViewerEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+{
+	return wpi->ProcessViewerEventW3(Event, Param);
+}
+int    WrapPluginInfo::PutFilesWrap(struct WrapPluginInfo* wpi, const PutFilesInfo *Info)
+{
+	return wpi->PutFilesW3(Info);
+}
+int    WrapPluginInfo::SetDirectoryWrap(struct WrapPluginInfo* wpi, const SetDirectoryInfo *Info)
+{
+	return wpi->SetDirectoryW3(Info);
+}
+int    WrapPluginInfo::SetFindListWrap(struct WrapPluginInfo* wpi, const SetFindListInfo *Info)
+{
+	return wpi->SetFindListW3(Info);
+}
+int    WrapPluginInfo::GetCustomDataWrap(struct WrapPluginInfo* wpi, const wchar_t *FilePath, wchar_t **CustomData)
+{
+	return wpi->GetCustomDataW3(FilePath, CustomData);
+}
+void   WrapPluginInfo::FreeCustomDataWrap(struct WrapPluginInfo* wpi, wchar_t *CustomData)
+{
+	return wpi->FreeCustomDataW3(CustomData);
+}
+/* *** */
+/* *** */
+/* *** */
+LONG_PTR WrapPluginInfo::FarApiDefDlgProcWrap(WrapPluginInfo* wpi, HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+{
+	return wpi->FarApiDefDlgProc(hDlg, Msg, Param1, Param2);
+}
+LONG_PTR WrapPluginInfo::FarApiSendDlgMessageWrap(WrapPluginInfo* wpi, HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+{
+	return wpi->FarApiSendDlgMessage(hDlg, Msg, Param1, Param2);
+}
+BOOL WrapPluginInfo::FarApiShowHelpWrap(WrapPluginInfo* wpi, const wchar_t *ModuleName, const wchar_t *Topic, DWORD Flags)
+{
+	return wpi->FarApiShowHelp(ModuleName, Topic, Flags);
+}
+HANDLE WrapPluginInfo::FarApiSaveScreenWrap(WrapPluginInfo* wpi, int X1, int Y1, int X2, int Y2)
+{
+	return wpi->FarApiSaveScreen(X1, Y1, X2, Y2);
+}
+void WrapPluginInfo::FarApiRestoreScreenWrap(WrapPluginInfo* wpi, HANDLE hScreen)
+{
+	wpi->FarApiRestoreScreen(hScreen);
+}
+void WrapPluginInfo::FarApiTextWrap(WrapPluginInfo* wpi, int X, int Y, int Color, const wchar_t *Str)
+{
+	wpi->FarApiText(X, Y, Color, Str);
+}
+int WrapPluginInfo::FarApiEditorWrap(WrapPluginInfo* wpi, const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage)
+{
+	return wpi->FarApiEditor(FileName, Title, X1, Y1, X2, Y2, Flags, StartLine, StartChar, CodePage);
+}
+int WrapPluginInfo::FarApiViewerWrap(WrapPluginInfo* wpi, const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, UINT CodePage)
+{
+	return wpi->FarApiViewer(FileName, Title, X1, Y1, X2, Y2, Flags, CodePage);
+}
+int WrapPluginInfo::FarApiMenuWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, int X, int Y, int MaxHeight, DWORD Flags, const wchar_t* Title, const wchar_t* Bottom, const wchar_t* HelpTopic, const int* BreakKeys, int* BreakCode, const struct Far2::FarMenuItem *Item, int ItemsNumber)
+{
+	return wpi->FarApiMenu(PluginNumber, X, Y, MaxHeight, Flags, Title, Bottom, HelpTopic, BreakKeys, BreakCode, Item, ItemsNumber);
+}
+int WrapPluginInfo::FarApiMessageWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, DWORD Flags, const wchar_t *HelpTopic, const wchar_t * const *Items, int ItemsNumber, int ButtonsNumber)
+{
+	return wpi->FarApiMessage(PluginNumber, Flags, HelpTopic, Items, ItemsNumber, ButtonsNumber);
+}
+HANDLE WrapPluginInfo::FarApiDialogInitWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, int X1, int Y1, int X2, int Y2, const wchar_t* HelpTopic, struct Far2::FarDialogItem *Item, unsigned int ItemsNumber, DWORD Reserved, DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param)
+{
+	return wpi->FarApiDialogInit(PluginNumber, X1, Y1, X2, Y2, HelpTopic, Item, ItemsNumber, Reserved, Flags, DlgProc, Param);
+}
+int WrapPluginInfo::FarApiDialogRunWrap(WrapPluginInfo* wpi, HANDLE hDlg)
+{
+	return wpi->FarApiDialogRun(hDlg);
+}
+void WrapPluginInfo::FarApiDialogFreeWrap(WrapPluginInfo* wpi, HANDLE hDlg)
+{
+	wpi->FarApiDialogFree(hDlg);
+}
+int WrapPluginInfo::FarApiControlWrap(WrapPluginInfo* wpi, HANDLE hPlugin, int Command, int Param1, LONG_PTR Param2)
+{
+	return wpi->FarApiControl(hPlugin, Command, Param1, Param2);
+}
+int WrapPluginInfo::FarApiGetDirListWrap(WrapPluginInfo* wpi, const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber)
+{
+	return wpi->FarApiGetDirList(Dir, pPanelItem, pItemsNumber);
+}
+void WrapPluginInfo::FarApiFreeDirListWrap(WrapPluginInfo* wpi, struct Far2::FAR_FIND_DATA *PanelItem, int nItemsNumber)
+{
+	wpi->FarApiFreeDirList(PanelItem, nItemsNumber);
+}
+int WrapPluginInfo::FarApiGetPluginDirListWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, HANDLE hPlugin, const wchar_t *Dir, struct Far2::PluginPanelItem **pPanelItem, int *pItemsNumber)
+{
+	return wpi->FarApiGetPluginDirList(PluginNumber, hPlugin, Dir, pPanelItem, pItemsNumber);
+}
+void WrapPluginInfo::FarApiFreePluginDirListWrap(WrapPluginInfo* wpi, struct Far2::PluginPanelItem *PanelItem, int nItemsNumber)
+{
+	wpi->FarApiFreePluginDirList(PanelItem, nItemsNumber);
+}
+int WrapPluginInfo::FarApiCmpNameWrap(WrapPluginInfo* wpi, const wchar_t *Pattern, const wchar_t *String, int SkipPath)
+{
+	return wpi->FarApiCmpName(Pattern, String, SkipPath);
+}
+LPCWSTR WrapPluginInfo::FarApiGetMsgWrap(WrapPluginInfo* wpi, INT_PTR PluginNumber, int MsgId)
+{
+	return wpi->FarApiGetMsg(PluginNumber, MsgId);
+}
+INT_PTR WrapPluginInfo::FarApiAdvControlWrap(WrapPluginInfo* wpi, INT_PTR ModuleNumber, int Command, void *Param)
+{
+	return wpi->FarApiAdvControl(ModuleNumber, Command, Param);
+}
+int WrapPluginInfo::FarApiViewerControlWrap(WrapPluginInfo* wpi, int Command, void *Param)
+{
+	return wpi->FarApiViewerControl(Command, Param);
+}
+int WrapPluginInfo::FarApiEditorControlWrap(WrapPluginInfo* wpi, int Command, void *Param)
+{
+	return wpi->FarApiEditorControl(Command, Param);
+}
+int WrapPluginInfo::FarApiInputBoxWrap(WrapPluginInfo* wpi, const wchar_t *Title, const wchar_t *SubTitle, const wchar_t *HistoryName, const wchar_t *SrcText, wchar_t *DestText, int   DestLength, const wchar_t *HelpTopic, DWORD Flags)
+{
+	return wpi->FarApiInputBox(Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
+}
+int WrapPluginInfo::FarApiPluginsControlWrap(WrapPluginInfo* wpi, HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
+{
+	return wpi->FarApiPluginsControl(hHandle, Command, Param1, Param2);
+}
+int WrapPluginInfo::FarApiFileFilterControlWrap(WrapPluginInfo* wpi, HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
+{
+	return wpi->FarApiFileFilterControl(hHandle, Command, Param1, Param2);
+}
+int WrapPluginInfo::FarApiRegExpControlWrap(WrapPluginInfo* wpi, HANDLE hHandle, int Command, LONG_PTR Param)
+{
+	return wpi->FarApiRegExpControl(hHandle, Command, Param);
+}
+int WrapPluginInfo::FarStdGetFileOwnerWrap(WrapPluginInfo* wpi, const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size)
+{
+	return wpi->FarStdGetFileOwner(Computer, Name, Owner, Size);
+}
+int WrapPluginInfo::FarStdGetPathRootWrap(WrapPluginInfo* wpi, const wchar_t *Path,wchar_t *Root, int DestSize)
+{
+	return wpi->FarStdGetPathRoot(Path, Root, DestSize);
+}
+wchar_t* WrapPluginInfo::FarStdXlatWrap(WrapPluginInfo* wpi, wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
+{
+	return wpi->FarStdXlatW3(Line, StartPos, EndPos, Flags);
+}
+void WrapPluginInfo::FarStdRecursiveSearchWrap(WrapPluginInfo* wpi, const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
+{
+	wpi->FarStdRecursiveSearch(InitDir, Mask, Func, Flags, Param);
+}
+int WrapPluginInfo::FarStdMkTempWrap(WrapPluginInfo* wpi, wchar_t *Dest, DWORD size, const wchar_t *Prefix)
+{
+	return wpi->FarStdMkTemp(Dest, size, Prefix);
+}
+int WrapPluginInfo::FarStdProcessNameWrap(WrapPluginInfo* wpi, const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags)
+{
+	return wpi->FarStdProcessName(param1, param2, size, flags);
+}
+int WrapPluginInfo::FarStdMkLinkWrap(WrapPluginInfo* wpi, const wchar_t *Src,const wchar_t *Dest,DWORD Flags)
+{
+	return wpi->FarStdMkLink(Src, Dest, Flags);
+}
+int WrapPluginInfo::FarConvertPathWrap(WrapPluginInfo* wpi, enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize)
+{
+	return wpi->FarConvertPath(Mode, Src, Dest, DestSize);
+}
+int WrapPluginInfo::FarGetReparsePointInfoWrap(WrapPluginInfo* wpi, const wchar_t *Src, wchar_t *Dest,int DestSize)
+{
+	return wpi->FarGetReparsePointInfo(Src, Dest, DestSize);
+}
+DWORD WrapPluginInfo::FarGetCurrentDirectoryWrap(WrapPluginInfo* wpi, DWORD Size,wchar_t* Buffer)
+{
+	return wpi->FarGetCurrentDirectory(Size, Buffer);
+}
+/* *** */
 
 
 
 
-Far2Dialog::Far2Dialog(int X1, int Y1, int X2, int Y2,
+
+Far2Dialog::Far2Dialog(WrapPluginInfo* pwpi,
+	int X1, int Y1, int X2, int Y2,
     const wchar_t *HelpTopic, Far2::FarDialogItem *Items, UINT ItemsNumber,
     DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param,
     GUID PluginGuid, GUID DefGuid)
 {
+	wpi = pwpi;
 	hDlg3 = NULL; m_Items3 = NULL; mp_ListInit3 = NULL;
 	m_PluginGuid = PluginGuid;
 	
@@ -4791,54 +5297,54 @@ Far2Dialog::~Far2Dialog()
 
 void Far2Dialog::FreeDlg()
 {
-	wpi->MapDlg_2_3.erase(this);
+	MapDlg_2_3.erase(this);
 	if (hDlg3 != NULL)
 	{
-		psi3.DialogFree(hDlg3);
-		wpi->MapDlg_3_2.erase(hDlg3);
+		wpi->psi3.DialogFree(hDlg3);
+		MapDlg_3_2.erase(hDlg3);
 		hDlg3 = NULL;
 	}
 }
 
 INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
-	Far2Dialog* p = wpi->MapDlg_3_2[hDlg];
+	Far2Dialog* p = MapDlg_3_2[hDlg];
 	INT_PTR lRc = 0;
 	if (p && p->m_DlgProc)
 	{
 		void* OrgParam2 = Param2;
-		Far2::FarMessagesProc Msg2 = FarMessage_3_2(Msg, Param1, Param2);
+		Far2::FarMessagesProc Msg2 = p->wpi->FarMessage_3_2(Msg, Param1, Param2);
 		_ASSERTE(Msg2!=Far2::DM_FIRST);
 		if (Msg > DM_FIRST && Msg < DM_USER && Msg2 != Far2::DM_FIRST)
 		{
 			if (OrgParam2 && Param2)
 			{
-				gnMsg_3 = (FARMESSAGE)Msg;
-				gnParam1_2 = gnParam1_3 = Param1;
-				gpParam2_3 = OrgParam2;
-				gnMsg_2 = Msg2;
-				gnParam2_2 = (LONG_PTR)Param2;
+				p->wpi->gnMsg_3 = (FARMESSAGE)Msg;
+				p->wpi->gnParam1_2 = p->wpi->gnParam1_3 = Param1;
+				p->wpi->gpParam2_3 = OrgParam2;
+				p->wpi->gnMsg_2 = Msg2;
+				p->wpi->gnParam2_2 = (LONG_PTR)Param2;
 			}
 		}
 		else
 		{
-			gnMsg_3 = DM_FIRST;
+			p->wpi->gnMsg_3 = DM_FIRST;
 		}
 		if (Msg == DM_KEY || Msg == DN_CONTROLINPUT)
-			gnMsgKey_3 = (FARMESSAGE)Msg;
+			p->wpi->gnMsgKey_3 = (FARMESSAGE)Msg;
 		if (Msg == DM_CLOSE || Msg == DN_CLOSE)
-			gnMsgClose_3 = (FARMESSAGE)Msg;
+			p->wpi->gnMsgClose_3 = (FARMESSAGE)Msg;
 		lRc = p->m_DlgProc((HANDLE)p, Msg2, Param1, (LONG_PTR)Param2);
 		if (Msg == DM_KEY || Msg == DN_CONTROLINPUT)
-			gnMsgKey_3 = DM_FIRST;
+			p->wpi->gnMsgKey_3 = DM_FIRST;
 		if (Msg == DM_CLOSE || Msg == DN_CLOSE)
-			gnMsgClose_3 = DM_FIRST;
+			p->wpi->gnMsgClose_3 = DM_FIRST;
 		if (Param2 && Param2 != OrgParam2)
-			FarMessageParam_2_3(Msg, Param1, Param2, OrgParam2, lRc);
+			p->wpi->FarMessageParam_2_3(Msg, Param1, Param2, OrgParam2, lRc);
 	}
 	else
 	{
-		lRc = psi3.DefDlgProc(hDlg, Msg, Param1, (void*)Param2);
+		lRc = p->wpi->psi3.DefDlgProc(hDlg, Msg, Param1, (void*)Param2);
 	}
 	return lRc;
 }
@@ -4878,7 +5384,7 @@ int Far2Dialog::RunDlg()
 		FarDialogItem *p3 = m_Items3;
 		for (UINT i = 0; i < m_ItemsNumber; i++, p2++, p3++)
 		{
-			FarDialogItem_2_3(p2, p3, mp_ListInit3+i);
+			wpi->FarDialogItem_2_3(p2, p3, mp_ListInit3+i);
 			//p3->Type = DialogItemTypes_2_3(p2->Type);
 			//p3->X1 = p2->X1;
 			//p3->Y1 = p2->Y1;
@@ -4934,26 +5440,26 @@ int Far2Dialog::RunDlg()
 
 	if (hDlg3 == NULL)
 	{
-		wpi->LastFar2Dlg = this;
+		wpi->m_LastFar2Dlg = this;
 		FARDIALOGFLAGS Flags3 = 0
 			| ((m_Flags & Far2::FDLG_WARNING) ? FDLG_WARNING : 0)
 			| ((m_Flags & Far2::FDLG_SMALLDIALOG) ? FDLG_SMALLDIALOG : 0)
 			| ((m_Flags & Far2::FDLG_NODRAWSHADOW) ? FDLG_NODRAWSHADOW : 0)
 			| ((m_Flags & Far2::FDLG_NODRAWPANEL) ? FDLG_NODRAWPANEL : 0);
-		hDlg3 = psi3.DialogInit(&m_PluginGuid, &m_Guid,
+		hDlg3 = wpi->psi3.DialogInit(&m_PluginGuid, &m_Guid,
 			m_X1, m_Y1, m_X2, m_Y2, m_HelpTopic, m_Items3, m_ItemsNumber, 0,
 			Flags3, Far3DlgProc, (void*)m_Param);
 		if (hDlg3)
 		{
-			wpi->MapDlg_2_3[this] = hDlg3;
-			wpi->MapDlg_3_2[hDlg3] = this;
+			MapDlg_2_3[this] = hDlg3;
+			MapDlg_3_2[hDlg3] = this;
 		}
 	}
 	
 	if (hDlg3 != NULL)
 	{
-		wpi->LastFar2Dlg = this;
-		iRc = psi3.DialogRun(hDlg3);
+		wpi->m_LastFar2Dlg = this;
+		iRc = wpi->psi3.DialogRun(hDlg3);
 
 		// Некоторые параметры нужно перекинуть обратно в версию 2
 		if (m_Items3 && m_Items2 && m_ItemsNumber > 0)
@@ -4968,29 +5474,319 @@ int Far2Dialog::RunDlg()
 		}
 
 		// Освобождаем - в DialogFree
-		//wpi->MapDlg_2_3.erase(this);
-		//for (std::map<Far2Dialog*,HANDLE>::iterator i1 = wpi->MapDlg_2_3.begin();
-		//	 i1 != wpi->MapDlg_2_3.end(); i++)
+		//MapDlg_2_3.erase(this);
+		//for (std::map<Far2Dialog*,HANDLE>::iterator i1 = MapDlg_2_3.begin();
+		//	 i1 != MapDlg_2_3.end(); i++)
 		//{
 		//	if (i->first == this)
 		//	{
-		//		wpi->MapDlg_2_3.erase(i1);
+		//		MapDlg_2_3.erase(i1);
 		//		break;
 		//	}
 		//}
-		//wpi->MapDlg_3_2.erase(hDlg3);
-		//for (std::map<HANDLE,Far2Dialog*>::iterator i2 = wpi->MapDlg_3_2.begin();
-		//	 i2 != wpi->MapDlg_3_2.end(); i++)
+		//MapDlg_3_2.erase(hDlg3);
+		//for (std::map<HANDLE,Far2Dialog*>::iterator i2 = MapDlg_3_2.begin();
+		//	 i2 != MapDlg_3_2.end(); i++)
 		//{
 		//	if (i->first == hDlg3)
 		//	{
-		//		wpi->MapDlg_3_2.erase(i2);
+		//		MapDlg_3_2.erase(i2);
 		//		break;
 		//	}
 		//}
 	}
 	
-	wpi->LastFar2Dlg = NULL;
+	wpi->m_LastFar2Dlg = NULL;
 	return iRc;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Плагин может быть вызван в первый раз из фоновой нити (диалог поиска при поиске в архивах)
+// Поэтому простой "gnMainThreadId = GetCurrentThreadId();" не прокатит. Нужно искать первую нить процесса!
+DWORD GetMainThreadId()
+{
+	DWORD nThreadID = 0;
+	DWORD nProcID = GetCurrentProcessId();
+	HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (h != INVALID_HANDLE_VALUE)
+	{
+		THREADENTRY32 ti = {sizeof(THREADENTRY32)};
+		if (Thread32First(h, &ti))
+		{
+			do {
+				// Нужно найти ПЕРВУЮ нить процесса
+				if (ti.th32OwnerProcessID == nProcID) {
+					nThreadID = ti.th32ThreadID;
+					break;
+				}
+			} while (Thread32Next(h, &ti));
+		}
+		CloseHandle(h);
+	}
+
+	// Нехорошо. Должна быть найдена. Вернем хоть что-то (текущую нить)
+	if (!nThreadID) {
+		_ASSERTE(nThreadID!=0);
+		nThreadID = GetCurrentThreadId();
+	}
+	return nThreadID;
+}
+
+
+BOOL APIENTRY DllMain( HANDLE hModule, 
+                       DWORD  ul_reason_for_call, 
+                       LPVOID lpReserved
+                     )
+{
+    if (ghFar3Wrap == NULL)
+    {
+		ghFar3Wrap = (HMODULE)hModule;
+		gnMainThreadId = GetMainThreadId();
+
+		//lbPsi2 = FALSE;
+		//memset(&psi3, 0, sizeof(psi3));
+		//memset(&psi2, 0, sizeof(psi2));
+		//memset(&FSF3, 0, sizeof(FSF3));
+		//memset(&FSF2, 0, sizeof(FSF2));
+
+		//wpi = NULL;
+		//LoadPluginInfo(); // может сейчас не будем, выполним в SetStartupInfoW?
+    }
+    if (ul_reason_for_call == DLL_PROCESS_DETACH)
+    {
+		//TODO: !!! Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время это выполнить
+		std::vector<WrapUpdateFunctions>::iterator iter;
+		#undef SET_EXP
+		#define SET_EXP(v,n) { lstrcpyA(strChange[nIdx].OldName, n); lstrcpyA(strChange[nIdx].NewName, n); if (upd.mn_NewAbsentFunctions & v) strChange[nIdx].NewName[0] = '_'; else strChange[nIdx].OldName[0] = '_'; nIdx++; }
+		for (iter = UpdateFunc.begin(); iter != UpdateFunc.end(); iter++)
+		{
+			WrapUpdateFunctions upd = *iter;
+			HANDLE hFile = CreateFile(upd.ms_Loader, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ, NULL,
+				OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+			if ( hFile == INVALID_HANDLE_VALUE )
+				continue;
+			HANDLE hFileMapping = CreateFileMapping(hFile, NULL, PAGE_READWRITE, 0, 0, NULL);
+			if (hFileMapping)
+			{
+				PBYTE pMappedFileBase = (PBYTE)MapViewOfFile(hFileMapping,FILE_MAP_READ|FILE_MAP_WRITE,0,0,0);
+				if (pMappedFileBase)
+				{
+					ExportFunc strChange[64] = {{NULL}};
+					int nIdx = 0;
+					if ((upd.mn_OldAbsentFunctions & ALF3_Analyse) != (upd.mn_NewAbsentFunctions & ALF3_Analyse))
+					{
+						SET_EXP(ALF3_Analyse, "AnalyseW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_Open) != (upd.mn_NewAbsentFunctions & ALF3_Open))
+					{
+						SET_EXP(ALF3_Open, "OpenW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_Configure) != (upd.mn_NewAbsentFunctions & ALF3_Configure))
+					{
+						SET_EXP(ALF3_Configure, "ConfigureW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_Compare) != (upd.mn_NewAbsentFunctions & ALF3_Compare))
+					{
+						SET_EXP(ALF3_Compare, "CompareW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_GetFiles) != (upd.mn_NewAbsentFunctions & ALF3_GetFiles))
+					{
+						SET_EXP(ALF3_GetFiles, "GetFilesW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_PutFiles) != (upd.mn_NewAbsentFunctions & ALF3_PutFiles))
+					{
+						SET_EXP(ALF3_PutFiles, "PutFilesW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_FindData) != (upd.mn_NewAbsentFunctions & ALF3_FindData))
+					{
+						SET_EXP(ALF3_FindData, "GetFindDataW");
+						SET_EXP(ALF3_FindData, "FreeFindDataW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_VirtualFindData) != (upd.mn_NewAbsentFunctions & ALF3_VirtualFindData))
+					{
+						SET_EXP(ALF3_VirtualFindData, "GetVirtualFindDataW");
+						SET_EXP(ALF3_VirtualFindData, "FreeVirtualFindDataW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_ProcessHostFile) != (upd.mn_NewAbsentFunctions & ALF3_ProcessHostFile))
+					{
+						SET_EXP(ALF3_ProcessHostFile, "ProcessHostFileW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_ProcessDialogEvent) != (upd.mn_NewAbsentFunctions & ALF3_ProcessDialogEvent))
+					{
+						SET_EXP(ALF3_ProcessDialogEvent, "ProcessDialogEventW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_ProcessEditorEvent) != (upd.mn_NewAbsentFunctions & ALF3_ProcessEditorEvent))
+					{
+						SET_EXP(ALF3_ProcessEditorEvent, "ProcessEditorEventW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_ProcessEditorInput) != (upd.mn_NewAbsentFunctions & ALF3_ProcessEditorInput))
+					{
+						SET_EXP(ALF3_ProcessEditorInput, "ProcessEditorInputW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_ProcessViewerEvent) != (upd.mn_NewAbsentFunctions & ALF3_ProcessViewerEvent))
+					{
+						SET_EXP(ALF3_ProcessViewerEvent, "ProcessViewerEventW");
+					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_CustomData) != (upd.mn_NewAbsentFunctions & ALF3_CustomData))
+					{
+						SET_EXP(ALF3_CustomData, "GetCustomDataW");
+						SET_EXP(ALF3_CustomData, "FreeCustomDataW");
+					}
+					ChangeExports(strChange, pMappedFileBase);
+					wchar_t szNew[32];
+					wsprintf(szNew, L"%i", upd.mn_NewAbsentFunctions);
+					WritePrivateProfileString(L"Plugin", L"DisabledFunctions", szNew, upd.ms_IniFile);
+				}
+				CloseHandle(hFileMapping);
+			}
+			// Что-то не меняется LastWriteDate
+			SYSTEMTIME st; GetSystemTime(&st);
+			FILETIME ft; SystemTimeToFileTime(&st, &ft);
+			SetFileTime(hFile, NULL, NULL, &ft);
+			CloseHandle(hFile);
+		}
+		#undef SET_EXP
+		return TRUE;
+    	//if (wpi)
+    	//{
+    	//	delete wpi;
+    	//	wpi = NULL;
+    	//}
+    }
+    return TRUE;
+}
+
+int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
+{
+#ifdef _DEBUG
+	_InitPlugin fDbg = InitPlugin; // Для проверки аргументов на этапе компиляции
+#endif
+	if (!pInfo2)
+		return -1;
+	if (pInfo2->StructSize != sizeof(*pInfo2))
+	{
+		if (pInfo2->ErrorInfo && (pInfo2->ErrorInfoMax >= 255 && pInfo2->ErrorInfoMax <= 4096))
+			wsprintf(pInfo2->ErrorInfo, L"Far3Wrap\nInitPlugin failed. Invalid value of pInfo2->StructSize\nRequired: %u, received: %u", (DWORD)sizeof(*pInfo2), (DWORD)pInfo2->StructSize);
+		return -2;
+	}
+	if (pInfo2->Far3Build != MVV_3)
+	{
+		if (pInfo2->ErrorInfo && (pInfo2->ErrorInfoMax >= 255 && pInfo2->ErrorInfoMax <= 4096))
+			wsprintf(pInfo2->ErrorInfo, L"Far3Wrap\nInitPlugin failed. Invalid value of pInfo2->Far3Build\nRequired: %u, received: %u", MVV_3, pInfo2->Far3Build);
+		return -3;
+	}
+
+	_ASSERTE(ghFar3Wrap==NULL || ghFar3Wrap==pInfo2->hFar3Wrap);
+	if (!gnMainThreadId)
+		gnMainThreadId = GetMainThreadId();
+	ghFar3Wrap = pInfo2->hFar3Wrap;
+	
+	pInfo2->wpi = new WrapPluginInfo(pInfo2);
+
+	pInfo2->wpi->LoadPluginInfo();
+	if (!pInfo2->wpi->LoadPlugin(TRUE/*abSilent*/))
+	{
+		delete pInfo2->wpi;
+		pInfo2->wpi = NULL;
+		return -4;
+	}
+
+	pInfo2->PluginGuid = &pInfo2->wpi->mguid_Plugin;
+
+	// Вернуть в Loader список функций враппера
+	#undef SET_FN
+	#define SET_FN(n) pInfo2->n##rap = WrapPluginInfo::n##rap;
+	SET_FN(SetStartupInfoW);
+	SET_FN(GetGlobalInfoW);
+	SET_FN(GetPluginInfoW);
+	SET_FN(OpenW);
+	SET_FN(AnalyseW);
+	SET_FN(ClosePanelW);
+	SET_FN(CompareW);
+	SET_FN(ConfigureW);
+	SET_FN(DeleteFilesW);
+	SET_FN(ExitFARW);
+	SET_FN(FreeVirtualFindDataW);
+	SET_FN(GetFilesW);
+	SET_FN(GetFindDataW);
+	SET_FN(FreeFindDataW);
+	SET_FN(GetOpenPanelInfoW);
+	SET_FN(GetVirtualFindDataW);
+	SET_FN(MakeDirectoryW);
+	SET_FN(ProcessDialogEventW);
+	SET_FN(ProcessEditorEventW);
+	SET_FN(ProcessEditorInputW);
+	SET_FN(ProcessEventW);
+	SET_FN(ProcessHostFileW);
+	SET_FN(ProcessPanelInputW);
+	SET_FN(ProcessConsoleInputW);
+	SET_FN(ProcessSynchroEventW);
+	SET_FN(ProcessViewerEventW);
+	SET_FN(PutFilesW);
+	SET_FN(SetDirectoryW);
+	SET_FN(SetFindListW);
+	SET_FN(GetCustomDataW);
+	SET_FN(FreeCustomDataW);
+	//
+	SET_FN(FarApiDefDlgProcW);
+	SET_FN(FarApiSendDlgMessageW);
+	SET_FN(FarApiShowHelpW);
+	SET_FN(FarApiSaveScreenW);
+	SET_FN(FarApiRestoreScreenW);
+	SET_FN(FarApiTextW);
+	SET_FN(FarApiEditorW);
+	SET_FN(FarApiViewerW);
+	SET_FN(FarApiMenuW);
+	SET_FN(FarApiMessageW);
+	SET_FN(FarApiDialogInitW);
+	SET_FN(FarApiDialogRunW);
+	SET_FN(FarApiDialogFreeW);
+	SET_FN(FarApiControlW);
+	SET_FN(FarApiGetDirListW);
+	SET_FN(FarApiFreeDirListW);
+	SET_FN(FarApiGetPluginDirListW);
+	SET_FN(FarApiFreePluginDirListW);
+	SET_FN(FarApiCmpNameW);
+	SET_FN(FarApiGetMsgW);
+	SET_FN(FarApiAdvControlW);
+	SET_FN(FarApiViewerControlW);
+	SET_FN(FarApiEditorControlW);
+	SET_FN(FarApiInputBoxW);
+	SET_FN(FarApiPluginsControlW);
+	SET_FN(FarApiFileFilterControlW);
+	SET_FN(FarApiRegExpControlW);
+	SET_FN(FarStdGetFileOwnerW);
+	SET_FN(FarStdGetPathRootW);
+	SET_FN(FarStdXlatW);
+	SET_FN(FarStdRecursiveSearchW);
+	SET_FN(FarStdMkTempW);
+	SET_FN(FarStdProcessNameW);
+	SET_FN(FarStdMkLinkW);
+	SET_FN(FarConvertPathW);
+	SET_FN(FarGetReparsePointInfoW);
+	SET_FN(FarGetCurrentDirectoryW);
+	#undef SET_FN
+
+	return 0;
+}

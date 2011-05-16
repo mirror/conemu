@@ -2271,11 +2271,17 @@ struct ProcessEditorInputInfo
 	INPUT_RECORD Rec;
 };
 
+typedef unsigned __int64 PROCESSCONSOLEINPUT_FLAGS;
+static const PROCESSCONSOLEINPUT_FLAGS
+	PCIF_NONE            =0,
+	PCIF_FROMMAIN        =0x0000000000000001ULL;
+
 struct ProcessConsoleInputInfo
 {
 	size_t StructSize;
-	const INPUT_RECORD *RecIn;
-	INPUT_RECORD *RecOut;
+	PROCESSCONSOLEINPUT_FLAGS Flags;
+	const INPUT_RECORD *Rec;
+	HANDLE hPanel;
 };
 
 #ifdef __cplusplus
@@ -2307,7 +2313,6 @@ extern "C"
 	int    WINAPI ProcessHostFileW(const struct ProcessHostFileInfo *Info);
 	int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
 	int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info);
-
 	int    WINAPI ProcessSynchroEventW(int Event,void *Param);
 	int    WINAPI ProcessViewerEventW(int Event,void *Param);
 	int    WINAPI PutFilesW(const struct PutFilesInfo *Info);
