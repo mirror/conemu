@@ -9,7 +9,6 @@
 //
 #include <windows.h>
 #include "version.h"
-//#include "resourceW.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -40,14 +39,12 @@ END
 BEGIN
     "#include <windows.h>\r\n"
     "#include ""version.h""\r\n"
-    "//#include ""resourceW.h""\r\n"
     "\0"
 END
 
 3 TEXTINCLUDE 
 BEGIN
     "#include ""resource2.rc""\r\n"
-    "//#include ""resourceW.rc""\r\n"
     "\r\n"
     "\0"
 END
@@ -65,7 +62,6 @@ END
 // Generated from the TEXTINCLUDE 3 resource.
 //
 #include "resource2.rc"
-//#include "resourceW.rc"
 
 
 /////////////////////////////////////////////////////////////////////////////

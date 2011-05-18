@@ -4,6 +4,7 @@
 //TODO: GetVirtualFindDataW/FreeVirtualFindDataW
 //TODO: SetFindListW? Только если в фаре появится возможность "отключать" экспорты
 //TODO: Конвертация CustomColumnData/CustomColumnNumber
+//TODO: Объявить MCMD_GETAREA и FARMACROAREA в plguinW.hpp
 
 /*
 Copyright (c) 2011 Maximus5
@@ -42,7 +43,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <crtdbg.h>
 #include <TlHelp32.h>
 #include "version.h"
-#include "SetExport.h"
+#include "resourceW.h"
 
 #define ZeroStruct(s) memset(&s, 0, sizeof(s))
 //TODO
@@ -121,39 +122,35 @@ struct Far2Dialog
 std::map<Far2Dialog*,HANDLE> MapDlg_2_3;
 std::map<HANDLE,Far2Dialog*> MapDlg_3_2;
 
-enum AbsentLoaderFunctions3
-{
-	ALF3_Analyse            = 0x0001,
-	ALF3_Open               = 0x0002,
-	ALF3_Configure          = 0x0004,
-	ALF3_Compare            = 0x0008,
-	ALF3_GetFiles           = 0x0010,
-	ALF3_PutFiles           = 0x0020,
-	ALF3_FindData           = 0x0040,
-	ALF3_VirtualFindData    = 0x0080,
-	ALF3_ProcessHostFile    = 0x0100,
-	ALF3_ProcessDialogEvent = 0x0200,
-	ALF3_ProcessEditorEvent = 0x0400,
-	ALF3_ProcessEditorInput = 0x0800,
-	ALF3_ProcessViewerEvent = 0x1000,
-	ALF3_SetFindList        = 0x2000,
-	ALF3_CustomData         = 0x4000,
-};
+typedef unsigned int LoaderFunctions3;
+static const LoaderFunctions3
+	LF3_None               = 0,
+	LF3_Analyse            = 0x0001,
+	LF3_CustomData         = 0x0002,
+	LF3_Dialog             = 0x0004,
+	LF3_Editor             = 0x0008,
+	LF3_FindList           = 0x0010,
+	LF3_Viewer             = 0x0020
+	//LF3_Window             = (LF3_Dialog|LF3_Editor|LF3_Viewer),
+	//LF3_Full               = (LF3_Analyse|LF3_Dialog|LF3_Editor|LF3_Viewer|LF3_Window)
+	//LF3_FullCustom       = (LF3_Full|LF3_CustomData)
+	;
 
-struct WrapUpdateFunctions
-{
-	DWORD mn_OldAbsentFunctions, mn_NewAbsentFunctions; // set of AbsentLoaderFunctions3
-	wchar_t ms_Loader[MAX_PATH+1], ms_IniFile[MAX_PATH+1];
-};
+//struct WrapUpdateFunctions
+//{
+//	LoaderFunctions3 mn_Functions; // set of LoaderFunctions3
+//	int nResourceID;
+//	wchar_t ms_Loader[MAX_PATH+1], ms_IniFile[MAX_PATH+1];
+//};
 
-std::vector<WrapUpdateFunctions> UpdateFunc;
+//std::vector<WrapUpdateFunctions> UpdateFunc;
 
 struct WrapPluginInfo
 {
 	// Instance variables
 	HMODULE mh_Loader; // Loader.dll / Loader64.dll
 	HMODULE mh_Dll;    // HMODULE собственно плагина
-	DWORD mn_OldAbsentFunctions, mn_NewAbsentFunctions; // set of AbsentLoaderFunctions3
+	LoaderFunctions3 mn_LoaderFunctions, mn_PluginFunctions; // set of LoaderFunctions3
 	wchar_t* m_ErrorInfo; // In-pointer, Out-error text (used for Loader)
 	int m_ErrorInfoMax; // max size of ErrorInfo in wchar_t (used for Loader)
 	wchar_t ms_PluginDll[MAX_PATH+1], ms_IniFile[MAX_PATH+1];
@@ -250,6 +247,7 @@ struct WrapPluginInfo
 
 	BOOL LoadPlugin(BOOL abSilent);
 	void LoadPluginInfo();
+	void CheckPluginExports(LoaderFunctions3 eFunc);
 
 	void UnloadPlugin();
 	void ClearProcAddr();
@@ -284,9 +282,14 @@ struct WrapPluginInfo
 	void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc);
 	InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber);
 	PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber);
-	static LPCWSTR FormatGuid(GUID* guid, wchar_t* tmp);
+	static LPCWSTR FormatGuid(GUID* guid, wchar_t* tmp, BOOL abQuote = FALSE);
 
 
+/* ******************************** */
+
+	static FARPROC WINAPI GetProcAddressWrap(struct WrapPluginInfo* wpi, HMODULE hModule, LPCSTR lpProcName);
+	       FARPROC        GetProcAddressW3  (HMODULE hModule, LPCSTR lpProcName);
+	       
 /* ******************************** */
 
 	static void   WINAPI SetStartupInfoWrap(struct WrapPluginInfo* wpi, PluginStartupInfo *Info);
@@ -515,7 +518,7 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 {
 	mh_Loader = pInfo2->hLoader;
 	mh_Dll = NULL;
-	mn_OldAbsentFunctions = mn_NewAbsentFunctions = 0;
+	mn_PluginFunctions = mn_LoaderFunctions = LF3_None;
 	ms_PluginDll[0] = ms_IniFile[0] = ms_Title[0] = ms_Desc[0] = ms_Author[0] = ms_RegRoot[0] = ms_File[0] = 0;
 	memset(&m_Version, 0, sizeof(m_Version));
 	memset(&mguid_Plugin, 0, sizeof(mguid_Plugin));
@@ -727,7 +730,7 @@ void WrapPluginInfo::LoadPluginInfo()
 				BOOL lb = WritePrivateProfileString(L"Plugin", L"PluginFile", pszFilePtr, szIni);
 				if (!lb)
 					dwErr = GetLastError();
-				lb = WritePrivateProfileString(L"Plugin", L"DisabledFunctions", L"0", szIni);
+				//lb = WritePrivateProfileString(L"Plugin", L"DisabledFunctions", L"0", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"AnalyzeMode", L"2", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"OldPutFilesParams", L"0", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"Title", pszFilePtr, szIni);
@@ -754,7 +757,7 @@ void WrapPluginInfo::LoadPluginInfo()
 			//else
 			//	lstrcpyn(File, pszFilePtr, ARRAYSIZE(File));
 
-			mn_OldAbsentFunctions = GetPrivateProfileInt(L"Plugin", L"DisabledFunctions", 0, szIni);
+			//mn_OldAbsentFunctions = GetPrivateProfileInt(L"Plugin", L"DisabledFunctions", 0, szIni);
 
 			m_AnalyzeMode = GetPrivateProfileInt(L"Plugin", L"AnalyzeMode", 2, szIni);
 			if (m_AnalyzeMode != 1 && m_AnalyzeMode != 2)
@@ -814,6 +817,63 @@ void WrapPluginInfo::LoadPluginInfo()
 		//guid_PluginConfigMenu = ::guid_DefPluginConfigMenu;
 		//guid_Dialogs = ::guid_DefDialogs;
 	}
+}
+
+void WrapPluginInfo::CheckPluginExports(LoaderFunctions3 eFunc)
+{
+	bool lbPluginExport = false; // Наличие в Far2 плагине экспортов
+	bool lbLoaderExport = false; // Наличие экспорта в Loader.dll
+	
+	
+	switch (eFunc)
+	{
+	case LF3_Analyse:
+		lbPluginExport = (AnalyseW!=NULL)||(OpenFilePluginW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "AnalyseW")!=NULL;
+		break;
+	case LF3_CustomData:
+		lbPluginExport = (GetCustomDataW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "GetCustomDataW")!=NULL;
+		break;
+	case LF3_Dialog:
+		lbPluginExport = (ProcessDialogEventW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "ProcessDialogEventW")!=NULL;
+		break;
+	case LF3_Editor:
+		lbPluginExport = (ProcessEditorEventW!=NULL)||(ProcessEditorInputW!=NULL);
+		lbLoaderExport = (GetProcAddress(mh_Loader, "ProcessEditorEventW")!=NULL)
+					  && (GetProcAddress(mh_Loader, "ProcessEditorInputW")!=NULL);
+		break;
+	case LF3_FindList:
+		lbPluginExport = (SetFindListW!=NULL);
+		lbLoaderExport = (GetProcAddress(mh_Loader, "SetFindListW")!=NULL)
+					  && (GetProcAddress(mh_Loader, "AnalyseW")!=NULL); // TempPanel!!
+		break;
+	case LF3_Viewer:
+		lbPluginExport = (ProcessViewerEventW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "ProcessViewerEventW")!=NULL;
+		break;
+	//case LF3_Window:
+	//	lbPluginExport = (
+	//		(((ProcessEditorEventW!=NULL)||(ProcessEditorInputW!=NULL)) ? 1 : 0) +
+	//		((ProcessViewerEventW!=NULL) ? 1 : 0) + 
+	//		((ProcessDialogEventW!=NULL) ? 1 : 0)) > 1;
+	//	lbLoaderExport = 
+	//		   (GetProcAddress(mh_Loader, "ProcessEditorEventW")!=NULL)
+	//		&& (GetProcAddress(mh_Loader, "ProcessEditorInputW")!=NULL)
+	//		&& (GetProcAddress(mh_Loader, "ProcessViewerEventW")!=NULL)
+	//		&& (GetProcAddress(mh_Loader, "ProcessDialogEventW")!=NULL);
+	//	break;
+	default:
+		// Неизвестный тип
+		_ASSERTE(eFunc == LF3_Viewer);
+	}
+	
+	if (lbPluginExport)
+		mn_PluginFunctions |= eFunc;
+	
+	if (lbLoaderExport)
+		mn_LoaderFunctions |= eFunc;
 }
 
 BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
@@ -908,40 +968,108 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 			FreeCustomDataW = (WrapPluginInfo::_FreeCustomDataW)GetProcAddress(mh_Dll, "FreeCustomDataW");
 
 			//TODO: Если экспортируемые функции из mh_Loader не совпадают с mn_OldAbsentFunctions - обновить (сбросить mn_OldAbsentFunctions в 0)
-			mn_NewAbsentFunctions = 0;
-			if (!(AnalyseW||OpenFilePluginW))
-				mn_NewAbsentFunctions |= ALF3_Analyse;
-			if (!(OpenPluginW||OpenFilePluginW))
-				mn_NewAbsentFunctions |= ALF3_Open;
-			if (!ConfigureW)
-				mn_NewAbsentFunctions |= ALF3_Configure;
-			if (!CompareW)
-				mn_NewAbsentFunctions |= ALF3_Compare;
-			if (!GetFilesW)
-				mn_NewAbsentFunctions |= ALF3_GetFiles;
-			if (!PutFilesW)
-				mn_NewAbsentFunctions |= ALF3_PutFiles;
-			if (!GetFindDataW)
-				mn_NewAbsentFunctions |= ALF3_FindData;
-			if (!GetVirtualFindDataW)
-				mn_NewAbsentFunctions |= ALF3_VirtualFindData;
-			if (!ProcessHostFileW)
-				mn_NewAbsentFunctions |= ALF3_ProcessHostFile;
-			if (!ProcessDialogEventW)
-				mn_NewAbsentFunctions |= ALF3_ProcessDialogEvent;
-			if (!ProcessEditorEventW)
-				mn_NewAbsentFunctions |= ALF3_ProcessEditorEvent;
-			if (!ProcessEditorInputW)
-				mn_NewAbsentFunctions |= ALF3_ProcessEditorInput;
-			if (!ProcessViewerEventW)
-				mn_NewAbsentFunctions |= ALF3_ProcessViewerEvent;
-			if (!SetFindListW)
-				mn_NewAbsentFunctions |= ALF3_SetFindList;
-			if (!GetCustomDataW)
-				mn_NewAbsentFunctions |= ALF3_CustomData;
+			mn_PluginFunctions = LF3_None;
+			mn_LoaderFunctions = LF3_None; // сформируем на основе реальных экспортов в Loader.dll
 
+			CheckPluginExports(LF3_Analyse);
+			CheckPluginExports(LF3_CustomData);
+			CheckPluginExports(LF3_Dialog);
+			CheckPluginExports(LF3_Editor);
+			CheckPluginExports(LF3_FindList);
+			CheckPluginExports(LF3_Viewer);
+			//CheckPluginExports(LF3_Window);
+			
+			#if 0	
+			CheckPluginExports(ALF3_Analyse);
+			CheckPluginExports(ALF3_Open);
+			CheckPluginExports(ALF3_Configure);
+			CheckPluginExports(ALF3_Compare);
+			CheckPluginExports(ALF3_GetFiles);
+			CheckPluginExports(ALF3_PutFiles);
+			CheckPluginExports(ALF3_FindData);
+			CheckPluginExports(ALF3_VirtualFindData);
+			CheckPluginExports(ALF3_ProcessHostFile);
+			CheckPluginExports(ALF3_ProcessDialogEvent);
+			CheckPluginExports(ALF3_ProcessEditorEvent);
+			CheckPluginExports(ALF3_ProcessEditorInput);
+			CheckPluginExports(ALF3_ProcessViewerEvent);
+			CheckPluginExports(ALF3_SetFindList);
+			CheckPluginExports(ALF3_CustomData);
+			#endif
 
-#if 0
+			#if 0
+			// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
+			int nLoaderResourceId = 0;
+			#ifdef _WIN64
+			#define MAKE_LOADER_RC(s) IDR_LOADER64_##s
+			#else
+			#define MAKE_LOADER_RC(s) IDR_LOADER_##s
+			#endif
+			// !! LF3_FindList должен идти перед LF3_Analyse !!
+			if (mn_LoaderFunctions == LF3_FindList)
+			{
+				if (mn_PluginFunctions != LF3_FindList)
+					nLoaderResourceId = MAKE_LOADER_RC(FINDLIST);
+			}
+			else if (mn_LoaderFunctions == LF3_Analyse)
+			{
+				if (mn_PluginFunctions != LF3_Analyse)
+					nLoaderResourceId = MAKE_LOADER_RC(ARC);
+			}
+			else if (mn_LoaderFunctions == LF3_CustomData)
+			{
+				if (mn_PluginFunctions != LF3_CustomData)
+					nLoaderResourceId = MAKE_LOADER_RC(CUSTOM);
+			}
+			else if (mn_LoaderFunctions == LF3_Window)
+			{
+				if (mn_PluginFunctions != LF3_Window)
+					nLoaderResourceId = MAKE_LOADER_RC(WINDOW);
+			}
+			else if (mn_LoaderFunctions == LF3_Dialog)
+			{
+				if (mn_PluginFunctions != LF3_Dialog)
+					nLoaderResourceId = MAKE_LOADER_RC(DIALOG);
+			}
+			else if (mn_LoaderFunctions == LF3_Editor)
+			{
+				if (mn_PluginFunctions != LF3_Editor)
+					nLoaderResourceId = MAKE_LOADER_RC(EDITOR);
+			}
+			else
+			{
+				_ASSERTE(mn_LoaderFunctions == LF3_Full);
+				if ((mn_PluginFunctions & LF3_Full) != LF3_Full)
+					nLoaderResourceId = MAKE_LOADER_RC(FULL);
+			};
+			if (mn_LoaderFunctions != mn_PluginFunctions && nLoaderResourceId == 0)
+			{
+				_ASSERTE(mn_LoaderFunctions == mn_PluginFunctions);
+			}
+			if (mn_LoaderFunctions != mn_PluginFunctions && *ms_PluginDll && nLoaderResourceId)
+			{
+				// Проверим, может уже помещен в список "на модификацию"
+				bool lbExist = false;
+				std::vector<WrapUpdateFunctions>::iterator iter;
+				for (iter = UpdateFunc.begin(); !lbExist && iter != UpdateFunc.end(); iter++)
+				{
+					if (lstrcmpi(iter->ms_IniFile, ms_IniFile) == 0)
+						lbExist = true;
+				}
+
+				if (!lbExist)
+				{
+					WrapUpdateFunctions upd = {mn_PluginFunctions, nLoaderResourceId};
+					if (GetModuleFileName(mh_Loader, upd.ms_Loader, ARRAYSIZE(upd.ms_Loader)))
+					{
+						lstrcpy(upd.ms_IniFile, ms_IniFile);
+						UpdateFunc.push_back(upd);
+					}
+				}
+			}
+			#endif
+
+			#if 0
 			int nIdx = 0;
 			ExportFunc strNull[64] = {{NULL}};
 			#undef SET_EXP
@@ -973,7 +1101,7 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 			#ifdef _DEBUG
 			p2 = GetProcAddress(mh_Loader, "SetFindListW");
 			#endif
-#endif
+			#endif
 		}
 	}
 	
@@ -1027,9 +1155,13 @@ void WrapPluginInfo::UnloadPlugin()
 
 
 
-LPCWSTR WrapPluginInfo::FormatGuid(GUID* guid, wchar_t* tmp)
+LPCWSTR WrapPluginInfo::FormatGuid(GUID* guid, wchar_t* tmp, BOOL abQuote /*= FALSE*/)
 {
-	wsprintf(tmp, L"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X",
+	wsprintf(tmp, 
+		abQuote ?
+			L"\"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\"" :
+			L"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X"
+			,
 		guid->Data1, guid->Data2, guid->Data3,
 		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
 		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
@@ -1772,6 +1904,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	FarListColors flColors3;
 	FarGetDialogItem fgdi3;
 	FarDialogItem fdi3;
+	DialogInfo di3;
 
 	//TODO: Сохранять gnMsg_2/gnMsg_3 только если они <DM_USER!
 	if (Msg2 == gnMsg_2 && gnMsg_3 != DM_FIRST
@@ -1903,7 +2036,8 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DM_LISTDELETE:
 			if (!Param2)
 			{
-				_ASSERTE(Param2!=NULL);
+				//_ASSERTE(Param2!=NULL); -- допустимо. удаление всех элементов
+				Msg3 = DM_LISTDELETE;
 			}
 			else
 			{
@@ -2128,7 +2262,11 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DM_GETCONSTTEXTPTR:
 			Msg3 = DM_GETCONSTTEXTPTR; break;
 		case Far2::DM_GETDIALOGINFO:
-			Msg3 = DM_GETDIALOGINFO; break;
+			ZeroStruct(di3);
+			di3.StructSize = sizeof(di3);
+			Param2 = (LONG_PTR)&di3;
+			Msg3 = DM_GETDIALOGINFO;
+			break;
 		case Far2::DN_FIRST:
 			Msg3 = DN_FIRST; break;
 		case Far2::DN_BTNCLICK:
@@ -2267,6 +2405,16 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 			//FarMessageParam_3_2(hDlg3, Msg, Param1, Param2, OrgParam2, lRc);
 			switch (Msg3)
 			{
+			case DM_GETDIALOGINFO:
+				if (lRc > 0)
+				{
+					Far2::DialogInfo* p2 = (Far2::DialogInfo*)OrgParam2;
+					if (p2 && p2->StructSize >= sizeof(Far2::DialogInfo))
+					{
+						p2->Id = di3.Id;
+					}
+				}
+				break;
 			case DM_GETDLGITEM:
 				if (lRc > 0)
 				{
@@ -3521,17 +3669,19 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 {
 	LOG_CMD(L"psi2.AdvControl(%i)",Command,0,0);
 	INT_PTR iRc = 0;
-	if (((INT_PTR)mh_Dll) != ModuleNumber)
+	GUID guid = {0};
+	if (((INT_PTR)mh_Dll) == ModuleNumber)
 	{
 		_ASSERTE(((INT_PTR)mh_Dll) == ModuleNumber);
-		iRc = 0;
+		guid = mguid_Plugin;
 	}
-	else switch (Command)
+	
+	switch (Command)
 	{
 	case Far2::ACTL_GETFARVERSION:
 		{
 			VersionInfo vi = {0};
-			iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETFARMANAGERVERSION, 0, &vi);
+			iRc = psi3.AdvControl(&guid, ACTL_GETFARMANAGERVERSION, 0, &vi);
 			if (iRc)
 			{
 				DWORD ver = MAKEFARVERSION2(vi.Major, vi.Minor, vi.Build);
@@ -3542,23 +3692,23 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 			break;
 		}
 	case Far2::ACTL_GETSYSWORDDIV:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETSYSWORDDIV, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETSYSWORDDIV, 0, Param); break;
 	case Far2::ACTL_WAITKEY:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_WAITKEY, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_WAITKEY, 0, Param); break;
 	case Far2::ACTL_GETCOLOR:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETCOLOR, (int)(INT_PTR)Param, NULL); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETCOLOR, (int)(INT_PTR)Param, NULL); break;
 	case Far2::ACTL_GETARRAYCOLOR:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETARRAYCOLOR, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETARRAYCOLOR, 0, Param); break;
 	case Far2::ACTL_EJECTMEDIA:
 		ASSERTSTRUCT(ActlEjectMedia);
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_EJECTMEDIA, 0, Param);
+		iRc = psi3.AdvControl(&guid, ACTL_EJECTMEDIA, 0, Param);
 		break;
 	case Far2::ACTL_KEYMACRO:
 		{
 			if (Param)
 			{
 				Far2::ActlKeyMacro* p2 = (Far2::ActlKeyMacro*)Param;
-				//iRc = psi3.AdvControl(&mguid_Plugin, ACTL_KEYMACRO, Param);
+				//iRc = psi3.AdvControl(&guid, ACTL_KEYMACRO, Param);
 				switch (p2->Command)
 				{
 				case Far2::MCMD_LOADALL:
@@ -3571,12 +3721,155 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					{
 						MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
 						mcr.SequenceText = p2->Param.PlainText.SequenceText;
+						wchar_t *pszUpper = NULL, *pszChanged = NULL;
+						// Плагин может звать сам себя через CallPlugin, 
+						// в этом случае нужно заменить старый PluginID (DWORD) на GUID
+						if (mcr.SequenceText && *mcr.SequenceText && m_Info.Reserved)
+						{
+							pszUpper = _wcsdup(p2->Param.PlainText.SequenceText);
+							size_t nOrigLen = lstrlen(p2->Param.PlainText.SequenceText);
+							CharUpperBuff(pszUpper, lstrlen(pszUpper));
+							wchar_t* pszFrom = pszUpper;
+							wchar_t* pszCall;
+							WCHAR /*szIdDec[32], szIdHex1[32], szIdHex2[32], szId[32],*/ szGuid[64];
+							//wsprintf(szIdDec, L"%u", m_Info.Reserved);
+							//wsprintf(szIdHex1, L"0X%X", m_Info.Reserved);
+							//wsprintf(szIdHex2, L"0X%08X", m_Info.Reserved);
+							//FormatGuid(&mguid_Plugin, szGuid, TRUE);
+							int nCchAdd = 0, nCchGuidsAdd = 0;
+							while ((pszCall = wcsstr(pszFrom, L"CALLPLUGIN")) != NULL)
+							{
+								pszCall = pszCall + 10; // lstrlen(L"CALLPLUGIN")
+								pszFrom = pszCall; // сразу, чтобы не забыть и не зациклиться
+								while (*pszCall == L' ' || *pszCall == L'\t') pszCall++;
+								if (*pszCall != L'(') continue;
+								pszCall++;
+								while (*pszCall == L' ' || *pszCall == L'\t') pszCall++;
+								if (*pszCall < L'0' || *pszCall > L'9') continue; // допускаются только числа
+
+								szGuid[0] = 0;
+								DWORD nID = 0;
+								wchar_t* pszEnd = NULL;
+								if (pszCall[1] == L'X')
+									nID = wcstoul(pszCall+2, &pszEnd, 16);
+								else
+									nID = wcstoul(pszCall, &pszEnd, 10);
+								if (!nID || !pszEnd || (pszEnd <= pszCall))
+									continue; // ошибка в ID?
+
+								if (nID == m_Info.Reserved)
+									FormatGuid(&mguid_Plugin, szGuid, TRUE);
+								else
+								{
+									LPCWSTR pszGuid = NULL;
+									switch (nID)
+									{
+									case 0x43454D55: // ConEmu
+										pszGuid = L"4b675d80-1d4a-4ea9-8436-fdc23f2fc14b"; break;
+									case 0x43455568: // ConEmuTh
+										pszGuid = L"bd454d48-448e-46cc-909d-b6cf789c2d65"; break;
+									// Wrapper!
+									case 0x424C434D: // MacroLib
+										pszGuid = L"46FC0BF1-CC99-4652-B41D-C7B8705D52AF"; break;
+									case 0x436C4678: // ClipFixer
+										pszGuid = L"AF0DD773-7193-4F50-9904-AB24673EB42C"; break;
+									//const SameFolder = 0x44464D53
+									case 0x444E4645: // EditFind
+										pszGuid = L"8EF28982-957E-4BCE-AD73-7E67DB443969"; break;
+									case 0x44654272: // DeepBrowser
+										pszGuid = L"D1778FAF-B6B1-4604-9D9C-CBCF3B15F7A8"; break;
+									case 0x466C5470: // FileTypes
+										pszGuid = L"32C72FF2-8762-4485-9BAE-2020B9143AA0"; break;
+									case 0x4D426C6B: // MBlockEditor
+										pszGuid = L"D82D6847-0C7B-4BF4-9A31-B0B929707854"; break;
+									case 0x4D4D5657: // MMView
+										pszGuid = L"44E0DA00-F361-4ACC-BF8F-DDC7D2E0494F"; break;
+									case 0x52674564: // RegEditor
+										pszGuid = L"F6A1E51C-1C11-4BD5-ADD2-8677348BC106"; break;
+									//const FarHints = 0x544E4948
+									case 0x5774654E: // Network
+										pszGuid = L"9E724C40-D0B6-4DC3-9F30-CC7AF5292C5B"; break;
+									case 0xA91B3F07: // PanelTabs
+										pszGuid = L"66D5D731-EE8E-4113-87F3-56883CC321DA"; break;
+									}
+									if (pszGuid)
+									{
+										szGuid[0] = L'"'; lstrcpy(szGuid+1, pszGuid); lstrcat(szGuid, L"\"");
+									}
+								}
+
+								if (szGuid[0] == 0)
+									continue; // неизвестный ID, сделать ничего не сможем
+
+								if (nCchAdd < 38 || !pszChanged)
+								{
+									wchar_t* pszNew = NULL;
+									int nLen = 0;
+									nCchAdd = 38*10; // 10 гуидов с кавычками
+									if (pszChanged == NULL)
+									{
+										nLen = lstrlen(p2->Param.PlainText.SequenceText);
+										pszNew = (wchar_t*)calloc(nLen+nCchAdd+1, sizeof(wchar_t));
+										if (!pszNew) { _ASSERTE(pszNew!=NULL); break; }
+										lstrcpy(pszNew, p2->Param.PlainText.SequenceText);
+									}
+									else
+									{
+										nLen = lstrlen(pszChanged);
+										pszNew = (wchar_t*)calloc(nLen+nCchAdd+1, sizeof(wchar_t));
+										if (!pszNew) { _ASSERTE(pszNew!=NULL); break; }
+										lstrcpy(pszNew, pszChanged);
+										free(pszChanged);
+									}
+									pszChanged = pszNew;
+								}
+
+								size_t nPos = pszCall - pszUpper;
+								size_t nOrigIdLen = pszEnd - pszCall;
+								size_t nNewIdLen = lstrlen(szGuid);
+								_ASSERTE(nNewIdLen==38);
+								if (nOrigLen < (nOrigIdLen+nPos))
+								{
+									_ASSERTE(nOrigLen > (nOrigIdLen+nPos));
+									break;
+								}
+								// Освободить место для GUID (размер такой, т.к. память выделена calloc)
+								memmove(pszChanged+nNewIdLen+nPos, pszChanged+nOrigIdLen+nPos, (nOrigLen-nOrigIdLen-nPos)*sizeof(wchar_t));
+								// положить новый ИД
+								memmove(pszChanged+nPos, szGuid, nNewIdLen*sizeof(wchar_t));
+
+								nCchAdd -= nNewIdLen;
+								pszFrom = pszCall + nOrigIdLen;
+
+								//// Теперь - скопировать ID в szId
+								//for (int i = 0; i < 12 
+								//		&& ( (pszCall[i] >= L'0' && pszCall[i] <= L'9')
+								//		  || (pszCall[i] >= L'A' && pszCall[i] <= L'F') // был CharUpperBuff
+								//		  || (pszCall[i] >= L'X') // HEX
+								//		    ) ; i++)
+								//{
+								//	szId[i] = pszCall[i]; szId[i+1] = 0;
+								//}
+								////
+								//if (lstrcmp(szId, szIdDec) && lstrcmp(szId, szIdHex1) && lstrcmp(szId, szIdHex2))
+								//	continue; 
+								//if (szGuid[0] == 0)
+								//	continue; // неизвестный ID, сделать ничего не сможем
+							}
+
+							if (pszChanged != NULL)
+								mcr.SequenceText = pszChanged;
+						}
 						mcr.Flags = 0
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
 						psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+						if (pszUpper)
+							free(pszUpper);
+						if (pszChanged)
+							free(pszChanged);
 					}
 					break;
 				case Far2::MCMD_CHECKMACRO:
@@ -3598,6 +3891,8 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
 					break;
 				case 6/*Far2::MCMD_GETAREA*/:
+					// В Far2 официально это в plugin api вынесено не было, но пользовались многие
+					_ASSERTE(MACROAREA_AUTOCOMPLETION==15 && MACROAREA_SHELL==1);
 					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
 					break;
 				}
@@ -3609,14 +3904,14 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 		_ASSERTE(Command != Far2::ACTL_POSTKEYSEQUENCE);
 		break;
 	case Far2::ACTL_GETWINDOWINFO:
-		//iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWINFO, 0, Param);
+		//iRc = psi3.AdvControl(&guid, ACTL_GETWINDOWINFO, 0, Param);
 		{
 			Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
 			WindowInfo wi = {sizeof(WindowInfo)};
 			wi.Pos = p2->Pos;
 			wi.TypeName = p2->TypeName; wi.TypeNameSize = p2->TypeNameSize;
 			wi.Name = p2->Name; wi.NameSize = p2->NameSize;
-			iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWINFO, 0, &wi);
+			iRc = psi3.AdvControl(&guid, ACTL_GETWINDOWINFO, 0, &wi);
 			if (iRc)
 			{
 				p2->Pos = wi.Pos;
@@ -3629,29 +3924,29 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 		}
 		break;
 	case Far2::ACTL_GETWINDOWCOUNT:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWCOUNT, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETWINDOWCOUNT, 0, Param); break;
 	case Far2::ACTL_SETCURRENTWINDOW:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETCURRENTWINDOW, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SETCURRENTWINDOW, 0, Param); break;
 	case Far2::ACTL_COMMIT:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_COMMIT, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_COMMIT, 0, Param); break;
 	case Far2::ACTL_GETFARHWND:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETFARHWND, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETFARHWND, 0, Param); break;
 	case Far2::ACTL_GETSYSTEMSETTINGS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETSYSTEMSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETSYSTEMSETTINGS, 0, Param); break;
 	case Far2::ACTL_GETPANELSETTINGS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETPANELSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETPANELSETTINGS, 0, Param); break;
 	case Far2::ACTL_GETINTERFACESETTINGS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETINTERFACESETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETINTERFACESETTINGS, 0, Param); break;
 	case Far2::ACTL_GETCONFIRMATIONS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETCONFIRMATIONS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETCONFIRMATIONS, 0, Param); break;
 	case Far2::ACTL_GETDESCSETTINGS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETDESCSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETDESCSETTINGS, 0, Param); break;
 	case Far2::ACTL_SETARRAYCOLOR:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETARRAYCOLOR, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SETARRAYCOLOR, 0, Param); break;
 	case Far2::ACTL_GETPLUGINMAXREADDATA:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
 	case Far2::ACTL_GETDIALOGSETTINGS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETDIALOGSETTINGS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETDIALOGSETTINGS, 0, Param); break;
 	case Far2::ACTL_GETSHORTWINDOWINFO:
 		{
 			Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
@@ -3662,7 +3957,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				//BUGBUG: Поскольку ACTL_GETWINDOWINFO нифига не ThreadSafe - юзаем MCTL_GETAREA
 				if (GetCurrentThreadId() != gnMainThreadId)
 				{
-					//iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETSHORTWINDOWINFO, Param);
+					//iRc = psi3.AdvControl(&guid, ACTL_GETSHORTWINDOWINFO, Param);
 					INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
 					switch(nArea)
 					{
@@ -3695,7 +3990,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				{
 					WindowInfo wi = {sizeof(WindowInfo)};
 					wi.Pos = p2->Pos;
-					iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETWINDOWINFO, 0, &wi);
+					iRc = psi3.AdvControl(&guid, ACTL_GETWINDOWINFO, 0, &wi);
 					if (iRc)
 					{
 						p2->Pos = wi.Pos;
@@ -3710,21 +4005,21 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 		}
 		break;
 	case Far2::ACTL_REDRAWALL:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_REDRAWALL, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_REDRAWALL, 0, Param); break;
 	case Far2::ACTL_SYNCHRO:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SYNCHRO, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SYNCHRO, 0, Param); break;
 	case Far2::ACTL_SETPROGRESSSTATE:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETPROGRESSSTATE, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SETPROGRESSSTATE, 0, Param); break;
 	case Far2::ACTL_SETPROGRESSVALUE:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETPROGRESSVALUE, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SETPROGRESSVALUE, 0, Param); break;
 	case Far2::ACTL_QUIT:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_QUIT, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_QUIT, 0, Param); break;
 	case Far2::ACTL_GETFARRECT:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETFARRECT, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETFARRECT, 0, Param); break;
 	case Far2::ACTL_GETCURSORPOS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_GETCURSORPOS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_GETCURSORPOS, 0, Param); break;
 	case Far2::ACTL_SETCURSORPOS:
-		iRc = psi3.AdvControl(&mguid_Plugin, ACTL_SETCURSORPOS, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SETCURSORPOS, 0, Param); break;
 	}
 	return iRc;
 };
@@ -4473,10 +4768,13 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 	{
 		if (m_Info.Reserved 
 			&& (((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACRO)
-				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING))
+				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING)
+				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == (OPEN_FROMMACRO|OPEN_FROMMACROSTRING)))
 		    && OpenPluginW)
 		{
-			h = OpenPluginW(Far2::OPEN_FROMMACRO, Info->Data);
+			h = OpenPluginW(Far2::OPEN_FROMMACRO
+							/*|(Info->OpenFrom & OPEN_FROMMACROSTRING)?0x20000:0*/,
+							Info->Data);
 		}
 		goto trap;
 	}
@@ -4539,8 +4837,8 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 	if (!mp_Analyze)
 		return FALSE;
 	LPBYTE ptr = (LPBYTE)mp_Analyze;
-	memmove(ptr, Info, sizeof(mp_Analyze));
-	ptr += sizeof(mp_Analyze);
+	memmove(ptr, Info, sizeof(*mp_Analyze));
+	ptr += sizeof(*mp_Analyze);
 	if (Info->BufferSize && Info->Buffer)
 	{
 		memmove(ptr, Info->Buffer, Info->BufferSize);
@@ -4575,6 +4873,11 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 		if (ClosePluginW)
 			ClosePluginW(h);
 		return TRUE;
+	}
+	if (mp_Analyze)
+	{
+		free(mp_Analyze);
+		mp_Analyze = NULL;
 	}
 	return 0;
 }
@@ -4640,16 +4943,16 @@ void   WrapPluginInfo::ExitFARW3(void)
 	if (ExitFARW)
 		ExitFARW();
 	UnloadPlugin();
-	// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
-	if (mn_OldAbsentFunctions != mn_NewAbsentFunctions && *ms_PluginDll)
-	{
-		WrapUpdateFunctions upd = {mn_OldAbsentFunctions, mn_NewAbsentFunctions};
-		if (GetModuleFileName(mh_Loader, upd.ms_Loader, ARRAYSIZE(upd.ms_Loader)))
-		{
-			lstrcpy(upd.ms_IniFile, ms_IniFile);
-			UpdateFunc.push_back(upd);
-		}
-	}
+	//// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
+	//if (mn_OldAbsentFunctions != mn_NewAbsentFunctions && *ms_PluginDll)
+	//{
+	//	WrapUpdateFunctions upd = {mn_OldAbsentFunctions, mn_NewAbsentFunctions};
+	//	if (GetModuleFileName(mh_Loader, upd.ms_Loader, ARRAYSIZE(upd.ms_Loader)))
+	//	{
+	//		lstrcpy(upd.ms_IniFile, ms_IniFile);
+	//		UpdateFunc.push_back(upd);
+	//	}
+	//}
 	delete this;
 }
 void   WrapPluginInfo::FreeVirtualFindDataW3(const FreeFindDataInfo *Info)
@@ -4953,6 +5256,38 @@ void   WrapPluginInfo::FreeCustomDataW3(wchar_t *CustomData)
 }
 
 
+/* *** */
+FARPROC WrapPluginInfo::GetProcAddressWrap(struct WrapPluginInfo* wpi, HMODULE hModule, LPCSTR lpProcName)
+{
+	return wpi->GetProcAddressW3(hModule, lpProcName);
+}
+FARPROC WrapPluginInfo::GetProcAddressW3(HMODULE hModule, LPCSTR lpProcName)
+{
+	if (!lstrcmpA(lpProcName, "AnalyseW"))
+		if (!(mn_PluginFunctions & LF3_Analyse))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "GetCustomDataW") || !lstrcmpA(lpProcName, "FreeCustomDataW"))
+		if (!(mn_PluginFunctions & LF3_CustomData))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "ProcessDialogEventW"))
+		if (!(mn_PluginFunctions & LF3_Dialog))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "ProcessEditorEventW") || !lstrcmpA(lpProcName, "ProcessEditorInputW"))
+		if (!(mn_PluginFunctions & LF3_Editor))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "SetFindListW"))
+		if (!(mn_PluginFunctions & LF3_FindList))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "ProcessViewerEventW"))
+		if (!(mn_PluginFunctions & LF3_Viewer))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "ProcessViewerEventW"))
+		if (!(mn_PluginFunctions & LF3_Viewer))
+			return NULL;
+	
+	// OK, можно
+	return GetProcAddress(hModule, lpProcName);
+}
 /* *** */
 void WrapPluginInfo::SetStartupInfoWrap(struct WrapPluginInfo* wpi, PluginStartupInfo *Info)
 {
@@ -5518,8 +5853,184 @@ int Far2Dialog::RunDlg()
 
 
 
+typedef FARPROC (WINAPI* GetProcAddressT)(HMODULE hModule, LPCSTR lpProcName);
+GetProcAddressT _GetProcAddress = NULL;
+FARPROC WINAPI WrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+{
+	// If this parameter is an ordinal value, it must be in the low-order word;
+	// the high-order word must be zero.
+	if ( (((DWORD_PTR)lpProcName) & 0xFFFF) != ((DWORD_PTR)lpProcName) )
+	{
+		GetProcAddressT fn = (GetProcAddressT)GetProcAddress(hModule, "FarWrapGetProcAddress");
+		if (fn)
+			return fn(hModule, lpProcName);
+	}
+	
+	// Если запрос не обработали - то обычным образом
+	if (_GetProcAddress)
+		return _GetProcAddress(hModule, lpProcName);
+	_ASSERTE(_GetProcAddress!=NULL);
+	return GetProcAddress(hModule, lpProcName);
+}
 
 
+bool SetProcAddressHook()
+{
+	#define GetPtrFromRVA(rva,pNTHeader,imageBase) (PVOID)((imageBase)+(rva))
+	
+	IMAGE_IMPORT_DESCRIPTOR* Import = 0;
+	DWORD Size = 0;
+	HMODULE Module = GetModuleHandle(0);
+
+	if (!Module || (Module == INVALID_HANDLE_VALUE))
+		return false;
+
+	IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)Module;
+	IMAGE_NT_HEADERS* nt_header = NULL;
+
+	if (dos_header->e_magic == IMAGE_DOS_SIGNATURE /*'ZM'*/)
+	{
+		nt_header = (IMAGE_NT_HEADERS*)((char*)Module + dos_header->e_lfanew);
+
+		if (nt_header->Signature != 0x004550)
+			return false;
+		else
+		{
+			Import = (IMAGE_IMPORT_DESCRIPTOR*)((char*)Module +
+			                                    (DWORD)(nt_header->OptionalHeader.
+			                                            DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].
+			                                            VirtualAddress));
+			Size = nt_header->OptionalHeader.
+			       DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size;
+		}
+	}
+	else
+		return false;
+
+	// if wrong module or no import table
+	if (!Import)
+		return false;
+
+#ifdef _DEBUG
+	PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(nt_header);
+#endif
+#ifdef _WIN64
+	_ASSERTE(sizeof(DWORD_PTR)==8);
+#else
+	_ASSERTE(sizeof(DWORD_PTR)==4);
+#endif
+#ifdef _WIN64
+#define TOP_SHIFT 60
+#else
+#define TOP_SHIFT 28
+#endif
+
+
+	bool bHooked = false;
+	
+	int nCount = Size / sizeof(IMAGE_IMPORT_DESCRIPTOR);
+	//_ASSERTE(Size == (nCount * sizeof(IMAGE_IMPORT_DESCRIPTOR))); -- равно быть не обязано
+	for(int i = 0; !bHooked && i < nCount; i++)
+	{
+		if (Import[i].Name == 0)
+			break;
+
+		//DebugString( ToTchar( (char*)Module + Import[i].Name ) );
+#ifdef _DEBUG
+		char* mod_name = (char*)Module + Import[i].Name;
+#endif
+		DWORD_PTR rvaINT = Import[i].OriginalFirstThunk;
+		DWORD_PTR rvaIAT = Import[i].FirstThunk;
+
+		if (rvaINT == 0)      // No Characteristics field?
+		{
+			// Yes! Gotta have a non-zero FirstThunk field then.
+			rvaINT = rvaIAT;
+
+			if (rvaINT == 0)       // No FirstThunk field?  Ooops!!!
+			{
+				_ASSERTE(rvaINT!=0);
+				break;
+			}
+		}
+
+		PIMAGE_IMPORT_BY_NAME pOrdinalNameO = NULL;
+		IMAGE_THUNK_DATA* thunk = (IMAGE_THUNK_DATA*)GetPtrFromRVA(rvaIAT, nt_header, (PBYTE)Module);
+		IMAGE_THUNK_DATA* thunkO = (IMAGE_THUNK_DATA*)GetPtrFromRVA(rvaINT, nt_header, (PBYTE)Module);
+
+		if (!thunk ||  !thunkO)
+		{
+			_ASSERTE(thunk && thunkO);
+			continue;
+		}
+
+		for (int f = 0; !bHooked && thunk->u1.Function; thunk++, thunkO++, f++)
+		{
+			const char* pszFuncName = NULL;
+			ULONGLONG ordinalO = -1;
+
+			if (thunk->u1.Function != thunkO->u1.Function)
+			{
+				// Ordinal у нас пока не используется
+				if (IMAGE_SNAP_BY_ORDINAL(thunkO->u1.Ordinal))
+				{
+					//WARNING("Это НЕ ORDINAL, это Hint!!!");
+					ordinalO = IMAGE_ORDINAL(thunkO->u1.Ordinal);
+					pOrdinalNameO = NULL;
+				}
+
+				if (!IMAGE_SNAP_BY_ORDINAL(thunkO->u1.Ordinal))
+				{
+					pOrdinalNameO = (PIMAGE_IMPORT_BY_NAME)GetPtrFromRVA(thunkO->u1.AddressOfData, nt_header, (PBYTE)Module);
+					//WARNING("Множественные вызовы IsBad???Ptr могут глючить");
+					BOOL lbValidPtr = !IsBadReadPtr(pOrdinalNameO, sizeof(IMAGE_IMPORT_BY_NAME));
+					_ASSERTE(lbValidPtr);
+
+					if (lbValidPtr)
+					{
+						lbValidPtr = !IsBadStringPtrA((LPCSTR)pOrdinalNameO->Name, 10);
+						_ASSERTE(lbValidPtr);
+
+						if (lbValidPtr)
+							pszFuncName = (LPCSTR)pOrdinalNameO->Name;
+					}
+				}
+			}
+			
+			if (!pszFuncName)
+				continue; // Если имя импорта определить не удалось - пропускаем
+			else if (lstrcmpA(pszFuncName, "GetProcAddress"))
+				continue;
+			
+			
+			bHooked = true;
+			DWORD old_protect = 0; DWORD dwErr = 0;
+
+			if (thunk->u1.Function == (DWORD_PTR)WrapGetProcAddress)
+			{
+				// оказалось захучено в другой нити? такого быть не должно
+				_ASSERTE(thunk->u1.Function != (DWORD_PTR)WrapGetProcAddress);
+			}
+			else
+			{
+				if (!VirtualProtect(&thunk->u1.Function, sizeof(thunk->u1.Function),
+				                   PAGE_READWRITE, &old_protect))
+				{
+					dwErr = GetLastError();
+					_ASSERTE(FALSE);
+				}
+				else
+				{
+					_GetProcAddress = (GetProcAddressT)thunk->u1.Function;
+					thunk->u1.Function = (DWORD_PTR)WrapGetProcAddress;
+					VirtualProtect(&thunk->u1.Function, sizeof(DWORD), old_protect, &old_protect);
+				}
+			}
+		}
+	}
+
+	return bHooked;
+}
 
 
 // Плагин может быть вызван в первый раз из фоновой нити (диалог поиска при поиске в архивах)
@@ -5563,6 +6074,15 @@ BOOL APIENTRY DllMain( HANDLE hModule,
     {
 		ghFar3Wrap = (HMODULE)hModule;
 		gnMainThreadId = GetMainThreadId();
+		
+		// Хукнуть GetProcAddress, чтобы в фар не отдавать те функции, 
+		// которых нет в оригинальном плагине. 
+		// Это может создать лишнюю и весьма большую нагрузку.
+		bool lbHooked = SetProcAddressHook();
+		if (!lbHooked)
+		{
+			_ASSERTE(lbHooked==true);
+		}
 
 		//lbPsi2 = FALSE;
 		//memset(&psi3, 0, sizeof(psi3));
@@ -5575,6 +6095,7 @@ BOOL APIENTRY DllMain( HANDLE hModule,
     }
     if (ul_reason_for_call == DLL_PROCESS_DETACH)
     {
+    	#if 0
 		//TODO: !!! Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время это выполнить
 		std::vector<WrapUpdateFunctions>::iterator iter;
 		#undef SET_EXP
@@ -5582,6 +6103,40 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 		for (iter = UpdateFunc.begin(); iter != UpdateFunc.end(); iter++)
 		{
 			WrapUpdateFunctions upd = *iter;
+			HRSRC hRc = FindResource(ghFar3Wrap, (LPCTSTR)upd.nResourceID, _T("LOADERS"));
+			if (hRc == NULL)
+			{
+				_ASSERTE(hRc != NULL);
+			}
+			else
+			{
+				DWORD nSize = SizeofResource(ghFar3Wrap, hRc);
+				HGLOBAL hRes = LoadResource(ghFar3Wrap, hRc);
+				if (hRes == NULL && nSize)
+				{
+					_ASSERTE(hRes != NULL && nSize);
+				}
+				else
+				{
+					LPVOID ptrLoader = LockResource(hRes);
+					if (ptrLoader == NULL)
+					{
+						_ASSERTE(ptrLoader!=NULL);
+					}
+					else
+					{
+						HANDLE hFile = CreateFile(upd.ms_Loader, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ, NULL,
+							CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+						if ( hFile == INVALID_HANDLE_VALUE )
+							continue;
+						DWORD nWrite = 0;
+						BOOL lbWrite = WriteFile(hFile, ptrLoader, nSize, &nWrite, NULL);
+						_ASSERTE(lbWrite && nWrite == nSize);
+						CloseHandle(hFile);
+					}
+				}
+			}
+			#if 0
 			HANDLE hFile = CreateFile(upd.ms_Loader, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ, NULL,
 				OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 			if ( hFile == INVALID_HANDLE_VALUE )
@@ -5648,6 +6203,10 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 					{
 						SET_EXP(ALF3_ProcessViewerEvent, "ProcessViewerEventW");
 					}
+					if ((upd.mn_OldAbsentFunctions & ALF3_SetFindList) != (upd.mn_NewAbsentFunctions & ALF3_SetFindList))
+					{
+						SET_EXP(ALF3_SetFindList, "SetFindListW");
+					}
 					if ((upd.mn_OldAbsentFunctions & ALF3_CustomData) != (upd.mn_NewAbsentFunctions & ALF3_CustomData))
 					{
 						SET_EXP(ALF3_CustomData, "GetCustomDataW");
@@ -5665,8 +6224,10 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 			FILETIME ft; SystemTimeToFileTime(&st, &ft);
 			SetFileTime(hFile, NULL, NULL, &ft);
 			CloseHandle(hFile);
+			#endif
 		}
 		#undef SET_EXP
+		#endif
 		return TRUE;
     	//if (wpi)
     	//{
@@ -5686,12 +6247,14 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 		return -1;
 	if (pInfo2->StructSize != sizeof(*pInfo2))
 	{
+		_ASSERTE(pInfo2->StructSize == sizeof(*pInfo2));
 		if (pInfo2->ErrorInfo && (pInfo2->ErrorInfoMax >= 255 && pInfo2->ErrorInfoMax <= 4096))
 			wsprintf(pInfo2->ErrorInfo, L"Far3Wrap\nInitPlugin failed. Invalid value of pInfo2->StructSize\nRequired: %u, received: %u", (DWORD)sizeof(*pInfo2), (DWORD)pInfo2->StructSize);
 		return -2;
 	}
 	if (pInfo2->Far3Build != MVV_3)
 	{
+		_ASSERTE(pInfo2->Far3Build == MVV_3);
 		if (pInfo2->ErrorInfo && (pInfo2->ErrorInfoMax >= 255 && pInfo2->ErrorInfoMax <= 4096))
 			wsprintf(pInfo2->ErrorInfo, L"Far3Wrap\nInitPlugin failed. Invalid value of pInfo2->Far3Build\nRequired: %u, received: %u", MVV_3, pInfo2->Far3Build);
 		return -3;
@@ -5707,6 +6270,7 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	pInfo2->wpi->LoadPluginInfo();
 	if (!pInfo2->wpi->LoadPlugin(TRUE/*abSilent*/))
 	{
+		_ASSERTE(pInfo2->wpi->mh_Dll!=NULL);
 		delete pInfo2->wpi;
 		pInfo2->wpi = NULL;
 		return -4;
@@ -5716,76 +6280,77 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 
 	// Вернуть в Loader список функций враппера
 	#undef SET_FN
-	#define SET_FN(n) pInfo2->n##rap = WrapPluginInfo::n##rap;
-	SET_FN(SetStartupInfoW);
-	SET_FN(GetGlobalInfoW);
-	SET_FN(GetPluginInfoW);
-	SET_FN(OpenW);
-	SET_FN(AnalyseW);
-	SET_FN(ClosePanelW);
-	SET_FN(CompareW);
-	SET_FN(ConfigureW);
-	SET_FN(DeleteFilesW);
-	SET_FN(ExitFARW);
-	SET_FN(FreeVirtualFindDataW);
-	SET_FN(GetFilesW);
-	SET_FN(GetFindDataW);
-	SET_FN(FreeFindDataW);
-	SET_FN(GetOpenPanelInfoW);
-	SET_FN(GetVirtualFindDataW);
-	SET_FN(MakeDirectoryW);
-	SET_FN(ProcessDialogEventW);
-	SET_FN(ProcessEditorEventW);
-	SET_FN(ProcessEditorInputW);
-	SET_FN(ProcessEventW);
-	SET_FN(ProcessHostFileW);
-	SET_FN(ProcessPanelInputW);
-	SET_FN(ProcessConsoleInputW);
-	SET_FN(ProcessSynchroEventW);
-	SET_FN(ProcessViewerEventW);
-	SET_FN(PutFilesW);
-	SET_FN(SetDirectoryW);
-	SET_FN(SetFindListW);
-	SET_FN(GetCustomDataW);
-	SET_FN(FreeCustomDataW);
+	#define SET_FN(n) pInfo2->n = WrapPluginInfo::n;
+	SET_FN(GetProcAddressWrap);
+	SET_FN(SetStartupInfoWrap);
+	SET_FN(GetGlobalInfoWrap);
+	SET_FN(GetPluginInfoWrap);
+	SET_FN(OpenWrap);
+	SET_FN(AnalyseWrap);
+	SET_FN(ClosePanelWrap);
+	SET_FN(CompareWrap);
+	SET_FN(ConfigureWrap);
+	SET_FN(DeleteFilesWrap);
+	SET_FN(ExitFARWrap);
+	SET_FN(FreeVirtualFindDataWrap);
+	SET_FN(GetFilesWrap);
+	SET_FN(GetFindDataWrap);
+	SET_FN(FreeFindDataWrap);
+	SET_FN(GetOpenPanelInfoWrap);
+	SET_FN(GetVirtualFindDataWrap);
+	SET_FN(MakeDirectoryWrap);
+	SET_FN(ProcessDialogEventWrap);
+	SET_FN(ProcessEditorEventWrap);
+	SET_FN(ProcessEditorInputWrap);
+	SET_FN(ProcessEventWrap);
+	SET_FN(ProcessHostFileWrap);
+	SET_FN(ProcessPanelInputWrap);
+	SET_FN(ProcessConsoleInputWrap);
+	SET_FN(ProcessSynchroEventWrap);
+	SET_FN(ProcessViewerEventWrap);
+	SET_FN(PutFilesWrap);
+	SET_FN(SetDirectoryWrap);
+	SET_FN(SetFindListWrap);
+	SET_FN(GetCustomDataWrap);
+	SET_FN(FreeCustomDataWrap);
 	//
-	SET_FN(FarApiDefDlgProcW);
-	SET_FN(FarApiSendDlgMessageW);
-	SET_FN(FarApiShowHelpW);
-	SET_FN(FarApiSaveScreenW);
-	SET_FN(FarApiRestoreScreenW);
-	SET_FN(FarApiTextW);
-	SET_FN(FarApiEditorW);
-	SET_FN(FarApiViewerW);
-	SET_FN(FarApiMenuW);
-	SET_FN(FarApiMessageW);
-	SET_FN(FarApiDialogInitW);
-	SET_FN(FarApiDialogRunW);
-	SET_FN(FarApiDialogFreeW);
-	SET_FN(FarApiControlW);
-	SET_FN(FarApiGetDirListW);
-	SET_FN(FarApiFreeDirListW);
-	SET_FN(FarApiGetPluginDirListW);
-	SET_FN(FarApiFreePluginDirListW);
-	SET_FN(FarApiCmpNameW);
-	SET_FN(FarApiGetMsgW);
-	SET_FN(FarApiAdvControlW);
-	SET_FN(FarApiViewerControlW);
-	SET_FN(FarApiEditorControlW);
-	SET_FN(FarApiInputBoxW);
-	SET_FN(FarApiPluginsControlW);
-	SET_FN(FarApiFileFilterControlW);
-	SET_FN(FarApiRegExpControlW);
-	SET_FN(FarStdGetFileOwnerW);
-	SET_FN(FarStdGetPathRootW);
-	SET_FN(FarStdXlatW);
-	SET_FN(FarStdRecursiveSearchW);
-	SET_FN(FarStdMkTempW);
-	SET_FN(FarStdProcessNameW);
-	SET_FN(FarStdMkLinkW);
-	SET_FN(FarConvertPathW);
-	SET_FN(FarGetReparsePointInfoW);
-	SET_FN(FarGetCurrentDirectoryW);
+	SET_FN(FarApiDefDlgProcWrap);
+	SET_FN(FarApiSendDlgMessageWrap);
+	SET_FN(FarApiShowHelpWrap);
+	SET_FN(FarApiSaveScreenWrap);
+	SET_FN(FarApiRestoreScreenWrap);
+	SET_FN(FarApiTextWrap);
+	SET_FN(FarApiEditorWrap);
+	SET_FN(FarApiViewerWrap);
+	SET_FN(FarApiMenuWrap);
+	SET_FN(FarApiMessageWrap);
+	SET_FN(FarApiDialogInitWrap);
+	SET_FN(FarApiDialogRunWrap);
+	SET_FN(FarApiDialogFreeWrap);
+	SET_FN(FarApiControlWrap);
+	SET_FN(FarApiGetDirListWrap);
+	SET_FN(FarApiFreeDirListWrap);
+	SET_FN(FarApiGetPluginDirListWrap);
+	SET_FN(FarApiFreePluginDirListWrap);
+	SET_FN(FarApiCmpNameWrap);
+	SET_FN(FarApiGetMsgWrap);
+	SET_FN(FarApiAdvControlWrap);
+	SET_FN(FarApiViewerControlWrap);
+	SET_FN(FarApiEditorControlWrap);
+	SET_FN(FarApiInputBoxWrap);
+	SET_FN(FarApiPluginsControlWrap);
+	SET_FN(FarApiFileFilterControlWrap);
+	SET_FN(FarApiRegExpControlWrap);
+	SET_FN(FarStdGetFileOwnerWrap);
+	SET_FN(FarStdGetPathRootWrap);
+	SET_FN(FarStdXlatWrap);
+	SET_FN(FarStdRecursiveSearchWrap);
+	SET_FN(FarStdMkTempWrap);
+	SET_FN(FarStdProcessNameWrap);
+	SET_FN(FarStdMkLinkWrap);
+	SET_FN(FarConvertPathWrap);
+	SET_FN(FarGetReparsePointInfoWrap);
+	SET_FN(FarGetCurrentDirectoryWrap);
 	#undef SET_FN
 
 	return 0;

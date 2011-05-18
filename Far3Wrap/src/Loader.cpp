@@ -210,6 +210,15 @@ void ReportWrapperFail()
 #define CHECKFN(n) if (!fwf.n) { ReportWrapperFail(); return; }
 #define CHECKFNRET(n,r) if (!fwf.n) { ReportWrapperFail(); return r; }
 
+
+FARPROC WINAPI FarWrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+{
+	if (fwf.GetProcAddressWrap)
+		return fwf.GetProcAddressWrap(fwf.wpi, hModule, lpProcName);
+	//_ASSERTE(fwf.GetProcAddressWrap!=NULL);
+	return GetProcAddress(hModule, lpProcName);
+}
+
 void WINAPI SetStartupInfoW(PluginStartupInfo *Info)
 {
 	psi = *Info;
@@ -743,11 +752,13 @@ BOOL LoadWrapper(LPCWSTR asModule)
 
 
 	// GO!
-#ifdef DO_NOT_UNLOAD_WRAP
-	ghWrapper = GetModuleHandle(asModule);
-	if (!ghWrapper)
-#endif
-		ghWrapper = LoadLibrary(asModule);
+	
+	//#ifdef DO_NOT_UNLOAD_WRAP
+	//ghWrapper = GetModuleHandle(asModule);
+	//if (!ghWrapper)
+	//#endif
+	ghWrapper = LoadLibrary(asModule);
+	
 	if (ghWrapper)
 	{
 		fwf.hFar3Wrap = ghWrapper;

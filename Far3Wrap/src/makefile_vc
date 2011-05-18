@@ -90,7 +90,7 @@ IA64=1
 CPU=IA64
 !endif
 
-RC_NAME=resource
+RC_NAME=Loader
 
 !if defined(DEBUG)
 DIRNAME=debug
@@ -124,12 +124,28 @@ COMINC = ..
 CPP_WIDE = /DUNICODE /D_UNICODE
 RC_WIDE = /dUNICODE
 EXT = dll
-DLLNAME = $(OUTNAME).$(EXT)
-DLLFULLNAME = $(OUTDIR)$(ADDOUTDIR)\$(DLLNAME)
-DEF = $(DEF_NAME).def
-MAP = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME).map
-PDBNAME = $(OUTNAME).pdb
-PDB = $(OUTDIR)$(ADDOUTDIR)\$(PDBNAME)
+#DLLNAME = $(OUTNAME).$(EXT)
+#DLLFULLNAME = $(OUTDIR)$(ADDOUTDIR)\$(DLLNAME)
+DLL_FULL = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME).$(EXT)
+DLL_ARC = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_ARC.$(EXT)
+DLL_CUSTOM = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_CUSTOM.$(EXT)
+DLL_DIALOG = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_DIALOG.$(EXT)
+DLL_EDITOR = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_EDITOR.$(EXT)
+DLL_FINDLIST = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_FINDLIST.$(EXT)
+DLL_VIEWER = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_VIEWER.$(EXT)
+DLL_WINDOW = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_WINDOW.$(EXT)
+#DEF = $(DEF_NAME).def
+#MAP = $(OUTDIR)$(ADDOUTDIR)\$(OUTNAME).map
+#PDBNAME = $(OUTNAME).pdb
+PDB = $(OUTDIR)$(ADDOUTDIR)\ldr.pdb
+PDB_FULL = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME).pdb"
+PDB_ARC = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_ARC.pdb"
+PDB_CUSTOM = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_CUSTOM.pdb"
+PDB_DIALOG = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_DIALOG.pdb"
+PDB_EDITOR = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_EDITOR.pdb"
+PDB_FINDLIST = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_FINDLIST.pdb"
+PDB_VIEWER = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_VIEWER.pdb"
+PDB_WINDOW = /pdb:"$(OUTDIR)$(ADDOUTDIR)\$(OUTNAME)_WINDOW.pdb"
 RES = $(OBJDIR)\$(NAME).res
 
 !ifdef VC8
@@ -139,12 +155,15 @@ NOWIN98=/OPT:NOWIN98
 
 
 !if defined(DEBUG)
-CPP_OPT=/DDEBUG /Od /Fd$(PDB) /DCRTSTARTUP
-LINK_DEBUG=/debug /map:"$(MAP)" /pdb:"$(PDB)"
+CPP_OPT=/DDEBUG /O1 /Fd$(PDB) /DCRTSTARTUP
+LINK_DEBUG=/debug 
+#/map:"$(MAP)"
+#/pdb:"$(PDB)"
 CPP_DEBUG=/Zi
 !else
 CPP_OPT=/DNDEBUG /O1i /Fd$(PDB) /DHIDE_TODO /DCRTSTARTUP
-LINK_DEBUG=/map:"$(MAP)" 
+LINK_DEBUG=
+#/map:"$(MAP)" 
 CPP_DEBUG=
 !endif
 
@@ -190,7 +209,8 @@ _LINK_PATH_=$(_BIN_PATH_)
 
 
 LNK=$(_LINK_PATH_)link.exe
-LINK_FLAGS=/nologo /SUBSYSTEM:WINDOWS /DYNAMICBASE /dll /RELEASE $(LINK_MACHINE) $(NOWIN98) $(ENV_LIB_OPT) /def:"$(DEF)" /out:"$(DLLFULLNAME)" $(LINK_DEBUG) /NODEFAULTLIB
+LINK_FLAGS=/nologo /SUBSYSTEM:WINDOWS /DYNAMICBASE /dll /RELEASE $(LINK_MACHINE) $(NOWIN98) $(ENV_LIB_OPT) $(LINK_DEBUG) /NODEFAULTLIB /MAP
+#/def:"$(DEF)"  /out:"$(DLLFULLNAME)"
 #LINK_FLAGS=/DEBUG /DEF:"export.def" /DLL /DYNAMICBASE /INCREMENTAL:NO /LTCG /MACHINE:X86 /MAP /NODEFAULTLIB /SUBSYSTEM:WINDOWS /OUT:"$(DLLFULLNAME)"
 
 
@@ -221,27 +241,91 @@ SRC_PATHS=.;..\common
 .path.def=$(SRC_PATHS)
 !endif
 
-ALL: dirs $(INSTALL) $(DLLFULLNAME) clean
+#ALL: dirs $(INSTALL) $(DLL_FULL) $(DLL_ARC) $(DLL_CUSTOM) $(DLL_DIALOG) $(DLL_EDITOR) $(DLL_FINDLIST) $(DLL_VIEWER) $(DLL_WINDOW) clean
+ALL: dirs $(INSTALL) $(DLL_FULL) clean
 
-$(DLLFULLNAME) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+#Loader
+#Loader_ARC
+#Loader_CUSTOM
+#Loader_DIALOG
+#Loader_EDITOR
+#Loader_FINDLIST
+#Loader_VIEWER
+#Loader_WIN
+
+$(DLL_FULL) : $(LINK_OBJS) $(RES) $(LINK_DEP)
 !ifndef __MAKE__
 	@$(LNK) @<<
-	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES)
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME).def" /out:"$(DLL_FULL)" $(PDB_FULL)
 <<
 !else
-	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES)
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME).def" /out:"$(DLL_FULL)" $(PDB_FULL)
 !endif
-!ifdef DOCS
-!ifndef WIDE
+
+$(DLL_ARC) : $(LINK_OBJS) $(RES) $(LINK_DEP)
 !ifndef __MAKE__
-	@for %%i in ($(DOCS)) do @copy /Y %%i $(OUTDIR)$(ADDOUTDIR) > nul 2> nul
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_ARC.def" /out:"$(DLL_ARC)" $(PDB_ARC)
+<<
 !else
-	@for %i in ($(DOCS)) do @copy /Y %i $(OUTDIR)$(ADDOUTDIR) > nul 2> nul
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_ARC.def" /out:"$(DLL_ARC)" $(PDB_ARC)
 !endif
+
+$(DLL_CUSTOM) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+!ifndef __MAKE__
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_CUSTOM.def" /out:"$(DLL_CUSTOM)" $(PDB_CUSTOM)
+<<
 !else
-	@$(COMMON)\convert.exe $(DOCS) $(OUTDIR)$(ADDOUTDIR)
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_CUSTOM.def" /out:"$(DLL_CUSTOM)" $(PDB_CUSTOM)
 !endif
+
+$(DLL_DIALOG) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+!ifndef __MAKE__
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_DIALOG.def" /out:"$(DLL_DIALOG)" $(PDB_DIALOG)
+<<
+!else
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_DIALOG.def" /out:"$(DLL_DIALOG)" $(PDB_DIALOG)
 !endif
+
+$(DLL_EDITOR) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+!ifndef __MAKE__
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_EDITOR.def" /out:"$(DLL_EDITOR)" $(PDB_EDITOR)
+<<
+!else
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_EDITOR.def" /out:"$(DLL_EDITOR)" $(PDB_EDITOR)
+!endif
+
+$(DLL_FINDLIST) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+!ifndef __MAKE__
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_FINDLIST.def" /out:"$(DLL_FINDLIST)" $(PDB_FINDLIST)
+<<
+!else
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_FINDLIST.def" /out:"$(DLL_FINDLIST)" $(PDB_FINDLIST)
+!endif
+
+
+$(DLL_VIEWER) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+!ifndef __MAKE__
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_VIEWER.def" /out:"$(DLL_VIEWER)" $(PDB_VIEWER)
+<<
+!else
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_VIEWER.def" /out:"$(DLL_VIEWER)" $(PDB_VIEWER)
+!endif
+
+$(DLL_WINDOW) : $(LINK_OBJS) $(RES) $(LINK_DEP)
+!ifndef __MAKE__
+	@$(LNK) @<<
+	$(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_WINDOW.def" /out:"$(DLL_WINDOW)" $(PDB_WINDOW)
+<<
+!else
+	$(LNK) $(LINK_FLAGS) $(LIBS) $(LINK_OBJS) $(RES) /def:"$(DEF_NAME)_WINDOW.def" /out:"$(DLL_WINDOW)" $(PDB_WINDOW)
+!endif
+
 
 !ifndef __MAKE__
 .cpp{$(OBJDIR)}.obj::
@@ -277,13 +361,13 @@ dirs:
 clean:
 	@echo copying release files
 	@if not exist "$(RELEASEDIR)\$(NULL)" mkdir "$(RELEASEDIR)"
-	@move $(DLLFULLNAME) $(RELEASEDIR) > nul
-!if defined(DEBUG)
-	@move $(PDB) $(RELEASEDIR)\$(PDBNAME) > nul
-!else
-	@if exist $(RELEASEDIR)\$(PDBNAME) del $(RELEASEDIR)\$(PDBNAME) > nul
+	@del $(OUTDIR)$(ADDOUTDIR)\*.exp
+	@del $(OUTDIR)$(ADDOUTDIR)\*.lib
+	@del $(OUTDIR)$(ADDOUTDIR)\ldr.pdb
+	@move $(OUTDIR)$(ADDOUTDIR)\*.* $(RELEASEDIR) > nul
+!if !defined(DEBUG)
+	@if exist $(RELEASEDIR)\$(OUTNAME)*.pdb del $(RELEASEDIR)\$(OUTNAME)*.pdb > nul
 !endif
-	@move $(MAP) $(RELEASEDIR) > nul
 	@rd /Q /S $(OUTDIR) > nul
 	@echo All done
 	@echo .

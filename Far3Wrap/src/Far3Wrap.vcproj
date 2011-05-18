@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="Far3Wrap"
 	ProjectGUID="{7E9CF007-1CAE-477B-859A-82C8B3D9D638}"
 	RootNamespace="Far3Wrap"
@@ -172,7 +172,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG"
+				PreprocessorDefinitions="_DEBUG;_WIN64"
 				Culture="1049"
 			/>
 			<Tool
@@ -287,6 +287,8 @@
 				ModuleDefinitionFile="Far3Wrap.def"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
+				GenerateMapFile="true"
+				MapFileName="$(TargetDir)/$(TargetName).map"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/Far3Wrap.lib"
@@ -370,7 +372,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_DEBUG"
+				PreprocessorDefinitions="_DEBUG;_WIN64"
 				Culture="1049"
 			/>
 			<Tool
@@ -386,6 +388,8 @@
 				ModuleDefinitionFile="Far3Wrap.def"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(TargetDir)/$(TargetName).pdb"
+				GenerateMapFile="true"
+				MapFileName="$(TargetDir)/$(TargetName).map"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				ImportLibrary="$(IntDir)/Far3Wrap.lib"
@@ -489,7 +493,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\SetExport.h"
+				RelativePath=".\resource.h"
 				>
 			</File>
 		</Filter>
@@ -524,18 +528,14 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
-				<FileConfiguration
-					Name="ReleaseW3|x64"
-					>
-					<Tool
-						Name="VCResourceCompilerTool"
-						PreprocessorDefinitions=""
-					/>
-				</FileConfiguration>
 			</File>
 		</Filter>
 		<File
 			RelativePath=".\!ToDo.txt"
+			>
+		</File>
+		<File
+			RelativePath="..\Loader.dll"
 			>
 		</File>
 	</Files>

@@ -3,6 +3,7 @@
 
 struct WrapPluginInfo;
 
+typedef FARPROC (WINAPI* _GetProcAddressWrap)(struct WrapPluginInfo* wpi, HMODULE hModule, LPCSTR lpProcName);
 typedef void (WINAPI* _SetStartupInfoWrap)(struct WrapPluginInfo* wpi, PluginStartupInfo *Info);
 typedef void (WINAPI* _GetGlobalInfoWrap)(struct WrapPluginInfo* wpi, GlobalInfo *Info);
 typedef void (WINAPI* _GetPluginInfoWrap)(struct WrapPluginInfo* wpi, PluginInfo *Info);
@@ -131,6 +132,7 @@ struct Far3WrapFunctions
 	Far2::FARSTDXLAT FarStdXlat;
 
 	// [Out] Wrapper exported functions 
+	_GetProcAddressWrap GetProcAddressWrap;
 	_SetStartupInfoWrap SetStartupInfoWrap;
 	_GetGlobalInfoWrap GetGlobalInfoWrap;
 	_GetPluginInfoWrap GetPluginInfoWrap;

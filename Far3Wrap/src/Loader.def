@@ -1,4 +1,25 @@
 EXPORTS
+	FarWrapGetProcAddress
+
+;; Далее идут функции, которые могу быть нежелательны
+;; во всех подряд плагинах. Они могу вызывать массированную
+;; загрузку всех подряд по любому чиху пользователя
+
+	AnalyseW
+
+	ProcessDialogEventW
+
+	ProcessViewerEventW
+
+	ProcessEditorEventW
+	ProcessEditorInputW
+	
+	GetCustomDataW
+	FreeCustomDataW
+	
+	SetFindListW
+
+;; Далее идет общий блок функций, который не создает сильной нагрузки на API плагинов
 	GetGlobalInfoW
 	SetStartupInfoW
 	GetPluginInfoW
@@ -6,7 +27,6 @@ EXPORTS
 	ExitFARW
 	ConfigureW
 	ClosePanelW
-	AnalyseW
 	SetDirectoryW
 	ProcessSynchroEventW
 	MakeDirectoryW
@@ -14,16 +34,9 @@ EXPORTS
 	GetFindDataW
 	FreeFindDataW
 	GetFilesW
+	PutFilesW
 	DeleteFilesW
 	CompareW
-	PutFilesW
-	ProcessViewerEventW
-	ProcessEditorEventW
-	ProcessEditorInputW
 	ProcessEventW
 	ProcessHostFileW
 	ProcessPanelInputW
-	ProcessDialogEventW
-	GetCustomDataW
-	FreeCustomDataW
-	SetFindListW
