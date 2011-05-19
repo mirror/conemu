@@ -4772,9 +4772,8 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == (OPEN_FROMMACRO|OPEN_FROMMACROSTRING)))
 		    && OpenPluginW)
 		{
-			h = OpenPluginW(Far2::OPEN_FROMMACRO
-							/*|(Info->OpenFrom & OPEN_FROMMACROSTRING)?0x20000:0*/,
-							Info->Data);
+			int nOpen2 = Far2::OPEN_FROMMACRO|((Info->OpenFrom & OPEN_FROMMACROSTRING)?0x20000:0);
+			h = OpenPluginW(nOpen2, Info->Data);
 		}
 		goto trap;
 	}
