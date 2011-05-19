@@ -1,3 +1,8 @@
+ver 1.9.2027
+[%] Глюк преобразования макросов с более чем одним вызовом CallPlugin
+[%] OpenPluginW не работал, если плагин создавал несколько пунктов (F11/AltF1/AltF2)
+[+] ACTL_POSTKEYSEQUENCE
+
 ver 1.8.2027
 [%] Не передавался OPEN_FROMMACROSTRING в OpenPluginW
 

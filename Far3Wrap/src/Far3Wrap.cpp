@@ -2,9 +2,7 @@
 // и пометить плагин ошибочным в списке плагинов (например, "RQP - Wrapper Failed")
 //TODO: Переделать FarMessage_3_2, чтобы не использовать static переменные
 //TODO: GetVirtualFindDataW/FreeVirtualFindDataW
-//TODO: SetFindListW? Только если в фаре появится возможность "отключать" экспорты
 //TODO: Конвертация CustomColumnData/CustomColumnNumber
-//TODO: Объявить MCMD_GETAREA и FARMACROAREA в plguinW.hpp
 
 /*
 Copyright (c) 2011 Maximus5
@@ -150,6 +148,7 @@ struct WrapPluginInfo
 	// Instance variables
 	HMODULE mh_Loader; // Loader.dll / Loader64.dll
 	HMODULE mh_Dll;    // HMODULE собственно плагина
+	DWORD m_MinFarVersion;
 	LoaderFunctions3 mn_LoaderFunctions, mn_PluginFunctions; // set of LoaderFunctions3
 	wchar_t* m_ErrorInfo; // In-pointer, Out-error text (used for Loader)
 	int m_ErrorInfoMax; // max size of ErrorInfo in wchar_t (used for Loader)
@@ -518,6 +517,7 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 {
 	mh_Loader = pInfo2->hLoader;
 	mh_Dll = NULL;
+	m_MinFarVersion = 0;
 	mn_PluginFunctions = mn_LoaderFunctions = LF3_None;
 	ms_PluginDll[0] = ms_IniFile[0] = ms_Title[0] = ms_Desc[0] = ms_Author[0] = ms_RegRoot[0] = ms_File[0] = 0;
 	memset(&m_Version, 0, sizeof(m_Version));
@@ -731,6 +731,7 @@ void WrapPluginInfo::LoadPluginInfo()
 				if (!lb)
 					dwErr = GetLastError();
 				//lb = WritePrivateProfileString(L"Plugin", L"DisabledFunctions", L"0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"MinFarVersion", L"0x00000000", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"AnalyzeMode", L"2", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"OldPutFilesParams", L"0", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"Title", pszFilePtr, szIni);
@@ -766,6 +767,13 @@ void WrapPluginInfo::LoadPluginInfo()
 			m_OldPutFilesParams = GetPrivateProfileInt(L"Plugin", L"OldPutFilesParams", 0, szIni);
 			if (m_OldPutFilesParams != 0 && m_OldPutFilesParams != 1)
 				m_OldPutFilesParams = 0;
+
+			if (GetPrivateProfileString(L"Plugin", L"MinFarVersion", L"0", szTemp, ARRAYSIZE(szTemp), szIni)
+				&& szTemp[0] == L'0' && szTemp[1] == L'x')
+			{
+				wchar_t* pszEnd = NULL;
+				m_MinFarVersion = wcstoul(szTemp+2, &pszEnd, 16);
+			}
 			
 			if (GetPrivateProfileString(L"Plugin", L"Title", L"Sample Far3 plugin", szTemp, ARRAYSIZE(szTemp), szIni))
 				lstrcpyn(ms_Title, szTemp, ARRAYSIZE(ms_Title));
@@ -966,6 +974,17 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 			SetStartupInfoW = (WrapPluginInfo::_SetStartupInfoW)GetProcAddress(mh_Dll, "SetStartupInfoW");
 			GetCustomDataW = (WrapPluginInfo::_GetCustomDataW)GetProcAddress(mh_Dll, "GetCustomDataW");
 			FreeCustomDataW = (WrapPluginInfo::_FreeCustomDataW)GetProcAddress(mh_Dll, "FreeCustomDataW");
+			
+			if (GetMinFarVersionW)
+			{
+				DWORD nMinFarVersion = GetMinFarVersionW();
+				if (nMinFarVersion != m_MinFarVersion)
+				{
+					m_MinFarVersion = nMinFarVersion;
+					wchar_t szVer[32]; wsprintf(szVer, L"0x%08X", nMinFarVersion);
+					WritePrivateProfileString(L"Plugin", L"MinFarVersion", szVer, ms_IniFile);
+				}
+			}
 
 			//TODO: Если экспортируемые функции из mh_Loader не совпадают с mn_OldAbsentFunctions - обновить (сбросить mn_OldAbsentFunctions в 0)
 			mn_PluginFunctions = LF3_None;
@@ -3728,6 +3747,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 						{
 							pszUpper = _wcsdup(p2->Param.PlainText.SequenceText);
 							size_t nOrigLen = lstrlen(p2->Param.PlainText.SequenceText);
+							size_t nAddPos = 0;
 							CharUpperBuff(pszUpper, lstrlen(pszUpper));
 							wchar_t* pszFrom = pszUpper;
 							wchar_t* pszCall;
@@ -3801,6 +3821,9 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 								if (szGuid[0] == 0)
 									continue; // неизвестный ID, сделать ничего не сможем
 
+								size_t nNewIdLen = lstrlen(szGuid);
+								_ASSERTE(nNewIdLen==38);
+
 								if (nCchAdd < 38 || !pszChanged)
 								{
 									wchar_t* pszNew = NULL;
@@ -3824,22 +3847,21 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 									pszChanged = pszNew;
 								}
 
-								size_t nPos = pszCall - pszUpper;
+								size_t nPos = (pszCall - pszUpper);
 								size_t nOrigIdLen = pszEnd - pszCall;
-								size_t nNewIdLen = lstrlen(szGuid);
-								_ASSERTE(nNewIdLen==38);
 								if (nOrigLen < (nOrigIdLen+nPos))
 								{
 									_ASSERTE(nOrigLen > (nOrigIdLen+nPos));
 									break;
 								}
 								// Освободить место для GUID (размер такой, т.к. память выделена calloc)
-								memmove(pszChanged+nNewIdLen+nPos, pszChanged+nOrigIdLen+nPos, (nOrigLen-nOrigIdLen-nPos)*sizeof(wchar_t));
+								memmove(pszChanged+nNewIdLen+nPos+nAddPos, pszChanged+nPos+nAddPos+nOrigIdLen, (nOrigLen-nOrigIdLen-nPos)*sizeof(wchar_t));
 								// положить новый ИД
-								memmove(pszChanged+nPos, szGuid, nNewIdLen*sizeof(wchar_t));
+								memmove(pszChanged+nPos+nAddPos, szGuid, nNewIdLen*sizeof(wchar_t));
 
 								nCchAdd -= nNewIdLen;
 								pszFrom = pszCall + nOrigIdLen;
+								nAddPos += nNewIdLen - nOrigIdLen;
 
 								//// Теперь - скопировать ID в szId
 								//for (int i = 0; i < 12 
@@ -3865,7 +3887,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
-						psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
 						if (pszUpper)
 							free(pszUpper);
 						if (pszChanged)
@@ -3890,9 +3912,23 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				case Far2::MCMD_GETSTATE:
 					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
 					break;
-				case 6/*Far2::MCMD_GETAREA*/:
-					// В Far2 официально это в plugin api вынесено не было, но пользовались многие
-					_ASSERTE(MACROAREA_AUTOCOMPLETION==15 && MACROAREA_SHELL==1);
+				case Far2::MCMD_GETAREA:
+					_ASSERTE(Far2::MACROAREA_OTHER==MACROAREA_OTHER);
+					_ASSERTE(Far2::MACROAREA_SHELL==MACROAREA_SHELL);
+					_ASSERTE(Far2::MACROAREA_VIEWER==MACROAREA_VIEWER);
+					_ASSERTE(Far2::MACROAREA_EDITOR==MACROAREA_EDITOR);
+					_ASSERTE(Far2::MACROAREA_DIALOG==MACROAREA_DIALOG);
+					_ASSERTE(Far2::MACROAREA_SEARCH==MACROAREA_SEARCH);
+					_ASSERTE(Far2::MACROAREA_DISKS==MACROAREA_DISKS);
+					_ASSERTE(Far2::MACROAREA_MAINMENU==MACROAREA_MAINMENU);
+					_ASSERTE(Far2::MACROAREA_MENU==MACROAREA_MENU);
+					_ASSERTE(Far2::MACROAREA_HELP==MACROAREA_HELP);
+					_ASSERTE(Far2::MACROAREA_INFOPANEL==MACROAREA_INFOPANEL);
+					_ASSERTE(Far2::MACROAREA_QVIEWPANEL==MACROAREA_QVIEWPANEL);
+					_ASSERTE(Far2::MACROAREA_TREEPANEL==MACROAREA_TREEPANEL);
+					_ASSERTE(Far2::MACROAREA_FINDFOLDER==MACROAREA_FINDFOLDER);
+					_ASSERTE(Far2::MACROAREA_USERMENU==MACROAREA_USERMENU);
+					_ASSERTE(Far2::MACROAREA_AUTOCOMPLETION==MACROAREA_AUTOCOMPLETION);
 					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
 					break;
 				}
@@ -3901,7 +3937,43 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 		}
 	case Far2::ACTL_POSTKEYSEQUENCE:
 		//TODO: Нужно переделать на MCTL_SENDSTRING
-		_ASSERTE(Command != Far2::ACTL_POSTKEYSEQUENCE);
+		{
+			Far2::KeySequence* p2 = (Far2::KeySequence*)Param;
+			if (p2 && p2->Count)
+			{
+				int i;
+				size_t nStrLen = 2, nKeyLen;
+				for (i = 0; i < p2->Count; i++)
+					nStrLen += FSF3.FarKeyToName(p2->Sequence[i], NULL, 0)+1;
+				wchar_t* pszMacro = (wchar_t*)malloc(nStrLen*sizeof(wchar_t));
+				if (pszMacro)
+				{
+					wchar_t* psz = pszMacro;
+					for (i = 0; i < p2->Count; i++)
+					{
+						nKeyLen = FSF3.FarKeyToName(p2->Sequence[i], psz, nStrLen);
+						psz += nKeyLen;
+						if (nKeyLen)
+							*(psz++) = L' ';
+						nStrLen -= nKeyLen + 1;
+					}
+					*psz = 0;
+					
+					if (*pszMacro)
+					{
+						MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
+						mcr.SequenceText = pszMacro;
+						mcr.Flags = 0
+							| ((p2->Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
+							| ((p2->Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
+							;
+						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+					}
+					
+					free(pszMacro);
+				}
+			}
+		}
 		break;
 	case Far2::ACTL_GETWINDOWINFO:
 		//iRc = psi3.AdvControl(&guid, ACTL_GETWINDOWINFO, 0, Param);
@@ -4624,7 +4696,8 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 	Info->StructSize = sizeof(*Info);
 
 	//_ASSERTE(lbPsi2 && lbPsi3);
-	OutputDebugString(L"GetPluginInfoW3 called before SetStartupInfoW3\n");
+	if (!lbPsi3)
+		OutputDebugString(L"GetPluginInfoW3 called before SetStartupInfoW3\n");
 
     if (GetPluginInfoW && lbPsi2)
     {
@@ -4729,12 +4802,46 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 	LOG_CMD(L"OpenW(0x%08X)", (DWORD)Info->OpenFrom,0,0);
 	HANDLE h = INVALID_HANDLE_VALUE;
 
-	int nPluginItemNumber = 0;
-	if (Info->Guid && memcmp(Info->Guid, &GUID_NULL, sizeof(GUID)) && mguids_PluginMenu)
+	if ((Info->OpenFrom & OPEN_FROMMACRO_MASK))
 	{
-		for (int i = 0; i < mn_PluginMenu; i++)
+		if (m_Info.Reserved 
+			&& (((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACRO)
+				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING)
+				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == (OPEN_FROMMACRO|OPEN_FROMMACROSTRING)))
+		    && OpenPluginW)
 		{
-			if (memcmp(Info->Guid, mguids_PluginMenu+i, sizeof(GUID)) == 0)
+			DWORD nOpen2 = Far2::OPEN_FROMMACRO;
+			if ((LOBYTE(HIWORD(m_MinFarVersion)) > 2)
+				|| ((LOBYTE(HIWORD(m_MinFarVersion)) == 2) && (LOWORD(m_MinFarVersion) >= 1800)))
+			{
+				nOpen2 |= ((Info->OpenFrom & OPEN_FROMMACROSTRING)?Far2::OPEN_FROMMACROSTRING:0);
+				nOpen2 |= LOWORD(Info->OpenFrom);
+			}
+			h = OpenPluginW(nOpen2, Info->Data);
+		}
+		goto trap;
+	}
+	
+	int nPluginItemNumber = 0;
+	GUID* pGuids = NULL;
+	int nGuids = 0;
+	if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_PLUGINSMENU)
+	{
+		pGuids = mguids_PluginMenu; nGuids = mn_PluginMenu;
+	}
+	//else if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_PLUGINSMENU)
+	//{
+	//	pGuids = mguids_PluginMenu; nGuids = mn_PluginMenu;
+	//}
+	else if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_LEFTDISKMENU || (Info->OpenFrom & OPEN_FROM_MASK) == OPEN_RIGHTDISKMENU)
+	{
+		pGuids = mguids_PluginDisks; nGuids = mn_PluginDisks;
+	}
+	if (Info->Guid && memcmp(Info->Guid, &GUID_NULL, sizeof(GUID)) && pGuids && nGuids > 0)
+	{
+		for (int i = 0; i < nGuids; i++)
+		{
+			if (memcmp(Info->Guid, pGuids+i, sizeof(GUID)) == 0)
 			{
 				nPluginItemNumber = i;
 				break;
@@ -4764,29 +4871,15 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		mp_Analyze = NULL;
 	}
 	
-	if ((Info->OpenFrom & OPEN_FROMMACRO_MASK))
-	{
-		if (m_Info.Reserved 
-			&& (((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACRO)
-				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING)
-				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == (OPEN_FROMMACRO|OPEN_FROMMACROSTRING)))
-		    && OpenPluginW)
-		{
-			int nOpen2 = Far2::OPEN_FROMMACRO|((Info->OpenFrom & OPEN_FROMMACROSTRING)?0x20000:0);
-			h = OpenPluginW(nOpen2, Info->Data);
-		}
-		goto trap;
-	}
-
 	if (OpenPluginW)
 	{
 		switch (Info->OpenFrom & OPEN_FROM_MASK)
 		{
 		case OPEN_LEFTDISKMENU:
 		case OPEN_RIGHTDISKMENU:
-			h = OpenPluginW(Far2::OPEN_DISKMENU, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_DISKMENU, nPluginItemNumber); break;
 		case OPEN_PLUGINSMENU:
-			h = OpenPluginW(Far2::OPEN_PLUGINSMENU, Info->Data); break;
+			h = OpenPluginW(Far2::OPEN_PLUGINSMENU, nPluginItemNumber); break;
 		case OPEN_FINDLIST:
 			h = OpenPluginW(Far2::OPEN_FINDLIST, Info->Data); break;
 		case OPEN_SHORTCUT:
