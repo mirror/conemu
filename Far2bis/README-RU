@@ -1,0 +1,40 @@
+                           Far Manager
+                     Поддерживается FAR Group
+                    http://www.farmanager.com
+
+
+Форум поддержки
+http://forum.farmanager.com/
+
+Баг трекер
+http://bugs.farmanager.com/
+
+Рассылка для разработчиков (русскоязычная)
+http://groups.google.com/group/fardev
+fardev@googlegroups.com
+
+Рассылка для разработчиков (англоязычная)
+http://groups.google.com/group/fardeven
+fardeven@googlegroups.com
+
+Рассылка коммитов
+http://groups.google.com/group/farcommits
+farcommits@googlegroups.com
+
+Взять исходный код
+svn co http://farmanager.com/svn/trunk/unicode_far unicode_far
+
+Плагины
+svn co http://farmanager.com/svn/trunk/plugins plugins
+
+Документация Фара
+svn co http://farmanager.com/svn/trunk/docs docs
+
+Addons Фара
+svn co http://farmanager.com/svn/trunk/addons addons
+
+Энциклопедия
+svn co http://farmanager.com/svn/trunk/enc enc
+
+Взять всё вместе
+svn co http://farmanager.com/svn/trunk fardev
