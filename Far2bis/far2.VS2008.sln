@@ -3,10 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "far2", "far2.VS2008.vcproj", "{62F794C9-5F4C-40F6-B358-5DC1A9D6D2CB}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ListBoxEx", "Debug.32.vc\Plugins\ListBoxEx\src\ListBoxEx.vcproj", "{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EMenu", "..\plugins\emenu\EMenu.VS2008.vcproj", "{F49B5724-0420-46A9-A3F4-647C5722031C}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Itanium = Debug|Itanium
@@ -29,26 +25,6 @@ Global
 		{62F794C9-5F4C-40F6-B358-5DC1A9D6D2CB}.Release|Win32.Build.0 = Release|Win32
 		{62F794C9-5F4C-40F6-B358-5DC1A9D6D2CB}.Release|x64.ActiveCfg = Release|x64
 		{62F794C9-5F4C-40F6-B358-5DC1A9D6D2CB}.Release|x64.Build.0 = Release|x64
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Debug|Itanium.ActiveCfg = Debug|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Debug|Win32.ActiveCfg = Debug|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Debug|Win32.Build.0 = Debug|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Debug|x64.ActiveCfg = Debug|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Release|Itanium.ActiveCfg = Release|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Release|Win32.ActiveCfg = Release|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Release|Win32.Build.0 = Release|Win32
-		{6A5E5D7A-C106-438B-B7C4-31BB59E332D4}.Release|x64.ActiveCfg = Release|Win32
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Debug|Itanium.ActiveCfg = Debug|Itanium
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Debug|Itanium.Build.0 = Debug|Itanium
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Debug|Win32.ActiveCfg = Debug Unicode|Win32
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Debug|Win32.Build.0 = Debug Unicode|Win32
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Debug|x64.ActiveCfg = Debug Unicode|x64
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Debug|x64.Build.0 = Debug Unicode|x64
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Release|Itanium.ActiveCfg = Release|Itanium
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Release|Itanium.Build.0 = Release|Itanium
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Release|Win32.ActiveCfg = Release Unicode|Win32
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Release|Win32.Build.0 = Release Unicode|Win32
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Release|x64.ActiveCfg = Release Unicode|x64
-		{F49B5724-0420-46A9-A3F4-647C5722031C}.Release|x64.Build.0 = Release Unicode|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
