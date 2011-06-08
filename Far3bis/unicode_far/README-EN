@@ -1,0 +1,40 @@
+                           Far Manager
+                      Maintained by FAR Group
+                     http://www.farmanager.com
+
+
+Support forum
+http://forum.farmanager.com/
+
+Bug tracker
+http://bugs.farmanager.com/
+
+Developers mailing list (english)
+http://groups.google.com/group/fardeven
+fardeven@googlegroups.com
+
+Developers mailing list (russian)
+http://groups.google.com/group/fardev
+fardev@googlegroups.com
+
+Commits mailing list
+http://groups.google.com/group/farcommits
+farcommits@googlegroups.com
+
+Get the code
+svn co http://farmanager.com/svn/trunk/unicode_far unicode_far
+
+Far Plugins
+svn co http://farmanager.com/svn/trunk/plugins plugins
+
+Far Documentation
+svn co http://farmanager.com/svn/trunk/docs docs
+
+Far Addons
+svn co http://farmanager.com/svn/trunk/addons addons
+
+Encyclopedia
+svn co http://farmanager.com/svn/trunk/enc enc
+
+Get it all
+svn co http://farmanager.com/svn/trunk fardev

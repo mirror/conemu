@@ -1,0 +1,3 @@
+IMPORTS
+  kernel32.EncodePointer
+  kernel32.DecodePointer

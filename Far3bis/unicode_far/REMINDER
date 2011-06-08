@@ -1,0 +1,142 @@
+PROJECT_DI_MEMOEDIT
+   
+   В usermenu.cpp, по мере развертывания DI_MEMOEDIT, изменять код.
+
+   svs 23.01.2007 18:11:09 +0300
+
+
+DIF_SEPARATORUSER
+
+   0. DI_TEXT & DI_VTEXT с флагом DIF_SEPARATORUSER должны:
+      а) рисовать сеператор по указанным координатам
+      б) в DlgItem.Mask содержится набор байтов, описывающих сепаратор
+
+   1. Переделка.
+
+      void DrawLine(int Length,int Type);
+      #define ShowUserSeparator(Length,Type,BoxSymbols) DrawLine(Length,Type)
+      у DrawLine должен быть параметр - массив байтов
+
+   svs 26.01.2007 15:52:00 +0300
+
+SetConsoleTitle & Macro
+
+   С этим надо что-то делать, т.к. реально макрос не выставляет заголовок консоли.
+   Если его выставлять - получим чрезмерное мелькание.
+   Возможно нужно эмулировать... функции установки и получения заголовка консоли
+   и если выполняется макрос - то...
+
+   svs 26.01.2007 16:02:00 +0300
+
+
+Editor:Save bookmarks
+   Mantis#0000327: [X] Save bookmarks не работает без [X] Save file position 
+   Если второе будет независимым, то в config.cpp::EditorConfig() убрать строку:
+     Dlg.SetAutomation(ID_EC_SAVEPOSITION,ID_EC_SAVEBOOKMARKS,...
+   тоже самое и в config.cpp::ViewerConfig():
+     Dlg.SetAutomation(ID_VC_SAVEPOSITION,ID_VC_SAVEBOOKMARKS,...
+   а так же убрать флаги DIF_AUTOMATION в обоих контролах, ответственных за
+   "Save file position"
+   и убрать строки
+    
+    if(!Opt.ViOpt.SaveViewerPos)
+      CfgDlg[ID_VC_SAVEBOOKMARKS].Flags |= DIF_DISABLE;
+
+    if(!EdOpt.SavePos)
+      CfgDlg[ID_EC_SAVEBOOKMARKS].Flags |= DIF_DISABLE;
+
+
+   svs 09.09.2007 18:18:00 +0300
+
+IA64Stacks
+   В IA64 два стека, регистровый и "обычный", имитация с помощью структуры
+   вот примерно такого:
+
+0x1a000            Backing store hard guard
+0x19000            Backing store soft guard
+0x14000            <space>
+0x13000            -- Frame D rotating register store
+0x12000            -- Frame C rotating register store
+0x11000            -- Frame B rotating register store
+0x10000            -- Frame A rotating register store
+                        -- "top" of "backing store" stack
+                        -- top of "normal" stack
+0x9000              -- Frame A
+0x8000              -- Frame B
+0x7000              -- Frame C
+0x6000              -- Frame D [call graph looks like: A()->B()->C()->D()]
+0x5FF8             <return address>
+0x5FF0             BYTE* ptr
+0x5F00             BYTE[] a (stack allocated byte array, size F0)
+0x5000              <space>
+0x1000              Soft guard
+0x0000              Hard guard
+
+   в лоб не удалась, кто знает как лучше, чем с помошью CreateThread, починить
+   стек, сделайте.
+
+   Zuz 26.09.2008 23:04:38 +0500
+
+intrin.h
+   VC9 нету сейчас под рукой, посему там, возможно, не нужно эти прототипы объявлять.
+
+   Zuz 26.09.2008 23:05:12 +0500
+
+
+TPreRedrawFunc
+   2SVS: "надо бы описать сей чудный механизм автоматической отрисовки" :)
+
+   drkns 28.11.2008 18:34:19 +0200
+
+copy.cpp
+   При вызовах apiGetDiskSize использовать не Root, а Dest (если Dest существует)
+   drkns 20.04.2009 14:07:34 +0200
+
+Повторные имплементации стека/списка/вектора которые в общем надо убить:
+   FarQueue?
+   Frame
+   CallBackStack
+   Manager?
+   FilePositionCache?
+   TPreRedrawFunc
+   TreeListCache
+
+   Есть наверно ещё но эти сразу в глаза бросаются.
+
+   t-rex 25.05.2009 21:16:54 +0200
+
+usermenu.cpp, filetype.cpp
+   Ахтунг. В режиме isSilent имеем проблемы с командами, которые выводят что-то на экран
+           Здесь необходимо переделка, например, перед исполнением подсунуть временный экранный буфер, а потом его содержимое подсунуть в ScreenBuf...
+
+   svs 29.05.2009 20:55:05 +0300 
+
+
+Диагностика в процессе загрузки
+
+   В процессе загрузки появляются разного рода нештатки (например, кривой макрос).
+   Видимо имеет смысл подобную диагностику выводить в файл, с последующим показов этого файла пользователю сразу после запуска FAR.
+
+   svs 02.06.2009 08:52:12 +0300
+
+
+Macro. Удаление.
+   Удалению подлежат (есть аналогичные функции):
+
+       * $Text
+
+   Дата удаления - конец мая начало июня 2010.
+
+   svs 26.03.2010 12:00:22 +0300
+
+
+filestr.?pp
+   Содержат "мусор": OldGetFileString, OldGetFileFormat.
+   Сие надо выкинуть, для чего потребуются некоторые изменения (уход от FILE*) в обработке hlf/lng.
+
+   drkns 16.04.2010 21:40:16 +0200
+
+tvar.?hpp
+   Переделать работу с таблицей, заменив текущую реализацию на обычный список.
+
+   svs 18.02.2011 11:13:33 +0300
