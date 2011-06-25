@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <TCHAR.h>
 #include <malloc.h>
 #include <rpc.h>
+#include "Version.h"
 
 // Far2 & Far3 plugin API's
 #define _FAR_NO_NAMELESS_UNIONS
@@ -62,7 +63,10 @@ PluginStartupInfo psi;
 _InitPlugin InitPlugin = NULL;
 wchar_t* gsErrInfo = NULL;
 bool gbFailReported = false;
+GUID guidPlugin = {0};
+wchar_t* gsModuleFail = NULL;
 #define ERRINFO_SIZE 2048
+#define ERRORTITLE_SIZE 255
 
 BOOL LoadWrapper(LPCWSTR asModule);
 
@@ -74,12 +78,14 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
     {
 		ghInstance = (HMODULE)hModule;
 		memset(&psi, 0, sizeof(psi));
+		memset(&fwf, 0, sizeof(fwf));
 		gbFailReported = false;
 		
 		wchar_t szWrapper[MAX_PATH];
 		int nTry = 0;
 		DWORD i;
 		gsErrInfo = (wchar_t*)calloc(ERRINFO_SIZE,sizeof(wchar_t));
+		gsModuleFail = (wchar_t*)calloc(ERRORTITLE_SIZE,sizeof(wchar_t));
 
 		while (ghWrapper == NULL)
 		{
@@ -192,15 +198,15 @@ BOOL WINAPI _DllMainCRTStartup(HANDLE hDll,DWORD dwReason,LPVOID lpReserved)
 }
 #endif
 
-void ReportWrapperFail()
+void ReportWrapperFail(bool bForce = false)
 {
-	if (gbFailReported)
+	if (gbFailReported && !bForce)
 		return;
 	gbFailReported = true; // чтобы опять не свалиться
 	if (gsErrInfo && *gsErrInfo)
 	{
-		if (psi.Message && fwf.PluginGuid)
-			psi.Message(fwf.PluginGuid, FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK, NULL,
+		if (psi.Message && guidPlugin.Data1)
+			psi.Message(&guidPlugin, FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK, NULL,
 				(const wchar_t * const *)gsErrInfo, 0,0);
 		else
 			MessageBox(NULL, gsErrInfo, L"Far3Wrap", MB_ICONSTOP|MB_OK|MB_SYSTEMMODAL);
@@ -209,6 +215,7 @@ void ReportWrapperFail()
 
 #define CHECKFN(n) if (!fwf.n) { ReportWrapperFail(); return; }
 #define CHECKFNRET(n,r) if (!fwf.n) { ReportWrapperFail(); return r; }
+#define CHECKFNRETF(n,r) if (!fwf.n) { ReportWrapperFail(true); return r; }
 
 
 FARPROC WINAPI FarWrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
@@ -219,12 +226,39 @@ FARPROC WINAPI FarWrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	return GetProcAddress(hModule, lpProcName);
 }
 
+int WINAPI GetMinFarVersionW(void)
+{
+	#define MAKEFARVERSION2(major,minor,build) ( ((major)<<8) | (minor) | ((build)<<16))
+	return MAKEFARVERSION2(3,0,MVV_3);
+}
+
 void WINAPI SetStartupInfoW(PluginStartupInfo *Info)
 {
 	psi = *Info;
 	// Ругаться сразу в SetStartupInfoW наверное некошерно?
 	if (fwf.SetStartupInfoWrap)
 		fwf.SetStartupInfoWrap(fwf.wpi, Info);
+}
+
+LPCWSTR GetModuleTitle(LPCWSTR asInfo = NULL, DWORD anError = 0, BOOL abForce = FALSE)
+{
+	// По идее, должно было быть заполнено в Far3wrap.dll
+	if (abForce || !*gsModuleFail)
+	{
+		wchar_t sModule[MAX_PATH+1] = {0};
+		GetModuleFileName(ghInstance, sModule, ARRAYSIZE(sModule));
+		//wchar_t* pszSlash = wcsrchr(sModule, L'\\');
+		//lstrcpyn(gsModuleFail, pszSlash ? pszSlash : *sModule ? sModule : L"<Far3wrap>", ARRAYSIZE(gsModuleFail));
+		int nLen = lstrlen(sModule);
+		int nMaxLen = ERRORTITLE_SIZE - (asInfo ? lstrlen(asInfo) : 0) - 20;
+		wsprintf(gsModuleFail, 
+			!asInfo ? L"<%s>" : !anError ? L"<%s> %s" : L"<%s> %s x%X",
+			*sModule
+				? ((nLen < ERRORTITLE_SIZE) ? sModule : (sModule + nLen - ERRORTITLE_SIZE + 1) )
+				: L"[Far3wrap]",
+			asInfo ? asInfo : L"", anError);
+	}
+	return gsModuleFail;
 }
 
 void WINAPI GetGlobalInfoW(GlobalInfo *Info)
@@ -235,20 +269,19 @@ void WINAPI GetGlobalInfoW(GlobalInfo *Info)
 	}
 	else
 	{
+		// Исключительная ситуация, не удалось загрузить Far3wrap.dll
 		Info->StructSize = sizeof(GlobalInfo);
 		Info->MinFarVersion = FARMANAGERVERSION;
-		static wchar_t sModule[MAX_PATH];
-		GetModuleFileName(ghInstance, sModule, ARRAYSIZE(sModule));
-		Info->Version = MAKEFARVERSION(0,0,0,0);
+		//static wchar_t sModule[MAX_PATH];
+		//GetModuleFileName(ghInstance, sModule, ARRAYSIZE(sModule));
+		Info->Version = MAKEFARVERSION(MVV_1,MVV_2,0,MVV_3,VS_RC);
 		//TODO: А вот здесь, можно было бы генерить гуид по полному пути файла?
-		static GUID guid = {0};
-		if (!guid.Data1)
+		if (!guidPlugin.Data1)
 		{
-			UuidCreate(&guid);
-			fwf.PluginGuid = &guid;
+			UuidCreate(&guidPlugin);
 		}
-		Info->Guid = guid;
-		Info->Title = sModule;
+		Info->Guid = guidPlugin;
+		Info->Title = GetModuleTitle(); //sModule;
 		Info->Description = L"Far2->Far3 wrapper";
 		Info->Author = L"Maximus5";
 	}
@@ -262,25 +295,24 @@ void WINAPI GetPluginInfoW(PluginInfo *Info)
 	}
 	else
 	{
+		// Исключительная ситуация, не удалось загрузить Far3wrap.dll
 		Info->StructSize = sizeof(*Info);
-		static GUID guid = {0};
 		static LPCWSTR sMenu[1];
-		static wchar_t sModule[MAX_PATH];
-		if (!guid.Data1)
-		{
-			UuidCreate(&guid);
-			GetModuleFileName(ghInstance, sModule, ARRAYSIZE(sModule));
-			sMenu[0] = wcsrchr(sModule, L'\\');
-		}
+		//static wchar_t sModule[MAX_PATH];
+		//TODO: А вот здесь, можно было бы генерить гуид по полному пути файла?
+		if (!guidPlugin.Data1)
+			UuidCreate(&guidPlugin);
+		//GetModuleFileName(ghInstance, sModule, ARRAYSIZE(sModule));
+		sMenu[0] = GetModuleTitle(); //wcsrchr(sModule, L'\\');
 		Info->PluginMenu.Count = 1;
-		Info->PluginMenu.Guids = &guid;
+		Info->PluginMenu.Guids = &guidPlugin;
 		Info->PluginMenu.Strings = sMenu;
 	}
 }
 
 HANDLE WINAPI OpenW(const OpenInfo *Info)
 {
-	CHECKFNRET(OpenWrap,INVALID_HANDLE_VALUE);
+	CHECKFNRETF(OpenWrap,INVALID_HANDLE_VALUE);
 	return fwf.OpenWrap(fwf.wpi, Info);
 }
 
@@ -316,7 +348,7 @@ int    WINAPI DeleteFilesW(const DeleteFilesInfo *Info)
 	return 0;
 }
 
-void   WINAPI ExitFARW(void)
+void   WINAPI ExitFARW(const struct ExitInfo *Info)
 {
 	if (fwf.ExitFARWrap)
 	{
@@ -324,7 +356,7 @@ void   WINAPI ExitFARW(void)
 		WrapPluginInfo* wpi = fwf.wpi;
 		// Чтобы не было шансов позвать функции враппера из другой нити или после завершения fwf.ExitFARWrap(fwf.wpi);
 		memset(&fwf, 0, sizeof(fwf));
-		ExitFARWrap(wpi);
+		ExitFARWrap(wpi, Info);
 	}
 	else
 		memset(&fwf, 0, sizeof(fwf));
@@ -710,6 +742,8 @@ BOOL LoadWrapper(LPCWSTR asModule)
 	//fwf.hFar3Wrap = ghWrapper; -- это NULL еще
 	fwf.ErrorInfo = gsErrInfo;
 	fwf.ErrorInfoMax = ERRINFO_SIZE;
+	fwf.ErrorTitle = gsModuleFail;
+	fwf.ErrorTitleMax = ERRORTITLE_SIZE;
 	fwf.Far3Build = MVV_3;
 	// In static functions
 	fwf.FarApiDefDlgProc = FarApiDefDlgProc;
@@ -768,16 +802,25 @@ BOOL LoadWrapper(LPCWSTR asModule)
 		{
 			wsprintf(gsErrInfo, L"Far3Wrap\nWrapper module failed (InitPlugin not found): %s\n", asModule);
 			OutputDebugString(gsErrInfo);
+			GetModuleTitle(L"InitPlugin not found", 0, TRUE);
 		}
 		else
 		{
 			lbRc = TRUE; // т.к. основной код враппера удалось загрузить
+			gsModuleFail[0] = 0; // сброс на всякий случай
 			if (0 != (iWrap = InitPlugin(&fwf)))
 			{
+				guidPlugin = fwf.PluginGuid;
 				wsprintf(szDbg, L"Wrapper module failed (ErrCode=%i): %s\n", iWrap, asModule);
 				OutputDebugString(szDbg);
+				if (!*gsModuleFail) // если основной код враппера не сформировал заголовок для меню плагинов...
+					GetModuleTitle(L"Wrapper failed", iWrap, TRUE);
 			}
 		}
+	}
+	else
+	{
+		GetModuleTitle(L"Wrapper loading failed", GetLastError(), TRUE);
 	}
 	if (!lbRc && ghWrapper)
 	{

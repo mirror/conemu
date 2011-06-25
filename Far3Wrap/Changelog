@@ -1,3 +1,23 @@
+.2075
+[*] Обработка DIF_SETCOLOR
+[*] ACTL_GETSYSWORDDIV
+[*] ACTL_GETCOLOR, ACTL_GETARRAYCOLOR, ACTL_SETARRAYCOLOR
+[*] DN_CTLCOLORDIALOG, DN_CTLCOLORDLGITEM, DN_CTLCOLORDLGLIST
+
+ver 1.12.2041
+[*] Расширена диагностика ошибок загрузки плагина
+[%] F11 в диалогах всегда вызывал первый пункт плагина (не работал DialogTools)
+[*] GetMinFarVersionW чтобы Loader не загружался в Far2
+
+ver 1.11.2041
+[%] Обработка отсутствия экспортов GetFilesW/PutFilesW/DeleteFilesW
+[+] ThreadSafe ACTL_GETSHORTWINDOWINFO
+
+ver 1.10.2041
+[!] Если вы уже пользовались плагином Network через враппер, необходимо
+    изменить гуид в ini-шнике на 8D1E4BD3-1959-43d7-9A64-B53CC0D46A91
+[*] Поправка в ProcessKeyW
+
 ver 1.9.2027
 [%] Глюк преобразования макросов с более чем одним вызовом CallPlugin
 [%] OpenPluginW не работал, если плагин создавал несколько пунктов (F11/AltF1/AltF2)

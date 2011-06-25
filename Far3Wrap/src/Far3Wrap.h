@@ -13,7 +13,7 @@ typedef void (WINAPI* _ClosePanelWrap)(struct WrapPluginInfo* wpi, HANDLE hPanel
 typedef int (WINAPI* _CompareWrap)(struct WrapPluginInfo* wpi, const CompareInfo *Info);
 typedef int (WINAPI* _ConfigureWrap)(struct WrapPluginInfo* wpi, const GUID* Guid);
 typedef int (WINAPI* _DeleteFilesWrap)(struct WrapPluginInfo* wpi, const DeleteFilesInfo *Info);
-typedef void (WINAPI* _ExitFARWrap)(struct WrapPluginInfo* wpi);
+typedef void (WINAPI* _ExitFARWrap)(struct WrapPluginInfo* wpi, const struct ExitInfo *Info);
 typedef void (WINAPI* _FreeVirtualFindDataWrap)(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info);
 typedef int (WINAPI* _GetFilesWrap)(struct WrapPluginInfo* wpi, GetFilesInfo *Info);
 typedef int (WINAPI* _GetFindDataWrap)(struct WrapPluginInfo* wpi, GetFindDataInfo *Info);
@@ -87,9 +87,11 @@ struct Far3WrapFunctions
 	wchar_t* ErrorInfo; // In-pointer, Out-error text
 	int ErrorInfoMax; // max size of ErrorInfo in wchar_t
 	int Far3Build; // Version (build number) of Far3 plugin.hpp
+	wchar_t* ErrorTitle; // In-pointer, Out-error text (used for Plugin menu)
+	int ErrorTitleMax; // max size of ErrorTitle in wchar_t
 	// [Out]
 	struct WrapPluginInfo* wpi;
-	const GUID* PluginGuid;
+	GUID PluginGuid;
 	// Non modifiable block end
 
 	// [In] Wrapper Far Api functions

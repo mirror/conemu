@@ -1,8 +1,3 @@
-//TODO: При ошибках загрузки плагина не ругаться сразу (MessageBox), а запомнить текст ошибки, 
-// и пометить плагин ошибочным в списке плагинов (например, "RQP - Wrapper Failed")
-//TODO: Переделать FarMessage_3_2, чтобы не использовать static переменные
-//TODO: GetVirtualFindDataW/FreeVirtualFindDataW
-//TODO: Конвертация CustomColumnData/CustomColumnNumber
 
 /*
 Copyright (c) 2011 Maximus5
@@ -42,6 +37,23 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <TlHelp32.h>
 #include "version.h"
 #include "resourceW.h"
+#include "Memory.h"
+
+#ifdef _DEBUG
+	//#define USE_MINIDUMP
+	#undef USE_MINIDUMP
+	//#define FORCE_TEXT_COMMIT
+	#undef FORCE_TEXT_COMMIT
+#else
+	#undef USE_MINIDUMP
+	#undef FORCE_TEXT_COMMIT
+#endif
+
+#ifdef USE_MINIDUMP
+	#include "MiniDump.h"
+#else
+	#define DebugDump(asText,asTitle)
+#endif
 
 #define ZeroStruct(s) memset(&s, 0, sizeof(s))
 //TODO
@@ -56,6 +68,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // class LogCmd, LOG_CMD, LOG_CMD0
 #define LOG_COMMANDS
 #include "LogCmd.h"
+#ifdef LOG_COMMANDS
+int LogCmd::nNestLevel = 0;
+#endif
 
 
 // Far2 & Far3 plugin API's
@@ -67,6 +82,8 @@ namespace Far2
 #include "pluginW.hpp"
 #undef __FARKEYS_HPP__
 #include "farkeys.hpp"
+#undef __COLORS_HPP__
+#include "farcolor.hpp"
 };
 
 //namespace Far3
@@ -75,6 +92,8 @@ namespace Far2
 #include "pluginW3.hpp"
 #undef __FARKEYS_HPP__
 #include "farkeys3.hpp"
+#undef __COLORS_HPP__
+#include "farcolor3.hpp"
 //};
 
 #include "Far3Wrap.h"
@@ -82,6 +101,7 @@ namespace Far2
 HMODULE ghFar3Wrap = NULL;
 DWORD gnMainThreadId = 0;
 
+#define DEFAULT_DESCRIPTION L"Far 2.x plugin"
 
 
 struct WrapPluginInfo;
@@ -96,8 +116,11 @@ struct Far2Dialog
     int m_X1, m_Y1, m_X2, m_Y2;
     wchar_t *m_HelpTopic;
     Far2::FarDialogItem *m_Items2;
+    DWORD *m_Colors2; // для удобства, (m_Items2->Flags & (DIF_COLORMASK|DIF_SETCOLOR))
     FarDialogItem *m_Items3;
     FarList *mp_ListInit3;
+	//CHAR_INFO * const *mpp_FarCharInfo2;
+    FAR_CHAR_INFO **mpp_FarCharInfo3;
     UINT m_ItemsNumber;
     DWORD m_Flags;
     Far2::FARWINDOWPROC m_DlgProc;
@@ -117,8 +140,8 @@ struct Far2Dialog
 	~Far2Dialog();
 };
 
-std::map<Far2Dialog*,HANDLE> MapDlg_2_3;
-std::map<HANDLE,Far2Dialog*> MapDlg_3_2;
+std::map<Far2Dialog*,HANDLE> *gpMapDlg_2_3 = NULL;
+std::map<HANDLE,Far2Dialog*> *gpMapDlg_3_2 = NULL;
 
 typedef unsigned int LoaderFunctions3;
 static const LoaderFunctions3
@@ -128,7 +151,10 @@ static const LoaderFunctions3
 	LF3_Dialog             = 0x0004,
 	LF3_Editor             = 0x0008,
 	LF3_FindList           = 0x0010,
-	LF3_Viewer             = 0x0020
+	LF3_Viewer             = 0x0020,
+	LF3_GetFiles           = 0x0040,
+	LF3_PutFiles           = 0x0080,
+	LF3_DeleteFiles        = 0x0100
 	//LF3_Window             = (LF3_Dialog|LF3_Editor|LF3_Viewer),
 	//LF3_Full               = (LF3_Analyse|LF3_Dialog|LF3_Editor|LF3_Viewer|LF3_Window)
 	//LF3_FullCustom       = (LF3_Full|LF3_CustomData)
@@ -143,19 +169,23 @@ static const LoaderFunctions3
 
 //std::vector<WrapUpdateFunctions> UpdateFunc;
 
+#define IsFarColorValid(c) ( ((c).Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) && ((c).Flags & ~0xFF) == 0 )
+
 struct WrapPluginInfo
 {
 	// Instance variables
 	HMODULE mh_Loader; // Loader.dll / Loader64.dll
 	HMODULE mh_Dll;    // HMODULE собственно плагина
+	wchar_t ms_DllFailFunc[64], ms_DllFailTitle[MAX_PATH*2]; DWORD mn_DllFailCode;
 	DWORD m_MinFarVersion;
 	LoaderFunctions3 mn_LoaderFunctions, mn_PluginFunctions; // set of LoaderFunctions3
 	wchar_t* m_ErrorInfo; // In-pointer, Out-error text (used for Loader)
 	int m_ErrorInfoMax; // max size of ErrorInfo in wchar_t (used for Loader)
-	wchar_t ms_PluginDll[MAX_PATH+1], ms_IniFile[MAX_PATH+1];
-	wchar_t ms_File[64];
-	wchar_t ms_Title[MAX_PATH+1], ms_Desc[256], ms_Author[256];
-	wchar_t ms_RegRoot[1024];
+	wchar_t ms_PluginDll[MAX_PATH+1]; // Собственно плагин (Far2)
+	wchar_t ms_IniFile[MAX_PATH+1]; // Полный путь к инишнику загрузчика
+	wchar_t ms_File[64]; // Для удобства, только имя файла плагина (Far2)
+	wchar_t ms_Title[MAX_PATH+1], ms_Desc[256], ms_Author[256]; // Информация для GetGlobalInfoW
+	wchar_t ms_RegRoot[1024]; // Путь в реестре для плагинов Far2, где они могут хранить настройки
 	VersionInfo m_Version;
 	GUID mguid_Plugin, mguid_Dialogs;
 	int mn_PluginMenu; GUID* mguids_PluginMenu;
@@ -168,10 +198,19 @@ struct WrapPluginInfo
 	KeyBarLabel    m_KeyBarLabels[7*12];
 	Far2::FarList m_ListItems2;
 	FarList m_ListItems3;
+	CHAR_INFO* m_FarCharInfo2;
+	FAR_CHAR_INFO* m_FarCharInfo3;
+	BYTE m_BufColors[255]; // буфер для конвертации DN_CTLCOLORDLGLIST
+
+	unsigned mn_EditorColorPriority;
 
 	AnalyseInfo* mp_Analyze;
+	int mn_AnalyzeReturn; // -2, если OpenFilePluginW вернул (HANDLE)-2
+	static wchar_t* gpsz_LastAnalyzeFile; // если !=NULL и совпадает с входом в AnalyseW - другие врапперы должны вернуть FALSE
+	wchar_t* mpsz_LastAnalyzeFile;
 	//;; 1 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW
 	//;; 2 - (AnalyzeW [ & OpenW]) -> OpenFilePluginW & ClosePluginW [& OpenFilePluginW]
+	//;; 3 -- режим PicView. Картинка уже показана в AnalyseW и меню плагинов будет лишним
 	int m_AnalyzeMode;
 
 	int m_OldPutFilesParams;
@@ -268,20 +307,24 @@ struct WrapPluginInfo
 	Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber);
 	void FarKey_2_3(int Key2, INPUT_RECORD *r);
 	DWORD FarKey_3_2(const INPUT_RECORD *Rec);
+	static int FarColorIndex_2_3(int ColorIndex2);
+	static int FarColorIndex_3_2(int ColorIndex3);
 	static FARDIALOGITEMTYPES DialogItemTypes_2_3(int ItemType2);
 	static int DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3);
-	static DWORD FarDialogItemFlags_3_2(FarDialogItemFlags Flags3);
-	static FarDialogItemFlags FarDialogItemFlags_2_3(DWORD Flags2);
+	static void FarColor_2_3(BYTE Color2, FarColor& Color3);
+	static BYTE FarColor_3_2(const FarColor& Color3);
+	static DWORD FarDialogItemFlags_3_2(FARDIALOGITEMFLAGS Flags3);
+	static FARDIALOGITEMFLAGS FarDialogItemFlags_2_3(DWORD Flags2);
 	void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3);
 	void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2);
-	void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3);
-	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2);
+	void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, FAR_CHAR_INFO*& pChars3);
+	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, CHAR_INFO*& pChars2);
 	LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2, const int Param1, LONG_PTR Param2);
 	Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Param2);
 	void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc);
 	InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber);
 	PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber);
-	static LPCWSTR FormatGuid(GUID* guid, wchar_t* tmp, BOOL abQuote = FALSE);
+	static LPCWSTR FormatGuid(const GUID* guid, wchar_t* tmp, BOOL abQuote = FALSE);
 
 
 /* ******************************** */
@@ -309,8 +352,8 @@ struct WrapPluginInfo
 	       int           ConfigureW3  (const GUID* Guid);
 	static int    WINAPI DeleteFilesWrap(struct WrapPluginInfo* wpi, const DeleteFilesInfo *Info);
 	       int           DeleteFilesW3  (const DeleteFilesInfo *Info);
-	static void   WINAPI ExitFARWrap(struct WrapPluginInfo* wpi);
-	       void          ExitFARW3  (void);
+	static void   WINAPI ExitFARWrap(struct WrapPluginInfo* wpi, const struct ExitInfo *Info);
+	       void          ExitFARW3  (const struct ExitInfo *Info);
 	static void   WINAPI FreeVirtualFindDataWrap(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info);
 	       void          FreeVirtualFindDataW3  (const FreeFindDataInfo *Info);
 	static int    WINAPI GetFilesWrap(struct WrapPluginInfo* wpi, GetFilesInfo *Info);
@@ -444,6 +487,7 @@ struct WrapPluginInfo
 
 /* ******************************** */
 
+	BOOL mb_ExportsLoaded;
 	// Exported Far2(!) Function
 	typedef int    (WINAPI* _AnalyseW)(const struct AnalyseInfo *Info);
 	_AnalyseW AnalyseW;
@@ -512,20 +556,24 @@ struct WrapPluginInfo
 };
 //WrapPluginInfo* wpi = NULL;
 
+std::map<DWORD,WrapPluginInfo*> *gpMapSysID = NULL;
+
+//static int WrapPluginInfo::mn_AnalyzeReturn = 0; // -2, если OpenFilePluginW вернул (HANDLE)-2
+wchar_t* WrapPluginInfo::gpsz_LastAnalyzeFile = NULL; // если !=NULL и совпадает с входом в AnalyseW - другие врапперы должны вернуть FALSE
 
 WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 {
 	mh_Loader = pInfo2->hLoader;
-	mh_Dll = NULL;
+	mh_Dll = NULL; ms_DllFailFunc[0] = ms_DllFailTitle[0] = 0; mn_DllFailCode = 0;
 	m_MinFarVersion = 0;
 	mn_PluginFunctions = mn_LoaderFunctions = LF3_None;
 	ms_PluginDll[0] = ms_IniFile[0] = ms_Title[0] = ms_Desc[0] = ms_Author[0] = ms_RegRoot[0] = ms_File[0] = 0;
-	memset(&m_Version, 0, sizeof(m_Version));
-	memset(&mguid_Plugin, 0, sizeof(mguid_Plugin));
-	memset(&mguid_Dialogs, 0, sizeof(mguid_Dialogs));
+	ZeroStruct(m_Version);
+	ZeroStruct(mguid_Plugin);
+	ZeroStruct(mguid_Dialogs);
 	mn_PluginMenu = mn_PluginDisks = mn_PluginConfig = 0;
 	mguids_PluginMenu = mguids_PluginDisks = mguids_PluginConfig = NULL;
-	memset(&m_Info, 0, sizeof(m_Info));
+	ZeroStruct(m_Info);
 	m_InfoLines = NULL; m_InfoLinesNumber = 0;
 	m_PanelModesArray = NULL; m_PanelModesNumber = 0;
 	m_KeyBar.CountLabels = 0; m_KeyBar.Labels = m_KeyBarLabels;
@@ -534,6 +582,8 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 	m_AnalyzeMode = 2;
 	ZeroStruct(m_ListItems2); ZeroStruct(m_ListItems3);
 	ZeroStruct(m_GetDlgItem);
+	m_FarCharInfo2 = NULL; m_FarCharInfo3 = NULL;
+	mn_EditorColorPriority = 0;
 
 	gnMsg_2 = 0; gnParam1_2 = 0; gnParam1_3 = 0;
 	gnMsg_3 = DM_FIRST;
@@ -552,6 +602,8 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 
 	ClearProcAddr();
 	mp_Analyze = NULL;
+	mn_AnalyzeReturn = 0;
+	mpsz_LastAnalyzeFile = NULL;
 
 	m_ErrorInfo = pInfo2->ErrorInfo;
 	m_ErrorInfoMax = pInfo2->ErrorInfoMax;
@@ -600,6 +652,8 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 
 WrapPluginInfo::~WrapPluginInfo()
 {
+	if (m_Info.Reserved)
+		(*gpMapSysID).erase(m_Info.Reserved);
 	if (m_ListItems2.Items)
 	{
 		free(m_ListItems2.Items);
@@ -609,6 +663,16 @@ WrapPluginInfo::~WrapPluginInfo()
 	{
 		free(m_ListItems3.Items);
 		m_ListItems3.Items = NULL;
+	}
+	if (m_FarCharInfo2)
+	{
+		free(m_FarCharInfo2);
+		m_FarCharInfo2 = NULL;
+	}
+	if (m_FarCharInfo3)
+	{
+		free(m_FarCharInfo3);
+		m_FarCharInfo3 = NULL;
 	}
 	if (mguids_PluginMenu)
 		free(mguids_PluginMenu);
@@ -625,6 +689,11 @@ WrapPluginInfo::~WrapPluginInfo()
 	_ASSERTE(m_KeyBar.Labels==m_KeyBarLabels);
 	if (m_GetDlgItem.Item)
 		free(m_GetDlgItem.Item);
+	if (mpsz_LastAnalyzeFile && mpsz_LastAnalyzeFile == gpsz_LastAnalyzeFile)
+	{
+		free(gpsz_LastAnalyzeFile);
+		gpsz_LastAnalyzeFile = NULL;
+	}
 }
 
 void WrapPluginInfo::LoadPluginInfo()
@@ -637,7 +706,15 @@ void WrapPluginInfo::LoadPluginInfo()
 	{
 		GUID tmpGuid = {0}; wchar_t szTmp[64];
 		HANDLE hIniFile = NULL;
+		DWORD nIniFileError = 0;
 		BOOL lbNewIniFile = FALSE;
+		WIN32_FIND_DATA fnd;
+		HMODULE hTestDll = NULL;
+		DWORD nTestDllError = 0;
+		FARPROC lpSetStartupInfoW = NULL, lpGetGlobalInfoW = NULL; // просто для информации, звать их нельзя
+		HANDLE hFind = NULL;
+		
+		
 		lstrcpy(szIni, szSelf);
 		wchar_t* pszSelfName = wcsrchr(szSelf, L'\\');
 		if (pszSelfName) pszSelfName++; else pszSelfName = szSelf;
@@ -661,6 +738,7 @@ void WrapPluginInfo::LoadPluginInfo()
 			hIniFile = CreateFile(szIni, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 			if (hIniFile != INVALID_HANDLE_VALUE)
 			{
+				nIniFileError = GetLastError();
 				CloseHandle(hIniFile);
 				// OK, создали, теперь нужно сформировать информацию по старому плагину
 				lbNewIniFile = TRUE;
@@ -688,11 +766,7 @@ void WrapPluginInfo::LoadPluginInfo()
 
 		if (lbNewIniFile)
 		{
-			
-			WIN32_FIND_DATA fnd;
-			HMODULE hTestDll = NULL;
-			FARPROC lpSetStartupInfoW = NULL, lpGetGlobalInfoW = NULL; // просто для информации, звать их нельзя
-			HANDLE hFind = NULL;
+			_ASSERTE(mh_Dll == NULL);
 			for (int i = 0; !hTestDll && i <= 1; i++)
 			{
 				lstrcpy(pszFilePtr, i ? L"*.dl_" : L"*.dll");
@@ -707,15 +781,22 @@ void WrapPluginInfo::LoadPluginInfo()
 						if (lstrcmpi(pszSelfName, fnd.cFileName) == 0)
 							continue; // это мы
 						lstrcpy(pszFilePtr, fnd.cFileName);
-						hTestDll = LoadLibraryEx(ms_PluginDll, NULL, DONT_RESOLVE_DLL_REFERENCES|LOAD_WITH_ALTERED_SEARCH_PATH);
+						hTestDll = LoadLibraryEx(ms_PluginDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 						if (hTestDll)
 						{
 							lpSetStartupInfoW = GetProcAddress(hTestDll, "SetStartupInfoW");
 							lpGetGlobalInfoW = GetProcAddress(hTestDll, "GetGlobalInfoW");
-							FreeLibrary(hTestDll);
 							if (lpSetStartupInfoW && !lpGetGlobalInfoW)
+							{
+								mh_Dll = hTestDll; // хэндл модуля уже получен, повторно загружать не будем
 								break; // Да, это Far2 плагин!
+							}
+							FreeLibrary(hTestDll);
 							hTestDll = NULL; // продолжаем поиск
+						}
+						else
+						{
+							nTestDllError = GetLastError();
 						}
 					} while (FindNextFile(hFind, &fnd));
 					FindClose(hFind);
@@ -734,8 +815,11 @@ void WrapPluginInfo::LoadPluginInfo()
 				lb = WritePrivateProfileString(L"Plugin", L"MinFarVersion", L"0x00000000", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"AnalyzeMode", L"2", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"OldPutFilesParams", L"0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"EditorColorPriority", L"0", szIni);
+				wchar_t* pszDot = wcsrchr(pszFilePtr, L'.'); if (pszDot) *pszDot = 0;
 				lb = WritePrivateProfileString(L"Plugin", L"Title", pszFilePtr, szIni);
-				lb = WritePrivateProfileString(L"Plugin", L"Description", pszFilePtr, szIni);
+				if (pszDot) *pszDot = L'.';
+				lb = WritePrivateProfileString(L"Plugin", L"Description", DEFAULT_DESCRIPTION, szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"Author", L"<Unknown>", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szIni);
@@ -761,8 +845,21 @@ void WrapPluginInfo::LoadPluginInfo()
 			//mn_OldAbsentFunctions = GetPrivateProfileInt(L"Plugin", L"DisabledFunctions", 0, szIni);
 
 			m_AnalyzeMode = GetPrivateProfileInt(L"Plugin", L"AnalyzeMode", 2, szIni);
-			if (m_AnalyzeMode != 1 && m_AnalyzeMode != 2)
+			if (m_AnalyzeMode != 1 && m_AnalyzeMode != 2 && m_AnalyzeMode != 3)
 				m_AnalyzeMode = 2;
+
+			mn_EditorColorPriority = GetPrivateProfileInt(L"Plugin", L"EditorColorPriority", 0, szIni);
+			//if (mn_EditorColorPriority < 0)
+			//{
+			//	if (ms_File[0] >= L'a' && ms_File[0] <= L'z')
+			//		mn_EditorColorPriority = ms_File[0] - L'a';
+			//	else if (ms_File[0] >= 32)
+			//		mn_EditorColorPriority = ms_File[0] - 32;
+			//	else
+			//		mn_EditorColorPriority = 0;
+			//	wsprintf(szTemp, L"%i", mn_EditorColorPriority);
+			//	WritePrivateProfileString(L"Plugin", L"EditorColorPriority", szTemp, szIni);
+			//}
 
 			m_OldPutFilesParams = GetPrivateProfileInt(L"Plugin", L"OldPutFilesParams", 0, szIni);
 			if (m_OldPutFilesParams != 0 && m_OldPutFilesParams != 1)
@@ -777,7 +874,7 @@ void WrapPluginInfo::LoadPluginInfo()
 			
 			if (GetPrivateProfileString(L"Plugin", L"Title", L"Sample Far3 plugin", szTemp, ARRAYSIZE(szTemp), szIni))
 				lstrcpyn(ms_Title, szTemp, ARRAYSIZE(ms_Title));
-			if (GetPrivateProfileString(L"Plugin", L"Description", L"Far2->Far3 plugin wrapper", szTemp, ARRAYSIZE(szTemp), szIni))
+			if (GetPrivateProfileString(L"Plugin", L"Description", DEFAULT_DESCRIPTION/*L"Far2->Far3 plugin wrapper"*/, szTemp, ARRAYSIZE(szTemp), szIni))
 				lstrcpyn(ms_Desc, szTemp, ARRAYSIZE(ms_Desc));
 			if (GetPrivateProfileString(L"Plugin", L"Author", L"Maximus5", szTemp, ARRAYSIZE(szTemp), szIni))
 				lstrcpyn(ms_Author, szTemp, ARRAYSIZE(ms_Author));
@@ -820,6 +917,11 @@ void WrapPluginInfo::LoadPluginInfo()
 		lstrcpy(ms_RegRoot, L"Software\\Far Manager\\Plugins");
 		UuidCreate(&mguid_Plugin);
 		UuidCreate(&mguid_Dialogs);
+		#ifdef _DEBUG
+		{
+			DebugDump(L"LoadPluginInfo failed!", szSelf[0] ? szSelf : L"Far3Wrap");
+		}
+		#endif
 		//mguid_Plugin = guid_DefPlugin;
 		//guid_PluginMenu = ::guid_DefPluginMenu;
 		//guid_PluginConfigMenu = ::guid_DefPluginConfigMenu;
@@ -861,6 +963,18 @@ void WrapPluginInfo::CheckPluginExports(LoaderFunctions3 eFunc)
 		lbPluginExport = (ProcessViewerEventW!=NULL);
 		lbLoaderExport = GetProcAddress(mh_Loader, "ProcessViewerEventW")!=NULL;
 		break;
+	case LF3_GetFiles:
+		lbPluginExport = (GetFilesW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "GetFilesW")!=NULL;
+		break;
+	case LF3_PutFiles:
+		lbPluginExport = (PutFilesW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "PutFilesW")!=NULL;
+		break;
+	case LF3_DeleteFiles:
+		lbPluginExport = (DeleteFilesW!=NULL);
+		lbLoaderExport = GetProcAddress(mh_Loader, "DeleteFilesW")!=NULL;
+		break;
 	//case LF3_Window:
 	//	lbPluginExport = (
 	//		(((ProcessEditorEventW!=NULL)||(ProcessEditorInputW!=NULL)) ? 1 : 0) +
@@ -892,8 +1006,16 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 
 	if (!*ms_PluginDll)
 	{
+		#ifdef _DEBUG
+		{
+			DebugDump(L"LoadPlugin failed (ms_PluginDll)!", ms_File);
+		}
+		#endif
 		return FALSE;
 	}
+	
+	DWORD dwErr = 0;
+	wchar_t szInfo[1024] = {0};
 	
 	if (mh_Dll == NULL)
 	{
@@ -906,11 +1028,18 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 		//	SetCurrentDirectory(PluginDll);
 		//	*pszSlash = L'\\';
 		//}
-		DWORD dwErr = 0;
-		wchar_t szInfo[1024] = {0};
 
+		bool lbErrorCreated = false;
+		
 		if (wcschr(ms_PluginDll, L'*'))
+		{
 			wsprintf(szInfo, L"Far3Wrap\nPlugin module not found: \n%s", ms_PluginDll);
+			wchar_t szSelf[MAX_PATH+1]; szSelf[0] = 0;
+			GetModuleFileName(mh_Loader, szSelf, ARRAYSIZE(szSelf));
+			wsprintf(ms_DllFailTitle, L"[%s] Plugin not found", szSelf);
+			dwErr = ERROR_FILE_NOT_FOUND;
+			lbErrorCreated = true;
+		}
 		else
 		{
 			if (wcschr(ms_PluginDll, L'\\'))
@@ -931,6 +1060,15 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), szInfo+lstrlen(szInfo),
 					ARRAYSIZE(szInfo)-lstrlen(szInfo) - 1, NULL);
 			}
+
+			wchar_t szSelf[MAX_PATH+1]; szSelf[0] = 0;
+			GetModuleFileName(mh_Loader, szSelf, ARRAYSIZE(szSelf));
+			wchar_t* pszPlugin = *ms_File ? ms_File : szSelf;
+			if (!lbErrorCreated)
+				wsprintf(ms_DllFailTitle, L"[%s] Load plugin failed x%X",
+					pszPlugin,
+					dwErr);
+
 			if (abSilent)
 			{
 				if (m_ErrorInfo && m_ErrorInfoMax > 0)
@@ -941,194 +1079,207 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 				MessageBox(NULL, szInfo, L"Far3Wrapper", MB_ICONSTOP|MB_SYSTEMMODAL);
 			}
 		}
+	}
+
+	if ((mh_Dll != NULL) && !mb_ExportsLoaded)
+	{
+		mb_ExportsLoaded = TRUE;
+		AnalyseW = (WrapPluginInfo::_AnalyseW)GetProcAddress(mh_Dll, "AnalyseW");
+		ClosePluginW = (WrapPluginInfo::_ClosePluginW)GetProcAddress(mh_Dll, "ClosePluginW");
+		CompareW = (WrapPluginInfo::_CompareW)GetProcAddress(mh_Dll, "CompareW");
+		ConfigureW = (WrapPluginInfo::_ConfigureW)GetProcAddress(mh_Dll, "ConfigureW");
+		DeleteFilesW = (WrapPluginInfo::_DeleteFilesW)GetProcAddress(mh_Dll, "DeleteFilesW");
+		ExitFARW = (WrapPluginInfo::_ExitFARW)GetProcAddress(mh_Dll, "ExitFARW");
+		FreeFindDataW = (WrapPluginInfo::_FreeFindDataW)GetProcAddress(mh_Dll, "FreeFindDataW");
+		FreeVirtualFindDataW = (WrapPluginInfo::_FreeVirtualFindDataW)GetProcAddress(mh_Dll, "FreeVirtualFindDataW");
+		GetFilesW = (WrapPluginInfo::_GetFilesW)GetProcAddress(mh_Dll, "GetFilesW");
+		GetFindDataW = (WrapPluginInfo::_GetFindDataW)GetProcAddress(mh_Dll, "GetFindDataW");
+		GetMinFarVersionW = (WrapPluginInfo::_GetMinFarVersionW)GetProcAddress(mh_Dll, "GetMinFarVersionW");
+		GetOpenPluginInfoW = (WrapPluginInfo::_GetOpenPluginInfoW)GetProcAddress(mh_Dll, "GetOpenPluginInfoW");
+		GetPluginInfoW = (WrapPluginInfo::_GetPluginInfoW)GetProcAddress(mh_Dll, "GetPluginInfoW");
+		GetVirtualFindDataW = (WrapPluginInfo::_GetVirtualFindDataW)GetProcAddress(mh_Dll, "GetVirtualFindDataW");
+		MakeDirectoryW = (WrapPluginInfo::_MakeDirectoryW)GetProcAddress(mh_Dll, "MakeDirectoryW");
+		OpenFilePluginW = (WrapPluginInfo::_OpenFilePluginW)GetProcAddress(mh_Dll, "OpenFilePluginW");
+		OpenPluginW = (WrapPluginInfo::_OpenPluginW)GetProcAddress(mh_Dll, "OpenPluginW");
+		ProcessDialogEventW = (WrapPluginInfo::_ProcessDialogEventW)GetProcAddress(mh_Dll, "ProcessDialogEventW");
+		ProcessEditorEventW = (WrapPluginInfo::_ProcessEditorEventW)GetProcAddress(mh_Dll, "ProcessEditorEventW");
+		ProcessEditorInputW = (WrapPluginInfo::_ProcessEditorInputW)GetProcAddress(mh_Dll, "ProcessEditorInputW");
+		ProcessEventW = (WrapPluginInfo::_ProcessEventW)GetProcAddress(mh_Dll, "ProcessEventW");
+		ProcessHostFileW = (WrapPluginInfo::_ProcessHostFileW)GetProcAddress(mh_Dll, "ProcessHostFileW");
+		ProcessKeyW = (WrapPluginInfo::_ProcessKeyW)GetProcAddress(mh_Dll, "ProcessKeyW");
+		ProcessSynchroEventW = (WrapPluginInfo::_ProcessSynchroEventW)GetProcAddress(mh_Dll, "ProcessSynchroEventW");
+		ProcessViewerEventW = (WrapPluginInfo::_ProcessViewerEventW)GetProcAddress(mh_Dll, "ProcessViewerEventW");
+		PutFilesW = (WrapPluginInfo::_PutFilesW)GetProcAddress(mh_Dll, "PutFilesW");
+		SetDirectoryW = (WrapPluginInfo::_SetDirectoryW)GetProcAddress(mh_Dll, "SetDirectoryW");
+		SetFindListW = (WrapPluginInfo::_SetFindListW)GetProcAddress(mh_Dll, "SetFindListW");
+		SetStartupInfoW = (WrapPluginInfo::_SetStartupInfoW)GetProcAddress(mh_Dll, "SetStartupInfoW");
+		GetCustomDataW = (WrapPluginInfo::_GetCustomDataW)GetProcAddress(mh_Dll, "GetCustomDataW");
+		FreeCustomDataW = (WrapPluginInfo::_FreeCustomDataW)GetProcAddress(mh_Dll, "FreeCustomDataW");
+		
+		if (GetMinFarVersionW)
+		{
+			DWORD nMinFarVersion = GetMinFarVersionW();
+			if (nMinFarVersion != m_MinFarVersion)
+			{
+				m_MinFarVersion = nMinFarVersion;
+				wchar_t szVer[32]; wsprintf(szVer, L"0x%08X", nMinFarVersion);
+				WritePrivateProfileString(L"Plugin", L"MinFarVersion", szVer, ms_IniFile);
+			}
+		}
+
+		//TODO: Если экспортируемые функции из mh_Loader не совпадают с mn_OldAbsentFunctions - обновить (сбросить mn_OldAbsentFunctions в 0)
+		mn_PluginFunctions = LF3_None;
+		mn_LoaderFunctions = LF3_None; // сформируем на основе реальных экспортов в Loader.dll
+
+		CheckPluginExports(LF3_Analyse);
+		CheckPluginExports(LF3_CustomData);
+		CheckPluginExports(LF3_Dialog);
+		CheckPluginExports(LF3_Editor);
+		CheckPluginExports(LF3_FindList);
+		CheckPluginExports(LF3_Viewer);
+		CheckPluginExports(LF3_GetFiles);
+		CheckPluginExports(LF3_PutFiles);
+		CheckPluginExports(LF3_DeleteFiles);
+
+		
+		#if 0	
+		CheckPluginExports(ALF3_Analyse);
+		CheckPluginExports(ALF3_Open);
+		CheckPluginExports(ALF3_Configure);
+		CheckPluginExports(ALF3_Compare);
+		CheckPluginExports(ALF3_GetFiles);
+		CheckPluginExports(ALF3_PutFiles);
+		CheckPluginExports(ALF3_FindData);
+		CheckPluginExports(ALF3_VirtualFindData);
+		CheckPluginExports(ALF3_ProcessHostFile);
+		CheckPluginExports(ALF3_ProcessDialogEvent);
+		CheckPluginExports(ALF3_ProcessEditorEvent);
+		CheckPluginExports(ALF3_ProcessEditorInput);
+		CheckPluginExports(ALF3_ProcessViewerEvent);
+		CheckPluginExports(ALF3_SetFindList);
+		CheckPluginExports(ALF3_CustomData);
+		#endif
+
+		#if 0
+		// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
+		int nLoaderResourceId = 0;
+		#ifdef _WIN64
+		#define MAKE_LOADER_RC(s) IDR_LOADER64_##s
+		#else
+		#define MAKE_LOADER_RC(s) IDR_LOADER_##s
+		#endif
+		// !! LF3_FindList должен идти перед LF3_Analyse !!
+		if (mn_LoaderFunctions == LF3_FindList)
+		{
+			if (mn_PluginFunctions != LF3_FindList)
+				nLoaderResourceId = MAKE_LOADER_RC(FINDLIST);
+		}
+		else if (mn_LoaderFunctions == LF3_Analyse)
+		{
+			if (mn_PluginFunctions != LF3_Analyse)
+				nLoaderResourceId = MAKE_LOADER_RC(ARC);
+		}
+		else if (mn_LoaderFunctions == LF3_CustomData)
+		{
+			if (mn_PluginFunctions != LF3_CustomData)
+				nLoaderResourceId = MAKE_LOADER_RC(CUSTOM);
+		}
+		else if (mn_LoaderFunctions == LF3_Window)
+		{
+			if (mn_PluginFunctions != LF3_Window)
+				nLoaderResourceId = MAKE_LOADER_RC(WINDOW);
+		}
+		else if (mn_LoaderFunctions == LF3_Dialog)
+		{
+			if (mn_PluginFunctions != LF3_Dialog)
+				nLoaderResourceId = MAKE_LOADER_RC(DIALOG);
+		}
+		else if (mn_LoaderFunctions == LF3_Editor)
+		{
+			if (mn_PluginFunctions != LF3_Editor)
+				nLoaderResourceId = MAKE_LOADER_RC(EDITOR);
+		}
 		else
 		{
-			AnalyseW = (WrapPluginInfo::_AnalyseW)GetProcAddress(mh_Dll, "AnalyseW");
-			ClosePluginW = (WrapPluginInfo::_ClosePluginW)GetProcAddress(mh_Dll, "ClosePluginW");
-			CompareW = (WrapPluginInfo::_CompareW)GetProcAddress(mh_Dll, "CompareW");
-			ConfigureW = (WrapPluginInfo::_ConfigureW)GetProcAddress(mh_Dll, "ConfigureW");
-			DeleteFilesW = (WrapPluginInfo::_DeleteFilesW)GetProcAddress(mh_Dll, "DeleteFilesW");
-			ExitFARW = (WrapPluginInfo::_ExitFARW)GetProcAddress(mh_Dll, "ExitFARW");
-			FreeFindDataW = (WrapPluginInfo::_FreeFindDataW)GetProcAddress(mh_Dll, "FreeFindDataW");
-			FreeVirtualFindDataW = (WrapPluginInfo::_FreeVirtualFindDataW)GetProcAddress(mh_Dll, "FreeVirtualFindDataW");
-			GetFilesW = (WrapPluginInfo::_GetFilesW)GetProcAddress(mh_Dll, "GetFilesW");
-			GetFindDataW = (WrapPluginInfo::_GetFindDataW)GetProcAddress(mh_Dll, "GetFindDataW");
-			GetMinFarVersionW = (WrapPluginInfo::_GetMinFarVersionW)GetProcAddress(mh_Dll, "GetMinFarVersionW");
-			GetOpenPluginInfoW = (WrapPluginInfo::_GetOpenPluginInfoW)GetProcAddress(mh_Dll, "GetOpenPluginInfoW");
-			GetPluginInfoW = (WrapPluginInfo::_GetPluginInfoW)GetProcAddress(mh_Dll, "GetPluginInfoW");
-			GetVirtualFindDataW = (WrapPluginInfo::_GetVirtualFindDataW)GetProcAddress(mh_Dll, "GetVirtualFindDataW");
-			MakeDirectoryW = (WrapPluginInfo::_MakeDirectoryW)GetProcAddress(mh_Dll, "MakeDirectoryW");
-			OpenFilePluginW = (WrapPluginInfo::_OpenFilePluginW)GetProcAddress(mh_Dll, "OpenFilePluginW");
-			OpenPluginW = (WrapPluginInfo::_OpenPluginW)GetProcAddress(mh_Dll, "OpenPluginW");
-			ProcessDialogEventW = (WrapPluginInfo::_ProcessDialogEventW)GetProcAddress(mh_Dll, "ProcessDialogEventW");
-			ProcessEditorEventW = (WrapPluginInfo::_ProcessEditorEventW)GetProcAddress(mh_Dll, "ProcessEditorEventW");
-			ProcessEditorInputW = (WrapPluginInfo::_ProcessEditorInputW)GetProcAddress(mh_Dll, "ProcessEditorInputW");
-			ProcessEventW = (WrapPluginInfo::_ProcessEventW)GetProcAddress(mh_Dll, "ProcessEventW");
-			ProcessHostFileW = (WrapPluginInfo::_ProcessHostFileW)GetProcAddress(mh_Dll, "ProcessHostFileW");
-			ProcessKeyW = (WrapPluginInfo::_ProcessKeyW)GetProcAddress(mh_Dll, "ProcessKeyW");
-			ProcessSynchroEventW = (WrapPluginInfo::_ProcessSynchroEventW)GetProcAddress(mh_Dll, "ProcessSynchroEventW");
-			ProcessViewerEventW = (WrapPluginInfo::_ProcessViewerEventW)GetProcAddress(mh_Dll, "ProcessViewerEventW");
-			PutFilesW = (WrapPluginInfo::_PutFilesW)GetProcAddress(mh_Dll, "PutFilesW");
-			SetDirectoryW = (WrapPluginInfo::_SetDirectoryW)GetProcAddress(mh_Dll, "SetDirectoryW");
-			SetFindListW = (WrapPluginInfo::_SetFindListW)GetProcAddress(mh_Dll, "SetFindListW");
-			SetStartupInfoW = (WrapPluginInfo::_SetStartupInfoW)GetProcAddress(mh_Dll, "SetStartupInfoW");
-			GetCustomDataW = (WrapPluginInfo::_GetCustomDataW)GetProcAddress(mh_Dll, "GetCustomDataW");
-			FreeCustomDataW = (WrapPluginInfo::_FreeCustomDataW)GetProcAddress(mh_Dll, "FreeCustomDataW");
-			
-			if (GetMinFarVersionW)
-			{
-				DWORD nMinFarVersion = GetMinFarVersionW();
-				if (nMinFarVersion != m_MinFarVersion)
-				{
-					m_MinFarVersion = nMinFarVersion;
-					wchar_t szVer[32]; wsprintf(szVer, L"0x%08X", nMinFarVersion);
-					WritePrivateProfileString(L"Plugin", L"MinFarVersion", szVer, ms_IniFile);
-				}
-			}
-
-			//TODO: Если экспортируемые функции из mh_Loader не совпадают с mn_OldAbsentFunctions - обновить (сбросить mn_OldAbsentFunctions в 0)
-			mn_PluginFunctions = LF3_None;
-			mn_LoaderFunctions = LF3_None; // сформируем на основе реальных экспортов в Loader.dll
-
-			CheckPluginExports(LF3_Analyse);
-			CheckPluginExports(LF3_CustomData);
-			CheckPluginExports(LF3_Dialog);
-			CheckPluginExports(LF3_Editor);
-			CheckPluginExports(LF3_FindList);
-			CheckPluginExports(LF3_Viewer);
-			//CheckPluginExports(LF3_Window);
-			
-			#if 0	
-			CheckPluginExports(ALF3_Analyse);
-			CheckPluginExports(ALF3_Open);
-			CheckPluginExports(ALF3_Configure);
-			CheckPluginExports(ALF3_Compare);
-			CheckPluginExports(ALF3_GetFiles);
-			CheckPluginExports(ALF3_PutFiles);
-			CheckPluginExports(ALF3_FindData);
-			CheckPluginExports(ALF3_VirtualFindData);
-			CheckPluginExports(ALF3_ProcessHostFile);
-			CheckPluginExports(ALF3_ProcessDialogEvent);
-			CheckPluginExports(ALF3_ProcessEditorEvent);
-			CheckPluginExports(ALF3_ProcessEditorInput);
-			CheckPluginExports(ALF3_ProcessViewerEvent);
-			CheckPluginExports(ALF3_SetFindList);
-			CheckPluginExports(ALF3_CustomData);
-			#endif
-
-			#if 0
-			// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
-			int nLoaderResourceId = 0;
-			#ifdef _WIN64
-			#define MAKE_LOADER_RC(s) IDR_LOADER64_##s
-			#else
-			#define MAKE_LOADER_RC(s) IDR_LOADER_##s
-			#endif
-			// !! LF3_FindList должен идти перед LF3_Analyse !!
-			if (mn_LoaderFunctions == LF3_FindList)
-			{
-				if (mn_PluginFunctions != LF3_FindList)
-					nLoaderResourceId = MAKE_LOADER_RC(FINDLIST);
-			}
-			else if (mn_LoaderFunctions == LF3_Analyse)
-			{
-				if (mn_PluginFunctions != LF3_Analyse)
-					nLoaderResourceId = MAKE_LOADER_RC(ARC);
-			}
-			else if (mn_LoaderFunctions == LF3_CustomData)
-			{
-				if (mn_PluginFunctions != LF3_CustomData)
-					nLoaderResourceId = MAKE_LOADER_RC(CUSTOM);
-			}
-			else if (mn_LoaderFunctions == LF3_Window)
-			{
-				if (mn_PluginFunctions != LF3_Window)
-					nLoaderResourceId = MAKE_LOADER_RC(WINDOW);
-			}
-			else if (mn_LoaderFunctions == LF3_Dialog)
-			{
-				if (mn_PluginFunctions != LF3_Dialog)
-					nLoaderResourceId = MAKE_LOADER_RC(DIALOG);
-			}
-			else if (mn_LoaderFunctions == LF3_Editor)
-			{
-				if (mn_PluginFunctions != LF3_Editor)
-					nLoaderResourceId = MAKE_LOADER_RC(EDITOR);
-			}
-			else
-			{
-				_ASSERTE(mn_LoaderFunctions == LF3_Full);
-				if ((mn_PluginFunctions & LF3_Full) != LF3_Full)
-					nLoaderResourceId = MAKE_LOADER_RC(FULL);
-			};
-			if (mn_LoaderFunctions != mn_PluginFunctions && nLoaderResourceId == 0)
-			{
-				_ASSERTE(mn_LoaderFunctions == mn_PluginFunctions);
-			}
-			if (mn_LoaderFunctions != mn_PluginFunctions && *ms_PluginDll && nLoaderResourceId)
-			{
-				// Проверим, может уже помещен в список "на модификацию"
-				bool lbExist = false;
-				std::vector<WrapUpdateFunctions>::iterator iter;
-				for (iter = UpdateFunc.begin(); !lbExist && iter != UpdateFunc.end(); iter++)
-				{
-					if (lstrcmpi(iter->ms_IniFile, ms_IniFile) == 0)
-						lbExist = true;
-				}
-
-				if (!lbExist)
-				{
-					WrapUpdateFunctions upd = {mn_PluginFunctions, nLoaderResourceId};
-					if (GetModuleFileName(mh_Loader, upd.ms_Loader, ARRAYSIZE(upd.ms_Loader)))
-					{
-						lstrcpy(upd.ms_IniFile, ms_IniFile);
-						UpdateFunc.push_back(upd);
-					}
-				}
-			}
-			#endif
-
-			#if 0
-			int nIdx = 0;
-			ExportFunc strNull[64] = {{NULL}};
-			#undef SET_EXP
-			#define SET_EXP_(n,s) if (!n) { strNull[nIdx].Name = s; strNull[nIdx].OldAddress = GetProcAddress(mh_Loader, s); nIdx++; }
-			#define SET_EXP(n) SET_EXP_(n,#n)
-			SET_EXP(ConfigureW);
-			SET_EXP_((AnalyseW||OpenFilePluginW),"AnalyseW");
-			SET_EXP_(ProcessKeyW, "ProcessPanelInputW");
-			SET_EXP(ProcessDialogEventW);
-			SET_EXP(ProcessEditorEventW);
-			SET_EXP(ProcessViewerEventW);
-			SET_EXP(GetFilesW);
-			SET_EXP(PutFilesW);
-			SET_EXP(DeleteFilesW);
-			SET_EXP(GetFindDataW);
-			SET_EXP(FreeFindDataW);
-			SET_EXP(GetVirtualFindDataW);
-			SET_EXP(FreeVirtualFindDataW);
-			SET_EXP(SetDirectoryW);
-			SET_EXP(SetFindListW);
-			SET_EXP(GetCustomDataW);
-			SET_EXP(FreeCustomDataW);
-			SET_EXP_((OpenPluginW||OpenFilePluginW), "OpenW");
-			#undef SET_EXP
-			#ifdef _DEBUG
-			p1 = GetProcAddress(mh_Loader, "SetFindListW");
-			#endif
-			ChangeExports(strNull, mh_Loader);
-			#ifdef _DEBUG
-			p2 = GetProcAddress(mh_Loader, "SetFindListW");
-			#endif
-			#endif
+			_ASSERTE(mn_LoaderFunctions == LF3_Full);
+			if ((mn_PluginFunctions & LF3_Full) != LF3_Full)
+				nLoaderResourceId = MAKE_LOADER_RC(FULL);
+		};
+		if (mn_LoaderFunctions != mn_PluginFunctions && nLoaderResourceId == 0)
+		{
+			_ASSERTE(mn_LoaderFunctions == mn_PluginFunctions);
 		}
+		if (mn_LoaderFunctions != mn_PluginFunctions && *ms_PluginDll && nLoaderResourceId)
+		{
+			// Проверим, может уже помещен в список "на модификацию"
+			bool lbExist = false;
+			std::vector<WrapUpdateFunctions>::iterator iter;
+			for (iter = UpdateFunc.begin(); !lbExist && iter != UpdateFunc.end(); iter++)
+			{
+				if (lstrcmpi(iter->ms_IniFile, ms_IniFile) == 0)
+					lbExist = true;
+			}
+
+			if (!lbExist)
+			{
+				WrapUpdateFunctions upd = {mn_PluginFunctions, nLoaderResourceId};
+				if (GetModuleFileName(mh_Loader, upd.ms_Loader, ARRAYSIZE(upd.ms_Loader)))
+				{
+					lstrcpy(upd.ms_IniFile, ms_IniFile);
+					UpdateFunc.push_back(upd);
+				}
+			}
+		}
+		#endif
+
+		#if 0
+		int nIdx = 0;
+		ExportFunc strNull[64] = {{NULL}};
+		#undef SET_EXP
+		#define SET_EXP_(n,s) if (!n) { strNull[nIdx].Name = s; strNull[nIdx].OldAddress = GetProcAddress(mh_Loader, s); nIdx++; }
+		#define SET_EXP(n) SET_EXP_(n,#n)
+		SET_EXP(ConfigureW);
+		SET_EXP_((AnalyseW||OpenFilePluginW),"AnalyseW");
+		SET_EXP_(ProcessKeyW, "ProcessPanelInputW");
+		SET_EXP(ProcessDialogEventW);
+		SET_EXP(ProcessEditorEventW);
+		SET_EXP(ProcessViewerEventW);
+		SET_EXP(GetFilesW);
+		SET_EXP(PutFilesW);
+		SET_EXP(DeleteFilesW);
+		SET_EXP(GetFindDataW);
+		SET_EXP(FreeFindDataW);
+		SET_EXP(GetVirtualFindDataW);
+		SET_EXP(FreeVirtualFindDataW);
+		SET_EXP(SetDirectoryW);
+		SET_EXP(SetFindListW);
+		SET_EXP(GetCustomDataW);
+		SET_EXP(FreeCustomDataW);
+		SET_EXP_((OpenPluginW||OpenFilePluginW), "OpenW");
+		#undef SET_EXP
+		#ifdef _DEBUG
+		p1 = GetProcAddress(mh_Loader, "SetFindListW");
+		#endif
+		ChangeExports(strNull, mh_Loader);
+		#ifdef _DEBUG
+		p2 = GetProcAddress(mh_Loader, "SetFindListW");
+		#endif
+		#endif
 	}
+
+	#ifdef _DEBUG
+	if (mh_Dll == NULL)
+	{
+		DebugDump(L"LoadPlugin failed (mh_Dll)!", ms_File);
+	}
+	#endif
 	
 	return (mh_Dll != NULL);
 }
 
 void WrapPluginInfo::ClearProcAddr()
 {
+	mb_ExportsLoaded = FALSE;
 	AnalyseW = NULL;
 	ClosePluginW = NULL;
 	CompareW = NULL;
@@ -1174,8 +1325,9 @@ void WrapPluginInfo::UnloadPlugin()
 
 
 
-LPCWSTR WrapPluginInfo::FormatGuid(GUID* guid, wchar_t* tmp, BOOL abQuote /*= FALSE*/)
+LPCWSTR WrapPluginInfo::FormatGuid(const GUID* guid, wchar_t* tmp, BOOL abQuote /*= FALSE*/)
 {
+	if (!guid) guid = &GUID_NULL;
 	wsprintf(tmp, 
 		abQuote ?
 			L"\"%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X\"" :
@@ -1570,6 +1722,372 @@ DWORD WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 	return Key2;
 }
 
+int WrapPluginInfo::FarColorIndex_2_3(int ColorIndex2)
+{
+	int ColorIndex3;
+	switch (ColorIndex2)
+	{
+	case Far2::COL_MENUTEXT: ColorIndex3 = COL_MENUTEXT; break;
+	case Far2::COL_MENUSELECTEDTEXT: ColorIndex3 = COL_MENUSELECTEDTEXT; break;
+	case Far2::COL_MENUHIGHLIGHT: ColorIndex3 = COL_MENUHIGHLIGHT; break;
+	case Far2::COL_MENUSELECTEDHIGHLIGHT: ColorIndex3 = COL_MENUSELECTEDHIGHLIGHT; break;
+	case Far2::COL_MENUBOX: ColorIndex3 = COL_MENUBOX; break;
+	case Far2::COL_MENUTITLE: ColorIndex3 = COL_MENUTITLE; break;
+
+	case Far2::COL_HMENUTEXT: ColorIndex3 = COL_HMENUTEXT; break;
+	case Far2::COL_HMENUSELECTEDTEXT: ColorIndex3 = COL_HMENUSELECTEDTEXT; break;
+	case Far2::COL_HMENUHIGHLIGHT: ColorIndex3 = COL_HMENUHIGHLIGHT; break;
+	case Far2::COL_HMENUSELECTEDHIGHLIGHT: ColorIndex3 = COL_HMENUSELECTEDHIGHLIGHT; break;
+
+	case Far2::COL_PANELTEXT: ColorIndex3 = COL_PANELTEXT; break;
+	case Far2::COL_PANELSELECTEDTEXT: ColorIndex3 = COL_PANELSELECTEDTEXT; break;
+	case Far2::COL_PANELHIGHLIGHTTEXT: ColorIndex3 = COL_PANELHIGHLIGHTTEXT; break;
+	case Far2::COL_PANELINFOTEXT: ColorIndex3 = COL_PANELINFOTEXT; break;
+	case Far2::COL_PANELCURSOR: ColorIndex3 = COL_PANELCURSOR; break;
+	case Far2::COL_PANELSELECTEDCURSOR: ColorIndex3 = COL_PANELSELECTEDCURSOR; break;
+	case Far2::COL_PANELTITLE: ColorIndex3 = COL_PANELTITLE; break;
+	case Far2::COL_PANELSELECTEDTITLE: ColorIndex3 = COL_PANELSELECTEDTITLE; break;
+	case Far2::COL_PANELCOLUMNTITLE: ColorIndex3 = COL_PANELCOLUMNTITLE; break;
+	case Far2::COL_PANELTOTALINFO: ColorIndex3 = COL_PANELTOTALINFO; break;
+	case Far2::COL_PANELSELECTEDINFO: ColorIndex3 = COL_PANELSELECTEDINFO; break;
+
+	case Far2::COL_DIALOGTEXT: ColorIndex3 = COL_DIALOGTEXT; break;
+	case Far2::COL_DIALOGHIGHLIGHTTEXT: ColorIndex3 = COL_DIALOGHIGHLIGHTTEXT; break;
+	case Far2::COL_DIALOGBOX: ColorIndex3 = COL_DIALOGBOX; break;
+	case Far2::COL_DIALOGBOXTITLE: ColorIndex3 = COL_DIALOGBOXTITLE; break;
+	case Far2::COL_DIALOGHIGHLIGHTBOXTITLE: ColorIndex3 = COL_DIALOGHIGHLIGHTBOXTITLE; break;
+	case Far2::COL_DIALOGEDIT: ColorIndex3 = COL_DIALOGEDIT; break;
+	case Far2::COL_DIALOGBUTTON: ColorIndex3 = COL_DIALOGBUTTON; break;
+	case Far2::COL_DIALOGSELECTEDBUTTON: ColorIndex3 = COL_DIALOGSELECTEDBUTTON; break;
+	case Far2::COL_DIALOGHIGHLIGHTBUTTON: ColorIndex3 = COL_DIALOGHIGHLIGHTBUTTON; break;
+	case Far2::COL_DIALOGHIGHLIGHTSELECTEDBUTTON: ColorIndex3 = COL_DIALOGHIGHLIGHTSELECTEDBUTTON; break;
+
+	case Far2::COL_DIALOGLISTTEXT: ColorIndex3 = COL_DIALOGLISTTEXT; break;
+	case Far2::COL_DIALOGLISTSELECTEDTEXT: ColorIndex3 = COL_DIALOGLISTSELECTEDTEXT; break;
+	case Far2::COL_DIALOGLISTHIGHLIGHT: ColorIndex3 = COL_DIALOGLISTHIGHLIGHT; break;
+	case Far2::COL_DIALOGLISTSELECTEDHIGHLIGHT: ColorIndex3 = COL_DIALOGLISTSELECTEDHIGHLIGHT; break;
+
+	case Far2::COL_WARNDIALOGTEXT: ColorIndex3 = COL_WARNDIALOGTEXT; break;
+	case Far2::COL_WARNDIALOGHIGHLIGHTTEXT: ColorIndex3 = COL_WARNDIALOGHIGHLIGHTTEXT; break;
+	case Far2::COL_WARNDIALOGBOX: ColorIndex3 = COL_WARNDIALOGBOX; break;
+	case Far2::COL_WARNDIALOGBOXTITLE: ColorIndex3 = COL_WARNDIALOGBOXTITLE; break;
+	case Far2::COL_WARNDIALOGHIGHLIGHTBOXTITLE: ColorIndex3 = COL_WARNDIALOGHIGHLIGHTBOXTITLE; break;
+	case Far2::COL_WARNDIALOGEDIT: ColorIndex3 = COL_WARNDIALOGEDIT; break;
+	case Far2::COL_WARNDIALOGBUTTON: ColorIndex3 = COL_WARNDIALOGBUTTON; break;
+	case Far2::COL_WARNDIALOGSELECTEDBUTTON: ColorIndex3 = COL_WARNDIALOGSELECTEDBUTTON; break;
+	case Far2::COL_WARNDIALOGHIGHLIGHTBUTTON: ColorIndex3 = COL_WARNDIALOGHIGHLIGHTBUTTON; break;
+	case Far2::COL_WARNDIALOGHIGHLIGHTSELECTEDBUTTON: ColorIndex3 = COL_WARNDIALOGHIGHLIGHTSELECTEDBUTTON; break;
+
+	case Far2::COL_KEYBARNUM: ColorIndex3 = COL_KEYBARNUM; break;
+	case Far2::COL_KEYBARTEXT: ColorIndex3 = COL_KEYBARTEXT; break;
+	case Far2::COL_KEYBARBACKGROUND: ColorIndex3 = COL_KEYBARBACKGROUND; break;
+
+	case Far2::COL_COMMANDLINE: ColorIndex3 = COL_COMMANDLINE; break;
+
+	case Far2::COL_CLOCK: ColorIndex3 = COL_CLOCK; break;
+
+	case Far2::COL_VIEWERTEXT: ColorIndex3 = COL_VIEWERTEXT; break;
+	case Far2::COL_VIEWERSELECTEDTEXT: ColorIndex3 = COL_VIEWERSELECTEDTEXT; break;
+	case Far2::COL_VIEWERSTATUS: ColorIndex3 = COL_VIEWERSTATUS; break;
+
+	case Far2::COL_EDITORTEXT: ColorIndex3 = COL_EDITORTEXT; break;
+	case Far2::COL_EDITORSELECTEDTEXT: ColorIndex3 = COL_EDITORSELECTEDTEXT; break;
+	case Far2::COL_EDITORSTATUS: ColorIndex3 = COL_EDITORSTATUS; break;
+
+	case Far2::COL_HELPTEXT: ColorIndex3 = COL_HELPTEXT; break;
+	case Far2::COL_HELPHIGHLIGHTTEXT: ColorIndex3 = COL_HELPHIGHLIGHTTEXT; break;
+	case Far2::COL_HELPTOPIC: ColorIndex3 = COL_HELPTOPIC; break;
+	case Far2::COL_HELPSELECTEDTOPIC: ColorIndex3 = COL_HELPSELECTEDTOPIC; break;
+	case Far2::COL_HELPBOX: ColorIndex3 = COL_HELPBOX; break;
+	case Far2::COL_HELPBOXTITLE: ColorIndex3 = COL_HELPBOXTITLE; break;
+
+	case Far2::COL_PANELDRAGTEXT: ColorIndex3 = COL_PANELDRAGTEXT; break;
+	case Far2::COL_DIALOGEDITUNCHANGED: ColorIndex3 = COL_DIALOGEDITUNCHANGED; break;
+	case Far2::COL_PANELSCROLLBAR: ColorIndex3 = COL_PANELSCROLLBAR; break;
+	case Far2::COL_HELPSCROLLBAR: ColorIndex3 = COL_HELPSCROLLBAR; break;
+	case Far2::COL_PANELBOX: ColorIndex3 = COL_PANELBOX; break;
+	case Far2::COL_PANELSCREENSNUMBER: ColorIndex3 = COL_PANELSCREENSNUMBER; break;
+	case Far2::COL_DIALOGEDITSELECTED: ColorIndex3 = COL_DIALOGEDITSELECTED; break;
+	case Far2::COL_COMMANDLINESELECTED: ColorIndex3 = COL_COMMANDLINESELECTED; break;
+	case Far2::COL_VIEWERARROWS: ColorIndex3 = COL_VIEWERARROWS; break;
+
+	case Far2::COL_DIALOGLISTSCROLLBAR: ColorIndex3 = COL_DIALOGLISTSCROLLBAR; break;
+	case Far2::COL_MENUSCROLLBAR: ColorIndex3 = COL_MENUSCROLLBAR; break;
+	case Far2::COL_VIEWERSCROLLBAR: ColorIndex3 = COL_VIEWERSCROLLBAR; break;
+	case Far2::COL_COMMANDLINEPREFIX: ColorIndex3 = COL_COMMANDLINEPREFIX; break;
+	case Far2::COL_DIALOGDISABLED: ColorIndex3 = COL_DIALOGDISABLED; break;
+	case Far2::COL_DIALOGEDITDISABLED: ColorIndex3 = COL_DIALOGEDITDISABLED; break;
+	case Far2::COL_DIALOGLISTDISABLED: ColorIndex3 = COL_DIALOGLISTDISABLED; break;
+	case Far2::COL_WARNDIALOGDISABLED: ColorIndex3 = COL_WARNDIALOGDISABLED; break;
+	case Far2::COL_WARNDIALOGEDITDISABLED: ColorIndex3 = COL_WARNDIALOGEDITDISABLED; break;
+	case Far2::COL_WARNDIALOGLISTDISABLED: ColorIndex3 = COL_WARNDIALOGLISTDISABLED; break;
+
+	case Far2::COL_MENUDISABLEDTEXT: ColorIndex3 = COL_MENUDISABLEDTEXT; break;
+
+	case Far2::COL_EDITORCLOCK: ColorIndex3 = COL_EDITORCLOCK; break;
+	case Far2::COL_VIEWERCLOCK: ColorIndex3 = COL_VIEWERCLOCK; break;
+
+	case Far2::COL_DIALOGLISTTITLE: ColorIndex3 = COL_DIALOGLISTTITLE; break;
+	case Far2::COL_DIALOGLISTBOX: ColorIndex3 = COL_DIALOGLISTBOX; break;
+
+	case Far2::COL_WARNDIALOGEDITSELECTED: ColorIndex3 = COL_WARNDIALOGEDITSELECTED; break;
+	case Far2::COL_WARNDIALOGEDITUNCHANGED: ColorIndex3 = COL_WARNDIALOGEDITUNCHANGED; break;
+
+	case Far2::COL_DIALOGCOMBOTEXT: ColorIndex3 = COL_DIALOGCOMBOTEXT; break;
+	case Far2::COL_DIALOGCOMBOSELECTEDTEXT: ColorIndex3 = COL_DIALOGCOMBOSELECTEDTEXT; break;
+	case Far2::COL_DIALOGCOMBOHIGHLIGHT: ColorIndex3 = COL_DIALOGCOMBOHIGHLIGHT; break;
+	case Far2::COL_DIALOGCOMBOSELECTEDHIGHLIGHT: ColorIndex3 = COL_DIALOGCOMBOSELECTEDHIGHLIGHT; break;
+	case Far2::COL_DIALOGCOMBOBOX: ColorIndex3 = COL_DIALOGCOMBOBOX; break;
+	case Far2::COL_DIALOGCOMBOTITLE: ColorIndex3 = COL_DIALOGCOMBOTITLE; break;
+	case Far2::COL_DIALOGCOMBODISABLED: ColorIndex3 = COL_DIALOGCOMBODISABLED; break;
+	case Far2::COL_DIALOGCOMBOSCROLLBAR: ColorIndex3 = COL_DIALOGCOMBOSCROLLBAR; break;
+
+	case Far2::COL_WARNDIALOGLISTTEXT: ColorIndex3 = COL_WARNDIALOGLISTTEXT; break;
+	case Far2::COL_WARNDIALOGLISTSELECTEDTEXT: ColorIndex3 = COL_WARNDIALOGLISTSELECTEDTEXT; break;
+	case Far2::COL_WARNDIALOGLISTHIGHLIGHT: ColorIndex3 = COL_WARNDIALOGLISTHIGHLIGHT; break;
+	case Far2::COL_WARNDIALOGLISTSELECTEDHIGHLIGHT: ColorIndex3 = COL_WARNDIALOGLISTSELECTEDHIGHLIGHT; break;
+	case Far2::COL_WARNDIALOGLISTBOX: ColorIndex3 = COL_WARNDIALOGLISTBOX; break;
+	case Far2::COL_WARNDIALOGLISTTITLE: ColorIndex3 = COL_WARNDIALOGLISTTITLE; break;
+	case Far2::COL_WARNDIALOGLISTSCROLLBAR: ColorIndex3 = COL_WARNDIALOGLISTSCROLLBAR; break;
+
+	case Far2::COL_WARNDIALOGCOMBOTEXT: ColorIndex3 = COL_WARNDIALOGCOMBOTEXT; break;
+	case Far2::COL_WARNDIALOGCOMBOSELECTEDTEXT: ColorIndex3 = COL_WARNDIALOGCOMBOSELECTEDTEXT; break;
+	case Far2::COL_WARNDIALOGCOMBOHIGHLIGHT: ColorIndex3 = COL_WARNDIALOGCOMBOHIGHLIGHT; break;
+	case Far2::COL_WARNDIALOGCOMBOSELECTEDHIGHLIGHT: ColorIndex3 = COL_WARNDIALOGCOMBOSELECTEDHIGHLIGHT; break;
+	case Far2::COL_WARNDIALOGCOMBOBOX: ColorIndex3 = COL_WARNDIALOGCOMBOBOX; break;
+	case Far2::COL_WARNDIALOGCOMBOTITLE: ColorIndex3 = COL_WARNDIALOGCOMBOTITLE; break;
+	case Far2::COL_WARNDIALOGCOMBODISABLED: ColorIndex3 = COL_WARNDIALOGCOMBODISABLED; break;
+	case Far2::COL_WARNDIALOGCOMBOSCROLLBAR: ColorIndex3 = COL_WARNDIALOGCOMBOSCROLLBAR; break;
+
+	case Far2::COL_DIALOGLISTARROWS: ColorIndex3 = COL_DIALOGLISTARROWS; break;
+	case Far2::COL_DIALOGLISTARROWSDISABLED: ColorIndex3 = COL_DIALOGLISTARROWSDISABLED; break;
+	case Far2::COL_DIALOGLISTARROWSSELECTED: ColorIndex3 = COL_DIALOGLISTARROWSSELECTED; break;
+	case Far2::COL_DIALOGCOMBOARROWS: ColorIndex3 = COL_DIALOGCOMBOARROWS; break;
+	case Far2::COL_DIALOGCOMBOARROWSDISABLED: ColorIndex3 = COL_DIALOGCOMBOARROWSDISABLED; break;
+	case Far2::COL_DIALOGCOMBOARROWSSELECTED: ColorIndex3 = COL_DIALOGCOMBOARROWSSELECTED; break;
+	case Far2::COL_WARNDIALOGLISTARROWS: ColorIndex3 = COL_WARNDIALOGLISTARROWS; break;
+	case Far2::COL_WARNDIALOGLISTARROWSDISABLED: ColorIndex3 = COL_WARNDIALOGLISTARROWSDISABLED; break;
+	case Far2::COL_WARNDIALOGLISTARROWSSELECTED: ColorIndex3 = COL_WARNDIALOGLISTARROWSSELECTED; break;
+	case Far2::COL_WARNDIALOGCOMBOARROWS: ColorIndex3 = COL_WARNDIALOGCOMBOARROWS; break;
+	case Far2::COL_WARNDIALOGCOMBOARROWSDISABLED: ColorIndex3 = COL_WARNDIALOGCOMBOARROWSDISABLED; break;
+	case Far2::COL_WARNDIALOGCOMBOARROWSSELECTED: ColorIndex3 = COL_WARNDIALOGCOMBOARROWSSELECTED; break;
+	case Far2::COL_MENUARROWS: ColorIndex3 = COL_MENUARROWS; break;
+	case Far2::COL_MENUARROWSDISABLED: ColorIndex3 = COL_MENUARROWSDISABLED; break;
+	case Far2::COL_MENUARROWSSELECTED: ColorIndex3 = COL_MENUARROWSSELECTED; break;
+	case Far2::COL_COMMANDLINEUSERSCREEN: ColorIndex3 = COL_COMMANDLINEUSERSCREEN; break;
+	case Far2::COL_EDITORSCROLLBAR: ColorIndex3 = COL_EDITORSCROLLBAR; break;
+
+	case Far2::COL_MENUGRAYTEXT: ColorIndex3 = COL_MENUGRAYTEXT; break;
+	case Far2::COL_MENUSELECTEDGRAYTEXT: ColorIndex3 = COL_MENUSELECTEDGRAYTEXT; break;
+	case Far2::COL_DIALOGCOMBOGRAY: ColorIndex3 = COL_DIALOGCOMBOGRAY; break;
+	case Far2::COL_DIALOGCOMBOSELECTEDGRAYTEXT: ColorIndex3 = COL_DIALOGCOMBOSELECTEDGRAYTEXT; break;
+	case Far2::COL_DIALOGLISTGRAY: ColorIndex3 = COL_DIALOGLISTGRAY; break;
+	case Far2::COL_DIALOGLISTSELECTEDGRAYTEXT: ColorIndex3 = COL_DIALOGLISTSELECTEDGRAYTEXT; break;
+	case Far2::COL_WARNDIALOGCOMBOGRAY: ColorIndex3 = COL_WARNDIALOGCOMBOGRAY; break;
+	case Far2::COL_WARNDIALOGCOMBOSELECTEDGRAYTEXT: ColorIndex3 = COL_WARNDIALOGCOMBOSELECTEDGRAYTEXT; break;
+	case Far2::COL_WARNDIALOGLISTGRAY: ColorIndex3 = COL_WARNDIALOGLISTGRAY; break;
+	case Far2::COL_WARNDIALOGLISTSELECTEDGRAYTEXT: ColorIndex3 = COL_WARNDIALOGLISTSELECTEDGRAYTEXT; break;
+
+	case Far2::COL_DIALOGDEFAULTBUTTON: ColorIndex3 = COL_DIALOGDEFAULTBUTTON; break;
+	case Far2::COL_DIALOGSELECTEDDEFAULTBUTTON: ColorIndex3 = COL_DIALOGSELECTEDDEFAULTBUTTON; break;
+	case Far2::COL_DIALOGHIGHLIGHTDEFAULTBUTTON: ColorIndex3 = COL_DIALOGHIGHLIGHTDEFAULTBUTTON; break;
+	case Far2::COL_DIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON: ColorIndex3 = COL_DIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON; break;
+	case Far2::COL_WARNDIALOGDEFAULTBUTTON: ColorIndex3 = COL_WARNDIALOGDEFAULTBUTTON; break;
+	case Far2::COL_WARNDIALOGSELECTEDDEFAULTBUTTON: ColorIndex3 = COL_WARNDIALOGSELECTEDDEFAULTBUTTON; break;
+	case Far2::COL_WARNDIALOGHIGHLIGHTDEFAULTBUTTON: ColorIndex3 = COL_WARNDIALOGHIGHLIGHTDEFAULTBUTTON; break;
+	case Far2::COL_WARNDIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON: ColorIndex3 = COL_WARNDIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON; break;
+
+	case Far2::COL_LASTPALETTECOLOR: ColorIndex3 = COL_LASTPALETTECOLOR; break;
+
+	default:
+		ColorIndex3 = COL_LASTPALETTECOLOR;
+	}
+	return ColorIndex3;
+}
+
+int WrapPluginInfo::FarColorIndex_3_2(int ColorIndex3)
+{
+	int ColorIndex2;
+	switch (ColorIndex3)
+	{
+	case COL_MENUTEXT: ColorIndex2 = Far2::COL_MENUTEXT; break;
+	case COL_MENUSELECTEDTEXT: ColorIndex2 = Far2::COL_MENUSELECTEDTEXT; break;
+	case COL_MENUHIGHLIGHT: ColorIndex2 = Far2::COL_MENUHIGHLIGHT; break;
+	case COL_MENUSELECTEDHIGHLIGHT: ColorIndex2 = Far2::COL_MENUSELECTEDHIGHLIGHT; break;
+	case COL_MENUBOX: ColorIndex2 = Far2::COL_MENUBOX; break;
+	case COL_MENUTITLE: ColorIndex2 = Far2::COL_MENUTITLE; break;
+
+	case COL_HMENUTEXT: ColorIndex2 = Far2::COL_HMENUTEXT; break;
+	case COL_HMENUSELECTEDTEXT: ColorIndex2 = Far2::COL_HMENUSELECTEDTEXT; break;
+	case COL_HMENUHIGHLIGHT: ColorIndex2 = Far2::COL_HMENUHIGHLIGHT; break;
+	case COL_HMENUSELECTEDHIGHLIGHT: ColorIndex2 = Far2::COL_HMENUSELECTEDHIGHLIGHT; break;
+
+	case COL_PANELTEXT: ColorIndex2 = Far2::COL_PANELTEXT; break;
+	case COL_PANELSELECTEDTEXT: ColorIndex2 = Far2::COL_PANELSELECTEDTEXT; break;
+	case COL_PANELHIGHLIGHTTEXT: ColorIndex2 = Far2::COL_PANELHIGHLIGHTTEXT; break;
+	case COL_PANELINFOTEXT: ColorIndex2 = Far2::COL_PANELINFOTEXT; break;
+	case COL_PANELCURSOR: ColorIndex2 = Far2::COL_PANELCURSOR; break;
+	case COL_PANELSELECTEDCURSOR: ColorIndex2 = Far2::COL_PANELSELECTEDCURSOR; break;
+	case COL_PANELTITLE: ColorIndex2 = Far2::COL_PANELTITLE; break;
+	case COL_PANELSELECTEDTITLE: ColorIndex2 = Far2::COL_PANELSELECTEDTITLE; break;
+	case COL_PANELCOLUMNTITLE: ColorIndex2 = Far2::COL_PANELCOLUMNTITLE; break;
+	case COL_PANELTOTALINFO: ColorIndex2 = Far2::COL_PANELTOTALINFO; break;
+	case COL_PANELSELECTEDINFO: ColorIndex2 = Far2::COL_PANELSELECTEDINFO; break;
+
+	case COL_DIALOGTEXT: ColorIndex2 = Far2::COL_DIALOGTEXT; break;
+	case COL_DIALOGHIGHLIGHTTEXT: ColorIndex2 = Far2::COL_DIALOGHIGHLIGHTTEXT; break;
+	case COL_DIALOGBOX: ColorIndex2 = Far2::COL_DIALOGBOX; break;
+	case COL_DIALOGBOXTITLE: ColorIndex2 = Far2::COL_DIALOGBOXTITLE; break;
+	case COL_DIALOGHIGHLIGHTBOXTITLE: ColorIndex2 = Far2::COL_DIALOGHIGHLIGHTBOXTITLE; break;
+	case COL_DIALOGEDIT: ColorIndex2 = Far2::COL_DIALOGEDIT; break;
+	case COL_DIALOGBUTTON: ColorIndex2 = Far2::COL_DIALOGBUTTON; break;
+	case COL_DIALOGSELECTEDBUTTON: ColorIndex2 = Far2::COL_DIALOGSELECTEDBUTTON; break;
+	case COL_DIALOGHIGHLIGHTBUTTON: ColorIndex2 = Far2::COL_DIALOGHIGHLIGHTBUTTON; break;
+	case COL_DIALOGHIGHLIGHTSELECTEDBUTTON: ColorIndex2 = Far2::COL_DIALOGHIGHLIGHTSELECTEDBUTTON; break;
+
+	case COL_DIALOGLISTTEXT: ColorIndex2 = Far2::COL_DIALOGLISTTEXT; break;
+	case COL_DIALOGLISTSELECTEDTEXT: ColorIndex2 = Far2::COL_DIALOGLISTSELECTEDTEXT; break;
+	case COL_DIALOGLISTHIGHLIGHT: ColorIndex2 = Far2::COL_DIALOGLISTHIGHLIGHT; break;
+	case COL_DIALOGLISTSELECTEDHIGHLIGHT: ColorIndex2 = Far2::COL_DIALOGLISTSELECTEDHIGHLIGHT; break;
+
+	case COL_WARNDIALOGTEXT: ColorIndex2 = Far2::COL_WARNDIALOGTEXT; break;
+	case COL_WARNDIALOGHIGHLIGHTTEXT: ColorIndex2 = Far2::COL_WARNDIALOGHIGHLIGHTTEXT; break;
+	case COL_WARNDIALOGBOX: ColorIndex2 = Far2::COL_WARNDIALOGBOX; break;
+	case COL_WARNDIALOGBOXTITLE: ColorIndex2 = Far2::COL_WARNDIALOGBOXTITLE; break;
+	case COL_WARNDIALOGHIGHLIGHTBOXTITLE: ColorIndex2 = Far2::COL_WARNDIALOGHIGHLIGHTBOXTITLE; break;
+	case COL_WARNDIALOGEDIT: ColorIndex2 = Far2::COL_WARNDIALOGEDIT; break;
+	case COL_WARNDIALOGBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGBUTTON; break;
+	case COL_WARNDIALOGSELECTEDBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGSELECTEDBUTTON; break;
+	case COL_WARNDIALOGHIGHLIGHTBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGHIGHLIGHTBUTTON; break;
+	case COL_WARNDIALOGHIGHLIGHTSELECTEDBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGHIGHLIGHTSELECTEDBUTTON; break;
+
+	case COL_KEYBARNUM: ColorIndex2 = Far2::COL_KEYBARNUM; break;
+	case COL_KEYBARTEXT: ColorIndex2 = Far2::COL_KEYBARTEXT; break;
+	case COL_KEYBARBACKGROUND: ColorIndex2 = Far2::COL_KEYBARBACKGROUND; break;
+
+	case COL_COMMANDLINE: ColorIndex2 = Far2::COL_COMMANDLINE; break;
+
+	case COL_CLOCK: ColorIndex2 = Far2::COL_CLOCK; break;
+
+	case COL_VIEWERTEXT: ColorIndex2 = Far2::COL_VIEWERTEXT; break;
+	case COL_VIEWERSELECTEDTEXT: ColorIndex2 = Far2::COL_VIEWERSELECTEDTEXT; break;
+	case COL_VIEWERSTATUS: ColorIndex2 = Far2::COL_VIEWERSTATUS; break;
+
+	case COL_EDITORTEXT: ColorIndex2 = Far2::COL_EDITORTEXT; break;
+	case COL_EDITORSELECTEDTEXT: ColorIndex2 = Far2::COL_EDITORSELECTEDTEXT; break;
+	case COL_EDITORSTATUS: ColorIndex2 = Far2::COL_EDITORSTATUS; break;
+
+	case COL_HELPTEXT: ColorIndex2 = Far2::COL_HELPTEXT; break;
+	case COL_HELPHIGHLIGHTTEXT: ColorIndex2 = Far2::COL_HELPHIGHLIGHTTEXT; break;
+	case COL_HELPTOPIC: ColorIndex2 = Far2::COL_HELPTOPIC; break;
+	case COL_HELPSELECTEDTOPIC: ColorIndex2 = Far2::COL_HELPSELECTEDTOPIC; break;
+	case COL_HELPBOX: ColorIndex2 = Far2::COL_HELPBOX; break;
+	case COL_HELPBOXTITLE: ColorIndex2 = Far2::COL_HELPBOXTITLE; break;
+
+	case COL_PANELDRAGTEXT: ColorIndex2 = Far2::COL_PANELDRAGTEXT; break;
+	case COL_DIALOGEDITUNCHANGED: ColorIndex2 = Far2::COL_DIALOGEDITUNCHANGED; break;
+	case COL_PANELSCROLLBAR: ColorIndex2 = Far2::COL_PANELSCROLLBAR; break;
+	case COL_HELPSCROLLBAR: ColorIndex2 = Far2::COL_HELPSCROLLBAR; break;
+	case COL_PANELBOX: ColorIndex2 = Far2::COL_PANELBOX; break;
+	case COL_PANELSCREENSNUMBER: ColorIndex2 = Far2::COL_PANELSCREENSNUMBER; break;
+	case COL_DIALOGEDITSELECTED: ColorIndex2 = Far2::COL_DIALOGEDITSELECTED; break;
+	case COL_COMMANDLINESELECTED: ColorIndex2 = Far2::COL_COMMANDLINESELECTED; break;
+	case COL_VIEWERARROWS: ColorIndex2 = Far2::COL_VIEWERARROWS; break;
+
+	case COL_DIALOGLISTSCROLLBAR: ColorIndex2 = Far2::COL_DIALOGLISTSCROLLBAR; break;
+	case COL_MENUSCROLLBAR: ColorIndex2 = Far2::COL_MENUSCROLLBAR; break;
+	case COL_VIEWERSCROLLBAR: ColorIndex2 = Far2::COL_VIEWERSCROLLBAR; break;
+	case COL_COMMANDLINEPREFIX: ColorIndex2 = Far2::COL_COMMANDLINEPREFIX; break;
+	case COL_DIALOGDISABLED: ColorIndex2 = Far2::COL_DIALOGDISABLED; break;
+	case COL_DIALOGEDITDISABLED: ColorIndex2 = Far2::COL_DIALOGEDITDISABLED; break;
+	case COL_DIALOGLISTDISABLED: ColorIndex2 = Far2::COL_DIALOGLISTDISABLED; break;
+	case COL_WARNDIALOGDISABLED: ColorIndex2 = Far2::COL_WARNDIALOGDISABLED; break;
+	case COL_WARNDIALOGEDITDISABLED: ColorIndex2 = Far2::COL_WARNDIALOGEDITDISABLED; break;
+	case COL_WARNDIALOGLISTDISABLED: ColorIndex2 = Far2::COL_WARNDIALOGLISTDISABLED; break;
+
+	case COL_MENUDISABLEDTEXT: ColorIndex2 = Far2::COL_MENUDISABLEDTEXT; break;
+
+	case COL_EDITORCLOCK: ColorIndex2 = Far2::COL_EDITORCLOCK; break;
+	case COL_VIEWERCLOCK: ColorIndex2 = Far2::COL_VIEWERCLOCK; break;
+
+	case COL_DIALOGLISTTITLE: ColorIndex2 = Far2::COL_DIALOGLISTTITLE; break;
+	case COL_DIALOGLISTBOX: ColorIndex2 = Far2::COL_DIALOGLISTBOX; break;
+
+	case COL_WARNDIALOGEDITSELECTED: ColorIndex2 = Far2::COL_WARNDIALOGEDITSELECTED; break;
+	case COL_WARNDIALOGEDITUNCHANGED: ColorIndex2 = Far2::COL_WARNDIALOGEDITUNCHANGED; break;
+
+	case COL_DIALOGCOMBOTEXT: ColorIndex2 = Far2::COL_DIALOGCOMBOTEXT; break;
+	case COL_DIALOGCOMBOSELECTEDTEXT: ColorIndex2 = Far2::COL_DIALOGCOMBOSELECTEDTEXT; break;
+	case COL_DIALOGCOMBOHIGHLIGHT: ColorIndex2 = Far2::COL_DIALOGCOMBOHIGHLIGHT; break;
+	case COL_DIALOGCOMBOSELECTEDHIGHLIGHT: ColorIndex2 = Far2::COL_DIALOGCOMBOSELECTEDHIGHLIGHT; break;
+	case COL_DIALOGCOMBOBOX: ColorIndex2 = Far2::COL_DIALOGCOMBOBOX; break;
+	case COL_DIALOGCOMBOTITLE: ColorIndex2 = Far2::COL_DIALOGCOMBOTITLE; break;
+	case COL_DIALOGCOMBODISABLED: ColorIndex2 = Far2::COL_DIALOGCOMBODISABLED; break;
+	case COL_DIALOGCOMBOSCROLLBAR: ColorIndex2 = Far2::COL_DIALOGCOMBOSCROLLBAR; break;
+
+	case COL_WARNDIALOGLISTTEXT: ColorIndex2 = Far2::COL_WARNDIALOGLISTTEXT; break;
+	case COL_WARNDIALOGLISTSELECTEDTEXT: ColorIndex2 = Far2::COL_WARNDIALOGLISTSELECTEDTEXT; break;
+	case COL_WARNDIALOGLISTHIGHLIGHT: ColorIndex2 = Far2::COL_WARNDIALOGLISTHIGHLIGHT; break;
+	case COL_WARNDIALOGLISTSELECTEDHIGHLIGHT: ColorIndex2 = Far2::COL_WARNDIALOGLISTSELECTEDHIGHLIGHT; break;
+	case COL_WARNDIALOGLISTBOX: ColorIndex2 = Far2::COL_WARNDIALOGLISTBOX; break;
+	case COL_WARNDIALOGLISTTITLE: ColorIndex2 = Far2::COL_WARNDIALOGLISTTITLE; break;
+	case COL_WARNDIALOGLISTSCROLLBAR: ColorIndex2 = Far2::COL_WARNDIALOGLISTSCROLLBAR; break;
+
+	case COL_WARNDIALOGCOMBOTEXT: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOTEXT; break;
+	case COL_WARNDIALOGCOMBOSELECTEDTEXT: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOSELECTEDTEXT; break;
+	case COL_WARNDIALOGCOMBOHIGHLIGHT: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOHIGHLIGHT; break;
+	case COL_WARNDIALOGCOMBOSELECTEDHIGHLIGHT: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOSELECTEDHIGHLIGHT; break;
+	case COL_WARNDIALOGCOMBOBOX: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOBOX; break;
+	case COL_WARNDIALOGCOMBOTITLE: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOTITLE; break;
+	case COL_WARNDIALOGCOMBODISABLED: ColorIndex2 = Far2::COL_WARNDIALOGCOMBODISABLED; break;
+	case COL_WARNDIALOGCOMBOSCROLLBAR: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOSCROLLBAR; break;
+
+	case COL_DIALOGLISTARROWS: ColorIndex2 = Far2::COL_DIALOGLISTARROWS; break;
+	case COL_DIALOGLISTARROWSDISABLED: ColorIndex2 = Far2::COL_DIALOGLISTARROWSDISABLED; break;
+	case COL_DIALOGLISTARROWSSELECTED: ColorIndex2 = Far2::COL_DIALOGLISTARROWSSELECTED; break;
+	case COL_DIALOGCOMBOARROWS: ColorIndex2 = Far2::COL_DIALOGCOMBOARROWS; break;
+	case COL_DIALOGCOMBOARROWSDISABLED: ColorIndex2 = Far2::COL_DIALOGCOMBOARROWSDISABLED; break;
+	case COL_DIALOGCOMBOARROWSSELECTED: ColorIndex2 = Far2::COL_DIALOGCOMBOARROWSSELECTED; break;
+	case COL_WARNDIALOGLISTARROWS: ColorIndex2 = Far2::COL_WARNDIALOGLISTARROWS; break;
+	case COL_WARNDIALOGLISTARROWSDISABLED: ColorIndex2 = Far2::COL_WARNDIALOGLISTARROWSDISABLED; break;
+	case COL_WARNDIALOGLISTARROWSSELECTED: ColorIndex2 = Far2::COL_WARNDIALOGLISTARROWSSELECTED; break;
+	case COL_WARNDIALOGCOMBOARROWS: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOARROWS; break;
+	case COL_WARNDIALOGCOMBOARROWSDISABLED: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOARROWSDISABLED; break;
+	case COL_WARNDIALOGCOMBOARROWSSELECTED: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOARROWSSELECTED; break;
+	case COL_MENUARROWS: ColorIndex2 = Far2::COL_MENUARROWS; break;
+	case COL_MENUARROWSDISABLED: ColorIndex2 = Far2::COL_MENUARROWSDISABLED; break;
+	case COL_MENUARROWSSELECTED: ColorIndex2 = Far2::COL_MENUARROWSSELECTED; break;
+	case COL_COMMANDLINEUSERSCREEN: ColorIndex2 = Far2::COL_COMMANDLINEUSERSCREEN; break;
+	case COL_EDITORSCROLLBAR: ColorIndex2 = Far2::COL_EDITORSCROLLBAR; break;
+
+	case COL_MENUGRAYTEXT: ColorIndex2 = Far2::COL_MENUGRAYTEXT; break;
+	case COL_MENUSELECTEDGRAYTEXT: ColorIndex2 = Far2::COL_MENUSELECTEDGRAYTEXT; break;
+	case COL_DIALOGCOMBOGRAY: ColorIndex2 = Far2::COL_DIALOGCOMBOGRAY; break;
+	case COL_DIALOGCOMBOSELECTEDGRAYTEXT: ColorIndex2 = Far2::COL_DIALOGCOMBOSELECTEDGRAYTEXT; break;
+	case COL_DIALOGLISTGRAY: ColorIndex2 = Far2::COL_DIALOGLISTGRAY; break;
+	case COL_DIALOGLISTSELECTEDGRAYTEXT: ColorIndex2 = Far2::COL_DIALOGLISTSELECTEDGRAYTEXT; break;
+	case COL_WARNDIALOGCOMBOGRAY: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOGRAY; break;
+	case COL_WARNDIALOGCOMBOSELECTEDGRAYTEXT: ColorIndex2 = Far2::COL_WARNDIALOGCOMBOSELECTEDGRAYTEXT; break;
+	case COL_WARNDIALOGLISTGRAY: ColorIndex2 = Far2::COL_WARNDIALOGLISTGRAY; break;
+	case COL_WARNDIALOGLISTSELECTEDGRAYTEXT: ColorIndex2 = Far2::COL_WARNDIALOGLISTSELECTEDGRAYTEXT; break;
+
+	case COL_DIALOGDEFAULTBUTTON: ColorIndex2 = Far2::COL_DIALOGDEFAULTBUTTON; break;
+	case COL_DIALOGSELECTEDDEFAULTBUTTON: ColorIndex2 = Far2::COL_DIALOGSELECTEDDEFAULTBUTTON; break;
+	case COL_DIALOGHIGHLIGHTDEFAULTBUTTON: ColorIndex2 = Far2::COL_DIALOGHIGHLIGHTDEFAULTBUTTON; break;
+	case COL_DIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON: ColorIndex2 = Far2::COL_DIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON; break;
+	case COL_WARNDIALOGDEFAULTBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGDEFAULTBUTTON; break;
+	case COL_WARNDIALOGSELECTEDDEFAULTBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGSELECTEDDEFAULTBUTTON; break;
+	case COL_WARNDIALOGHIGHLIGHTDEFAULTBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGHIGHLIGHTDEFAULTBUTTON; break;
+	case COL_WARNDIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON: ColorIndex2 = Far2::COL_WARNDIALOGHIGHLIGHTSELECTEDDEFAULTBUTTON; break;
+
+	case COL_LASTPALETTECOLOR: ColorIndex2 = Far2::COL_LASTPALETTECOLOR; break;
+
+	default:
+		ColorIndex2 = Far2::COL_LASTPALETTECOLOR;
+	}
+	return ColorIndex2;
+}
+
 FARDIALOGITEMTYPES WrapPluginInfo::DialogItemTypes_2_3(int ItemType2)
 {
 	FARDIALOGITEMTYPES ItemType3 = DI_TEXT;
@@ -1614,13 +2132,35 @@ int WrapPluginInfo::DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3)
 	return ItemType2;
 }
 
-DWORD WrapPluginInfo::FarDialogItemFlags_3_2(FarDialogItemFlags Flags3)
+void WrapPluginInfo::FarColor_2_3(BYTE Color2, FarColor& Color3)
 {
-	_ASSERTE(Far2::DIF_COLORMASK == DIF_COLORMASK);
-	DWORD Flags2 = (DWORD)(Flags3 & DIF_COLORMASK);
+	ZeroStruct(Color3);
+	Color3.Flags = FCF_FG_4BIT|FCF_BG_4BIT;
+	Color3.ForegroundColor = Color2 & 0xF;
+	Color3.BackgroundColor = (Color2 & 0xF0) >> 4;
+}
 
-	if (Flags3 & DIF_SETCOLOR)
-		Flags2 |= Far2::DIF_SETCOLOR;
+BYTE WrapPluginInfo::FarColor_3_2(const FarColor& Color3)
+{
+	BYTE Color2 = 0;
+	if ((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT))
+	{
+		Color2 = (Color3.ForegroundColor & 0xF) | ((Color3.BackgroundColor & 0xF) << 4);
+	}
+	else
+	{
+		_ASSERTE((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) || Color3.Flags == 0);
+	}
+	return Color2;
+}
+
+DWORD WrapPluginInfo::FarDialogItemFlags_3_2(FARDIALOGITEMFLAGS Flags3)
+{
+	//_ASSERTE(Far2::DIF_COLORMASK == DIF_COLORMASK);
+	DWORD Flags2 = 0; //(DWORD)(Flags3 & DIF_COLORMASK);
+
+	//if (Flags3 & DIF_SETCOLOR)
+	//	Flags2 |= Far2::DIF_SETCOLOR;
 	if (Flags3 & DIF_BOXCOLOR)
 		Flags2 |= Far2::DIF_BOXCOLOR;
 	if (Flags3 & DIF_GROUP)
@@ -1671,13 +2211,13 @@ DWORD WrapPluginInfo::FarDialogItemFlags_3_2(FarDialogItemFlags Flags3)
 	return Flags2;
 }
 
-FarDialogItemFlags WrapPluginInfo::FarDialogItemFlags_2_3(DWORD Flags2)
+FARDIALOGITEMFLAGS WrapPluginInfo::FarDialogItemFlags_2_3(DWORD Flags2)
 {
-	_ASSERTE(Far2::DIF_COLORMASK == DIF_COLORMASK);
-	FarDialogItemFlags Flags3 = (Flags2 & Far2::DIF_COLORMASK);
-
-	if (Flags2 & Far2::DIF_SETCOLOR)
-		Flags3 |= DIF_SETCOLOR;
+	//_ASSERTE(Far2::DIF_COLORMASK == DIF_COLORMASK);
+	FARDIALOGITEMFLAGS Flags3 = (Flags2 & ~(Far2::DIF_COLORMASK|Far2::DIF_SETCOLOR));
+	
+	//if (Flags2 & Far2::DIF_SETCOLOR)
+	//	Flags3 |= DIF_SETCOLOR;
 	if (Flags2 & Far2::DIF_BOXCOLOR)
 		Flags3 |= DIF_BOXCOLOR;
 	if (Flags2 & Far2::DIF_GROUP)
@@ -1748,7 +2288,10 @@ void WrapPluginInfo::FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p
 	p2->Reserved[2] = p3->Reserved[2];
 }
 
-void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3)
+#define VBufDim(Item) (((Item)->X2-(Item)->X1+1)*((Item)->Y2-(Item)->Y1+1))
+
+// pnColor2 - флаг DIF_SETCOLOR и DIF_COLORMASK (то, что раньше было в Far2)
+void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, FAR_CHAR_INFO*& pChars3)
 {
 	p3->Reserved = 0;
 
@@ -1801,7 +2344,25 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 	}
 	else if (p3->Type == DI_USERCONTROL)
 	{
-		p3->VBuf = p2->Param.VBuf;
+		if (pChars3)
+		{
+			free(pChars3);
+			pChars3 = NULL;
+		}
+		if (!p2->Param.VBuf)
+			p3->VBuf = NULL;
+		else
+		{
+			size_t nCount = VBufDim(p2);
+			pChars3 = (FAR_CHAR_INFO*)malloc(nCount*sizeof(*pChars3));
+			for (size_t i = 0; i < nCount; i++)
+			{
+				pChars3[i].Char = p2->Param.VBuf[i].Char.UnicodeChar;
+				//TODO: COMMON_LVB_UNDERSCORE/COMMON_LVB_REVERSE_VIDEO/COMMON_LVB_GRID_RVERTICAL/COMMON_LVB_GRID_LVERTICAL/COMMON_LVB_GRID_HORIZONTAL/COMMON_LVB_TRAILING_BYTE/COMMON_LVB_LEADING_BYTE
+				FarColor_2_3((BYTE)(p2->Param.VBuf[i].Attributes & 0xFF), pChars3[i].Attributes);
+			}
+			p3->VBuf = pChars3;
+		}
 	}
 	else
 	{
@@ -1809,7 +2370,7 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 	}
 }
 
-void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2)
+void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, CHAR_INFO*& pChars2)
 {
 	p2->Param.Reserved = 0;
 
@@ -1872,7 +2433,26 @@ void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAlloca
 	}
 	else if (p3->Type == DI_USERCONTROL)
 	{
-		p2->Param.VBuf = p3->VBuf;
+		//p2->Param.VBuf = p3->VBuf;
+		if (pChars2)
+		{
+			free(pChars2);
+			pChars2 = NULL;
+		}
+		if (!p3->VBuf)
+			p2->Param.VBuf = NULL;
+		else
+		{
+			size_t nCount = VBufDim(p3);
+			pChars2 = (CHAR_INFO*)malloc(nCount*sizeof(*pChars2));
+			for (size_t i = 0; i < nCount; i++)
+			{
+				pChars2[i].Char.UnicodeChar = p3->VBuf[i].Char;
+				//TODO: COMMON_LVB_UNDERSCORE/COMMON_LVB_REVERSE_VIDEO/COMMON_LVB_GRID_RVERTICAL/COMMON_LVB_GRID_LVERTICAL/COMMON_LVB_GRID_HORIZONTAL/COMMON_LVB_TRAILING_BYTE/COMMON_LVB_LEADING_BYTE
+				pChars2[i].Attributes = FarColor_3_2(p3->VBuf[i].Attributes);
+			}
+			p2->Param.VBuf = pChars2;
+		}
 	}
 	else
 	{
@@ -1897,7 +2477,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		return 0;
 	}
 	LONG_PTR lRc = 0;
-	HANDLE hDlg3 = MapDlg_2_3[(Far2Dialog*)hDlg2];
+	HANDLE hDlg3 = (*gpMapDlg_2_3)[(Far2Dialog*)hDlg2];
 	if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	{
 		hDlg3 = hDlg2;
@@ -1920,10 +2500,13 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	FarListInfo flInfo3;
 	FarListItemData flItemData3;
 	FarListTitles flTitles3;
-	FarListColors flColors3;
+	//FarListColors flColors3;
 	FarGetDialogItem fgdi3;
 	FarDialogItem fdi3;
 	DialogInfo di3;
+	FarDialogItemColors fdic3;
+	FarColor colors[32];
+	FAR_CHAR_INFO* pfci = NULL;
 
 	//TODO: Сохранять gnMsg_2/gnMsg_3 только если они <DM_USER!
 	if (Msg2 == gnMsg_2 && gnMsg_3 != DM_FIRST
@@ -2291,9 +2874,26 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DN_BTNCLICK:
 			Msg3 = DN_BTNCLICK; break;
 		case Far2::DN_CTLCOLORDIALOG:
-			Msg3 = DN_CTLCOLORDIALOG; break;
+			Msg3 = DN_CTLCOLORDIALOG;
+			FarColor_2_3((BYTE)LOBYTE(LOWORD(Param2)), colors[0]);
+			FarColor_2_3((BYTE)HIBYTE(LOWORD(Param2)), colors[1]);
+			FarColor_2_3((BYTE)LOBYTE(HIWORD(Param2)), colors[2]);
+			FarColor_2_3((BYTE)HIBYTE(HIWORD(Param2)), colors[3]);
+			Param2 = (LONG_PTR)colors;
+			break;
 		case Far2::DN_CTLCOLORDLGITEM:
-			Msg3 = DN_CTLCOLORDLGITEM; break;
+			Msg3 = DN_CTLCOLORDLGITEM;
+			//if (!Param2)
+			ZeroStruct(fdic3);
+			fdic3.Colors = colors;
+			_ASSERTE(ARRAYSIZE(colors)>=4);
+			fdic3.ColorsCount = 4;
+			FarColor_2_3((BYTE)LOBYTE(LOWORD(Param2)), colors[0]);
+			FarColor_2_3((BYTE)HIBYTE(LOWORD(Param2)), colors[1]);
+			FarColor_2_3((BYTE)LOBYTE(HIWORD(Param2)), colors[2]);
+			FarColor_2_3((BYTE)HIBYTE(HIWORD(Param2)), colors[3]);
+			Param2 = (LONG_PTR)&fdic3;
+			break;
 
 		case Far2::DN_CTLCOLORDLGLIST:
 			if (!Param2)
@@ -2304,13 +2904,17 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 			{
 				const Far2::FarListColors* p2 = (const Far2::FarListColors*)Param2;
 				//static FarListColors flColors3;
-				ZeroStruct(flColors3);
-				//TODO: Конвертация флагов?
-				flColors3.Flags = p2->Flags;
-				flColors3.Reserved = p2->Reserved;
-				flColors3.ColorCount = p2->ColorCount;
-				flColors3.Colors = p2->Colors;
-				Param2 = (LONG_PTR)&flColors3;
+				ZeroStruct(fdic3);
+				fdic3.Colors = colors;
+				_ASSERTE(ARRAYSIZE(colors)>=p2->ColorCount);
+				//fdic3.Flags = 0/*p2->Flags*/; // Флаги. Поле должно быть равно 0.
+				//fdic3.Reserved = 0/*p2->Reserved*/;
+				fdic3.ColorsCount = min(p2->ColorCount,ARRAYSIZE(colors));
+				//TODO: конвертация индексов цветов в массиве?
+				for (UINT i = 0; i < fdic3.ColorsCount; i++)
+					FarColor_2_3(p2->Colors[i], colors[i]);
+				// done
+				Param2 = (LONG_PTR)&fdic3;
 				Msg3 = DN_CTLCOLORDLGLIST;
 			}
 			break;
@@ -2350,7 +2954,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 				//static FarDialogItem p3;
 				ZeroStruct(fdi3);
-				FarDialogItem_2_3(p2, &fdi3, &m_ListItems3);
+				FarDialogItem_2_3(p2, &fdi3, &m_ListItems3, pfci);
 				Param2 = (LONG_PTR)&fdi3;
 				switch (Msg2)
 				{
@@ -2450,7 +3054,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 					lRc = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &m_GetDlgItem);
 					if (lRc > 0)
 					{
-						FarDialogItem_3_2(m_GetDlgItem.Item, /*m_GetDlgItem.Size,*/ p2, &m_ListItems2);
+						FarDialogItem_3_2(m_GetDlgItem.Item, /*m_GetDlgItem.Size,*/ p2, &m_ListItems2, m_FarCharInfo2);
 					}
 					//free(item.Item);
 				}
@@ -2459,7 +3063,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				{
 					const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 					Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-					FarDialogItem_3_2(p3, /*0,*/ p2, &m_ListItems2);
+					FarDialogItem_3_2(p3, /*0,*/ p2, &m_ListItems2, m_FarCharInfo2);
 				}
 				break;
 			case DM_LISTGETITEM:
@@ -2511,6 +3115,8 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		}
 	}
 
+	if (pfci != NULL)
+		free(pfci);
 	return lRc;
 }
 
@@ -2530,7 +3136,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 	}
 	else switch (Msg3)
 	{
-		//TODO: Скорее всего потребуется переработка аргументов для некоторых сообщений
+		// потребуется переработка аргументов для некоторых сообщений
 		case DM_KEY:
 		case DN_INPUT:
 		case DN_CONTROLINPUT:
@@ -2888,9 +3494,40 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 		case DN_BTNCLICK:
 			Msg2 = Far2::DN_BTNCLICK; break;
 		case DN_CTLCOLORDIALOG:
-			Msg2 = Far2::DN_CTLCOLORDIALOG; break;
+			Msg2 = Far2::DN_CTLCOLORDIALOG;
+			if (!Param2)
+			{
+				_ASSERTE(Param2!=0);
+			}
+			else
+			{
+				FarColor* p3 = (FarColor*)Param2;
+				LONG_PTR Color2 = FarColor_3_2(*p3);
+				Param2 = (void*)Color2;
+			}
+			break;
 		case DN_CTLCOLORDLGITEM:
-			Msg2 = Far2::DN_CTLCOLORDLGITEM; break;
+			Msg2 = Far2::DN_CTLCOLORDLGITEM;
+			if (!Param2)
+			{
+				_ASSERTE(Param2!=0);
+			}
+			else
+			{
+				FarDialogItemColors* p3 = (FarDialogItemColors*)Param2;
+				//_ASSERTE((p3->Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT));
+				LONG_PTR Color2 = 0;
+				if (p3->ColorsCount >= 1 && IsFarColorValid(p3->Colors[0]))
+					Color2 |= FarColor_3_2(p3->Colors[0]);
+				if (p3->ColorsCount >= 2 && IsFarColorValid(p3->Colors[1]))
+					Color2 |= (((DWORD)FarColor_3_2(p3->Colors[1])) << 8);
+				if (p3->ColorsCount >= 3 && IsFarColorValid(p3->Colors[2]))
+					Color2 |= (((DWORD)FarColor_3_2(p3->Colors[2])) << 16);
+				if (p3->ColorsCount >= 4 && IsFarColorValid(p3->Colors[3]))
+					Color2 |= (((DWORD)FarColor_3_2(p3->Colors[3])) << 24);
+				Param2 = (void*)Color2;
+			}
+			break;
 
 		case DN_CTLCOLORDLGLIST:
 			if (!Param2)
@@ -2899,13 +3536,14 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			}
 			else
 			{
-				const FarListColors* p3 = (const FarListColors*)Param2;
+				const FarDialogItemColors* p3 = (const FarDialogItemColors*)Param2;
 				static Far2::FarListColors p2;
-				//TODO: Конвертация флагов?
-				p2.Flags = p3->Flags;
-				p2.Reserved = p3->Reserved;
-				p2.ColorCount = p3->ColorCount;
-				p2.Colors = p3->Colors;
+				p2.Flags = /*p3->Flags*/ 0; // Флаги. Поле должно быть равно 0.
+				p2.Reserved = 0/*p3->Reserved*/;
+				p2.ColorCount = min(p3->ColorsCount,ARRAYSIZE(m_BufColors));
+				for (int i = 0; i < p2.ColorCount; i++)
+					m_BufColors[i] = FarColor_3_2(p3->Colors[i]);
+				p2.Colors = m_BufColors;
 				Param2 = &p2;
 				Msg2 = Far2::DN_CTLCOLORDLGLIST;
 			}
@@ -2932,7 +3570,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 				const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 				static Far2::FarDialogItem p2;
 				memset(&p2, 0, sizeof(p2));
-				FarDialogItem_3_2(p3, /*0,*/ &p2, &m_ListItems2);
+				FarDialogItem_3_2(p3, /*0,*/ &p2, &m_ListItems2, m_FarCharInfo2);
 				Param2 = &p2;
 				switch (Msg3)
 				{
@@ -3005,7 +3643,7 @@ void WrapPluginInfo::FarMessageParam_2_3(const int Msg2, const int Param1, const
 			_ASSERTE(Msg2!=Far2::DM_GETDLGITEMSHORT);
 			const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 			FarDialogItem* p3 = (FarDialogItem*)OrgParam2;
-			FarDialogItem_2_3(p2, p3, &m_ListItems3);
+			FarDialogItem_2_3(p2, p3, &m_ListItems3, m_FarCharInfo3);
 		}
 		break;
 	case Far2::DM_LISTGETITEM:
@@ -3052,86 +3690,25 @@ void WrapPluginInfo::FarMessageParam_2_3(const int Msg2, const int Param1, const
 			p3->Bottom = p2->Bottom;
 		}
 		break;
+	case Far2::DN_DRAWDLGITEM:
+		{
+			const Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)Param2;
+			FarDialogItem* p3 = (FarDialogItem*)OrgParam2;
+			if (p2->Type == Far2::DI_USERCONTROL && p2->Param.VBuf)
+			{
+				size_t nCount = VBufDim(p2);
+				FAR_CHAR_INFO* pChars3 = p3->VBuf; // для удобства
+				for (size_t i = 0; i < nCount; i++)
+				{
+					pChars3[i].Char = p2->Param.VBuf[i].Char.UnicodeChar;
+					//TODO: COMMON_LVB_UNDERSCORE/COMMON_LVB_REVERSE_VIDEO/COMMON_LVB_GRID_RVERTICAL/COMMON_LVB_GRID_LVERTICAL/COMMON_LVB_GRID_HORIZONTAL/COMMON_LVB_TRAILING_BYTE/COMMON_LVB_LEADING_BYTE
+					FarColor_2_3((BYTE)(p2->Param.VBuf[i].Attributes & 0xFF), pChars3[i].Attributes);
+				}
+			}
+		}
+		break;
 	}
 }
-
-//void FarMessageParam_3_2(HANDLE hDlg3, const int Msg3, const int Param1, const LONG_PTR Param2, LONG_PTR OrgParam2, LONG_PTR& lRc)
-//{
-//	if (Param2 == OrgParam2 || !Param2 || !OrgParam2)
-//	{
-//		_ASSERTE(Param2 != OrgParam2 && Param2 && OrgParam2);
-//		return;
-//	}
-//	switch (Msg3)
-//	{
-//	case DM_GETDLGITEM:
-//		if (lRc > 0)
-//		{
-//			Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-//			FarGetDialogItem item = {lRc};
-//			item.Item = (FarDialogItem*)calloc(lRc, 1);
-//			lRc = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &item);
-//			if (lRc > 0)
-//			{
-//				FarDialogItem_3_2(item.Item, p2, &m_ListItems2);
-//			}
-//			free(item.Item);
-//		}
-//		break;
-//	case DM_GETDLGITEMSHORT:
-//		{
-//			const FarDialogItem* p3 = (const FarDialogItem*)Param2;
-//			Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-//			FarDialogItem_3_2(p3, p2, &m_ListItems2);
-//		}
-//		break;
-//	case DM_LISTGETITEM:
-//		{
-//			const FarListGetItem* p3 = (const FarListGetItem*)Param2;
-//			Far2::FarListGetItem* p2 = (Far2::FarListGetItem*)OrgParam2;
-//			p2->ItemIndex = p3->ItemIndex;
-//			FarListItem_3_2(&p3->Item, &p2->Item);
-//		}
-//		break;
-//	case DM_LISTINFO:
-//		{
-//			const FarListInfo* p3 = (const FarListInfo*)Param2;
-//			Far2::FarListInfo* p2 = (Far2::FarListInfo*)OrgParam2;
-//			//TODO: конвертация флагов
-//			p2->Flags = p3->Flags;
-//			p2->ItemsNumber = p3->ItemsNumber;
-//			p2->SelectPos = p3->SelectPos;
-//			p2->TopPos = p3->TopPos;
-//			p2->MaxHeight = p3->MaxHeight;
-//			p2->MaxLength = p3->MaxLength;
-//			p2->Reserved[0] = p3->Reserved[0];
-//			p2->Reserved[1] = p3->Reserved[1];
-//			p2->Reserved[2] = p3->Reserved[2];
-//			p2->Reserved[3] = p3->Reserved[3];
-//			p2->Reserved[4] = p3->Reserved[4];
-//			p2->Reserved[5] = p3->Reserved[5];
-//		}
-//		break;
-//	case DM_LISTGETCURPOS:
-//		{
-//			const FarListPos* p3 = (const FarListPos*)Param2;
-//			Far2::FarListPos* p2 = (Far2::FarListPos*)OrgParam2;
-//			p2->SelectPos = p3->SelectPos;
-//			p2->TopPos = p3->TopPos;
-//		}
-//		break;
-//	case DM_LISTGETTITLES:
-//		{
-//			const FarListTitles* p3 = (const FarListTitles*)Param2;
-//			Far2::FarListTitles* p2 = (Far2::FarListTitles*)OrgParam2;
-//			p2->TitleLen = p3->TitleLen;
-//			p2->Title = p3->Title;
-//			p2->BottomLen = p3->BottomLen;
-//			p2->Bottom = p3->Bottom;
-//		}
-//		break;
-//	}
-//};
 
 
 
@@ -3201,7 +3778,7 @@ LONG_PTR WrapPluginInfo::FarApiDefDlgProc(HANDLE hDlg, int Msg, int Param1, LONG
 	LOG_CMD(L"psi2.DefDlgProc(%i,%i,%i)",Msg,Param1,Param2);
 	LONG_PTR lRc = CallDlgProc_2_3(psi3.DefDlgProc, hDlg, Msg, Param1, Param2);
 	return lRc;
-	//HANDLE hDlg3 = MapDlg_2_3[(Far2Dialog*)hDlg];
+	//HANDLE hDlg3 = (*gpMapDlg_2_3)[(Far2Dialog*)hDlg];
 	//if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	//	hDlg3 = hDlg;
 	//if (hDlg3)
@@ -3224,7 +3801,7 @@ LONG_PTR WrapPluginInfo::FarApiSendDlgMessage(HANDLE hDlg, int Msg, int Param1, 
 	LOG_CMD(L"psi2.SendDlgMessage(%i,%i,%i)",Msg,Param1,Param2);
 	LONG_PTR lRc = CallDlgProc_2_3(psi3.SendDlgMessage, hDlg, Msg, Param1, Param2);
 	return lRc;
-	//HANDLE hDlg3 = MapDlg_2_3[(Far2Dialog*)hDlg];
+	//HANDLE hDlg3 = (*gpMapDlg_2_3)[(Far2Dialog*)hDlg];
 	//if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	//	hDlg3 = hDlg;
 	//if (hDlg3)
@@ -3267,7 +3844,14 @@ void WrapPluginInfo::FarApiRestoreScreen(HANDLE hScreen)
 void WrapPluginInfo::FarApiText(int X, int Y, int Color, const wchar_t *Str)
 {
 	LOG_CMD(L"psi2.Text",0,0,0);
-	psi3.Text(X,Y,Color,Str);
+	FarColor c = {};
+	if (Str)
+		FarColor_2_3((BYTE)(Color&0xFF), c);
+	psi3.Text(X,Y,&c,Str);
+	#ifdef FORCE_TEXT_COMMIT
+	if (Str)
+		psi3.Text(0,0,&c,NULL);
+	#endif
 }
 int WrapPluginInfo::FarApiEditor(const wchar_t *FileName, const wchar_t *Title, int X1, int Y1, int X2, int Y2, DWORD Flags, int StartLine, int StartChar, UINT CodePage)
 {
@@ -3531,6 +4115,8 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 					   : (FILE_CONTROL_COMMANDS)0;
 			_ASSERTE(Cmd3!=(FILE_CONTROL_COMMANDS)0);
 			size_t nItemSize = psi3.PanelControl(hPlugin, Cmd3, Param1, NULL);
+			if (sizeof(PluginPanelItem) < sizeof(Far2::PluginPanelItem))
+				nItemSize += (sizeof(Far2::PluginPanelItem) - sizeof(PluginPanelItem));
 			if (Param2 == NULL)
 			{
 				ASSERTSTRUCTGT(PluginPanelItem);
@@ -3573,9 +4159,30 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 							lstrcpy(psz, p3.Item->Owner);
 							psz += lstrlen(psz)+1;
 						}
-						//TODO: CustomColumnData/CustomColumnNumber
-						p2->CustomColumnData = NULL;
-						p2->CustomColumnNumber = 0;
+						if (p3.Item->CustomColumnData && p3.Item->CustomColumnNumber > 0)
+						{
+							p2->CustomColumnNumber = p3.Item->CustomColumnNumber;
+							p2->CustomColumnData = (const wchar_t * const *)psz;
+							psz = (wchar_t*)(((LPBYTE)psz) + p2->CustomColumnNumber*sizeof(wchar_t*));
+							for (INT_PTR i = 0; i < p2->CustomColumnNumber; i++)
+							{
+								if (p3.Item->CustomColumnData[i] && *(p3.Item->CustomColumnData[i]))
+								{
+									((wchar_t**)p2->CustomColumnData)[i] = psz;
+									lstrcpy(psz, p3.Item->CustomColumnData[i]);
+									psz += lstrlen(psz)+1;
+								}
+								else
+								{
+									((wchar_t**)p2->CustomColumnData)[i] = NULL;
+								}
+							}
+						}
+						else
+						{
+							p2->CustomColumnData = NULL;
+							p2->CustomColumnNumber = 0;
+						}
 					}
 					free(p3.Item);
 				}
@@ -3599,10 +4206,10 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 	}
 	return iRc;
 };
-//std::map<Far2::FAR_FIND_DATA*,PluginPanelItem*> m_MapDirList;
-//std::map<Far2::PluginPanelItem*,PluginPanelItem*> m_MapPlugDirList;
 int WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_DATA **pPanelItem, int *pItemsNumber)
 {
+	//std::map<Far2::FAR_FIND_DATA*,PluginPanelItem*> m_MapDirList;
+	//std::map<Far2::PluginPanelItem*,PluginPanelItem*> m_MapPlugDirList;
 	LOG_CMD(L"psi2.GetDirList",0,0,0);
 	PluginPanelItem* p3 = NULL;
 	int iRc = psi3.GetDirList(Dir, &p3, pItemsNumber);
@@ -3680,13 +4287,30 @@ int WrapPluginInfo::FarApiCmpName(const wchar_t *Pattern, const wchar_t *String,
 LPCWSTR WrapPluginInfo::FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
 {
 	LOG_CMD(L"psi2.GetMsg(%i)",MsgId,0,0);
+	LPCWSTR pszMsg = NULL;
 	if (((INT_PTR)mh_Dll) == PluginNumber)
-		return psi3.GetMsg(&mguid_Plugin, MsgId);
-	return L"";
+		pszMsg = psi3.GetMsg(&mguid_Plugin, MsgId);
+#ifdef _DEBUG
+	// некоторые плагина (EventViewer/AdvCmp2) реально хранят пустые строки в ресурсах >:|
+	GUID guidSkip[] = {
+		// EventViewer - F2BED8E4-2CDA-45E1-893C-5DAAED9BA67C
+		{0xF2BED8E4, 0x2CDA, 0x45E1, {0x89, 0x3C, 0x5D, 0xAA, 0xED, 0x9B, 0xA6, 0x7C}},
+		// AdvCmp2 - 0244A6CB-99AC-4689-AA86-408D4AA7F0A3
+		{0x0244A6CB, 0x99AC, 0x4689, {0xAA, 0x86, 0x40, 0x8D, 0x4A, 0xA7, 0xF0, 0xA3}},
+	};
+	bool lbSkipPlugin = false;
+	for (size_t n = 0; n < ARRAYSIZE(guidSkip); n++)
+	{
+		if (memcmp(guidSkip+n, &mguid_Plugin, sizeof(mguid_Plugin)) == 0)
+			lbSkipPlugin = true;
+	}
+	_ASSERTE((pszMsg && *pszMsg) || lbSkipPlugin);
+#endif
+	return pszMsg ? pszMsg : L"";
 };
 INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void *Param)
 {
-	LOG_CMD(L"psi2.AdvControl(%i)",Command,0,0);
+	LOG_CMD(L"psi2.AdvControl(%i,x%08X)",Command,(DWORD)Param,0);
 	INT_PTR iRc = 0;
 	GUID guid = {0};
 	if (((INT_PTR)mh_Dll) == ModuleNumber)
@@ -3711,13 +4335,50 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 			break;
 		}
 	case Far2::ACTL_GETSYSWORDDIV:
-		iRc = psi3.AdvControl(&guid, ACTL_GETSYSWORDDIV, 0, Param); break;
+		// Достаточность буфера - на совести вызывающего плагина
+		{
+			INT_PTR nSize = Param ? psi3.AdvControl(&guid, ACTL_GETSYSWORDDIV, 0, NULL) : 0;
+			iRc = psi3.AdvControl(&guid, ACTL_GETSYSWORDDIV, nSize, Param);
+		}
+		break;
 	case Far2::ACTL_WAITKEY:
 		iRc = psi3.AdvControl(&guid, ACTL_WAITKEY, 0, Param); break;
 	case Far2::ACTL_GETCOLOR:
-		iRc = psi3.AdvControl(&guid, ACTL_GETCOLOR, (int)(INT_PTR)Param, NULL); break;
+		{
+			FarColor fc3 = {};
+			//_ASSERTE(Far2::COL_DIALOGDISABLED == COL_DIALOGDISABLED); -- это уже не так
+			int Far3Index = FarColorIndex_2_3((int)(INT_PTR)Param);
+			iRc = psi3.AdvControl(&guid, ACTL_GETCOLOR, Far3Index, &fc3);
+			if (iRc)
+				iRc = FarColor_3_2(fc3);
+		}
+		break;
 	case Far2::ACTL_GETARRAYCOLOR:
-		iRc = psi3.AdvControl(&guid, ACTL_GETARRAYCOLOR, 0, Param); break;
+		{
+			if (!Param)
+			{
+				iRc = Far2::COL_LASTPALETTECOLOR+1; // fixed for Far2
+			}
+			else
+			{
+				memset(Param, 0, Far2::COL_LASTPALETTECOLOR+1);
+				iRc = psi3.AdvControl(&guid, ACTL_GETARRAYCOLOR, 0, 0);
+				if (iRc > 0)
+				{
+					FarColor* pColors = (FarColor*)calloc(iRc,sizeof(*pColors));
+					//TODO: Логично был бы в фаре3 принимать размер буфера в Param1
+					iRc = pColors ? psi3.AdvControl(&guid, ACTL_GETARRAYCOLOR, 0, pColors) : 0;
+					for (INT_PTR i = 0; i < iRc; i++)
+					{
+						UINT Far2Index = FarColorIndex_3_2(i);
+						if (Far2Index < Far2::COL_LASTPALETTECOLOR)
+							((LPBYTE)Param)[Far2Index] = FarColor_3_2(pColors[i]);
+					}
+					free(pColors);
+				}
+			}
+		}
+		break;
 	case Far2::ACTL_EJECTMEDIA:
 		ASSERTSTRUCT(ActlEjectMedia);
 		iRc = psi3.AdvControl(&guid, ACTL_EJECTMEDIA, 0, Param);
@@ -3727,6 +4388,35 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 			if (Param)
 			{
 				Far2::ActlKeyMacro* p2 = (Far2::ActlKeyMacro*)Param;
+				#ifdef LOG_COMMANDS
+				wchar_t szDbgInfo[255]; szDbgInfo[0] = 0;
+				switch (p2->Command)
+				{
+				case Far2::MCMD_LOADALL:
+					lstrcpy(szDbgInfo, L"Far2::MCMD_LOADALL");
+					break;
+				case Far2::MCMD_SAVEALL:
+					lstrcpy(szDbgInfo, L"Far2::MCMD_SAVEALL");
+					break;
+				case Far2::MCMD_POSTMACROSTRING:
+					lstrcpy(szDbgInfo, L"Far2::MCMD_POSTMACROSTRING: ");
+					lstrcpyn(szDbgInfo+lstrlen(szDbgInfo), p2->Param.PlainText.SequenceText, 200);
+					break;
+				case Far2::MCMD_CHECKMACRO:
+					lstrcpy(szDbgInfo, L"Far2::MCMD_CHECKMACRO: ");
+					lstrcpyn(szDbgInfo+lstrlen(szDbgInfo), p2->Param.PlainText.SequenceText, 200);
+					break;
+				case Far2::MCMD_GETSTATE:
+					lstrcpy(szDbgInfo, L"Far2::MCMD_GETSTATE");
+					break;
+				case Far2::MCMD_GETAREA:
+					lstrcpy(szDbgInfo, L"Far2::MCMD_GETAREA");
+					break;
+				default:
+					wsprintf(szDbgInfo, L"Far2::ACTL_KEYMACRO(%i)", p2->Command);
+				}
+				LOG_CMD(L"%s", szDbgInfo, 0,0);
+				#endif
 				//iRc = psi3.AdvControl(&guid, ACTL_KEYMACRO, Param);
 				switch (p2->Command)
 				{
@@ -3743,9 +4433,9 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 						wchar_t *pszUpper = NULL, *pszChanged = NULL;
 						// Плагин может звать сам себя через CallPlugin, 
 						// в этом случае нужно заменить старый PluginID (DWORD) на GUID
-						if (mcr.SequenceText && *mcr.SequenceText && m_Info.Reserved)
+						if (mcr.SequenceText && *mcr.SequenceText /*&& m_Info.Reserved*/)
 						{
-							pszUpper = _wcsdup(p2->Param.PlainText.SequenceText);
+							pszUpper = lstrdup(p2->Param.PlainText.SequenceText);
 							size_t nOrigLen = lstrlen(p2->Param.PlainText.SequenceText);
 							size_t nAddPos = 0;
 							CharUpperBuff(pszUpper, lstrlen(pszUpper));
@@ -3781,40 +4471,55 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 									FormatGuid(&mguid_Plugin, szGuid, TRUE);
 								else
 								{
-									LPCWSTR pszGuid = NULL;
-									switch (nID)
+									// Ищем среди загруженных враппером
+									std::map<DWORD,WrapPluginInfo*>::iterator iter;
+									for (iter = (*gpMapSysID).begin(); iter != (*gpMapSysID).end(); iter++)
 									{
-									case 0x43454D55: // ConEmu
-										pszGuid = L"4b675d80-1d4a-4ea9-8436-fdc23f2fc14b"; break;
-									case 0x43455568: // ConEmuTh
-										pszGuid = L"bd454d48-448e-46cc-909d-b6cf789c2d65"; break;
-									// Wrapper!
-									case 0x424C434D: // MacroLib
-										pszGuid = L"46FC0BF1-CC99-4652-B41D-C7B8705D52AF"; break;
-									case 0x436C4678: // ClipFixer
-										pszGuid = L"AF0DD773-7193-4F50-9904-AB24673EB42C"; break;
-									//const SameFolder = 0x44464D53
-									case 0x444E4645: // EditFind
-										pszGuid = L"8EF28982-957E-4BCE-AD73-7E67DB443969"; break;
-									case 0x44654272: // DeepBrowser
-										pszGuid = L"D1778FAF-B6B1-4604-9D9C-CBCF3B15F7A8"; break;
-									case 0x466C5470: // FileTypes
-										pszGuid = L"32C72FF2-8762-4485-9BAE-2020B9143AA0"; break;
-									case 0x4D426C6B: // MBlockEditor
-										pszGuid = L"D82D6847-0C7B-4BF4-9A31-B0B929707854"; break;
-									case 0x4D4D5657: // MMView
-										pszGuid = L"44E0DA00-F361-4ACC-BF8F-DDC7D2E0494F"; break;
-									case 0x52674564: // RegEditor
-										pszGuid = L"F6A1E51C-1C11-4BD5-ADD2-8677348BC106"; break;
-									//const FarHints = 0x544E4948
-									case 0x5774654E: // Network
-										pszGuid = L"9E724C40-D0B6-4DC3-9F30-CC7AF5292C5B"; break;
-									case 0xA91B3F07: // PanelTabs
-										pszGuid = L"66D5D731-EE8E-4113-87F3-56883CC321DA"; break;
+										if (iter->first == nID)
+										{
+											FormatGuid(&iter->second->mguid_Plugin, szGuid, TRUE);
+											break;
+										}
 									}
-									if (pszGuid)
+
+									// Ищем по "известным"
+									if (szGuid[0] == 0)
 									{
-										szGuid[0] = L'"'; lstrcpy(szGuid+1, pszGuid); lstrcat(szGuid, L"\"");
+										LPCWSTR pszGuid = NULL;
+										switch (nID)
+										{
+										case 0x43454D55: // ConEmu
+											pszGuid = L"4b675d80-1d4a-4ea9-8436-fdc23f2fc14b"; break;
+										case 0x43455568: // ConEmuTh
+											pszGuid = L"bd454d48-448e-46cc-909d-b6cf789c2d65"; break;
+										// Wrapper!
+										case 0x424C434D: // MacroLib
+											pszGuid = L"46FC0BF1-CC99-4652-B41D-C7B8705D52AF"; break;
+										case 0x436C4678: // ClipFixer
+											pszGuid = L"AF0DD773-7193-4F50-9904-AB24673EB42C"; break;
+										//const SameFolder = 0x44464D53
+										case 0x444E4645: // EditFind
+											pszGuid = L"8EF28982-957E-4BCE-AD73-7E67DB443969"; break;
+										case 0x44654272: // DeepBrowser
+											pszGuid = L"D1778FAF-B6B1-4604-9D9C-CBCF3B15F7A8"; break;
+										case 0x466C5470: // FileTypes
+											pszGuid = L"32C72FF2-8762-4485-9BAE-2020B9143AA0"; break;
+										case 0x4D426C6B: // MBlockEditor
+											pszGuid = L"D82D6847-0C7B-4BF4-9A31-B0B929707854"; break;
+										case 0x4D4D5657: // MMView
+											pszGuid = L"44E0DA00-F361-4ACC-BF8F-DDC7D2E0494F"; break;
+										case 0x52674564: // RegEditor
+											pszGuid = L"F6A1E51C-1C11-4BD5-ADD2-8677348BC106"; break;
+										//const FarHints = 0x544E4948
+										case 0x5774654E: // Network
+											pszGuid = L"9E724C40-D0B6-4DC3-9F30-CC7AF5292C5B"; break;
+										case 0xA91B3F07: // PanelTabs
+											pszGuid = L"66D5D731-EE8E-4113-87F3-56883CC321DA"; break;
+										}
+										if (pszGuid)
+										{
+											szGuid[0] = L'"'; lstrcpy(szGuid+1, pszGuid); lstrcat(szGuid, L"\"");
+										}
 									}
 								}
 
@@ -4014,7 +4719,19 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 	case Far2::ACTL_GETDESCSETTINGS:
 		iRc = psi3.AdvControl(&guid, ACTL_GETDESCSETTINGS, 0, Param); break;
 	case Far2::ACTL_SETARRAYCOLOR:
-		iRc = psi3.AdvControl(&guid, ACTL_SETARRAYCOLOR, 0, Param); break;
+		{
+			Far2::FarSetColors* p2 = (Far2::FarSetColors*)Param;
+			FarSetColors p3 = {};
+			p3.Flags = (p2->Flags & Far2::FCLR_REDRAW) ? FSETCLR_REDRAW : FSETCLR_NONE;
+			p3.Colors = (FarColor*)calloc(p2->ColorCount,sizeof(*p3.Colors));
+			for (int i = 0; i < p2->ColorCount; i++)
+				FarColor_2_3(p2->Colors[i], p3.Colors[i]);
+			p3.StartIndex = p2->StartIndex;
+			p3.ColorsCount = p2->ColorCount;
+			iRc = psi3.AdvControl(&guid, ACTL_SETARRAYCOLOR, 0, &p3);
+			free(p3.Colors);
+		}
+		break;
 	case Far2::ACTL_GETPLUGINMAXREADDATA:
 		iRc = psi3.AdvControl(&guid, ACTL_GETPLUGINMAXREADDATA, 0, Param); break;
 	case Far2::ACTL_GETDIALOGSETTINGS:
@@ -4022,43 +4739,9 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 	case Far2::ACTL_GETSHORTWINDOWINFO:
 		{
 			Far2::WindowInfo* p2 = (Far2::WindowInfo*)Param;
-			if (p2->Pos == -1)
+			if (p2)
 			{
-				memset(p2, 0, sizeof(*p2));
-				p2->Pos = -1;
-				//BUGBUG: Поскольку ACTL_GETWINDOWINFO нифига не ThreadSafe - юзаем MCTL_GETAREA
-				if (GetCurrentThreadId() != gnMainThreadId)
-				{
-					//iRc = psi3.AdvControl(&guid, ACTL_GETSHORTWINDOWINFO, Param);
-					INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
-					switch(nArea)
-					{
-						case MACROAREA_SHELL:
-						case MACROAREA_INFOPANEL:
-						case MACROAREA_QVIEWPANEL:
-						case MACROAREA_TREEPANEL:
-							p2->Type = WTYPE_PANELS;
-						case MACROAREA_VIEWER:
-							p2->Type = WTYPE_VIEWER;
-						case MACROAREA_EDITOR:
-							p2->Type = WTYPE_EDITOR;
-						case MACROAREA_DIALOG:
-						case MACROAREA_SEARCH:
-						case MACROAREA_DISKS:
-						case MACROAREA_FINDFOLDER:
-						case MACROAREA_AUTOCOMPLETION:
-							p2->Type = WTYPE_DIALOG;
-						case MACROAREA_HELP:
-							p2->Type = WTYPE_HELP;
-						case MACROAREA_MAINMENU:
-						case MACROAREA_MENU:
-						case MACROAREA_USERMENU:
-							p2->Type = WTYPE_VMENU;
-						//case MACROAREA_OTHER: // Grabber
-						//	return -1;
-					}
-				}
-				else
+				if (GetCurrentThreadId() == gnMainThreadId)
 				{
 					WindowInfo wi = {sizeof(WindowInfo)};
 					wi.Pos = p2->Pos;
@@ -4072,6 +4755,44 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 						p2->TypeNameSize = wi.TypeNameSize;
 						p2->NameSize = wi.NameSize;
 					}
+				}
+				else if (p2->Pos == -1)
+				{
+					memset(p2, 0, sizeof(*p2));
+					p2->Pos = -1;
+					//BUGBUG: Поскольку ACTL_GETWINDOWINFO нифига не ThreadSafe - юзаем MCTL_GETAREA
+					iRc = TRUE;
+					//iRc = psi3.AdvControl(&guid, ACTL_GETSHORTWINDOWINFO, Param);
+					INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
+					switch(nArea)
+					{
+						case MACROAREA_SHELL:
+						case MACROAREA_INFOPANEL:
+						case MACROAREA_QVIEWPANEL:
+						case MACROAREA_TREEPANEL:
+							p2->Type = WTYPE_PANELS; break;
+						case MACROAREA_VIEWER:
+							p2->Type = WTYPE_VIEWER; break;
+						case MACROAREA_EDITOR:
+							p2->Type = WTYPE_EDITOR; break;
+						case MACROAREA_DIALOG:
+						case MACROAREA_SEARCH:
+						case MACROAREA_DISKS:
+						case MACROAREA_FINDFOLDER:
+						case MACROAREA_AUTOCOMPLETION:
+							p2->Type = WTYPE_DIALOG; break;
+						case MACROAREA_HELP:
+							p2->Type = WTYPE_HELP; break;
+						case MACROAREA_MAINMENU:
+						case MACROAREA_MENU:
+						case MACROAREA_USERMENU:
+							p2->Type = WTYPE_VMENU; break;
+						//case MACROAREA_OTHER: // Grabber
+						//	return -1;
+						default:
+							iRc = 0;
+					}
+					p2->Current = (iRc != 0);
 				}
 			}
 		}
@@ -4249,15 +4970,30 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 	case Far2::ECTL_ADDCOLOR:
 		{
 			const Far2::EditorColor* p2 = (const Far2::EditorColor*)Param;
-			EditorColor p3 = {sizeof(EditorColor)};
-			p3.StringNumber = p2->StringNumber;
-			p3.ColorItem = p2->ColorItem;
-			p3.StartPos = p2->StartPos;
-			p3.EndPos = p2->EndPos;
-			p3.Color.Flags = FMSG_FG_4BIT|FMSG_BG_4BIT;
-			p3.Color.ForegroundColor = p2->Color & 0xF;
-			p3.Color.BackgroundColor = (p2->Color & 0xF0) >> 4;
-			nRc = psi3.EditorControl(-1, ECTL_ADDCOLOR, 0, &p3);
+			if (p2->Color)
+			{
+				EditorColor p3 = {sizeof(EditorColor)};
+				p3.StringNumber = p2->StringNumber;
+				p3.ColorItem = 0; // p2->ColorItem; -- Это поле не используется в ECTL_ADDCOLOR. Новый цвет всегда применяется ко всей области
+				p3.StartPos = p2->StartPos;
+				p3.EndPos = p2->EndPos;
+				// Вроде только младший байт используется
+				FarColor_2_3((BYTE)(p2->Color & 0xFF), p3.Color);
+				//p3.Color.Flags = FCF_FG_4BIT|FCF_BG_4BIT;
+				//p3.Color.ForegroundColor = p2->Color & 0xF;
+				//p3.Color.BackgroundColor = (p2->Color & 0xF0) >> 4;
+				p3.Owner = mguid_Plugin;
+				p3.Priority = mn_EditorColorPriority;
+				nRc = psi3.EditorControl(-1, ECTL_ADDCOLOR, 0, &p3);
+			}
+			else
+			{
+				EditorDeleteColor p3 = {sizeof(EditorDeleteColor)};
+				p3.Owner = mguid_Plugin;
+				p3.StringNumber = p2->StringNumber;
+				p3.StartPos = p2->StartPos;
+                nRc = psi3.EditorControl(-1, ECTL_DELCOLOR, 0, &p3);
+			}
 		}
 		break;
 	case Far2::ECTL_GETCOLOR:
@@ -4268,12 +5004,13 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 			p3.ColorItem = p2->ColorItem;
 			p3.StartPos = p2->StartPos;
 			p3.EndPos = p2->EndPos;
-			p3.Color.Flags = FMSG_FG_4BIT|FMSG_BG_4BIT;
+			p3.Color.Flags = FCF_FG_4BIT|FCF_BG_4BIT;
 			nRc = psi3.EditorControl(-1, ECTL_GETCOLOR, 0, &p3);
 			if (nRc)
 			{
-				_ASSERTE(p3.Color.Flags == (FMSG_FG_4BIT|FMSG_BG_4BIT));
-				p2->Color = (p3.Color.ForegroundColor & 0xF) | ((p3.Color.BackgroundColor & 0xF) << 4);
+				_ASSERTE(p3.Color.Flags == (FCF_FG_4BIT|FCF_BG_4BIT));
+				//p2->Color = (p3.Color.ForegroundColor & 0xF) | ((p3.Color.BackgroundColor & 0xF) << 4);
+				p2->Color = FarColor_3_2(p3.Color);
 			}
 		}
 		break;
@@ -4685,6 +5422,13 @@ void WrapPluginInfo::GetGlobalInfoW3(GlobalInfo *Info)
 	Info->Title = ms_Title;
 	Info->Description = ms_Desc;
 	Info->Author = ms_Author;
+
+#ifdef _DEBUG
+	wchar_t szDebugInfo[2048], szGUID[64];
+	FormatGuid(&mguid_Plugin, szGUID, FALSE);
+	wsprintf(szDebugInfo, L"GetGlobalInfoW3: %s: %s\n", szGUID, ms_PluginDll);
+	OutputDebugString(szDebugInfo);
+#endif
 }
 
 
@@ -4699,12 +5443,38 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 	if (!lbPsi3)
 		OutputDebugString(L"GetPluginInfoW3 called before SetStartupInfoW3\n");
 
-    if (GetPluginInfoW && lbPsi2)
+	// По идее, mh_Dll не может быть NULL - тогда Loader зовет FreeLibrary на Far3Wrap и забывает про него
+    if (!lbPsi2 || !mh_Dll)
+	{
+		if (!*ms_DllFailTitle)
+		{
+			wchar_t szSelf[MAX_PATH+1]; szSelf[0] = 0;
+			GetModuleFileName(mh_Loader, szSelf, ARRAYSIZE(szSelf)-4);
+			wchar_t* pszPlugin = *ms_File ? ms_File : szSelf;
+
+			wsprintf(ms_DllFailTitle, L"[%s] %s x%08X",
+				pszPlugin,
+				*ms_DllFailFunc ? ms_DllFailFunc : !mh_Dll ? L"mh_Dll" : L"lbPsi2",
+				mn_DllFailCode);
+		}
+
+		static wchar_t *pszFailMenu[1]; pszFailMenu[0] = ms_DllFailTitle;
+		Info->PluginMenu.Count = 1;
+		Info->PluginMenu.Strings = pszFailMenu;
+		Info->PluginMenu.Guids = &mguid_Plugin;
+	}
+	else if (GetPluginInfoW)
     {
     	LOG_CMD(L"GetPluginInfoW",0,0,0);
+		DWORD nOldSysID = m_Info.Reserved;
 		ZeroStruct(m_Info);
 		m_Info.StructSize = sizeof(m_Info);
     	GetPluginInfoW(&m_Info);
+
+		if (nOldSysID && nOldSysID != m_Info.Reserved)
+			(*gpMapSysID).erase(nOldSysID);
+		if (m_Info.Reserved)
+			(*gpMapSysID)[m_Info.Reserved] = this;
     	
     	if (m_Info.Flags & Far2::PF_PRELOAD)
     		Info->Flags |= PF_PRELOAD;
@@ -4800,6 +5570,14 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 {
 	LOG_CMD(L"OpenW(0x%08X)", (DWORD)Info->OpenFrom,0,0);
+#ifdef _DEBUG
+	wchar_t szDebugInfo[2048], szGUID[64], szMenuGUID[64];
+	FormatGuid(&mguid_Plugin, szGUID, FALSE);
+	FormatGuid(Info->Guid, szMenuGUID, FALSE);
+	wsprintf(szDebugInfo, L"OpenW3(x%X, x%X) %s\\%s: %s\n", (DWORD)Info->OpenFrom, (DWORD)Info->Data, szGUID, szMenuGUID, ms_PluginDll);
+	OutputDebugString(szDebugInfo);
+#endif
+
 	HANDLE h = INVALID_HANDLE_VALUE;
 
 	if ((Info->OpenFrom & OPEN_FROMMACRO_MASK))
@@ -4811,8 +5589,8 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		    && OpenPluginW)
 		{
 			DWORD nOpen2 = Far2::OPEN_FROMMACRO;
-			if ((LOBYTE(HIWORD(m_MinFarVersion)) > 2)
-				|| ((LOBYTE(HIWORD(m_MinFarVersion)) == 2) && (LOWORD(m_MinFarVersion) >= 1800)))
+			if ((HIBYTE(LOWORD(m_MinFarVersion)) > 2)
+				|| ((HIBYTE(LOWORD(m_MinFarVersion)) == 2) && (HIWORD(m_MinFarVersion) >= 1800)))
 			{
 				nOpen2 |= ((Info->OpenFrom & OPEN_FROMMACROSTRING)?Far2::OPEN_FROMMACROSTRING:0);
 				nOpen2 |= LOWORD(Info->OpenFrom);
@@ -4825,17 +5603,17 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 	int nPluginItemNumber = 0;
 	GUID* pGuids = NULL;
 	int nGuids = 0;
-	if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_PLUGINSMENU)
-	{
-		pGuids = mguids_PluginMenu; nGuids = mn_PluginMenu;
-	}
-	//else if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_PLUGINSMENU)
+	//if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_PLUGINSMENU)
 	//{
 	//	pGuids = mguids_PluginMenu; nGuids = mn_PluginMenu;
 	//}
-	else if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_LEFTDISKMENU || (Info->OpenFrom & OPEN_FROM_MASK) == OPEN_RIGHTDISKMENU)
+	if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_LEFTDISKMENU || (Info->OpenFrom & OPEN_FROM_MASK) == OPEN_RIGHTDISKMENU)
 	{
 		pGuids = mguids_PluginDisks; nGuids = mn_PluginDisks;
+	}
+	else //if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_PLUGINSMENU || (Info->OpenFrom & OPEN_FROM_MASK) == OPEN_DIALOG)
+	{
+		pGuids = mguids_PluginMenu; nGuids = mn_PluginMenu;
 	}
 	if (Info->Guid && memcmp(Info->Guid, &GUID_NULL, sizeof(GUID)) && pGuids && nGuids > 0)
 	{
@@ -4857,6 +5635,20 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 			h = OpenPluginW(OpenFrom_3_2(Info->OpenFrom), Info->Data);
 			goto trap;
 		}
+		if (mn_AnalyzeReturn == -2)
+		{
+			_ASSERTE(mp_Analyze == NULL);
+			h = (HANDLE)-2;
+			// Раз мы дошли сюда, значит юзер выбрал в меню этот плагин (который вернул TRUE в AnalyseW)
+			if (gpsz_LastAnalyzeFile)
+			{
+				_ASSERTE(mpsz_LastAnalyzeFile == gpsz_LastAnalyzeFile);
+				free(gpsz_LastAnalyzeFile);
+				gpsz_LastAnalyzeFile = NULL;
+			}
+			mpsz_LastAnalyzeFile = NULL;
+			goto trap;
+		}
 		if (!mp_Analyze || !OpenFilePluginW)
 			goto trap;
 		h = OpenFilePluginW(mp_Analyze->FileName,
@@ -4864,11 +5656,6 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 				mp_Analyze->BufferSize,
 				OpMode_3_2(mp_Analyze->OpMode));
 		goto trap;
-	}
-	else if (mp_Analyze)
-	{
-		free(mp_Analyze);
-		mp_Analyze = NULL;
 	}
 	
 	if (OpenPluginW)
@@ -4898,9 +5685,10 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 				Far2::OpenDlgPluginData p2 = {nPluginItemNumber};
 				if (p3)
 				{
-					Far2Dialog* p = MapDlg_3_2[p3->hDlg];
+					Far2Dialog* p = (*gpMapDlg_3_2)[p3->hDlg];
 					// Может быть NULL, если это диалог НЕ из этого плагина
 					p2.hDlg = p ? ((HANDLE)p) : p3->hDlg;
+					p2.ItemNumber = nPluginItemNumber;
 				}
 				h = OpenPluginW(Far2::OPEN_DIALOG, (INT_PTR)&p2);
 			}
@@ -4908,13 +5696,31 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		}
 	}
 trap:
+	// Больше не требуется
+	if (mp_Analyze)
+	{
+		free(mp_Analyze);
+		mp_Analyze = NULL;
+	}
 	return h;
 }
 
 int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 {
 	LOG_CMD(L"AnalyseW",0,0,0);
-	if (AnalyseW)
+	mn_AnalyzeReturn = 0;
+	if (gpsz_LastAnalyzeFile)
+	{
+		if (mpsz_LastAnalyzeFile != gpsz_LastAnalyzeFile)
+		{
+			if (Info->FileName && !lstrcmp(Info->FileName, gpsz_LastAnalyzeFile))
+				return FALSE;
+		}
+		free(gpsz_LastAnalyzeFile);
+		gpsz_LastAnalyzeFile = NULL;
+	}
+	gpsz_LastAnalyzeFile = NULL;
+	if (AnalyseW) // В Far2 была такая функция, так что если экспорт есть - зовем
 		return AnalyseW(Info);
 	if (mp_Analyze)
 	{
@@ -4970,6 +5776,29 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 	{
 		free(mp_Analyze);
 		mp_Analyze = NULL;
+	}
+	if (((INT_PTR)h) == -2)
+	{
+		// Плагин сказал "больше никем не открывать".
+		// Это в принципе, не очень хорошо, т.к. вызывается из AnalyseW,
+		// но так "безобразничают" только отдельно взятые, с известным поведением
+		mn_AnalyzeReturn = -2;
+		_ASSERTE(gpsz_LastAnalyzeFile == NULL);
+		if (Info->FileName && *Info->FileName)
+		{
+			wchar_t* pszNew = lstrdup(Info->FileName);
+			gpsz_LastAnalyzeFile = pszNew;
+			mpsz_LastAnalyzeFile = pszNew;
+		}
+		// Могут быть ANSI плагины, который тоже предлагают открыть файл?
+		if (m_AnalyzeMode == 3)
+		{
+			MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
+			mcr.SequenceText = L"$if (Menu) Esc $end";
+			mcr.Flags = KMFLAGS_DISABLEOUTPUT;
+			psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+		}
+		return TRUE;
 	}
 	return 0;
 }
@@ -5029,7 +5858,7 @@ int    WrapPluginInfo::DeleteFilesW3(const DeleteFilesInfo *Info)
 	}
 	return iRc;
 }
-void   WrapPluginInfo::ExitFARW3(void)
+void   WrapPluginInfo::ExitFARW3(const struct ExitInfo *Info)
 {
 	LOG_CMD(L"ExitFARW",0,0,0);
 	if (ExitFARW)
@@ -5195,6 +6024,7 @@ int    WrapPluginInfo::ProcessDialogEventW3(int Event,void *Param)
 		}
 		FarDialogEvent* p3 = (FarDialogEvent*)Param;
 		Far2::FarDialogEvent p2 = {p3->hDlg, 0, p3->Param1, (LONG_PTR)p3->Param2, p3->Result};
+		//TODO: Конвертация VBuf?
 		p2.Msg = FarMessage_3_2(p3->Msg, p2.Param1, (void*&)p2.Param2);
 		if (p2.Msg != DM_FIRST)
 		{
@@ -5250,14 +6080,19 @@ int    WrapPluginInfo::ProcessPanelInputW3(HANDLE hPanel,const struct ProcessPan
 	int iRc = 0;
 	if (ProcessKeyW)
 	{
-		int Key2 = FarKey_3_2(&Info->Rec);
-		DWORD FShift = Key2 & 0x7F000000; // старший бит используется в других целях!
+		int Key3 = FarKey_3_2(&Info->Rec);
+		DWORD FShift = Key3 & 0x7F000000; // старший бит используется в других целях!
 		DWORD ControlState =
 			(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
 			(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
 			(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0);
 		//DWORD PreProcess = (Info->Flags & PKIF_PREPROCESS) ? Far2::PKF_PREPROCESS : 0;
-		iRc = ProcessKeyW(hPanel, (Key2 & 0x0003FFFF) /*| PreProcess*/, ControlState);
+		int Key2;
+		if ((Key3 & 0x00030000) == 0x00010000)
+			Key2 = Key3 & 0x0000FFFF; // KEY_BREAK .. KEY_F24, KEY_BROWSER_BACK, KEY_MEDIA_NEXT_TRACK и т.п. 
+		else
+			Key2 = Key3 & 0x0003FFFF;
+		iRc = ProcessKeyW(hPanel, Key2 /*| PreProcess*/, ControlState);
 	}
 	return iRc;
 }
@@ -5373,8 +6208,14 @@ FARPROC WrapPluginInfo::GetProcAddressW3(HMODULE hModule, LPCSTR lpProcName)
 	if (!lstrcmpA(lpProcName, "ProcessViewerEventW"))
 		if (!(mn_PluginFunctions & LF3_Viewer))
 			return NULL;
-	if (!lstrcmpA(lpProcName, "ProcessViewerEventW"))
-		if (!(mn_PluginFunctions & LF3_Viewer))
+	if (!lstrcmpA(lpProcName, "GetFilesW"))
+		if (!(mn_PluginFunctions & LF3_GetFiles))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "PutFilesW"))
+		if (!(mn_PluginFunctions & LF3_PutFiles))
+			return NULL;
+	if (!lstrcmpA(lpProcName, "DeleteFilesW"))
+		if (!(mn_PluginFunctions & LF3_DeleteFiles))
 			return NULL;
 	
 	// OK, можно
@@ -5417,9 +6258,9 @@ int    WrapPluginInfo::DeleteFilesWrap(struct WrapPluginInfo* wpi, const DeleteF
 {
 	return wpi->DeleteFilesW3(Info);
 }
-void   WrapPluginInfo::ExitFARWrap(struct WrapPluginInfo* wpi)
+void   WrapPluginInfo::ExitFARWrap(struct WrapPluginInfo* wpi, const struct ExitInfo *Info)
 {
-	return wpi->ExitFARW3();
+	return wpi->ExitFARW3(Info);
 }
 void   WrapPluginInfo::FreeVirtualFindDataWrap(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info)
 {
@@ -5673,14 +6514,32 @@ Far2Dialog::Far2Dialog(WrapPluginInfo* pwpi,
 	m_PluginGuid = PluginGuid;
 	
     m_X1 = X1; m_Y1 = Y1; m_X2 = X2; m_Y2 = Y2;
-    m_HelpTopic = HelpTopic ? _wcsdup(HelpTopic) : NULL;
+    m_HelpTopic = HelpTopic ? lstrdup(HelpTopic) : NULL;
     
     m_ItemsNumber = ItemsNumber;
     m_Items2 = NULL;
+    m_Colors2 = NULL;
+	//mpp_FarCharInfo2 = NULL;
+    mpp_FarCharInfo3 = NULL;
+    
     if (ItemsNumber > 0 && Items)
     {
+#ifdef _DEBUG
+		for (UINT i = 0; i < ItemsNumber; i++)
+		{
+			_ASSERTE(Items[i].MaxLen<0xFFFFFF);
+		}
+#endif
     	m_Items2 = (Far2::FarDialogItem*)calloc(ItemsNumber, sizeof(*m_Items2));
     	memmove(m_Items2, Items, ItemsNumber*sizeof(*m_Items2));
+    	m_Colors2 = (DWORD*)calloc(ItemsNumber, sizeof(*m_Colors2));
+		//mpp_FarCharInfo2 = (CHAR_INFO**)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo2));
+    	mpp_FarCharInfo3 = (FAR_CHAR_INFO**)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo3));
+    	for (UINT i = 0; i < ItemsNumber; i++)
+		{
+    		m_Colors2[i] = Items[i].Flags & (Far2::DIF_COLORMASK|Far2::DIF_SETCOLOR);
+			//mpp_FarCharInfo2[i] = (Items[i].Type == DI_USERCONTROL) ? Items[i].VBuf : NULL;
+		}
     }
     m_Flags = Flags;
     m_DlgProc = DlgProc;
@@ -5706,6 +6565,21 @@ Far2Dialog::~Far2Dialog()
 		free(m_Items2);
 		m_Items2 = NULL;
 	}
+	if (m_Colors2)
+	{
+		free(m_Colors2);
+		m_Colors2 = NULL;
+	}
+	if (mpp_FarCharInfo3)
+	{
+		for (UINT i = 0; i < m_ItemsNumber; i++)
+		{
+			if (mpp_FarCharInfo3[i])
+				free(mpp_FarCharInfo3[i]);
+		}
+		free(mpp_FarCharInfo3);
+		mpp_FarCharInfo3 = NULL;
+	}
 	if (mp_ListInit3)
 	{
 		for (UINT i = 0; i < m_ItemsNumber; i++)
@@ -5724,22 +6598,33 @@ Far2Dialog::~Far2Dialog()
 
 void Far2Dialog::FreeDlg()
 {
-	MapDlg_2_3.erase(this);
+	(*gpMapDlg_2_3).erase(this);
 	if (hDlg3 != NULL)
 	{
 		wpi->psi3.DialogFree(hDlg3);
-		MapDlg_3_2.erase(hDlg3);
+		(*gpMapDlg_3_2).erase(hDlg3);
 		hDlg3 = NULL;
 	}
 }
 
 INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
-	Far2Dialog* p = MapDlg_3_2[hDlg];
+	Far2Dialog* p = (*gpMapDlg_3_2)[hDlg];
 	INT_PTR lRc = 0;
-	if (p && p->m_DlgProc)
+	
+	if (!p)
 	{
-		void* OrgParam2 = Param2;
+		_ASSERTE(p!=NULL);
+		return 0;
+	}
+	
+	void* OrgParam2 = Param2;
+	bool lbNeedColor = (Msg == DN_CTLCOLORDLGITEM /* || ...*/)
+		&& (Param1 >= 0) && (Param1 < (int)p->m_ItemsNumber)
+		&& (p->m_Colors2[Param1] & Far2::DIF_SETCOLOR);
+	
+	if (p->m_DlgProc)
+	{
 		Far2::FarMessagesProc Msg2 = p->wpi->FarMessage_3_2(Msg, Param1, Param2);
 		_ASSERTE(Msg2!=Far2::DM_FIRST);
 		if (Msg > DM_FIRST && Msg < DM_USER && Msg2 != Far2::DM_FIRST)
@@ -5761,18 +6646,45 @@ INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 			p->wpi->gnMsgKey_3 = (FARMESSAGE)Msg;
 		if (Msg == DM_CLOSE || Msg == DN_CLOSE)
 			p->wpi->gnMsgClose_3 = (FARMESSAGE)Msg;
+			
+		/* ********* собственно вызов ********** */
 		lRc = p->m_DlgProc((HANDLE)p, Msg2, Param1, (LONG_PTR)Param2);
+		/* ************************************* */
+		
 		if (Msg == DM_KEY || Msg == DN_CONTROLINPUT)
 			p->wpi->gnMsgKey_3 = DM_FIRST;
 		if (Msg == DM_CLOSE || Msg == DN_CLOSE)
 			p->wpi->gnMsgClose_3 = DM_FIRST;
 		if (Param2 && Param2 != OrgParam2)
 			p->wpi->FarMessageParam_2_3(Msg, Param1, Param2, OrgParam2, lRc);
+			
+		if (lbNeedColor && lRc)
+			lbNeedColor = false;
 	}
 	else
 	{
 		lRc = p->wpi->psi3.DefDlgProc(hDlg, Msg, Param1, (void*)Param2);
 	}
+	
+	
+	// Из Far3 убран DIF_SETCOLOR
+	if (lbNeedColor)
+	{
+		switch (Msg)
+		{
+		case DN_CTLCOLORDLGITEM:
+			{
+				FarDialogItemColors* p3 = (FarDialogItemColors*)OrgParam2;
+				// Установить переденный через флаг DIF_SETCOLOR
+				WrapPluginInfo::FarColor_2_3((BYTE)(p->m_Colors2[Param1] & 0xFF), p3->Colors[0]);
+				//TODO: А какие индексы (0..3) нужно обновлять?
+				// Результат фаром похоже игнорируется
+				//lRc = TRUE;
+			}
+			break;
+		}
+	}
+	
 	return lRc;
 }
 
@@ -5811,57 +6723,7 @@ int Far2Dialog::RunDlg()
 		FarDialogItem *p3 = m_Items3;
 		for (UINT i = 0; i < m_ItemsNumber; i++, p2++, p3++)
 		{
-			wpi->FarDialogItem_2_3(p2, p3, mp_ListInit3+i);
-			//p3->Type = DialogItemTypes_2_3(p2->Type);
-			//p3->X1 = p2->X1;
-			//p3->Y1 = p2->Y1;
-			//p3->X2 = p2->X2;
-			//p3->Y2 = p2->Y2;
-
-			//p3->Flags = FarDialogItemFlags_2_3(p2->Flags);
-			//if (p2->DefaultButton)
-			//	p3->Flags |= DIF_DEFAULTBUTTON;
-			//if (p2->Focus)
-			//	p3->Flags |= DIF_FOCUS;
-
-			//p3->Data = p2->PtrData;
-			//p3->MaxLength = p2->MaxLen;
-
-			//if (p3->Type == DI_EDIT)
-			//{
-			//	p3->History = p2->Param.History;
-			//}
-			//else if (p3->Type == DI_FIXEDIT)
-			//{
-			//	p3->Mask = p2->Param.Mask;
-			//}
-			//else if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
-			//{
-			//	if (p2->Param.ListItems != NULL)
-			//	{
-			//		int nItems = p2->Param.ListItems->ItemsNumber;
-			//		mp_ListInit3[i].ItemsNumber = nItems;
-			//		if (p2->Param.ListItems > 0)
-			//		{
-			//			mp_ListInit3[i].Items = (FarListItem*)calloc(nItems,sizeof(FarListItem));
-			//			const Far2::FarListItem* pi2 = p2->Param.ListItems->Items;
-			//			FarListItem* pi3 = mp_ListInit3[i].Items;
-			//			for (int j = 0; j < nItems; j++, pi2++, pi3++)
-			//			{
-			//				FarListItem_2_3(pi2, pi3);
-			//			}
-			//		}
-			//		p3->ListItems = (mp_ListInit3 + i);
-			//	}
-			//}
-			//else if (p3->Type == DI_USERCONTROL)
-			//{
-			//	p3->VBuf = p2->Param.VBuf;
-			//}
-			//else
-			//{
-			//	p3->Reserved = p2->Param.Reserved;
-			//}
+			wpi->FarDialogItem_2_3(p2, p3, mp_ListInit3+i, mpp_FarCharInfo3[i]);
 		}
 	}
 
@@ -5878,8 +6740,8 @@ int Far2Dialog::RunDlg()
 			Flags3, Far3DlgProc, (void*)m_Param);
 		if (hDlg3)
 		{
-			MapDlg_2_3[this] = hDlg3;
-			MapDlg_3_2[hDlg3] = this;
+			(*gpMapDlg_2_3)[this] = hDlg3;
+			(*gpMapDlg_3_2)[hDlg3] = this;
 		}
 	}
 	
@@ -5901,23 +6763,23 @@ int Far2Dialog::RunDlg()
 		}
 
 		// Освобождаем - в DialogFree
-		//MapDlg_2_3.erase(this);
-		//for (std::map<Far2Dialog*,HANDLE>::iterator i1 = MapDlg_2_3.begin();
-		//	 i1 != MapDlg_2_3.end(); i++)
+		//(*gpMapDlg_2_3).erase(this);
+		//for (std::map<Far2Dialog*,HANDLE>::iterator i1 = (*gpMapDlg_2_3).begin();
+		//	 i1 != (*gpMapDlg_2_3).end(); i++)
 		//{
 		//	if (i->first == this)
 		//	{
-		//		MapDlg_2_3.erase(i1);
+		//		(*gpMapDlg_2_3).erase(i1);
 		//		break;
 		//	}
 		//}
-		//MapDlg_3_2.erase(hDlg3);
-		//for (std::map<HANDLE,Far2Dialog*>::iterator i2 = MapDlg_3_2.begin();
-		//	 i2 != MapDlg_3_2.end(); i++)
+		//(*gpMapDlg_3_2).erase(hDlg3);
+		//for (std::map<HANDLE,Far2Dialog*>::iterator i2 = (*gpMapDlg_3_2).begin();
+		//	 i2 != (*gpMapDlg_3_2).end(); i++)
 		//{
 		//	if (i->first == hDlg3)
 		//	{
-		//		MapDlg_3_2.erase(i2);
+		//		(*gpMapDlg_3_2).erase(i2);
 		//		break;
 		//	}
 		//}
@@ -6166,6 +7028,11 @@ BOOL APIENTRY DllMain( HANDLE hModule,
     {
 		ghFar3Wrap = (HMODULE)hModule;
 		gnMainThreadId = GetMainThreadId();
+		HeapInitialize();
+
+		gpMapDlg_2_3 = new std::map<Far2Dialog*,HANDLE>;
+		gpMapDlg_3_2 = new std::map<HANDLE,Far2Dialog*>;
+		gpMapSysID = new std::map<DWORD,WrapPluginInfo*>;
 		
 		// Хукнуть GetProcAddress, чтобы в фар не отдавать те функции, 
 		// которых нет в оригинальном плагине. 
@@ -6320,6 +7187,30 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 		}
 		#undef SET_EXP
 		#endif
+
+		if (WrapPluginInfo::gpsz_LastAnalyzeFile != NULL)
+		{
+			free(WrapPluginInfo::gpsz_LastAnalyzeFile);
+			WrapPluginInfo::gpsz_LastAnalyzeFile = NULL;
+		}
+
+		if (gpMapDlg_2_3)
+		{
+			delete gpMapDlg_2_3;
+			gpMapDlg_2_3 = NULL;
+		}
+		if (gpMapDlg_3_2)
+		{
+			delete gpMapDlg_3_2;
+			gpMapDlg_3_2 = NULL;
+		}
+		if (gpMapSysID)
+		{
+			delete gpMapSysID;
+			gpMapSysID = NULL;
+		}
+
+		HeapDeinitialize();
 		return TRUE;
     	//if (wpi)
     	//{
@@ -6336,20 +7227,63 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	_InitPlugin fDbg = InitPlugin; // Для проверки аргументов на этапе компиляции
 #endif
 	if (!pInfo2)
-		return -1;
+	{
+		#ifdef _DEBUG
+		{
+			DebugDump(L"InitPlugin failed (pInfo2)!", L"Far3Wrap");
+		}
+		#endif
+		return 1;
+	}
 	if (pInfo2->StructSize != sizeof(*pInfo2))
 	{
 		_ASSERTE(pInfo2->StructSize == sizeof(*pInfo2));
 		if (pInfo2->ErrorInfo && (pInfo2->ErrorInfoMax >= 255 && pInfo2->ErrorInfoMax <= 4096))
 			wsprintf(pInfo2->ErrorInfo, L"Far3Wrap\nInitPlugin failed. Invalid value of pInfo2->StructSize\nRequired: %u, received: %u", (DWORD)sizeof(*pInfo2), (DWORD)pInfo2->StructSize);
-		return -2;
+		if (pInfo2->ErrorTitle && pInfo2->ErrorTitleMax >= 255)
+		{
+			wchar_t sModule[MAX_PATH+1] = {0};
+			GetModuleFileName(pInfo2->hLoader, sModule, ARRAYSIZE(sModule));
+			int nLen = lstrlen(sModule);
+			int nMaxLen = pInfo2->ErrorTitleMax - 64;
+			wsprintf(pInfo2->ErrorTitle, 
+				L"<%s> Incorrect struct size # (%u!=%u)",
+				*sModule
+				? ((nLen < pInfo2->ErrorTitleMax) ? sModule : (sModule + nLen - pInfo2->ErrorTitleMax + 1) )
+				: L"[Far3wrap]",
+				(DWORD)pInfo2->StructSize, (DWORD)sizeof(*pInfo2));
+		}
+		#ifdef _DEBUG
+		{
+			DebugDump(L"InitPlugin failed (StructSize)!", L"Far3Wrap");
+		}
+		#endif
+		return 2;
 	}
 	if (pInfo2->Far3Build != MVV_3)
 	{
 		_ASSERTE(pInfo2->Far3Build == MVV_3);
 		if (pInfo2->ErrorInfo && (pInfo2->ErrorInfoMax >= 255 && pInfo2->ErrorInfoMax <= 4096))
 			wsprintf(pInfo2->ErrorInfo, L"Far3Wrap\nInitPlugin failed. Invalid value of pInfo2->Far3Build\nRequired: %u, received: %u", MVV_3, pInfo2->Far3Build);
-		return -3;
+		if (pInfo2->ErrorTitle && pInfo2->ErrorTitleMax >= 255)
+		{
+			wchar_t sModule[MAX_PATH+1] = {0};
+			GetModuleFileName(pInfo2->hLoader, sModule, ARRAYSIZE(sModule));
+			int nLen = lstrlen(sModule);
+			int nMaxLen = pInfo2->ErrorTitleMax - 64;
+			wsprintf(pInfo2->ErrorTitle, 
+				L"<%s> Incorrect build # (%u!=%u)",
+				*sModule
+				? ((nLen < pInfo2->ErrorTitleMax) ? sModule : (sModule + nLen - pInfo2->ErrorTitleMax + 1) )
+				: L"[Far3wrap]",
+				pInfo2->Far3Build, MVV_3);
+		}
+		#ifdef _DEBUG
+		{
+			DebugDump(L"InitPlugin failed (Build)!", L"Far3Wrap");
+		}
+		#endif
+		return 3;
 	}
 
 	_ASSERTE(ghFar3Wrap==NULL || ghFar3Wrap==pInfo2->hFar3Wrap);
@@ -6362,13 +7296,17 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	pInfo2->wpi->LoadPluginInfo();
 	if (!pInfo2->wpi->LoadPlugin(TRUE/*abSilent*/))
 	{
-		_ASSERTE(pInfo2->wpi->mh_Dll!=NULL);
+		if (pInfo2->ErrorTitle && pInfo2->ErrorTitleMax > 0 && *pInfo2->wpi->ms_DllFailTitle)
+			lstrcpyn(pInfo2->ErrorTitle, pInfo2->wpi->ms_DllFailTitle, pInfo2->ErrorTitleMax);
+		// Если pInfo2->wpi->mh_Dll, значит врапперу не удалось 
+		// загрузить собственно плагин (файл отсутствует?)
+		//_ASSERTE(pInfo2->wpi->mh_Dll!=NULL); -- не нада, уже DebugDump позвали
 		delete pInfo2->wpi;
 		pInfo2->wpi = NULL;
-		return -4;
+		return 4;
 	}
 
-	pInfo2->PluginGuid = &pInfo2->wpi->mguid_Plugin;
+	pInfo2->PluginGuid = pInfo2->wpi->mguid_Plugin;
 
 	// Вернуть в Loader список функций враппера
 	#undef SET_FN

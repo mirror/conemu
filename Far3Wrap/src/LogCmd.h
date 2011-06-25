@@ -2,28 +2,41 @@
 #pragma once
 
 #ifdef LOG_COMMANDS
+	extern DWORD gnMainThreadId;
+
 	class LogCmd
 	{
+		protected:
+		static int nNestLevel;
 		public:
 		LPCWSTR pszInfo;
-		wchar_t szFile[64];
+		wchar_t szFile[64], szLevel[129];
 		public:
 		void Dump(LPCWSTR asFmt)
 		{
 			wchar_t szFull[1024];
 			SYSTEMTIME st; GetLocalTime(&st); DWORD nTID = GetCurrentThreadId();
-			wsprintf(szFull, asFmt, szFile, nTID, st.wHour, st.wMinute, st.wSecond, pszInfo);
+			wsprintf(szFull, asFmt, szFile, nTID, st.wHour, st.wMinute, st.wSecond, szLevel, pszInfo);
 			OutputDebugString(szFull);
 		};
 		LogCmd(LPCWSTR asFunc, LPWSTR asFile)
 		{
 			pszInfo = asFunc;
 			lstrcpyn(szFile, asFile, ARRAYSIZE(szFile));
-			Dump(L"%s:T%u(%u:%02u:%02u) %s\n");
+			szLevel[0] = 0;
+			for (int i = 0, j = 0; (i+3) < ARRAYSIZE(szLevel) && j < nNestLevel; i+=2, j++)
+			{
+				szLevel[i] = szLevel[i+1] = _T(' '); szLevel[i+2] = 0;
+			}
+			Dump(L"%-24.24s:T%u(%u:%02u:%02u) %s%s\n");
+			if (gnMainThreadId == GetCurrentThreadId())
+				nNestLevel++;
 		}
 		~LogCmd()
 		{
-			Dump(L"%s:T%u(%u:%02u:%02u) -end- %s\n");
+			Dump(L"%-24.24s:T%u(%u:%02u:%02u) %s-end- %s\n");
+			if (gnMainThreadId == GetCurrentThreadId() && nNestLevel > 0)
+				nNestLevel--;
 		};
 	};
 	#define LOG_CMD_(f,a1,a2,a3) \
