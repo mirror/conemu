@@ -1,0 +1,65 @@
+
+// Far2
+const DirSyncID = 0x44725363
+// Far3
+//const DirSyncID = "F5AE7C40-F8D0-443E-82A4-285DBFB4FF69"
+
+macro Descr="DirSync options" Area="Editor" Key="AltF3"
+{{
+  $if (callplugin(#%DirSyncID,1)==0) $Exit $end
+  $if (env("DirSyncFileInfo")=="")
+    MsgBox("DirSync info","Current editor is not DirSync report\nor current line is not difference info",1)
+    $Exit
+  $end
+
+  %VisComp = "&VisualCompare";
+  %edit_left = "Edit &left:  "+env("DirSyncFileLeft");
+  %edit_right = "Edit &right: "+env("DirSyncFileRight");
+  %edit_both = "Edit &both";
+  %show_info = "&Show information";
+  %copy_left = "<--- Copy file to l&eft";
+  %copy_right = "---> Copy file to r&ight";
+
+  %action = Menu.Show(%VisComp+"\r\n"+%edit_left+"\r\n"+%edit_right+"\r\n"+%edit_both+"\r\n"+%show_info+"\r\n\1\r\n"+%copy_left+"\r\n"+%copy_right,"DirSync action");
+  $if (%action == %VisComp)
+    $if (env("DirSyncFileLeft")=="" || !fexist(env("DirSyncFileLeft")))
+      MsgBox("DirSync info","Left file not exists\n"+env("DirSyncFileLeft"),1)
+    $else $if (env("DirSyncFileRight")=="" || !fexist(env("DirSyncFileRight")))
+      MsgBox("DirSync info","Right file not exists\n"+env("DirSyncFileRight"),1)
+    $else
+      %%DirSyncReport=Editor.FileName;
+      F12 0 Esc print("vc:\""+env("DirSyncFileLeft")+"\" \""+env("DirSyncFileRight")+"\"") Enter AltDown
+    $end $end
+  $end
+  $if (%action == %edit_left || %action == %edit_both)
+    ShiftF4 print(env("DirSyncFileLeft")) Enter
+  $end
+  $if (%action == %edit_right || %action == %edit_both)
+    ShiftF4 print(env("DirSyncFileRight")) Enter
+  $end
+  $if (%action == %show_info)
+    MsgBox("DirSync info",env("DirSyncFileInfo"),0x8)
+  $end
+  $if (%action == %copy_left)
+    CtrlU Home $Rep(4) ShiftRight $end print("<---") Right
+  $end
+  $if (%action == %copy_right)
+    CtrlU Home $Rep(4) ShiftRight $end print("--->") Right
+  $end
+}}
+
+macro Descr="Вернуться в DirSync после VisualCompare"
+  Area="Dialog.{633CC7A9-9B2F-463A-9455-8FB4F9F7E9A8}"
+  Key="Esc"
+{{
+  Esc
+  $if (Shell && %%DirSyncReport!="")
+    F12
+    $if (Menu.Select(%%DirSyncReport,2)>0)
+      Enter
+    $else
+      Esc
+    $end
+    %%DirSyncReport="";
+  $end
+}}

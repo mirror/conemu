@@ -1,10 +1,15 @@
-.Language=English,English
+﻿.Language=English,English
 
-"Ok"
-"Cancel"
-
+// Plugin title
 "Synchronize Directory"
-
+//Buttons
+"OK"
+"Cancel"
+"&Skip"
+"S&kip all"
+"&Delete"
+"Delete &all"
+"&Retry"
 "Synchronize Directory"
 "Process:"
 "sub&folders"
@@ -20,52 +25,65 @@
 "differences in new &line characters"
 "&whitespace"
 "Display a message if &no differences were found"
-
+"&Use self settings"
 "Two file panels are required to perform the compare"
-
 "  Comparing file/folder"
 "  with file/folder"
-
 "Comparing files..."
-
 "No difference"
 "The compared files seem to be identical"
-
 "Not enough memory"
 "Not enough memory to initialize plugin"
-
 "Wrong FAR version"
 "Synchronize Directory plugin requires FAR 1.70 or later"
-
 "Operation was interrupted"
 "Do you really want to cancel it?"
-
 "Show report of found differences"
 "Synchronize directories"
-
 "Copying file"
 "to"
-
 "Warning"
 "File in left panel already exists:"
 "File in right panel already exists:"
-"File in left panel is read only:"
-"File in right panel is read only:"
+"File in left panel is read only!"
+"File in right panel is read only!"
+"Directory in left panel is read only!"
+"Directory in right panel is read only!"
+"File is absent on the left panel"
+"File is absent on the right panel"
+"Directory is absent on the left panel"
+"Directory is absent on the right panel"
+"Confirm file deletion on the left panel"
+"Confirm file deletion on the right panel"
+"Confirm directory deletion on the left panel"
+"Confirm directory deletion on the right panel"
+"Can't create directory"
+"File with same name already exists"
 "New"
 "Existing"
+"File"
+"Directory"
+"<Directory>"
 "&Overwrite"
 "&All"
-"&Skip"
-"S&kip all"
-
-"Coudln't create file"
-
+"Copying file failed"
+"Failed to open source file while copying"
+"Failed to open target file while copying"
+"Failed to create target file while copying"
+"File deletion failed"
+"Directory deletion failed"
+"to file"
 "Copy to &left panel"
 "Confirm &overwrite"
 "Copy to &right panel"
 "Confirm o&verwrite"
-
-"Synchronize directories\n-----------------------\nLeft directory:  %s\nRight directory: %s\n\n(Note: Only lines that remain when you close the editor will be synchronized.)\n\n\n"
-
-"MOpenErrorTitle"
-"MOpenErrorBody"
+" (Higher priority) "
+"Delete on le&ft absent on right"
+"Delete on ri&ght absent on left"
+"Synchronize directories\n-----------------------\nLeft directory:  %s\nRight directory: %s\n\n"
+"*** You can change the report by deleting unnecessary lines containing file names\n*** or by changing direction of synchronization. With an appropriate macro\n*** (see examples in AltF3.fml or AltF3.reg) you also can open a right or left file\n"
+"*** in built-in editor or viewer, start visual comparison of right and left file's\n*** contents with Visual Compare plugin or change the copying direction.\n*** After file save and editor window close, the files/folders copy and delete\n*** options dialog is opened."
+"Compare failed"
+"Can't open file for comparing"
+"Can't create results files"
+"Can't create temp dir"

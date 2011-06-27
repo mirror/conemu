@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="DirSync"
 	ProjectGUID="{BE0D2980-F7E0-44B8-BA48-FE65040AE197}"
 	RootNamespace="MMView"
@@ -11,14 +11,17 @@
 		<Platform
 			Name="Win32"
 		/>
+		<Platform
+			Name="x64"
+		/>
 	</Platforms>
 	<ToolFiles>
 	</ToolFiles>
 	<Configurations>
 		<Configuration
 			Name="Release_Unicode|Win32"
-			OutputDirectory=".\Release_Unicode"
-			IntermediateDirectory=".\Release_Unicode"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -55,11 +58,11 @@
 				StringPooling="false"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="false"
-				PrecompiledHeaderFile=".\Release_Unicode/DirSyncW.pch"
+				PrecompiledHeaderFile=""
 				AssemblerOutput="4"
-				AssemblerListingLocation=".\Release_Unicode/"
-				ObjectFile=".\Release_Unicode/"
-				ProgramDataBaseFileName=".\Release_Unicode/"
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DisableSpecificWarnings="4995;4996"
@@ -77,16 +80,16 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile=".\Release_Unicode\DirSyncW.dll"
+				OutputFile="..\DirSyncW.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\DirSyncW.def"
-				ProgramDatabaseFile=".\Release_Unicode/DirSyncW.pdb"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
 				OptimizeForWindows98="1"
 				ResourceOnlyDLL="false"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
-				ImportLibrary=".\Release_Unicode/DirSyncW.lib"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -100,8 +103,106 @@
 			/>
 			<Tool
 				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release_Unicode|x64"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			ConfigurationType="2"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			CharacterSet="1"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="NDEBUG"
+				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
-				OutputFile="C:\Temp\VCProject\MMView\Release_Unicode/DirSyncW.bsc"
+				TargetEnvironment="3"
+				TypeLibraryName="C:\Temp\VCProject\MMView\Release_Unicode/DirSyncW.tlb"
+				HeaderFileName=""
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="1"
+				InlineFunctionExpansion="1"
+				AdditionalIncludeDirectories="&quot;C:\Program Files\Microsoft SDKs\Windows\v7.0\Include\&quot;;F:\VCProject\FarPlugin\FAR180\trunk\plugins\common\;E:\Source\FARUnicode\trunk\plugins\common\"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;UNICODE;_USRDLL;FARPIC2_EXPORTS;_WIN32_WINNT=0x0600"
+				StringPooling="false"
+				RuntimeLibrary="0"
+				EnableFunctionLevelLinking="false"
+				PrecompiledHeaderFile=""
+				AssemblerOutput="4"
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
+				WarningLevel="3"
+				SuppressStartupBanner="true"
+				DisableSpecificWarnings="4995;4996"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1049"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				OutputFile="..\DirSyncW x64.dll"
+				LinkIncremental="1"
+				SuppressStartupBanner="true"
+				ModuleDefinitionFile=".\DirSyncW.def"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
+				OptimizeForWindows98="1"
+				ResourceOnlyDLL="false"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -115,8 +216,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_Unicode|Win32"
-			OutputDirectory=".\Debug_Unicode"
-			IntermediateDirectory=".\Debug_Unicode"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -152,10 +253,10 @@
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
-				PrecompiledHeaderFile=".\Debug_Unicode/DirSyncW.pch"
-				AssemblerListingLocation=".\Debug_Unicode/"
-				ObjectFile=".\Debug_Unicode/"
-				ProgramDataBaseFileName=".\Debug_Unicode/"
+				PrecompiledHeaderFile=""
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -175,15 +276,15 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="E:\Source\FARUnicode\trunk\unicode_far\Debug.32.vc\plugins\DirSync\DirSyncW.dll"
+				OutputFile="\Far3\Plugins\DirSynch\DirSyncW.dl_"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\DirSyncW.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug_Unicode/DirSyncW.pdb"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
-				ImportLibrary=".\Debug_Unicode/DirSyncW.lib"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -197,8 +298,105 @@
 			/>
 			<Tool
 				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Debug_Unicode|x64"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			ConfigurationType="2"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			CharacterSet="1"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="_DEBUG"
+				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug_Unicode/DirSyncW.bsc"
+				TargetEnvironment="3"
+				TypeLibraryName="C:\Temp\VCProject\MMView\Debug_Unicode/DirSyncW.tlb"
+				HeaderFileName=""
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="0"
+				AdditionalIncludeDirectories="&quot;C:\Program Files\Microsoft SDKs\Windows\v7.0\Include\&quot;;F:\VCProject\FarPlugin\FAR180\trunk\plugins\common\;E:\Source\FARUnicode\trunk\plugins\common\"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;UNICODE;_USRDLL;FARPIC2_EXPORTS;_WIN32_WINNT=0x0600"
+				MinimalRebuild="true"
+				BasicRuntimeChecks="3"
+				RuntimeLibrary="1"
+				PrecompiledHeaderFile=""
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="true"
+				DebugInformationFormat="3"
+				DisableSpecificWarnings="4995;4996"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="_DEBUG"
+				Culture="1049"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				OutputFile="T:\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far2x64\Plugins\DirSync\DirSyncW x64.dll"
+				LinkIncremental="2"
+				SuppressStartupBanner="true"
+				ModuleDefinitionFile=".\DirSyncW.def"
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -212,8 +410,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="C:\Temp\VCProject\MMView\Debug"
-			IntermediateDirectory="C:\Temp\VCProject\MMView\Debug"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -249,10 +447,10 @@
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
-				PrecompiledHeaderFile="C:\Temp\VCProject\MMView\Debug/DirSyncW.pch"
-				AssemblerListingLocation="C:\Temp\VCProject\MMView\Debug/"
-				ObjectFile="C:\Temp\VCProject\MMView\Debug/"
-				ProgramDataBaseFileName="C:\Temp\VCProject\MMView\Debug/"
+				PrecompiledHeaderFile=""
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -273,15 +471,15 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="strmiids.lib odbc32.lib odbccp32.lib"
-				OutputFile="c:\DirSyncW.dll"
+				OutputFile="c:\DirSync.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\DirSyncW.def"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="C:\Temp\VCProject\MMView\Debug/DirSyncW.pdb"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
-				ImportLibrary="C:\Temp\VCProject\MMView\Debug/DirSyncW.lib"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -295,8 +493,106 @@
 			/>
 			<Tool
 				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Debug|x64"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			ConfigurationType="2"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			CharacterSet="2"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="_DEBUG"
+				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
-				OutputFile="C:\Temp\VCProject\MMView\Debug/DirSyncW.bsc"
+				TargetEnvironment="3"
+				TypeLibraryName="C:\Temp\VCProject\MMView\Debug/DirSyncW.tlb"
+				HeaderFileName=""
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="0"
+				AdditionalIncludeDirectories=""
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;FARPIC2_EXPORTS"
+				MinimalRebuild="true"
+				BasicRuntimeChecks="3"
+				RuntimeLibrary="1"
+				PrecompiledHeaderFile=""
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="true"
+				DebugInformationFormat="3"
+				DisableSpecificWarnings="4995;4996"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="_DEBUG"
+				Culture="1049"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalDependencies="strmiids.lib odbc32.lib odbccp32.lib"
+				OutputFile="c:\DirSync x64.dll"
+				LinkIncremental="2"
+				SuppressStartupBanner="true"
+				ModuleDefinitionFile=".\DirSyncW.def"
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -310,8 +606,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="C:\Temp\VCProject\MMView\Release"
-			IntermediateDirectory="C:\Temp\VCProject\MMView\Release"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -346,13 +642,13 @@
 				AdditionalIncludeDirectories="P:\dxsdk\include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;FARPIC2_EXPORTS"
 				StringPooling="true"
-				RuntimeLibrary="2"
+				RuntimeLibrary="0"
 				StructMemberAlignment="1"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile="C:\Temp\VCProject\MMView\Release/DirSyncW.pch"
-				AssemblerListingLocation="C:\Temp\VCProject\MMView\Release/"
-				ObjectFile="C:\Temp\VCProject\MMView\Release/"
-				ProgramDataBaseFileName="C:\Temp\VCProject\MMView\Release/"
+				PrecompiledHeaderFile=""
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DisableSpecificWarnings="4995;4996"
@@ -371,16 +667,16 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="strmiids.lib odbc32.lib odbccp32.lib"
-				OutputFile="Release/DirSyncW.dll"
+				OutputFile="..\DirSync.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile=".\DirSyncW.def"
-				ProgramDatabaseFile="C:\Temp\VCProject\MMView\Release/DirSyncW.pdb"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
 				OptimizeForWindows98="1"
 				ResourceOnlyDLL="true"
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
-				ImportLibrary="C:\Temp\VCProject\MMView\Release/DirSyncW.lib"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -394,8 +690,107 @@
 			/>
 			<Tool
 				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release|x64"
+			OutputDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="c:\Temp\$(ProjectName)\$(PlatformName)\$(ConfigurationName)"
+			ConfigurationType="2"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			CharacterSet="2"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="NDEBUG"
+				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
-				OutputFile="C:\Temp\VCProject\MMView\Release/DirSyncW.bsc"
+				TargetEnvironment="3"
+				TypeLibraryName="C:\Temp\VCProject\MMView\Release/DirSyncW.tlb"
+				HeaderFileName=""
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="1"
+				InlineFunctionExpansion="1"
+				AdditionalIncludeDirectories="P:\dxsdk\include"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;FARPIC2_EXPORTS"
+				StringPooling="true"
+				RuntimeLibrary="0"
+				StructMemberAlignment="0"
+				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=""
+				AssemblerListingLocation="$(OutDir)\"
+				ObjectFile="$(OutDir)\"
+				ProgramDataBaseFileName="$(OutDir)\"
+				WarningLevel="3"
+				SuppressStartupBanner="true"
+				DisableSpecificWarnings="4995;4996"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1049"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalDependencies="strmiids.lib odbc32.lib odbccp32.lib"
+				OutputFile="..\DirSync x64.dll"
+				LinkIncremental="1"
+				SuppressStartupBanner="true"
+				ModuleDefinitionFile=".\DirSyncW.def"
+				ProgramDatabaseFile="$(TargetDir)\$(TargetName).pdb"
+				OptimizeForWindows98="1"
+				ResourceOnlyDLL="true"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				ImportLibrary="$(OutDir)\DirSyncW.lib"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+				SuppressStartupBanner="false"
+				OutputFile=""
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -428,7 +823,25 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="Release_Unicode|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Debug_Unicode|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug_Unicode|x64"
 					>
 					<Tool
 						Name="VCCLCompilerTool"
@@ -446,7 +859,25 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="Debug|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|x64"
 					>
 					<Tool
 						Name="VCCLCompilerTool"
@@ -467,7 +898,23 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="Debug|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|x64"
 					ExcludedFromBuild="true"
 					>
 					<Tool
@@ -487,7 +934,23 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="Release_Unicode|x64"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Debug_Unicode|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Debug_Unicode|x64"
 					>
 					<Tool
 						Name="VCResourceCompilerTool"
@@ -503,6 +966,14 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="Debug|x64"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Release|Win32"
 					>
 					<Tool
@@ -510,12 +981,28 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|x64"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\Memory.cpp"
+				>
 			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl"
 			>
+			<File
+				RelativePath=".\Memory.h"
+				>
+			</File>
 			<File
 				RelativePath="resource.h"
 				>
@@ -527,7 +1014,11 @@
 			>
 		</Filter>
 		<File
-			RelativePath=".\Changelog"
+			RelativePath="..\changelog"
+			>
+		</File>
+		<File
+			RelativePath=".\Lang.templ"
 			>
 		</File>
 	</Files>

@@ -1,3 +1,21 @@
+26.06.2011 Maximus5 - v0.3.5
+
+Delete left/right option in options dialog.
+You can show menu for each synchronized line in editor,
+  CallPlugin(0x44725363,1), look at AltF3.fml for example.
+Fix: Copying fails, when target have 'Hidden' attribute.
+
+
+21.06.2011 Maximus5 - v0.3.4
+
+Fix: Memory leaks, traps.
+Fix: Checkboxes in copying direction confirmation dialog ignored.
+Checkbox «Use self settings» in options dialog.
+Force panels updating after sync.
+Very long paths support.
+More information in copying failed dialog.
+
+
 09.06.2010 Maximus5 - v0.3.3
 
 Readonly file overwrite confirmation.

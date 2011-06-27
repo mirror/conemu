@@ -1,0 +1,386 @@
+﻿#hpp file name
+DirSync_Lang.h
+#number of languages
+2
+#id:0 language file name, language name, language description
+..\DirSyncEng.lng English "English"
+#id:1 language file name, language name, language description
+..\DirSyncRus.lng Russian "Russian (Русский)"
+
+#head of the hpp file
+hhead:
+hhead:#pragma once
+hhead:
+
+#tail of the hpp file
+#htail:
+#htail:
+#and so on as much as needed
+
+#--------------------------------------------------------------------
+#now come the lng feeds
+#--------------------------------------------------------------------
+#first comes the text name from the enum which can be preceded with
+#comments that will go to the hpp file
+#h://This comment will appear before MYes
+#he://This comment will appear after MYes
+#MYes
+#now come the lng lines for all the languages in the order defined
+#above, they can be preceded with comments as shown below
+#l://This comment will appear in all the lng files before the lng line
+#le://This comment will appear in all the lng files after the lng line
+#ls://This comment will appear only in Russian lng file before the lng line
+#lse://This comment will appear only in Russian lng file after the lng line
+#"Да"
+#ls://This comment will appear only in English lng file before the lng line
+#lse://This comment will appear only in English lng file after the lng line
+#"Yes"
+#ls://This comment will appear only in Czech lng file before the lng line
+#lse://This comment will appear only in Czech lng file after the lng line
+#upd:"Ano"
+#
+#lng lines marked with "upd:" will cause a warning to be printed to the
+#screen reminding that this line should be updated/translated
+
+
+MCompare=0
+l:// Plugin title
+"Synchronize Directory"
+"Синхронизация каталогов"
+
+MOK
+l://Buttons
+"OK"
+"OK"
+
+MCancel
+"Cancel"
+"Отмена"
+
+MSkip
+"&Skip"
+"П&ропустить"
+
+MSkipAll
+"S&kip all"
+"Пропустить в&се"
+
+MErase
+"&Delete"
+"&Удалить"
+
+MEraseAll
+"Delete &all"
+"&Все"
+
+MRetry
+"&Retry"
+"&Повторить"
+
+MCmpTitle
+"Synchronize Directory"
+"Синхронизация каталогов"
+
+MProcessBox
+"Process:"
+"Обрабатывать:"
+
+MProcessSubfolders
+"sub&folders"
+"вложенные &папки"
+
+MUseMaxScanDepth
+"&maximum folder depth:"
+"&максимальный уровень вложенности:"
+
+MProcessSelected
+"s&elected items only"
+"только п&омеченные файлы/папки"
+
+MCompareBox
+"Compare:"
+"Сравнивать:"
+
+MCompareTime
+"&time"
+"&время"
+
+MCompareLowPrecision
+"two seconds &precision"
+"двухсекундная &точность"
+
+MCompareIgnoreTimeZone
+"&ignore possible time zone differences"
+"&игнорировать различия из-за часовых поясов"
+
+MCompareSize
+"&size"
+"&размер"
+
+MCompareContents
+"&contents"
+"&содержимое"
+
+MCompareContentsIgnore
+"i&gnore:"
+"и&гнорировать:"
+
+MCompareIgnoreNewLines
+"differences in new &line characters"
+"ра&зличия в символах перевода строки"
+
+MCompareIgnoreWhitespace
+"&whitespace"
+"про&белы"
+
+MMessageWhenNoDiff
+"Display a message if &no differences were found"
+"Показывать сообщение, &если различия не найдены"
+
+MUseSelfSettings
+"&Use self settings"
+"Использовать собственные &настройки"
+
+MFilePanelsRequired
+"Two file panels are required to perform the compare"
+"Для сравнения требуются две файловые панели"
+
+MComparing
+"  Comparing file/folder"
+"  Сравнение файла/каталога"
+
+MComparingWith
+"  with file/folder"
+"  с файлом/каталогом"
+
+MComparingFiles
+"Comparing files..."
+"Сравнение файлов..."
+
+MNoDiffTitle
+"No difference"
+"Нет различий"
+
+MNoDiffBody
+"The compared files seem to be identical"
+"В результате сравнения различия не обнаружены"
+
+MNoMemTitle
+"Not enough memory"
+"Недостаточно памяти"
+
+MNoMemBody
+"Not enough memory to initialize plugin"
+"Не хватает памяти для инициализации"
+
+MOldFARTitle
+"Wrong FAR version"
+"Старая версия FAR"
+
+MOldFARBody
+"Synchronize Directory plugin requires FAR 1.70 or later"
+"Для синхронизации каталогов нужен FAR версии 1.70 или больше"
+
+MEscTitle
+"Operation was interrupted"
+"Действие было прервано"
+
+MEscBody
+"Do you really want to cancel it?"
+"Вы действительно хотите отменить действие?"
+
+MShowReport
+"Show report of found differences"
+"Показывать отчёт о найденных различиях"
+
+MSynchronizeDirs
+"Synchronize directories"
+"Синхронизация каталогов"
+
+MCopying
+"Copying file"
+"Копируется файл"
+
+MCopyingTo
+"to"
+"в"
+
+MWarning
+"Warning"
+"Предупреждение"
+
+MLeftFileAlreadyExists
+"File in left panel already exists:"
+"Файл на левой панели уже существует:"
+
+MRightFileAlreadyExists
+"File in right panel already exists:"
+"Файл на правой панели уже существует:"
+
+MLeftFileReadonly
+"File in left panel is read only!"
+"Файл на левой панели имеет атрибут \"Только для чтения\"!"
+
+MRightFileReadonly
+"File in right panel is read only!"
+"Файл на правой панели имеет атрибут \"Только для чтения\"!"
+
+MLeftDirReadonly
+"Directory in left panel is read only!"
+"Директория на левой панели имеет атрибут \"Только для чтения\"!"
+
+MRightDirReadonly
+"Directory in right panel is read only!"
+"Директория на правой панели имеет атрибут \"Только для чтения\"!"
+
+MLeftFileAbsent
+"File is absent on the left panel"
+"Файл отсутствует на левой панели"
+
+MRightFileAbsent
+"File is absent on the right panel"
+"Файл отсутствует на правой панели"
+
+MLeftDirAbsent
+"Directory is absent on the left panel"
+"Директория отсутствует на левой панели"
+
+MRightDirAbsent
+"Directory is absent on the right panel"
+"Директория отсутствует на правой панели"
+
+MLeftFileErase
+"Confirm file deletion on the left panel"
+"Подтвердите удаление файла на левой панели"
+
+MRightFileErase
+"Confirm file deletion on the right panel"
+"Подтвердите удаление файла на правой панели"
+
+MLeftDirErase
+"Confirm directory deletion on the left panel"
+"Подтвердите удаление директории на левой панели"
+
+MRightDirErase
+"Confirm directory deletion on the right panel"
+"Подтвердите удаление директории на правой панели"
+
+MCantCreateDirectory
+"Can't create directory"
+"Невозможно создать директорию"
+
+MSameFileAlreadyExists
+"File with same name already exists"
+"Уже существует файл с таким же именем"
+
+MNew
+"New"
+"Новый"
+
+MExisting
+"Existing"
+"Существующий"
+
+MEraseFile
+"File"
+"Файл"
+
+MEraseDir
+"Directory"
+"Директория"
+
+MDirectory
+"<Directory>"
+"<Директория>"
+
+MOverwrite
+"&Overwrite"
+"&Поверх"
+
+MOverwriteAll
+"&All"
+"&Все"
+
+MFailedCopySrcFile
+"Copying file failed"
+"Не удалось скопировать файл"
+
+MFailedOpenSrcFile
+"Failed to open source file while copying"
+"Ошибка открытия исходного файла при копировании"
+
+MFailedOpenDstFile
+"Failed to open target file while copying"
+"Ошибка открытия файла назначения при копировании"
+
+MFailedCreateDstFile
+"Failed to create target file while copying"
+"Ошибка создания файла назначения при копировании"
+
+MFailedEraseFile
+"File deletion failed"
+"Не удалось удалить файл"
+
+MFailedEraseDir
+"Directory deletion failed"
+"Не удалось удалить директорию"
+
+MFailedCopyDstFile
+"to file"
+"в файл"
+
+MCopyRightToLeft
+"Copy to &left panel"
+"Копировать на &левую панель"
+
+MOverwriteRightToLeft
+"Confirm &overwrite"
+"П&одтвердить перезапись"
+
+MCopyLeftToRight
+"Copy to &right panel"
+"Копировать на &правую панель"
+
+MOverwriteLeftToRight
+"Confirm o&verwrite"
+"По&дтвердить перезапись"
+
+MEraseAbsentFiles
+" (Higher priority) "
+" (Приоритетные опции) "
+
+MEraseAbsentFilesLeft
+"Delete on le&ft absent on right"
+"Удалять слева отсуствующие справа"
+
+MEraseAbsentFilesRight
+"Delete on ri&ght absent on left"
+"Удалять справа отсутствующие слева"
+
+MReportFileTitle
+"Synchronize directories\n-----------------------\nLeft directory:  %s\nRight directory: %s\n\n"
+"Синхронизация каталогов\n-----------------------\nЛевая панель:  %s\nПравая панель: %s\n\n"
+
+MReportFileNotes1
+"*** You can change the report by deleting unnecessary lines containing file names\n*** or by changing direction of synchronization. With an appropriate macro\n*** (see examples in AltF3.fml or AltF3.reg) you also can open a right or left file\n"
+"*** Вы можете изменить отчет, удалив ненужные строки с именами файлов\n*** или изменив направление синхронизации. С помощью соответствующего\n*** макроса (пример в файлах AltF3.fml или AltF3.reg) вы также можете\n*** открыть правый или левый файл во встроенном редакторе или вьювере\n"
+
+MReportFileNotes2
+"*** in built-in editor or viewer, start visual comparison of right and left file's\n*** contents with Visual Compare plugin or change the copying direction.\n*** After file save and editor window close, the files/folders copy and delete\n*** options dialog is opened."
+"*** запустить визуальное сравнение содержимого правого и левого файла\n*** через плагин Visual Compare или поменять направление копирования.\n*** После сохранения и закрытия окна редактора откроется диалог опций\n*** копирования и удаления файлов/папок."
+
+MOpenErrorTitle
+"Compare failed"
+"Ошибка сравнения"
+
+MOpenErrorBody
+"Can't open file for comparing"
+"Ошибка открытия файла для сравнения"
+
+MCreateResultsFailed
+"Can't create results files"
+"Не удалось создать файл сравнения"
+
+MCreateTempFailed
+"Can't create temp dir"
+"Не удалось создать временную папку"
