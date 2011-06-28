@@ -322,10 +322,10 @@ int    WINAPI AnalyseW(const AnalyseInfo *Info)
 	return fwf.AnalyseWrap(fwf.wpi, Info);
 }
 
-void   WINAPI ClosePanelW(HANDLE hPanel)
+void   WINAPI ClosePanelW(const struct ClosePanelInfo *Info)
 {
 	if (fwf.ClosePanelWrap)
-		fwf.ClosePanelWrap(fwf.wpi, hPanel);
+		fwf.ClosePanelWrap(fwf.wpi, Info);
 }
 
 int    WINAPI CompareW(const CompareInfo *Info)
@@ -335,10 +335,10 @@ int    WINAPI CompareW(const CompareInfo *Info)
 	return -2;
 }
 
-int    WINAPI ConfigureW(const GUID* Guid)
+int    WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
 	CHECKFNRET(ConfigureWrap,0);
-	return fwf.ConfigureWrap(fwf.wpi, Guid);
+	return fwf.ConfigureWrap(fwf.wpi, Info);
 }
 
 int    WINAPI DeleteFilesW(const DeleteFilesInfo *Info)
@@ -408,17 +408,17 @@ int    WINAPI MakeDirectoryW(MakeDirectoryInfo *Info)
 	return 0;
 }
 
-int    WINAPI ProcessDialogEventW(int Event,void *Param)
+int    WINAPI ProcessDialogEventW(const struct ProcessDialogEventInfo *Info)
 {
 	if (fwf.ProcessDialogEventWrap)
-		return fwf.ProcessDialogEventWrap(fwf.wpi, Event, Param);
+		return fwf.ProcessDialogEventWrap(fwf.wpi, Info);
 	return 0;
 }
 
-int    WINAPI ProcessEditorEventW(int Event,void *Param)
+int    WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *Info)
 {
 	if (fwf.ProcessEditorEventWrap)
-		return fwf.ProcessEditorEventWrap(fwf.wpi, Event, Param);
+		return fwf.ProcessEditorEventWrap(fwf.wpi, Info);
 	return 0;
 }
 
@@ -429,10 +429,10 @@ int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info)
 	return 0;
 }
 
-int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param)
+int    WINAPI ProcessPanelEventW(HANDLE hPanel,const struct ProcessPanelEventInfo *Info)
 {
-	if (fwf.ProcessEventWrap)
-		return fwf.ProcessEventWrap(fwf.wpi, hPanel, Event, Param);
+	if (fwf.ProcessPanelEventWrap)
+		return fwf.ProcessPanelEventWrap(fwf.wpi, Info);
 	return 0;
 }
 
@@ -443,10 +443,10 @@ int    WINAPI ProcessHostFileW(const ProcessHostFileInfo *Info)
 	return 0;
 }
 
-int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
+int    WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *Info)
 {
 	if (fwf.ProcessPanelInputWrap)
-		return fwf.ProcessPanelInputWrap(fwf.wpi, hPanel, Info);
+		return fwf.ProcessPanelInputWrap(fwf.wpi, Info);
 	return 0;
 }
 
@@ -457,17 +457,17 @@ int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info)
 	return 0;
 }
 
-int    WINAPI ProcessSynchroEventW(int Event,void *Param)
+int    WINAPI ProcessSynchroEventW(const struct ProcessSynchroEventInfo *Info)
 {
 	if (fwf.ProcessSynchroEventWrap)
-		return fwf.ProcessSynchroEventWrap(fwf.wpi, Event, Param);
+		return fwf.ProcessSynchroEventWrap(fwf.wpi, Info);
 	return 0;
 }
 
-int    WINAPI ProcessViewerEventW(int Event,void *Param)
+int    WINAPI ProcessViewerEventW(const struct ProcessViewerEventInfo *Info)
 {
 	if (fwf.ProcessViewerEventWrap)
-		return fwf.ProcessViewerEventWrap(fwf.wpi, Event, Param);
+		return fwf.ProcessViewerEventWrap(fwf.wpi, Info);
 	return 0;
 }
 

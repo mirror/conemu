@@ -344,12 +344,12 @@ struct WrapPluginInfo
 	       HANDLE        OpenW3  (const OpenInfo *Info);
 	static int    WINAPI AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
 	       int           AnalyseW3  (const AnalyseInfo *Info);
-	static void   WINAPI ClosePanelWrap(struct WrapPluginInfo* wpi, HANDLE hPanel);
-	       void          ClosePanelW3  (HANDLE hPanel);
+	static void   WINAPI ClosePanelWrap(struct WrapPluginInfo* wpi, const struct ClosePanelInfo *Info);
+	       void          ClosePanelW3  (const struct ClosePanelInfo *Info);
 	static int    WINAPI CompareWrap(struct WrapPluginInfo* wpi, const CompareInfo *Info);
 	       int           CompareW3  (const CompareInfo *Info);
-	static int    WINAPI ConfigureWrap(struct WrapPluginInfo* wpi, const GUID* Guid);
-	       int           ConfigureW3  (const GUID* Guid);
+	static int    WINAPI ConfigureWrap(struct WrapPluginInfo* wpi, const struct ConfigureInfo *Info);
+	       int           ConfigureW3  (const struct ConfigureInfo *Info);
 	static int    WINAPI DeleteFilesWrap(struct WrapPluginInfo* wpi, const DeleteFilesInfo *Info);
 	       int           DeleteFilesW3  (const DeleteFilesInfo *Info);
 	static void   WINAPI ExitFARWrap(struct WrapPluginInfo* wpi, const struct ExitInfo *Info);
@@ -368,24 +368,24 @@ struct WrapPluginInfo
 	       int           GetVirtualFindDataW3  (GetVirtualFindDataInfo *Info);
 	static int    WINAPI MakeDirectoryWrap(struct WrapPluginInfo* wpi, MakeDirectoryInfo *Info);
 	       int           MakeDirectoryW3  (MakeDirectoryInfo *Info);
-	static int    WINAPI ProcessDialogEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
-	       int           ProcessDialogEventW3  (int Event,void *Param);
-	static int    WINAPI ProcessEditorEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
-	       int           ProcessEditorEventW3  (int Event,void *Param);
+	static int    WINAPI ProcessDialogEventWrap(struct WrapPluginInfo* wpi, const struct ProcessDialogEventInfo *Info);
+	       int           ProcessDialogEventW3  (const struct ProcessDialogEventInfo *Info);
+	static int    WINAPI ProcessEditorEventWrap(struct WrapPluginInfo* wpi, const struct ProcessEditorEventInfo *Info);
+	       int           ProcessEditorEventW3  (const struct ProcessEditorEventInfo *Info);
 	static int    WINAPI ProcessEditorInputWrap(struct WrapPluginInfo* wpi, const ProcessEditorInputInfo *Info);
 	       int           ProcessEditorInputW3  (const ProcessEditorInputInfo *Info);
-	static int    WINAPI ProcessEventWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,int Event,void *Param);
-	       int           ProcessEventW3  (HANDLE hPanel,int Event,void *Param);
+	static int    WINAPI ProcessPanelEventWrap(struct WrapPluginInfo* wpi, const struct ProcessPanelEventInfo *Info);
+	       int           ProcessPanelEventW3  (const struct ProcessPanelEventInfo *Info);
 	static int    WINAPI ProcessHostFileWrap(struct WrapPluginInfo* wpi, const ProcessHostFileInfo *Info);
 	       int           ProcessHostFileW3  (const ProcessHostFileInfo *Info);
-	static int    WINAPI ProcessPanelInputWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
-	       int           ProcessPanelInputW3  (HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
+	static int    WINAPI ProcessPanelInputWrap(struct WrapPluginInfo* wpi, const struct ProcessPanelInputInfo *Info);
+	       int           ProcessPanelInputW3  (const struct ProcessPanelInputInfo *Info);
 	static int    WINAPI ProcessConsoleInputWrap(struct WrapPluginInfo* wpi, ProcessConsoleInputInfo *Info);
 	       int           ProcessConsoleInputW3  (ProcessConsoleInputInfo *Info);
-	static int    WINAPI ProcessSynchroEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
-	       int           ProcessSynchroEventW3  (int Event,void *Param);
-	static int    WINAPI ProcessViewerEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param);
-	       int           ProcessViewerEventW3  (int Event,void *Param);
+	static int    WINAPI ProcessSynchroEventWrap(struct WrapPluginInfo* wpi, const struct ProcessSynchroEventInfo *Info);
+	       int           ProcessSynchroEventW3  (const struct ProcessSynchroEventInfo *Info);
+	static int    WINAPI ProcessViewerEventWrap(struct WrapPluginInfo* wpi, const struct ProcessViewerEventInfo *Info);
+	       int           ProcessViewerEventW3  (const struct ProcessViewerEventInfo *Info);
 	static int    WINAPI PutFilesWrap(struct WrapPluginInfo* wpi, const PutFilesInfo *Info);
 	       int           PutFilesW3  (const PutFilesInfo *Info);
 	static int    WINAPI SetDirectoryWrap(struct WrapPluginInfo* wpi, const SetDirectoryInfo *Info);
@@ -3707,6 +3707,45 @@ void WrapPluginInfo::FarMessageParam_2_3(const int Msg2, const int Param1, const
 			}
 		}
 		break;
+	case Far2::DN_CTLCOLORDIALOG:
+		{
+			FarColor* p3 = (FarColor*)OrgParam2;
+			if (p3 && lRc)
+			{
+				FarColor_2_3(LOBYTE(lRc), *p3);
+			}
+		}
+		break;
+	case Far2::DN_CTLCOLORDLGITEM:
+		{
+			FarDialogItemColors* p3 = (FarDialogItemColors*)OrgParam2;
+			if (p3 && lRc)
+			{
+				if (p3->ColorsCount >= 0)
+					FarColor_2_3(LOBYTE(LOWORD(lRc)), p3->Colors[0]);
+				if (p3->ColorsCount >= 1)
+					FarColor_2_3(HIBYTE(LOWORD(lRc)), p3->Colors[1]);
+				if (p3->ColorsCount >= 2)
+					FarColor_2_3(LOBYTE(HIWORD(lRc)), p3->Colors[2]);
+				if (p3->ColorsCount >= 3)
+					FarColor_2_3(HIBYTE(HIWORD(lRc)), p3->Colors[3]);
+			}
+		}
+		break;
+	case Far2::DN_CTLCOLORDLGLIST:
+		{
+			FarDialogItemColors* p3 = (FarDialogItemColors*)OrgParam2;
+			Far2::FarListColors* p2 = (Far2::FarListColors*)Param2;
+			if (p3 && p2 && lRc)
+			{
+				int nMax = min(p2->ColorCount,(int)p3->ColorsCount);
+				for (int i = 0; i < nMax; i++)
+				{
+					FarColor_2_3(p2->Colors[i], p3->Colors[i]);
+				}
+			}
+		}
+		break;
 	}
 }
 
@@ -5802,11 +5841,11 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 	}
 	return 0;
 }
-void   WrapPluginInfo::ClosePanelW3(HANDLE hPanel)
+void   WrapPluginInfo::ClosePanelW3(const struct ClosePanelInfo *Info)
 {
 	LOG_CMD(L"ClosePanelW",0,0,0);
 	if (ClosePluginW)
-		ClosePluginW(hPanel);
+		ClosePluginW(Info->hPanel);
 }
 int    WrapPluginInfo::CompareW3(const CompareInfo *Info)
 {
@@ -5822,7 +5861,7 @@ int    WrapPluginInfo::CompareW3(const CompareInfo *Info)
 	}
 	return iRc;
 }
-int    WrapPluginInfo::ConfigureW3(const GUID* Guid)
+int    WrapPluginInfo::ConfigureW3(const struct ConfigureInfo *Info)
 {
 	LOG_CMD(L"ConfigureW",0,0,0);
 	int iRc = 0;
@@ -5832,8 +5871,8 @@ int    WrapPluginInfo::ConfigureW3(const GUID* Guid)
 		{
 			for (int i = 0; i < mn_PluginConfig; i++)
 			{
-				if (memcmp(Guid, &GUID_NULL, sizeof(GUID)) == 0 ||
-					memcmp(Guid, mguids_PluginConfig+i, sizeof(GUID)) == 0)
+				if (memcmp(Info->Guid, &GUID_NULL, sizeof(GUID)) == 0 ||
+					memcmp(Info->Guid, mguids_PluginConfig+i, sizeof(GUID)) == 0)
 				{
 					iRc = ConfigureW(i);
 					break;
@@ -6004,14 +6043,14 @@ int    WrapPluginInfo::MakeDirectoryW3(MakeDirectoryInfo *Info)
 		iRc = MakeDirectoryW(Info->hPanel, &Info->Name, OpMode_3_2(Info->OpMode));
 	return iRc;
 }
-int    WrapPluginInfo::ProcessDialogEventW3(int Event,void *Param)
+int    WrapPluginInfo::ProcessDialogEventW3(const struct ProcessDialogEventInfo *Info)
 {
 	LOG_CMD0(L"ProcessDialogEventW",0,0,0);
 	int lRc = 0;
 	if (ProcessDialogEventW)
 	{
 		Far2::DIALOG_EVENTS Event2 = Far2::DE_DLGPROCINIT;
-		switch (Event)
+		switch (Info->Event)
 		{
 		case DE_DLGPROCINIT:
 			Event2 = Far2::DE_DLGPROCINIT; break;
@@ -6022,7 +6061,7 @@ int    WrapPluginInfo::ProcessDialogEventW3(int Event,void *Param)
 		default:
 			return FALSE;
 		}
-		FarDialogEvent* p3 = (FarDialogEvent*)Param;
+		FarDialogEvent* p3 = (FarDialogEvent*)Info->Param;
 		Far2::FarDialogEvent p2 = {p3->hDlg, 0, p3->Param1, (LONG_PTR)p3->Param2, p3->Result};
 		//TODO: Конвертация VBuf?
 		p2.Msg = FarMessage_3_2(p3->Msg, p2.Param1, (void*&)p2.Param2);
@@ -6035,12 +6074,12 @@ int    WrapPluginInfo::ProcessDialogEventW3(int Event,void *Param)
 	}
 	return lRc;
 }
-int    WrapPluginInfo::ProcessEditorEventW3(int Event,void *Param)
+int    WrapPluginInfo::ProcessEditorEventW3(const struct ProcessEditorEventInfo *Info)
 {
 	LOG_CMD0(L"ProcessEditorEventW(%i)",Event,0,0);
 	int iRc = 0;
 	if (ProcessEditorEventW)
-		iRc = ProcessEditorEventW(Event, Param);
+		iRc = ProcessEditorEventW(Info->Event, Info->Param);
 	return iRc;
 }
 int    WrapPluginInfo::ProcessEditorInputW3(const ProcessEditorInputInfo *Info)
@@ -6052,12 +6091,12 @@ int    WrapPluginInfo::ProcessEditorInputW3(const ProcessEditorInputInfo *Info)
 		iRc = ProcessEditorInputW(&Info->Rec);
 	return iRc;
 }
-int    WrapPluginInfo::ProcessEventW3(HANDLE hPanel,int Event,void *Param)
+int    WrapPluginInfo::ProcessPanelEventW3(const struct ProcessPanelEventInfo *Info)
 {
 	LOG_CMD0(L"ProcessEventW(%i)",Event,0,0);
 	int iRc = 0;
 	if (ProcessEventW)
-		iRc = ProcessEventW(hPanel, Event, Param);
+		iRc = ProcessEventW(Info->hPanel, Info->Event, Info->Param);
 	return iRc;
 }
 int    WrapPluginInfo::ProcessHostFileW3(const ProcessHostFileInfo *Info)
@@ -6073,7 +6112,7 @@ int    WrapPluginInfo::ProcessHostFileW3(const ProcessHostFileInfo *Info)
 	}
 	return iRc;
 }
-int    WrapPluginInfo::ProcessPanelInputW3(HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
+int    WrapPluginInfo::ProcessPanelInputW3(const struct ProcessPanelInputInfo *Info)
 {
 	LOG_CMD(L"ProcessPanelInputW(%s,0x%X,0x%X)",(Info->Rec.EventType==KEY_EVENT?L"Key":L"???"),Info->Rec.Event.KeyEvent.wVirtualKeyCode,Info->Rec.Event.KeyEvent.dwControlKeyState);
 	_ASSERTE(Info->StructSize == sizeof(*Info));
@@ -6092,7 +6131,7 @@ int    WrapPluginInfo::ProcessPanelInputW3(HANDLE hPanel,const struct ProcessPan
 			Key2 = Key3 & 0x0000FFFF; // KEY_BREAK .. KEY_F24, KEY_BROWSER_BACK, KEY_MEDIA_NEXT_TRACK и т.п. 
 		else
 			Key2 = Key3 & 0x0003FFFF;
-		iRc = ProcessKeyW(hPanel, Key2 /*| PreProcess*/, ControlState);
+		iRc = ProcessKeyW(Info->hPanel, Key2 /*| PreProcess*/, ControlState);
 	}
 	return iRc;
 }
@@ -6101,20 +6140,20 @@ int    WrapPluginInfo::ProcessConsoleInputW3(ProcessConsoleInputInfo *Info)
 	//TODO: А здесь можно бы кинуть в Far2 то что раньше было PKF_PREPROCESS
 	return 0;
 }
-int    WrapPluginInfo::ProcessSynchroEventW3(int Event,void *Param)
+int    WrapPluginInfo::ProcessSynchroEventW3(const struct ProcessSynchroEventInfo *Info)
 {
 	LOG_CMD(L"ProcessSynchroEventW",0,0,0);
 	int iRc = 0;
 	if (ProcessSynchroEventW)
-		iRc = ProcessSynchroEventW(Event, Param);
+		iRc = ProcessSynchroEventW(Info->Event, Info->Param);
 	return iRc;
 }
-int    WrapPluginInfo::ProcessViewerEventW3(int Event,void *Param)
+int    WrapPluginInfo::ProcessViewerEventW3(const struct ProcessViewerEventInfo *Info)
 {
 	LOG_CMD(L"ProcessViewerEventW",0,0,0);
 	int iRc = 0;
 	if (ProcessViewerEventW)
-		iRc = ProcessViewerEventW(Event, Param);
+		iRc = ProcessViewerEventW(Info->Event, Info->Param);
 	return iRc;
 }
 int    WrapPluginInfo::PutFilesW3(const PutFilesInfo *Info)
@@ -6242,17 +6281,17 @@ int    WrapPluginInfo::AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo
 {
 	return wpi->AnalyseW3(Info);
 }
-void   WrapPluginInfo::ClosePanelWrap(struct WrapPluginInfo* wpi, HANDLE hPanel)
+void   WrapPluginInfo::ClosePanelWrap(struct WrapPluginInfo* wpi, const struct ClosePanelInfo *Info)
 {
-	return wpi->ClosePanelW3(hPanel);
+	return wpi->ClosePanelW3(Info);
 }
 int    WrapPluginInfo::CompareWrap(struct WrapPluginInfo* wpi, const CompareInfo *Info)
 {
 	return wpi->CompareW3(Info);
 }
-int    WrapPluginInfo::ConfigureWrap(struct WrapPluginInfo* wpi, const GUID* Guid)
+int    WrapPluginInfo::ConfigureWrap(struct WrapPluginInfo* wpi, const struct ConfigureInfo *Info)
 {
-	return wpi->ConfigureW3(Guid);
+	return wpi->ConfigureW3(Info);
 }
 int    WrapPluginInfo::DeleteFilesWrap(struct WrapPluginInfo* wpi, const DeleteFilesInfo *Info)
 {
@@ -6290,41 +6329,41 @@ int    WrapPluginInfo::MakeDirectoryWrap(struct WrapPluginInfo* wpi, MakeDirecto
 {
 	return wpi->MakeDirectoryW3(Info);
 }
-int    WrapPluginInfo::ProcessDialogEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+int    WrapPluginInfo::ProcessDialogEventWrap(struct WrapPluginInfo* wpi, const struct ProcessDialogEventInfo *Info)
 {
-	return wpi->ProcessDialogEventW3(Event, Param);
+	return wpi->ProcessDialogEventW3(Info);
 }
-int    WrapPluginInfo::ProcessEditorEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+int    WrapPluginInfo::ProcessEditorEventWrap(struct WrapPluginInfo* wpi, const struct ProcessEditorEventInfo *Info)
 {
-	return wpi->ProcessEditorEventW3(Event, Param);
+	return wpi->ProcessEditorEventW3(Info);
 }
 int    WrapPluginInfo::ProcessEditorInputWrap(struct WrapPluginInfo* wpi, const ProcessEditorInputInfo *Info)
 {
 	return wpi->ProcessEditorInputW3(Info);
 }
-int    WrapPluginInfo::ProcessEventWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,int Event,void *Param)
+int    WrapPluginInfo::ProcessPanelEventWrap(struct WrapPluginInfo* wpi, const struct ProcessPanelEventInfo *Info)
 {
-	return wpi->ProcessEventW3(hPanel, Event, Param);
+	return wpi->ProcessPanelEventW3(Info);
 }
 int    WrapPluginInfo::ProcessHostFileWrap(struct WrapPluginInfo* wpi, const ProcessHostFileInfo *Info)
 {
 	return wpi->ProcessHostFileW3(Info);
 }
-int    WrapPluginInfo::ProcessPanelInputWrap(struct WrapPluginInfo* wpi, HANDLE hPanel,const struct ProcessPanelInputInfo *Info)
+int    WrapPluginInfo::ProcessPanelInputWrap(struct WrapPluginInfo* wpi, const struct ProcessPanelInputInfo *Info)
 {
-	return wpi->ProcessPanelInputW3(hPanel, Info);
+	return wpi->ProcessPanelInputW3(Info);
 }
 int    WrapPluginInfo::ProcessConsoleInputWrap(struct WrapPluginInfo* wpi, ProcessConsoleInputInfo *Info)
 {
 	return wpi->ProcessConsoleInputW3(Info);
 }
-int    WrapPluginInfo::ProcessSynchroEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+int    WrapPluginInfo::ProcessSynchroEventWrap(struct WrapPluginInfo* wpi, const struct ProcessSynchroEventInfo *Info)
 {
-	return wpi->ProcessSynchroEventW3(Event, Param);
+	return wpi->ProcessSynchroEventW3(Info);
 }
-int    WrapPluginInfo::ProcessViewerEventWrap(struct WrapPluginInfo* wpi, int Event,void *Param)
+int    WrapPluginInfo::ProcessViewerEventWrap(struct WrapPluginInfo* wpi, const struct ProcessViewerEventInfo *Info)
 {
-	return wpi->ProcessViewerEventW3(Event, Param);
+	return wpi->ProcessViewerEventW3(Info);
 }
 int    WrapPluginInfo::PutFilesWrap(struct WrapPluginInfo* wpi, const PutFilesInfo *Info)
 {
@@ -7332,7 +7371,7 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	SET_FN(ProcessDialogEventWrap);
 	SET_FN(ProcessEditorEventWrap);
 	SET_FN(ProcessEditorInputWrap);
-	SET_FN(ProcessEventWrap);
+	SET_FN(ProcessPanelEventWrap);
 	SET_FN(ProcessHostFileWrap);
 	SET_FN(ProcessPanelInputWrap);
 	SET_FN(ProcessConsoleInputWrap);

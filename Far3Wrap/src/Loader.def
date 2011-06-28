@@ -39,6 +39,6 @@ EXPORTS
 	PutFilesW
 	DeleteFilesW
 	CompareW
-	ProcessEventW
+	ProcessPanelEventW
 	ProcessHostFileW
 	ProcessPanelInputW
