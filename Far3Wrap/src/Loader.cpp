@@ -429,7 +429,7 @@ int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info)
 	return 0;
 }
 
-int    WINAPI ProcessPanelEventW(HANDLE hPanel,const struct ProcessPanelEventInfo *Info)
+int    WINAPI ProcessPanelEventW(const struct ProcessPanelEventInfo *Info)
 {
 	if (fwf.ProcessPanelEventWrap)
 		return fwf.ProcessPanelEventWrap(fwf.wpi, Info);

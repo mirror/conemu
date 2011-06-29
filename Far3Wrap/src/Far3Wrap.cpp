@@ -115,7 +115,7 @@ struct Far2Dialog
 	// Far2
     int m_X1, m_Y1, m_X2, m_Y2;
     wchar_t *m_HelpTopic;
-    Far2::FarDialogItem *m_Items2;
+    Far2::FarDialogItem *m_Items2; // ссылка(!) на то, что передает Far2 плагин
     DWORD *m_Colors2; // для удобства, (m_Items2->Flags & (DIF_COLORMASK|DIF_SETCOLOR))
     FarDialogItem *m_Items3;
     FarList *mp_ListInit3;
@@ -2965,6 +2965,17 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				case Far2::DN_EDITCHANGE: Msg3 = DN_EDITCHANGE; break;
 				case Far2::DN_DRAWDLGITEM: Msg3 = DN_DRAWDLGITEM; break;
 				}
+				if (Msg3 == DM_SETDLGITEM || Msg3 == DM_SETDLGITEMSHORT)
+				{
+					Far2Dialog* p = (*gpMapDlg_3_2)[hDlg3];
+					if (p && p->m_Colors2 && (p->m_ItemsNumber > (UINT)Param1))
+					{
+						if (p2->Flags & Far2::DIF_SETCOLOR)
+							p->m_Colors2[Param1] = p2->Flags & (Far2::DIF_COLORMASK|Far2::DIF_SETCOLOR);
+						else
+							p->m_Colors2[Param1] = 0;
+					}
+				}
 			}
 			break;
 
@@ -3055,6 +3066,11 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 					if (lRc > 0)
 					{
 						FarDialogItem_3_2(m_GetDlgItem.Item, /*m_GetDlgItem.Size,*/ p2, &m_ListItems2, m_FarCharInfo2);
+						Far2Dialog* p = (*gpMapDlg_3_2)[hDlg3];
+						if (p && p->m_Colors2 && (p->m_ItemsNumber > (UINT)Param1) && (p->m_Colors2[Param1] & Far2::DIF_SETCOLOR))
+						{
+							p2->Flags |= p->m_Colors2[Param1];
+						}
 					}
 					//free(item.Item);
 				}
@@ -3064,6 +3080,11 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 					const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 					Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
 					FarDialogItem_3_2(p3, /*0,*/ p2, &m_ListItems2, m_FarCharInfo2);
+					Far2Dialog* ps = (*gpMapDlg_3_2)[hDlg3];
+					if (ps && ps->m_Colors2 && (ps->m_ItemsNumber > (UINT)Param1) && (ps->m_Colors2[Param1] & Far2::DIF_SETCOLOR))
+					{
+						p2->Flags |= ps->m_Colors2[Param1];
+					}
 				}
 				break;
 			case DM_LISTGETITEM:
@@ -4405,8 +4426,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				if (iRc > 0)
 				{
 					FarColor* pColors = (FarColor*)calloc(iRc,sizeof(*pColors));
-					//TODO: Логично был бы в фаре3 принимать размер буфера в Param1
-					iRc = pColors ? psi3.AdvControl(&guid, ACTL_GETARRAYCOLOR, 0, pColors) : 0;
+					iRc = pColors ? psi3.AdvControl(&guid, ACTL_GETARRAYCOLOR, iRc, pColors) : 0;
 					for (INT_PTR i = 0; i < iRc; i++)
 					{
 						UINT Far2Index = FarColorIndex_3_2(i);
@@ -6569,8 +6589,9 @@ Far2Dialog::Far2Dialog(WrapPluginInfo* pwpi,
 			_ASSERTE(Items[i].MaxLen<0xFFFFFF);
 		}
 #endif
-    	m_Items2 = (Far2::FarDialogItem*)calloc(ItemsNumber, sizeof(*m_Items2));
-    	memmove(m_Items2, Items, ItemsNumber*sizeof(*m_Items2));
+    	//m_Items2 = (Far2::FarDialogItem*)calloc(ItemsNumber, sizeof(*m_Items2));
+    	//memmove(m_Items2, Items, ItemsNumber*sizeof(*m_Items2));
+		m_Items2 = Items;
     	m_Colors2 = (DWORD*)calloc(ItemsNumber, sizeof(*m_Colors2));
 		//mpp_FarCharInfo2 = (CHAR_INFO**)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo2));
     	mpp_FarCharInfo3 = (FAR_CHAR_INFO**)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo3));
@@ -6599,11 +6620,11 @@ Far2Dialog::~Far2Dialog()
 		free(m_HelpTopic);
 		m_HelpTopic = NULL;
 	}
-	if (m_Items2)
-	{
-		free(m_Items2);
-		m_Items2 = NULL;
-	}
+	//if (m_Items2) -- это ссылка, не наша память!
+	//{
+	//	free(m_Items2);
+	//	m_Items2 = NULL;
+	//}
 	if (m_Colors2)
 	{
 		free(m_Colors2);
@@ -6796,7 +6817,13 @@ int Far2Dialog::RunDlg()
 			FarDialogItem *p3 = m_Items3;
 			for (UINT i = 0; i < m_ItemsNumber; i++, p2++, p3++)
 			{
-				p2->Param.Reserved = p3->Reserved;
+				if (p3->Type == DI_COMBOBOX || p3->Type == DI_LISTBOX)
+					p2->Param.Selected = p3->Selected;
+				else if (p3->Type == DI_CHECKBOX || p3->Type == DI_RADIOBUTTON)
+					p2->Param.Selected = p3->Selected;
+
+				p2->Flags &= ~(Far2::DIF_SETCOLOR|Far2::DIF_COLORMASK);
+				p2->Flags |= m_Colors2[i];
 			}
 
 		}
