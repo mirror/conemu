@@ -4272,7 +4272,10 @@ int WrapPluginInfo::FarApiGetDirList(const wchar_t *Dir, struct Far2::FAR_FIND_D
 	//std::map<Far2::PluginPanelItem*,PluginPanelItem*> m_MapPlugDirList;
 	LOG_CMD(L"psi2.GetDirList",0,0,0);
 	PluginPanelItem* p3 = NULL;
-	int iRc = psi3.GetDirList(Dir, &p3, pItemsNumber);
+	size_t nItemsNumber3 = pItemsNumber ? *pItemsNumber : 0;
+	int iRc = psi3.GetDirList(Dir, &p3, &nItemsNumber3);
+	if (pItemsNumber)
+		*pItemsNumber = nItemsNumber3;
 	if (iRc)
 	{
 		*pPanelItem = (Far2::FAR_FIND_DATA*)calloc(sizeof(Far2::FAR_FIND_DATA),*pItemsNumber);
@@ -4307,7 +4310,10 @@ int WrapPluginInfo::FarApiGetPluginDirList(INT_PTR PluginNumber, HANDLE hPlugin,
 	_ASSERTE(PluginNumber == psi2.ModuleNumber);
 	LOG_CMD(L"psi2.GetPluginDirList",0,0,0);
 	PluginPanelItem* p3 = NULL;
-	int iRc = psi3.GetPluginDirList(&mguid_Plugin, hPlugin, Dir, &p3, pItemsNumber);
+	size_t nItemsNumber3 = pItemsNumber ? *pItemsNumber : 0;
+	int iRc = psi3.GetPluginDirList(&mguid_Plugin, hPlugin, Dir, &p3, &nItemsNumber3);
+	if (pItemsNumber)
+		*pItemsNumber = nItemsNumber3;
 	if (iRc)
 	{
 		*pPanelItem = (Far2::PluginPanelItem*)calloc(sizeof(Far2::PluginPanelItem),*pItemsNumber);
@@ -4357,6 +4363,8 @@ LPCWSTR WrapPluginInfo::FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
 		{0xF2BED8E4, 0x2CDA, 0x45E1, {0x89, 0x3C, 0x5D, 0xAA, 0xED, 0x9B, 0xA6, 0x7C}},
 		// AdvCmp2 - 0244A6CB-99AC-4689-AA86-408D4AA7F0A3
 		{0x0244A6CB, 0x99AC, 0x4689, {0xAA, 0x86, 0x40, 0x8D, 0x4A, 0xA7, 0xF0, 0xA3}},
+		// UserMgr - 7EB82D3C-B0A8-40F4-8A29-E0E37F22B19D
+		{0x7EB82D3C, 0xB0A8, 0x40F4, {0x8A, 0x29, 0xE0, 0xE3, 0x7F, 0x22, 0xB1, 0x9D}},
 	};
 	bool lbSkipPlugin = false;
 	for (size_t n = 0; n < ARRAYSIZE(guidSkip); n++)
