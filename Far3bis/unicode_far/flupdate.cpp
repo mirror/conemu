@@ -262,7 +262,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 	::FindFile Find(strCurDir+L"\\"+L"*",true);
 	DWORD FindErrorCode = ERROR_SUCCESS;
 	bool UseFilter=Filter->IsEnabledOnPanel();
-	bool ReadCustomData=IsColumnDisplayed(CUSTOM_COLUMN0)!=0 && (SortMode==BY_CUSTOMDATA || (ViewSettings.Flags&PVS_PRELOADC0DATA));
+	bool ReadCustomData=(IsColumnDisplayed(CUSTOM_COLUMN0)!=0 && (ViewSettings.Flags&PVS_PRELOADC0DATA)) || (SortMode==BY_CUSTOMDATA);
 
 	DWORD StartTime = GetTickCount();
 
@@ -274,7 +274,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 		{
 			if (FileCount>=AllocatedCount)
 			{
-				AllocatedCount=AllocatedCount+256+AllocatedCount/4;
+				AllocatedCount+=4096;
 				FileListItem **pTemp;
 
 				if (!(pTemp=(FileListItem **)xf_realloc(ListData,AllocatedCount*sizeof(*ListData))))
@@ -346,9 +346,6 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 			if (ReadCustomData)
 				CtrlObject->Plugins.GetCustomData(NewPtr);
 
-			if (NeedHighlight)
-				CtrlObject->HiFiles->GetHiColor(&NewPtr,1);
-
 			if (!(fdata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				TotalFileCount++;
 
@@ -367,7 +364,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 					{
 						if (!DrawMessage)
 						{
-							Text(X1+1,Y1,COL_PANELBOX,Title);
+							Text(X1+1,Y1,ColorIndexToColor(COL_PANELBOX),Title);
 							IsShowTitle=TRUE;
 							SetColor(Focus ? COL_PANELSELECTEDTITLE:COL_PANELTITLE);
 						}
@@ -440,9 +437,6 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 
 			AddParentPoint(ListData[FileCount],FileCount,TwoDotsTimes,TwoDotsOwner);
 
-			if (NeedHighlight)
-				CtrlObject->HiFiles->GetHiColor(&ListData[FileCount],1);
-
 			FileCount++;
 		}
 	}
@@ -450,12 +444,17 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 	if (IsColumnDisplayed(DIZ_COLUMN))
 		ReadDiz();
 
+	if (NeedHighlight)
+	{
+		CtrlObject->HiFiles->GetHiColor(ListData, FileCount);
+	}
+
 	if (AnotherPanel->GetMode()==PLUGIN_PANEL)
 	{
 		HANDLE hAnotherPlugin=AnotherPanel->GetPluginHandle();
 		PluginPanelItem *PanelData=nullptr;
 		string strPath;
-		int PanelCount=0;
+		size_t PanelCount=0;
 		strPath = strCurDir;
 		AddEndSlash(strPath);
 
@@ -467,7 +466,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 			{
 				ListData=pTemp;
 
-				for (int i=0; i < PanelCount; i++)
+				for (size_t i=0; i < PanelCount; i++)
 				{
 					CurPtr = ListData[FileCount+i];
 					PluginPanelItem &fdata=PanelData[i];
@@ -484,7 +483,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 
 				// цветовую боевую раскраску в самом конце, за один раз
 				CtrlObject->HiFiles->GetHiColor(&ListData[FileCount],PanelCount);
-				FileCount+=PanelCount;
+				FileCount+=static_cast<int>(PanelCount);
 			}
 
 			CtrlObject->Plugins.FreeVirtualFindData(hAnotherPlugin,PanelData,PanelCount);
@@ -685,7 +684,7 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 	}
 
 	PluginPanelItem *PanelData=nullptr;
-	int PluginFileCount;
+	size_t PluginFileCount;
 
 	if (!CtrlObject->Plugins.GetFindData(hPlugin,&PanelData,&PluginFileCount,0))
 	{
@@ -743,7 +742,7 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 		DeleteListData(ListData,FileCount);
 	}
 
-	FileCount=PluginFileCount;
+	FileCount=static_cast<int>(PluginFileCount);
 	ListData=(FileListItem**)xf_malloc(sizeof(FileListItem*)*(FileCount+1));
 
 	if (!ListData)
@@ -842,7 +841,7 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 	/* $ 25.02.2001 VVM
 	    ! Ќе считывать повторно список файлов с панели плагина */
 	if (IsColumnDisplayed(DIZ_COLUMN))
-		ReadDiz(PanelData,PluginFileCount,RDF_NO_UPDATE);
+		ReadDiz(PanelData,static_cast<int>(PluginFileCount),RDF_NO_UPDATE);
 
 	CorrectPosition();
 	CtrlObject->Plugins.FreeFindData(hPlugin,PanelData,PluginFileCount);
@@ -884,7 +883,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 	else
 	{
 		PluginPanelItem *PanelData=nullptr;
-		int PluginFileCount=0;
+		size_t PluginFileCount=0;
 		OpenPanelInfo Info;
 		CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,&Info);
 
@@ -911,7 +910,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 			{
 				PluginPanelItem *CurPanelData=PanelData;
 
-				for (int J=0; J < PluginFileCount; J++, CurPanelData++)
+				for (size_t J=0; J < PluginFileCount; J++, CurPanelData++)
 				{
 					string strFileName = CurPanelData->FileName;
 

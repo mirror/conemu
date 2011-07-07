@@ -62,7 +62,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "elevation.hpp"
 #include "configdb.hpp"
 
-Options Opt={0};
+Options Opt={};
 
 // Стандартный набор разделителей
 static const wchar_t *WordDiv0 = L"~!%^&*()+|{}:\"<>?`-=\\[];',./";
@@ -374,9 +374,6 @@ void PluginsManagerSettings()
 
 	Builder.AddCheckbox(MPluginsManagerOEMPluginsSupport, &Opt.LoadPlug.OEMPluginsSupport);
 	Builder.AddCheckbox(MPluginsManagerScanSymlinks, &Opt.LoadPlug.ScanSymlinks);
-	Builder.AddText(MPluginsManagerPersonalPath);
-	Builder.AddEditField(&Opt.LoadPlug.strPersonalPluginsPath, 45, L"PersPath", DIF_EDITPATH);
-
 	Builder.AddSeparator(MPluginConfirmationTitle);
 	DialogItemEx *ConfirmOFP = Builder.AddCheckbox(MPluginsManagerOFP, &Opt.PluginConfirm.OpenFilePlugin);
 	ConfirmOFP->Flags|=DIF_3STATE;
@@ -445,6 +442,7 @@ void ViewerConfig(ViewerOptions &ViOpt,bool Local)
 		Builder.AddEmptyLine();
 		Builder.AddCheckbox(MViewAutoDetectCodePage, &ViOpt.AutoDetectCodePage);
 		Builder.AddCheckbox(MViewConfigAnsiCodePageAsDefault, &ViOpt.AnsiCodePageAsDefault);
+		Builder.AddCheckbox(MViewConfigRefreshOnRemovable, &ViOpt.RefreshOnRemovable);
 	}
 	Builder.AddOKCancel();
 	if (Builder.ShowDialog())
@@ -540,7 +538,7 @@ static struct FARConfig
 	const wchar_t *DefStr;   // строка/данные по умолчанию
 } CFG[]=
 {
-	{1, GeneralConfig::TYPE_BLOB,    NKeyColors, L"CurrentPalette",(char*)Palette,SizeArrayPalette,(wchar_t*)DefaultPalette},
+	{1, GeneralConfig::TYPE_BLOB,    NKeyColors, L"CurrentPalette",(char*)Opt.Palette.CurrentPalette,static_cast<DWORD>(Opt.Palette.SizeArrayPalette*sizeof(FarColor)),(const wchar_t*)Opt.Palette.DefaultPalette},
 
 	{1, GeneralConfig::TYPE_INTEGER, NKeyScreen, L"Clock", &Opt.Clock, 1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyScreen, L"ViewerEditorClock",&Opt.ViewerEditorClock,0, 0},
@@ -593,6 +591,7 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"Wrap",&Opt.ViOpt.ViewerWrap,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"PersistentBlocks",&Opt.ViOpt.PersistentBlocks,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"AnsiCodePageAsDefault",&Opt.ViOpt.AnsiCodePageAsDefault,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"RefreshOnRemovable",&Opt.ViOpt.RefreshOnRemovable,0, 0},
 
 	{0, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"MaxLineSize",&Opt.ViOpt.MaxLineSize,ViewerOptions::eDefLineSize, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"SearchEditFocus",&Opt.ViOpt.SearchEditFocus,0, 0},
@@ -847,16 +846,11 @@ static struct FARConfig
 void ReadConfig()
 {
 	/* <ПРЕПРОЦЕССЫ> *************************************************** */
-	// "Вспомним" путь для дополнительного поиска плагинов
 	string strGlobalUserMenuDir;
 	strGlobalUserMenuDir.ReleaseBuffer(GetPrivateProfileString(L"General", L"GlobalUserMenuDir", g_strFarPath, strGlobalUserMenuDir.GetBuffer(NT_MAX_PATH), NT_MAX_PATH, g_strFarINI));
 	apiExpandEnvironmentStrings(strGlobalUserMenuDir, Opt.GlobalUserMenuDir);
 	ConvertNameToFull(Opt.GlobalUserMenuDir,Opt.GlobalUserMenuDir);
 	AddEndSlash(Opt.GlobalUserMenuDir);
-
-	string strPersonalPluginsPath;
-	strPersonalPluginsPath.ReleaseBuffer(GetPrivateProfileString(L"General", L"TemplatePluginsPath", L"", strPersonalPluginsPath.GetBuffer(NT_MAX_PATH), NT_MAX_PATH, g_strFarINI));
-	GeneralCfg->GetValue(NKeySystem,L"PersonalPluginsPath",Opt.LoadPlug.strPersonalPluginsPath, strPersonalPluginsPath);
 
 	/* BUGBUG??
 	SetRegRootKey(HKEY_LOCAL_MACHINE);
@@ -903,25 +897,6 @@ void ReadConfig()
 	}
 
 	Opt.HelpTabSize=8; // пока жестко пропишем...
-	//   Уточняем алгоритм "взятия" палитры.
-	for (size_t I=COL_PRIVATEPOSITION_FOR_DIF165ABOVE-COL_FIRSTPALETTECOLOR+1;
-	        I < (COL_LASTPALETTECOLOR-COL_FIRSTPALETTECOLOR);
-	        ++I)
-	{
-		if (!Palette[I])
-		{
-			if (!Palette[COL_PRIVATEPOSITION_FOR_DIF165ABOVE-COL_FIRSTPALETTECOLOR])
-				Palette[I]=DefaultPalette[I];
-			else if (Palette[COL_PRIVATEPOSITION_FOR_DIF165ABOVE-COL_FIRSTPALETTECOLOR] == 1)
-				Palette[I]=BlackPalette[I];
-
-			/*
-			else
-			  в других случаях нифига ничего не делаем, т.к.
-			  есть другие палитры...
-			*/
-		}
-	}
 
 	Opt.ViOpt.ViewerIsWrap &= 1;
 	Opt.ViOpt.ViewerWrap &= 1;
@@ -1107,7 +1082,6 @@ void SaveConfig(int Ask)
 
 	GeneralCfg->BeginTransaction();
 
-	GeneralCfg->SetValue(NKeySystem,L"PersonalPluginsPath",Opt.LoadPlug.strPersonalPluginsPath);
 	GeneralCfg->SetValue(NKeyLanguage,L"Main",Opt.strLanguage);
 	GeneralCfg->SetValue(NKeyLanguage, L"Help", Opt.strHelpLanguage);
 

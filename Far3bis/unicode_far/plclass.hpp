@@ -116,7 +116,7 @@ enum EXPORTS_ENUM
 	iConfigure,
 	iExitFAR,
 	iProcessPanelInput,
-	iProcessEvent,
+	iProcessPanelEvent,
 	iProcessEditorEvent,
 	iCompare,
 	iProcessEditorInput,
@@ -135,6 +135,7 @@ enum EXPORTS_ENUM
 
 	iOpenFilePlugin,
 	iGetMinFarVersion,
+	iWrapperFunction2, // FarWrapGetProcAddress
 	i_LAST
 };
 
@@ -149,28 +150,28 @@ public:
 	virtual bool CheckMinFarVersion(bool &bUnloaded);
 	virtual HANDLE Open(int OpenFrom, const GUID& Guid, INT_PTR Item);
 	virtual HANDLE OpenFilePlugin(const wchar_t *Name, const unsigned char *Data, int DataSize, int OpMode);
-	virtual int SetFindList(HANDLE hPlugin, const PluginPanelItem *PanelItem, int ItemsNumber);
-	virtual int GetFindData(HANDLE hPlugin, PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode);
-	virtual int GetVirtualFindData(HANDLE hPlugin, PluginPanelItem **pPanelItem, int *pItemsNumber, const wchar_t *Path);
+	virtual int SetFindList(HANDLE hPlugin, const PluginPanelItem *PanelItem, size_t ItemsNumber);
+	virtual int GetFindData(HANDLE hPlugin, PluginPanelItem **pPanelItem, size_t *pItemsNumber, int OpMode);
+	virtual int GetVirtualFindData(HANDLE hPlugin, PluginPanelItem **pPanelItem, size_t *pItemsNumber, const wchar_t *Path);
 	virtual int SetDirectory(HANDLE hPlugin, const wchar_t *Dir, int OpMode);
-	virtual int GetFiles(HANDLE hPlugin, PluginPanelItem *PanelItem, int ItemsNumber, int Move, const wchar_t **DestPath, int OpMode);
-	virtual int PutFiles(HANDLE hPlugin, PluginPanelItem *PanelItem, int ItemsNumber, int Move, int OpMode);
-	virtual int DeleteFiles(HANDLE hPlugin, PluginPanelItem *PanelItem, int ItemsNumber, int OpMode);
+	virtual int GetFiles(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber, bool Move, const wchar_t **DestPath, int OpMode);
+	virtual int PutFiles(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber, bool Move, int OpMode);
+	virtual int DeleteFiles(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber, int OpMode);
 	virtual int MakeDirectory(HANDLE hPlugin, const wchar_t **Name, int OpMode);
-	virtual int ProcessHostFile(HANDLE hPlugin, PluginPanelItem *PanelItem, int ItemsNumber, int OpMode);
+	virtual int ProcessHostFile(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber, int OpMode);
 	virtual int ProcessKey(HANDLE hPlugin, const INPUT_RECORD *Rec, bool Pred);
-	virtual int ProcessEvent(HANDLE hPlugin, int Event, PVOID Param);
+	virtual int ProcessPanelEvent(HANDLE hPlugin, int Event, PVOID Param);
 	virtual int Compare(HANDLE hPlugin, const PluginPanelItem *Item1, const PluginPanelItem *Item2, unsigned long Mode);
 	virtual int GetCustomData(const wchar_t *FilePath, wchar_t **CustomData);
 	virtual void FreeCustomData(wchar_t *CustomData);
 	virtual void GetOpenPanelInfo(HANDLE hPlugin, OpenPanelInfo *Info);
-	virtual void FreeFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, int ItemsNumber);
-	virtual void FreeVirtualFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, int ItemsNumber);
+	virtual void FreeFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
+	virtual void FreeVirtualFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
 	virtual void ClosePanel(HANDLE hPlugin);
 	virtual int ProcessEditorInput(const INPUT_RECORD *D);
 	virtual int ProcessEditorEvent(int Event, PVOID Param);
 	virtual int ProcessViewerEvent(int Event, PVOID Param);
-	virtual int ProcessDialogEvent(int Event, PVOID Param);
+	virtual int ProcessDialogEvent(int Event, FarDialogEvent *Param);
 	virtual int ProcessSynchroEvent(int Event, PVOID Param);
 #if defined(MANTIS_0000466)
 	virtual int ProcessMacro(ProcessMacroInfo *Info);
@@ -184,6 +185,7 @@ public:
 	virtual void ExitFAR(const ExitInfo *Info);
 
 	virtual bool IsOemPlugin() const { return false; }
+	virtual bool IsFar2Plugin() const { return HasWrapperFunction2(); }
 	virtual const wchar_t *GetHotkeyName() const { return m_strGuid; }
 
 	bool HasGetGlobalInfo()       const { return Exports[iGetGlobalInfo]!=nullptr; }
@@ -206,7 +208,7 @@ public:
 	bool HasConfigure()           const { return Exports[iConfigure]!=nullptr; }
 	bool HasExitFAR()             const { return Exports[iExitFAR]!=nullptr; }
 	bool HasProcessPanelInput()   const { return Exports[iProcessPanelInput]!=nullptr; }
-	bool HasProcessEvent()        const { return Exports[iProcessEvent]!=nullptr; }
+	bool HasProcessPanelEvent()   const { return Exports[iProcessPanelEvent]!=nullptr; }
 	bool HasProcessEditorEvent()  const { return Exports[iProcessEditorEvent]!=nullptr; }
 	bool HasCompare()             const { return Exports[iCompare]!=nullptr; }
 	bool HasProcessEditorInput()  const { return Exports[iProcessEditorInput]!=nullptr; }
@@ -225,6 +227,8 @@ public:
 
 	bool HasOpenFilePlugin()      const { return Exports[iOpenFilePlugin]!=nullptr; }
 	bool HasMinFarVersion()       const { return Exports[iGetMinFarVersion]!=nullptr; }
+	
+	bool HasWrapperFunction2()    const { return Exports[iWrapperFunction2]!=nullptr; }
 
 	const string &GetModuleName() const { return m_strModuleName; }
 	const wchar_t *GetCacheName() const  { return m_strCacheName; }

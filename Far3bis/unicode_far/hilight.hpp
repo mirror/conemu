@@ -53,7 +53,7 @@ enum enumHighlightDataColor
 
 struct HighlightDataColor
 {
-	WORD Color[2][4]; // [0=file, 1=mark][0=normal,1=selected,2=undercursor,3=selectedundercursor]; if HIBYTE == 0xFF then transparent
+	FarColor Color[2][4]; // [0=file, 1=mark][0=normal,1=selected,2=undercursor,3=selectedundercursor]; if HIBYTE == 0xFF then transparent
 	DWORD MarkChar;
 };
 
@@ -78,7 +78,7 @@ class HighlightFiles
 
 	public:
 		void UpdateCurrentTime();
-		void GetHiColor(FileListItem **FileItem,int FileCount,bool UseAttrHighlighting=false);
+		void GetHiColor(FileListItem **FileItem,size_t FileCount,bool UseAttrHighlighting=false);
 		int  GetGroup(const FileListItem *fli);
 		void HiEdit(int MenuPos);
 

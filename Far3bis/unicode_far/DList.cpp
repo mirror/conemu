@@ -113,8 +113,22 @@ void *CDList::CDelete(void *item)
 	Node *node=(Node*)((BYTE*)item-sizeof(Node));
 	Node *pr=node->prev;
 	Node *nx=node->next;
-	pr->next=nx;
-	nx->prev=pr;
+	if (pr)
+	{
+		pr->next=nx;
+	}
+	else
+	{
+		_ASSERTE(pr!=NULL);
+	}
+	if (nx && nx!=(Node*)0xfdfdfdfd)
+	{
+		nx->prev=pr;
+	}
+	else
+	{
+		_ASSERTE(nx && nx!=(Node*)0xfdfdfdfd);
+	}
 	--count;
 	DeleteNode(node);
 	return pr==&root ? nullptr : ((BYTE*)pr)+sizeof(Node);

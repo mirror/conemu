@@ -67,8 +67,8 @@ other possible license with no implications from the above license on them.
 
 typedef unsigned __int64 FARCOLORFLAGS;
 static const FARCOLORFLAGS
-	FMSG_FG_4BIT  = 0x0000000000000001ULL,
-	FMSG_BG_4BIT  = 0x0000000000000002ULL;
+	FCF_FG_4BIT  = 0x0000000000000001ULL,
+	FCF_BG_4BIT  = 0x0000000000000002ULL;
 
 struct FarColor
 {
@@ -157,8 +157,6 @@ static __inline BOOL IsEdit(enum FARDIALOGITEMTYPES Type)
 typedef unsigned __int64 FARDIALOGITEMFLAGS;
 static const FARDIALOGITEMFLAGS
 	DIF_NONE                  = 0,
-	DIF_COLORMASK             = 0x00000000000000ffULL,
-	DIF_SETCOLOR              = 0x0000000000000100ULL,
 	DIF_BOXCOLOR              = 0x0000000000000200ULL,
 	DIF_GROUP                 = 0x0000000000000400ULL,
 	DIF_LEFTTEXT              = 0x0000000000000800ULL,
@@ -414,7 +412,7 @@ static const FARLISTINFOFLAGS
 struct FarListInfo
 {
 	FARLISTINFOFLAGS Flags;
-	int ItemsNumber;
+	size_t ItemsNumber;
 	int SelectPos;
 	int TopPos;
 	int MaxHeight;
@@ -444,12 +442,18 @@ struct FarListTitles
 	const wchar_t *Bottom;
 };
 
-struct FarListColors
+struct FarDialogItemColors
 {
 	unsigned __int64 Flags;
-	DWORD  Reserved;
-	int    ColorCount;
-	LPBYTE Colors;
+	size_t ColorsCount;
+	struct FarColor* Colors;
+	void* Reserved;
+};
+
+struct FAR_CHAR_INFO
+{
+	WCHAR Char;
+	struct FarColor Attributes;
 };
 
 struct FarDialogItem
@@ -461,7 +465,7 @@ struct FarDialogItem
 		DWORD_PTR Reserved;
 		int Selected;
 		struct FarList *ListItems;
-		CHAR_INFO *VBuf;
+		struct FAR_CHAR_INFO *VBuf;
 	}
 #ifndef __cplusplus
 	Param
@@ -579,8 +583,8 @@ typedef HANDLE(WINAPI *FARAPIDIALOGINIT)(
     int                   X2,
     int                   Y2,
     const wchar_t        *HelpTopic,
-    struct FarDialogItem *Item,
-    unsigned int          ItemsNumber,
+    const struct FarDialogItem *Item,
+    size_t                ItemsNumber,
     DWORD                 Reserved,
     FARDIALOGFLAGS        Flags,
     FARWINDOWPROC         DlgProc,
@@ -745,8 +749,8 @@ struct PanelInfo
 	HANDLE PluginHandle;
 	enum PANELINFOTYPE PanelType;
 	RECT PanelRect;
-	int ItemsNumber;
-	int SelectedItemsNumber;
+	size_t ItemsNumber;
+	size_t SelectedItemsNumber;
 	int CurrentItem;
 	int TopPanelItem;
 	int ViewMode;
@@ -813,7 +817,7 @@ enum FILE_CONTROL_COMMANDS
 typedef void (WINAPI *FARAPITEXT)(
     int X,
     int Y,
-    int Color,
+    const FarColor* Color,
     const wchar_t *Str
 );
 
@@ -825,7 +829,7 @@ typedef void (WINAPI *FARAPIRESTORESCREEN)(HANDLE hScreen);
 typedef int (WINAPI *FARAPIGETDIRLIST)(
     const wchar_t *Dir,
     struct PluginPanelItem **pPanelItem,
-    int *pItemsNumber
+    size_t *pItemsNumber
 );
 
 typedef int (WINAPI *FARAPIGETPLUGINDIRLIST)(
@@ -833,11 +837,11 @@ typedef int (WINAPI *FARAPIGETPLUGINDIRLIST)(
     HANDLE hPanel,
     const wchar_t *Dir,
     struct PluginPanelItem **pPanelItem,
-    int *pItemsNumber
+    size_t *pItemsNumber
 );
 
-typedef void (WINAPI *FARAPIFREEDIRLIST)(struct PluginPanelItem *PanelItem, int nItemsNumber);
-typedef void (WINAPI *FARAPIFREEPLUGINDIRLIST)(struct PluginPanelItem *PanelItem, int nItemsNumber);
+typedef void (WINAPI *FARAPIFREEDIRLIST)(struct PluginPanelItem *PanelItem, size_t nItemsNumber);
+typedef void (WINAPI *FARAPIFREEPLUGINDIRLIST)(struct PluginPanelItem *PanelItem, size_t nItemsNumber);
 
 typedef unsigned __int64 VIEWER_FLAGS;
 static const VIEWER_FLAGS
@@ -1280,9 +1284,9 @@ static const FARSETCOLORFLAGS
 struct FarSetColors
 {
 	FARSETCOLORFLAGS Flags;
-	int StartIndex;
-	int ColorCount;
-	LPBYTE Colors;
+	size_t StartIndex;
+	size_t ColorsCount;
+	FarColor* Colors;
 };
 
 enum WINDOWINFO_TYPE
@@ -2409,7 +2413,7 @@ struct PutFilesInfo
 	HANDLE hPanel;
 	struct PluginPanelItem *PanelItem;
 	size_t ItemsNumber;
-	int Move;
+	BOOL Move;
 	const wchar_t *SrcPath;
 	OPERATION_MODES OpMode;
 };
@@ -2445,7 +2449,7 @@ struct GetFindDataInfo
 	size_t StructSize;
 	HANDLE hPanel;
 	struct PluginPanelItem *PanelItem;
-	int ItemsNumber;
+	size_t ItemsNumber;
 	OPERATION_MODES OpMode;
 };
 
@@ -2454,7 +2458,7 @@ struct GetVirtualFindDataInfo
 	size_t StructSize;
 	HANDLE hPanel;
 	struct PluginPanelItem *PanelItem;
-	int ItemsNumber;
+	size_t ItemsNumber;
 	const wchar_t *Path;
 };
 
@@ -2463,7 +2467,7 @@ struct FreeFindDataInfo
 	size_t StructSize;
 	HANDLE hPanel;
 	struct PluginPanelItem *PanelItem;
-	int ItemsNumber;
+	size_t ItemsNumber;
 };
 
 struct GetFilesInfo
@@ -2471,8 +2475,8 @@ struct GetFilesInfo
 	size_t StructSize;
 	HANDLE hPanel;
 	struct PluginPanelItem *PanelItem;
-	int ItemsNumber;
-	int Move;
+	size_t ItemsNumber;
+	BOOL Move;
 	const wchar_t *DestPath;
 	OPERATION_MODES OpMode;
 };
@@ -2482,13 +2486,14 @@ struct DeleteFilesInfo
 	size_t StructSize;
 	HANDLE hPanel;
 	struct PluginPanelItem *PanelItem;
-	int ItemsNumber;
+	size_t ItemsNumber;
 	OPERATION_MODES OpMode;
 };
 
 struct ProcessPanelInputInfo
 {
 	size_t StructSize;
+	HANDLE hPanel;
 	INPUT_RECORD Rec;
 };
 
@@ -2520,6 +2525,54 @@ struct ExitInfo
 	size_t StructSize;
 };
 
+struct ProcessPanelEventInfo
+{
+	size_t StructSize;
+	HANDLE hPanel;
+	int Event;
+	void* Param;
+};
+
+struct ProcessEditorEventInfo
+{
+	size_t StructSize;
+	int Event;
+	void* Param;
+};
+
+struct ProcessDialogEventInfo
+{
+	size_t StructSize;
+	int Event;
+	FarDialogEvent* Param;
+};
+
+struct ProcessSynchroEventInfo
+{
+	size_t StructSize;
+	int Event;
+	void* Param;
+};
+
+struct ProcessViewerEventInfo
+{
+	size_t StructSize;
+	int Event;
+	void* Param;
+};
+
+struct ClosePanelInfo
+{
+	size_t StructSize;
+	HANDLE hPanel;
+};
+
+struct ConfigureInfo
+{
+	size_t StructSize;
+	const GUID* Guid;
+};
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -2527,9 +2580,9 @@ extern "C"
 // Exported Functions
 
 	int    WINAPI AnalyseW(const struct AnalyseInfo *Info);
-	void   WINAPI ClosePanelW(HANDLE hPanel);
+	void   WINAPI ClosePanelW(const struct ClosePanelInfo *Info);
 	int    WINAPI CompareW(const struct CompareInfo *Info);
-	int    WINAPI ConfigureW(const GUID* Guid);
+	int    WINAPI ConfigureW(const struct ConfigureInfo *Info);
 	int    WINAPI DeleteFilesW(const struct DeleteFilesInfo *Info);
 	void   WINAPI ExitFARW(const struct ExitInfo *Info);
 	void   WINAPI FreeFindDataW(const struct FreeFindDataInfo *Info);
@@ -2542,12 +2595,12 @@ extern "C"
 	int    WINAPI GetVirtualFindDataW(struct GetVirtualFindDataInfo *Info);
 	int    WINAPI MakeDirectoryW(struct MakeDirectoryInfo *Info);
 	HANDLE WINAPI OpenW(const struct OpenInfo *Info);
-	int    WINAPI ProcessDialogEventW(int Event,void *Param);
-	int    WINAPI ProcessEditorEventW(int Event,void *Param);
-	int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info);
-	int    WINAPI ProcessEventW(HANDLE hPanel,int Event,void *Param);
+	int    WINAPI ProcessDialogEventW(const struct ProcessDialogEventInfo *Info);
+	int    WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *Info);
+	int    WINAPI ProcessEditorInputW(const struct ProcessEditorInputInfo *Info);
+	int    WINAPI ProcessPanelEventW(const struct ProcessPanelEventInfo *Info);
 	int    WINAPI ProcessHostFileW(const struct ProcessHostFileInfo *Info);
-	int    WINAPI ProcessPanelInputW(HANDLE hPanel,const struct ProcessPanelInputInfo *Info);
+	int    WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *Info);
 #ifdef FAR_USE_INTERNALS
 #if defined(MANTIS_0000466)
 	int    WINAPI ProcessMacroW(const struct ProcessMacroInfo *Info);
@@ -2558,8 +2611,8 @@ extern "C"
 	int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info);
 #endif
 #endif // END FAR_USE_INTERNALS
-	int    WINAPI ProcessSynchroEventW(int Event,void *Param);
-	int    WINAPI ProcessViewerEventW(int Event,void *Param);
+	int    WINAPI ProcessSynchroEventW(const struct ProcessSynchroEventInfo *Info);
+	int    WINAPI ProcessViewerEventW(const struct ProcessViewerEventInfo *Info);
 	int    WINAPI PutFilesW(const struct PutFilesInfo *Info);
 	int    WINAPI SetDirectoryW(const struct SetDirectoryInfo *Info);
 	int    WINAPI SetFindListW(const struct SetFindListInfo *Info);

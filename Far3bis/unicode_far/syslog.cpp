@@ -421,7 +421,7 @@ void SysLogDump(const wchar_t *Title,DWORD StartAddress,LPBYTE Buf,int SizeBuf,F
 }
 
 
-void SaveScreenDumpBuffer(const wchar_t *Title,const CHAR_INFO *Buffer,int X1,int Y1,int X2,int Y2,FILE *fp)
+void SaveScreenDumpBuffer(const wchar_t *Title,const FAR_CHAR_INFO *Buffer,int X1,int Y1,int X2,int Y2,FILE *fp)
 {
 #if defined(SYSLOG)
 
@@ -438,7 +438,7 @@ void SaveScreenDumpBuffer(const wchar_t *Title,const CHAR_INFO *Buffer,int X1,in
 		if (fp)
 		{
 			wchar_t timebuf[64];
-			fwprintf(fp,L"%s %s(CHAR_INFO DumpBuffer: '%s')\n",PrintTime(timebuf,ARRAYSIZE(timebuf)),MakeSpace(),NullToEmpty(Title));
+			fwprintf(fp,L"%s %s(FAR_CHAR_INFO DumpBuffer: '%s')\n",PrintTime(timebuf,ARRAYSIZE(timebuf)),MakeSpace(),NullToEmpty(Title));
 		}
 	}
 
@@ -449,7 +449,7 @@ void SaveScreenDumpBuffer(const wchar_t *Title,const CHAR_INFO *Buffer,int X1,in
 		int x,y,i;
 
 		if (!InternalLog && Title && *Title)
-			fwprintf(fp,L"CHAR_INFO DumpBuffer: %s\n",Title);
+			fwprintf(fp,L"FAR_CHAR_INFO DumpBuffer: %s\n",Title);
 
 		fwprintf(fp,L"XY={%i,%i - %i,%i}\n",X1,Y1,X2,Y2);
 
@@ -459,7 +459,7 @@ void SaveScreenDumpBuffer(const wchar_t *Title,const CHAR_INFO *Buffer,int X1,in
 
 			for (i=0, x=X1; x <= X2; x++, ++i)
 			{
-				line[i]=Buffer->Char.UnicodeChar?Buffer->Char.UnicodeChar:L' ';
+				line[i]=Buffer->Char?Buffer->Char:L' ';
 				Buffer++;
 			}
 
@@ -1317,6 +1317,8 @@ string __MCODE_ToName(DWORD OpCode)
 		DEF_MCODE_(F_HISTIORY_ENABLE),           // N=History.Enable([State])
 		DEF_MCODE_(F_PLUGIN_LOAD),              // N=Plugin.Load(DllPath[,ForceLoad])
 		DEF_MCODE_(F_PLUGIN_UNLOAD),            // N=Plugin.UnLoad(DllPath)
+		DEF_MCODE_(F_MENU_FILTER),              // N=Menu.Filter(Action[,Mode])
+		DEF_MCODE_(F_MENU_FILTERSTR),           // S=Menu.FilterStr([Action[,S]])
 
 	};
 	string Name;

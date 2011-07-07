@@ -48,6 +48,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filestr.hpp"
 #include "codepage.hpp"
 #include "cache.hpp"
+#include "elevation.hpp"
 
 static DizRecord *SearchDizData;
 static int _cdecl SortDizIndex(const void *el1,const void *el2);
@@ -479,7 +480,12 @@ bool DizList::Flush(const wchar_t *Path,const wchar_t *DizName)
 
 		if(!(FileAttr&FILE_ATTRIBUTE_READONLY))
 		{
+			//Maximus5: Ќа некоторых сетевых устройствах атрибуты вообще не устанавливаютс€
+			// ѕоэтому возвращаетс€ ошибка, и производитс€ попытка Elevation (что бессмысленно)
+			DWORD oldElevation = Opt.ElevationMode;
+			Opt.ElevationMode &= ~ELEVATION_MODIFY_REQUEST;
 			apiSetFileAttributes(strDizFileName,FILE_ATTRIBUTE_ARCHIVE);
+			Opt.ElevationMode = oldElevation;
 		}
 		else
 		{

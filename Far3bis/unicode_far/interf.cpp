@@ -49,11 +49,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "console.hpp"
 #include "configdb.hpp"
+#include "colormix.hpp"
 
 BOOL __stdcall CtrlHandler(DWORD CtrlType);
 
 static int CurX,CurY;
-static int CurColor;
+static FarColor CurColor;
 
 CONSOLE_CURSOR_INFO InitialCursorInfo;
 
@@ -84,8 +85,7 @@ void InitConsole(int FirstInit)
 	Console.GetTitle(strInitTitle);
 	Console.GetWindowRect(InitWindowRect);
 	Console.GetSize(InitialSize);
-	CONSOLE_CURSOR_INFO InitCursorInfo;
-	Console.GetCursorInfo(InitCursorInfo);
+	Console.GetCursorInfo(InitialCursorInfo);
 
 	GeneralCfg->GetValue(L"Interface",L"Mouse",&Opt.Mouse,1);
 
@@ -136,7 +136,7 @@ void InitConsole(int FirstInit)
 	  для consoledetach не нужно, что бы инитилась палитра.
 	*/
 	if (FirstInit)
-		memcpy(Palette,DefaultPalette,SizeArrayPalette);
+		Opt.Palette.ResetToDefault();
 
 	HWND hWnd = Console.GetWindow();
 	if (hWnd && Opt.SmallIcon)
@@ -160,6 +160,15 @@ void CloseConsole()
 
 	Console.SetTitle(strInitTitle);
 	Console.SetSize(InitialSize);
+	COORD CursorPos = {};
+	Console.GetCursorPosition(CursorPos);
+	SHORT Height = InitWindowRect.Bottom-InitWindowRect.Top, Width = InitWindowRect.Right-InitWindowRect.Left;
+	if (CursorPos.Y > InitWindowRect.Bottom || CursorPos.Y < InitWindowRect.Top)
+		InitWindowRect.Top = (CursorPos.Y <= Height) ? 0 : max(CursorPos.Y-Height,0);
+	if (CursorPos.X > InitWindowRect.Right || CursorPos.X < InitWindowRect.Left)
+		InitWindowRect.Left = (CursorPos.X <= Width) ? 0 : max(CursorPos.X-Width,0);
+	InitWindowRect.Bottom = InitWindowRect.Top + Height;
+	InitWindowRect.Right = InitWindowRect.Left + Width;
 	Console.SetWindowRect(InitWindowRect);
 	Console.SetSize(InitialSize);
 
@@ -405,7 +414,7 @@ void ShowTime(int ShowAlways)
 	static SYSTEMTIME lasttm={0,0,0,0,0,0,0,0};
 	SYSTEMTIME tm;
 	GetLocalTime(&tm);
-	CHAR_INFO ScreenClockText[5];
+	FAR_CHAR_INFO ScreenClockText[5];
 	GetText(ScrX-4,0,ScrX,0,ScreenClockText,sizeof(ScreenClockText));
 
 	if (ShowAlways==2)
@@ -415,7 +424,7 @@ void ShowTime(int ShowAlways)
 	}
 
 	if ((!ShowAlways && lasttm.wMinute==tm.wMinute && lasttm.wHour==tm.wHour &&
-	        ScreenClockText[2].Char.UnicodeChar==L':') || ScreenSaverActive)
+	        ScreenClockText[2].Char==L':') || ScreenSaverActive)
 		return;
 
 	ProcessShowClock++;
@@ -573,9 +582,9 @@ void InitRecodeOutTable()
 }
 
 
-void Text(int X, int Y, int Color, const WCHAR *Str)
+void Text(int X, int Y, const FarColor& Color, const WCHAR *Str)
 {
-	CurColor=FarColorToReal(Color);
+	CurColor=Color;
 	CurX=X;
 	CurY=Y;
 	Text(Str);
@@ -588,19 +597,19 @@ void Text(const WCHAR *Str)
 	if (Length<=0)
 		return;
 
-	CHAR_INFO StackBuffer[StackBufferSize/sizeof(CHAR_INFO)];
-	PCHAR_INFO HeapBuffer=nullptr;
-	PCHAR_INFO BufPtr=StackBuffer;
+	FAR_CHAR_INFO StackBuffer[StackBufferSize/sizeof(FAR_CHAR_INFO)];
+	FAR_CHAR_INFO* HeapBuffer=nullptr;
+	FAR_CHAR_INFO* BufPtr=StackBuffer;
 
-	if (Length >= StackBufferSize/sizeof(CHAR_INFO))
+	if (Length >= StackBufferSize/sizeof(FAR_CHAR_INFO))
 	{
-		HeapBuffer=new CHAR_INFO[Length+1];
+		HeapBuffer=new FAR_CHAR_INFO[Length+1];
 		BufPtr=HeapBuffer;
 	}
 
 	for (size_t i=0; i < Length; i++)
 	{
-		BufPtr[i].Char.UnicodeChar=Str[i];
+		BufPtr[i].Char=Str[i];
 		BufPtr[i].Attributes=CurColor;
 	}
 
@@ -638,10 +647,10 @@ void VText(const WCHAR *Str)
 	}
 }
 
-void HiText(const wchar_t *Str,int HiColor,int isVertText)
+void HiText(const wchar_t *Str,const FarColor& HiColor,int isVertText)
 {
 	string strTextStr;
-	int SaveColor;
+	FarColor SaveColor;
 	size_t pos;
 	strTextStr = Str;
 
@@ -716,7 +725,7 @@ void HiText(const wchar_t *Str,int HiColor,int isVertText)
 
 
 
-void SetScreen(int X1,int Y1,int X2,int Y2,wchar_t Ch,int Color)
+void SetScreen(int X1,int Y1,int X2,int Y2,wchar_t Ch,const FarColor& Color)
 {
 	if (X1<0) X1=0;
 
@@ -726,7 +735,7 @@ void SetScreen(int X1,int Y1,int X2,int Y2,wchar_t Ch,int Color)
 
 	if (Y2>ScrY) Y2=ScrY;
 
-	ScrBuf.FillRect(X1,Y1,X2,Y2,Ch,FarColorToReal(Color));
+	ScrBuf.FillRect(X1, Y1, X2, Y2, Ch, Color);
 }
 
 
@@ -739,11 +748,12 @@ void MakeShadow(int X1,int Y1,int X2,int Y2)
 	if (X2>ScrX) X2=ScrX;
 
 	if (Y2>ScrY) Y2=ScrY;
-
-	ScrBuf.ApplyColorMask(X1,Y1,X2,Y2,0xF8);
+	FarColor Mask;
+	Colors::ConsoleColorToFarColor(0xf8, Mask);
+	ScrBuf.ApplyColorMask(X1,Y1,X2,Y2,Mask);
 }
 
-void ChangeBlockColor(int X1,int Y1,int X2,int Y2,int Color)
+void ChangeBlockColor(int X1,int Y1,int X2,int Y2,const FarColor& Color)
 {
 	if (X1<0) X1=0;
 
@@ -753,7 +763,7 @@ void ChangeBlockColor(int X1,int Y1,int X2,int Y2,int Color)
 
 	if (Y2>ScrY) Y2=ScrY;
 
-	ScrBuf.ApplyColor(X1,Y1,X2,Y2,FarColorToReal(Color));
+	ScrBuf.ApplyColor(X1, Y1, X2, Y2, Color);
 }
 
 void vmprintf(const WCHAR *fmt,...)
@@ -766,32 +776,39 @@ void vmprintf(const WCHAR *fmt,...)
 	va_end(argptr);
 }
 
-
 void SetColor(int Color)
 {
-	CurColor=FarColorToReal(Color);
+	CurColor=ColorIndexToColor((PaletteColors)Color);
 }
 
-void SetRealColor(int Color)
+void SetColor(PaletteColors Color)
 {
-	CurColor=FarColorToReal(Color);
-	Console.SetTextAttributes(CurColor);
+	CurColor=ColorIndexToColor(Color);
 }
 
-void ClearScreen(int Color)
+void SetColor(const FarColor& Color)
 {
-	Color=FarColorToReal(Color);
+	CurColor=Color;
+}
+
+void SetRealColor(const FarColor& Color)
+{
+	Console.SetTextAttributes(Colors::FarColorToConsoleColor(Color));
+}
+
+void ClearScreen(const FarColor& Color)
+{
 	ScrBuf.FillRect(0,0,ScrX,ScrY,L' ',Color);
 	if(Opt.WindowMode)
 	{
-		Console.ClearExtraRegions(Color);
+		Console.ClearExtraRegions(Colors::FarColorToConsoleColor(Color));
 	}
 	ScrBuf.ResetShadow();
 	ScrBuf.Flush();
-	Console.SetTextAttributes(Color);
+	Console.SetTextAttributes(Colors::FarColorToConsoleColor(Color));
 }
 
-int GetColor()
+const FarColor& GetColor()
 {
 	return(CurColor);
 }
@@ -800,20 +817,20 @@ int GetColor()
 void ScrollScreen(int Count)
 {
 	ScrBuf.Scroll(Count);
-	ScrBuf.FillRect(0,ScrY+1-Count,ScrX,ScrY,L' ',FarColorToReal(COL_COMMANDLINEUSERSCREEN));
+	ScrBuf.FillRect(0,ScrY+1-Count,ScrX,ScrY,L' ',ColorIndexToColor(COL_COMMANDLINEUSERSCREEN));
 }
 
 
-void GetText(int X1,int Y1,int X2,int Y2,void *Dest,size_t DestSize)
+void GetText(int X1,int Y1,int X2,int Y2,FAR_CHAR_INFO* Dest,size_t DestSize)
 {
-	ScrBuf.Read(X1,Y1,X2,Y2,(CHAR_INFO *)Dest,DestSize);
+	ScrBuf.Read(X1,Y1,X2,Y2,Dest,DestSize);
 }
 
 void PutText(int X1,int Y1,int X2,int Y2,const void *Src)
 {
 	int Width=X2-X1+1;
 	int Y;
-	CHAR_INFO *SrcPtr=(CHAR_INFO*)Src;
+	FAR_CHAR_INFO *SrcPtr=(FAR_CHAR_INFO*)Src;
 
 	for (Y=Y1; Y<=Y2; ++Y,SrcPtr+=Width)
 		ScrBuf.Write(X1,Y,SrcPtr,Width);
@@ -838,7 +855,7 @@ void BoxText(const wchar_t *Str,int IsVert)
 /*
    Отрисовка прямоугольника.
 */
-void Box(int x1,int y1,int x2,int y2,int Color,int Type)
+void Box(int x1,int y1,int x2,int y2,const FarColor& Color,int Type)
 {
 	if (x1>=x2 || y1>=y2)
 		return;

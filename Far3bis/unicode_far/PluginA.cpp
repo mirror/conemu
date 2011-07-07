@@ -67,7 +67,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define EXP_CONFIGURE           "Configure"
 #define EXP_EXITFAR             "ExitFAR"
 #define EXP_PROCESSPANELINPUT   "ProcessKey"
-#define EXP_PROCESSEVENT        "ProcessEvent"
+#define EXP_PROCESSPANELEVENT   "ProcessEvent"
 #define EXP_PROCESSEDITOREVENT  "ProcessEditorEvent"
 #define EXP_COMPARE             "Compare"
 #define EXP_PROCESSEDITORINPUT  "ProcessEditorInput"
@@ -86,6 +86,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define EXP_OPENFILEPLUGIN      "OpenFilePlugin"
 #define EXP_GETMINFARVERSION    "GetMinFarVersion"
+
+#define EXP_WRAPPERFUNCTION2    ""
 
 
 static const char* _ExportsNamesA[i_LAST] =
@@ -110,7 +112,7 @@ static const char* _ExportsNamesA[i_LAST] =
 	EXP_CONFIGURE,
 	EXP_EXITFAR,
 	EXP_PROCESSPANELINPUT,
-	EXP_PROCESSEVENT,
+	EXP_PROCESSPANELEVENT,
 	EXP_PROCESSEDITOREVENT,
 	EXP_COMPARE,
 	EXP_PROCESSEDITORINPUT,
@@ -129,6 +131,8 @@ static const char* _ExportsNamesA[i_LAST] =
 
 	EXP_OPENFILEPLUGIN,
 	EXP_GETMINFARVERSION,
+	
+	EXP_WRAPPERFUNCTION2,
 };
 
 
@@ -154,7 +158,7 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 	W(EXP_CONFIGURE),
 	W(EXP_EXITFAR),
 	W(EXP_PROCESSPANELINPUT),
-	W(EXP_PROCESSEVENT),
+	W(EXP_PROCESSPANELEVENT),
 	W(EXP_PROCESSEDITOREVENT),
 	W(EXP_COMPARE),
 	W(EXP_PROCESSEDITORINPUT),
@@ -173,6 +177,8 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 
 	W(EXP_OPENFILEPLUGIN),
 	W(EXP_GETMINFARVERSION),
+	
+	W(EXP_WRAPPERFUNCTION2),
 };
 
 typedef void   (WINAPI *iClosePanelPrototype)          (HANDLE hPlugin);
@@ -193,7 +199,7 @@ typedef HANDLE (WINAPI *iOpenFilePluginPrototype)      (char *Name,const unsigne
 typedef HANDLE (WINAPI *iOpenPrototype)                (int OpenFrom,INT_PTR Item);
 typedef int    (WINAPI *iProcessEditorEventPrototype)  (int Event,void *Param);
 typedef int    (WINAPI *iProcessEditorInputPrototype)  (const INPUT_RECORD *Rec);
-typedef int    (WINAPI *iProcessEventPrototype)        (HANDLE hPlugin,int Event,void *Param);
+typedef int    (WINAPI *iProcessPanelEventPrototype)   (HANDLE hPlugin,int Event,void *Param);
 typedef int    (WINAPI *iProcessHostFilePrototype)     (HANDLE hPlugin,oldfar::PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
 typedef int    (WINAPI *iProcessPanelInputPrototype)   (HANDLE hPlugin,int Key,unsigned int ControlState);
 typedef int    (WINAPI *iPutFilesPrototype)            (HANDLE hPlugin,oldfar::PluginPanelItem *PanelItem,int ItemsNumber,int Move,int OpMode);
@@ -602,12 +608,12 @@ void FreeUnicodeKeyBarTitles(KeyBarTitles *kbtW)
 	}
 }
 
-void ConvertPanelItemA(const oldfar::PluginPanelItem *PanelItemA, PluginPanelItem **PanelItemW, int ItemsNumber)
+void ConvertPanelItemA(const oldfar::PluginPanelItem *PanelItemA, PluginPanelItem **PanelItemW, size_t ItemsNumber)
 {
 	*PanelItemW = (PluginPanelItem *)xf_malloc(ItemsNumber*sizeof(PluginPanelItem));
 	memset(*PanelItemW,0,ItemsNumber*sizeof(PluginPanelItem));
 
-	for (int i=0; i<ItemsNumber; i++)
+	for (size_t i=0; i<ItemsNumber; i++)
 	{
 		(*PanelItemW)[i].Flags = PanelItemA[i].Flags;
 		(*PanelItemW)[i].NumberOfLinks = PanelItemA[i].NumberOfLinks;
@@ -689,12 +695,12 @@ void ConvertPanelItemToAnsi(const PluginPanelItem &PanelItem, oldfar::PluginPane
 	UnicodeToOEM(PanelItem.AlternateFileName,PanelItemA.FindData.cAlternateFileName,sizeof(PanelItemA.FindData.cAlternateFileName));
 }
 
-void ConvertPanelItemsArrayToAnsi(const PluginPanelItem *PanelItemW, oldfar::PluginPanelItem *&PanelItemA, int ItemsNumber)
+void ConvertPanelItemsArrayToAnsi(const PluginPanelItem *PanelItemW, oldfar::PluginPanelItem *&PanelItemA, size_t ItemsNumber)
 {
 	PanelItemA = (oldfar::PluginPanelItem *)xf_malloc(ItemsNumber*sizeof(oldfar::PluginPanelItem));
 	memset(PanelItemA,0,ItemsNumber*sizeof(oldfar::PluginPanelItem));
 
-	for (int i=0; i<ItemsNumber; i++)
+	for (size_t i=0; i<ItemsNumber; i++)
 	{
 		ConvertPanelItemToAnsi(PanelItemW[i],PanelItemA[i]);
 	}
@@ -724,9 +730,9 @@ void FreeUnicodePanelItem(PluginPanelItem *PanelItem, size_t ItemsNumber)
 	xf_free(PanelItem);
 }
 
-void FreePanelItemA(oldfar::PluginPanelItem *PanelItem, int ItemsNumber, bool bFreeArray=true)
+void FreePanelItemA(oldfar::PluginPanelItem *PanelItem, size_t ItemsNumber, bool bFreeArray=true)
 {
-	for (int i=0; i<ItemsNumber; i++)
+	for (size_t i=0; i<ItemsNumber; i++)
 	{
 		if (PanelItem[i].Description)
 			xf_free(PanelItem[i].Description);
@@ -1248,12 +1254,14 @@ int WINAPI FarCmpNameA(const char *pattern,const char *str,int skippath)
 	return ProcessNameA(pattern, const_cast<char*>(str), oldfar::PN_CMPNAME|(skippath?oldfar::PN_SKIPPATH:0));
 }
 
-void WINAPI FarTextA(int X,int Y,int Color,const char *Str)
+void WINAPI FarTextA(int X,int Y,int ConColor,const char *Str)
 {
-	if (!Str) return NativeInfo.Text(X,Y,Color,nullptr);
+	FarColor Color;
+	Colors::ConsoleColorToFarColor(ConColor, Color);
+	if (!Str) return NativeInfo.Text(X,Y,&Color,nullptr);
 
 	string strS(Str);
-	return NativeInfo.Text(X,Y,Color,strS);
+	return NativeInfo.Text(X,Y,&Color,strS);
 }
 
 BOOL WINAPI FarShowHelpA(const char *ModuleName,const char *HelpTopic,DWORD Flags)
@@ -1517,15 +1525,32 @@ FarList* CurrentList(HANDLE hDlg,int ItemNumber)
 	return Data?&Data->l[ItemNumber]:nullptr;
 }
 
+TStack<FarDialogEvent>OriginalEvents;
+
+class StackHandler
+{
+public:
+	StackHandler(FarDialogEvent& e){OriginalEvents.Push(e);}
+	~StackHandler(){FarDialogEvent e; OriginalEvents.Pop(e);}
+};
+
+LONG_PTR WINAPI FarDefDlgProcA(HANDLE hDlg, int Msg, int Param1, void* Param2)
+{
+	LONG_PTR Result = NativeInfo.DefDlgProc(OriginalEvents.Peek()->hDlg, OriginalEvents.Peek()->Msg, OriginalEvents.Peek()->Param1, OriginalEvents.Peek()->Param2);
+	switch(Msg)
+	{
+	case DN_CTLCOLORDIALOG:
+	case DN_CTLCOLORDLGITEM:
+		Result = reinterpret_cast<LONG_PTR>(Param2);
+		break;
+	}
+	return Result;
+}
+
 INT_PTR WINAPI CurrentDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
-	INT_PTR Ret=0;
 	PDialogData Data=FindCurrentDialogData(hDlg);
-
-	if (Data && Data->DlgProc)
-		Ret=Data->DlgProc(Data->hDlg,Msg,Param1,Param2);
-
-	return Ret;
+	return (Data && Data->DlgProc)? Data->DlgProc(Data->hDlg,Msg,Param1,Param2) : FarDefDlgProcA(hDlg, Msg, Param1, Param2);
 }
 
 void UnicodeListItemToAnsi(FarListItem* li, oldfar::FarListItem* liA)
@@ -1553,7 +1578,7 @@ size_t GetAnsiVBufSize(oldfar::FarDialogItem &diA)
 	return (diA.X2-diA.X1+1)*(diA.Y2-diA.Y1+1);
 }
 
-PCHAR_INFO GetAnsiVBufPtr(PCHAR_INFO VBuf, size_t Size)
+PCHAR_INFO GetAnsiVBufPtr(FAR_CHAR_INFO* VBuf, size_t Size)
 {
 	PCHAR_INFO VBufA=nullptr;
 	if (VBuf)
@@ -1563,7 +1588,7 @@ PCHAR_INFO GetAnsiVBufPtr(PCHAR_INFO VBuf, size_t Size)
 	return VBufA;
 }
 
-void SetAnsiVBufPtr(PCHAR_INFO VBuf, PCHAR_INFO VBufA, size_t Size)
+void SetAnsiVBufPtr(FAR_CHAR_INFO* VBuf, PCHAR_INFO VBufA, size_t Size)
 {
 	if (VBuf)
 	{
@@ -1571,7 +1596,7 @@ void SetAnsiVBufPtr(PCHAR_INFO VBuf, PCHAR_INFO VBufA, size_t Size)
 	}
 }
 
-void AnsiVBufToUnicode(PCHAR_INFO VBufA, PCHAR_INFO VBuf, size_t Size,bool NoCvt)
+void AnsiVBufToUnicode(PCHAR_INFO VBufA, FAR_CHAR_INFO* VBuf, size_t Size,bool NoCvt)
 {
 	if (VBuf && VBufA)
 	{
@@ -1579,27 +1604,26 @@ void AnsiVBufToUnicode(PCHAR_INFO VBufA, PCHAR_INFO VBuf, size_t Size,bool NoCvt
 		{
 			if (NoCvt)
 			{
-				VBuf[i].Char.UnicodeChar=VBufA[i].Char.UnicodeChar;
+				VBuf[i].Char=VBufA[i].Char.UnicodeChar;
 			}
 			else
 			{
-				AnsiToUnicodeBin(&VBufA[i].Char.AsciiChar,&VBuf[i].Char.UnicodeChar,1);
+				AnsiToUnicodeBin(&VBufA[i].Char.AsciiChar,&VBuf[i].Char,1);
 			}
-
-			VBuf[i].Attributes = VBufA[i].Attributes;
+			Colors::ConsoleColorToFarColor(VBufA[i].Attributes, VBuf[i].Attributes);
 		}
 	}
 }
 
-PCHAR_INFO AnsiVBufToUnicode(oldfar::FarDialogItem &diA)
+FAR_CHAR_INFO* AnsiVBufToUnicode(oldfar::FarDialogItem &diA)
 {
-	PCHAR_INFO VBuf = nullptr;
+	FAR_CHAR_INFO* VBuf = nullptr;
 
 	if (diA.VBuf)
 	{
 		size_t Size = GetAnsiVBufSize(diA);
 		// +sizeof(PCHAR_INFO) потому что там храним поинтер на анси vbuf.
-		VBuf = static_cast<PCHAR_INFO>(xf_malloc(Size*sizeof(CHAR_INFO)+sizeof(PCHAR_INFO)));
+		VBuf = static_cast<FAR_CHAR_INFO*>(xf_malloc(Size*sizeof(FAR_CHAR_INFO)+sizeof(PCHAR_INFO)));
 
 		if (VBuf)
 		{
@@ -1693,9 +1717,6 @@ void AnsiDialogItemToUnicodeSafe(oldfar::FarDialogItem &diA, FarDialogItem &di)
 
 	if (diA.Flags)
 	{
-		if (diA.Flags&oldfar::DIF_SETCOLOR)
-			di.Flags|=DIF_SETCOLOR|(diA.Flags&oldfar::DIF_COLORMASK);
-
 		if (diA.Flags&oldfar::DIF_BOXCOLOR)
 			di.Flags|=DIF_BOXCOLOR;
 
@@ -1897,16 +1918,17 @@ void FreeUnicodeDialogItem(FarDialogItem &di)
 
 void FreeAnsiDialogItem(oldfar::FarDialogItem &diA)
 {
-	if ((diA.Type==oldfar::DI_EDIT || diA.Type==oldfar::DI_FIXEDIT) &&
-	        (diA.Flags&oldfar::DIF_HISTORY ||diA.Flags&oldfar::DIF_MASKEDIT) &&
-	        diA.History)
+	if ((diA.Type==oldfar::DI_EDIT || diA.Type==oldfar::DI_FIXEDIT) && (diA.Flags&oldfar::DIF_HISTORY ||diA.Flags&oldfar::DIF_MASKEDIT) && diA.History)
+	{
 		xf_free((void*)diA.History);
+		diA.History = nullptr;
+	}
 
-	if ((diA.Type==oldfar::DI_EDIT || diA.Type==oldfar::DI_COMBOBOX) &&
-	        diA.Flags&oldfar::DIF_VAREDIT && diA.Ptr.PtrData)
+	if ((diA.Type==oldfar::DI_EDIT || diA.Type==oldfar::DI_COMBOBOX) && diA.Flags&oldfar::DIF_VAREDIT && diA.Ptr.PtrData)
+	{
 		xf_free(diA.Ptr.PtrData);
-
-	memset(&diA,0,sizeof(oldfar::FarDialogItem));
+		diA.Ptr.PtrData = nullptr;
+	}
 }
 
 void UnicodeDialogItemToAnsiSafe(FarDialogItem &di,oldfar::FarDialogItem &diA)
@@ -1965,13 +1987,18 @@ void UnicodeDialogItemToAnsiSafe(FarDialogItem &di,oldfar::FarDialogItem &diA)
 	diA.X2=di.X2;
 	diA.Y2=di.Y2;
 	diA.Focus=(di.Flags&DIF_FOCUS)?true:false;
-	diA.Flags=0;
+
+	if (diA.Flags&oldfar::DIF_SETCOLOR)
+	{
+		diA.Flags=oldfar::DIF_SETCOLOR|(diA.Flags&oldfar::DIF_COLORMASK);
+	}
+	else
+	{
+		diA.Flags=0;
+	}
 
 	if (di.Flags)
 	{
-		if (di.Flags&DIF_SETCOLOR)
-			diA.Flags|=oldfar::DIF_SETCOLOR|(di.Flags&DIF_COLORMASK);
-
 		if (di.Flags&DIF_BOXCOLOR)
 			diA.Flags|=oldfar::DIF_BOXCOLOR;
 
@@ -2122,15 +2149,6 @@ oldfar::FarDialogItem* UnicodeDialogItemToAnsi(FarDialogItem &di,HANDLE hDlg,int
 	return diA;
 }
 
-TStack<FarDialogEvent>OriginalEvents;
-
-class StackHandler
-{
-public:
-	StackHandler(FarDialogEvent& e){OriginalEvents.Push(e);}
-	~StackHandler(){FarDialogEvent e; OriginalEvents.Pop(e);}
-};
-
 INT_PTR WINAPI DlgProcA(HANDLE hDlg, int NewMsg, int Param1, void* Param2)
 {
 	FarDialogEvent e = {hDlg, NewMsg, Param1, Param2};
@@ -2147,27 +2165,67 @@ INT_PTR WINAPI DlgProcA(HANDLE hDlg, int NewMsg, int Param1, void* Param2)
 		case DN_CLOSE:           Msg=oldfar::DN_CLOSE; break;
 		case DN_LISTHOTKEY:      Msg=oldfar::DN_LISTHOTKEY; break;
 		case DN_BTNCLICK:        Msg=oldfar::DN_BTNCLICK; break;
-		case DN_CTLCOLORDIALOG:  Msg=oldfar::DN_CTLCOLORDIALOG; break;
-		case DN_CTLCOLORDLGITEM: Msg=oldfar::DN_CTLCOLORDLGITEM; break;
-		case DN_DRAWDIALOG:      Msg=oldfar::DN_DRAWDIALOG; break;
+
+		case DN_CTLCOLORDIALOG:
+			{
+				FarColor* Color = static_cast<FarColor*>(Param2);
+				Colors::ConsoleColorToFarColor(static_cast<int>(CurrentDlgProc(hDlg, oldfar::DN_CTLCOLORDIALOG, Param1, ToPtr(Colors::FarColorToConsoleColor(*Color)))),*Color);
+			}
+			break;
+
+		case DN_DRAWDIALOG:
+			Msg=oldfar::DN_DRAWDIALOG;
+			break;
+
+		case DN_CTLCOLORDLGITEM:
+			{
+				FarDialogItemColors* lc = reinterpret_cast<FarDialogItemColors*>(Param2);
+
+				oldfar::FarDialogItem* diA = CurrentDialogItemA(hDlg, Param1);
+
+				// first, emulate DIF_SETCOLOR
+				if(diA->Flags&oldfar::DIF_SETCOLOR)
+				{
+					BYTE Colors = diA->Flags&oldfar::DIF_COLORMASK;
+					Colors::ConsoleColorToFarColor(Colors, lc->Colors[0]);
+				}
+
+				DWORD Result = static_cast<DWORD>(CurrentDlgProc(hDlg, oldfar::DN_CTLCOLORDLGITEM, Param1, ToPtr(MAKELONG(
+					MAKEWORD(Colors::FarColorToConsoleColor(lc->Colors[0]), Colors::FarColorToConsoleColor(lc->Colors[1])),
+					MAKEWORD(Colors::FarColorToConsoleColor(lc->Colors[2]), Colors::FarColorToConsoleColor(lc->Colors[3]))))));
+				if(lc->ColorsCount > 0)
+					Colors::ConsoleColorToFarColor(LOBYTE(LOWORD(Result)),lc->Colors[0]);
+				if(lc->ColorsCount > 1)
+					Colors::ConsoleColorToFarColor(HIBYTE(LOWORD(Result)),lc->Colors[1]);
+				if(lc->ColorsCount > 2)
+					Colors::ConsoleColorToFarColor(LOBYTE(HIWORD(Result)),lc->Colors[2]);
+				if(lc->ColorsCount > 3)
+					Colors::ConsoleColorToFarColor(HIBYTE(HIWORD(Result)),lc->Colors[3]);
+			}
+			break;
 
 		case DN_CTLCOLORDLGLIST:
 			{
-				if(Param2)
+				FarDialogItemColors* lc = reinterpret_cast<FarDialogItemColors*>(Param2);
+				oldfar::FarListColors lcA={};
+				lcA.ColorCount = static_cast<int>(lc->ColorsCount);
+				LPBYTE Colors = new BYTE[lcA.ColorCount];
+				lcA.Colors = Colors;
+				for(size_t i = 0; i < lc->ColorsCount; ++i)
 				{
-					FarListColors* lc = reinterpret_cast<FarListColors*>(Param2);
-					oldfar::FarListColors lcA={};
-					lcA.ColorCount = lc->ColorCount;
-					lcA.Colors = lc->Colors;
-					INT_PTR Result = CurrentDlgProc(hDlg, oldfar::DN_CTLCOLORDLGLIST, Param1, &lcA);
-					if(Result)
+					lcA.Colors[i] = static_cast<BYTE>(Colors::FarColorToConsoleColor(lc->Colors[i]));
+				}
+				INT_PTR Result = CurrentDlgProc(hDlg, oldfar::DN_CTLCOLORDLGLIST, Param1, &lcA);
+				if(Result)
+				{
+					lc->ColorsCount = lcA.ColorCount;
+					for(size_t i = 0; i < lc->ColorsCount; ++i)
 					{
-						lc->ColorCount = lcA.ColorCount;
-						lc->Colors = lcA.Colors;
-						return TRUE;
+						Colors::ConsoleColorToFarColor(lcA.Colors[i], lc->Colors[i]);
 					}
 				}
-				return FALSE;
+				delete[] Colors;
+				return Result != 0;
 			}
 			break;
 
@@ -2185,8 +2243,8 @@ INT_PTR WINAPI DlgProcA(HANDLE hDlg, int NewMsg, int Param1, void* Param2)
 			return ret;
 		}
 		case DN_EDITCHANGE:
-			Msg=oldfar::DN_EDITCHANGE;
-			return Param2?NativeInfo.DefDlgProc(hDlg, NewMsg, Param1, Param2):FALSE;
+			return CurrentDlgProc(hDlg, oldfar::DN_EDITCHANGE, Param1, UnicodeDialogItemToAnsi(*static_cast<FarDialogItem*>(Param2), hDlg, Param1));
+
 		case DN_ENTERIDLE: Msg=oldfar::DN_ENTERIDLE; break;
 		case DN_GOTFOCUS:  Msg=oldfar::DN_GOTFOCUS; break;
 		case DN_HELP:
@@ -2253,11 +2311,6 @@ INT_PTR WINAPI DlgProcA(HANDLE hDlg, int NewMsg, int Param1, void* Param2)
 	}
 
 	return CurrentDlgProc(hDlg, Msg, Param1, Param2);
-}
-
-LONG_PTR WINAPI FarDefDlgProcA(HANDLE hDlg, int Msg, int Param1, void* Param2)
-{
-	return NativeInfo.DefDlgProc(OriginalEvents.Peek()->hDlg, OriginalEvents.Peek()->Msg, OriginalEvents.Peek()->Param1, OriginalEvents.Peek()->Param2);
 }
 
 LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Param2)
@@ -2344,6 +2397,14 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 			FreeUnicodeDialogItem(*di);
 			oldfar::FarDialogItem *diA = (oldfar::FarDialogItem *)Param2;
 			AnsiDialogItemToUnicode(*diA,*di,*di->ListItems);
+
+			// save color info
+			if(diA->Flags&oldfar::DIF_SETCOLOR)
+			{
+				oldfar::FarDialogItem *diA_Copy=CurrentDialogItemA(hDlg,Param1);
+				diA_Copy->Flags = diA->Flags;
+			}
+
 			return NativeInfo.SendDlgMessage(hDlg, DM_SETDLGITEM, Param1, di);
 		}
 		case oldfar::DM_SETFOCUS: Msg = DM_SETFOCUS; break;
@@ -2801,6 +2862,13 @@ int WINAPI FarDialogExA(INT_PTR PluginNumber,int X1,int Y1,int X2,int Y2,const c
 		return -1;
 
 	oldfar::FarDialogItem* diA=new oldfar::FarDialogItem[ItemsNumber]();
+
+	// to save DIF_SETCOLOR state
+	for(int i = 0; i < ItemsNumber; ++i)
+	{
+		diA[i].Flags = Item[i].Flags;
+	}
+
 	FarDialogItem* di = new FarDialogItem[ItemsNumber]();
 	FarList* l = new FarList[ItemsNumber]();
 
@@ -2822,7 +2890,7 @@ int WINAPI FarDialogExA(INT_PTR PluginNumber,int X1,int Y1,int X2,int Y2,const c
 	if (Flags&oldfar::FDLG_NONMODAL)     DlgFlags|=FDLG_NONMODAL;
 
 	int ret = -1;
-	HANDLE hDlg = NativeInfo.DialogInit(GetPluginGuid(PluginNumber), &FarGuid, X1, Y1, X2, Y2, (HelpTopic?strHT.CPtr():nullptr), (FarDialogItem *)di, ItemsNumber, 0, DlgFlags, DlgProc?DlgProcA:0, Param);
+	HANDLE hDlg = NativeInfo.DialogInit(GetPluginGuid(PluginNumber), &FarGuid, X1, Y1, X2, Y2, (HelpTopic?strHT.CPtr():nullptr), (FarDialogItem *)di, ItemsNumber, 0, DlgFlags, DlgProcA, Param);
 	PDialogData NewDialogData=new DialogData;
 	NewDialogData->DlgProc=DlgProc;
 	NewDialogData->hDlg=hDlg;
@@ -2912,8 +2980,8 @@ void ConvertUnicodePanelInfoToAnsi(PanelInfo* PIW, oldfar::PanelInfo* PIA)
 	PIA->PanelRect.top    = PIW->PanelRect.top;
 	PIA->PanelRect.right  = PIW->PanelRect.right;
 	PIA->PanelRect.bottom = PIW->PanelRect.bottom;
-	PIA->ItemsNumber = PIW->ItemsNumber;
-	PIA->SelectedItemsNumber = PIW->SelectedItemsNumber;
+	PIA->ItemsNumber = static_cast<int>(PIW->ItemsNumber);
+	PIA->SelectedItemsNumber = static_cast<int>(PIW->SelectedItemsNumber);
 	PIA->PanelItems = nullptr;
 	PIA->SelectedItems = nullptr;
 	PIA->CurrentItem = PIW->CurrentItem;
@@ -3038,7 +3106,7 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 						memset(OldPI->PanelItems,0,PI.ItemsNumber*sizeof(oldfar::PluginPanelItem));
 						PluginPanelItem* PPI=nullptr; int PPISize=0;
 
-						for (int i=0; i<PI.ItemsNumber; i++)
+						for (int i=0; i<static_cast<int>(PI.ItemsNumber); i++)
 						{
 							int NewPPISize=static_cast<int>(NativeInfo.PanelControl(hPlugin,FCTL_GETPANELITEM,i,0));
 
@@ -3076,7 +3144,7 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 						memset(OldPI->SelectedItems,0,PI.SelectedItemsNumber*sizeof(oldfar::PluginPanelItem));
 						PluginPanelItem* PPI=nullptr; int PPISize=0;
 
-						for (int i=0; i<PI.SelectedItemsNumber; i++)
+						for (int i=0; i<static_cast<int>(PI.SelectedItemsNumber); i++)
 						{
 							int NewPPISize=static_cast<int>(NativeInfo.PanelControl(hPlugin,FCTL_GETSELECTEDPANELITEM,i,0));
 
@@ -3322,7 +3390,7 @@ int WINAPI FarGetDirListA(const char *Dir,oldfar::PluginPanelItem **pPanelItem,i
 	DeleteEndSlash(strDir, true);
 
 	PluginPanelItem *pItems;
-	int ItemsNumber;
+	size_t ItemsNumber;
 	int ret=NativeInfo.GetDirList(strDir, &pItems, &ItemsNumber);
 
 	size_t PathOffset = ExtractFilePath(strDir).GetLength() + 1;
@@ -3334,12 +3402,12 @@ int WINAPI FarGetDirListA(const char *Dir,oldfar::PluginPanelItem **pPanelItem,i
 
 		if (*pPanelItem)
 		{
-			*pItemsNumber = ItemsNumber;
-			**((int **)pPanelItem) = ItemsNumber;
+			*pItemsNumber = static_cast<int>(ItemsNumber);
+			**((int **)pPanelItem) = static_cast<int>(ItemsNumber);
 			(*((int **)pPanelItem))++;
 			memset(*pPanelItem,0,ItemsNumber*sizeof(oldfar::PluginPanelItem));
 
-			for (int i=0; i<ItemsNumber; i++)
+			for (size_t i=0; i<ItemsNumber; i++)
 			{
 				(*pPanelItem)[i].FindData.dwFileAttributes = pItems[i].FileAttributes;
 				(*pPanelItem)[i].FindData.ftCreationTime = pItems[i].CreationTime;
@@ -3372,7 +3440,7 @@ int WINAPI FarGetPluginDirListA(INT_PTR PluginNumber,HANDLE hPlugin,const char *
 	string strDir(Dir);
 
 	PluginPanelItem *pPanelItemW;
-	int ItemsNumber;
+	size_t ItemsNumber;
 	int ret=NativeInfo.GetPluginDirList(GetPluginGuid(PluginNumber), hPlugin, strDir, &pPanelItemW, &ItemsNumber);
 
 	if (ret && ItemsNumber)
@@ -3382,12 +3450,12 @@ int WINAPI FarGetPluginDirListA(INT_PTR PluginNumber,HANDLE hPlugin,const char *
 
 		if (*pPanelItem)
 		{
-			*pItemsNumber = ItemsNumber;
-			**((int **)pPanelItem) = ItemsNumber;
+			*pItemsNumber = static_cast<int>(ItemsNumber);
+			**((int **)pPanelItem) = static_cast<int>(ItemsNumber);
 			(*((int **)pPanelItem))++;
 			memset(*pPanelItem,0,ItemsNumber*sizeof(oldfar::PluginPanelItem));
 
-			for (int i=0; i<ItemsNumber; i++)
+			for (size_t i=0; i<ItemsNumber; i++)
 			{
 				ConvertPanelItemToAnsi(pPanelItemW[i],(*pPanelItem)[i]);
 			}
@@ -3452,7 +3520,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			if (Param)
 			{
 				wchar_t *SysWordDiv = (wchar_t*)xf_malloc((Length+1)*sizeof(wchar_t));
-				NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETSYSWORDDIV, 0, SysWordDiv);
+				NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETSYSWORDDIV, Length, SysWordDiv);
 				UnicodeToOEM(SysWordDiv,(char*)Param,oldfar::NM);
 				xf_free(SysWordDiv);
 			}
@@ -3461,10 +3529,38 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 		}
 		case oldfar::ACTL_WAITKEY:
 			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_WAITKEY, 0, Param);
+
 		case oldfar::ACTL_GETCOLOR:
-			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETCOLOR, static_cast<int>(reinterpret_cast<INT_PTR>(Param)), nullptr);
+			{
+				FarColor Color;
+				int ColorIndex = static_cast<int>(reinterpret_cast<INT_PTR>(Param));
+
+				// there was a reserved position after COL_VIEWERARROWS in Far 1.x.
+				if(ColorIndex > COL_VIEWERARROWS-COL_FIRSTPALETTECOLOR)
+				{
+					ColorIndex--;
+				}
+				return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETCOLOR, ColorIndex, &Color)? Colors::FarColorToConsoleColor(Color) :-1;
+			}
+			break;
+
 		case oldfar::ACTL_GETARRAYCOLOR:
-			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETARRAYCOLOR, static_cast<int>(reinterpret_cast<INT_PTR>(Param)), nullptr);
+			{
+				size_t PaletteSize = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETARRAYCOLOR, 0, nullptr);
+				if(Param)
+				{
+					FarColor* Color = new FarColor[PaletteSize];
+					NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETARRAYCOLOR, 0, Color);
+					LPBYTE OldColors = static_cast<LPBYTE>(Param);
+					for(size_t i = 0; i < PaletteSize; ++i)
+					{
+						OldColors[i] = static_cast<BYTE>(Colors::FarColorToConsoleColor(Color[i]));
+					}
+					delete[] Color;
+				}
+				return PaletteSize;
+			}
+			break;
 		case oldfar::ACTL_EJECTMEDIA:
 			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_EJECTMEDIA, 0, Param);
 		case oldfar::ACTL_KEYMACRO:
@@ -3800,11 +3896,16 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			if (!Param) return FALSE;
 
 			oldfar::FarSetColors *scA = (oldfar::FarSetColors *)Param;
-			FarSetColors sc = {0, scA->StartIndex, scA->ColorCount, scA->Colors};
+			FarSetColors sc = {0, scA->StartIndex, scA->ColorCount, new FarColor[scA->ColorCount]};
+			for(size_t i = 0; i < sc.ColorsCount; ++i)
+			{
+				Colors::ConsoleColorToFarColor(scA->Colors[i], sc.Colors[i]);
+			}
 
 			if (scA->Flags&oldfar::FCLR_REDRAW) sc.Flags|=FSETCLR_REDRAW;
-
-			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_SETARRAYCOLOR, 0, &sc);
+			INT_PTR Result = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_SETARRAYCOLOR, 0, &sc);
+			delete[] sc.Colors;
+			return Result;
 		}
 		case oldfar::ACTL_GETWCHARMODE:
 			return TRUE;
@@ -3958,7 +4059,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 				ec.StringNumber = ecA->StringNumber;
 				ec.StartPos = ecA->StartPos;
 				ec.EndPos = ecA->EndPos;
-				Colors::ColorToFarColor(ecA->Color,ec.Color);
+				Colors::ConsoleColorToFarColor(ecA->Color,ec.Color);
 				if(ecA->Color&oldfar::ECF_TAB1) ec.Color.Flags|=ECF_TAB1;
 				ec.Priority=EDITOR_COLOR_NORMAL_PRIORITY;
 				ec.Owner=FarGuid;
@@ -3982,7 +4083,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 				{
 					ecA->StartPos = ec.StartPos;
 					ecA->EndPos = ec.EndPos;
-					ecA->Color = Colors::FarColorToColor(ec.Color);
+					ecA->Color = Colors::FarColorToConsoleColor(ec.Color);
 					if(ec.Color.Flags&ECF_TAB1) ecA->Color|=oldfar::ECF_TAB1;
 				}
 				return Result;
@@ -4884,7 +4985,7 @@ HANDLE PluginA::OpenFilePlugin(
 int PluginA::SetFindList(
     HANDLE hPlugin,
     const PluginPanelItem *PanelItem,
-    int ItemsNumber
+    size_t ItemsNumber
 )
 {
 	BOOL bResult = FALSE;
@@ -4896,7 +4997,7 @@ int PluginA::SetFindList(
 		es.bDefaultResult = FALSE;
 		oldfar::PluginPanelItem *PanelItemA = nullptr;
 		ConvertPanelItemsArrayToAnsi(PanelItem,PanelItemA,ItemsNumber);
-		EXECUTE_FUNCTION_EX(FUNCTION(iSetFindList)(hPlugin, PanelItemA, ItemsNumber), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iSetFindList)(hPlugin, PanelItemA, static_cast<int>(ItemsNumber)), es);
 		FreePanelItemA(PanelItemA,ItemsNumber);
 		bResult = es.bResult;
 	}
@@ -4966,7 +5067,7 @@ int PluginA::ProcessViewerEvent(
 
 int PluginA::ProcessDialogEvent(
     int Event,
-    void *Param
+    FarDialogEvent *Param
 )
 {
 	BOOL bResult = FALSE;
@@ -4986,7 +5087,7 @@ int PluginA::ProcessDialogEvent(
 int PluginA::GetVirtualFindData(
     HANDLE hPlugin,
     PluginPanelItem **pPanelItem,
-    int *pItemsNumber,
+    size_t *pItemsNumber,
     const wchar_t *Path
 )
 {
@@ -5001,7 +5102,9 @@ int PluginA::GetVirtualFindData(
 		size_t Size=StrLength(Path)+1;
 		LPSTR PathA=new char[Size];
 		UnicodeToOEM(Path,PathA,Size);
-		EXECUTE_FUNCTION_EX(FUNCTION(iGetVirtualFindData)(hPlugin, &pVFDPanelItemA, pItemsNumber, PathA), es);
+		int ItemsNumber = 0;
+		EXECUTE_FUNCTION_EX(FUNCTION(iGetVirtualFindData)(hPlugin, &pVFDPanelItemA, &ItemsNumber, PathA), es);
+		*pItemsNumber = ItemsNumber;
 		bResult = es.bResult;
 		delete[] PathA;
 
@@ -5018,7 +5121,7 @@ int PluginA::GetVirtualFindData(
 void PluginA::FreeVirtualFindData(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber
+    size_t ItemsNumber
 )
 {
 	FreeUnicodePanelItem(PanelItem, ItemsNumber);
@@ -5027,7 +5130,7 @@ void PluginA::FreeVirtualFindData(
 	{
 		ExecuteStruct es;
 		es.id = EXCEPT_FREEVIRTUALFINDDATA;
-		EXECUTE_FUNCTION(FUNCTION(iFreeVirtualFindData)(hPlugin, pVFDPanelItemA, ItemsNumber), es);
+		EXECUTE_FUNCTION(FUNCTION(iFreeVirtualFindData)(hPlugin, pVFDPanelItemA, static_cast<int>(ItemsNumber)), es);
 		pVFDPanelItemA = nullptr;
 	}
 }
@@ -5037,8 +5140,8 @@ void PluginA::FreeVirtualFindData(
 int PluginA::GetFiles(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
-    int Move,
+    size_t ItemsNumber,
+    bool Move,
     const wchar_t **DestPath,
     int OpMode
 )
@@ -5054,7 +5157,7 @@ int PluginA::GetFiles(
 		ConvertPanelItemsArrayToAnsi(PanelItem,PanelItemA,ItemsNumber);
 		char DestA[oldfar::NM];
 		UnicodeToOEM(*DestPath,DestA,sizeof(DestA));
-		EXECUTE_FUNCTION_EX(FUNCTION(iGetFiles)(hPlugin, PanelItemA, ItemsNumber, Move, DestA, OpMode), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iGetFiles)(hPlugin, PanelItemA, static_cast<int>(ItemsNumber), Move, DestA, OpMode), es);
 		static wchar_t DestW[oldfar::NM];
 		OEMToUnicode(DestA,DestW,ARRAYSIZE(DestW));
 		*DestPath=DestW;
@@ -5069,8 +5172,8 @@ int PluginA::GetFiles(
 int PluginA::PutFiles(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
-    int Move,
+    size_t ItemsNumber,
+    bool Move,
     int OpMode
 )
 {
@@ -5083,7 +5186,7 @@ int PluginA::PutFiles(
 		es.nDefaultResult = -1;
 		oldfar::PluginPanelItem *PanelItemA = nullptr;
 		ConvertPanelItemsArrayToAnsi(PanelItem,PanelItemA,ItemsNumber);
-		EXECUTE_FUNCTION_EX(FUNCTION(iPutFiles)(hPlugin, PanelItemA, ItemsNumber, Move, OpMode), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iPutFiles)(hPlugin, PanelItemA, static_cast<int>(ItemsNumber), Move, OpMode), es);
 		FreePanelItemA(PanelItemA,ItemsNumber);
 		nResult = (int)es.nResult;
 	}
@@ -5094,7 +5197,7 @@ int PluginA::PutFiles(
 int PluginA::DeleteFiles(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
+    size_t ItemsNumber,
     int OpMode
 )
 {
@@ -5107,7 +5210,7 @@ int PluginA::DeleteFiles(
 		es.bDefaultResult = FALSE;
 		oldfar::PluginPanelItem *PanelItemA = nullptr;
 		ConvertPanelItemsArrayToAnsi(PanelItem,PanelItemA,ItemsNumber);
-		EXECUTE_FUNCTION_EX(FUNCTION(iDeleteFiles)(hPlugin, PanelItemA, ItemsNumber, OpMode), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iDeleteFiles)(hPlugin, PanelItemA, static_cast<int>(ItemsNumber), OpMode), es);
 		FreePanelItemA(PanelItemA,ItemsNumber);
 		bResult = (int)es.bResult;
 	}
@@ -5145,7 +5248,7 @@ int PluginA::MakeDirectory(
 int PluginA::ProcessHostFile(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
+    size_t ItemsNumber,
     int OpMode
 )
 {
@@ -5158,7 +5261,7 @@ int PluginA::ProcessHostFile(
 		es.bDefaultResult = FALSE;
 		oldfar::PluginPanelItem *PanelItemA = nullptr;
 		ConvertPanelItemsArrayToAnsi(PanelItem,PanelItemA,ItemsNumber);
-		EXECUTE_FUNCTION_EX(FUNCTION(iProcessHostFile)(hPlugin, PanelItemA, ItemsNumber, OpMode), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iProcessHostFile)(hPlugin, PanelItemA, static_cast<int>(ItemsNumber), OpMode), es);
 		FreePanelItemA(PanelItemA,ItemsNumber);
 		bResult = es.bResult;
 	}
@@ -5167,7 +5270,7 @@ int PluginA::ProcessHostFile(
 }
 
 
-int PluginA::ProcessEvent(
+int PluginA::ProcessPanelEvent(
     HANDLE hPlugin,
     int Event,
     PVOID Param
@@ -5175,17 +5278,17 @@ int PluginA::ProcessEvent(
 {
 	BOOL bResult = FALSE;
 
-	if (Exports[iProcessEvent] && !ProcessException)
+	if (Exports[iProcessPanelEvent] && !ProcessException)
 	{
 		ExecuteStruct es;
-		es.id = EXCEPT_PROCESSEVENT;
+		es.id = EXCEPT_PROCESSPANELEVENT;
 		es.bDefaultResult = FALSE;
 		PVOID ParamA = Param;
 
 		if (Param && (Event == FE_COMMAND || Event == FE_CHANGEVIEWMODE))
 			ParamA = (PVOID)UnicodeToAnsi((const wchar_t *)Param);
 
-		EXECUTE_FUNCTION_EX(FUNCTION(iProcessEvent)(hPlugin, Event, ParamA), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iProcessPanelEvent)(hPlugin, Event, ParamA), es);
 
 		if (ParamA && (Event == FE_COMMAND || Event == FE_CHANGEVIEWMODE))
 			xf_free(ParamA);
@@ -5228,7 +5331,7 @@ int PluginA::Compare(
 int PluginA::GetFindData(
     HANDLE hPlugin,
     PluginPanelItem **pPanelItem,
-    int *pItemsNumber,
+    size_t *pItemsNumber,
     int OpMode
 )
 {
@@ -5240,8 +5343,10 @@ int PluginA::GetFindData(
 		es.id = EXCEPT_GETFINDDATA;
 		es.bDefaultResult = FALSE;
 		pFDPanelItemA = nullptr;
-		EXECUTE_FUNCTION_EX(FUNCTION(iGetFindData)(hPlugin, &pFDPanelItemA, pItemsNumber, OpMode), es);
+		int ItemsNumber = 0;
+		EXECUTE_FUNCTION_EX(FUNCTION(iGetFindData)(hPlugin, &pFDPanelItemA, &ItemsNumber, OpMode), es);
 		bResult = es.bResult;
+		*pItemsNumber = ItemsNumber;
 
 		if (bResult && *pItemsNumber)
 		{
@@ -5256,7 +5361,7 @@ int PluginA::GetFindData(
 void PluginA::FreeFindData(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber
+    size_t ItemsNumber
 )
 {
 	FreeUnicodePanelItem(PanelItem, ItemsNumber);
@@ -5265,7 +5370,7 @@ void PluginA::FreeFindData(
 	{
 		ExecuteStruct es;
 		es.id = EXCEPT_FREEFINDDATA;
-		EXECUTE_FUNCTION(FUNCTION(iFreeFindData)(hPlugin, pFDPanelItemA, ItemsNumber), es);
+		EXECUTE_FUNCTION(FUNCTION(iFreeFindData)(hPlugin, pFDPanelItemA, static_cast<int>(ItemsNumber)), es);
 		pFDPanelItemA = nullptr;
 	}
 }
@@ -5281,7 +5386,7 @@ int PluginA::ProcessKey(HANDLE hPlugin,const INPUT_RECORD *Rec, bool Pred)
 	if (Exports[iProcessPanelInput] && !ProcessException)
 	{
 		ExecuteStruct es;
-		es.id = EXCEPT_PROCESSKEY;
+		es.id = EXCEPT_PROCESSPANELINPUT;
 		es.bDefaultResult = TRUE; // do not pass this key to far on exception
 		EXECUTE_FUNCTION_EX(FUNCTION(iProcessPanelInput)(hPlugin, VirtKey|(Pred?PKF_PREPROCESS:0), dwControlState), es);
 		bResult = es.bResult;

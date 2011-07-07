@@ -101,7 +101,7 @@ enum PLUGINITEMCALLFUNCFLAGS
 	PICFF_CONFIGURE            = 0x00080000, //
 	PICFF_EXITFAR              = 0x00100000, //
 	PICFF_PROCESSPANELINPUT    = 0x00200000, //
-	PICFF_PROCESSEVENT         = 0x00400000, //
+	PICFF_PROCESSPANELEVENT    = 0x00400000, //
 	PICFF_PROCESSEDITOREVENT   = 0x00800000, //
 	PICFF_COMPARE              = 0x01000000, //
 	PICFF_PROCESSEDITORINPUT   = 0x02000000, //
@@ -241,27 +241,27 @@ class PluginManager
 	public:
 		HANDLE Open(Plugin *pPlugin,int OpenFrom,const GUID& Guid,INT_PTR Item);
 		HANDLE OpenFilePlugin(const wchar_t *Name, int OpMode, OPENFILEPLUGINTYPE Type);
-		HANDLE OpenFindListPlugin(const PluginPanelItem *PanelItem,int ItemsNumber);
+		HANDLE OpenFindListPlugin(const PluginPanelItem *PanelItem,size_t ItemsNumber);
 		void ClosePanel(HANDLE hPlugin);
 		void GetOpenPanelInfo(HANDLE hPlugin, OpenPanelInfo *Info);
-		int GetFindData(HANDLE hPlugin,PluginPanelItem **pPanelItem,int *pItemsNumber,int Silent);
-		void FreeFindData(HANDLE hPlugin,PluginPanelItem *PanelItem,int ItemsNumber);
-		int GetVirtualFindData(HANDLE hPlugin,PluginPanelItem **pPanelItem,int *pItemsNumber,const wchar_t *Path);
-		void FreeVirtualFindData(HANDLE hPlugin,PluginPanelItem *PanelItem,int ItemsNumber);
+		int GetFindData(HANDLE hPlugin,PluginPanelItem **pPanelItem,size_t *pItemsNumber,int Silent);
+		void FreeFindData(HANDLE hPlugin,PluginPanelItem *PanelItem,size_t ItemsNumber);
+		int GetVirtualFindData(HANDLE hPlugin,PluginPanelItem **pPanelItem,size_t *pItemsNumber,const wchar_t *Path);
+		void FreeVirtualFindData(HANDLE hPlugin,PluginPanelItem *PanelItem,size_t ItemsNumber);
 		int SetDirectory(HANDLE hPlugin,const wchar_t *Dir,int OpMode);
 		int GetFile(HANDLE hPlugin,PluginPanelItem *PanelItem,const wchar_t *DestPath,string &strResultName,int OpMode);
-		int GetFiles(HANDLE hPlugin,PluginPanelItem *PanelItem,int ItemsNumber,int Move,const wchar_t **DestPath,int OpMode);
-		int PutFiles(HANDLE hPlugin,PluginPanelItem *PanelItem,int ItemsNumber,int Move,int OpMode);
-		int DeleteFiles(HANDLE hPlugin,PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
+		int GetFiles(HANDLE hPlugin,PluginPanelItem *PanelItem,size_t ItemsNumber,bool Move,const wchar_t **DestPath,int OpMode);
+		int PutFiles(HANDLE hPlugin,PluginPanelItem *PanelItem,size_t ItemsNumber,bool Move,int OpMode);
+		int DeleteFiles(HANDLE hPlugin,PluginPanelItem *PanelItem,size_t ItemsNumber,int OpMode);
 		int MakeDirectory(HANDLE hPlugin,const wchar_t **Name,int OpMode);
-		int ProcessHostFile(HANDLE hPlugin,PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
+		int ProcessHostFile(HANDLE hPlugin,PluginPanelItem *PanelItem,size_t ItemsNumber,int OpMode);
 		int ProcessKey(HANDLE hPlugin,const INPUT_RECORD *Rec,bool Pred);
 		int ProcessEvent(HANDLE hPlugin,int Event,void *Param);
 		int Compare(HANDLE hPlugin,const PluginPanelItem *Item1,const PluginPanelItem *Item2,unsigned int Mode);
 		int ProcessEditorInput(INPUT_RECORD *Rec);
 		int ProcessEditorEvent(int Event,void *Param);
 		int ProcessViewerEvent(int Event,void *Param);
-		int ProcessDialogEvent(int Event,void *Param);
+		int ProcessDialogEvent(int Event,FarDialogEvent *Param);
 #if defined(MANTIS_0000466)
 		int ProcessMacro(const GUID& guid,ProcessMacroInfo *Info);
 #endif
@@ -269,6 +269,7 @@ class PluginManager
 		int ProcessConsoleInput(ProcessConsoleInputInfo *Info);
 #endif
 		void GetCustomData(FileListItem *ListItem);
+		bool HasGetCustomData();
 
 		friend class Plugin;
 };

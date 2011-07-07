@@ -408,12 +408,12 @@ static TMacroFunction intMacroFunction[]=
 	{L"LCASE",            1, 0,   MCODE_F_LCASE,            nullptr, 0,nullptr,L"S=LCase(S1)",0,lcaseFunc},
 	{L"LEN",              1, 0,   MCODE_F_LEN,              nullptr, 0,nullptr,L"N=Len(S)",0,lenFunc},
 	{L"MAX",              2, 0,   MCODE_F_MAX,              nullptr, 0,nullptr,L"N=Max(N1,N2)",0,maxFunc},
+	{L"MENU.FILTER",      2, 2,   MCODE_F_MENU_FILTER,      nullptr, 0,nullptr,L"N=Menu.Filter([Action[,Mode]])",0,usersFunc},
+	{L"MENU.FILTERSTR",   2, 2,   MCODE_F_MENU_FILTERSTR,   nullptr, 0,nullptr,L"N=Menu.FilterStr([Action[,S]])",0,usersFunc},
 	{L"MENU.GETVALUE",    1, 1,   MCODE_F_MENU_GETVALUE,    nullptr, 0,nullptr,L"S=Menu.GetValue([N])",0,usersFunc},
 	{L"MENU.ITEMSTATUS",  1, 1,   MCODE_F_MENU_ITEMSTATUS,  nullptr, 0,nullptr,L"N=Menu.ItemStatus([N])",0,usersFunc},
 	{L"MENU.SELECT",      3, 2,   MCODE_F_MENU_SELECT,      nullptr, 0,nullptr,L"N=Menu.Select(S[,N[,Dir]])",0,usersFunc},
 	{L"MENU.SHOW",        6, 5,   MCODE_F_MENU_SHOW,        nullptr, 0,nullptr,L"S=Menu.Show(Items[,Title[,Flags[,FindOrFilter[,X[,Y]]]]])",IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT,menushowFunc},
-	{L"MENU.FILTER",      2, 2,   MCODE_F_MENU_FILTER,      nullptr, 0,nullptr,L"N=Menu.Filter([Action[,Mode]])",0,usersFunc},
-	{L"MENU.FILTERSTR",   2, 2,   MCODE_F_MENU_FILTERSTR,   nullptr, 0,nullptr,L"N=Menu.FilterStr([Action[,S]])",0,usersFunc},
 	{L"MIN",              2, 0,   MCODE_F_MIN,              nullptr, 0,nullptr,L"N=Min(N1,N2)",0,minFunc},
 	{L"MLOAD",            1, 0,   MCODE_F_MLOAD,            nullptr, 0,nullptr,L"N=MLoad(S)",0,mloadFunc},
 	{L"MMODE",            2, 1,   MCODE_F_MMODE,            nullptr, 0,nullptr,L"N=MMode(Action[,Value])",0,usersFunc},
@@ -545,6 +545,7 @@ KeyMacro::KeyMacro():
 	Recording(MACROMODE_NOMACRO),
 	Mode(MACRO_SHELL),
 	CurPCStack(-1),
+	StopMacro(false),
 	MacroLIB(nullptr),
 	RecBufferSize(0),
 	RecBuffer(nullptr),
@@ -916,6 +917,8 @@ int KeyMacro::ProcessKey(int Key)
 			//_KEYMACRO(CleverSysLog Clev(L"MACRO find..."));
 			//_KEYMACRO(SysLog(L"Param Key=%s",_FARKEY_ToName(Key)));
 			UINT64 CurFlags;
+
+			StopMacro=false;
 
 			if ((Key&(~KEY_CTRLMASK)) > 0x01 && (Key&(~KEY_CTRLMASK)) < KEY_FKEY_BEGIN) // 0xFFFF ??
 			{
@@ -2466,8 +2469,10 @@ static bool msgBoxFunc(const TMacroFunction*)
 	TempBuf += L"\n";
 	TempBuf += text;
 	int Result=FarMessageFn(-1,Flags,nullptr,(const wchar_t * const *)TempBuf.CPtr(),0,0)+1;
+	/*
 	if (Result <= -1) // Break?
 		CtrlObject->Macro.SendDropProcess();
+	*/
 	VMStack.Push((__int64)Result);
 	return true;
 }
@@ -2475,6 +2480,9 @@ static bool msgBoxFunc(const TMacroFunction*)
 
 static int __cdecl CompareItems(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
+	if (((*el1)->Flags & LIF_SEPARATOR) || ((*el2)->Flags & LIF_SEPARATOR))
+		return 0;
+
 	string strName1((*el1)->strName);
 	string strName2((*el2)->strName);
 	RemoveChar(strName1,L'&',TRUE);
@@ -2504,16 +2512,29 @@ static bool menushowFunc(const TMacroFunction*)
 	TVar VFindOrFilter; VMStack.Pop(VFindOrFilter);
 	DWORD Flags = (DWORD)VMStack.Pop().getInteger();
 	TVar Title; VMStack.Pop(Title);
+
+	if (Title.isUnknown())
+		Title=L"";
+
 	string strTitle=Title.toString();
 	string strBottom;
 	TVar Items; VMStack.Pop(Items);
 	string strItems = Items.toString();
 	ReplaceStrings(strItems,L"\r\n",L"\n");
-	strItems.Append(L"\n");
-	TVar Result = -1;
 
+	if (!strItems.IsSubStrAt(strItems.GetLength()-1,L"\n"))
+		strItems.Append(L"\n");
+
+	TVar Result = -1;
 	int BoxType = (Flags & 0x7)?(Flags & 0x7)-1:3;
+	bool bResultAsIndex = (Flags & 0x08)?true:false;
+	bool bMultiSelect = (Flags & 0x010)?true:false;
+	bool bSorting = (Flags & 0x20)?true:false;
+	bool bPacking = (Flags & 0x40)?true:false;
+	bool bAutohighlight = (Flags & 0x80)?true:false;
+	bool bSetMenuFilter = (Flags & 0x100)?true:false;
 	bool bAutoNumbering = (Flags & 0x200)?true:false;
+	bool bExitAfterNavigate = (Flags & 0x400)?true:false;
 	int nLeftShift=bAutoNumbering?9:0;
 	int X = -1;
 	int Y = -1;
@@ -2525,25 +2546,21 @@ static bool menushowFunc(const TMacroFunction*)
 	if (!VY.isUnknown())
 		Y=VY.toInteger();
 
-	if (Title.isUnknown())
-		Title=L"";
-
-	bool MultiSelect = (Flags & 0x010)?true:false;
-
-	if (Flags & 0x080)
+	if (bAutohighlight)
 		MenuFlags |= VMENU_AUTOHIGHLIGHT;
 
 	int SelectedPos=0;
 	int LineCount=0;
 	size_t CurrentPos=0;
+	size_t PosLF;
+	size_t SubstrLen;
 	ReplaceStrings(strTitle,L"\r\n",L"\n");
-	size_t PosCRLF;
-	bool CRFound=strTitle.Pos(PosCRLF, L"\n");
+	bool CRFound=strTitle.Pos(PosLF, L"\n");
 
 	if(CRFound)
 	{
-		strBottom=strTitle.SubStr(PosCRLF+1);
-		strTitle=strTitle.SubStr(0,PosCRLF);
+		strBottom=strTitle.SubStr(PosLF+1);
+		strTitle=strTitle.SubStr(0,PosLF);
 	}
 	VMenu Menu(strTitle.CPtr(),nullptr,0,ScrY-4);
 	Menu.SetBottomTitle(strBottom.CPtr());
@@ -2551,13 +2568,20 @@ static bool menushowFunc(const TMacroFunction*)
 	Menu.SetPosition(X,Y,0,0);
 	Menu.SetBoxType(BoxType);
 
-	CRFound=strItems.Pos(PosCRLF, L"\n");
+	CRFound=strItems.Pos(PosLF, L"\n");
 	while(CRFound)
 	{
 		MenuItemEx NewItem;
 		NewItem.Clear();
+		SubstrLen=PosLF-CurrentPos;
 
-		NewItem.strName=strItems.SubStr(CurrentPos,PosCRLF-CurrentPos);
+		if (SubstrLen==0)
+			SubstrLen=1;
+
+		NewItem.strName=strItems.SubStr(CurrentPos,SubstrLen);
+
+		if (NewItem.strName!=L"\n")
+		{
 		wchar_t *CurrentChar=(wchar_t *)NewItem.strName.CPtr();
 		bool bContunue=(*CurrentChar<=L'\x4');
 		while(*CurrentChar && bContunue)
@@ -2591,25 +2615,42 @@ static bool menushowFunc(const TMacroFunction*)
 			}
 		}
 		NewItem.strName=CurrentChar;
-		if (bAutoNumbering)
+		}
+		else
+			NewItem.strName.Clear();
+
+		if (bAutoNumbering && !(bSorting || bPacking) && !(NewItem.Flags & LIF_SEPARATOR))
 		{
 			LineCount++;
 			NewItem.strName.Format(L"%6d - %s", LineCount, NewItem.strName.CPtr());
 		}
 		Menu.AddItem(&NewItem);
-		CurrentPos=PosCRLF+1;
-		CRFound=strItems.Pos(PosCRLF, L"\n",CurrentPos+1);
+		CurrentPos=PosLF+1;
+		CRFound=strItems.Pos(PosLF, L"\n",CurrentPos);
 	}
 
-	if (Flags & 0x020)
+	if (bSorting)
 		Menu.SortItems(reinterpret_cast<TMENUITEMEXCMPFUNC>(CompareItems));
 
-	if (Flags & 0x040)
+	if (bPacking)
 		Menu.Pack();
+
+	if ((bAutoNumbering) && (bSorting || bPacking))
+	{
+		for (int i = 0; i < Menu.GetShowItemCount(); i++)
+		{
+			MenuItemEx *Item=Menu.GetItemPtr(i);
+			if (!(Item->Flags & LIF_SEPARATOR))
+			{
+				LineCount++;
+				Item->strName.Format(L"%6d - %s", LineCount, Item->strName.CPtr());
+			}
+		}
+	}
 
 	if (!VFindOrFilter.isUnknown())
 	{
-		if (Flags & 0x100)
+		if (bSetMenuFilter)
 		{
 			Menu.SetFilterEnabled(true);
 			Menu.SetFilterString(VFindOrFilter.toString());
@@ -2642,7 +2683,7 @@ static bool menushowFunc(const TMacroFunction*)
 		{
 			case KEY_NUMPAD0:
 			case KEY_INS:
-				if (MultiSelect)
+				if (bMultiSelect)
 				{
 					Menu.SetCheck(!Menu.GetCheck(SelectedPos));
 					Menu.Show();
@@ -2651,7 +2692,7 @@ static bool menushowFunc(const TMacroFunction*)
 
 			case KEY_CTRLADD:
 			case KEY_CTRLSUBTRACT:
-				if (MultiSelect)
+				if (bMultiSelect)
 				{
 					for(int i=0; i<Menu.GetShowItemCount(); i++)
 					{
@@ -2659,6 +2700,7 @@ static bool menushowFunc(const TMacroFunction*)
 					}
 					Menu.Show();
 				}
+				break;
 
 			case KEY_BREAK:
 				CtrlObject->Macro.SendDropProcess();
@@ -2670,7 +2712,7 @@ static bool menushowFunc(const TMacroFunction*)
 				break;
 		}
 
-		if ((Flags & 0x400) && (PrevSelectedPos!=SelectedPos))
+		if (bExitAfterNavigate && (PrevSelectedPos!=SelectedPos))
 		{
 			SelectedPos=Menu.GetSelectPos();
 			break;
@@ -2684,14 +2726,14 @@ static bool menushowFunc(const TMacroFunction*)
 	if (Menu.Modal::GetExitCode() >= 0)
 	{
 		SelectedPos=Menu.GetExitCode();
-		if (MultiSelect)
+		if (bMultiSelect)
 		{
 			Result=L"";
 			for(int i=0; i<Menu.GetItemCount(); i++)
 			{
 				if (Menu.GetCheck(i))
 				{
-					if (Flags & 0x8)
+					if (bResultAsIndex)
 					{
 						_i64tow(i+1,temp,10);
 						Result+=temp;
@@ -2703,7 +2745,7 @@ static bool menushowFunc(const TMacroFunction*)
 			}
 			if(Result==L"")
 			{
-				if (Flags & 0x8)
+				if (bResultAsIndex)
 				{
 					_i64tow(SelectedPos+1,temp,10);
 					Result=temp;
@@ -2713,7 +2755,7 @@ static bool menushowFunc(const TMacroFunction*)
 			}
 		}
 		else
-			if(!(Flags & 0x8))
+			if(!bResultAsIndex)
 				Result=(*Menu.GetItemPtr(SelectedPos)).strName.CPtr()+nLeftShift;
 			else
 				Result=SelectedPos+1;
@@ -2723,7 +2765,7 @@ static bool menushowFunc(const TMacroFunction*)
 	{
 		Menu.Hide();
 		Result=0;
-		if (Flags & 0x400)
+		if (bExitAfterNavigate)
 		{
 			Result=SelectedPos+1;
 			if ((Key == KEY_ESC) || (Key == KEY_F10) || (Key == KEY_BREAK))
@@ -3014,7 +3056,7 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 						const char *Item->Mask;
 						FarList *Item->ListItems;
 						int  Item->ListPos;
-						CHAR_INFO *Item->VBuf;
+						FAR_CHAR_INFO *Item->VBuf;
 						*/
 					}
 
@@ -3832,7 +3874,7 @@ static bool panelitemFunc(const TMacroFunction*)
 	}
 
 	int TypePanel=SelPanel->GetType(); //FILE_PANEL,TREE_PANEL,QVIEW_PANEL,INFO_PANEL
-	int PanelMode=SelPanel->GetMode(); //NORMAL_PANEL,PLUGIN_PANEL
+	int SelPanelMode=SelPanel->GetMode(); //NORMAL_PANEL,PLUGIN_PANEL
 
 	if (!(TypePanel == FILE_PANEL || TypePanel ==TREE_PANEL))
 	{
@@ -3945,7 +3987,7 @@ static bool panelitemFunc(const TMacroFunction*)
 				Ret=TVar((__int64)FileTimeToUI64(&filelistItem.ChangeTime));
 				break;
 			case 22:  // CustomData
-				if (PanelMode==NORMAL_PANEL && !filelistItem.CustomDataLoaded)
+				if (SelPanelMode==NORMAL_PANEL && !filelistItem.CustomDataLoaded)
 				{
 					//Maximus: BUGBUG: требуется установка текущей папки для панели (это может быть пассивная панель!)
 					CtrlObject->Plugins.GetCustomData(&filelistItem);
@@ -4510,7 +4552,7 @@ int KeyMacro::GetKey()
 	TVar tmpVar;
 	TVarSet *tmpVarSet=nullptr;
 #ifdef _DEBUG
-	int jj = 0;
+	size_t jj = 0;
 	TMacroFunction ff = {};
 #endif
 
@@ -4654,6 +4696,8 @@ done:
 		ScrBuf.RestoreMacroChar();
 		Work.HistroyEnable=0;
 
+		StopMacro=false;
+
 		return KEY_NONE; // Здесь ВСЕГДА!
 	}
 
@@ -4664,7 +4708,8 @@ done:
 	{
 		INPUT_RECORD rec;
 
-		if (PeekInputRecord(&rec) && rec.EventType==KEY_EVENT && rec.Event.KeyEvent.wVirtualKeyCode == VK_CANCEL)
+		//if (PeekInputRecord(&rec) && rec.EventType==KEY_EVENT && rec.Event.KeyEvent.wVirtualKeyCode == VK_CANCEL)
+		if (StopMacro)
 		{
 			GetInputRecord(&rec,true);  // удаляем из очереди эту "клавишу"...
 			Work.KeyProcess=0;
@@ -5375,6 +5420,7 @@ done:
 			VMStack.Push(tmpVar);
 			goto begin;
 		}
+
 		case MCODE_F_MENU_SELECT:      // N=Menu.Select(S[,N[,Dir]])
 		case MCODE_F_MENU_CHECKHOTKEY: // N=checkhotkey(S[,N])
 		{
@@ -5432,7 +5478,7 @@ done:
 			VMStack.Pop(tmpAction);
 			if (tmpAction.isUnknown())
 				tmpAction=Key == MCODE_F_MENU_FILTER ? 4 : 0;
-			
+
 			int CurMMode=CtrlObject->Macro.GetMode();
 
 			if (IsMenuArea(CurMMode) || CurMMode == MACRO_DIALOG)
@@ -5486,10 +5532,7 @@ done:
 
 		default:
 		{
-			/*
 			size_t J;
-			*/
-			UINT J;
 
 			for (J=0; J < CMacroFunction; ++J)
 			{
@@ -7667,7 +7710,7 @@ int KeyMacro::IsExecutingLastKey()
 void KeyMacro::SendDropProcess()
 {
 	if (Work.Executing)
-		WriteInput(VK_CANCEL,SKEY_VK_KEYS);
+		StopMacro=true;
 }
 
 void KeyMacro::DropProcess()

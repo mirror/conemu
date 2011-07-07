@@ -83,6 +83,12 @@ struct FileListItem
 	string strCustomData;
 	bool CustomDataLoaded;
 
+	void ClearCustomData()
+	{
+		strCustomData.Clear();
+		CustomDataLoaded=false;
+	}
+
 	void Clear()
 	{
 		Selected = 0;
@@ -113,8 +119,7 @@ struct FileListItem
 		strName.Clear();
 		strShortName.Clear();
 		ReparseTag=0;
-		strCustomData.Clear();
-		CustomDataLoaded=false;
+		ClearCustomData();
 	}
 
 	FileListItem& operator=(const FileListItem &fliCopy)
@@ -238,7 +243,7 @@ class FileList:public Panel
 		void ShowFileList(int Fast);
 		void ShowList(int ShowStatus,int StartColumn);
 		void SetShowColor(int Position, int ColorType=HIGHLIGHTCOLORTYPE_FILE);
-		int  GetShowColor(int Position, int ColorType);
+		const FarColor GetShowColor(int Position, int ColorType);
 		void ShowSelectedSize();
 		void ShowTotalSize(OpenPanelInfo &Info);
 		int ConvertName(const wchar_t *SrcName, string &strDest, int MaxLength, int RightAlign, int ShowStatus, DWORD dwFileAttr);
@@ -421,4 +426,5 @@ class FileList:public Panel
 		static string &AddPluginPrefix(FileList *SrcPanel,string &strPrefix);
 
 		virtual int GetPanelStatusHeight();
+		virtual void ClearCustomData();
 };

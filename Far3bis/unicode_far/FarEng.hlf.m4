@@ -177,8 +177,9 @@ without this switch. If the cache is empty, no plugins will be loaded.
   - ^<wrap>if only the /co switch is given and plugins cache is not empty, then plugins
 will be loaded from cache;
   - ^<wrap>/co is ignored, if /p is given;
-  - ^<wrap>if /p and /co are not given, then plugins will be loaded from the main folder,
-and from the path given at the "~Path for personal plugins~@PluginsManagerSettings@" parameter.
+  - ^<wrap>if /p and /co are not given, then plugins will be loaded from the 'Plugins'
+folder, which is in the same folder as Far.exe, and the 'Plugins' folder, which is in the
+user profile folder ('%APPDATA%\Far Manager\Profile' by default).
 
   #/m#
   Far will not load macros when started.
@@ -219,7 +220,7 @@ active panel, the second path - to the passive one:
   - ^<wrap>if a folder or archive is specified, Far will show its contents;
   - ^<wrap>if a file is specified, Far will change to the folder where it
 resides and place the cursor on the file, if it exists;
-  - ^<wrap>when profixes specified (simultaneous use with common paths allowed)
+  - ^<wrap>when prefixes specified (simultaneous use with common paths allowed)
 passive command executes first (passive panel activates temporary). Single letter prefixes will be ignored.
   Example: far ma:c:\\Far20.7z "macro:post MsgBox(\\"Far Manager\\",\\"Successfully started\\")"
 
@@ -569,7 +570,7 @@ to the same data.
 possible size of a console window. In the fullscreen mode, #Alt-F9# toggles the
 screen height between 25 and 50 lines. See TechInfo##38 for details.
 
-  Configure ~plugin~@Plugins@ modules.                             #Alt-Shift-F9#
+  Configure ~plugins~@Plugins@.                                    #Alt-Shift-F9#
 
   Perform ~find folder~@FindFolder@ command                                #Alt-F10#
 
@@ -793,15 +794,17 @@ editor and viewer (see TechInfo##33).
 
 @Plugins
 $ #Plugins support#
-    External DLL modules (plugins) may be used to implement new Far commands
-and emulate file systems. For example, archives support, FTP client, temporary
-panel and network browser are plugins that emulate file systems.
+    Plugins may be used to implement new Far commands and emulate file systems.
+For example, archives support, FTP client, temporary panel and network browser
+are plugins that emulate file systems.
 
     All plugins are stored in separate folders within the 'Plugins' folder,
-which is in the same folder as FAR.EXE. When detecting a new plugin Far saves
-information about it and later loads the plugin only when necessary, so unused
-plugins do not require additional memory. But if you are sure that some plugins
-are useless for you, you may remove them to save disk space.
+which is in the same folder as Far.exe, and the 'Plugins' folder, which is in the
+user profile folder ('%APPDATA%\Far Manager\Profile' by default).
+When detecting a new plugin Far saves information about it and later loads the
+plugin only when necessary, so unused plugins do not require additional memory.
+But if you are sure that some plugins are useless for you, you may remove them
+to save disk space.
 
     Plugins may be called either from ~Change drive menu~@DriveDlg@ or from
 #Plugin commands# menu, activated by #F11# or by corresponding item of
@@ -820,8 +823,8 @@ necessary functionality. Search from the current folder in the "Find file"
 command requires less functionality than search from the root folder, so try to
 use it if search from the root folder does not work correctly.
 
-    The modules have their own message and help files. You can get a list of
-available help on the modules by pressing
+    Plugins have their own message and help files. You can get a list of
+available help on the plugins by pressing
 
     #Shift-F2# - anywhere in the Far help system
 
@@ -874,7 +877,7 @@ in filenames and in editor).
 
 @PluginsConfig
 $ #Plugins configuration#
-    You can configure the installed ~plugin modules~@Plugins@ using the command
+    You can configure the installed ~plugins~@Plugins@ using the command
 #"Plugins configuration"# from the ~Options menu~@OptMenu@ or by pressing
 #Alt-Shift-F9# in the ~drive selection menu~@DriveDlg@ or plugins menu.
 
@@ -1025,7 +1028,7 @@ operations.
 
     Far stores folder tree information in the file named #tree2.far# at root
 folder of each drive. For read-only drives this information is stored in the
-hidden folder Tree.Cache within the folder containing FAR.EXE. The tree2.far
+hidden folder Tree.Cache within the folder containing Far.exe. The tree2.far
 file doesn't exist by default. It will be automatically created after the first
 use of the #Tree Panel# or the #Find Folder# command. If that file exists, Far
 updates it with the changes to the tree structure it is aware of. If such
@@ -1302,7 +1305,7 @@ $ #Menus: options menu#
    #Languages#             Select main and help language.
                          Use "Save setup" to save selected languages.
 
-   #Plugins#               Configure ~plugin~@Plugins@ modules.
+   #Plugins#               Configure ~plugins~@Plugins@.
    #configuration#
 
    #Confirmation#          Switch on or off ~confirmations~@ConfirmDlg@ for
@@ -1341,7 +1344,7 @@ following operations:
 
     - overwrite destination files when performing file moving;
 
-    - overwrite and delete files with "read only" arrtibute;
+    - overwrite and delete files with "read only" atrtibute;
 
     - ~drag and drop~@DragAndDrop@ files;
 
@@ -1366,12 +1369,6 @@ following operations:
 
 @PluginsManagerSettings
 $ #Plugins manager#
-
-  #Path for personal plugins#
-  Enter here the full path, where Far will search for "personal" plugins in addition to the "main"
-plugins. Several search paths may be given separated by ';'. Environment variables can be entered in the
-search path. Personal plugins will not be loaded, if the switches /p or /co are given in the
-~command line~@CmdLine@.
 
 @ChoosePluginMenu
 $ #Plugin selection menu#
@@ -2039,7 +2036,7 @@ $ #Special symbols#
              Several such symbols are allowed in the same line,
              for example:
 
-             grep !?Search for:?! !?In:?*.*!|c:\\far\\far.exe -v -
+             grep !?Search for:?! !?In:?*.*!|c:\\far\\Far.exe -v -
 
              A history name for the <init> string can be supplied
              in the <title>. In such case the command has the
@@ -2049,12 +2046,12 @@ $ #Special symbols#
 
              for example:
 
-             grep !?#$GrepHist$#Search for:?! !?In:?*.*!|far.exe -v -
+             grep !?#$GrepHist$#Search for:?! !?In:?*.*!|Far.exe -v -
 
              In <title> and <init> the usage of other meta-symbols is
              allowed by enclosing them in brackets.
 
-             (e.g. grep !?Find in (!.!):?! |far.exe -v -)
+             (e.g. grep !?Find in (!.!):?! |Far.exe -v -)
 
     #!###       "!##" modifier specified before a file association
              symbol forces it (and all the following characters)
@@ -3669,7 +3666,7 @@ account). If the option "Process multiple destinations" is enabled, the dialog
 selected in the tree is appended to the edit line.
 
     The possibility of copying, moving and renaming files for plugins depends
-upon the plugin module functionality.
+upon the plugin functionality.
 
     If a destination file already exists, it can be overwritten, skipped or
 appended with the file being copied.
@@ -3888,12 +3885,12 @@ $ #Error: plugin not loaded#
    This error message can appear in the following cases:
 
    1. A dynamic link library not present on your system is required
-      for correct operation of the plugin module.
+      for correct operation of the plugin.
 
-   2. For some reason, the module returned an error code
+   2. For some reason, the plugin returned an error code
       telling the system to abort plugin loading.
 
-   3. The DLL file of the plugin is corrupt.
+   3. The Dll file of the plugin is corrupt.
 
 
 @ScrSwitch
@@ -4005,9 +4002,13 @@ $ #Environment variables#
     On startup, Far Manager sets the following environment variables available
 to child processes:
 
-    #FARHOME#            path to the folder from which Far was started.
+    #FARHOME#            ^<wrap>path to the folder containing main Far executable module.
 
-    #FARLANG#            the name of the current interface language.
+    #FARPROFILE#         ^<wrap>path to the folder containing roaming user data (Far & plugins settings, additional plugins etc.)
+
+    #FARLOCALPROFILE#    ^<wrap>path to the folder containing local user data (histories, plugin cache etc.)
+
+    #FARLANG#            ^<wrap>the name of the current interface language.
 
     #FARUSER#            ^<wrap>the name of the current user given by the /u ~command line~@CmdLine@ option.
 
@@ -4099,14 +4100,14 @@ happens, which is rather expensive).
 "AZXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", #.*# captures the whole string, and then
 rolls back symbol by symbol until it finds Z. On the opposite, if the expression
 is "A.*?Z" then Z is found at once. Not greedy quantifier is also known as
-#mininizing#, it captures minimal possible quantity of symbols, and only if
+#minimizing#, it captures minimal possible quantity of symbols, and only if
 further match fails it captures more.
 
     #Special symbols#
 
    Non-letter and non-digit symbol can be prepended by '#\#' in most cases,
 but in case of letters and digits this must be done with care because this is
-the way thew special symbols are written:
+the way the special symbols are written:
 
     #.#    - ^<wrap>any symbol except carriage return. If there is “s” among
 the options then this can be any symbol.

@@ -398,7 +398,7 @@ void Editor::ShowEditor(int CurLineOnly)
 			}
 			else
 			{
-				SetScreen(X1,Y,XX2,Y,L' ',COL_EDITORTEXT); //Пустые строки после конца текста
+				SetScreen(X1,Y,XX2,Y,L' ',ColorIndexToColor(COL_EDITORTEXT)); //Пустые строки после конца текста
 			}
 	}
 
@@ -426,7 +426,7 @@ void Editor::ShowEditor(int CurLineOnly)
 						BlockX2=XX2;
 
 					if (BlockX1<=XX2 && BlockX2>=X1)
-						ChangeBlockColor(BlockX1,Y,BlockX2,Y,COL_EDITORSELECTEDTEXT);
+						ChangeBlockColor(BlockX1,Y,BlockX2,Y,ColorIndexToColor(COL_EDITORSELECTEDTEXT));
 				}
 
 				CurPtr=CurPtr->m_next;
@@ -2351,7 +2351,7 @@ int Editor::ProcessKey(int Key)
 			if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
 				BeginVBlockMarking();
 
-			if (!EdOpt.CursorBeyondEOL && VBlockX>=CurLine->m_next->GetLength())
+			if (!EdOpt.CursorBeyondEOL && VBlockX>=CurLine->m_next->RealPosToTab(CurLine->m_next->GetLength()))
 				return TRUE;
 
 			Pasting++;
@@ -2440,8 +2440,10 @@ int Editor::ProcessKey(int Key)
 			Lock();
 			Pasting++;
 
-			while (CurLine!=TopList)
+			Edit* PrevLine = nullptr;
+			while (CurLine!=TopList && PrevLine!=CurLine)
 			{
+				PrevLine = CurLine;
 				ProcessKey(KEY_ALTUP);
 			}
 
@@ -2456,8 +2458,10 @@ int Editor::ProcessKey(int Key)
 			Lock();
 			Pasting++;
 
-			while (CurLine!=EndList)
+			Edit* PrevLine = nullptr;
+			while (CurLine!=EndList && PrevLine!=CurLine)
 			{
+				PrevLine = CurLine;
 				ProcessKey(KEY_ALTDOWN);
 			}
 
@@ -3705,7 +3709,7 @@ BOOL Editor::Search(int Next)
 						Show();
 						SHORT CurX,CurY;
 						GetCursorPos(CurX,CurY);
-						ScrBuf.ApplyColor(CurX,CurY,CurPtr->RealPosToTab(CurPtr->TabPosToReal(CurX)+SearchLength)-1,CurY,FarColorToReal(COL_EDITORSELECTEDTEXT));
+						ScrBuf.ApplyColor(CurX,CurY,CurPtr->RealPosToTab(CurPtr->TabPosToReal(CurX)+SearchLength)-1,CurY,ColorIndexToColor(COL_EDITORSELECTEDTEXT));
 						string strQSearchStr(CurPtr->GetStringAddr()+CurPtr->GetCurPos(),SearchLength), strQReplaceStr=strReplaceStrCurrent;
 						InsertQuote(strQSearchStr);
 						InsertQuote(strQReplaceStr);
@@ -5758,12 +5762,12 @@ int Editor::EditorControl(int Command,void *Param)
 				_ECTLLOG(SysLog(L"  ColorItem   =%d (0x%08X)",col->ColorItem,col->ColorItem));
 				_ECTLLOG(SysLog(L"  StartPos    =%d",col->StartPos));
 				_ECTLLOG(SysLog(L"  EndPos      =%d",col->EndPos));
-				_ECTLLOG(SysLog(L"  Color       =%d (0x%08X)",Colors::FarColorToColor(col->Color),Colors::FarColorToColor(col->Color)));
+				_ECTLLOG(SysLog(L"  Color       =%d/%d (0x%08X/0x%08X)",col->Color.ForegroundColor,col->Color.BackgroundColor,col->Color.ForegroundColor,col->Color.BackgroundColor));
 				_ECTLLOG(SysLog(L"}"));
 				ColorItem newcol;
 				newcol.StartPos=col->StartPos+(col->StartPos!=-1?X1:0);
 				newcol.EndPos=col->EndPos+X1;
-				newcol.Color=Colors::FarColorToColor(col->Color);
+				newcol.Color=col->Color;
 				newcol.Flags=col->Flags;
 				newcol.Owner=col->Owner;
 				newcol.Priority=col->Priority;
@@ -5805,7 +5809,7 @@ int Editor::EditorControl(int Command,void *Param)
 
 				col->StartPos=curcol.StartPos-X1;
 				col->EndPos=curcol.EndPos-X1;
-				Colors::ColorToFarColor(curcol.Color,col->Color);
+				col->Color=curcol.Color;
 				col->Flags=curcol.Flags;
 				col->Owner=curcol.Owner;
 				col->Priority=curcol.Priority;
@@ -5814,7 +5818,7 @@ int Editor::EditorControl(int Command,void *Param)
 				_ECTLLOG(SysLog(L"  ColorItem   =%d (0x%08X)",col->ColorItem,col->ColorItem));
 				_ECTLLOG(SysLog(L"  StartPos    =%d",col->StartPos));
 				_ECTLLOG(SysLog(L"  EndPos      =%d",col->EndPos));
-				_ECTLLOG(SysLog(L"  Color       =%d (0x%08X)",Colors::FarColorToColor(col->Color),Colors::FarColorToColor(col->Color)));
+				_ECTLLOG(SysLog(L"  Color       =%d/%d (0x%08X/0x%08X)",col->Color.ForegroundColor,col->Color.BackgroundColor,col->Color.ForegroundColor,col->Color.BackgroundColor));
 				_ECTLLOG(SysLog(L"}"));
 				return TRUE;
 			}
@@ -6995,7 +6999,7 @@ void Editor::GetCursorType(bool& Visible,DWORD& Size)
 	CurLine->GetCursorType(Visible,Size); //???
 }
 
-void Editor::SetObjectColor(int Color,int SelColor,int ColorUnChanged)
+void Editor::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)
 {
 	for (Edit *CurPtr=TopList; CurPtr; CurPtr=CurPtr->m_next) //???
 		CurPtr->SetObjectColor(Color,SelColor,ColorUnChanged);

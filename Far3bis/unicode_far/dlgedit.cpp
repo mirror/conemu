@@ -44,6 +44,7 @@ DlgEdit::DlgEdit(Dialog* pOwner,unsigned Index,DLGEDITTYPE Type):
 	m_Dialog(pOwner),
 	m_Index(Index),
 	Type(Type),
+	iHistory(nullptr),
 #if defined(PROJECT_DI_MEMOEDIT)
 	multiEdit(nullptr),
 #endif
@@ -60,7 +61,6 @@ DlgEdit::DlgEdit(Dialog* pOwner,unsigned Index,DLGEDITTYPE Type):
 		{
 			Edit::Callback callback={true,EditChange,this};
 
-			iHistory=0;
 			FarList* iList=0;
 			DWORD iFlags=0;
 			if(pOwner)
@@ -72,7 +72,7 @@ DlgEdit::DlgEdit(Dialog* pOwner,unsigned Index,DLGEDITTYPE Type):
 				}
 				if(CurItem->Flags&DIF_HISTORY && !CurItem->strHistory.IsEmpty())
 				{
-					iHistory=new History(HISTORYTYPE_DIALOG, CurItem->strHistory, Opt.DialogsHistoryCount, &Opt.Dialogs.EditHistory, false);
+					SetHistory(CurItem->strHistory);
 				}
 				if(CurItem->Type == DI_COMBOBOX)
 				{
@@ -103,6 +103,13 @@ DlgEdit::~DlgEdit()
 	if (multiEdit) delete multiEdit;
 
 #endif
+}
+
+
+void DlgEdit::SetHistory(const wchar_t* Name)
+{
+	delete iHistory;
+	iHistory=new History(HISTORYTYPE_DIALOG, Name, Opt.DialogsHistoryCount, &Opt.Dialogs.EditHistory, false);
 }
 
 int DlgEdit::ProcessKey(int Key)
@@ -455,7 +462,17 @@ int  DlgEdit::GetDelRemovesBlocks()
 		return lineEdit->GetDelRemovesBlocks();
 }
 
-void DlgEdit::SetObjectColor(int Color,int SelColor,int ColorUnChanged)
+void DlgEdit::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)
+{
+#if defined(PROJECT_DI_MEMOEDIT)
+
+	if (Type == DLGEDIT_MULTILINE)
+		multiEdit->SetObjectColor(Color,SelColor,ColorUnChanged);
+	else
+#endif
+		lineEdit->SetObjectColor(Color,SelColor,ColorUnChanged);
+}
+void DlgEdit::SetObjectColor(const FarColor& Color,const FarColor& SelColor,const FarColor& ColorUnChanged)
 {
 #if defined(PROJECT_DI_MEMOEDIT)
 
@@ -466,26 +483,15 @@ void DlgEdit::SetObjectColor(int Color,int SelColor,int ColorUnChanged)
 		lineEdit->SetObjectColor(Color,SelColor,ColorUnChanged);
 }
 
-long DlgEdit::GetObjectColor()
+void DlgEdit::GetObjectColor(FarColor& Color, FarColor& SelColor, FarColor& ColorUnChanged)
 {
 #if defined(PROJECT_DI_MEMOEDIT)
 
 	if (Type == DLGEDIT_MULTILINE)
-		return 0;// multiEdit->GetObjectColor();
+		return 0;// multiEdit->GetObjectColor(Color, SelColor, ColorUnChanged);
 	else
 #endif
-		return lineEdit->GetObjectColor();
-}
-
-int DlgEdit::GetObjectColorUnChanged()
-{
-#if defined(PROJECT_DI_MEMOEDIT)
-
-	if (Type == DLGEDIT_MULTILINE)
-		return 0; // multiEdit->GetObjectColorUnChanged();
-	else
-#endif
-		return lineEdit->GetObjectColorUnChanged();
+		return lineEdit->GetObjectColor(Color, SelColor, ColorUnChanged);
 }
 
 void DlgEdit::FastShow()

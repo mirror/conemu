@@ -135,6 +135,8 @@ class SQLiteStmt {
 
 protected:
 	sqlite3_stmt *pStmt;
+public:
+	void CheckStmt() { _ASSERTE(pStmt!=nullptr); }
 
 public:
 
@@ -142,7 +144,7 @@ public:
 
 	~SQLiteStmt() { sqlite3_finalize(pStmt); }
 
-	SQLiteStmt& Reset() { param=1; sqlite3_clear_bindings(pStmt); sqlite3_reset(pStmt); return *this; }
+	SQLiteStmt& Reset() { param=1; _ASSERTE(pStmt); sqlite3_clear_bindings(pStmt); sqlite3_reset(pStmt); return *this; }
 
 	bool Step() { return sqlite3_step(pStmt) == SQLITE_ROW; }
 
@@ -223,7 +225,10 @@ public:
 	{
 #if defined(_DEBUG)
 		bool b = sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr) == SQLITE_OK;
-		assert(stmtStmt.pStmt != nullptr);
+		if (stmtStmt.pStmt == nullptr)
+		{
+			_ASSERTE(stmtStmt.pStmt != nullptr);
+		}
 		return b;
 #else
 		return sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr) == SQLITE_OK;
@@ -534,47 +539,49 @@ public:
 
 	explicit HierarchicalConfigDb(const wchar_t *DbName)
 	{
+		bool b;
 		if (!db.Open(DbName))
 			return;
 
 		//schema
-		db.EnableForeignKeysConstraints();
-		db.Exec(
+		b = db.EnableForeignKeysConstraints();
+		b = db.Exec(
 			"CREATE TABLE IF NOT EXISTS table_keys(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, FOREIGN KEY(parent_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, UNIQUE (parent_id,name));"
 			"CREATE TABLE IF NOT EXISTS table_values(key_id INTEGER NOT NULL, name TEXT NOT NULL, value BLOB, FOREIGN KEY(key_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (key_id, name), CHECK (key_id <> 0));"
 		);
 
 		//root key (needs to be before the transaction start)
-		db.Exec("INSERT INTO table_keys VALUES (0,0,\"\",\"Root - do not edit\");");
+		b = db.Exec("INSERT INTO table_keys VALUES (0,0,\"\",\"Root - do not edit\");");
 
-		db.BeginTransaction();
+		b = db.BeginTransaction();
 
 		//create key statement
-		db.InitStmt(stmtCreateKey, L"INSERT INTO table_keys VALUES (NULL,?1,?2,?3);");
+		b = db.InitStmt(stmtCreateKey, L"INSERT INTO table_keys VALUES (NULL,?1,?2,?3);");
 
 		//find key statement
-		db.InitStmt(stmtFindKey, L"SELECT id FROM table_keys WHERE parent_id=?1 AND name=?2 AND id<>0;");
+		b = db.InitStmt(stmtFindKey, L"SELECT id FROM table_keys WHERE parent_id=?1 AND name=?2 AND id<>0;");
+		stmtFindKey.CheckStmt();
 
 		//set key description statement
-		db.InitStmt(stmtSetKeyDescription, L"UPDATE table_keys SET description=?1 WHERE id=?2 AND id<>0 AND description<>?1;");
+		b = db.InitStmt(stmtSetKeyDescription, L"UPDATE table_keys SET description=?1 WHERE id=?2 AND id<>0 AND description<>?1;");
 
 		//set value statement
-		db.InitStmt(stmtSetValue, L"INSERT OR REPLACE INTO table_values VALUES (?1,?2,?3);");
+		b = db.InitStmt(stmtSetValue, L"INSERT OR REPLACE INTO table_values VALUES (?1,?2,?3);");
 
 		//get value statement
-		db.InitStmt(stmtGetValue, L"SELECT value FROM table_values WHERE key_id=?1 AND name=?2;");
+		b = db.InitStmt(stmtGetValue, L"SELECT value FROM table_values WHERE key_id=?1 AND name=?2;");
 
 		//enum keys statement
-		db.InitStmt(stmtEnumKeys, L"SELECT name FROM table_keys WHERE parent_id=?1 AND id<>0;");
+		b = db.InitStmt(stmtEnumKeys, L"SELECT name FROM table_keys WHERE parent_id=?1 AND id<>0;");
 
 		//enum values statement
-		db.InitStmt(stmtEnumValues, L"SELECT name, value FROM table_values WHERE key_id=?1;");
+		b = db.InitStmt(stmtEnumValues, L"SELECT name, value FROM table_values WHERE key_id=?1;");
 
 		//delete value statement
-		db.InitStmt(stmtDelValue, L"DELETE FROM table_values WHERE key_id=?1 AND name=?2;");
+		b = db.InitStmt(stmtDelValue, L"DELETE FROM table_values WHERE key_id=?1 AND name=?2;");
 
 		//delete tree statement
-		db.InitStmt(stmtDeleteTree, L"DELETE FROM table_keys WHERE id=?1 AND id<>0;");
+		b = db.InitStmt(stmtDeleteTree, L"DELETE FROM table_keys WHERE id=?1 AND id<>0;");
 	}
 
 	virtual ~HierarchicalConfigDb() { db.EndTransaction(); }
@@ -599,6 +606,7 @@ public:
 	unsigned __int64 GetKeyID(unsigned __int64 Root, const wchar_t *Name)
 	{
 		unsigned __int64 id = 0;
+		stmtFindKey.CheckStmt();
 		if (stmtFindKey.Bind(Root).Bind(Name).Step())
 			id = stmtFindKey.GetColInt64(0);
 		stmtFindKey.Reset();
@@ -2091,7 +2099,7 @@ public:
 
 HierarchicalConfig *CreatePluginsConfig(const wchar_t *guid)
 {
-	string strDbName = L"Plugins\\";
+	string strDbName = L"PluginsData\\";
 	strDbName += guid;
 	strDbName += L".db";
 	return new HierarchicalConfigDb(strDbName);
@@ -2192,7 +2200,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 
 		{
 			string strPlugins = Opt.ProfilePath;
-			strPlugins += L"\\Plugins\\*.db";
+			strPlugins += L"\\PluginsData\\*.db";
 			FAR_FIND_DATA_EX fd;
 			FindFile ff(strPlugins);
 			e = new TiXmlElement("pluginsconfig");

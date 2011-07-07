@@ -193,7 +193,7 @@ class CopyProgress
 		bool Move,Total,Time;
 		bool BgInit,ScanBgInit;
 		bool IsCancelled;
-		int Color;
+		FarColor Color;
 		int Percents;
 		DWORD LastWriteTime;
 		string strSrc,strDst,strFiles,strTime;
@@ -265,7 +265,7 @@ CopyProgress::CopyProgress(bool Move,bool Total,bool Time):
 	BgInit(false),
 	ScanBgInit(false),
 	IsCancelled(false),
-	Color(FarColorToReal(COL_DIALOGTEXT)),
+	Color(ColorIndexToColor(COL_DIALOGTEXT)),
 	Percents(0),
 	LastWriteTime(0)
 {
@@ -1408,18 +1408,6 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 		return;
 	}
 
-	if (CheckNulOrCon(strCopyDlgValue))
-		Flags|=FCOPY_COPYTONUL;
-
-	if (Flags&FCOPY_COPYTONUL)
-	{
-		Flags&=~FCOPY_MOVE;
-		Move=0;
-	}
-
-	if (CDP.SelCount==1 || (Flags&FCOPY_COPYTONUL))
-		AddSlash=false; //???
-
 	if (DestPlugin==2)
 	{
 		if (PluginDestPath)
@@ -1442,7 +1430,6 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 	// TODO: Posix - bugbug
 	ReplaceSlashToBSlash(strCopyDlgValue);
 	// нужно ли показывать время копирования?
-	bool ShowCopyTime=(Opt.CMOpt.CopyTimeRule&((Flags&FCOPY_COPYTONUL)?COPY_RULE_NUL:COPY_RULE_FILES))!=0;
 	// ***********************************************************************
 	// **** Здесь все подготовительные операции закончены, можно приступать
 	// **** к процессу Copy/Move/Link
@@ -1471,11 +1458,8 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 			TotalCopySize=TotalCopiedSize=TotalSkippedSize=0;
 
 			// Запомним время начала
-			if (ShowCopyTime)
-			{
-				CopyStartTime = clock();
-				WaitUserTime = OldCalcTime = 0;
-			}
+			CopyStartTime = clock();
+			WaitUserTime = OldCalcTime = 0;
 
 			if (CountTarget > 1)
 				Move=0;
@@ -1506,6 +1490,11 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 					Flags&=~FCOPY_MOVE;
 					Move=0;
 				}
+				bool ShowCopyTime=(Opt.CMOpt.CopyTimeRule&((Flags&FCOPY_COPYTONUL)?COPY_RULE_NUL:COPY_RULE_FILES))!=0;
+
+				if (CDP.SelCount==1 || (Flags&FCOPY_COPYTONUL))
+					AddSlash=false; //???
+
 
 				if (DestList.IsEmpty()) // нужно учесть моменты связанные с операцией Move.
 				{
@@ -2209,8 +2198,8 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 	if (!*NamePtr || TestParentFolderName(NamePtr))
 		DestAttr=FILE_ATTRIBUTE_DIRECTORY;
 
-	FAR_FIND_DATA_EX DestData;
-	if (DestAttr==INVALID_FILE_ATTRIBUTES)
+	FAR_FIND_DATA_EX DestData={};
+	if (DestAttr==INVALID_FILE_ATTRIBUTES && !(Flags&FCOPY_COPYTONUL))
 	{
 		if (apiGetFindDataEx(strDestPath,DestData))
 			DestAttr=DestData.dwFileAttributes;
@@ -3181,7 +3170,7 @@ int ShellCopy::ShellCopyFile(const wchar_t *SrcName,const FAR_FIND_DATA_EX &SrcD
 					DestFile.SetEnd();
 					DestFile.Close();
 
-					if (!Append)
+					if (!Append && !(Flags&FCOPY_COPYTONUL))
 					{
 						apiSetFileAttributes(strDestName,FILE_ATTRIBUTE_NORMAL);
 						apiDeleteFile(strDestName); //BUGBUG
@@ -3533,8 +3522,10 @@ INT_PTR WINAPI WarnDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		{
 			if (Param1==WDLG_FILENAME)
 			{
-				int Color=FarColorToReal(COL_WARNDIALOGTEXT)&0xFF;
-				return ((reinterpret_cast<INT_PTR>(Param2)&0xFF00FF00)|(Color<<16)|Color);
+				FarColor Color=ColorIndexToColor(COL_WARNDIALOGTEXT);
+				FarDialogItemColors* Colors = static_cast<FarDialogItemColors*>(Param2);
+				Colors->Colors[0] = Color;
+				Colors->Colors[2] = Color;
 			}
 		}
 		break;

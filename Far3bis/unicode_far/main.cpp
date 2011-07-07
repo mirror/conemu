@@ -63,6 +63,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cmdline.hpp"
 #include "console.hpp"
 #include "configdb.hpp"
+#include "palette.hpp"
 
 #ifdef DIRECT_RT
 int DirectRT=0;
@@ -122,7 +123,7 @@ static int MainProcess(
 		ControlObject CtrlObj;
 		WORD InitAttributes=0;
 		Console.GetTextAttributes(InitAttributes);
-		SetRealColor(COL_COMMANDLINEUSERSCREEN);
+		SetRealColor(ColorIndexToColor(COL_COMMANDLINEUSERSCREEN));
 		GetSystemInfo(&SystemInfo);
 
 		if (*lpwszEditName || *lpwszViewName)
@@ -282,7 +283,7 @@ static int MainProcess(
 		}
 
 		// очистим за собой!
-		SetScreen(0,0,ScrX,ScrY,L' ',COL_COMMANDLINEUSERSCREEN);
+		SetScreen(0,0,ScrX,ScrY,L' ',ColorIndexToColor(COL_COMMANDLINEUSERSCREEN));
 		Console.SetTextAttributes(InitAttributes);
 		ScrBuf.ResetShadow();
 		ScrBuf.Flush();
@@ -322,7 +323,7 @@ void InitProfile(string &strProfilePath)
 		int UseSystemProfiles = GetPrivateProfileInt(L"General", L"UseSystemProfiles", 1, g_strFarINI);
 		if (UseSystemProfiles)
 		{
-			// roaming profiles default path: %APPDATA%\Far Manager\Profile
+			// roaming data default path: %APPDATA%\Far Manager\Profile
 			SHGetFolderPath(nullptr, CSIDL_APPDATA|CSIDL_FLAG_CREATE, nullptr, 0, Opt.ProfilePath.GetBuffer(MAX_PATH));
 			Opt.ProfilePath.ReleaseBuffer();
 			AddEndSlash(Opt.ProfilePath);
@@ -334,17 +335,25 @@ void InitProfile(string &strProfilePath)
 			}
 			else
 			{
-				// local profiles default path: %LOCALAPPDATA%\Far Manager\Profile
+				// local data default path: %LOCALAPPDATA%\Far Manager\Profile
 				SHGetFolderPath(nullptr, CSIDL_LOCAL_APPDATA|CSIDL_FLAG_CREATE, nullptr, 0, Opt.LocalProfilePath.GetBuffer(MAX_PATH));
 				Opt.LocalProfilePath.ReleaseBuffer();
 				AddEndSlash(Opt.LocalProfilePath);
 				Opt.LocalProfilePath += L"Far Manager";
 			}
+
+			string* Paths[]={&Opt.ProfilePath,&Opt.LocalProfilePath};
+			for (size_t i = 0; i< ARRAYSIZE(Paths); ++i)
+			{
+				AddEndSlash(*Paths[i]);
+				*Paths[i] += L"Profile";
+				CreatePath(*Paths[i], true);
+			}
 		}
 		else
 		{
 			string strUserProfileDir;
-			strUserProfileDir.ReleaseBuffer(GetPrivateProfileString(L"General", L"UserProfileDir", L"%FARHOME%\\UserData", strUserProfileDir.GetBuffer(NT_MAX_PATH), NT_MAX_PATH, g_strFarINI));
+			strUserProfileDir.ReleaseBuffer(GetPrivateProfileString(L"General", L"UserProfileDir", L"%FARHOME%\\Profile", strUserProfileDir.GetBuffer(NT_MAX_PATH), NT_MAX_PATH, g_strFarINI));
 			apiExpandEnvironmentStrings(strUserProfileDir, Opt.ProfilePath);
 			Unquote(Opt.ProfilePath);
 			ConvertNameToFull(Opt.ProfilePath,Opt.ProfilePath);
@@ -357,17 +366,14 @@ void InitProfile(string &strProfilePath)
 		Opt.LocalProfilePath = strProfilePath;
 	}
 
-	string* Paths[] = {&Opt.ProfilePath, &Opt.LocalProfilePath};
-	for (size_t i = 0; i< ARRAYSIZE(Paths); ++i)
-	{
-		AddEndSlash(*Paths[i]);
-		*Paths[i] += L"Profile";
-		CreatePath(*Paths[i], true);
-	}
+	string strPluginsData = Opt.ProfilePath;
+	strPluginsData += L"\\PluginsData";
+	CreatePath(strPluginsData, true);
 
-	string strPlugins = Opt.ProfilePath;
-	strPlugins += L"\\Plugins";
-	CreatePath(strPlugins, true);
+	Opt.LoadPlug.strPersonalPluginsPath = Opt.ProfilePath+L"\\Plugins";
+
+	SetEnvironmentVariable(L"FARPROFILE", Opt.ProfilePath);
+	SetEnvironmentVariable(L"FARLOCALPROFILE", Opt.LocalProfilePath);
 }
 
 int ExportImportMain(bool Export, const wchar_t *XML, const wchar_t *ProfilePath)
@@ -390,7 +396,14 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 
 	std::set_new_handler(nullptr);
 	GetVersionEx(&WinVer);
-	apiEnableLowFragmentationHeap();
+	
+	// Starting with Windows Vista, the system uses the low-fragmentation heap (LFH) as needed to service memory allocation requests.
+	// Applications do not need to enable the LFH for their heaps.
+	if(WinVer.dwMajorVersion<6)
+	{
+		apiEnableLowFragmentationHeap();
+	}
+
 	InitCurrentDirectory();
 
 	if (apiGetModuleFileName(nullptr, g_strFarModuleName))

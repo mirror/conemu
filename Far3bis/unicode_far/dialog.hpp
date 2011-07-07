@@ -205,7 +205,7 @@ class Dialog: public Frame
 		void* DataDialog;        // Данные, специфические для конкретного экземпляра диалога (первоначально здесь параметр, переданный в конструктор)
 
 		DialogItemEx **Item; // массив элементов диалога
-		DialogItemEx *pSaveItemEx; // пользовательский массив элементов диалога
+		DialogItemEx * pSaveItemEx; // пользовательский массив элементов диалога
 
 		unsigned ItemCount;         // количество элементов диалога
 
@@ -236,7 +236,7 @@ class Dialog: public Frame
 
 		void ShowDialog(unsigned ID=(unsigned)-1);  //    ID=-1 - отрисовать весь диалог
 
-		INT_PTR CtlColorDlgItem(int ItemPos,int Type,int Focus,int Default,FARDIALOGITEMFLAGS Flags);
+		INT_PTR CtlColorDlgItem(FarColor Color[4], int ItemPos,int Type,int Focus,int Default,FARDIALOGITEMFLAGS Flags);
 		/* $ 28.07.2000 SVS
 		   + Изменяет фокус ввода между двумя элементами.
 		     Вынесен отдельно для того, чтобы обработать DMSG_KILLFOCUS & DMSG_SETFOCUS
@@ -292,7 +292,7 @@ class Dialog: public Frame
 	public:
 		Dialog(DialogItemEx *SrcItem, size_t SrcItemCount,
 		       FARWINDOWPROC DlgProc=nullptr,void* InitParam=nullptr);
-		Dialog(FarDialogItem *SrcItem, size_t SrcItemCount,
+		Dialog(const FarDialogItem *SrcItem, size_t SrcItemCount,
 		       FARWINDOWPROC DlgProc=nullptr,void* InitParam=nullptr);
 		bool InitOK() {return bInitOK;}
 		virtual ~Dialog();

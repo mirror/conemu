@@ -66,6 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "console.hpp"
 #include "wakeful.hpp"
 #include "RegExp.hpp"
+#include "palette.hpp"
 
 static void PR_ViewerSearchMsg();
 static void ViewerSearchMsg(const wchar_t *name, int percent, int search_hex);
@@ -253,6 +254,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 
 	ViewFile.Close();
 	Reader.Clear();
+	vgetc_ready = lcache_ready = false;
 
 	SelectSize = -1; // Сбросим выделение
 	strFileName = Name;
@@ -400,7 +402,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 		DriveType = DRIVE_CDROM;
 	switch (DriveType) //??? make it configurable
 	{
-		case DRIVE_REMOVABLE: update_check_period = -1;  break; // flash drive or floppy: never
+		case DRIVE_REMOVABLE: update_check_period = ViOpt.RefreshOnRemovable ? 500 : -1; break; // flash drive or floppy: 0.5 sec
 		case DRIVE_FIXED:     update_check_period = +1;  break; // hard disk: 1 msec
 		case DRIVE_REMOTE:    update_check_period = 500; break; // network drive: 0.5 sec
 		case DRIVE_CDROM:     update_check_period = -1;  break; // cd/dvd: never
@@ -435,7 +437,7 @@ void Viewer::ShowPage(int nMode)
 	{
 		if (!strFileName.IsEmpty() && ((nMode == SHOW_RELOAD) || (nMode == SHOW_HEX)))
 		{
-			SetScreen(X1,Y1,X2,Y2,L' ',COL_VIEWERTEXT);
+			SetScreen(X1,Y1,X2,Y2,L' ',ColorIndexToColor(COL_VIEWERTEXT));
 			GotoXY(X1,Y1);
 			SetColor(COL_WARNDIALOGTEXT);
 			FS<<fmt::Precision(XX2-X1+1)<<MSG(MViewerCannotOpenFile);
@@ -547,7 +549,7 @@ void Viewer::ShowPage(int nMode)
 					if (LeftPos > Strings[I]->nSelEnd)
 						Length = 0;
 
-					FS<<fmt::Precision(static_cast<int>(Length))<<&Strings[I]->lpData[static_cast<size_t>(SelX1+LeftPos)];
+					FS<<fmt::Precision(static_cast<size_t>(Length))<<&Strings[I]->lpData[static_cast<size_t>(SelX1+LeftPos)];
 				}
 			}
 
@@ -1940,7 +1942,7 @@ void Viewer::CacheLine( __int64 start, int length, bool have_eol )
 #if defined(_DEBUG) && 1 // it is legal case if file changed...
 		assert(start >= lcache_first && start+length <= lcache_last);
 		int i = CacheFindUp(start+length);
-		assert(i >= 0 && _abs64(lcache_lines[i]) == start);
+		_ASSERTE(i >= 0 && _abs64(lcache_lines[i]) == start);
 #endif
 		lcache_first = start;
 		lcache_last = start + length;
@@ -3966,12 +3968,7 @@ int Viewer::ViewerControl(int Command,void *Param)
 				if ((LeftPos=vsp->LeftPos) < 0)
 					LeftPos=0;
 
-				/* $ 20.01.2003 IS
-				     Если кодировка - юникод, то оперируем числами, уменьшенными в
-				     2 раза. Поэтому увеличим StartPos в 2 раза, т.к. функция
-				     GoTo принимает смещения в _байтах_.
-				*/
-				GoTo(FALSE, vsp->StartPos*(IsUnicodeCodePage(VM.CodePage)?2:1), vsp->Flags);
+				GoTo(FALSE, vsp->StartPos, vsp->Flags);
 
 				if (isReShow && !(vsp->Flags&VSP_NOREDRAW))
 					ScrBuf.Flush();

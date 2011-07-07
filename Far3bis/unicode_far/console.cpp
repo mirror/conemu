@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "config.hpp"
 #include "palette.hpp"
 #include "colors.hpp"
+#include "colormix.hpp"
 #include "interf.hpp"
 
 #ifdef _DEBUG
@@ -293,7 +294,7 @@ bool console::WriteInput(INPUT_RECORD* Buffer, DWORD Length, DWORD& NumberOfEven
 // пишем/читаем порциями по 32 K, иначе проблемы.
 const unsigned int MAXSIZE=0x8000;
 
-bool console::ReadOutput(CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT& ReadRegion) const
+bool console::ReadOutput(FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT& ReadRegion) const
 {
 	bool Result=false;
 	int Delta=Opt.WindowMode?GetDelta():0;
@@ -301,7 +302,8 @@ bool console::ReadOutput(CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord,
 	ReadRegion.Bottom+=Delta;
 
 	// skip unused region
-	PCHAR_INFO BufferStart=Buffer+BufferCoord.Y*BufferSize.X;
+	int Offset = BufferCoord.Y*BufferSize.X;
+	PCHAR_INFO ConsoleBuffer = new CHAR_INFO[BufferSize.X*BufferSize.Y-Offset]();
 	BufferSize.Y-=BufferCoord.Y;
 	BufferCoord.Y=0;
 
@@ -315,14 +317,22 @@ bool console::ReadOutput(CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord,
 		{
 			ReadRegion=SavedWriteRegion;
 			ReadRegion.Top=Start+i;
-			PCHAR_INFO BufPtr=BufferStart+i*BufferSize.X;
+			PCHAR_INFO BufPtr=ConsoleBuffer+i*BufferSize.X;
 			Result=ReadConsoleOutput(GetOutputHandle(), BufPtr, BufferSize, BufferCoord, &ReadRegion)!=FALSE;
 		}
 	}
 	else
 	{
-		Result=ReadConsoleOutput(GetOutputHandle(), BufferStart, BufferSize, BufferCoord, &ReadRegion)!=FALSE;
+		Result=ReadConsoleOutput(GetOutputHandle(), ConsoleBuffer, BufferSize, BufferCoord, &ReadRegion)!=FALSE;
 	}
+
+	for(int i = 0; i < BufferSize.X*BufferSize.Y; ++i)
+	{
+		Buffer[i+Offset].Char = ConsoleBuffer[i].Char.UnicodeChar;
+		Colors::ConsoleColorToFarColor(ConsoleBuffer[i].Attributes, Buffer[i+Offset].Attributes);
+	}
+
+	delete[] ConsoleBuffer; 
 
 	if(Opt.WindowMode)
 	{
@@ -333,7 +343,7 @@ bool console::ReadOutput(CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord,
 	return Result;
 }
 
-bool console::WriteOutput(const CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT& WriteRegion) const
+bool console::WriteOutput(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT& WriteRegion) const
 {
 	bool Result=false;
 	int Delta=Opt.WindowMode?GetDelta():0;
@@ -341,7 +351,14 @@ bool console::WriteOutput(const CHAR_INFO* Buffer, COORD BufferSize, COORD Buffe
 	WriteRegion.Bottom+=Delta;
 
 	// skip unused region
-	const CHAR_INFO* BufferStart=Buffer+BufferCoord.Y*BufferSize.X;
+	int Offset = BufferCoord.Y*BufferSize.X;
+	PCHAR_INFO ConsoleBuffer = new CHAR_INFO[BufferSize.X*BufferSize.Y-Offset];
+	for(int i = Offset; i < BufferSize.X*BufferSize.Y; ++i)
+	{
+		ConsoleBuffer[i-Offset].Char.UnicodeChar = Buffer[i].Char;
+		ConsoleBuffer[i-Offset].Attributes = Colors::FarColorToConsoleColor(Buffer[i].Attributes);
+	}
+
 	BufferSize.Y-=BufferCoord.Y;
 	BufferCoord.Y=0;
 
@@ -355,14 +372,16 @@ bool console::WriteOutput(const CHAR_INFO* Buffer, COORD BufferSize, COORD Buffe
 		{
 			WriteRegion=SavedWriteRegion;
 			WriteRegion.Top=Start+i;
-			const CHAR_INFO* BufPtr=BufferStart+i*BufferSize.X;
+			const CHAR_INFO* BufPtr=ConsoleBuffer+i*BufferSize.X;
 			Result=WriteConsoleOutput(GetOutputHandle(), BufPtr, BufferSize, BufferCoord, &WriteRegion)!=FALSE;
 		}
 	}
 	else
 	{
-		Result=WriteConsoleOutput(GetOutputHandle(), BufferStart, BufferSize, BufferCoord, &WriteRegion)!=FALSE;
+		Result=WriteConsoleOutput(GetOutputHandle(), ConsoleBuffer, BufferSize, BufferCoord, &WriteRegion)!=FALSE;
 	}
+
+	delete[] ConsoleBuffer;
 
 	if(Opt.WindowMode)
 	{
@@ -546,7 +565,7 @@ bool console::ScrollScreenBuffer(int Lines) const
 	GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
 	SMALL_RECT ScrollRectangle={0, 0, csbi.dwSize.X-1, csbi.dwSize.Y-1};
 	COORD DestinationOrigin={0,-Lines};
-	CHAR_INFO Fill={L' ', FarColorToReal(COL_COMMANDLINEUSERSCREEN)};
+	CHAR_INFO Fill={L' ', Colors::FarColorToConsoleColor(ColorIndexToColor(COL_COMMANDLINEUSERSCREEN))};
 	return ScrollConsoleScreenBuffer(GetOutputHandle(), &ScrollRectangle, nullptr, DestinationOrigin, &Fill)!=FALSE;
 }
 

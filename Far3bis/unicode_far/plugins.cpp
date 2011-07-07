@@ -673,6 +673,23 @@ void PluginManager::LoadPlugins(bool Redraw)
 
 	Flags.Set(PSIF_PLUGINSLOADDED);
 	far_qsort(PluginsData, PluginsCount, sizeof(*PluginsData), PluginsSort);
+
+	// Иначе после загрузка Far в панелях не загрузятся колонки C0
+	if (HasGetCustomData())
+	{
+		Panel *ActivePanel=CtrlObject->Cp()->ActivePanel;
+		if (ActivePanel->GetType()==FILE_PANEL && ActivePanel->GetMode()==NORMAL_PANEL && ActivePanel->IsColumnDisplayed(CUSTOM_COLUMN0))
+		{
+			ActivePanel->ClearCustomData();
+			ActivePanel->Redraw();
+		}
+		Panel *AnotherPanel=CtrlObject->Cp()->GetAnotherPanel(ActivePanel);
+		if (AnotherPanel->GetType()==FILE_PANEL && AnotherPanel->GetMode()==NORMAL_PANEL && AnotherPanel->IsColumnDisplayed(CUSTOM_COLUMN0))
+		{
+			AnotherPanel->ClearCustomData();
+			AnotherPanel->Redraw();
+		}
+	}
 }
 
 /* $ 01.09.2000 tran
@@ -899,7 +916,7 @@ HANDLE PluginManager::OpenFilePlugin(
 	return hResult;
 }
 
-HANDLE PluginManager::OpenFindListPlugin(const PluginPanelItem *PanelItem, int ItemsNumber)
+HANDLE PluginManager::OpenFindListPlugin(const PluginPanelItem *PanelItem, size_t ItemsNumber)
 {
 	ChangePriority ChPriority(THREAD_PRIORITY_NORMAL);
 	PluginHandle *pResult = nullptr;
@@ -1055,7 +1072,7 @@ int PluginManager::ProcessViewerEvent(int Event, void *Param)
 	return nResult;
 }
 
-int PluginManager::ProcessDialogEvent(int Event, void *Param)
+int PluginManager::ProcessDialogEvent(int Event, FarDialogEvent *Param)
 {
 	for (int i=0; i<PluginsCount; i++)
 	{
@@ -1117,7 +1134,7 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 int PluginManager::GetFindData(
     HANDLE hPlugin,
     PluginPanelItem **pPanelData,
-    int *pItemsNumber,
+    size_t *pItemsNumber,
     int OpMode
 )
 {
@@ -1131,7 +1148,7 @@ int PluginManager::GetFindData(
 void PluginManager::FreeFindData(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber
+    size_t ItemsNumber
 )
 {
 	PluginHandle *ph = (PluginHandle *)hPlugin;
@@ -1142,7 +1159,7 @@ void PluginManager::FreeFindData(
 int PluginManager::GetVirtualFindData(
     HANDLE hPlugin,
     PluginPanelItem **pPanelData,
-    int *pItemsNumber,
+    size_t *pItemsNumber,
     const wchar_t *Path
 )
 {
@@ -1156,7 +1173,7 @@ int PluginManager::GetVirtualFindData(
 void PluginManager::FreeVirtualFindData(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber
+    size_t ItemsNumber
 )
 {
 	PluginHandle *ph = (PluginHandle*)hPlugin;
@@ -1235,7 +1252,7 @@ int PluginManager::GetFile(
 int PluginManager::DeleteFiles(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
+    size_t ItemsNumber,
     int OpMode
 )
 {
@@ -1274,7 +1291,7 @@ int PluginManager::MakeDirectory(
 int PluginManager::ProcessHostFile(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
+    size_t ItemsNumber,
     int OpMode
 )
 {
@@ -1294,8 +1311,8 @@ int PluginManager::ProcessHostFile(
 int PluginManager::GetFiles(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
-    int Move,
+    size_t ItemsNumber,
+    bool Move,
     const wchar_t **DestPath,
     int OpMode
 )
@@ -1309,8 +1326,8 @@ int PluginManager::GetFiles(
 int PluginManager::PutFiles(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    int ItemsNumber,
-    int Move,
+    size_t ItemsNumber,
+    bool Move,
     int OpMode
 )
 {
@@ -1360,7 +1377,7 @@ int PluginManager::ProcessEvent(
 )
 {
 	PluginHandle *ph = (PluginHandle*)hPlugin;
-	return ph->pPlugin->ProcessEvent(ph->hPlugin, Event, Param);
+	return ph->pPlugin->ProcessPanelEvent(ph->hPlugin, Event, Param);
 }
 
 
@@ -1541,6 +1558,8 @@ int PluginManager::Configure(int StartPos)
 
 						if (pPlugin->IsOemPlugin())
 							ListItem.Flags=LIF_CHECKED|L'A';
+						else if (pPlugin->IsFar2Plugin())
+							ListItem.Flags=LIF_CHECKED|L'2';
 						if (!bNext)
 							ListItem.Flags|=MIF_SUBMENU;
 
@@ -1910,6 +1929,8 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 
 						if (pPlugin->IsOemPlugin())
 							ListItem.Flags=LIF_CHECKED|L'A';
+						else if (pPlugin->IsFar2Plugin())
+							ListItem.Flags=LIF_CHECKED|L'2';
 
 						if (!HotKeysPresent)
 							ListItem.strName = strName;
@@ -2113,9 +2134,11 @@ bool PluginManager::SetHotKeyDialog(Plugin *pPlugin, const GUID& Guid, PluginsHo
 	*/
 	string strPluginGuid = GuidToStr(pPlugin->GetGUID());
 	string strItemGuid = GuidToStr(Guid);
+	unsigned __int64 id = PlCacheCfg->GetCacheID(pPlugin->GetCacheName());
+	string strPluginPrefix = id?PlCacheCfg->GetCommandPrefix(id):L"";
 	FarDialogItem PluginDlgData[]=
 	{
-		{DI_DOUBLEBOX,3,1,60,17,0,nullptr,nullptr,0,MSG(MPluginHotKeyTitle)},
+		{DI_DOUBLEBOX,3,1,60,19,0,nullptr,nullptr,0,MSG(MPluginHotKeyTitle)},
 		{DI_TEXT,5,2,0,2,0,nullptr,nullptr,0,MSG(MPluginHotKey)},
 		{DI_FIXEDIT,5,3,5,3,0,nullptr,nullptr,DIF_FOCUS|DIF_DEFAULTBUTTON,L""},
 		{DI_TEXT,8,3,58,3,0,nullptr,nullptr,0,DlgPluginTitle},
@@ -2132,6 +2155,8 @@ bool PluginManager::SetHotKeyDialog(Plugin *pPlugin, const GUID& Guid, PluginsHo
 		{DI_EDIT,5,14,58,14,0,nullptr,nullptr,DIF_READONLY,strPluginGuid.CPtr()},
 		{DI_TEXT,5,15,0,15,0,nullptr,nullptr,0,MSG(MPluginItemGUID)},
 		{DI_EDIT,5,16,58,16,0,nullptr,nullptr,DIF_READONLY,strItemGuid.CPtr()},
+		{DI_TEXT,5,17,0,15,0,nullptr,nullptr,0,MSG(MPluginPrefix)},
+		{DI_EDIT,5,18,58,16,0,nullptr,nullptr,DIF_READONLY,strPluginPrefix.CPtr()},
 	};
 	MakeDialogItemsEx(PluginDlgData,PluginDlg);
 
@@ -2143,7 +2168,7 @@ bool PluginManager::SetHotKeyDialog(Plugin *pPlugin, const GUID& Guid, PluginsHo
 	int ExitCode;
 	{
 		Dialog Dlg(PluginDlg,ARRAYSIZE(PluginDlg));
-		Dlg.SetPosition(-1,-1,64,19);
+		Dlg.SetPosition(-1,-1,64,21);
 		Dlg.Process();
 		ExitCode=Dlg.GetExitCode();
 	}
@@ -2244,6 +2269,14 @@ void PluginManager::ReloadLanguage()
 	for (int I=0; I<PluginsCount; I++)
 	{
 		PData = PluginsData[I];
+#ifdef _DEBUG
+		// Если плагин еще не загружен - не будем закрывать LangData
+		// в принципе, это не очень хорошо, поскольку останутся старые (на старом языке)
+		// кешированные строки для меню плагинов, конфигураций и т.п.
+		// Но для отладки - самое то, не будем требовать загрузку всех подряд плагинов
+		if (PData->m_hModule == NULL)
+			continue;
+#endif
 		PData->CloseLang();
 	}
 
@@ -2256,6 +2289,14 @@ void PluginManager::DiscardCache()
 	for (int I=0; I<PluginsCount; I++)
 	{
 		Plugin *pPlugin = PluginsData[I];
+#ifdef _DEBUG
+		// Если плагин еще не загружен - не будем закрывать LangData
+		// в принципе, это не очень хорошо, поскольку останутся старые (на старом языке)
+		// кешированные строки для меню плагинов, конфигураций и т.п.
+		// Но для отладки - самое то, не будем требовать загрузку всех подряд плагинов
+		if (pPlugin->m_hModule == NULL)
+			continue;
+#endif
 		pPlugin->Load();
 	}
 
@@ -2572,4 +2613,16 @@ void PluginManager::GetCustomData(FileListItem *ListItem)
 	}
 
 	ListItem->CustomDataLoaded = true;
+}
+
+bool PluginManager::HasGetCustomData()
+{
+	for (int i=0; i<PluginsCount; i++)
+	{
+		if (PluginsData[i]->HasGetCustomData())
+		{
+			return true;
+		}
+	}
+	return false;
 }

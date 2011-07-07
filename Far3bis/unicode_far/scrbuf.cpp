@@ -44,6 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DList.hpp"
 #include "elevation.hpp"
 #include "console.hpp"
+#include "colormix.hpp"
 
 enum
 {
@@ -97,8 +98,8 @@ void ScreenBuf::AllocBuf(int X,int Y)
 	if (Shadow) delete[] Shadow;
 
 	unsigned Cnt=X*Y;
-	Buf=new CHAR_INFO[Cnt]();
-	Shadow=new CHAR_INFO[Cnt]();
+	Buf=new FAR_CHAR_INFO[Cnt]();
+	Shadow=new FAR_CHAR_INFO[Cnt]();
 	BufX=X;
 	BufY=Y;
 }
@@ -111,7 +112,7 @@ void ScreenBuf::FillBuf()
 	COORD BufferSize={BufX, BufY}, BufferCoord={0, 0};
 	SMALL_RECT ReadRegion={0, 0, BufX-1, BufY-1};
 	Console.ReadOutput(Buf, BufferSize, BufferCoord, ReadRegion);
-	memcpy(Shadow,Buf,BufX*BufY*sizeof(CHAR_INFO));
+	memcpy(Shadow,Buf,BufX*BufY*sizeof(FAR_CHAR_INFO));
 	SBFlags.Set(SBFLAGS_USESHADOW);
 	COORD CursorPosition;
 	Console.GetCursorPosition(CursorPosition);
@@ -121,7 +122,7 @@ void ScreenBuf::FillBuf()
 
 /* Записать Text в виртуальный буфер
 */
-void ScreenBuf::Write(int X,int Y,const CHAR_INFO *Text,int TextLength)
+void ScreenBuf::Write(int X,int Y,const FAR_CHAR_INFO *Text,int TextLength)
 {
 	CriticalSectionLock Lock(CS);
 
@@ -138,11 +139,11 @@ void ScreenBuf::Write(int X,int Y,const CHAR_INFO *Text,int TextLength)
 	if (X+TextLength >= BufX)
 		TextLength=BufX-X; //??
 
-	CHAR_INFO *PtrBuf=Buf+Y*BufX+X;
+	FAR_CHAR_INFO *PtrBuf=Buf+Y*BufX+X;
 
 	for (int i=0; i<TextLength; i++)
 	{
-		SetVidChar(PtrBuf[i],Text[i].Char.UnicodeChar);
+		SetVidChar(PtrBuf[i],Text[i].Char);
 		PtrBuf[i].Attributes=Text[i].Attributes;
 	}
 
@@ -160,7 +161,7 @@ void ScreenBuf::Write(int X,int Y,const CHAR_INFO *Text,int TextLength)
 
 /* Читать блок из виртуального буфера.
 */
-void ScreenBuf::Read(int X1,int Y1,int X2,int Y2,CHAR_INFO *Text,size_t MaxTextLength)
+void ScreenBuf::Read(int X1,int Y1,int X2,int Y2,FAR_CHAR_INFO *Text,size_t MaxTextLength)
 {
 	CriticalSectionLock Lock(CS);
 	int Width=X2-X1+1;
@@ -168,27 +169,32 @@ void ScreenBuf::Read(int X1,int Y1,int X2,int Y2,CHAR_INFO *Text,size_t MaxTextL
 	int I, Idx;
 
 	for (Idx=I=0; I < Height; I++, Idx+=Width)
-		memcpy(Text+Idx,Buf+(Y1+I)*BufX+X1,Min(sizeof(CHAR_INFO)*Width,MaxTextLength));
+		memcpy(Text+Idx,Buf+(Y1+I)*BufX+X1,Min(sizeof(FAR_CHAR_INFO)*Width,MaxTextLength));
 }
 
 /* Изменить значение цветовых атрибутов в соответствии с маской
    (в основном применяется для "создания" тени)
 */
-void ScreenBuf::ApplyColorMask(int X1,int Y1,int X2,int Y2,WORD ColorMask)
+void ScreenBuf::ApplyColorMask(int X1,int Y1,int X2,int Y2,const FarColor& ColorMask)
 {
 	CriticalSectionLock Lock(CS);
 	int Width=X2-X1+1;
 	int Height=Y2-Y1+1;
 	int I, J;
-
+	FarColor Mask;
+	Colors::ConsoleColorToFarColor(0x08, Mask);
 	for (I=0; I < Height; I++)
 	{
-		CHAR_INFO *PtrBuf=Buf+(Y1+I)*BufX+X1;
+		FAR_CHAR_INFO *PtrBuf=Buf+(Y1+I)*BufX+X1;
 
 		for (J=0; J < Width; J++, ++PtrBuf)
 		{
-			if (!(PtrBuf->Attributes&=~ColorMask))
-				PtrBuf->Attributes=0x08;
+			PtrBuf->Attributes.ForegroundColor&=~ColorMask.ForegroundColor;
+			PtrBuf->Attributes.BackgroundColor&=~ColorMask.BackgroundColor;
+			if (!PtrBuf->Attributes.ForegroundColor && !PtrBuf->Attributes.BackgroundColor)
+			{
+				PtrBuf->Attributes=Mask;
+			}
 		}
 	}
 
@@ -204,7 +210,7 @@ void ScreenBuf::ApplyColorMask(int X1,int Y1,int X2,int Y2,WORD ColorMask)
 
 /* Непосредственное изменение цветовых атрибутов
 */
-void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,WORD Color)
+void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,const FarColor& Color)
 {
 	CriticalSectionLock Lock(CS);
 	if(X1<=ScrX && Y1<=ScrY && X2>=0 && Y2>=0)
@@ -220,7 +226,7 @@ void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,WORD Color)
 
 		for (I=0; I < Height; I++)
 		{
-			CHAR_INFO *PtrBuf=Buf+(Y1+I)*BufX+X1;
+			FAR_CHAR_INFO *PtrBuf=Buf+(Y1+I)*BufX+X1;
 
 			for (J=0; J < Width; J++, ++PtrBuf)
 				PtrBuf->Attributes=Color;
@@ -241,7 +247,7 @@ void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,WORD Color)
 
 /* Непосредственное изменение цветовых атрибутов с заданым цетом исключением
 */
-void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,int Color,WORD ExceptColor)
+void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,const FarColor& Color,const FarColor& ExceptColor)
 {
 	CriticalSectionLock Lock(CS);
 	if(X1<=ScrX && Y1<=ScrY && X2>=0 && Y2>=0)
@@ -253,11 +259,15 @@ void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,int Color,WORD ExceptColo
 
 		for (int I = 0; I < Y2-Y1+1; I++)
 		{
-			CHAR_INFO *PtrBuf = Buf+(Y1+I)*BufX+X1;
+			FAR_CHAR_INFO *PtrBuf = Buf+(Y1+I)*BufX+X1;
 
 			for (int J = 0; J < X2-X1+1; J++, ++PtrBuf)
-				if (PtrBuf->Attributes != ExceptColor)
+			{
+				if (PtrBuf->Attributes.ForegroundColor != ExceptColor.ForegroundColor || PtrBuf->Attributes.BackgroundColor != ExceptColor.BackgroundColor)
+				{
 					PtrBuf->Attributes = Color;
+				}
+			}
 		}
 
 #ifdef DIRECT_SCREEN_OUT
@@ -273,13 +283,13 @@ void ScreenBuf::ApplyColor(int X1,int Y1,int X2,int Y2,int Color,WORD ExceptColo
 
 /* Закрасить прямоугольник символом Ch и цветом Color
 */
-void ScreenBuf::FillRect(int X1,int Y1,int X2,int Y2,WCHAR Ch,WORD Color)
+void ScreenBuf::FillRect(int X1,int Y1,int X2,int Y2,WCHAR Ch,const FarColor& Color)
 {
 	CriticalSectionLock Lock(CS);
 	int Width=X2-X1+1;
 	int Height=Y2-Y1+1;
 	int I, J;
-	CHAR_INFO CI,*PtrBuf;
+	FAR_CHAR_INFO CI,*PtrBuf;
 	CI.Attributes=Color;
 	SetVidChar(CI,Ch);
 
@@ -315,13 +325,13 @@ void ScreenBuf::Flush()
 
 			if(CtrlObject->Macro.IsRecording())
 			{
-				Buf[0].Char.UnicodeChar=L'R';
-				Buf[0].Attributes=0xCF;
+				Buf[0].Char=L'R';
+				Colors::ConsoleColorToFarColor(0xCF, Buf[0].Attributes);
 			}
 			else
 			{
-				Buf[0].Char.UnicodeChar=L'P';
-				Buf[0].Attributes=0x2F;
+				Buf[0].Char=L'P';
+				Colors::ConsoleColorToFarColor(0x2F, Buf[0].Attributes);
 			}
 		}
 
@@ -330,8 +340,8 @@ void ScreenBuf::Flush()
 			ElevationChar=Buf[BufX*BufY-1];
 			ElevationCharUsed=true;
 
-			Buf[BufX*BufY-1].Char.UnicodeChar=L'A';
-			Buf[BufX*BufY-1].Attributes=0xCF;
+			Buf[BufX*BufY-1].Char=L'A';
+			Colors::ConsoleColorToFarColor(0xCF, Buf[BufX*BufY-1].Attributes);
 		}
 
 		if (!SBFlags.Check(SBFLAGS_FLUSHEDCURTYPE) && !CurVisible)
@@ -355,7 +365,7 @@ void ScreenBuf::Flush()
 
 			if (SBFlags.Check(SBFLAGS_USESHADOW))
 			{
-				PCHAR_INFO PtrBuf=Buf,PtrShadow=Shadow;
+				FAR_CHAR_INFO* PtrBuf=Buf,*PtrShadow=Shadow;
 
 				if (Opt.ClearType)
 				{
@@ -368,7 +378,7 @@ void ScreenBuf::Flush()
 						WriteRegion.Top=I;
 						WriteRegion.Bottom=I-1;
 
-						while (I<BufY && memcmp(PtrBuf,PtrShadow,BufX*sizeof(CHAR_INFO)))
+						while (I<BufY && memcmp(PtrBuf,PtrShadow,BufX*sizeof(FAR_CHAR_INFO)))
 						{
 							I++;
 							PtrBuf+=BufX;
@@ -392,7 +402,7 @@ void ScreenBuf::Flush()
 					{
 						for (SHORT J=0; J<BufX; J++,++PtrBuf,++PtrShadow)
 						{
-							if (memcmp(PtrBuf,PtrShadow,sizeof(CHAR_INFO)))
+							if (memcmp(PtrBuf,PtrShadow,sizeof(FAR_CHAR_INFO)))
 							{
 								WriteRegion.Left=Min(WriteRegion.Left,J);
 								WriteRegion.Top=Min(WriteRegion.Top,I);
@@ -458,7 +468,7 @@ void ScreenBuf::Flush()
 					SMALL_RECT WriteRegion=*PtrRect;
 					Console.WriteOutput(Buf, BufferSize, BufferCoord, WriteRegion);
 				}
-				memcpy(Shadow,Buf,BufX*BufY*sizeof(CHAR_INFO));
+				memcpy(Shadow,Buf,BufX*BufY*sizeof(FAR_CHAR_INFO));
 			}
 		}
 
@@ -580,7 +590,7 @@ void ScreenBuf::Scroll(int Num)
 	CriticalSectionLock Lock(CS);
 
 	if (Num > 0 && Num < BufY)
-		memmove(Buf,Buf+Num*BufX,(BufY-Num)*BufX*sizeof(CHAR_INFO));
+		memmove(Buf,Buf+Num*BufX,(BufY-Num)*BufX*sizeof(FAR_CHAR_INFO));
 
 #ifdef DIRECT_SCREEN_OUT
 	Flush();

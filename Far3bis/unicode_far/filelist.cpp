@@ -285,7 +285,7 @@ void FileList::CorrectPosition()
 	if (CurFile<CurTopFile)
 		CurTopFile=CurFile;
 
-	if (CurFile>CurTopFile+Columns*Height-1) //Maximus: BUGBUG: похоже, тут не учитывается многострочный InfoLine
+	if (CurFile>CurTopFile+Columns*Height-1)
 		CurTopFile=CurFile-Columns*Height+1;
 }
 

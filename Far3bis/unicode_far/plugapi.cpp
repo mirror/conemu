@@ -355,8 +355,8 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 		}
 		case ACTL_GETSYSWORDDIV:
 		{
-			if (Param2)
-				wcscpy((wchar_t *)Param2,Opt.strWordDiv);
+			if (Param1 && Param2)
+				xwcsncpy((wchar_t *)Param2, Opt.strWordDiv, Param1);
 
 			return Opt.strWordDiv.GetLength()+1;
 		}
@@ -371,29 +371,33 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 			return WaitKey(Param1?Param1:-1,0,false);
 		}
 		/* $ 04.12.2000 SVS
-		  ACTL_GETCOLOR - получить определенный цвет по индекс, определенному
+		  ACTL_GETCOLOR - получить определенный цвет по индексу, определенному
 		   в farcolor.hpp
-		  Param1 - индекс.
-		  Return - значение цвета или -1 если индекс неверен.
+		  Param2 - [OUT] значение цвета
+		  Return - TRUE если OK или FALSE если индекс неверен.
 		*/
 		case ACTL_GETCOLOR:
 		{
-			if (Param1 < SizeArrayPalette && Param1 >= 0)
-				return Palette[Param1];
-
-			return -1;
+			if (static_cast<UINT>(Param1) < Opt.Palette.SizeArrayPalette)
+			{
+				*static_cast<FarColor*>(Param2) = Opt.Palette.CurrentPalette[static_cast<size_t>(Param1)];
+				return TRUE;
+			}
+			return FALSE;
 		}
 		/* $ 04.12.2000 SVS
 		  ACTL_GETARRAYCOLOR - получить весь массив цветов
-		  Param - указатель на массив или nullptr - чтобы получить размер буфера
+		  Param1 - размер буфера (в элементах FarColor)
+		  Param2 - указатель на буфер или nullptr, чтобы получить необходимый размер
 		  Return - размер массива.
 		*/
 		case ACTL_GETARRAYCOLOR:
 		{
-			if (Param2)
-				memcpy(Param2,Palette,SizeArrayPalette);
-
-			return SizeArrayPalette;
+			if (Param2 && static_cast<size_t>(Param1) >= Opt.Palette.SizeArrayPalette)
+			{
+				memcpy(Param2, Opt.Palette.CurrentPalette, Opt.Palette.SizeArrayPalette*sizeof(FarColor));
+			}
+			return Opt.Palette.SizeArrayPalette;
 		}
 		/*
 		  Param=FARColor{
@@ -409,11 +413,9 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 			{
 				FarSetColors *Pal=(FarSetColors*)Param2;
 
-				if (Pal->Colors &&
-				        Pal->StartIndex >= 0 &&
-				        Pal->StartIndex+Pal->ColorCount <= SizeArrayPalette)
+				if (Pal->Colors && Pal->StartIndex+Pal->ColorsCount <= Opt.Palette.SizeArrayPalette)
 				{
-					memmove(Palette+Pal->StartIndex,Pal->Colors,Pal->ColorCount);
+					memmove(Opt.Palette.CurrentPalette+Pal->StartIndex,Pal->Colors,Pal->ColorsCount*sizeof(FarColor));
 
 					if (Pal->Flags&FSETCLR_REDRAW)
 					{
@@ -1006,8 +1008,8 @@ static int FarDialogExSehed(Dialog *FarDialog)
 }
 
 HANDLE WINAPI FarDialogInit(INT_PTR PluginNumber, const GUID* Id, int X1, int Y1, int X2, int Y2,
-                            const wchar_t *HelpTopic, FarDialogItem *Item,
-                            unsigned int ItemsNumber, DWORD Reserved, unsigned __int64 Flags,
+                            const wchar_t *HelpTopic, const FarDialogItem *Item,
+                            size_t ItemsNumber, DWORD Reserved, unsigned __int64 Flags,
                             FARWINDOWPROC DlgProc, void* Param)
 {
 	HANDLE hDlg=INVALID_HANDLE_VALUE;
@@ -1552,7 +1554,7 @@ static void PR_FarGetDirListMsg()
 	Message(0,0,L"",MSG(MPreparingList));
 }
 
-int WINAPI FarGetDirList(const wchar_t *Dir,PluginPanelItem **pPanelItem,int *pItemsNumber)
+int WINAPI FarGetDirList(const wchar_t *Dir,PluginPanelItem **pPanelItem,size_t *pItemsNumber)
 {
 	if (FrameManager->ManagerIsDown() || !Dir || !*Dir || !pItemsNumber || !pPanelItem)
 		return FALSE;
@@ -1644,7 +1646,7 @@ int WINAPI FarGetPluginDirList(INT_PTR PluginNumber,
                                HANDLE hPlugin,
                                const wchar_t *Dir,
                                PluginPanelItem **pPanelItem,
-                               int *pItemsNumber)
+                               size_t *pItemsNumber)
 {
 	if (FrameManager->ManagerIsDown() || !Dir || !*Dir || !pItemsNumber || !pPanelItem)
 		return FALSE;
@@ -1707,7 +1709,7 @@ int WINAPI FarGetPluginDirList(INT_PTR PluginNumber,
 					if (StrCmpI(strPrevDir, NewInfo.CurDir) )
 					{
 						PluginPanelItem *PanelData=nullptr;
-						int ItemCount=0;
+						size_t ItemCount=0;
 
 						if (CtrlObject->Plugins.GetFindData(hDirListPlugin,&PanelData,&ItemCount,OPM_SILENT))
 						{
@@ -1757,7 +1759,7 @@ static void CopyPluginDirItem(PluginPanelItem *CurPanelItem)
 void ScanPluginDir()
 {
 	PluginPanelItem *PanelData=nullptr;
-	int ItemCount=0;
+	size_t ItemCount=0;
 	int AbortOp=FALSE;
 	string strDirName;
 	strDirName = strPluginSearchPath;
@@ -1795,7 +1797,7 @@ void ScanPluginDir()
 
 	PluginDirList=NewList;
 
-	for (int i=0; i<ItemCount && !StopSearch; i++)
+	for (size_t i=0; i<ItemCount && !StopSearch; i++)
 	{
 		PluginPanelItem *CurPanelItem=PanelData+i;
 
@@ -1803,7 +1805,7 @@ void ScanPluginDir()
 			CopyPluginDirItem(CurPanelItem);
 	}
 
-	for (int i=0; i<ItemCount && !StopSearch; i++)
+	for (size_t i=0; i<ItemCount && !StopSearch; i++)
 	{
 		PluginPanelItem *CurPanelItem=PanelData+i;
 
@@ -1854,9 +1856,9 @@ void ScanPluginDir()
 }
 
 
-void WINAPI FarFreeDirList(PluginPanelItem *PanelItem, int nItemsNumber)
+void WINAPI FarFreeDirList(PluginPanelItem *PanelItem, size_t nItemsNumber)
 {
-	for (int I=0; I<nItemsNumber; I++)
+	for (size_t I=0; I<nItemsNumber; I++)
 	{
 		PluginPanelItem *CurPanelItem=PanelItem+I;
 		FreePluginPanelItem(CurPanelItem);
@@ -1866,12 +1868,12 @@ void WINAPI FarFreeDirList(PluginPanelItem *PanelItem, int nItemsNumber)
 }
 
 
-void WINAPI FarFreePluginDirList(PluginPanelItem *PanelItem, int ItemsNumber)
+void WINAPI FarFreePluginDirList(PluginPanelItem *PanelItem, size_t ItemsNumber)
 {
 	if (!PanelItem)
 		return;
 
-	for (int I=0; I<ItemsNumber; I++)
+	for (size_t I=0; I<ItemsNumber; I++)
 	{
 		PluginPanelItem *CurPanelItem=PanelItem+I;
 
@@ -2128,7 +2130,7 @@ int WINAPI FarEditor(
 	return ExitCode;
 }
 
-void WINAPI FarText(int X,int Y,int Color,const wchar_t *Str)
+void WINAPI FarText(int X,int Y,const FarColor* Color,const wchar_t *Str)
 {
 	if (DisablePluginsOutput || FrameManager->ManagerIsDown())
 		return;
@@ -2142,7 +2144,7 @@ void WINAPI FarText(int X,int Y,int Color,const wchar_t *Str)
 	}
 	else
 	{
-		Text(X,Y,Color,Str);
+		Text(X,Y,*Color,Str);
 	}
 }
 

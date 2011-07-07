@@ -116,9 +116,8 @@ void ControlObject::Init()
 	{
 		string strOldTitle;
 		Console.GetTitle(strOldTitle);
-		// ѕозвать перед FrameManager->PluginCommit(), иначе в панел€х не загруз€тс€ C0
-		Plugins.LoadPlugins();
 		FrameManager->PluginCommit();
+		Plugins.LoadPlugins();
 		Console.SetTitle(strOldTitle);
 	}
 	Macro.LoadMacros();
@@ -162,7 +161,7 @@ ControlObject::~ControlObject()
 	delete ViewHistory;
 	delete CmdLine;
 	delete HiFiles;
-	delete FolderShortcuts;
+	delete FolderShortcuts; //Maximus5: «десь периодически вылезает Assert на ::~Shortcuts => GetKeyID => SQLiteStmt::Reset
 
 	History::CompactHistory();
 	FilePositionCache::CompactHistory();
