@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9,00"
+	Version="9.00"
 	Name="far2"
 	ProjectGUID="{62F794C9-5F4C-40F6-B358-5DC1A9D6D2CB}"
 	RootNamespace="far2"
@@ -764,10 +764,6 @@
 				>
 			</File>
 			<File
-				RelativePath="ffolders.cpp"
-				>
-			</File>
-			<File
 				RelativePath="fileattr.cpp"
 				>
 			</File>
@@ -1028,6 +1024,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\macrocompiler.cpp"
+				>
+			</File>
+			<File
 				RelativePath="main.cpp"
 				>
 			</File>
@@ -1180,6 +1180,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\shortcuts.cpp"
+				>
+			</File>
+			<File
 				RelativePath="stddlg.cpp"
 				>
 			</File>
@@ -1189,10 +1193,6 @@
 			</File>
 			<File
 				RelativePath="synchro.cpp"
-				>
-			</File>
-			<File
-				RelativePath="syntax.cpp"
 				>
 			</File>
 			<File
@@ -3047,10 +3047,6 @@
 				>
 			</File>
 			<File
-				RelativePath="ffolders.hpp"
-				>
-			</File>
-			<File
 				RelativePath="fileattr.hpp"
 				>
 			</File>
@@ -3270,6 +3266,10 @@
 			</File>
 			<File
 				RelativePath="macro.hpp"
+				>
+			</File>
+			<File
+				RelativePath=".\macrocompiler.hpp"
 				>
 			</File>
 			<File
@@ -3507,6 +3507,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\shortcuts.hpp"
+				>
+			</File>
+			<File
 				RelativePath="stddlg.hpp"
 				>
 			</File>
@@ -3516,10 +3520,6 @@
 			</File>
 			<File
 				RelativePath="synchro.hpp"
-				>
-			</File>
-			<File
-				RelativePath="syntax.hpp"
 				>
 			</File>
 			<File
