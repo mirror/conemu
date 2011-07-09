@@ -1466,12 +1466,16 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			//while (LineLen>0 && LinePtr[LineLen-1]==L' ')
 			//	LineLen--;
 			if (LineLen<(X2-X1-1))
+			{
 				if (StatusAlign & COLUMN_CENTERALIGN)
 					FS<<fmt::Width((X2-X1-1-LineLen)>>1)<<L"";
 				else if (StatusAlign & COLUMN_RIGHTALIGN)
 					FS<<fmt::Width(X2-X1-1-LineLen)<<L"";
+			}
 			else if (LineLen>(X2-X1-1))
+			{
 				LineLen = X2-X1-1;
+			}
 	        FS<<fmt::Width(LineLen)<<fmt::Precision(LineLen)<<strLine/*LinePtr*/;
 			//FS<<L"*";
 	        #endif
