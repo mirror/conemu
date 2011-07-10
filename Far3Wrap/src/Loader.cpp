@@ -40,16 +40,16 @@ namespace Far2
 {
 #undef __PLUGIN_HPP__
 #include "pluginW.hpp"
-#undef __FARKEYS_HPP__
-#include "farkeys.hpp"
+//#undef __FARKEYS_HPP__
+//#include "farkeys.hpp"
 };
 
 //namespace Far3
 //{
 #undef __PLUGIN_HPP__
 #include "pluginW3.hpp"
-#undef __FARKEYS_HPP__
-#include "farkeys3.hpp"
+//#undef __FARKEYS_HPP__
+//#include "farkeys3.hpp"
 //};
 
 #include "Far3Wrap.h"
@@ -206,7 +206,7 @@ void ReportWrapperFail(bool bForce = false)
 	if (gsErrInfo && *gsErrInfo)
 	{
 		if (psi.Message && guidPlugin.Data1)
-			psi.Message(&guidPlugin, FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK, NULL,
+			psi.Message(&guidPlugin, &guidPlugin, FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK, NULL,
 				(const wchar_t * const *)gsErrInfo, 0,0);
 		else
 			MessageBox(NULL, gsErrInfo, L"Far3Wrap", MB_ICONSTOP|MB_OK|MB_SYSTEMMODAL);
