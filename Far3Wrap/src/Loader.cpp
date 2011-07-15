@@ -47,7 +47,11 @@ namespace Far2
 //namespace Far3
 //{
 #undef __PLUGIN_HPP__
-#include "pluginW3.hpp"
+#if MVV_3>=2103
+	#include "pluginW3.hpp"
+#else
+	#include "pluginW3#2098.hpp"
+#endif
 //#undef __FARKEYS_HPP__
 //#include "farkeys3.hpp"
 //};
@@ -67,6 +71,12 @@ GUID guidPlugin = {0};
 wchar_t* gsModuleFail = NULL;
 #define ERRINFO_SIZE 2048
 #define ERRORTITLE_SIZE 255
+
+#if MVV_3>=2103
+	#define WrapGuids(g) &g, &g
+#else
+	#define WrapGuids(g) &g
+#endif
 
 BOOL LoadWrapper(LPCWSTR asModule);
 
@@ -206,7 +216,7 @@ void ReportWrapperFail(bool bForce = false)
 	if (gsErrInfo && *gsErrInfo)
 	{
 		if (psi.Message && guidPlugin.Data1)
-			psi.Message(&guidPlugin, &guidPlugin, FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK, NULL,
+			psi.Message(WrapGuids(guidPlugin), FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK, NULL,
 				(const wchar_t * const *)gsErrInfo, 0,0);
 		else
 			MessageBox(NULL, gsErrInfo, L"Far3Wrap", MB_ICONSTOP|MB_OK|MB_SYSTEMMODAL);

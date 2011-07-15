@@ -89,9 +89,15 @@ namespace Far2
 //namespace Far3
 //{
 #undef __PLUGIN_HPP__
-#include "pluginW3.hpp"
+#if MVV_3>=2103
+	#include "pluginW3.hpp"
+#else
+	#include "pluginW3#2098.hpp"
+#endif
 #undef __FARKEYS_HPP__
-//#include "farkeys3.hpp"
+#if MVV_3<=2102
+	#include "farkeys3#2016.hpp"
+#endif
 #undef __COLORS_HPP__
 #include "farcolor3.hpp"
 //};
@@ -101,11 +107,24 @@ namespace Far2
 HMODULE ghFar3Wrap = NULL;
 DWORD gnMainThreadId = 0;
 
-FARSTDINPUTRECORDTOKEYNAME FarInputRecordToName = NULL;
-FARSTDKEYNAMETOINPUTRECORD FarNameToInputRecord = NULL;
+#if MVV_3>=2103
+	FARSTDINPUTRECORDTOKEYNAME FarInputRecordToName = NULL;
+	FARSTDKEYNAMETOINPUTRECORD FarNameToInputRecord = NULL;
+#endif
 
 #define DEFAULT_DESCRIPTION L"Far 2.x plugin"
 
+#if MVV_3>=2103
+	#define WrapGuids(g) &mguid_Plugin, &g
+#else
+	#define WrapGuids(g) &mguid_Plugin
+#endif
+
+#if MVV_3<=2102
+	#define FarKeyToName3 FSF3.FarKeyToName
+#else
+	#define FarKeyToName3 FarKeyToName
+#endif
 
 struct WrapPluginInfo;
 
@@ -189,8 +208,13 @@ struct WrapPluginInfo
 	wchar_t ms_File[64]; // Для удобства, только имя файла плагина (Far2)
 	wchar_t ms_Title[MAX_PATH+1], ms_Desc[256], ms_Author[256]; // Информация для GetGlobalInfoW
 	wchar_t ms_RegRoot[1024]; // Путь в реестре для плагинов Far2, где они могут хранить настройки
+	wchar_t ms_ForcePrefix[64];
 	VersionInfo m_Version;
-	GUID mguid_Plugin, mguid_Dialogs, mguid_ApiMessage, mguid_ApiMenu, mguid_ApiInput;
+	DWORD mn_FakeFarVersion;
+	GUID mguid_Plugin, mguid_Dialogs;
+	#if MVV_3>=2103
+	GUID mguid_ApiMessage, mguid_ApiMenu, mguid_ApiInput;
+	#endif
 	int mn_PluginMenu; GUID* mguids_PluginMenu;
 	int mn_PluginDisks; GUID* mguids_PluginDisks;
 	int mn_PluginConfig; GUID* mguids_PluginConfig;
@@ -310,8 +334,10 @@ struct WrapPluginInfo
 	Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber);
 	void FarKey_2_3(int Key2, INPUT_RECORD *r);
 	DWORD FarKey_3_2(const INPUT_RECORD *Rec);
-	static size_t WINAPI FarKeyToName(int Key2,wchar_t *KeyText,size_t Size);
-	static int WINAPI FarNameToKey(const wchar_t *Name);
+	#if MVV_3>=2103
+	static size_t WINAPI FarKeyToName3(int Key2,wchar_t *KeyText,size_t Size);
+	static int WINAPI FarNameToKey3(const wchar_t *Name);
+	#endif
 	static int FarColorIndex_2_3(int ColorIndex2);
 	static int FarColorIndex_3_2(int ColorIndex3);
 	static FARDIALOGITEMTYPES DialogItemTypes_2_3(int ItemType2);
@@ -572,13 +598,17 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 	mh_Dll = NULL; ms_DllFailFunc[0] = ms_DllFailTitle[0] = 0; mn_DllFailCode = 0;
 	m_MinFarVersion = 0;
 	mn_PluginFunctions = mn_LoaderFunctions = LF3_None;
-	ms_PluginDll[0] = ms_IniFile[0] = ms_Title[0] = ms_Desc[0] = ms_Author[0] = ms_RegRoot[0] = ms_File[0] = 0;
+	ms_PluginDll[0] = ms_IniFile[0] = ms_Title[0] = ms_Desc[0] = ms_Author[0] = 0;
+	ms_RegRoot[0] = ms_File[0] = ms_ForcePrefix[0] = 0;
+	mn_FakeFarVersion = 0;
 	ZeroStruct(m_Version);
 	ZeroStruct(mguid_Plugin);
 	ZeroStruct(mguid_Dialogs);
+	#if MVV_3>=2103
 	ZeroStruct(mguid_ApiMessage);
 	ZeroStruct(mguid_ApiMenu);
 	ZeroStruct(mguid_ApiInput);
+	#endif
 	mn_PluginMenu = mn_PluginDisks = mn_PluginConfig = 0;
 	mguids_PluginMenu = mguids_PluginDisks = mguids_PluginConfig = NULL;
 	ZeroStruct(m_Info);
@@ -831,6 +861,8 @@ void WrapPluginInfo::LoadPluginInfo()
 				lb = WritePrivateProfileString(L"Plugin", L"Author", L"<Unknown>", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"ForcePrefix", L"", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"FakeFarVersion", L"", szIni);
 				// Начальные GUID-ы
 				UuidCreate(&tmpGuid);
 				lb = WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&tmpGuid, szTmp), szIni);
@@ -888,9 +920,53 @@ void WrapPluginInfo::LoadPluginInfo()
 				lstrcpyn(ms_Author, szTemp, ARRAYSIZE(ms_Author));
 			if (GetPrivateProfileString(L"Plugin", L"RegRoot", L"Software\\Far Manager\\Plugins", szTemp, ARRAYSIZE(szTemp), szIni))
 				lstrcpyn(ms_RegRoot, szTemp, ARRAYSIZE(ms_RegRoot));
+			if (GetPrivateProfileString(L"Plugin", L"ForcePrefix", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+				lstrcpyn(ms_ForcePrefix, szTemp, ARRAYSIZE(ms_ForcePrefix));
+			if (GetPrivateProfileString(L"Plugin", L"FakeFarVersion", L"", szTemp, ARRAYSIZE(szTemp), szIni))
+			{
+				mn_FakeFarVersion = 0;
+				int nMajor = 0, nMinor = 0, nBuild = 0;
+				wchar_t* pszEnd = NULL;
+				nMajor = wcstol(szTemp, &pszEnd, 10);
+				if ((nMajor > 0) && pszEnd && *pszEnd == L'.')
+				{
+					nMinor = wcstol(pszEnd+1, &pszEnd, 10);
+					if (pszEnd && *pszEnd == L'.')
+					{
+						nBuild = wcstol(pszEnd+1, &pszEnd, 10);
+					}
+				}
+				if ((nMajor == 1 || nMajor == 2) && (nMinor >= 0) && (nBuild >= 0))
+					mn_FakeFarVersion = MAKEFARVERSION2(nMajor, nMinor, nBuild);
+			}
 			if (GetPrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szTemp, ARRAYSIZE(szTemp), szIni))
 			{
-				//TODO: Обработка версии
+				ZeroStruct(m_Version);
+				int nMajor = 0, nMinor = 0, nRevision = 0, nBuild = 0, nStage = 0;
+				wchar_t* pszEnd = NULL;
+				nMajor = wcstol(szTemp, &pszEnd, 10);
+				if (pszEnd && *pszEnd == L'.')
+				{
+					nMinor = wcstol(pszEnd+1, &pszEnd, 10);
+					if (pszEnd && *pszEnd == L'.')
+					{
+						nRevision = wcstol(pszEnd+1, &pszEnd, 10);
+						if (pszEnd && *pszEnd == L'.')
+						{
+							nBuild = wcstol(pszEnd+1, &pszEnd, 10);
+							if (pszEnd && *pszEnd == L'.')
+							{
+								nStage = wcstol(pszEnd+1, &pszEnd, 10);
+							}
+						}
+					}
+					m_Version.Major = nMajor;
+					m_Version.Minor = nMinor;
+					m_Version.Revision = nRevision;
+					m_Version.Build = nBuild;
+					if (nStage >= VS_RELEASE && nStage <= VS_RC)
+						m_Version.Stage = (VERSION_STAGE)nStage;
+				}
 			}
 
 			GUID guid;
@@ -900,9 +976,11 @@ void WrapPluginInfo::LoadPluginInfo()
 			} initGuids[] = {
 				{L"GUID", &mguid_Plugin},
 				{L"DialogsGUID", &mguid_Dialogs},
+				#if MVV_3>=2103
 				{L"ApiMessage", &mguid_ApiMessage},
 				{L"ApiMenu", &mguid_ApiMenu},
 				{L"ApiInput", &mguid_ApiInput},
+				#endif
 			};
 			for (UINT ig = 0; ig < ARRAYSIZE(initGuids); ig++)
 			{
@@ -928,6 +1006,7 @@ void WrapPluginInfo::LoadPluginInfo()
 		lstrcpy(ms_Desc, L"Far2->Far3 plugin wrapper");
 		lstrcpy(ms_Author, L"Maximus5");
 		lstrcpy(ms_RegRoot, L"Software\\Far Manager\\Plugins");
+		ms_ForcePrefix[0] = 0;
 		UuidCreate(&mguid_Plugin);
 		UuidCreate(&mguid_Dialogs);
 		#ifdef _DEBUG
@@ -1658,99 +1737,104 @@ Far2::PluginPanelItem* WrapPluginInfo::PluginPanelItems_3_2(const PluginPanelIte
 	return p2;
 }
 
+#if MVV_3>=2103
 int TranslateKeyToVK(int Key,INPUT_RECORD *Rec);
+#endif
 
 void WrapPluginInfo::FarKey_2_3(int Key2, INPUT_RECORD *r)
 {
 	memset(r, 0, sizeof(INPUT_RECORD));
-#if 1
+#if MVV_3>=2103
 	TranslateKeyToVK(Key2, r);
 #else
 	FSF3.FarKeyToInputRecord(Key2, r);
 #endif
 }
 
+#if MVV_3>=2103
 int WINAPI CalcKeyCode(const INPUT_RECORD *rec);
+#endif
 
 DWORD WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 {
 	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
 	DWORD Key2 = 0;
 
-#if 1 // Начиная с Far3 build 2103 FarInputRecordToKey похерен
+#if MVV_3>=2103
 
+	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
 	Key2 = CalcKeyCode(Rec);
 
 #else
-	//#if 1
-	//	// В Far3 build 2026 функу подправили
-	//	Key2 = FSF3.FarInputRecordToKey(Rec);
-	//
-	//#else
-	//
-	//	if (Rec->EventType == KEY_EVENT)
-	//	{
-	//		if (!Rec->Event.KeyEvent.uChar.UnicodeChar
-	//			&& !Rec->Event.KeyEvent.dwControlKeyState
-	//			&& !Rec->Event.KeyEvent.wVirtualScanCode
-	//			&& (Rec->Event.KeyEvent.wVirtualKeyCode <= 8))
-	//		{
-	//			Key2 = INTERNAL_KEY_BASE_2+Rec->Event.KeyEvent.wVirtualKeyCode;
-	//		}
-	//		else if (Rec->Event.KeyEvent.uChar.UnicodeChar == 0
-	//			&& Rec->Event.KeyEvent.wVirtualScanCode && Rec->Event.KeyEvent.wVirtualKeyCode
-	//				/*&& (Rec->Event.KeyEvent.wVirtualKeyCode == VK_SHIFT
-	//				|| Rec->Event.KeyEvent.wVirtualKeyCode == VK_CONTROL || Rec->Event.KeyEvent.wVirtualKeyCode == VK_RCONTROL
-	//				|| Rec->Event.KeyEvent.wVirtualKeyCode == VK_MENU || Rec->Event.KeyEvent.wVirtualKeyCode == VK_RMENU)*/)
-	//		{
-	//			switch (Rec->Event.KeyEvent.wVirtualKeyCode)
-	//			{
-	//			case VK_SHIFT: Key2 = KEY_SHIFT; break;
-	//			case VK_CONTROL: Key2 = KEY_CTRL; break;
-	//			case VK_MENU: Key2 = KEY_ALT; break;
-	//			case VK_RCONTROL: Key2 = KEY_RCTRL; break;
-	//			case VK_RMENU: Key2 = KEY_RALT; break;
-	//			default: Key2 = Rec->Event.KeyEvent.wVirtualKeyCode;
-	//			}
-	//			if (Rec->Event.KeyEvent.dwControlKeyState & LEFT_CTRL_PRESSED)
-	//				Key2 |= KEY_CTRL;
-	//			if (Rec->Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED)
-	//				Key2 |= KEY_RCTRL;
-	//			if (Rec->Event.KeyEvent.dwControlKeyState & LEFT_ALT_PRESSED)
-	//				Key2 |= KEY_ALT;
-	//			if (Rec->Event.KeyEvent.dwControlKeyState & RIGHT_ALT_PRESSED)
-	//				Key2 |= KEY_RALT;
-	//			if (Rec->Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED)
-	//				Key2 |= KEY_SHIFT;
-	//		}
-	//		else
-	//		{
-	//			//TODO: У фара (2018) срывает крышу: http://bugs.farmanager.com/view.php?id=1760
-	//			//_ASSERTE(FALSE);
-	//			Key2 = FSF3.FarInputRecordToKey(Rec);
-	//		}
-	//	}
-	//	else
-	//	{
-	//		// У фара (2018) срывает крышу: http://bugs.farmanager.com/view.php?id=1760
-	//		_ASSERTE(FALSE);
-	//		Key2 = FSF3.FarInputRecordToKey(Rec);
-	//	}
-	//
-	//	//TODO: Ctrl/Shift/Alt?
-	//	//DWORD FShift = Key2 & 0x7F000000; // старший бит используется в других целях!
-	//	//ControlState =
-	//	//	(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
-	//	//	(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
-	//	//	(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0);
-	//#endif
-	//TODO: Маскировать нужно?
+#if 1
+	// В Far3 build 2026 функу подправили
+	Key2 = FSF3.FarInputRecordToKey(Rec);
+
+#else
+
+	if (Rec->EventType == KEY_EVENT)
+	{
+		if (!Rec->Event.KeyEvent.uChar.UnicodeChar
+			&& !Rec->Event.KeyEvent.dwControlKeyState
+			&& !Rec->Event.KeyEvent.wVirtualScanCode
+			&& (Rec->Event.KeyEvent.wVirtualKeyCode <= 8))
+		{
+			Key2 = INTERNAL_KEY_BASE_2+Rec->Event.KeyEvent.wVirtualKeyCode;
+		}
+		else if (Rec->Event.KeyEvent.uChar.UnicodeChar == 0
+			&& Rec->Event.KeyEvent.wVirtualScanCode && Rec->Event.KeyEvent.wVirtualKeyCode
+				/*&& (Rec->Event.KeyEvent.wVirtualKeyCode == VK_SHIFT
+				|| Rec->Event.KeyEvent.wVirtualKeyCode == VK_CONTROL || Rec->Event.KeyEvent.wVirtualKeyCode == VK_RCONTROL
+				|| Rec->Event.KeyEvent.wVirtualKeyCode == VK_MENU || Rec->Event.KeyEvent.wVirtualKeyCode == VK_RMENU)*/)
+		{
+			switch (Rec->Event.KeyEvent.wVirtualKeyCode)
+			{
+			case VK_SHIFT: Key2 = KEY_SHIFT; break;
+			case VK_CONTROL: Key2 = KEY_CTRL; break;
+			case VK_MENU: Key2 = KEY_ALT; break;
+			case VK_RCONTROL: Key2 = KEY_RCTRL; break;
+			case VK_RMENU: Key2 = KEY_RALT; break;
+			default: Key2 = Rec->Event.KeyEvent.wVirtualKeyCode;
+			}
+			if (Rec->Event.KeyEvent.dwControlKeyState & LEFT_CTRL_PRESSED)
+				Key2 |= KEY_CTRL;
+			if (Rec->Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED)
+				Key2 |= KEY_RCTRL;
+			if (Rec->Event.KeyEvent.dwControlKeyState & LEFT_ALT_PRESSED)
+				Key2 |= KEY_ALT;
+			if (Rec->Event.KeyEvent.dwControlKeyState & RIGHT_ALT_PRESSED)
+				Key2 |= KEY_RALT;
+			if (Rec->Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED)
+				Key2 |= KEY_SHIFT;
+		}
+		else
+		{
+			//TODO: У фара (2018) срывает крышу: http://bugs.farmanager.com/view.php?id=1760
+			//_ASSERTE(FALSE);
+			Key2 = FSF3.FarInputRecordToKey(Rec);
+		}
+	}
+	else
+	{
+		// У фара (2018) срывает крышу: http://bugs.farmanager.com/view.php?id=1760
+		_ASSERTE(FALSE);
+		Key2 = FSF3.FarInputRecordToKey(Rec);
+	}
+
+	//TODO: Ctrl/Shift/Alt?
+	//DWORD FShift = Key2 & 0x7F000000; // старший бит используется в других целях!
+	//ControlState =
+	//	(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
+	//	(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
+	//	(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0);
+#endif
 #endif
 
 	return Key2;
 }
 
-size_t WrapPluginInfo::FarKeyToName(int Key2,wchar_t *KeyText,size_t Size)
+#if MVV_3>=2103
+size_t WrapPluginInfo::FarKeyToName3(int Key2,wchar_t *KeyText,size_t Size)
 {
 	if (!FarInputRecordToName)
 	{
@@ -1764,7 +1848,7 @@ size_t WrapPluginInfo::FarKeyToName(int Key2,wchar_t *KeyText,size_t Size)
 	return FarInputRecordToName(&r, KeyText, Size);
 }
 
-int WrapPluginInfo::FarNameToKey(const wchar_t *Name)
+int WrapPluginInfo::FarNameToKey3(const wchar_t *Name)
 {
 #ifdef _DEBUG
 	if (lstrcmpi(Name, L"RAltBS")==0)
@@ -1787,7 +1871,7 @@ int WrapPluginInfo::FarNameToKey(const wchar_t *Name)
 	int Key2 = CalcKeyCode(&r);
 #ifdef _DEBUG
 	wchar_t szBackName[128];
-	size_t nBackSize = FarKeyToName(Key2, szBackName, ARRAYSIZE(szBackName));
+	size_t nBackSize = FarKeyToName3(Key2, szBackName, ARRAYSIZE(szBackName));
 	int nCmp = lstrcmpi(Name, szBackName);
 	if (nCmp != 0)
 	{
@@ -1801,6 +1885,7 @@ int WrapPluginInfo::FarNameToKey(const wchar_t *Name)
 #endif
 	return Key2;
 }
+#endif
 
 int WrapPluginInfo::FarColorIndex_2_3(int ColorIndex2)
 {
@@ -4086,7 +4171,7 @@ int WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight
 			| ((Flags & Far2::FMENU_REVERSEAUTOHIGHLIGHT) ? FMENU_REVERSEAUTOHIGHLIGHT : 0)
 			| ((Flags & Far2::FMENU_CHANGECONSOLETITLE) ? FMENU_CHANGECONSOLETITLE : 0);
 		
-		iRc = psi3.Menu(&mguid_Plugin, &mguid_ApiMenu, X, Y, MaxHeight, Flags3,
+		iRc = psi3.Menu(WrapGuids(mguid_ApiMenu), X, Y, MaxHeight, Flags3,
 				Title, Bottom, HelpTopic, pBreak3, BreakCode, pItems3, ItemsNumber);
 	}
 	
@@ -4121,7 +4206,7 @@ int WrapPluginInfo::FarApiMessage(INT_PTR PluginNumber, DWORD Flags, const wchar
 	else if ((Flags & 0x000F0000) == Far2::FMSG_MB_RETRYCANCEL)
 		Far3Flags |= FMSG_MB_RETRYCANCEL;
 	
-	iRc = psi3.Message(&mguid_Plugin, &mguid_ApiMessage, Far3Flags, 
+	iRc = psi3.Message(WrapGuids(mguid_ApiMessage), Far3Flags, 
 				HelpTopic, Items, ItemsNumber, ButtonsNumber);
 	return iRc;
 };
@@ -4445,6 +4530,8 @@ LPCWSTR WrapPluginInfo::FarApiGetMsg(INT_PTR PluginNumber, int MsgId)
 		{0x0244A6CB, 0x99AC, 0x4689, {0xAA, 0x86, 0x40, 0x8D, 0x4A, 0xA7, 0xF0, 0xA3}},
 		// UserMgr - 7EB82D3C-B0A8-40F4-8A29-E0E37F22B19D
 		{0x7EB82D3C, 0xB0A8, 0x40F4, {0x8A, 0x29, 0xE0, 0xE3, 0x7F, 0x22, 0xB1, 0x9D}},
+		// SvcMgr - 64390498-E446-4F74-8BFC-9058E31BB4DB
+		{0x64390498, 0xE446, 0x4F74, {0x8B, 0xFC, 0x90, 0x58, 0xE3, 0x1B, 0xB4, 0xDB}},
 	};
 	bool lbSkipPlugin = false;
 	for (size_t n = 0; n < ARRAYSIZE(guidSkip); n++)
@@ -4471,14 +4558,21 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 	{
 	case Far2::ACTL_GETFARVERSION:
 		{
-			VersionInfo vi = {0};
-			iRc = psi3.AdvControl(&guid, ACTL_GETFARMANAGERVERSION, 0, &vi);
-			if (iRc)
+			if (mn_FakeFarVersion != 0)
 			{
-				DWORD ver = MAKEFARVERSION2(vi.Major, vi.Minor, vi.Build);
-				if (Param)
-					*((DWORD*)Param) = ver;
-				iRc = ver;
+				iRc = mn_FakeFarVersion;
+			}
+			else
+			{
+				VersionInfo vi = {0};
+				iRc = psi3.AdvControl(&guid, ACTL_GETFARMANAGERVERSION, 0, &vi);
+				if (iRc)
+				{
+					DWORD ver = MAKEFARVERSION2(vi.Major, vi.Minor, vi.Build);
+					if (Param)
+						*((DWORD*)Param) = ver;
+					iRc = ver;
+				}
 			}
 			break;
 		}
@@ -4796,14 +4890,14 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				int i;
 				size_t nStrLen = 2, nKeyLen;
 				for (i = 0; i < p2->Count; i++)
-					nStrLen += FarKeyToName(p2->Sequence[i], NULL, 0)+1;
+					nStrLen += FarKeyToName3(p2->Sequence[i], NULL, 0)+1;
 				wchar_t* pszMacro = (wchar_t*)malloc(nStrLen*sizeof(wchar_t));
 				if (pszMacro)
 				{
 					wchar_t* psz = pszMacro;
 					for (i = 0; i < p2->Count; i++)
 					{
-						nKeyLen = FarKeyToName(p2->Sequence[i], psz, nStrLen);
+						nKeyLen = FarKeyToName3(p2->Sequence[i], psz, nStrLen);
 						psz += nKeyLen;
 						if (nKeyLen)
 							*(psz++) = L' ';
@@ -5251,7 +5345,7 @@ int WrapPluginInfo::FarApiInputBox(const wchar_t *Title, const wchar_t *SubTitle
 		| ((Flags & Far2::FIB_NOAMPERSAND) ? FIB_NOAMPERSAND : 0)
 		| ((Flags & Far2::FIB_EDITPATH) ? FIB_EDITPATH : 0)
 		;
-	int nRc = psi3.InputBox(&mguid_Plugin, &mguid_ApiInput, Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
+	int nRc = psi3.InputBox(WrapGuids(mguid_ApiInput), Title, SubTitle, HistoryName, SrcText, DestText, DestLength, HelpTopic, Flags);
 	return nRc;
 };
 int WrapPluginInfo::FarApiPluginsControl(HANDLE hHandle, int Command, int Param1, LONG_PTR Param2)
@@ -5466,6 +5560,7 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 	psi3.FSF = &FSF3;
 	lbPsi3 = TRUE;
 
+#if MVV_3>=2103
 	if (!FarInputRecordToName)
 		FarInputRecordToName = Info->FSF->FarInputRecordToName;
 	if (!FarNameToInputRecord)
@@ -5506,6 +5601,7 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 		_ASSERTE(lFail==-1);
 	}
 #endif
+#endif // #if MVV_3>=2103
 
 	LoadPluginInfo();
 	
@@ -5555,9 +5651,15 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 	FSF2.AddEndSlash = FSF3.AddEndSlash;
 	FSF2.CopyToClipboard = FSF3.CopyToClipboard;
 	FSF2.PasteFromClipboard = FSF3.PasteFromClipboard;
-	FSF2.FarKeyToName = WrapPluginInfo::FarKeyToName;
-	FSF2.FarNameToKey = WrapPluginInfo::FarNameToKey;
+#if MVV_3>=2103
+	FSF2.FarKeyToName = WrapPluginInfo::FarKeyToName3;
+	FSF2.FarNameToKey = WrapPluginInfo::FarNameToKey3;
 	FSF2.FarInputRecordToKey = CalcKeyCode;
+#else
+	FSF2.FarKeyToName = FSF3.FarKeyToName;
+	FSF2.FarNameToKey = FSF3.FarNameToKey;
+	FSF2.FarInputRecordToKey = FSF3.FarInputRecordToKey;
+#endif
 	FSF2.XLat = WrapPluginInfo::FarStdXlatExp;
 	FSF2.GetFileOwner = WrapPluginInfo::FarStdGetFileOwnerExp;
 	FSF2.GetNumberOfLinks = FSF3.GetNumberOfLinks;
@@ -5770,7 +5872,10 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 		//int PluginConfigStringsNumber;
 		// -->struct PluginMenuItem PluginConfig;
 		
-		Info->CommandPrefix = m_Info.CommandPrefix;
+		if (ms_ForcePrefix[0] && (!m_Info.CommandPrefix || !*m_Info.CommandPrefix) && this->OpenFilePluginW)
+			Info->CommandPrefix = ms_ForcePrefix;
+		else
+			Info->CommandPrefix = m_Info.CommandPrefix;
     }
 }
 
@@ -5832,6 +5937,31 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 				break;
 			}
 		}
+	}
+	
+	// Fake: ForcePrefix
+	if (((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_COMMANDLINE)
+		&& (ms_ForcePrefix[0] && (!m_Info.CommandPrefix || !*m_Info.CommandPrefix) && OpenFilePluginW))
+	{
+		// Сюда мы попадаем только если архивный плагин экспортит OpenFilePluginW, но не удосужился объявить префикс
+		unsigned char Buffer[8192];
+		DWORD nRead = 0;
+		// Поскольку функция ожидает буфер - нужно считать заголовок файла
+		// И предварительно, сконвертить путь в \\UNC формат
+		size_t nLen = FSF3.ConvertPath(CPM_NATIVE, (LPCWSTR)Info->Data, NULL, 0);
+		wchar_t* pszUnc = (wchar_t*)malloc(nLen*sizeof(wchar_t));
+		FSF3.ConvertPath(CPM_NATIVE, (LPCWSTR)Info->Data, pszUnc, nLen);
+		HANDLE hFile = CreateFile(pszUnc, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+		if (hFile != INVALID_HANDLE_VALUE)
+		{
+			if (!ReadFile(hFile, Buffer, sizeof(Buffer), &nRead, NULL))
+				nRead = 0;
+			CloseHandle(hFile);
+		}
+		free(pszUnc);
+		
+		h = OpenFilePluginW((LPCWSTR)Info->Data, Buffer, nRead, 0);
+		goto trap;
 	}
 
 	if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_ANALYSE)
@@ -6290,9 +6420,16 @@ int    WrapPluginInfo::ProcessPanelInputW3(const struct ProcessPanelInputInfo *I
 		int Key3 = FarKey_3_2(&Info->Rec);
 		DWORD FShift = Key3 & 0x7F000000; // старший бит используется в других целях!
 		DWORD ControlState =
+		#if MVV_3>=2103
 			(FShift & Far2::KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
 			(FShift & Far2::KEY_ALT ? Far2::PKF_ALT : 0)|
-			(FShift & Far2::KEY_CTRL ? Far2::PKF_CONTROL : 0);
+			(FShift & Far2::KEY_CTRL ? Far2::PKF_CONTROL : 0)
+		#else
+			(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
+			(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
+			(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0)
+		#endif
+			;
 		//DWORD PreProcess = (Info->Flags & PKIF_PREPROCESS) ? Far2::PKF_PREPROCESS : 0;
 		int Key2;
 		if ((Key3 & 0x00030000) == 0x00010000)
