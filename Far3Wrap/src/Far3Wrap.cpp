@@ -36,7 +36,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <crtdbg.h>
 #include <TlHelp32.h>
 #include "version.h"
-#include "resourceW.h"
 #include "Memory.h"
 
 #ifdef _DEBUG
