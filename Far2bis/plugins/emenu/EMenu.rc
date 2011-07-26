@@ -1,0 +1,14 @@
+#include "farversion.hpp"
+#include <windows.h>
+#include "resource.h"
+
+#include "version.h"
+
+genericpluginrc(PLUGIN_BUILD, PLUGIN_DESC, PLUGIN_NAME, PLUGIN_FILENAME)
+
+IDD_NULL DIALOG DISCARDABLE  20, 20, 127, 9
+STYLE DS_MODALFRAME | DS_SETFOREGROUND | WS_POPUP
+CAPTION ""
+FONT 8, "MS Sans Serif"
+BEGIN
+END
