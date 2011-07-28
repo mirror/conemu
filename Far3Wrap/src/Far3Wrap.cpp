@@ -355,6 +355,7 @@ struct WrapPluginInfo
 	InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber);
 	PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber);
 	static LPCWSTR FormatGuid(const GUID* guid, wchar_t* tmp, BOOL abQuote = FALSE);
+	static LPWSTR MacroFromMultiSZ(LPCWSTR aszMultiSZ);
 
 
 /* ******************************** */
@@ -593,6 +594,13 @@ wchar_t* WrapPluginInfo::gpsz_LastAnalyzeFile = NULL; // если !=NULL и совпадает
 
 WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 {
+#ifdef _DEBUG
+	LPCWSTR pszMSZ = L"Line 1\0Line Line Line Line 2\0Line --- 3\0";
+	wchar_t* pszDeMsz = MacroFromMultiSZ(pszMSZ);
+	if (pszDeMsz)
+		free(pszDeMsz);
+#endif
+
 	mh_Loader = pInfo2->hLoader;
 	mh_Dll = NULL; ms_DllFailFunc[0] = ms_DllFailTitle[0] = 0; mn_DllFailCode = 0;
 	m_MinFarVersion = 0;
@@ -1428,6 +1436,38 @@ LPCWSTR WrapPluginInfo::FormatGuid(const GUID* guid, wchar_t* tmp, BOOL abQuote 
 		guid->Data4[0], guid->Data4[1], guid->Data4[2], guid->Data4[3],
 		guid->Data4[4], guid->Data4[5], guid->Data4[6], guid->Data4[7]);
 	return tmp;
+}
+
+LPWSTR WrapPluginInfo::MacroFromMultiSZ(LPCWSTR aszMultiSZ)
+{
+	if (!aszMultiSZ || !*aszMultiSZ)
+		return NULL;
+	
+	// ѕараметр SequenceText представлен в формате REG_MULTI_SZ.
+    // строка 1\x00 строка 2\x00 ... строка N\x00\x00
+    
+    // —начала определить длину строки
+    wchar_t* pszEnd = (wchar_t*)aszMultiSZ;
+    while (*pszEnd)
+    {
+    	pszEnd += lstrlen(pszEnd)+1;
+    }
+    size_t nLen = (pszEnd - aszMultiSZ + 1);
+    
+    wchar_t* pszNew = (wchar_t*)malloc(nLen*sizeof(wchar_t));
+    memmove(pszNew, aszMultiSZ, nLen*sizeof(wchar_t));
+
+    pszEnd = pszNew;
+    while (TRUE)
+    {
+    	wchar_t* psz = pszEnd + lstrlen(pszEnd);
+    	if (psz[1] == 0)
+    		break;
+		*psz = L'\n';
+    	pszEnd = psz+1;
+    }
+    
+    return pszNew;
 }
 
 InfoPanelLine* WrapPluginInfo::InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber)
@@ -2998,7 +3038,62 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DM_SETITEMDATA:
 			Msg3 = DM_SETITEMDATA; break;
 		case Far2::DM_LISTSETMOUSEREACTION:
-			Msg3 = DM_LISTSETMOUSEREACTION; break;
+			#if MVV_3>=2116
+			//TODO: ѕроверить, а работает ли?
+			// build 2116:
+			// DM_LISTSETMOUSEREACTION больше нет. ∆елаемое поведение списка задаетс€ флагами
+			// DIF_LISTTRACKMOUSE/DIF_LISTTRACKMOUSEINFOCUS при создании диалога.
+			// ѕо умолчанию дл€ новых плагинов флаги не установлены (список за мышью не следит),
+			// дл€ ansi-плагинов установлен DIF_LISTTRACKMOUSE (следит всегда).
+			{
+				lRc = 0;
+				ZeroStruct(fgdi3);
+				LONG_PTR lSize = psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &fgdi3);
+				if (lSize > 0)
+				{
+					fgdi3.Size = lSize;
+					fgdi3.Item = (FarDialogItem*)calloc(lSize, 1);
+					if (fgdi3.Item && (psi3.SendDlgMessage(hDlg3, DM_GETDLGITEM, Param1, &fgdi3) == lSize))
+					{
+						// “екущее положение дел
+						if (fgdi3.Item->Flags & DIF_LISTTRACKMOUSEINFOCUS)
+							lRc = Far2::LMRT_ONLYFOCUS;
+						else if (fgdi3.Item->Flags & DIF_LISTTRACKMOUSE)
+							lRc = Far2::LMRT_ALWAYS;
+						else
+							lRc = Far2::LMRT_NEVER;
+						// ћен€ем
+						FARDIALOGITEMFLAGS NewFlags = fgdi3.Item->Flags;
+						if (Param2 == Far2::LMRT_NEVER)
+						{
+							NewFlags &= ~(DIF_LISTTRACKMOUSEINFOCUS|DIF_LISTTRACKMOUSE);
+						}
+						else if (Param2 == Far2::LMRT_ALWAYS)
+						{
+							NewFlags &= ~DIF_LISTTRACKMOUSEINFOCUS;
+							NewFlags |= DIF_LISTTRACKMOUSE;
+						}
+						else if (Param2 == Far2::LMRT_ONLYFOCUS)
+						{
+							NewFlags &= ~DIF_LISTTRACKMOUSE;
+							NewFlags |= DIF_LISTTRACKMOUSEINFOCUS;
+						}
+						// »зменилось?
+						if (NewFlags != fgdi3.Item->Flags)
+						{
+							fgdi3.Item->Flags = NewFlags;
+							psi3.SendDlgMessage(hDlg3, DM_SETDLGITEM, Param1, &fgdi3);
+						}
+						free(fgdi3.Item);
+					}
+					ZeroStruct(fgdi3);
+				}
+				return lRc;
+			}
+			#else
+			Msg3 = DM_LISTSETMOUSEREACTION; -- 
+			#endif
+			break;
 		case Far2::DM_GETCURSORSIZE:
 			Msg3 = DM_GETCURSORSIZE; break;
 		case Far2::DM_SETCURSORSIZE:
@@ -3642,8 +3737,15 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			Msg2 = Far2::DM_GETITEMDATA; break;
 		case DM_SETITEMDATA:
 			Msg2 = Far2::DM_SETITEMDATA; break;
+		#if MVV_3<2116
+		// build 2116:
+		// DM_LISTSETMOUSEREACTION больше нет. ∆елаемое поведение списка задаетс€ флагами
+		// DIF_LISTTRACKMOUSE/DIF_LISTTRACKMOUSEINFOCUS при создании диалога.
+		// ѕо умолчанию дл€ новых плагинов флаги не установлены (список за мышью не следит),
+		// дл€ ansi-плагинов установлен DIF_LISTTRACKMOUSE (следит всегда).
 		case DM_LISTSETMOUSEREACTION:
 			Msg2 = Far2::DM_LISTSETMOUSEREACTION; break;
+		#endif
 		case DM_GETCURSORSIZE:
 			Msg2 = Far2::DM_GETCURSORSIZE; break;
 		case DM_SETCURSORSIZE:
@@ -4670,13 +4772,18 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					{
 						MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
 						mcr.SequenceText = p2->Param.PlainText.SequenceText;
-						wchar_t *pszUpper = NULL, *pszChanged = NULL;
+						wchar_t *pszUpper = NULL, *pszChanged = NULL, *pszDeMultiSz = NULL;
+						if (p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ)
+						{
+							if ((pszDeMultiSz = MacroFromMultiSZ(p2->Param.PlainText.SequenceText)) != NULL)
+								mcr.SequenceText = pszDeMultiSz;
+						}
 						// ѕлагин может звать сам себ€ через CallPlugin, 
 						// в этом случае нужно заменить старый PluginID (DWORD) на GUID
 						if (mcr.SequenceText && *mcr.SequenceText /*&& m_Info.Reserved*/)
 						{
-							pszUpper = lstrdup(p2->Param.PlainText.SequenceText);
-							size_t nOrigLen = lstrlen(p2->Param.PlainText.SequenceText);
+							pszUpper = lstrdup(mcr.SequenceText);
+							size_t nOrigLen = lstrlen(mcr.SequenceText);
 							size_t nAddPos = 0;
 							CharUpperBuff(pszUpper, lstrlen(pszUpper));
 							wchar_t* pszFrom = pszUpper;
@@ -4776,10 +4883,10 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 									nCchAdd = 38*10; // 10 гуидов с кавычками
 									if (pszChanged == NULL)
 									{
-										nLen = lstrlen(p2->Param.PlainText.SequenceText);
+										nLen = lstrlen(mcr.SequenceText);
 										pszNew = (wchar_t*)calloc(nLen+nCchAdd+1, sizeof(wchar_t));
 										if (!pszNew) { _ASSERTE(pszNew!=NULL); break; }
-										lstrcpy(pszNew, p2->Param.PlainText.SequenceText);
+										lstrcpy(pszNew, mcr.SequenceText);
 									}
 									else
 									{
@@ -4830,28 +4937,38 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 						mcr.Flags = 0
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
-							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
+							//| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
 						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
 						if (pszUpper)
 							free(pszUpper);
 						if (pszChanged)
 							free(pszChanged);
+						if (pszDeMultiSz)
+							free(pszDeMultiSz);
 					}
 					break;
 				case Far2::MCMD_CHECKMACRO:
 					{
 						MacroCheckMacroText mcr = {{sizeof(MacroCheckMacroText)}};
 						mcr.Text.SequenceText = p2->Param.PlainText.SequenceText;
+						wchar_t *pszDeMultiSz = NULL;
+						if (p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ)
+						{
+							if ((pszDeMultiSz = MacroFromMultiSZ(p2->Param.PlainText.SequenceText)) != NULL)
+								mcr.Text.SequenceText = pszDeMultiSz;
+						}
 						mcr.Text.Flags = 0
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
-							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
+							//| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
 						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
 						p2->Param.MacroResult.ErrCode = mcr.Result.ErrCode;
 						p2->Param.MacroResult.ErrPos = mcr.Result.ErrPos;
 						p2->Param.MacroResult.ErrSrc = mcr.Result.ErrSrc;
+						if (pszDeMultiSz)
+							free(pszDeMultiSz);
 					}
 					break;
 				case Far2::MCMD_GETSTATE:
