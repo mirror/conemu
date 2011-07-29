@@ -18,16 +18,15 @@ nmake /A /B /F %MAKEFILE%
 rem nmake /F %MAKEFILE% DEBUG=%DEBUG%
 if errorlevel 1 goto end
 
-rem call "%VS90COMNTOOLS%..\..\VC\BIN\vcvarsx86_amd64.bat"
-if exist "%VS90COMNTOOLS%..\..\VC\BIN\vcvarsx86_amd64.bat" (
-  call "%VS90COMNTOOLS%..\..\VC\BIN\vcvarsx86_amd64.bat"
+rem call "%VS90COMNTOOLS%..\..\VC\BIN\x86_amd64\vcvarsx86_amd64.bat"
+if exist "%VS90COMNTOOLS%..\..\VC\BIN\x86_amd64\vcvarsx86_amd64.bat" (
+  call "%VS90COMNTOOLS%..\..\VC\BIN\x86_amd64\vcvarsx86_amd64.bat"
 ) else (
   call "C:\Program Files\Microsoft Visual Studio 9.0\VC\bin\vcvarsx86_amd64.bat"
 )
 set AMD64=1
 nmake /A /B /F %MAKEFILE%
 rem nmake /F %MAKEFILE% DEBUG=%DEBUG%
-
 
 
 set BUILD_RC=ERROR

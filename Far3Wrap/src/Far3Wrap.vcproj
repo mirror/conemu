@@ -467,6 +467,14 @@
 				RelativePath=".\Far3Wrap.def"
 				>
 			</File>
+			<File
+				RelativePath=".\Keyboard3.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Memory.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -477,11 +485,27 @@
 				>
 			</File>
 			<File
+				RelativePath=".\farcolor.hpp"
+				>
+			</File>
+			<File
+				RelativePath=".\farcolor3.hpp"
+				>
+			</File>
+			<File
 				RelativePath=".\farkeys.hpp"
 				>
 			</File>
 			<File
 				RelativePath=".\LogCmd.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Memory.h"
+				>
+			</File>
+			<File
+				RelativePath=".\MiniDump.h"
 				>
 			</File>
 			<File
@@ -535,7 +559,15 @@
 			>
 		</File>
 		<File
+			RelativePath="..\Changelog"
+			>
+		</File>
+		<File
 			RelativePath="..\Loader.dll"
+			>
+		</File>
+		<File
+			RelativePath=".\version.h"
 			>
 		</File>
 	</Files>
