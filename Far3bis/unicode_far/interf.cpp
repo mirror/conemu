@@ -164,9 +164,9 @@ void CloseConsole()
 	Console.GetCursorPosition(CursorPos);
 	SHORT Height = InitWindowRect.Bottom-InitWindowRect.Top, Width = InitWindowRect.Right-InitWindowRect.Left;
 	if (CursorPos.Y > InitWindowRect.Bottom || CursorPos.Y < InitWindowRect.Top)
-		InitWindowRect.Top = (CursorPos.Y <= Height) ? 0 : max(CursorPos.Y-Height,0);
+		InitWindowRect.Top = Max(0, CursorPos.Y-Height);
 	if (CursorPos.X > InitWindowRect.Right || CursorPos.X < InitWindowRect.Left)
-		InitWindowRect.Left = (CursorPos.X <= Width) ? 0 : max(CursorPos.X-Width,0);
+		InitWindowRect.Left = Max(0, CursorPos.X-Width);
 	InitWindowRect.Bottom = InitWindowRect.Top + Height;
 	InitWindowRect.Right = InitWindowRect.Left + Width;
 	Console.SetWindowRect(InitWindowRect);
@@ -334,7 +334,7 @@ void GenerateWINDOW_BUFFER_SIZE_EVENT(int Sx, int Sy)
 	Rec.EventType=WINDOW_BUFFER_SIZE_EVENT;
 	Rec.Event.WindowBufferSizeEvent.dwSize.X=Sx==-1?Size.X:Sx;
 	Rec.Event.WindowBufferSizeEvent.dwSize.Y=Sy==-1?Size.Y:Sy;
-	DWORD Writes;
+	size_t Writes;
 	Console.WriteInput(&Rec,1,Writes);
 }
 
@@ -748,9 +748,7 @@ void MakeShadow(int X1,int Y1,int X2,int Y2)
 	if (X2>ScrX) X2=ScrX;
 
 	if (Y2>ScrY) Y2=ScrY;
-	FarColor Mask;
-	Colors::ConsoleColorToFarColor(0xf8, Mask);
-	ScrBuf.ApplyColorMask(X1,Y1,X2,Y2,Mask);
+	ScrBuf.ApplyShadow(X1,Y1,X2,Y2);
 }
 
 void ChangeBlockColor(int X1,int Y1,int X2,int Y2,const FarColor& Color)
@@ -793,7 +791,7 @@ void SetColor(const FarColor& Color)
 
 void SetRealColor(const FarColor& Color)
 {
-	Console.SetTextAttributes(Colors::FarColorToConsoleColor(Color));
+	Console.SetTextAttributes(Color);
 }
 
 void ClearScreen(const FarColor& Color)
@@ -801,11 +799,11 @@ void ClearScreen(const FarColor& Color)
 	ScrBuf.FillRect(0,0,ScrX,ScrY,L' ',Color);
 	if(Opt.WindowMode)
 	{
-		Console.ClearExtraRegions(Colors::FarColorToConsoleColor(Color));
+		Console.ClearExtraRegions(Color);
 	}
 	ScrBuf.ResetShadow();
 	ScrBuf.Flush();
-	Console.SetTextAttributes(Colors::FarColorToConsoleColor(Color));
+	Console.SetTextAttributes(Color);
 }
 
 const FarColor& GetColor()

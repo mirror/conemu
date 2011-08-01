@@ -67,8 +67,14 @@ other possible license with no implications from the above license on them.
 
 typedef unsigned __int64 FARCOLORFLAGS;
 static const FARCOLORFLAGS
-	FCF_FG_4BIT  = 0x0000000000000001ULL,
-	FCF_BG_4BIT  = 0x0000000000000002ULL;
+	FCF_FG_4BIT       = 0x0000000000000001ULL,
+	FCF_BG_4BIT       = 0x0000000000000002ULL,
+	FCF_4BITMASK      = 0x0000000000000003ULL, //FCF_FG_4BIT|FCF_BG_4BIT
+
+	FCF_FG_BOLD       = 0x0000000000000004ULL,
+	FCF_FG_ITALIC     = 0x0000000000000008ULL,
+	FCF_FG_UNDERLINE  = 0x0000000000000010ULL,
+	FCF_STYLEMASK     = 0x000000000000001cULL; //FCF_FG_BOLD|FCF_FG_ITALIC|FCF_FG_UNDERLINE
 
 struct FarColor
 {
@@ -105,6 +111,7 @@ static const FARMESSAGEFLAGS
 
 typedef int (WINAPI *FARAPIMESSAGE)(
     const GUID* PluginId,
+    const GUID* Id,
     FARMESSAGEFLAGS Flags,
     const wchar_t *HelpTopic,
     const wchar_t * const *Items,
@@ -181,6 +188,8 @@ static const FARDIALOGITEMFLAGS
 	DIF_DROPDOWNLIST          = 0x0000000000100000ULL,
 	DIF_USELASTHISTORY        = 0x0000000000200000ULL,
 	DIF_MASKEDIT              = 0x0000000000400000ULL,
+	DIF_LISTTRACKMOUSE        = 0x0000000000400000ULL,
+	DIF_LISTTRACKMOUSEINFOCUS = 0x0000000000800000ULL,
 	DIF_SELECTONENTRY         = 0x0000000000800000ULL,
 	DIF_3STATE                = 0x0000000000800000ULL,
 	DIF_EDITPATH              = 0x0000000001000000ULL,
@@ -263,7 +272,6 @@ enum FARMESSAGE
 	DM_SETITEMDATA,
 
 	DM_LISTSET,
-	DM_LISTSETMOUSEREACTION,
 
 	DM_GETCURSORSIZE,
 	DM_SETCURSORSIZE,
@@ -323,13 +331,6 @@ enum FARCHECKEDSTATE
 	BSTATE_CHECKED   = 1,
 	BSTATE_3STATE    = 2,
 	BSTATE_TOGGLE    = 3,
-};
-
-enum FARLISTMOUSEREACTIONTYPE
-{
-	LMRT_ONLYFOCUS   = 0,
-	LMRT_ALWAYS      = 1,
-	LMRT_NEVER       = 2,
 };
 
 enum FARCOMBOBOXEVENTTYPE
@@ -509,7 +510,7 @@ struct DialogInfo
 struct FarGetDialogItem
 {
 	size_t Size;
-	FarDialogItem* Item;
+	struct FarDialogItem* Item;
 };
 
 #define Dlg_RedrawDialog(Info,hDlg)            Info.SendDlgMessage(hDlg,DM_REDRAW,0,0)
@@ -641,6 +642,7 @@ static const FARMENUFLAGS
 
 typedef int (WINAPI *FARAPIMENU)(
 	const GUID*         PluginId,
+    const GUID*         Id,
     int                 X,
     int                 Y,
     int                 MaxHeight,
@@ -692,7 +694,7 @@ struct PluginPanelItem
 struct FarGetPluginPanelItem
 {
 	size_t Size;
-	PluginPanelItem* Item;
+	struct PluginPanelItem* Item;
 };
 
 typedef unsigned __int64 PANELINFOFLAGS;
@@ -817,7 +819,7 @@ enum FILE_CONTROL_COMMANDS
 typedef void (WINAPI *FARAPITEXT)(
     int X,
     int Y,
-    const FarColor* Color,
+    const struct FarColor* Color,
     const wchar_t *Str
 );
 
@@ -1117,7 +1119,6 @@ static const FARKEYMACROFLAGS
 	KMFLAGS_NONE                = 0,
 	KMFLAGS_DISABLEOUTPUT       = 0x0000000000000001,
 	KMFLAGS_NOSENDKEYSTOPLUGINS = 0x0000000000000002,
-	KMFLAGS_REG_MULTI_SZ        = 0x0000000000100000,
 	KMFLAGS_SILENTCHECK         = 0x0000000000000001;
 
 enum FARMACROSENDSTRINGCOMMAND
@@ -1190,7 +1191,7 @@ struct MacroSendMacroText
 {
 	size_t StructSize;
 	FARKEYMACROFLAGS Flags;
-	DWORD AKey;
+	INPUT_RECORD AKey;
 	const wchar_t *SequenceText;
 };
 
@@ -1286,7 +1287,7 @@ struct FarSetColors
 	FARSETCOLORFLAGS Flags;
 	size_t StartIndex;
 	size_t ColorsCount;
-	FarColor* Colors;
+	struct FarColor* Colors;
 };
 
 enum WINDOWINFO_TYPE
@@ -1746,6 +1747,7 @@ static const INPUTBOXFLAGS
 
 typedef int (WINAPI *FARAPIINPUTBOX)(
     const GUID* PluginId,
+    const GUID* Id,
     const wchar_t *Title,
     const wchar_t *SubTitle,
     const wchar_t *HistoryName,
@@ -1967,8 +1969,6 @@ typedef const wchar_t*(WINAPI *FARSTDPOINTTONAME)(const wchar_t *Path);
 typedef BOOL (WINAPI *FARSTDADDENDSLASH)(wchar_t *Path);
 typedef int (WINAPI *FARSTDCOPYTOCLIPBOARD)(const wchar_t *Data);
 typedef wchar_t *(WINAPI *FARSTDPASTEFROMCLIPBOARD)(void);
-typedef int (WINAPI *FARSTDINPUTRECORDTOKEY)(const INPUT_RECORD *r);
-typedef int (WINAPI *FARSTDKEYTOINPUTRECORD)(int Key,INPUT_RECORD *r);
 typedef int (WINAPI *FARSTDLOCALISLOWER)(wchar_t Ch);
 typedef int (WINAPI *FARSTDLOCALISUPPER)(wchar_t Ch);
 typedef int (WINAPI *FARSTDLOCALISALPHA)(wchar_t Ch);
@@ -2001,11 +2001,11 @@ static const XLAT_FLAGS
 	XLAT_CONVERTALLCMDLINE = 0x0000000000010000ULL;
 
 
-typedef size_t (WINAPI *FARSTDKEYTOKEYNAME)(int Key, wchar_t *KeyText, size_t Size);
+typedef size_t (WINAPI *FARSTDINPUTRECORDTOKEYNAME)(const INPUT_RECORD* Key, wchar_t *KeyText, size_t Size);
 
 typedef wchar_t*(WINAPI *FARSTDXLAT)(wchar_t *Line,int StartPos,int EndPos,XLAT_FLAGS Flags);
 
-typedef int (WINAPI *FARSTDKEYNAMETOKEY)(const wchar_t *Name);
+typedef BOOL (WINAPI *FARSTDKEYNAMETOINPUTRECORD)(const wchar_t *Name,INPUT_RECORD* Key);
 
 typedef int (WINAPI *FRSUSERFUNC)(
     const struct PluginPanelItem *FData,
@@ -2100,10 +2100,8 @@ typedef struct FarStandardFunctions
 	FARSTDADDENDSLASH          AddEndSlash;
 	FARSTDCOPYTOCLIPBOARD      CopyToClipboard;
 	FARSTDPASTEFROMCLIPBOARD   PasteFromClipboard;
-	FARSTDKEYTOKEYNAME         FarKeyToName;
-	FARSTDKEYNAMETOKEY         FarNameToKey;
-	FARSTDINPUTRECORDTOKEY     FarInputRecordToKey;
-	FARSTDKEYTOINPUTRECORD     FarKeyToInputRecord;
+	FARSTDINPUTRECORDTOKEYNAME FarInputRecordToName;
+	FARSTDKEYNAMETOINPUTRECORD FarNameToInputRecord;
 	FARSTDXLAT                 XLat;
 	FARSTDGETFILEOWNER         GetFileOwner;
 	FARSTDGETNUMBEROFLINKS     GetNumberOfLinks;
@@ -2365,6 +2363,8 @@ enum FAR_PKF_FLAGS
 	PKF_CONTROL     = 0x00000001,
 	PKF_ALT         = 0x00000002,
 	PKF_SHIFT       = 0x00000004,
+ 	PKF_RCONTROL    = 0x00000010,
+ 	PKF_RALT        = 0x00000020,
 	PKF_PREPROCESS  = 0x00080000, // for "Key", function ProcessKey()
 };
 #endif // END FAR_USE_INTERNALS
@@ -2544,7 +2544,7 @@ struct ProcessDialogEventInfo
 {
 	size_t StructSize;
 	int Event;
-	FarDialogEvent* Param;
+	struct FarDialogEvent* Param;
 };
 
 struct ProcessSynchroEventInfo

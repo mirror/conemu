@@ -107,6 +107,7 @@ static void show_help()
 #endif
 		;
 	Console.Write(HelpMsg, ARRAYSIZE(HelpMsg)-1);
+	Console.Commit();
 }
 
 static int MainProcess(
@@ -121,7 +122,7 @@ static int MainProcess(
 	{
 		ChangePriority ChPriority(THREAD_PRIORITY_NORMAL);
 		ControlObject CtrlObj;
-		WORD InitAttributes=0;
+		FarColor InitAttributes={};
 		Console.GetTextAttributes(InitAttributes);
 		SetRealColor(ColorIndexToColor(COL_COMMANDLINEUSERSCREEN));
 		GetSystemInfo(&SystemInfo);
@@ -666,9 +667,11 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 
 	InitDb();
 
-	//Настройка OEM сортировки. Должна быть перед InitKeysArray!
+	//Настройка OEM сортировки
+#ifndef NO_WRAPPER
 	LocalUpperInit();
-	InitLCIDSort();
+#endif // NO_WRAPPER
+
 	//Инициализация массива клавиш.
 	InitKeysArray();
 	WaitForInputIdle(GetCurrentProcess(),0);
@@ -691,7 +694,7 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 		GeneralCfg->GetValue(L"Language",L"Main",Opt.strLanguage,strDefaultLanguage);
 	}
 
-	if (!Lang.Init(g_strFarPath,true,MNewFileName))
+	if (!Lang.Init(g_strFarPath, MNewFileName))
 	{
 		ControlObject::ShowCopyright(1);
 		LPCWSTR LngMsg;

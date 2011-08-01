@@ -1146,8 +1146,8 @@ int TreeList::ProcessKey(int Key)
 		}
 		default:
 
-			if ((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+255) ||
-			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+255))
+			if ((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+255) || (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+255) ||
+			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+255) || (Key>=KEY_RALTSHIFT_BASE+0x01 && Key<=KEY_RALTSHIFT_BASE+255))
 			{
 				FastFind(Key);
 

@@ -71,25 +71,15 @@ static const wchar_t *EOL_TYPE_CHARS[]={L"",L"\r",L"\n",L"\r\n",L"\r\r\n"};
 #define EDMASK_ALPHA L'A' // позволяет вводить в строку ввода только буквы.
 #define EDMASK_HEX   L'H' // позволяет вводить в строку ввода шестнадцатиричные символы.
 
-class DisableCallback
-{
-	bool OldState;
-	bool *CurState;
-public:
-	DisableCallback(bool &State){OldState=State;CurState=&State;State=false;}
-	void Restore(){*CurState=OldState;}
-	~DisableCallback(){Restore();}
-};
-
-Edit::Edit(ScreenObject *pOwner, Callback* aCallback, bool bAllocateData):
-	m_next(nullptr),
-	m_prev(nullptr),
+Edit::Edit(ScreenObject *pOwner, bool bAllocateData):
 	Str(bAllocateData ? static_cast<wchar_t*>(xf_malloc(sizeof(wchar_t))) : nullptr),
 	StrSize(0),
+	CurPos(0),
+	LeftPos(0),
+	m_next(nullptr),
+	m_prev(nullptr),
 	MaxLength(-1),
 	Mask(nullptr),
-	LeftPos(0),
-	CurPos(0),
 	PrevCurPos(0),
 	MSelStart(-1),
 	SelStart(-1),
@@ -97,12 +87,6 @@ Edit::Edit(ScreenObject *pOwner, Callback* aCallback, bool bAllocateData):
 	CursorSize(-1),
 	CursorPos(0)
 {
-	m_Callback.Active=true;
-	m_Callback.m_Callback=nullptr;
-	m_Callback.m_Param=nullptr;
-
-	if (aCallback) m_Callback=*aCallback;
-
 	SetOwner(pOwner);
 	SetWordDiv(Opt.strWordDiv);
 
@@ -110,7 +94,7 @@ Edit::Edit(ScreenObject *pOwner, Callback* aCallback, bool bAllocateData):
 		*Str=0;
 
 	Flags.Set(FEDITLINE_EDITBEYONDEND);
-	SetObjectColor(COL_COMMANDLINE, COL_COMMANDLINESELECTED, COL_DIALOGEDITUNCHANGED);
+	SetObjectColor(COL_COMMANDLINE, COL_COMMANDLINESELECTED);
 	EndType=EOL_NONE;
 	ColorList=nullptr;
 	ColorCount=0;
@@ -433,7 +417,7 @@ void Edit::FastShow()
 	{
 		if (Flags.Check(FEDITLINE_CLEARFLAG))
 		{
-			SetColor(ColorUnChanged);
+			SetUnchangedColor();
 
 			if (Mask && *Mask)
 				OutStrLength=StrLength(RemoveTrailingSpaces(OutStr));
@@ -715,7 +699,7 @@ int Edit::ProcessKey(int Key)
 	       - символ перед курсором удален
 	       - выделение блока снято
 	*/
-	if ((((Key==KEY_BS || Key==KEY_DEL || Key==KEY_NUMDEL) && Flags.Check(FEDITLINE_DELREMOVESBLOCKS)) || Key==KEY_CTRLD) &&
+	if ((((Key==KEY_BS || Key==KEY_DEL || Key==KEY_NUMDEL) && Flags.Check(FEDITLINE_DELREMOVESBLOCKS)) || Key==KEY_CTRLD || Key==KEY_RCTRLD) &&
 	        !Flags.Check(FEDITLINE_EDITORMODE) && SelStart!=-1 && SelStart<SelEnd)
 	{
 		DeleteBlock();
@@ -791,7 +775,7 @@ int Edit::ProcessKey(int Key)
 	if (Key!=KEY_NONE && Key!=KEY_IDLE && Key!=KEY_SHIFTINS && Key!=KEY_SHIFTNUMPAD0 && Key!=KEY_CTRLINS &&
 	        ((unsigned int)Key<KEY_F1 || (unsigned int)Key>KEY_F12) && Key!=KEY_ALT && Key!=KEY_SHIFT &&
 	        Key!=KEY_CTRL && Key!=KEY_RALT && Key!=KEY_RCTRL &&
-	        (Key<KEY_ALT_BASE || Key > KEY_ALT_BASE+0xFFFF) && // ???? 256 ???
+	        !((Key>=KEY_ALT_BASE && Key <= KEY_ALT_BASE+0xFFFF) || (Key>=KEY_RALT_BASE && Key <= KEY_RALT_BASE+0xFFFF)) && // ???? 256 ???
 	        !(((unsigned int)Key>=KEY_MACRO_BASE && (unsigned int)Key<=KEY_MACRO_ENDBASE) || ((unsigned int)Key>=KEY_OP_BASE && (unsigned int)Key <=KEY_OP_ENDBASE)) && Key!=KEY_CTRLQ)
 	{
 		Flags.Clear(FEDITLINE_CLEARFLAG);
@@ -968,14 +952,14 @@ int Edit::ProcessKey(int Key)
 		}
 		case KEY_CTRLSHIFTBS:
 		{
-			DisableCallback DC(m_Callback.Active);
+			DisableCallback();
 
 			// BUGBUG
 			for (int i=CurPos; i>=0; i--)
 			{
 				RecurseProcessKey(KEY_BS);
 			}
-			DC.Restore();
+			RevertCallback();
 			Changed(true);
 			Show();
 			return TRUE;
@@ -990,7 +974,7 @@ int Edit::ProcessKey(int Key)
 
 			Lock();
 
-			DisableCallback DC(m_Callback.Active);
+			DisableCallback();
 
 			// BUGBUG
 			for (;;)
@@ -1010,7 +994,7 @@ int Edit::ProcessKey(int Key)
 			}
 
 			Unlock();
-			DC.Restore();
+			RevertCallback();
 			Changed(true);
 			Show();
 			return TRUE;
@@ -1075,7 +1059,7 @@ int Edit::ProcessKey(int Key)
 				return FALSE;
 
 			Lock();
-			DisableCallback DC(m_Callback.Active);
+			DisableCallback();
 			if (Mask && *Mask)
 			{
 				int MaskLen=StrLength(Mask);
@@ -1115,7 +1099,7 @@ int Edit::ProcessKey(int Key)
 			}
 
 			Unlock();
-			DC.Restore();
+			RevertCallback();
 			Changed(true);
 			Show();
 			return TRUE;
@@ -1164,6 +1148,7 @@ int Edit::ProcessKey(int Key)
 		}
 		case KEY_HOME:        case KEY_NUMPAD7:
 		case KEY_CTRLHOME:    case KEY_CTRLNUMPAD7:
+		case KEY_RCTRLHOME:   case KEY_RCTRLNUMPAD7:
 		{
 			PrevCurPos=CurPos;
 			CurPos=0;
@@ -1172,7 +1157,9 @@ int Edit::ProcessKey(int Key)
 		}
 		case KEY_END:         case KEY_NUMPAD1:
 		case KEY_CTRLEND:     case KEY_CTRLNUMPAD1:
+		case KEY_RCTRLEND:    case KEY_RCTRLNUMPAD1:
 		case KEY_CTRLSHIFTEND:     case KEY_CTRLSHIFTNUMPAD1:
+		case KEY_RCTRLSHIFTEND:    case KEY_RCTRLSHIFTNUMPAD1:
 		{
 			PrevCurPos=CurPos;
 
@@ -1194,7 +1181,7 @@ int Edit::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_LEFT:        case KEY_NUMPAD4:        case KEY_MSWHEEL_LEFT:
-		case KEY_CTRLS:
+		case KEY_CTRLS:       case KEY_RCTRLS:
 		{
 			if (CurPos>0)
 			{
@@ -1206,7 +1193,7 @@ int Edit::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_RIGHT:       case KEY_NUMPAD6:        case KEY_MSWHEEL_RIGHT:
-		case KEY_CTRLD:
+		case KEY_CTRLD:       case KEY_RCTRLD:
 		{
 			PrevCurPos=CurPos;
 
@@ -1262,7 +1249,21 @@ int Edit::ProcessKey(int Key)
 
 			if (Mask && *Mask)
 			{
-				Str[CurPos] = L' ';
+				int MaskLen=StrLength(Mask);
+				int i,j;
+				for (i=CurPos,j=CurPos; i<MaskLen; i++)
+				{
+					if (CheckCharMask(Mask[i+1]))
+					{
+						while (!CheckCharMask(Mask[j]) && j<MaskLen)
+							j++;
+
+						Str[j]=Str[i+1];
+						j++;
+					}
+				}
+
+				Str[j]=L' ';
 			}
 			else
 			{
@@ -1276,6 +1277,7 @@ int Edit::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLLEFT:  case KEY_CTRLNUMPAD4:
+		case KEY_RCTRLLEFT: case KEY_RCTRLNUMPAD4:
 		{
 			PrevCurPos=CurPos;
 
@@ -1298,6 +1300,7 @@ int Edit::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLRIGHT:   case KEY_CTRLNUMPAD6:
+		case KEY_RCTRLRIGHT:  case KEY_RCTRLNUMPAD6:
 		{
 			if (CurPos>=StrSize)
 				return FALSE;
@@ -1397,8 +1400,9 @@ int Edit::ProcessKey(int Key)
 
 			if (!Flags.Check(FEDITLINE_PERSISTENTBLOCKS))
 			{
-				DisableCallback DC(m_Callback.Active);
+				DisableCallback();
 				DeleteBlock();
+				RevertCallback();
 			}
 
 			for (int i=StrLength(Str)-1; i>=0 && IsEol(Str[i]); i--)
@@ -1461,8 +1465,9 @@ int Edit::ProcessKey(int Key)
 					SelStart=PrevSelStart;
 					SelEnd=PrevSelEnd;
 				}
-				DisableCallback DC(m_Callback.Active);
+				DisableCallback();
 				DeleteBlock();
+				RevertCallback();
 			}
 
 			if (InsertKey(Key))
@@ -1654,18 +1659,16 @@ int Edit::InsertKey(int Key)
 	return TRUE;
 }
 
-void Edit::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)
+void Edit::SetObjectColor(PaletteColors Color,PaletteColors SelColor)
 {
 	this->Color=ColorIndexToColor(Color);
 	this->SelColor=ColorIndexToColor(SelColor);
-	this->ColorUnChanged=ColorIndexToColor(ColorUnChanged);
 }
 
-void Edit::SetObjectColor(const FarColor& Color,const FarColor& SelColor, const FarColor& ColorUnChanged)
+void Edit::SetObjectColor(const FarColor& Color,const FarColor& SelColor)
 {
 	this->Color=Color;
 	this->SelColor=SelColor;
-	this->ColorUnChanged=ColorUnChanged;
 }
 
 void Edit::GetString(wchar_t *Str,int MaxSize)
@@ -2846,9 +2849,9 @@ int Edit::KeyMatchedMask(int Key)
 {
 	int Inserted=FALSE;
 
-	if (Mask[CurPos]==EDMASK_ANY || Key == L' ')
+	if (Mask[CurPos]==EDMASK_ANY)
 		Inserted=TRUE;
-	else if (Mask[CurPos]==EDMASK_DSS && (iswdigit(Key) /*|| Key==L' '*/ || Key==L'-'))
+	else if (Mask[CurPos]==EDMASK_DSS && (iswdigit(Key) || Key==L' ' || Key==L'-'))
 		Inserted=TRUE;
 	else if (Mask[CurPos]==EDMASK_DIGIT && (iswdigit(Key)))
 		Inserted=TRUE;
@@ -2879,14 +2882,6 @@ void Edit::SetDialogParent(DWORD Sets)
 	{
 		Flags.Clear(FEDITLINE_PARENT_SINGLELINE);
 		Flags.Set(FEDITLINE_PARENT_MULTILINE);
-	}
-}
-
-void Edit::Changed(bool DelBlock)
-{
-	if(m_Callback.Active && m_Callback.m_Callback)
-	{
-		m_Callback.m_Callback(m_Callback.m_Param);
 	}
 }
 
@@ -2980,14 +2975,26 @@ int __stdcall SystemCPEncoder::Transcode(
 }
 */
 
-EditControl::EditControl(ScreenObject *pOwner,Callback* aCallback,bool bAllocateData,History* iHistory,FarList* iList,DWORD iFlags):Edit(pOwner,aCallback,bAllocateData)
+EditControl::EditControl(ScreenObject *pOwner,Callback* aCallback,bool bAllocateData,History* iHistory,FarList* iList,DWORD iFlags):Edit(pOwner,bAllocateData)
 {
+	if (aCallback)
+	{
+		m_Callback=*aCallback;
+	}
+	else
+	{
+		m_Callback.Active=true;
+		m_Callback.m_Callback=nullptr;
+		m_Callback.m_Param=nullptr;
+	}
+
 	ECFlags=iFlags;
 	pHistory=iHistory;
 	pList=iList;
 	Selection=false;
 	SelectionStart=-1;
 	ACState=ECFlags.Check(EC_ENABLEAUTOCOMPLETE)!=FALSE;
+	ColorUnChanged = ColorIndexToColor(COL_DIALOGEDITUNCHANGED);
 }
 
 void EditControl::Show()
@@ -3006,8 +3013,11 @@ void EditControl::Changed(bool DelBlock)
 {
 	if(m_Callback.Active)
 	{
-		Edit::Changed();
-		AutoComplete(false,DelBlock);
+		if(m_Callback.m_Callback)
+		{
+			m_Callback.m_Callback(m_Callback.m_Param);
+		}
+		AutoComplete(false, DelBlock);
 	}
 }
 
@@ -3260,11 +3270,12 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 											CurPos--;
 										}
 
-										DisableCallback DC(m_Callback.Active);
+										DisableCallback();
 										InsertString(ComplMenu.GetItemPtr(0)->strName+SelStart);
 										if(X2-X1>GetLength())
 											SetLeftPos(0);
 										Select(SelStart, GetLength());
+										RevertCallback();
 									}
 									ComplMenu.AddItem(&EmptyItem,0);
 									SetMenuPos(ComplMenu);
@@ -3284,6 +3295,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 							{
 							// "классический" перебор
 							case KEY_CTRLEND:
+							case KEY_RCTRLEND:
 								{
 									ComplMenu.ProcessKey(KEY_DOWN);
 									break;
@@ -3316,13 +3328,13 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 							// навигация по строке ввода
 							case KEY_LEFT:
 							case KEY_NUMPAD4:
-							case KEY_CTRLS:
+							case KEY_CTRLS:     case KEY_RCTRLS:
 							case KEY_RIGHT:
 							case KEY_NUMPAD6:
-							case KEY_CTRLD:
-							case KEY_CTRLLEFT:
-							case KEY_CTRLRIGHT:
-							case KEY_CTRLHOME:
+							case KEY_CTRLD:     case KEY_RCTRLD:
+							case KEY_CTRLLEFT:  case KEY_RCTRLLEFT:
+							case KEY_CTRLRIGHT: case KEY_RCTRLRIGHT:
+							case KEY_CTRLHOME:  case KEY_RCTRLHOME:
 								{
 									if(MenuKey == KEY_LEFT || MenuKey == KEY_NUMPAD4)
 									{
@@ -3353,6 +3365,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 							case KEY_ESC:
 							case KEY_F10:
 							case KEY_ALTF9:
+							case KEY_RALTF9:
 							case KEY_UP:
 							case KEY_NUMPAD8:
 							case KEY_DOWN:
@@ -3362,9 +3375,13 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 							case KEY_PGDN:
 							case KEY_NUMPAD3:
 							case KEY_ALTLEFT:
+							case KEY_RALTLEFT:
 							case KEY_ALTRIGHT:
+							case KEY_RALTRIGHT:
 							case KEY_ALTHOME:
+							case KEY_RALTHOME:
 							case KEY_ALTEND:
+							case KEY_RALTEND:
 							case KEY_MSWHEEL_UP:
 							case KEY_MSWHEEL_DOWN:
 							case KEY_MSWHEEL_LEFT:
@@ -3474,4 +3491,27 @@ void EditControl::DisableAC(bool Permanent)
 {
 	ACState=Permanent?false:ECFlags.Check(EC_ENABLEAUTOCOMPLETE)!=FALSE;
 	ECFlags.Clear(EC_ENABLEAUTOCOMPLETE);
+}
+
+void EditControl::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)
+{
+	Edit::SetObjectColor(Color, SelColor);
+	this->ColorUnChanged=ColorIndexToColor(ColorUnChanged);
+}
+
+void EditControl::SetObjectColor(const FarColor& Color,const FarColor& SelColor, const FarColor& ColorUnChanged)
+{
+	Edit::SetObjectColor(Color, SelColor);
+	this->ColorUnChanged=ColorUnChanged;
+}
+
+void EditControl::GetObjectColor(FarColor& Color, FarColor& SelColor, FarColor& ColorUnChanged)
+{
+	Edit::GetObjectColor(Color, SelColor);
+	ColorUnChanged = this->ColorUnChanged;
+}
+
+void EditControl::SetUnchangedColor()
+{
+	SetColor(ColorUnChanged);
 }

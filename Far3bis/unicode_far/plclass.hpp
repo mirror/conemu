@@ -135,7 +135,9 @@ enum EXPORTS_ENUM
 
 	iOpenFilePlugin,
 	iGetMinFarVersion,
+#ifndef NO_WRAPPER
 	iWrapperFunction2, // FarWrapGetProcAddress
+#endif // NO_WRAPPER
 	i_LAST
 };
 
@@ -183,10 +185,14 @@ public:
 	virtual bool GetPluginInfo(PluginInfo *pi);
 	virtual int Configure(const GUID& Guid);
 	virtual void ExitFAR(const ExitInfo *Info);
-
+#ifndef NO_WRAPPER
 	virtual bool IsOemPlugin() const { return false; }
 	virtual bool IsFar2Plugin() const { return HasWrapperFunction2(); }
+#endif // NO_WRAPPER
 	virtual const wchar_t *GetHotkeyName() const { return m_strGuid; }
+
+	virtual bool InitLang(const wchar_t *Path) { return PluginLang.Init(Path); }
+	void CloseLang() { PluginLang.Close(); }
 
 	bool HasGetGlobalInfo()       const { return Exports[iGetGlobalInfo]!=nullptr; }
 	bool HasOpenPanel()           const { return Exports[iOpen]!=nullptr; }
@@ -228,7 +234,9 @@ public:
 	bool HasOpenFilePlugin()      const { return Exports[iOpenFilePlugin]!=nullptr; }
 	bool HasMinFarVersion()       const { return Exports[iGetMinFarVersion]!=nullptr; }
 	
+#ifndef NO_WRAPPER
 	bool HasWrapperFunction2()    const { return Exports[iWrapperFunction2]!=nullptr; }
+#endif // NO_WRAPPER
 
 	const string &GetModuleName() const { return m_strModuleName; }
 	const wchar_t *GetCacheName() const  { return m_strCacheName; }
@@ -241,9 +249,6 @@ public:
 	bool CheckWorkFlags(DWORD flags) const { return WorkFlags.Check(flags)==TRUE; }
 	DWORD GetWorkFlags() const { return WorkFlags.Flags; }
 	DWORD GetFuncFlags() const { return FuncFlags.Flags; }
-
-	bool InitLang(const wchar_t *Path) { return PluginLang.Init(Path,!IsOemPlugin()); }
-	void CloseLang() { PluginLang.Close(); }
 
 	bool Load();
 	int Unload(bool bExitFAR = false);
@@ -291,3 +296,6 @@ private:
 
 extern PluginStartupInfo NativeInfo;
 extern FarStandardFunctions NativeFSF;
+
+size_t WINAPI FarKeyToName(int Key,wchar_t *KeyText,size_t Size);
+int WINAPI KeyNameToKeyW(const wchar_t *Name);

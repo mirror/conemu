@@ -867,9 +867,17 @@ int Editor::ProcessKey(int Key)
 					KEY_CTRLRIGHT, KEY_CTRLNUMPAD7,
 					KEY_CTRLUP,    KEY_CTRLNUMPAD8,
 					KEY_CTRLDOWN,  KEY_CTRLNUMPAD2,
-					KEY_CTRLN,
-					KEY_CTRLE,
-					KEY_CTRLS,
+					KEY_RCTRLHOME, KEY_RCTRLNUMPAD7,
+					KEY_RCTRLPGUP, KEY_RCTRLNUMPAD9,
+					KEY_RCTRLEND,  KEY_RCTRLNUMPAD1,
+					KEY_RCTRLPGDN, KEY_RCTRLNUMPAD3,
+					KEY_RCTRLLEFT, KEY_RCTRLNUMPAD4,
+					KEY_RCTRLRIGHT,KEY_RCTRLNUMPAD7,
+					KEY_RCTRLUP,   KEY_RCTRLNUMPAD8,
+					KEY_RCTRLDOWN, KEY_RCTRLNUMPAD2,
+					KEY_CTRLN,     KEY_RCTRLN,
+					KEY_CTRLE,     KEY_RCTRLE,
+					KEY_CTRLS,     KEY_RCTRLS,
 				};
 
 				for (size_t I=0; I<ARRAYSIZE(UnmarkKeys); I++)
@@ -1871,7 +1879,9 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLHOME:  case KEY_CTRLNUMPAD7:
+		case KEY_RCTRLHOME: case KEY_RCTRLNUMPAD7:
 		case KEY_CTRLPGUP:  case KEY_CTRLNUMPAD9:
+		case KEY_RCTRLPGUP: case KEY_RCTRLNUMPAD9:
 		{
 			{
 				Flags.Set(FEDITOR_NEWUNDO);
@@ -1879,7 +1889,7 @@ int Editor::ProcessKey(int Key)
 				NumLine=0;
 				TopScreen=CurLine=TopList;
 
-				if (Key == KEY_CTRLHOME || Key == KEY_CTRLNUMPAD7)
+				if (Key == KEY_CTRLHOME || Key == KEY_CTRLNUMPAD7 || Key == KEY_RCTRLHOME || Key == KEY_RCTRLNUMPAD7)
 					CurLine->SetCurPos(0);
 				else
 					CurLine->SetTabCurPos(StartPos);
@@ -1889,7 +1899,9 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLEND:   case KEY_CTRLNUMPAD1:
+		case KEY_RCTRLEND:  case KEY_RCTRLNUMPAD1:
 		case KEY_CTRLPGDN:  case KEY_CTRLNUMPAD3:
+		case KEY_RCTRLPGDN: case KEY_RCTRLNUMPAD3:
 		{
 			{
 				Flags.Set(FEDITOR_NEWUNDO);
@@ -1905,7 +1917,7 @@ int Editor::ProcessKey(int Key)
 
 				CurLine->SetLeftPos(0);
 
-				if (Key == KEY_CTRLEND || Key == KEY_CTRLNUMPAD1)
+				if (Key == KEY_CTRLEND || Key == KEY_CTRLNUMPAD1 || Key == KEY_RCTRLEND || Key == KEY_RCTRLNUMPAD1)
 				{
 					CurLine->SetCurPos(CurLine->GetLength());
 					CurLine->FastShow();
@@ -2035,6 +2047,7 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_ALTF7:
+		case KEY_RALTF7:
 		{
 			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
 			int LastSearchReversePrev = LastSearchReverse;
@@ -2089,13 +2102,16 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLSHIFTZ:
+		case KEY_RCTRLSHIFTZ:
 		case KEY_ALTBS:
+		case KEY_RALTBS:
 		case KEY_CTRLZ:
+		case KEY_RCTRLZ:
 		{
 			if (!Flags.Check(FEDITOR_LOCKMODE))
 			{
 				Lock();
-				Undo(Key==KEY_CTRLSHIFTZ);
+				Undo(Key==KEY_CTRLSHIFTZ || Key==KEY_RCTRLSHIFTZ);
 				Unlock();
 				Show();
 			}
@@ -2103,6 +2119,7 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_ALTF8:
+		case KEY_RALTF8:
 		{
 			{
 				GoToPosition();
@@ -2631,17 +2648,19 @@ int Editor::ProcessKey(int Key)
 						Show();
 					}
 
-				int SkipCheckUndo=(Key==KEY_RIGHT     || Key==KEY_NUMPAD6     ||
-				                   Key==KEY_CTRLLEFT  || Key==KEY_CTRLNUMPAD4 ||
-				                   Key==KEY_CTRLRIGHT || Key==KEY_CTRLNUMPAD6 ||
-				                   Key==KEY_HOME      || Key==KEY_NUMPAD7     ||
-				                   Key==KEY_END       || Key==KEY_NUMPAD1     ||
-				                   Key==KEY_CTRLS);
+				int SkipCheckUndo=(Key==KEY_RIGHT      || Key==KEY_NUMPAD6      ||
+				                   Key==KEY_CTRLLEFT   || Key==KEY_CTRLNUMPAD4  ||
+				                   Key==KEY_RCTRLLEFT  || Key==KEY_RCTRLNUMPAD4 ||
+				                   Key==KEY_CTRLRIGHT  || Key==KEY_CTRLNUMPAD6  ||
+				                   Key==KEY_RCTRLRIGHT || Key==KEY_RCTRLNUMPAD6 ||
+				                   Key==KEY_HOME       || Key==KEY_NUMPAD7      ||
+				                   Key==KEY_END        || Key==KEY_NUMPAD1      ||
+				                   Key==KEY_CTRLS      || Key==KEY_RCTRLS);
 
 				if (Flags.Check(FEDITOR_LOCKMODE) && !SkipCheckUndo)
 					return TRUE;
 
-				if ((Key==KEY_CTRLLEFT || Key==KEY_CTRLNUMPAD4) && !CurLine->GetCurPos())
+				if ((Key==KEY_CTRLLEFT || Key==KEY_CTRLNUMPAD4 || Key==KEY_RCTRLLEFT || Key==KEY_RCTRLNUMPAD4) && !CurLine->GetCurPos())
 				{
 					Pasting++;
 					ProcessKey(KEY_LEFT);
@@ -6744,7 +6763,7 @@ void Editor::PR_EditorShowMsg()
 
 Edit *Editor::CreateString(const wchar_t *lpwszStr, int nLength)
 {
-	Edit *pEdit = new Edit(this, nullptr, lpwszStr ? false : true);
+	Edit *pEdit = new Edit(this, lpwszStr ? false : true);
 
 	if (pEdit)
 	{
@@ -6999,10 +7018,10 @@ void Editor::GetCursorType(bool& Visible,DWORD& Size)
 	CurLine->GetCursorType(Visible,Size); //???
 }
 
-void Editor::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)
+void Editor::SetObjectColor(PaletteColors Color,PaletteColors SelColor)
 {
 	for (Edit *CurPtr=TopList; CurPtr; CurPtr=CurPtr->m_next) //???
-		CurPtr->SetObjectColor(Color,SelColor,ColorUnChanged);
+		CurPtr->SetObjectColor(Color,SelColor);
 }
 
 void Editor::DrawScrollbar()

@@ -35,6 +35,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class console
 {
 public:
+	console();
+	~console();
+
 	bool Allocate() const;
 	bool Free() const;
 
@@ -68,15 +71,16 @@ public:
 	bool GetMode(HANDLE ConsoleHandle, DWORD& Mode) const;
 	bool SetMode(HANDLE ConsoleHandle, DWORD Mode) const;
 
-	bool PeekInput(INPUT_RECORD* Buffer, DWORD Length, DWORD& NumberOfEventsRead) const;
-	bool ReadInput(INPUT_RECORD* Buffer, DWORD Length, DWORD& NumberOfEventsRead) const;
-	bool WriteInput(INPUT_RECORD* Buffer, DWORD Length, DWORD& NumberOfEventsWritten) const;
+	bool PeekInput(INPUT_RECORD* Buffer, size_t Length, size_t& NumberOfEventsRead) const;
+	bool ReadInput(INPUT_RECORD* Buffer, size_t Length, size_t& NumberOfEventsRead) const;
+	bool WriteInput(INPUT_RECORD* Buffer, size_t Length, size_t& NumberOfEventsWritten) const;
 	bool ReadOutput(FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT& ReadRegion) const ;
 	bool WriteOutput(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT& WriteRegion) const;
-	bool Write(LPCWSTR Buffer, DWORD NumberOfCharsToWrite) const;
+	bool Write(LPCWSTR Buffer, size_t NumberOfCharsToWrite) const;
+	bool Commit() const;
 
-	bool GetTextAttributes(WORD& Attributes) const;
-	bool SetTextAttributes(WORD Attributes) const;
+	bool GetTextAttributes(FarColor& Attributes) const;
+	bool SetTextAttributes(const FarColor& Attributes) const;
 
 	bool GetCursorInfo(CONSOLE_CURSOR_INFO& ConsoleCursorInfo) const;
 	bool SetCursorInfo(const CONSOLE_CURSOR_INFO& ConsoleCursorInfo) const;
@@ -86,9 +90,9 @@ public:
 
 	bool FlushInputBuffer() const;
 
-	bool GetNumberOfInputEvents(DWORD& NumberOfEvents) const;
+	bool GetNumberOfInputEvents(size_t& NumberOfEvents) const;
 
-	DWORD GetAlias(LPCWSTR Source, LPWSTR TargetBuffer, DWORD TargetBufferLength, LPCWSTR ExeName) const;
+	bool GetAlias(LPCWSTR Source, LPWSTR TargetBuffer, size_t TargetBufferLength, LPCWSTR ExeName) const;
 
 	bool GetDisplayMode(DWORD& Mode) const;
 
@@ -96,7 +100,7 @@ public:
 
 	bool SetActiveScreenBuffer(HANDLE ConsoleOutput) const;
 
-	bool ClearExtraRegions(WORD Color) const;
+	bool ClearExtraRegions(const FarColor& Color) const;
 
 	bool ScrollWindow(int Lines,int Columns=0) const;
 
@@ -104,8 +108,10 @@ public:
 
 	bool ResetPosition() const;
 
+	bool GetColorDialog(FarColor& Color, bool Centered = false, bool AddTransparent = false) const;
+
 private:
-	int GetDelta() const;
+	class ConsoleCore* Core;
 };
 
 extern console Console;

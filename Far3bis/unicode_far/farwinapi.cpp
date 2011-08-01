@@ -627,12 +627,13 @@ BOOL apiSetCurrentDirectory(LPCWSTR lpPathName, bool Validate)
 #endif
 	strCurrentDirectory()=strDir;
 
+#ifndef NO_WRAPPER
 	// try to synchronize far cur dir with process cur dir
 	if(CtrlObject && CtrlObject->Plugins.GetOemPluginsCount())
 	{
 		SetCurrentDirectory(strCurrentDirectory());
 	}
-
+#endif // NO_WRAPPER
 	return TRUE;
 }
 

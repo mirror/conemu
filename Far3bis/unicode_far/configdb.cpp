@@ -184,6 +184,8 @@ public:
 	friend class SQLiteDb;
 };
 
+extern DWORD gnMainThreadId;
+
 class SQLiteDb {
 	sqlite3 *pDb;
 
@@ -224,7 +226,9 @@ public:
 	bool InitStmt(SQLiteStmt &stmtStmt, const wchar_t *Stmt)
 	{
 #if defined(_DEBUG)
-		bool b = sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr) == SQLITE_OK;
+		_ASSERTE(GetCurrentThreadId()==gnMainThreadId);
+		int nRc = sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr);
+		bool b = (nRc == SQLITE_OK);
 		if (stmtStmt.pStmt == nullptr)
 		{
 			_ASSERTE(stmtStmt.pStmt != nullptr);
@@ -239,7 +243,7 @@ public:
 
 	unsigned __int64 LastInsertRowID() { return sqlite3_last_insert_rowid(pDb); }
 
-	bool Close() { return sqlite3_close(pDb) == SQLITE_OK; }
+	bool Close() { _ASSERTE(GetCurrentThreadId()==gnMainThreadId); return sqlite3_close(pDb) == SQLITE_OK; }
 
 	bool SetWALJournalingMode() { return Exec("PRAGMA journal_mode = WAL;"); }
 

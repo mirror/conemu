@@ -63,7 +63,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "synchro.hpp"
 #include "setcolor.hpp"
 #include "mix.hpp"
-
+#include "FarGuid.hpp"
+#include "console.hpp"
 
 typedef void   (WINAPI *iClosePanelPrototype)          (const ClosePanelInfo *Info);
 typedef int    (WINAPI *iComparePrototype)             (const CompareInfo *Info);
@@ -238,7 +239,7 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 	W(EXP_WRAPPERFUNCTION2),
 };
 
-static size_t WINAPI FarKeyToName(int Key,wchar_t *KeyText,size_t Size)
+size_t WINAPI FarKeyToName(int Key,wchar_t *KeyText,size_t Size)
 {
 	string strKT;
 
@@ -265,6 +266,16 @@ int WINAPI KeyNameToKeyW(const wchar_t *Name)
 	return KeyNameToKey(strN);
 }
 
+static size_t WINAPI InputRecordToKeyName(const INPUT_RECORD* Key, wchar_t *KeyText, size_t Size)
+{
+	return FarKeyToName(InputRecordToKey(Key),KeyText,Size);
+}
+
+static BOOL WINAPI KeyNameToInputRecord(const wchar_t *Name,INPUT_RECORD* Key)
+{
+	return KeyToInputRecord(KeyNameToKeyW(Name),Key)?TRUE:FALSE;
+}
+
 #define GetPluginNumber(Id) (CtrlObject?CtrlObject->Plugins.PluginGuidToPluginNumber(*Id):-1)
 
 static int WINAPI FarGetPluginDirListW(const GUID* PluginId,HANDLE hPlugin,
@@ -274,27 +285,27 @@ static int WINAPI FarGetPluginDirListW(const GUID* PluginId,HANDLE hPlugin,
 	return FarGetPluginDirList(GetPluginNumber(PluginId),hPlugin,Dir,pPanelItem,pItemsNumber);
 }
 
-static int WINAPI FarMenuFnW(const GUID* PluginId,int X,int Y,int MaxHeight,
+static int WINAPI FarMenuFnW(const GUID* PluginId,const GUID* Id,int X,int Y,int MaxHeight,
                      unsigned __int64 Flags,const wchar_t *Title,const wchar_t *Bottom,
                      const wchar_t *HelpTopic,const FarKey *BreakKeys,int *BreakCode,
                      const struct FarMenuItem *Item, size_t ItemsNumber)
 {
-	return FarMenuFn(GetPluginNumber(PluginId),X,Y,MaxHeight,Flags,Title,Bottom,HelpTopic,BreakKeys,BreakCode,Item,ItemsNumber);
+	return FarMenuFn(GetPluginNumber(PluginId),Id,X,Y,MaxHeight,Flags,Title,Bottom,HelpTopic,BreakKeys,BreakCode,Item,ItemsNumber);
 }
 
-static int WINAPI FarMessageFnW(const GUID* PluginId,unsigned __int64 Flags,
+static int WINAPI FarMessageFnW(const GUID* PluginId,const GUID* Id,unsigned __int64 Flags,
                         const wchar_t *HelpTopic,const wchar_t * const *Items,size_t ItemsNumber,
                         int ButtonsNumber)
 {
-  return FarMessageFn(GetPluginNumber(PluginId),Flags,HelpTopic,Items,ItemsNumber,ButtonsNumber);
+  return FarMessageFn(GetPluginNumber(PluginId),Id,Flags,HelpTopic,Items,ItemsNumber,ButtonsNumber);
 }
 
-static int WINAPI FarInputBoxW(const GUID* PluginId,const wchar_t *Title,const wchar_t *Prompt,
+static int WINAPI FarInputBoxW(const GUID* PluginId,const GUID* Id,const wchar_t *Title,const wchar_t *Prompt,
                        const wchar_t *HistoryName,const wchar_t *SrcText,
                        wchar_t *DestText,int DestLength,
                        const wchar_t *HelpTopic,unsigned __int64 Flags)
 {
-	return FarInputBox(GetPluginNumber(PluginId),Title,Prompt,HistoryName,SrcText,DestText,DestLength,HelpTopic,Flags);
+	return FarInputBox(GetPluginNumber(PluginId),Id,Title,Prompt,HistoryName,SrcText,DestText,DestLength,HelpTopic,Flags);
 }
 
 static BOOL WINAPI farColorDialog(const GUID* PluginId, COLORDIALOGFLAGS Flags, struct FarColor *Color)
@@ -302,7 +313,7 @@ static BOOL WINAPI farColorDialog(const GUID* PluginId, COLORDIALOGFLAGS Flags, 
 	BOOL Result = FALSE;
 	if (!FrameManager->ManagerIsDown())
 	{
-		Result = GetColorDialog(*Color, true, false);
+		Result = Console.GetColorDialog(*Color, true, false);
 	}
 	return Result;
 }
@@ -407,10 +418,8 @@ FarStandardFunctions NativeFSF =
 	AddEndSlash,
 	CopyToClipboard,
 	PasteFromClipboard,
-	FarKeyToName,
-	KeyNameToKeyW,
-	InputRecordToKey,
-	KeyToInputRecord,
+	InputRecordToKeyName,
+	KeyNameToInputRecord,
 	Xlat,
 	farGetFileOwner,
 	GetNumberOfLinks,

@@ -1365,11 +1365,15 @@ int FileList::ProcessKey(int Key)
 		case KEY_F3:
 		case KEY_NUMPAD5:      case KEY_SHIFTNUMPAD5:
 		case KEY_ALTF3:
+		case KEY_RALTF3:
 		case KEY_CTRLSHIFTF3:
+		case KEY_RCTRLSHIFTF3:
 		case KEY_F4:
 		case KEY_ALTF4:
+		case KEY_RALTF4:
 		case KEY_SHIFTF4:
 		case KEY_CTRLSHIFTF4:
+		case KEY_RCTRLSHIFTF4:
 		{
 			_ALGO(CleverSysLog clv(L"Edit/View"));
 			_ALGO(SysLog(L"%s, FileCount=%d Key=%s",(PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(Key)));
@@ -1384,7 +1388,7 @@ int FileList::ProcessKey(int Key)
 
 			if ((Key==KEY_SHIFTF4 || FileCount>0) && SetCurPath())
 			{
-				int Edit=(Key==KEY_F4 || Key==KEY_ALTF4 || Key==KEY_SHIFTF4 || Key==KEY_CTRLSHIFTF4);
+				int Edit=(Key==KEY_F4 || Key==KEY_ALTF4 || Key==KEY_RALTF4 || Key==KEY_SHIFTF4 || Key==KEY_CTRLSHIFTF4 || Key==KEY_RCTRLSHIFTF4);
 				BOOL Modaling=FALSE; ///
 				int UploadFile=TRUE;
 				string strPluginData;
@@ -1558,11 +1562,11 @@ int FileList::ProcessKey(int Key)
 					{
 						int editorExitCode;
 						int EnableExternal=(((Key==KEY_F4 || Key==KEY_SHIFTF4) && Opt.EdOpt.UseExternalEditor) ||
-						                    (Key==KEY_ALTF4 && !Opt.EdOpt.UseExternalEditor)) && !Opt.strExternalEditor.IsEmpty();
+						                    ((Key==KEY_ALTF4 || Key==KEY_RALTF4) && !Opt.EdOpt.UseExternalEditor)) && !Opt.strExternalEditor.IsEmpty();
 						/* $ 02.08.2001 IS обработаем ассоциации для alt-f4 */
 						BOOL Processed=FALSE;
 
-						if (Key==KEY_ALTF4 &&
+						if ((Key==KEY_ALTF4 || Key==KEY_RALTF4) &&
 						        ProcessLocalFileTypes(strFileName,strShortFileName,FILETYPE_ALTEDIT,
 						                              PluginMode))
 							Processed=TRUE;
@@ -1666,12 +1670,12 @@ int FileList::ProcessKey(int Key)
 					else
 					{
 						int EnableExternal=((Key==KEY_F3 && Opt.ViOpt.UseExternalViewer) ||
-						                    (Key==KEY_ALTF3 && !Opt.ViOpt.UseExternalViewer)) &&
+						                    ((Key==KEY_ALTF3 || Key==KEY_RALTF3) && !Opt.ViOpt.UseExternalViewer)) &&
 						                   !Opt.strExternalViewer.IsEmpty();
 						/* $ 02.08.2001 IS обработаем ассоциации для alt-f3 */
 						BOOL Processed=FALSE;
 
-						if (Key==KEY_ALTF3 &&
+						if ((Key==KEY_ALTF3 || Key==KEY_RALTF3) &&
 						        ProcessLocalFileTypes(strFileName,strShortFileName,FILETYPE_ALTVIEW,PluginMode))
 							Processed=TRUE;
 						else if (Key==KEY_F3 &&
@@ -1766,6 +1770,7 @@ int FileList::ProcessKey(int Key)
 		case KEY_F5:
 		case KEY_F6:
 		case KEY_ALTF6:
+		case KEY_RALTF6:
 		case KEY_DRAGCOPY:
 		case KEY_DRAGMOVE:
 		{
@@ -1778,6 +1783,7 @@ int FileList::ProcessKey(int Key)
 		}
 
 		case KEY_ALTF5:  // Печать текущего/выбранных файла/ов
+		case KEY_RALTF5:
 		{
 			_ALGO(CleverSysLog clv(L"Alt-F5"));
 			_ALGO(SysLog(L"%s, FileCount=%d",(PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
@@ -2182,17 +2188,21 @@ int FileList::ProcessKey(int Key)
 		}
 		return TRUE;
 		case KEY_CTRLPGDN:
+		case KEY_RCTRLPGDN:
 		case KEY_CTRLNUMPAD3:
+		case KEY_RCTRLNUMPAD3:
 		case KEY_CTRLSHIFTPGDN:
+		case KEY_RCTRLSHIFTPGDN:
 		case KEY_CTRLSHIFTNUMPAD3:
+		case KEY_RCTRLSHIFTNUMPAD3:
 			ProcessEnter(0,0,!(Key&KEY_SHIFT), false, OFP_ALTERNATIVE);
 			return TRUE;
 		default:
 
-			if (((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+65535) ||
-			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+65535)) &&
-			        (Key&~KEY_ALTSHIFT_BASE)!=KEY_BS && (Key&~KEY_ALTSHIFT_BASE)!=KEY_TAB &&
-			        (Key&~KEY_ALTSHIFT_BASE)!=KEY_ENTER && (Key&~KEY_ALTSHIFT_BASE)!=KEY_ESC &&
+			if (((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+65535) || (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+65535) ||
+			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+65535) || (Key>=KEY_RALTSHIFT_BASE+0x01 && Key<=KEY_RALTSHIFT_BASE+65535)) &&
+			        (Key&~(KEY_ALT|KEY_RALT|KEY_SHIFT))!=KEY_BS && (Key&~(KEY_ALT|KEY_RALT|KEY_SHIFT))!=KEY_TAB &&
+			        (Key&~(KEY_ALT|KEY_RALT|KEY_SHIFT))!=KEY_ENTER && (Key&~(KEY_ALT|KEY_RALT|KEY_SHIFT))!=KEY_ESC &&
 			        !(Key&EXTENDED_KEY_BASE)
 			   )
 			{
@@ -2203,11 +2213,13 @@ int FileList::ProcessKey(int Key)
 
 				if (Key >= KEY_ALTSHIFT0 && Key <= KEY_ALTSHIFT9)
 					Key=(DWORD)Code[Key-KEY_ALTSHIFT0];
-				else if ((Key&(~(KEY_ALT+KEY_SHIFT))) == '/')
+				else if (Key >= KEY_RALTSHIFT0 && Key <= KEY_RALTSHIFT9)
+					Key=(DWORD)Code[Key-KEY_RALTSHIFT0];
+				else if ((Key&(~(KEY_ALT|KEY_RALT|KEY_SHIFT))) == '/')
 					Key='?';
-				else if (Key == KEY_ALTSHIFT+'-')
+				else if ((Key == KEY_ALTSHIFT+'-') || (Key == KEY_RALT+KEY_SHIFT+'-'))
 					Key='_';
-				else if (Key == KEY_ALTSHIFT+'=')
+				else if ((Key == KEY_ALTSHIFT+'=') || (Key == KEY_RALT+KEY_SHIFT+'='))
 					Key='+';
 
 				//_SVS(SysLog(L"<FastFind: Key=%s",_FARKEY_ToName(Key)));
@@ -4797,7 +4809,7 @@ void FileList::ProcessCopyKeys(int Key)
 
 		if (PanelMode==PLUGIN_PANEL && !CtrlObject->Plugins.UseFarCommand(hPlugin,PLUGIN_FARGETFILES))
 		{
-			if (Key!=KEY_ALTF6)
+			if (Key!=KEY_ALTF6 && Key!=KEY_RALTF6)
 			{
 				string strPluginDestPath;
 				int ToPlugin=FALSE;
@@ -4850,9 +4862,9 @@ void FileList::ProcessCopyKeys(int Key)
 		else
 		{
 			int ToPlugin=AnotherPanel->GetMode()==PLUGIN_PANEL &&
-			             AnotherPanel->IsVisible() && Key!=KEY_ALTF6 &&
+			             AnotherPanel->IsVisible() && (Key!=KEY_ALTF6 && Key!=KEY_RALTF6) &&
 			             !CtrlObject->Plugins.UseFarCommand(AnotherPanel->GetPluginHandle(),PLUGIN_FARPUTFILES);
-			ShellCopy ShCopy(this,Move,Key==KEY_ALTF6,FALSE,Ask,ToPlugin,nullptr, Drag && AnotherDir);
+			ShellCopy ShCopy(this,Move,(Key==KEY_ALTF6 || Key==KEY_RALTF6),FALSE,Ask,ToPlugin,nullptr, Drag && AnotherDir);
 
 			if (ToPlugin==1)
 				PluginPutFilesToAnother(Move,AnotherPanel);

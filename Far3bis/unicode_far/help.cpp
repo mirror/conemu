@@ -1127,7 +1127,9 @@ int Help::ProcessKey(int Key)
 		}
 		case KEY_HOME:        case KEY_NUMPAD7:
 		case KEY_CTRLHOME:    case KEY_CTRLNUMPAD7:
+		case KEY_RCTRLHOME:   case KEY_RCTRLNUMPAD7:
 		case KEY_CTRLPGUP:    case KEY_CTRLNUMPAD9:
+		case KEY_RCTRLPGUP:   case KEY_RCTRLNUMPAD9:
 		{
 			StackData.CurX=StackData.CurY=0;
 			StackData.TopStr=0;
@@ -1140,7 +1142,9 @@ int Help::ProcessKey(int Key)
 		}
 		case KEY_END:         case KEY_NUMPAD1:
 		case KEY_CTRLEND:     case KEY_CTRLNUMPAD1:
+		case KEY_RCTRLEND:    case KEY_RCTRLNUMPAD1:
 		case KEY_CTRLPGDN:    case KEY_CTRLNUMPAD3:
+		case KEY_RCTRLPGDN:   case KEY_RCTRLNUMPAD3:
 		{
 			StackData.CurX=StackData.CurY=0;
 			StackData.TopStr=StrCount;
@@ -1307,6 +1311,7 @@ int Help::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_ALTF1:
+		case KEY_RALTF1:
 		case KEY_BS:
 		{
 			// Если стек возврата пуст - выходим их хелпа

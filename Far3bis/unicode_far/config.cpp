@@ -371,8 +371,9 @@ void SetConfirmations()
 void PluginsManagerSettings()
 {
 	DialogBuilder Builder(MPluginsManagerSettingsTitle, L"PluginsManagerSettings");
-
+#ifndef NO_WRAPPER
 	Builder.AddCheckbox(MPluginsManagerOEMPluginsSupport, &Opt.LoadPlug.OEMPluginsSupport);
+#endif // NO_WRAPPER
 	Builder.AddCheckbox(MPluginsManagerScanSymlinks, &Opt.LoadPlug.ScanSymlinks);
 	Builder.AddSeparator(MPluginConfirmationTitle);
 	DialogItemEx *ConfirmOFP = Builder.AddCheckbox(MPluginsManagerOFP, &Opt.PluginConfirm.OpenFilePlugin);
@@ -689,7 +690,9 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SetAttrFolderRules",&Opt.SetAttrFolderRules,1, 0},
 	{0, GeneralConfig::TYPE_TEXT,    NKeySystem,L"ConsoleDetachKey", &strKeyNameConsoleDetachKey, 0, L"CtrlAltTab"},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SilentLoadPlugin",  &Opt.LoadPlug.SilentLoadPlugin, 0, 0},
+#ifndef NO_WRAPPER
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"OEMPluginsSupport",  &Opt.LoadPlug.OEMPluginsSupport, 1, 0},
+#endif // NO_WRAPPER
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"ScanSymlinks",  &Opt.LoadPlug.ScanSymlinks, 1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"MultiMakeDir",&Opt.MultiMakeDir,0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"FlagPosixSemantics", &Opt.FlagPosixSemantics, 1, 0},
@@ -720,7 +723,6 @@ static struct FARConfig
 
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystemExecutor,L"RestoreCP",&Opt.RestoreCPAfterExecute,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystemExecutor,L"UseAppPath",&Opt.ExecuteUseAppPath,1, 0},
-	{0, GeneralConfig::TYPE_INTEGER, NKeySystemExecutor,L"ShowErrorMessage",&Opt.ExecuteShowErrorMessage,1, 0},
 	{0, GeneralConfig::TYPE_TEXT,    NKeySystemExecutor,L"BatchType",&Opt.strExecuteBatchType,0,constBatchExt},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystemExecutor,L"FullTitle",&Opt.ExecuteFullTitle,0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystemExecutor,L"SilentExternal",&Opt.ExecuteSilentExternal,0, 0},

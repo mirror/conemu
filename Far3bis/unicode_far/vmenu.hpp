@@ -233,18 +233,23 @@ class VMenu: public Modal
 
 		bool bFilterEnabled;
 		bool bFilterLocked;
+		bool bFilterMaskMode;
 		string strFilter;
+		string strMaskFilter;
 
 		MenuItemEx **Item;
 
 		int ItemCount;
 		int ItemHiddenCount;
 		int ItemSubMenusCount;
+		int SeparatorCount;
+		int SeparatorHiddenCount;
 
 		FarColor Colors[VMENU_COLOR_COUNT];
 
 		int MaxLineWidth;
 		bool bRightBtnPressed;
+		GUID MenuId;
 
 	private:
 		virtual void DisplayObject();
@@ -265,6 +270,7 @@ class VMenu: public Modal
 		void UpdateInternalCounters(UINT64 OldFlags, UINT64 NewFlags);
 		bool IsFilterEditKey(int Key);
 		bool ShouldSendKeyToFilter(int Key);
+		void ShortenFilterString(int Key);
 		//коректировка текущей позиции и флагов SELECTED
 		void UpdateSelectPos();
 
@@ -325,15 +331,18 @@ class VMenu: public Modal
 		int  FindItem(const FarListFind *FindItem);
 		int  FindItem(int StartIndex,const wchar_t *Pattern,UINT64 Flags=0);
 		void RestoreFilteredItems();
-		void FilterStringUpdated(bool bLonger);
+		void FilterStringUpdated();
 		void FilterUpdateHeight(bool bShrink=false);
 		void SetFilterEnabled(bool bEnabled) { bFilterEnabled=bEnabled; };
 		void SetFilterLocked(bool bLocked) { bFilterEnabled=bLocked; };
+		void SetFilterMaskMode(bool bMaskMode) { bFilterMaskMode=bMaskMode; };
  		bool AddToFilter(const wchar_t *str);
+ 		const wchar_t *GetFilterString();
  		void SetFilterString(const wchar_t *str);
 
 		int  GetItemCount() { return ItemCount; };
 		int  GetShowItemCount() { return ItemCount-ItemHiddenCount; };
+		int  GetShowSeparatorCount() { return SeparatorCount-SeparatorHiddenCount; };
 		int  GetVisualPos(int Pos);
 		int  VisualPosToReal(int VPos);
 
@@ -376,4 +385,6 @@ class VMenu: public Modal
 
 		static INT_PTR WINAPI DefMenuProc(HANDLE hVMenu,int Msg,int Param1,void* Param2);
 		static INT_PTR WINAPI SendMenuMessage(HANDLE hVMenu,int Msg,int Param1,void* Param2);
+		void SetId(const GUID& Id);
+		const GUID& Id(void);
 };

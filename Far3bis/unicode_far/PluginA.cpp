@@ -29,6 +29,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "headers.hpp"
 #pragma hdrstop
 
+#ifndef NO_WRAPPER
+
 #include "plugins.hpp"
 #include "codepage.hpp"
 #include "chgprior.hpp"
@@ -46,6 +48,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "mix.hpp"
 #include "colormix.hpp"
+#include "FarGuid.hpp"
 
 #define EXP_GETGLOBALINFO       ""
 #define EXP_SETSTARTUPINFO      "SetStartupInfo"
@@ -1092,13 +1095,13 @@ int WINAPI ProcessNameA(const char *Param1,char *Param2,DWORD Flags)
 int WINAPI KeyNameToKeyA(const char *Name)
 {
 	string strN(Name);
-	return KeyToOldKey(NativeFSF.FarNameToKey(strN));
+	return KeyToOldKey(KeyNameToKeyW(strN));
 }
 
 BOOL WINAPI FarKeyToNameA(int Key,char *KeyText,int Size)
 {
 	wchar_t Name[MAX_PATH];
-	size_t ret = NativeFSF.FarKeyToName(OldKeyToKey(Key),Name,ARRAYSIZE(Name));
+	size_t ret = FarKeyToName(OldKeyToKey(Key),Name,ARRAYSIZE(Name));
 
 	if (ret)
 		UnicodeToOEM(Name, KeyText,Size>0?Size+1:32);
@@ -1108,7 +1111,7 @@ BOOL WINAPI FarKeyToNameA(int Key,char *KeyText,int Size)
 
 int WINAPI InputRecordToKeyA(const INPUT_RECORD *r)
 {
-	return KeyToOldKey(NativeFSF.FarInputRecordToKey(r));
+	return KeyToOldKey(InputRecordToKey(r));
 }
 
 char* WINAPI FarMkTempA(char *Dest, const char *Prefix)
@@ -1289,7 +1292,7 @@ int WINAPI FarInputBoxA(const char *Title,const char *Prompt,const char *History
 	if (Flags&oldfar::FIB_NOAMPERSAND)
 		NewFlags|=FIB_NOAMPERSAND;
 
-	int ret = NativeInfo.InputBox(&FarGuid,(Title?strT.CPtr():nullptr),(Prompt?strP.CPtr():nullptr),(HistoryName?strHN.CPtr():nullptr),(SrcText?strST.CPtr():nullptr),D,DestLength,(HelpTopic?strHT.CPtr():nullptr),NewFlags);
+	int ret = NativeInfo.InputBox(&FarGuid,&FarGuid,(Title?strT.CPtr():nullptr),(Prompt?strP.CPtr():nullptr),(HistoryName?strHN.CPtr():nullptr),(SrcText?strST.CPtr():nullptr),D,DestLength,(HelpTopic?strHT.CPtr():nullptr),NewFlags);
 	strD.ReleaseBuffer();
 
 	if (ret && DestText)
@@ -1344,7 +1347,7 @@ int WINAPI FarMessageFnA(INT_PTR PluginNumber,DWORD Flags,const char *HelpTopic,
 	if (Flags&oldfar::FMSG_MB_RETRYCANCEL)
 		NewFlags|=FMSG_MB_RETRYCANCEL;
 
-	int ret = NativeInfo.Message(GetPluginGuid(PluginNumber),NewFlags,(HelpTopic?strHT.CPtr():nullptr),p,ItemsNumber,ButtonsNumber);
+	int ret = NativeInfo.Message(GetPluginGuid(PluginNumber),&FarGuid,NewFlags,(HelpTopic?strHT.CPtr():nullptr),p,ItemsNumber,ButtonsNumber);
 
 	for (int i=0; i<c; i++)
 		xf_free(p[i]);
@@ -1468,7 +1471,7 @@ int WINAPI FarMenuFnA(INT_PTR PluginNumber,int X,int Y,int MaxHeight,DWORD Flags
 		}
 	}
 
-	int ret = NativeInfo.Menu(GetPluginGuid(PluginNumber),X,Y,MaxHeight,NewFlags,wszT,wszB,wszHT,NewBreakKeys,BreakCode,mi,ItemsNumber);
+	int ret = NativeInfo.Menu(GetPluginGuid(PluginNumber),&FarGuid,X,Y,MaxHeight,NewFlags,wszT,wszB,wszHT,NewBreakKeys,BreakCode,mi,ItemsNumber);
 
 	for (int i=0; i<ItemsNumber; i++)
 		if (mi[i].Text) xf_free((wchar_t *)mi[i].Text);
@@ -1713,7 +1716,17 @@ void AnsiDialogItemToUnicodeSafe(oldfar::FarDialogItem &diA, FarDialogItem &di)
 	di.X2=diA.X2;
 	di.Y2=diA.Y2;
 	di.Flags=0;
-	if (diA.Focus) di.Flags|=DIF_FOCUS;
+
+	if (diA.Focus)
+	{
+		di.Flags|=DIF_FOCUS;
+	}
+
+	// emulate old listbox behaviour
+	if (diA.Type == oldfar::DI_LISTBOX)
+	{
+		di.Flags|=DIF_LISTTRACKMOUSE;
+	}
 
 	if (diA.Flags)
 	{
@@ -2264,7 +2277,7 @@ INT_PTR WINAPI DlgProcA(HANDLE hDlg, int NewMsg, int Param1, void* Param2)
 		}
 		case DN_HOTKEY:
 			Msg=oldfar::DN_HOTKEY;
-			Param2=ToPtr(KeyToOldKey((DWORD)NativeFSF.FarInputRecordToKey((const INPUT_RECORD *)Param2)));
+			Param2=ToPtr(KeyToOldKey((DWORD)InputRecordToKey((const INPUT_RECORD *)Param2)));
 			break;
 		case DN_INITDIALOG:
 			Msg=oldfar::DN_INITDIALOG;
@@ -2301,7 +2314,7 @@ INT_PTR WINAPI DlgProcA(HANDLE hDlg, int NewMsg, int Param1, void* Param2)
 				else if (record->EventType==KEY_EVENT)
 				{
 					Msg=oldfar::DN_KEY;
-					Param2=ToPtr(KeyToOldKey((DWORD)NativeFSF.FarInputRecordToKey((const INPUT_RECORD *)Param2)));
+					Param2=ToPtr(KeyToOldKey((DWORD)InputRecordToKey((const INPUT_RECORD *)Param2)));
 					break;
 				}
 			}
@@ -2376,7 +2389,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 
 			for (int i=0; i<Count; i++)
 			{
-				NativeFSF.FarKeyToInputRecord(OldKeyToKey(KeysA[i]),KeysW+i);
+				KeyToInputRecord(OldKeyToKey(KeysA[i]),KeysW+i);
 			}
 			INT_PTR ret = NativeInfo.SendDlgMessage(hDlg, DM_KEY, Param1, KeysW);
 			xf_free(KeysW);
@@ -2784,22 +2797,31 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		case oldfar::DM_LISTSETMOUSEREACTION:
 		{
 			oldfar::FARLISTMOUSEREACTIONTYPE OldType = static_cast<oldfar::FARLISTMOUSEREACTIONTYPE>(reinterpret_cast<INT_PTR>(Param2));
-			FARLISTMOUSEREACTIONTYPE Type=LMRT_ONLYFOCUS;
+			FarDialogItem DlgItem = {};
+			NativeInfo.SendDlgMessage(hDlg, DM_GETDLGITEMSHORT, Param1, &DlgItem);
+			FARDIALOGITEMFLAGS OldFlags = DlgItem.Flags;
+			DlgItem.Flags&=~(DIF_LISTTRACKMOUSE|DIF_LISTTRACKMOUSEINFOCUS);
 			switch (OldType)
 			{
 			case oldfar::LMRT_ONLYFOCUS:
-				Type=LMRT_ONLYFOCUS;
+				DlgItem.Flags|=DIF_LISTTRACKMOUSEINFOCUS;
 				break;
 			case oldfar::LMRT_ALWAYS:
-				Type=LMRT_ALWAYS;
+				DlgItem.Flags|=DIF_LISTTRACKMOUSE;
 				break;
 			case oldfar::LMRT_NEVER:
-				Type=LMRT_NEVER;
 				break;
 			default:
+				DlgItem.Flags = OldFlags;
 				break;
 			}
-			return NativeInfo.SendDlgMessage(hDlg, DM_LISTSETMOUSEREACTION, Param1, ToPtr(Type));
+			NativeInfo.SendDlgMessage(hDlg, DM_SETDLGITEMSHORT, Param1, &DlgItem);
+			DWORD OldValue = oldfar::LMRT_NEVER;
+			if (OldFlags&DIF_LISTTRACKMOUSE)
+				OldValue = oldfar::LMRT_ALWAYS;
+			else if (OldFlags&DIF_LISTTRACKMOUSEINFOCUS)
+				OldValue = oldfar::LMRT_ONLYFOCUS;
+			return OldValue;
 		}
 		case oldfar::DM_GETCURSORSIZE:   Msg = DM_GETCURSORSIZE; break;
 		case oldfar::DM_SETCURSORSIZE:   Msg = DM_SETCURSORSIZE; break;
@@ -3595,8 +3617,6 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 
 					if (kmA->PlainText.Flags&oldfar::KSFLAGS_NOSENDKEYSTOPLUGINS) kmW.Text.Flags|=KMFLAGS_NOSENDKEYSTOPLUGINS;
 
-					if (kmA->PlainText.Flags&oldfar::KSFLAGS_REG_MULTI_SZ) kmW.Text.Flags|=KMFLAGS_REG_MULTI_SZ;
-
 					break;
 
 				case oldfar::MCMD_CHECKMACRO:
@@ -3671,9 +3691,6 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 
 			if (ksA->Flags&oldfar::KSFLAGS_NOSENDKEYSTOPLUGINS)
 				MRec.Flags|=MFLAGS_NOSENDKEYSTOPLUGINS;
-
-			if (ksA->Flags&oldfar::KSFLAGS_REG_MULTI_SZ)
-				MRec.Flags|=MFLAGS_REG_MULTI_SZ;
 
 			MRec.BufferSize=ksA->Count;
 
@@ -5382,7 +5399,7 @@ int PluginA::ProcessKey(HANDLE hPlugin,const INPUT_RECORD *Rec, bool Pred)
 	int dwControlState;
 
 	//BUGBUG: здесь можно проще.
-	TranslateKeyToVK(NativeFSF.FarInputRecordToKey(Rec),VirtKey,dwControlState);
+	TranslateKeyToVK(InputRecordToKey(Rec),VirtKey,dwControlState);
 	if (Exports[iProcessPanelInput] && !ProcessException)
 	{
 		ExecuteStruct es;
@@ -5759,3 +5776,5 @@ void PluginA::ExitFAR(const ExitInfo *Info)
 		EXECUTE_FUNCTION(FUNCTION(iExitFAR)(), es);
 	}
 }
+
+#endif // NO_WRAPPER

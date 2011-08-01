@@ -78,12 +78,12 @@ int WINAPI FarGetPluginDirList(INT_PTR PluginNumber,HANDLE hPlugin,
                                size_t *pItemsNumber);
 void WINAPI FarFreePluginDirList(PluginPanelItem *PanelItem, size_t ItemsNumber);
 
-int WINAPI FarMenuFn(INT_PTR PluginNumber,int X,int Y,int MaxHeight,
+int WINAPI FarMenuFn(INT_PTR PluginNumber,const GUID* Id,int X,int Y,int MaxHeight,
                      unsigned __int64 Flags,const wchar_t *Title,const wchar_t *Bottom,
                      const wchar_t *HelpTopic,const FarKey *BreakKeys,int *BreakCode,
                      const struct FarMenuItem *Item, size_t ItemsNumber);
 const wchar_t* WINAPI FarGetMsgFn(INT_PTR PluginHandle,int MsgId);
-int WINAPI FarMessageFn(INT_PTR PluginNumber,unsigned __int64 Flags,
+int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Flags,
                         const wchar_t *HelpTopic,const wchar_t * const *Items,size_t ItemsNumber,
                         int ButtonsNumber);
 INT_PTR WINAPI FarPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int Param1,void* Param2);
@@ -111,7 +111,7 @@ BOOL WINAPI FarShowHelp(const wchar_t *ModuleName,
 /* Обертка вокруг GetString для плагинов - с меньшей функциональностью.
    Сделано для того, чтобы не дублировать код GetString.*/
 
-int WINAPI FarInputBox(INT_PTR PluginNumber,const wchar_t *Title,const wchar_t *Prompt,
+int WINAPI FarInputBox(INT_PTR PluginNumber,const GUID* Id,const wchar_t *Title,const wchar_t *Prompt,
                        const wchar_t *HistoryName,const wchar_t *SrcText,
                        wchar_t *DestText,int DestLength,
                        const wchar_t *HelpTopic,unsigned __int64 Flags);

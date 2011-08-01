@@ -583,11 +583,14 @@ int FileList::ConvertName(const wchar_t *SrcName,string &strDest,int MaxLength,i
 	wmemset(lpwszDest,L' ',MaxLength);
 	int SrcLength=StrLength(SrcName);
 
-	if (RightAlign && SrcLength>MaxLength)
+	if (RightAlign)
 	{
-		wmemcpy(lpwszDest,SrcName+SrcLength-MaxLength,MaxLength);
+		if (SrcLength>MaxLength)
+			wmemcpy(lpwszDest,SrcName+SrcLength-MaxLength,MaxLength);
+		else
+			wmemcpy(lpwszDest+MaxLength-SrcLength,SrcName,SrcLength);
 		strDest.ReleaseBuffer(MaxLength);
-		return TRUE;
+		return (SrcLength>MaxLength);
 	}
 
 	const wchar_t *DotPtr;
@@ -1140,9 +1143,14 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 										int CurRightPos=LeftPos;
 
 										if (Length+CurRightPos<Width)
+										{
 											CurRightPos=Width-Length;
+										}
 										else
+										{
 											RightBracket=TRUE;
+											LeftBracket=TRUE;
+										}
 
 										NamePtr += Length+CurRightPos-Width;
 										RightAlign=FALSE;
@@ -1448,23 +1456,12 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 		if (ShowStatus && !strLine.IsEmpty())
 		{
 			GotoXY(X1+1,WhereY());
-			#if 0 // Left
-	        Text(strLine);
-	        #else
-	        //Maximus: TODO: обрезание строки если она получилась длиннее?
+			SetColor(COL_PANELTEXT);
 	        if (StatusAlign & COLUMN_CENTERALIGN)
 		        RemoveExternalSpaces(strLine);
 			else if (StatusAlign & COLUMN_RIGHTALIGN)
 				RemoveTrailingSpaces(strLine);
 			int LineLen = static_cast<int>(strLine.GetLength());
-			//const wchar_t *LinePtr = strLine;
-			//while (*LinePtr==L' ')
-			//{
-			//	LinePtr++;
-			//	LineLen--;
-			//}
-			//while (LineLen>0 && LinePtr[LineLen-1]==L' ')
-			//	LineLen--;
 			if (LineLen<(X2-X1-1))
 			{
 				if (StatusAlign & COLUMN_CENTERALIGN)
@@ -1477,8 +1474,6 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 				LineLen = X2-X1-1;
 			}
 	        FS<<fmt::Width(LineLen)<<fmt::Precision(LineLen)<<strLine/*LinePtr*/;
-			//FS<<L"*";
-	        #endif
         }
 
 		if ((!ShowStatus || StatusLine) && WhereX()<X2)

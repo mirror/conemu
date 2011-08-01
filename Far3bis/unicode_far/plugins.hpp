@@ -157,7 +157,9 @@ class PluginManager
 
 		Plugin **PluginsData;
 		int PluginsCount;
+#ifndef NO_WRAPPER
 		int OemPluginsCount;
+#endif // NO_WRAPPER
 		PluginTree* PluginsCache;
 
 	public:
@@ -213,7 +215,9 @@ class PluginManager
 		bool IsPluginValid(Plugin *pPlugin);
 
 		int GetPluginsCount() { return PluginsCount; }
+#ifndef NO_WRAPPER
 		int GetOemPluginsCount() { return OemPluginsCount; }
+#endif // NO_WRAPPER
 
 		BOOL IsPluginsLoaded() { return Flags.Check(PSIF_PLUGINSLOADDED); }
 

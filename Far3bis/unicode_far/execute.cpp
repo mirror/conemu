@@ -1042,9 +1042,6 @@ int Execute(const wchar_t *CmdStr, // Ком.строка для исполнения
 		dwError = GetLastError();
 	}
 
-	DWORD ErrorCode=0;
-	bool ErrMsg=false;
-
 	if (!dwError)
 	{
 		if (hProcess)
@@ -1067,12 +1064,12 @@ int Execute(const wchar_t *CmdStr, // Ком.строка для исполнения
 					HANDLE hOutput = Console.GetOutputHandle();
 					HANDLE hInput = Console.GetInputHandle();
 					INPUT_RECORD ir[256];
-					DWORD rd;
+					size_t rd;
 					int vkey=0,ctrl=0;
 					TranslateKeyToVK(Opt.ConsoleDetachKey,vkey,ctrl,nullptr);
-					int alt=ctrl&PKF_ALT;
+					int alt=ctrl&(PKF_ALT|PKF_RALT);
 					int shift=ctrl&PKF_SHIFT;
-					ctrl=ctrl&PKF_CONTROL;
+					ctrl=ctrl&(PKF_CONTROL|PKF_RCONTROL);
 					bool bAlt, bShift, bCtrl;
 					DWORD dwControlKeyState;
 
@@ -1198,38 +1195,35 @@ int Execute(const wchar_t *CmdStr, // Ком.строка для исполнения
 		}
 
 		nResult = 0;
+
+		if(!Silent)
+		{
+			ScrBuf.FillBuf();
+			CtrlObject->CmdLine->SaveBackground();
+			ProcessShowClock--;
+		}
 	}
 	else
 	{
 
-		if (Opt.ExecuteShowErrorMessage)
+		if (!Silent)
 		{
-			ErrorCode=GetLastError();
-			ErrMsg=true;
+			CtrlObject->Cp()->Redraw();
+			if (Opt.ShowKeyBar)
+			{
+				CtrlObject->MainKeyBar->Show();
+			}
+		}
+
+		SetMessageHelp(L"ErrCannotExecute");
+		if(DirectRun)
+		{
+			Message(MSG_WARNING|MSG_ERRORTYPE, 1,MSG(MError), MSG(MCannotExecute), strNewCmdStr, MSG(MOk));
 		}
 		else
 		{
-			string strOutStr;
-			strOutStr.Format(MSG(MExecuteErrorMessage),strNewCmdStr.CPtr());
-			string strPtrStr=FarFormatText(strOutStr,ScrX,strPtrStr,L"\n",0);
-			Console.Write(strPtrStr, static_cast<DWORD>(strPtrStr.GetLength()));
+			Message(MSG_WARNING|MSG_ERRORTYPE, 1, MSG(MError), MSG(MCannotInvokeComspec), strComspec, MSG(MCheckComspecVar), MSG(MOk));
 		}
-	}
-
-	if(!Silent)
-	{
-		ScrBuf.FillBuf();
-		CtrlObject->CmdLine->SaveBackground();
-		ProcessShowClock--;
-	}
-
-	if(ErrMsg)
-	{
-		SetLastError(ErrorCode);
-		SetMessageHelp(L"ErrCannotExecute");
-		string strOutStr = strNewCmdStr;
-		Unquote(strOutStr);
-		Message(MSG_WARNING|MSG_ERRORTYPE,1,MSG(MError),MSG(MCannotExecute),strOutStr,MSG(MOk));
 	}
 
 	if(!Silent)
@@ -1290,22 +1284,21 @@ int CommandLine::CmdExecute(const wchar_t *CmdLine,bool AlwaysWaitFinish,bool Se
 	bool PrintCommand=true;
 	if ((Code=ProcessOSCommands(CmdLine,SeparateWindow,PrintCommand)) == TRUE)
 	{
-		ShowBackground();
-
-		string strNewDir=strCurDir;
-		strCurDir=strPrevDir;
-		Redraw();
-		strCurDir=strNewDir;
-
 		if (PrintCommand)
 		{
+			ShowBackground();
+			string strNewDir=strCurDir;
+			strCurDir=strPrevDir;
+			Redraw();
+			strCurDir=strNewDir;
 			GotoXY(X2+1,Y1);
 			Text(L" ");
 			ScrollScreen(2);
+			SaveBackground();
 		}
 
 		SetString(L"", FALSE);
-		SaveBackground();
+
 		Code=-1;
 	}
 	else
@@ -1573,13 +1566,42 @@ int CommandLine::ProcessOSCommands(const wchar_t *CmdLine, bool SeparateWindow, 
 		strCmdLine.LShift(3);
 		RemoveLeadingSpaces(strCmdLine);
 
-		if (CheckCmdLineForHelp(strCmdLine) || strCmdLine.IsEmpty())
+		// "set" (display all) or "set var" (display all that begin with "var")
+		if (strCmdLine.IsEmpty() || !strCmdLine.Pos(pos,L'=') || !pos)
+		{
+			ShowBackground();
+			// display command
+			Redraw();
+			GotoXY(X2+1,Y1);
+			Text(L" ");
+			ScrBuf.Flush();
+			Console.SetTextAttributes(ColorIndexToColor(COL_COMMANDLINEUSERSCREEN));
+			string strOut("\n");
+			int CmdLength = static_cast<int>(strCmdLine.GetLength());
+			LPWCH Environment = GetEnvironmentStrings();
+			for (LPCWSTR Ptr = Environment; *Ptr;)
+			{
+				int PtrLength = StrLength(Ptr);
+				if (!StrCmpNI(Ptr, strCmdLine, CmdLength))
+				{
+					strOut.Append(Ptr, PtrLength).Append(L"\n");
+				}
+				Ptr+=PtrLength+1;
+			}
+			FreeEnvironmentStrings(Environment);
+			strOut.Append(L"\n\n", Opt.ShowKeyBar?2:1);
+			Console.Write(strOut, strOut.GetLength());
+			Console.Commit();
+			ScrBuf.FillBuf();
+			SaveBackground();
+			PrintCommand = false;
+			return TRUE;
+		}
+
+		if (CheckCmdLineForHelp(strCmdLine))
 			return FALSE; // отдадимся COMSPEC`у
 
 		if (CheckCmdLineForSet(strCmdLine)) // вариант для /A и /P
-			return FALSE;
-
-		if (!strCmdLine.Pos(pos,L'='))
 			return FALSE;
 
 		if (strCmdLine.GetLength() == pos+1) //set var=
@@ -1704,8 +1726,9 @@ int CommandLine::ProcessOSCommands(const wchar_t *CmdLine, bool SeparateWindow, 
 		if (r1 && r2) // Если все ОБИ, то так  и...
 		{
 			InitRecodeOutTable();
+#ifndef NO_WRAPPER
 			LocalUpperInit();
-			InitLCIDSort();
+#endif // NO_WRAPPER
 			InitKeysArray();
 			ScrBuf.ResetShadow();
 			ScrBuf.Flush();

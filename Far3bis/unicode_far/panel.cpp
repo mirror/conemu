@@ -272,10 +272,12 @@ static size_t AddPluginItems(VMenu &ChDisk, int Pos, int DiskCount, bool SetSele
 				item->bIsPlugin = true;
 				item->pPlugin = pPlugin;
 				item->Guid = guid;
-
+#ifndef NO_WRAPPER
 				if (pPlugin->IsOemPlugin())
 					OneItem.Item.Flags=LIF_CHECKED|L'A';
-
+				else if (pPlugin->IsFar2Plugin())
+					OneItem.Item.Flags=LIF_CHECKED|L'2';
+#endif // NO_WRAPPER
 				OneItem.Item.strName = strMenuText;
 				OneItem.Item.UserDataSize=sizeof(PanelMenuItem);
 				OneItem.Item.UserData=item;
@@ -1360,7 +1362,7 @@ void Panel::FastFind(int FirstKey)
 				else if (!rec.EventType || rec.EventType==KEY_EVENT || rec.EventType==FARMACRO_KEY_EVENT)
 				{
 					// для вставки воспользуемся макродвижком...
-					if (Key==KEY_CTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0)
+					if (Key==KEY_CTRLV || Key==KEY_RCTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0)
 					{
 						wchar_t *ClipText=PasteFromClipboard();
 
@@ -1411,9 +1413,13 @@ void Panel::FastFind(int FirstKey)
 			// // _SVS(if (!FirstKey) SysLog(L"Panel::FastFind  Key=%s  %s",_FARKEY_ToName(Key),_INPUT_RECORD_Dump(&rec)));
 			if (Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+65535)
 				Key=Lower(static_cast<WCHAR>(Key-KEY_ALT_BASE));
+			else if (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+65535)
+				Key=Lower(static_cast<WCHAR>(Key-KEY_RALT_BASE));
 
 			if (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+65535)
 				Key=Lower(static_cast<WCHAR>(Key-KEY_ALTSHIFT_BASE));
+			else if (Key>=KEY_RALTSHIFT_BASE+0x01 && Key<=KEY_RALTSHIFT_BASE+65535)
+				Key=Lower(static_cast<WCHAR>(Key-KEY_RALTSHIFT_BASE));
 
 			if (Key==KEY_MULTIPLY)
 				Key=L'*';
@@ -1431,14 +1437,14 @@ void Panel::FastFind(int FirstKey)
 					FastFindShow(FindX,FindY);
 					break;
 				}
-				case KEY_CTRLNUMENTER:
-				case KEY_CTRLENTER:
+				case KEY_CTRLNUMENTER:   case KEY_RCTRLNUMENTER:
+				case KEY_CTRLENTER:      case KEY_RCTRLENTER:
 					FindPartName(strName,TRUE,1,1);
 					FindEdit.Show();
 					FastFindShow(FindX,FindY);
 					break;
-				case KEY_CTRLSHIFTNUMENTER:
-				case KEY_CTRLSHIFTENTER:
+				case KEY_CTRLSHIFTNUMENTER:  case KEY_RCTRLSHIFTNUMENTER:
+				case KEY_CTRLSHIFTENTER:     case KEY_RCTRLSHIFTENTER:
 					FindPartName(strName,TRUE,-1,1);
 					FindEdit.Show();
 					FastFindShow(FindX,FindY);
@@ -1448,10 +1454,11 @@ void Panel::FastFind(int FirstKey)
 					break;
 				default:
 
-					if ((Key<32 || Key>=65536) && Key!=KEY_BS && Key!=KEY_CTRLY &&
-					        Key!=KEY_CTRLBS && Key!=KEY_ALT && Key!=KEY_SHIFT &&
+					if ((Key<32 || Key>=65536) && Key!=KEY_BS && Key!=KEY_CTRLY && Key!=KEY_RCTRLY &&
+					        Key!=KEY_CTRLBS && Key!=KEY_RCTRLBS && Key!=KEY_ALT && Key!=KEY_SHIFT &&
 					        Key!=KEY_CTRL && Key!=KEY_RALT && Key!=KEY_RCTRL &&
-					        !(Key==KEY_CTRLINS||Key==KEY_CTRLNUMPAD0) && !(Key==KEY_SHIFTINS||Key==KEY_SHIFTNUMPAD0))
+					        !(Key==KEY_CTRLINS||Key==KEY_CTRLNUMPAD0||Key==KEY_RCTRLINS||Key==KEY_RCTRLNUMPAD0) &&
+							!(Key==KEY_SHIFTINS||Key==KEY_SHIFTNUMPAD0))
 					{
 						KeyToProcess=Key;
 						break;

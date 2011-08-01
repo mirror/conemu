@@ -1778,21 +1778,23 @@ Far2::PluginPanelItem* WrapPluginInfo::PluginPanelItems_3_2(const PluginPanelIte
 }
 
 #if MVV_3>=2103
-int TranslateKeyToVK(int Key,INPUT_RECORD *Rec);
+//int TranslateKeyToVK(int Key,INPUT_RECORD *Rec);
+int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec);
 #endif
 
 void WrapPluginInfo::FarKey_2_3(int Key2, INPUT_RECORD *r)
 {
 	memset(r, 0, sizeof(INPUT_RECORD));
 #if MVV_3>=2103
-	TranslateKeyToVK(Key2, r);
+	int VirtKey = 0, ControlState = 0;
+	TranslateKeyToVK(Key2, VirtKey, ControlState, r);
 #else
 	FSF3.FarKeyToInputRecord(Key2, r);
 #endif
 }
 
 #if MVV_3>=2103
-int WINAPI CalcKeyCode(const INPUT_RECORD *rec);
+DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey=FALSE,int *NotMacros=NULL,bool ProcessCtrlCode=true);
 #endif
 
 int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
@@ -1803,14 +1805,31 @@ int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 #if MVV_3>=2103
 
 	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
-	Key2 = CalcKeyCode(Rec);
+	INPUT_RECORD r = *Rec;
+	Key2 = CalcKeyCode(&r);
 
 #ifdef _DEBUG
 	if (Key2 != Far2::KEY_NONE)
 	{
 		INPUT_RECORD rDbg = {};
 		FarKey_2_3(Key2, &rDbg);
-		int nCmp = memcmp(&rDbg, Rec, sizeof(rDbg)) != 0;
+		int nCmp = 0; //memcmp(&rDbg, Rec, sizeof(rDbg)) != 0;
+		if (r.EventType == KEY_EVENT)
+		{
+			nCmp = (r.Event.KeyEvent.bKeyDown != rDbg.Event.KeyEvent.bKeyDown)
+				|| (r.Event.KeyEvent.wVirtualKeyCode != rDbg.Event.KeyEvent.wVirtualKeyCode)
+				|| (r.Event.KeyEvent.wVirtualScanCode != rDbg.Event.KeyEvent.wVirtualScanCode)
+				|| (r.Event.KeyEvent.uChar.UnicodeChar != rDbg.Event.KeyEvent.uChar.UnicodeChar)
+				|| (r.Event.KeyEvent.dwControlKeyState != rDbg.Event.KeyEvent.dwControlKeyState)
+				;
+		}
+		else if (r.EventType == MOUSE_EVENT)
+		{
+			nCmp = (r.Event.MouseEvent.dwButtonState != rDbg.Event.MouseEvent.dwButtonState)
+				|| (r.Event.MouseEvent.dwControlKeyState != rDbg.Event.MouseEvent.dwControlKeyState)
+				|| (r.Event.MouseEvent.dwEventFlags != rDbg.Event.MouseEvent.dwEventFlags)
+				;
+		}
 		if (nCmp != 0)
 		{
 			static bool bFirstCall = false;
@@ -1903,7 +1922,8 @@ size_t WrapPluginInfo::FarKeyToName3(int Key2,wchar_t *KeyText,size_t Size)
 		return 0;
 	}
 	INPUT_RECORD r = {};
-	TranslateKeyToVK(Key2, &r);
+	int VirtKey = 0, ControlState = 0;
+	TranslateKeyToVK(Key2, VirtKey, ControlState, &r);
 	return FarInputRecordToName(&r, KeyText, Size);
 }
 

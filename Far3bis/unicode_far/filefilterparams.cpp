@@ -50,6 +50,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "datetime.hpp"
 #include "strmix.hpp"
 #include "mix.hpp"
+#include "console.hpp"
 
 FileFilterParams::FileFilterParams()
 {
@@ -58,6 +59,14 @@ FileFilterParams::FileFilterParams()
 	memset(&FDate,0,sizeof(FDate));
 	memset(&FAttr,0,sizeof(FAttr));
 	memset(&FHighlight.Colors,0,sizeof(FHighlight.Colors));
+	for(size_t i = 0; i < 2; ++i)
+	{
+		for(size_t j = 0; j < 4; ++j)
+		{
+			FHighlight.Colors.Color[i][j].ForegroundColor|=0xff000000;
+		}
+	}
+
 	FHighlight.SortGroup=DEFAULT_SORT_GROUP;
 	FHighlight.bContinueProcessing=false;
 	ClearAllFlags();
@@ -603,8 +612,13 @@ void HighlightDlgUpdateUserControl(FAR_CHAR_INFO *VBufColorExample,HighlightData
 	{
 		Color=Colors.Color[HIGHLIGHTCOLORTYPE_FILE][i];
 
-		if (!Color.BackgroundColor && !Color.ForegroundColor)
+		if (!(Color.BackgroundColor&0x00ffffff) && !(Color.ForegroundColor&0x00ffffff))
+		{
+			FARCOLORFLAGS ExFlags = Color.Flags&~FCF_4BITMASK;
 			Color=ColorIndexToColor(PalColor[i]);
+			Color.Flags|=ExFlags;
+
+		}
 
 		if (Colors.MarkChar&0x0000FFFF)
 			ptr=MSG(MHighlightExample2);
@@ -616,12 +630,22 @@ void HighlightDlgUpdateUserControl(FAR_CHAR_INFO *VBufColorExample,HighlightData
 			VBufColorExample[15*i+k].Char=ptr[k];
 			VBufColorExample[15*i+k].Attributes=Color;
 		}
+		// inherit only color mode, not style
+		VBufColorExample[15*i+1].Attributes.Flags = Color.Flags&FCF_4BITMASK;
 
 		if (LOWORD(Colors.MarkChar))
 		{
 			VBufColorExample[15*i+1].Char=LOWORD(Colors.MarkChar);
-			if ((Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].ForegroundColor&0x00FFFFFF) && (Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].BackgroundColor&0x00FFFFFF))
-			VBufColorExample[15*i+1].Attributes=Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i];
+			if ((Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].ForegroundColor&0x00FFFFFF) || (Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].BackgroundColor&0x00FFFFFF))
+			{
+				VBufColorExample[15*i+1].Attributes=Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i];
+			}
+			else
+			{
+				// apply all except color mode
+				FARCOLORFLAGS ExFlags = Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].Flags&~FCF_4BITMASK;
+				VBufColorExample[15*i+1].Attributes.Flags|=ExFlags;
+			}
 		}
 
 		VBufColorExample[15*i].Attributes=ColorIndexToColor(COL_PANELBOX);
@@ -739,8 +763,8 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 				for (int i=0; i<2; i++)
 					for (int j=0; j<4; j++)
 					{
-						Colors->Color[i][j].ForegroundColor|=0xff000000;
-						Colors->Color[i][j].BackgroundColor|=0xff000000;
+						Colors->Color[i][j].ForegroundColor&=0x00ffffff;
+						Colors->Color[i][j].BackgroundColor&=0x00ffffff;
 					}
 
 				SendDlgMessage(hDlg,DM_SETCHECK,ID_HER_MARKTRANSPARENT,ToPtr(BSTATE_CHECKED));
@@ -769,7 +793,7 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 
 				//Color[0=file, 1=mark][0=normal,1=selected,2=undercursor,3=selectedundercursor]
 				FarColor Color=EditData->Color[(Param1-ID_HER_NORMALFILE)&1][(Param1-ID_HER_NORMALFILE)/2];
-				GetColorDialog(Color,true,true);
+				Console.GetColorDialog(Color,true,true);
 				EditData->Color[(Param1-ID_HER_NORMALFILE)&1][(Param1-ID_HER_NORMALFILE)/2]=Color;
 				
 				FarGetDialogItem gdi = {SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,0), (FarDialogItem *)xf_malloc(gdi.Size)};

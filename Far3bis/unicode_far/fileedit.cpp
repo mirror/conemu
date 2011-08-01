@@ -931,6 +931,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 		   Alt-F11 - показать view/edit history
 		*/
 		case KEY_ALTF11:
+		case KEY_RALTF11:
 		{
 			if (GetCanLoseFocus())
 			{

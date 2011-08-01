@@ -80,6 +80,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CFileMask.hpp"
 #include "vmenu.hpp"
 #include "elevation.hpp"
+#include "FarGuid.hpp"
 
 // для диалога назначения клавиши
 struct DlgParam
@@ -218,6 +219,7 @@ TMacroKeywords MKeywords[] =
 	{2,  L"Viewer.State",       MCODE_V_VIEWERSTATE,0},
 
 	{2,  L"Menu.Value",         MCODE_V_MENU_VALUE,0},
+	{2,  L"Menu.Info.Id",       MCODE_V_MENUINFOID,0},
 
 	{2,  L"Fullscreen",         MCODE_C_FULLSCREENMODE,0},
 	{2,  L"IsUserAdmin",        MCODE_C_ISUSERADMIN,0},
@@ -1609,6 +1611,7 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 					break;
 				}
 				case MCODE_V_MENU_VALUE: // Menu.Value
+				case MCODE_V_MENUINFOID: // Menu.Info.Id
 				{
 					int CurMMode=GetMode();
 					Cond=L"";
@@ -1631,11 +1634,19 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 						{
 							string NewStr;
 
-							if (f->VMProcess(CheckCode,&NewStr))
+							switch(CheckCode)
 							{
-								HiText2Str(strFileName, NewStr);
-								RemoveExternalSpaces(strFileName);
-								Cond=strFileName.CPtr();
+								case MCODE_V_MENU_VALUE:
+									if (f->VMProcess(CheckCode,&NewStr))
+									{
+										HiText2Str(strFileName, NewStr);
+										RemoveExternalSpaces(strFileName);
+										Cond=strFileName.CPtr();
+									}
+									break;
+								case MCODE_V_MENUINFOID:
+									Cond=reinterpret_cast<LPCWSTR>(static_cast<INT_PTR>(f->VMProcess(CheckCode)));
+									break;
 							}
 						}
 					}
@@ -2468,7 +2479,7 @@ static bool msgBoxFunc(const TMacroFunction*)
 	string TempBuf = title;
 	TempBuf += L"\n";
 	TempBuf += text;
-	int Result=FarMessageFn(-1,Flags,nullptr,(const wchar_t * const *)TempBuf.CPtr(),0,0)+1;
+	int Result=FarMessageFn(-1,&FarGuid,Flags,nullptr,(const wchar_t * const *)TempBuf.CPtr(),0,0)+1;
 	/*
 	if (Result <= -1) // Break?
 		CtrlObject->Macro.SendDropProcess();
@@ -2582,39 +2593,39 @@ static bool menushowFunc(const TMacroFunction*)
 
 		if (NewItem.strName!=L"\n")
 		{
-		wchar_t *CurrentChar=(wchar_t *)NewItem.strName.CPtr();
-		bool bContunue=(*CurrentChar<=L'\x4');
-		while(*CurrentChar && bContunue)
-		{
-			switch (*CurrentChar)
+			wchar_t *CurrentChar=(wchar_t *)NewItem.strName.CPtr();
+			bool bContunue=(*CurrentChar<=L'\x4');
+			while(*CurrentChar && bContunue)
 			{
-				case L'\x1':
-					NewItem.Flags|=LIF_SEPARATOR;
-					CurrentChar++;
-					break;
+				switch (*CurrentChar)
+				{
+					case L'\x1':
+						NewItem.Flags|=LIF_SEPARATOR;
+						CurrentChar++;
+						break;
 
-				case L'\x2':
-					NewItem.Flags|=LIF_CHECKED;
-					CurrentChar++;
-					break;
+					case L'\x2':
+						NewItem.Flags|=LIF_CHECKED;
+						CurrentChar++;
+						break;
 
-				case L'\x3':
-					NewItem.Flags|=LIF_DISABLE;
-					CurrentChar++;
-					break;
+					case L'\x3':
+						NewItem.Flags|=LIF_DISABLE;
+						CurrentChar++;
+						break;
 
-				case L'\x4':
-					NewItem.Flags|=LIF_GRAYED;
-					CurrentChar++;
-					break;
+					case L'\x4':
+						NewItem.Flags|=LIF_GRAYED;
+						CurrentChar++;
+						break;
 
-				default:
-				bContunue=false;
-				CurrentChar++;
-				break;
+					default:
+						bContunue=false;
+						CurrentChar++;
+						break;
+				}
 			}
-		}
-		NewItem.strName=CurrentChar;
+			NewItem.strName=CurrentChar;
 		}
 		else
 			NewItem.strName.Clear();
@@ -2654,7 +2665,7 @@ static bool menushowFunc(const TMacroFunction*)
 		{
 			Menu.SetFilterEnabled(true);
 			Menu.SetFilterString(VFindOrFilter.toString());
-			Menu.FilterStringUpdated(true);
+			Menu.FilterStringUpdated();
 			Menu.Show();
 		}
 		else
@@ -2675,6 +2686,9 @@ static bool menushowFunc(const TMacroFunction*)
 	Menu.Show();
 	int PrevSelectedPos=Menu.GetSelectPos();
 	DWORD Key=0;
+	int RealPos;
+	bool CheckFlag;
+	int X1, Y1, X2, Y2, NewY2;
 	while (!Menu.Done() && !CloseFARMenu)
 	{
 		SelectedPos=Menu.GetSelectPos();
@@ -2692,15 +2706,38 @@ static bool menushowFunc(const TMacroFunction*)
 
 			case KEY_CTRLADD:
 			case KEY_CTRLSUBTRACT:
+			case KEY_CTRLMULTIPLY:
 				if (bMultiSelect)
 				{
 					for(int i=0; i<Menu.GetShowItemCount(); i++)
 					{
-						Menu.SetCheck((Key==KEY_CTRLADD), Menu.VisualPosToReal(i));
+						RealPos=Menu.VisualPosToReal(i);
+						if (Key==KEY_CTRLMULTIPLY)
+						{
+							CheckFlag=Menu.GetCheck(RealPos)?false:true;
+						}
+						else
+						{
+							CheckFlag=(Key==KEY_CTRLADD);
+						}
+						Menu.SetCheck(CheckFlag, RealPos);
 					}
 					Menu.Show();
 				}
 				break;
+
+			case KEY_CTRLA:
+			{
+				Menu.GetPosition(X1, Y1, X2, Y2);
+				NewY2=Y1+Menu.GetShowItemCount()+1;
+
+				if (NewY2>ScrY-2)
+					NewY2=ScrY-2;
+
+				Menu.SetPosition(X1,Y1,X2,NewY2);
+				Menu.Show();
+				break;
+			}
 
 			case KEY_BREAK:
 				CtrlObject->Macro.SendDropProcess();
@@ -2764,12 +2801,18 @@ static bool menushowFunc(const TMacroFunction*)
 	else
 	{
 		Menu.Hide();
-		Result=0;
 		if (bExitAfterNavigate)
 		{
 			Result=SelectedPos+1;
 			if ((Key == KEY_ESC) || (Key == KEY_F10) || (Key == KEY_BREAK))
 				Result=-Result;
+		}
+		else
+		{
+			if(bResultAsIndex)
+				Result=0;
+			else
+				Result=L"";
 		}
 	}
 
@@ -4708,8 +4751,7 @@ done:
 	{
 		INPUT_RECORD rec;
 
-		//if (PeekInputRecord(&rec) && rec.EventType==KEY_EVENT && rec.Event.KeyEvent.wVirtualKeyCode == VK_CANCEL)
-		if (StopMacro)
+		if (StopMacro || (PeekInputRecord(&rec) && rec.EventType==KEY_EVENT && rec.Event.KeyEvent.wVirtualKeyCode == VK_CANCEL))
 		{
 			GetInputRecord(&rec,true);  // удаляем из очереди эту "клавишу"...
 			Work.KeyProcess=0;
@@ -5920,6 +5962,26 @@ int KeyMacro::ReadVarsConst(int ReadMode, string &strSData)
 
 void KeyMacro::SetMacroConst(const wchar_t *ConstName, const TVar& Value)
 {
+#ifdef _DEBUG
+	if (ConstName == constMsButton)
+	{
+		static int LastMsButton;
+		if ((LastMsButton & 1) && (Value.i() == 0))
+		{
+			// LButton was Down, now - Up
+			LastMsButton = (int)Value.i();
+		}
+		else if (!LastMsButton && (Value.i() & 1))
+		{
+			// LButton was Up, now - Down
+			LastMsButton = (int)Value.i();
+		}
+		else
+		{
+			LastMsButton = (int)Value.i();
+		}
+	}
+#endif
 	varLook(glbConstTable, ConstName,1)->value = Value;
 }
 

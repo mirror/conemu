@@ -57,6 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "message.hpp"
 #include "strmix.hpp"
 #include "history.hpp"
+#include "FarGuid.hpp"
 
 // debug
 #include "plugapi.hpp"
@@ -83,9 +84,6 @@ enum DLGEDITLINEFLAGS
 
 enum DLGITEMINTERNALFLAGS
 {
-	DLGIIF_LISTREACTIONFOCUS        = 0x00000001, // MouseReaction для фокусного элемента
-	DLGIIF_LISTREACTIONNOFOCUS      = 0x00000002, // MouseReaction для не фокусного элемента
-
 	DLGIIF_COMBOBOXNOREDRAWEDIT     = 0x00000008, // не прорисовывать строку редактирования при изменениях в комбо
 	DLGIIF_COMBOBOXEVENTKEY         = 0x00000010, // посылать события клавиатуры в диалоговую проц. для открытого комбобокса
 	DLGIIF_COMBOBOXEVENTMOUSE       = 0x00000020, // посылать события мыши в диалоговую проц. для открытого комбобокса
@@ -728,7 +726,6 @@ unsigned Dialog::InitDialogObjects(unsigned ID)
 				     DI_COMBOBOX выставляется флаг MENU_SHOWAMPERSAND. Этот флаг
 				     подавляет такое поведение
 				*/
-				CurItem->IFlags.Set(DLGIIF_LISTREACTIONFOCUS|DLGIIF_LISTREACTIONNOFOCUS); // всегда!
 				ListPtr->ChangeFlags(VMENU_DISABLED, ItemFlags&DIF_DISABLE);
 				ListPtr->ChangeFlags(VMENU_SHOWAMPERSAND, !(ItemFlags&DIF_LISTNOAMPERSAND));
 				ListPtr->ChangeFlags(VMENU_SHOWNOBOX, ItemFlags&DIF_LISTNOBOX);
@@ -2071,9 +2068,11 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 		switch (Key)
 		{
 			case KEY_CTRLLEFT:  case KEY_CTRLNUMPAD4:
+			case KEY_RCTRLLEFT: case KEY_RCTRLNUMPAD4:
 			case KEY_CTRLHOME:  case KEY_CTRLNUMPAD7:
+			case KEY_RCTRLHOME: case KEY_RCTRLNUMPAD7:
 			case KEY_HOME:      case KEY_NUMPAD7:
-				rr=Key == KEY_CTRLLEFT || Key == KEY_CTRLNUMPAD4?10:X1;
+				rr=(Key == KEY_CTRLLEFT || Key == KEY_CTRLNUMPAD4 || Key == KEY_RCTRLLEFT || Key == KEY_RCTRLNUMPAD4)?10:X1;
 			case KEY_LEFT:      case KEY_NUMPAD4:
 				Hide();
 
@@ -2088,10 +2087,12 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 				if (!DialogMode.Check(DMODE_ALTDRAGGED)) Show();
 
 				break;
-			case KEY_CTRLRIGHT: case KEY_CTRLNUMPAD6:
-			case KEY_CTRLEND:   case KEY_CTRLNUMPAD1:
+			case KEY_CTRLRIGHT:  case KEY_CTRLNUMPAD6:
+			case KEY_RCTRLRIGHT: case KEY_RCTRLNUMPAD6:
+			case KEY_CTRLEND:    case KEY_CTRLNUMPAD1:
+			case KEY_RCTRLEND:   case KEY_RCTRLNUMPAD1:
 			case KEY_END:       case KEY_NUMPAD1:
-				rr=Key == KEY_CTRLRIGHT || Key == KEY_CTRLNUMPAD6?10:Max(0,ScrX-X2);
+				rr=(Key == KEY_CTRLRIGHT || Key == KEY_CTRLNUMPAD6 || Key == KEY_RCTRLRIGHT || Key == KEY_RCTRLNUMPAD6)?10:Max(0,ScrX-X2);
 			case KEY_RIGHT:     case KEY_NUMPAD6:
 				Hide();
 
@@ -2125,9 +2126,11 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 
 				break;
 			case KEY_CTRLDOWN:  case KEY_CTRLNUMPAD2:
+			case KEY_RCTRLDOWN: case KEY_RCTRLNUMPAD2:
 			case KEY_CTRLPGDN:  case KEY_CTRLNUMPAD3:
+			case KEY_RCTRLPGDN: case KEY_RCTRLNUMPAD3:
 			case KEY_PGDN:      case KEY_NUMPAD3:
-				rr=Key == KEY_CTRLDOWN || Key == KEY_CTRLNUMPAD2? 5:Max(0,ScrY-Y2);
+				rr=(Key == KEY_CTRLDOWN || Key == KEY_CTRLNUMPAD2 || Key == KEY_RCTRLDOWN || Key == KEY_RCTRLNUMPAD2)? 5:Max(0,ScrY-Y2);
 			case KEY_DOWN:      case KEY_NUMPAD2:
 				Hide();
 
@@ -2954,7 +2957,7 @@ int Dialog::ProcessKey(int Key)
 						if (Item[FocusPos]->Flags & DIF_READONLY)
 							return TRUE;
 
-						if ((Key==KEY_CTRLEND || Key==KEY_CTRLNUMPAD1) && edt->GetCurPos()==edt->GetLength())
+						if ((Key==KEY_CTRLEND || Key==KEY_CTRLNUMPAD1 || Key==KEY_RCTRLEND || Key==KEY_RCTRLNUMPAD1) && edt->GetCurPos()==edt->GetLength())
 						{
 							if (edt->LastPartLength ==-1)
 								edt->strLastStr = edt->GetStringAddr();
@@ -3071,7 +3074,7 @@ int Dialog::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 					ShowDialog();
 				}
 
-				if (mouse.Event.MouseEvent.dwEventFlags!=DOUBLE_CLICK && !(Item[I]->IFlags.Flags&(DLGIIF_LISTREACTIONFOCUS|DLGIIF_LISTREACTIONNOFOCUS)))
+				if (mouse.Event.MouseEvent.dwEventFlags!=DOUBLE_CLICK && !(Item[I]->Flags&(DIF_LISTTRACKMOUSE|DIF_LISTTRACKMOUSEINFOCUS)))
 				{
 					List->ProcessMouse(&mouse.Event.MouseEvent);
 					int NewListPos=List->GetSelectPos();
@@ -3136,10 +3139,7 @@ int Dialog::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 			{
 				if (!mouse.Event.MouseEvent.dwButtonState || SendDlgMessage(this,DN_CONTROLINPUT,I,&mouse))
 				{
-					if ((I == FocusPos && (Item[I]->IFlags.Flags&DLGIIF_LISTREACTIONFOCUS))
-					        ||
-					        (I != FocusPos && (Item[I]->IFlags.Flags&DLGIIF_LISTREACTIONNOFOCUS))
-					   )
+					if ((I == FocusPos && (Item[I]->Flags&DIF_LISTTRACKMOUSEINFOCUS)) || (Item[I]->Flags&DIF_LISTTRACKMOUSE))
 					{
 						List->ProcessMouse(&mouse.Event.MouseEvent);
 						int NewListPos=List->GetSelectPos();
@@ -5022,7 +5022,6 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		case DM_LISTSETTITLES: // Param1=ID Param2=FarListTitles: TitleLen=strlen(Title), BottomLen=strlen(Bottom)
 		case DM_LISTGETTITLES: // Param1=ID Param2=FarListTitles: TitleLen=strlen(Title), BottomLen=strlen(Bottom)
 		case DM_LISTGETDATASIZE: // Param1=ID Param2=Index
-		case DM_LISTSETMOUSEREACTION: // Param1=ID Param2=FARLISTMOUSEREACTIONTYPE Ret=OldSets
 		case DM_SETCOMBOBOXEVENT: // Param1=ID Param2=FARCOMBOBOXEVENTTYPE Ret=OldSets
 		case DM_GETCOMBOBOXEVENT: // Param1=ID Param2=0 Ret=Sets
 		{
@@ -5210,35 +5209,6 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 									Ret=ListBox->SetSelectPos(CurListPos,1);
 
 							break; // т.к. нужно перерисовать!
-						}
-						case DM_LISTSETMOUSEREACTION: // Param1=ID Param2=FARLISTMOUSEREACTIONTYPE Ret=OldSets
-						{
-							int OldSets=CurItem->IFlags.Flags;
-							FARLISTMOUSEREACTIONTYPE Type = static_cast<FARLISTMOUSEREACTIONTYPE>(reinterpret_cast<INT_PTR>(Param2));
-							if (Type == LMRT_ONLYFOCUS)
-							{
-								CurItem->IFlags.Clear(DLGIIF_LISTREACTIONNOFOCUS);
-								CurItem->IFlags.Set(DLGIIF_LISTREACTIONFOCUS);
-							}
-							else if (Type == LMRT_NEVER)
-							{
-								CurItem->IFlags.Clear(DLGIIF_LISTREACTIONNOFOCUS|DLGIIF_LISTREACTIONFOCUS);
-								//ListBox->ClearFlags(VMENU_MOUSEREACTION);
-							}
-							else
-							{
-								CurItem->IFlags.Set(DLGIIF_LISTREACTIONNOFOCUS|DLGIIF_LISTREACTIONFOCUS);
-								//ListBox->SetFlags(VMENU_MOUSEREACTION);
-							}
-
-							if ((OldSets&(DLGIIF_LISTREACTIONNOFOCUS|DLGIIF_LISTREACTIONFOCUS)) == (DLGIIF_LISTREACTIONNOFOCUS|DLGIIF_LISTREACTIONFOCUS))
-								OldSets=LMRT_ALWAYS;
-							else if (!(OldSets&(DLGIIF_LISTREACTIONNOFOCUS|DLGIIF_LISTREACTIONFOCUS)))
-								OldSets=LMRT_NEVER;
-							else
-								OldSets=LMRT_ONLYFOCUS;
-
-							return OldSets;
 						}
 						case DM_GETCOMBOBOXEVENT: // Param1=ID Param2=0 Ret=Sets
 						{

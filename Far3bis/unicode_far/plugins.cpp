@@ -105,6 +105,17 @@ unsigned long CRC32(
 
 enum
 {
+	CRC32_GETGLOBALINFOW   = 0x633EC0C4,
+};
+
+DWORD ExportCRC32W[] =
+{
+	CRC32_GETGLOBALINFOW,
+};
+
+#ifndef NO_WRAPPER
+enum
+{
 	CRC32_SETSTARTUPINFO   = 0xF537107A,
 	CRC32_GETPLUGININFO    = 0xDB6424B4,
 	CRC32_OPENPLUGIN       = 0x601AEDE8,
@@ -113,11 +124,6 @@ enum
 	CRC32_SETFINDLIST      = 0x7A74A2E5,
 	CRC32_CONFIGURE        = 0x4DC1BC1A,
 	CRC32_GETMINFARVERSION = 0x2BBAD952,
-};
-
-enum
-{
-	CRC32_GETGLOBALINFOW   = 0x633EC0C4,
 };
 
 DWORD ExportCRC32[] =
@@ -131,17 +137,15 @@ DWORD ExportCRC32[] =
 	CRC32_CONFIGURE,
 	CRC32_GETMINFARVERSION
 };
-
-DWORD ExportCRC32W[] =
-{
-	CRC32_GETGLOBALINFOW,
-};
+#endif // NO_WRAPPER
 
 enum PluginType
 {
 	NOT_PLUGIN,
 	UNICODE_PLUGIN,
+#ifndef NO_WRAPPER
 	OEM_PLUGIN,
+#endif // NO_WRAPPER
 };
 
 PluginType IsModulePlugin2(
@@ -193,8 +197,9 @@ PluginType IsModulePlugin2(
 				int nDiff = pSection[i].VirtualAddress-pSection[i].PointerToRawData;
 				PIMAGE_EXPORT_DIRECTORY pExportDir = (PIMAGE_EXPORT_DIRECTORY)&hModule[dwExportAddr-nDiff];
 				DWORD* pNames = (DWORD *)&hModule[pExportDir->AddressOfNames-nDiff];
+#ifndef NO_WRAPPER
 				bool bOemExports=false;
-
+#endif // NO_WRAPPER
 				for (DWORD n = 0; n < pExportDir->NumberOfNames; n++)
 				{
 					const char *lpExportName = (const char *)&hModule[pNames[n]-nDiff];
@@ -205,14 +210,17 @@ PluginType IsModulePlugin2(
 						if (dwCRC32 == ExportCRC32W[j])
 							return UNICODE_PLUGIN;
 
+#ifndef NO_WRAPPER
 					if (!bOemExports && Opt.LoadPlug.OEMPluginsSupport)
 						for (size_t j = 0; j < ARRAYSIZE(ExportCRC32); j++)
 							if (dwCRC32 == ExportCRC32[j])
 								bOemExports=true;
+#endif // NO_WRAPPER
 				}
-
+#ifndef NO_WRAPPER
 				if (bOemExports)
 					return OEM_PLUGIN;
+#endif // NO_WRAPPER
 			}
 		}
 
@@ -309,7 +317,9 @@ AncientPlugin** PluginTree::query(const GUID& value)
 PluginManager::PluginManager():
 	PluginsData(nullptr),
 	PluginsCount(0),
+#ifndef NO_WRAPPER
 	OemPluginsCount(0),
+#endif // NO_WRAPPER
 	PluginsCache(nullptr),
 	CurPluginItem(nullptr),
 	CurEditor(nullptr),
@@ -367,10 +377,12 @@ bool PluginManager::AddPlugin(Plugin *pPlugin)
 	PluginsData = NewPluginsData;
 	PluginsData[PluginsCount]=pPlugin;
 	PluginsCount++;
+#ifndef NO_WRAPPER
 	if(pPlugin->IsOemPlugin())
 	{
 		OemPluginsCount++;
 	}
+#endif // NO_WRAPPER
 	return true;
 }
 
@@ -397,10 +409,12 @@ bool PluginManager::RemovePlugin(Plugin *pPlugin)
 	{
 		if (PluginsData[i] == pPlugin)
 		{
+#ifndef NO_WRAPPER
 			if(pPlugin->IsOemPlugin())
 			{
 				OemPluginsCount--;
 			}
+#endif // NO_WRAPPER
 			delete pPlugin;
 			memmove(&PluginsData[i], &PluginsData[i+1], (PluginsCount-i-1)*sizeof(Plugin*));
 			PluginsCount--;
@@ -423,7 +437,9 @@ bool PluginManager::LoadPlugin(
 	switch (IsModulePlugin(lpwszModuleName))
 	{
 		case UNICODE_PLUGIN: pPlugin = new Plugin(this, lpwszModuleName); break;
+#ifndef NO_WRAPPER
 		case OEM_PLUGIN: pPlugin = new PluginA(this, lpwszModuleName); break;
+#endif // NO_WRAPPER
 		default: return false;
 	}
 
@@ -1556,10 +1572,12 @@ int PluginManager::Configure(int StartPos)
 						MenuItemEx ListItem;
 						ListItem.Clear();
 
+#ifndef NO_WRAPPER
 						if (pPlugin->IsOemPlugin())
 							ListItem.Flags=LIF_CHECKED|L'A';
 						else if (pPlugin->IsFar2Plugin())
 							ListItem.Flags=LIF_CHECKED|L'2';
+#endif // NO_WRAPPER
 						if (!bNext)
 							ListItem.Flags|=MIF_SUBMENU;
 
@@ -1747,16 +1765,16 @@ int PluginManager::Configure(int StartPos)
 						}
 						break;
 
-					case KEY_CTRLHOME:
-					case KEY_CTRLSHIFTHOME:
-					case KEY_CTRLPGUP:
-					case KEY_CTRLSHIFTPGUP:
+					case KEY_CTRLHOME:       case KEY_RCTRLHOME:
+					case KEY_CTRLSHIFTHOME:  case KEY_RCTRLSHIFTHOME:
+					case KEY_CTRLPGUP:       case KEY_RCTRLPGUP:
+					case KEY_CTRLSHIFTPGUP:  case KEY_RCTRLSHIFTPGUP:
 						{
 							PluginList.Hide();
 							string strDirName=g_strFarPath+PluginsFolderName;
-							bool bChangeAnotherPanel=(Key==KEY_CTRLSHIFTPGUP || Key==KEY_CTRLSHIFTHOME);
+							bool bChangeAnotherPanel=(Key==KEY_CTRLSHIFTPGUP || Key==KEY_CTRLSHIFTHOME || Key==KEY_RCTRLSHIFTPGUP || Key==KEY_RCTRLSHIFTHOME);
 
-							if ((Key==KEY_CTRLPGUP || Key==KEY_CTRLSHIFTPGUP) && PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+							if ((Key==KEY_CTRLPGUP || Key==KEY_CTRLSHIFTPGUP || Key==KEY_RCTRLPGUP || Key==KEY_RCTRLSHIFTPGUP) && PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
 							{
 								strDirName=item->pPlugin->GetModuleName();
 								const wchar_t *NamePtr=PointToName(strDirName);
@@ -1926,12 +1944,12 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						GetPluginHotKey(pPlugin,guid,PluginsHotkeysConfig::PLUGINS_MENU,strHotKey);
 						MenuItemEx ListItem;
 						ListItem.Clear();
-
+#ifndef NO_WRAPPER
 						if (pPlugin->IsOemPlugin())
 							ListItem.Flags=LIF_CHECKED|L'A';
 						else if (pPlugin->IsFar2Plugin())
 							ListItem.Flags=LIF_CHECKED|L'2';
-
+#endif // NO_WRAPPER
 						if (!HotKeysPresent)
 							ListItem.strName = strName;
 						else if (!strHotKey.IsEmpty())
@@ -2088,11 +2106,12 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 	}
 
 	// restore title for old plugins only.
+#ifndef NO_WRAPPER
 	if (item.pPlugin->IsOemPlugin() && Editor && CurEditor)
 	{
 		CurEditor->SetPluginTitle(nullptr);
 	}
-
+#endif // NO_WRAPPER
 	CtrlObject->Macro.SetMode(PrevMacroMode);
 	return TRUE;
 }
@@ -2110,10 +2129,11 @@ void PluginManager::GetHotKeyPluginKey(Plugin *pPlugin, string &strPluginKey)
 	---------------------------------------------------------------------------------------
 	*/
 	strPluginKey = pPlugin->GetHotkeyName();
+#ifndef NO_WRAPPER
 	size_t FarPathLength=g_strFarPath.GetLength();
-
 	if (pPlugin->IsOemPlugin() && FarPathLength < pPlugin->GetModuleName().GetLength() && !StrCmpNI(pPlugin->GetModuleName(), g_strFarPath, (int)FarPathLength))
 		strPluginKey.LShift(FarPathLength);
+#endif // NO_WRAPPER
 }
 
 void PluginManager::GetPluginHotKey(Plugin *pPlugin, const GUID& Guid, PluginsHotkeysConfig::HotKeyTypeEnum HotKeyType, string &strHotKey)

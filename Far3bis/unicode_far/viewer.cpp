@@ -1238,6 +1238,7 @@ int Viewer::ProcessKey(int Key)
 		}
 		//   включить/выключить скролбар
 		case KEY_CTRLS:
+		case KEY_RCTRLS:
 		{
 			ViOpt.ShowScrollbar=!ViOpt.ShowScrollbar;
 			Opt.ViOpt.ShowScrollbar=ViOpt.ShowScrollbar;
@@ -1595,7 +1596,8 @@ int Viewer::ProcessKey(int Key)
 
 			return TRUE;
 		}
-		case KEY_CTRLLEFT: case KEY_CTRLNUMPAD4:
+		case KEY_CTRLLEFT:  case KEY_CTRLNUMPAD4:
+		case KEY_RCTRLLEFT: case KEY_RCTRLNUMPAD4:
 		{
 			if (ViewFile.Opened())
 			{
@@ -1613,7 +1615,8 @@ int Viewer::ProcessKey(int Key)
 
 			return TRUE;
 		}
-		case KEY_CTRLRIGHT: case KEY_CTRLNUMPAD6:
+		case KEY_CTRLRIGHT:  case KEY_CTRLNUMPAD6:
+		case KEY_RCTRLRIGHT: case KEY_RCTRLNUMPAD6:
 		{
 			if (ViewFile.Opened())
 			{
@@ -1635,7 +1638,8 @@ int Viewer::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLSHIFTLEFT:    case KEY_CTRLSHIFTNUMPAD4:
-
+		case KEY_RCTRLSHIFTLEFT:   case KEY_RCTRLSHIFTNUMPAD4:
+		{
 			// Перейти на начало строк
 			if (ViewFile.Opened())
 			{
@@ -1644,7 +1648,9 @@ int Viewer::ProcessKey(int Key)
 			}
 
 			return TRUE;
+		}
 		case KEY_CTRLSHIFTRIGHT:     case KEY_CTRLSHIFTNUMPAD6:
+		case KEY_RCTRLSHIFTRIGHT:    case KEY_RCTRLSHIFTNUMPAD6:
 		{
 			// Перейти на конец строк
 			if (ViewFile.Opened())
@@ -1670,6 +1676,7 @@ int Viewer::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLHOME:    case KEY_CTRLNUMPAD7:
+		case KEY_RCTRLHOME:   case KEY_RCTRLNUMPAD7:
 		case KEY_HOME:        case KEY_NUMPAD7:   case KEY_SHIFTNUMPAD7:
 
 			// Перейти на начало файла
@@ -1677,6 +1684,7 @@ int Viewer::ProcessKey(int Key)
 				LeftPos=0;
 
 		case KEY_CTRLPGUP:    case KEY_CTRLNUMPAD9:
+		case KEY_RCTRLPGUP:   case KEY_RCTRLNUMPAD9:
 			if (ViewFile.Opened())
 			{
 				FilePos=0;
@@ -1685,6 +1693,7 @@ int Viewer::ProcessKey(int Key)
 
 			return TRUE;
 		case KEY_CTRLEND:     case KEY_CTRLNUMPAD1:
+		case KEY_RCTRLEND:    case KEY_RCTRLNUMPAD1:
 		case KEY_END:         case KEY_NUMPAD1: case KEY_SHIFTNUMPAD1:
 
 			// Перейти на конец файла
@@ -1692,6 +1701,7 @@ int Viewer::ProcessKey(int Key)
 				LeftPos=0;
 
 		case KEY_CTRLPGDN:    case KEY_CTRLNUMPAD3:
+		case KEY_RCTRLPGDN:   case KEY_RCTRLNUMPAD3:
 
 			if (ViewFile.Opened())
 			{
