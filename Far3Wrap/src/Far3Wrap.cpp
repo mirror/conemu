@@ -331,11 +331,12 @@ struct WrapPluginInfo
 	static void PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FIND_DATA* p2);
 	static void PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPanelItem *p3);
 	Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber);
-	void FarKey_2_3(int Key2, INPUT_RECORD *r);
-	DWORD FarKey_3_2(const INPUT_RECORD *Rec);
+	static void FarKey_2_3(int Key2, INPUT_RECORD *r);
+	static int WINAPI FarKey_3_2(const INPUT_RECORD *Rec);
 	#if MVV_3>=2103
 	static size_t WINAPI FarKeyToName3(int Key2,wchar_t *KeyText,size_t Size);
 	static int WINAPI FarNameToKey3(const wchar_t *Name);
+	//static int WINAPI FarInputRecordToKey3(const INPUT_RECORD *rec);
 	#endif
 	static int FarColorIndex_2_3(int ColorIndex2);
 	static int FarColorIndex_3_2(int ColorIndex3);
@@ -1794,7 +1795,7 @@ void WrapPluginInfo::FarKey_2_3(int Key2, INPUT_RECORD *r)
 int WINAPI CalcKeyCode(const INPUT_RECORD *rec);
 #endif
 
-DWORD WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
+int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 {
 	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
 	DWORD Key2 = 0;
@@ -1803,6 +1804,25 @@ DWORD WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 
 	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
 	Key2 = CalcKeyCode(Rec);
+
+#ifdef _DEBUG
+	if (Key2 != Far2::KEY_NONE)
+	{
+		INPUT_RECORD rDbg = {};
+		FarKey_2_3(Key2, &rDbg);
+		int nCmp = memcmp(&rDbg, Rec, sizeof(rDbg)) != 0;
+		if (nCmp != 0)
+		{
+			static bool bFirstCall = false;
+			if (!bFirstCall)
+			{
+				bFirstCall = true;
+				_ASSERTE(nCmp == 0);
+			}
+		}
+	}
+#endif
+	
 
 #else
 #if 1
@@ -1907,7 +1927,7 @@ int WrapPluginInfo::FarNameToKey3(const wchar_t *Name)
 		return -1;
 	}
 
-	int Key2 = CalcKeyCode(&r);
+	int Key2 = FarKey_3_2(&r);
 #ifdef _DEBUG
 	wchar_t szBackName[128];
 	size_t nBackSize = FarKeyToName3(Key2, szBackName, ARRAYSIZE(szBackName));
@@ -1924,7 +1944,7 @@ int WrapPluginInfo::FarNameToKey3(const wchar_t *Name)
 #endif
 	return Key2;
 }
-#endif
+#endif // #if MVV_3>=2103
 
 int WrapPluginInfo::FarColorIndex_2_3(int ColorIndex2)
 {
@@ -5770,7 +5790,7 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 #if MVV_3>=2103
 	FSF2.FarKeyToName = WrapPluginInfo::FarKeyToName3;
 	FSF2.FarNameToKey = WrapPluginInfo::FarNameToKey3;
-	FSF2.FarInputRecordToKey = CalcKeyCode;
+	FSF2.FarInputRecordToKey = WrapPluginInfo::FarKey_3_2;
 #else
 	FSF2.FarKeyToName = FSF3.FarKeyToName;
 	FSF2.FarNameToKey = FSF3.FarNameToKey;
