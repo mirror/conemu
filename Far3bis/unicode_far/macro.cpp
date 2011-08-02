@@ -2705,20 +2705,23 @@ static bool menushowFunc(const TMacroFunction*)
 				break;
 
 			case KEY_CTRLADD:
+			case KEY_RCTRLADD:
 			case KEY_CTRLSUBTRACT:
+			case KEY_RCTRLSUBTRACT:
 			case KEY_CTRLMULTIPLY:
+			case KEY_RCTRLMULTIPLY:
 				if (bMultiSelect)
 				{
 					for(int i=0; i<Menu.GetShowItemCount(); i++)
 					{
 						RealPos=Menu.VisualPosToReal(i);
-						if (Key==KEY_CTRLMULTIPLY)
+						if (Key==KEY_CTRLMULTIPLY || Key==KEY_RCTRLMULTIPLY)
 						{
 							CheckFlag=Menu.GetCheck(RealPos)?false:true;
 						}
 						else
 						{
-							CheckFlag=(Key==KEY_CTRLADD);
+							CheckFlag=(Key==KEY_CTRLADD || Key==KEY_RCTRLADD);
 						}
 						Menu.SetCheck(CheckFlag, RealPos);
 					}
@@ -2727,6 +2730,7 @@ static bool menushowFunc(const TMacroFunction*)
 				break;
 
 			case KEY_CTRLA:
+			case KEY_RCTRLA:
 			{
 				Menu.GetPosition(X1, Y1, X2, Y2);
 				NewY2=Y1+Menu.GetShowItemCount()+1;
@@ -4791,6 +4795,7 @@ done:
 			goto begin;
 		}
 		case KEY_ALTINS:
+		case KEY_RALTINS:
 		{
 			if (RunGraber())
 				return KEY_NONE;
@@ -6526,7 +6531,7 @@ INT_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void*
 		// <Клавиши, которые не введешь в диалоге назначения>
 		DWORD PreDefKeyMain[]=
 		{
-			KEY_CTRLDOWN,KEY_ENTER,KEY_NUMENTER,KEY_ESC,KEY_F1,KEY_CTRLF5,
+			KEY_CTRLDOWN,KEY_RCTRLDOWN,KEY_ENTER,KEY_NUMENTER,KEY_ESC,KEY_F1,KEY_CTRLF5,KEY_RCTRLF5,
 		};
 
 		for (size_t i=0; i<ARRAYSIZE(PreDefKeyMain); i++)
@@ -6545,7 +6550,7 @@ INT_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void*
 		};
 		DWORD PreDefModKey[]=
 		{
-			0,KEY_CTRL,KEY_SHIFT,KEY_ALT,KEY_CTRLSHIFT,KEY_CTRLALT,KEY_ALTSHIFT,
+			0,KEY_CTRL,KEY_RCTRL,KEY_SHIFT,KEY_ALT,KEY_RALT,KEY_CTRLSHIFT,KEY_RCTRLSHIFT,KEY_CTRLALT,KEY_RCTRLRALT,KEY_ALTSHIFT,KEY_RALTSHIFT,
 		};
 
 		for (size_t i=0; i<ARRAYSIZE(PreDefKey); i++)
@@ -6605,7 +6610,7 @@ INT_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void*
 		// Esc & (Enter и предыдущий Enter) - не обрабатываем
 		if (key == KEY_ESC ||
 		        ((key == KEY_ENTER||key == KEY_NUMENTER) && (LastKey == KEY_ENTER||LastKey == KEY_NUMENTER)) ||
-		        key == KEY_CTRLDOWN ||
+		        key == KEY_CTRLDOWN || key == KEY_RCTRLDOWN ||
 		        key == KEY_F1)
 		{
 			return FALSE;

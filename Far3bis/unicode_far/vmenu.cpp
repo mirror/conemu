@@ -927,17 +927,17 @@ void VMenu::FilterUpdateHeight(bool bShrink)
 
 bool VMenu::IsFilterEditKey(int Key)
 {
-	return (Key>=(int)KEY_SPACE && Key<0xffff) || Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_CTRLDEL || Key==KEY_CTRLNUMDEL;
+	return (Key>=(int)KEY_SPACE && Key<0xffff) || Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_RCTRLBS || Key==KEY_CTRLDEL || Key==KEY_RCTRLDEL || Key==KEY_CTRLNUMDEL || Key==KEY_RCTRLNUMDEL;
 }
 
 bool VMenu::ShouldSendKeyToFilter(int Key)
 {
-	if (Key==KEY_CTRLALTF || Key==KEY_CTRLALTM)
+	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM)
 		return true;
 
 	if (bFilterEnabled)
 	{
-		if (Key==KEY_CTRLALTL || Key==KEY_CTRLALTM || Key==KEY_CTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0)
+		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM || Key==KEY_CTRLV || Key==KEY_RCTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0)
 			return true;
 
 		if (Key==KEY_MULTIPLY || Key==KEY_ADD || Key==KEY_SUBTRACT || Key==KEY_SUBTRACT || Key==KEY_DECIMAL || Key==KEY_DIVIDE)
@@ -1324,13 +1324,16 @@ void VMenu::ShortenFilterString(int Key)
 		switch (Key)
 		{
 			case KEY_CTRLDEL:
+			case KEY_RCTRLDEL:
 			case KEY_CTRLNUMDEL:
+			case KEY_RCTRLNUMDEL:
 				FilterString.Clear();
 				break;
 			case KEY_BS:
 				FilterString.SetLength(FilterString.GetLength()-1);
 				break;
 			case KEY_CTRLBS:
+			case KEY_RCTRLBS:
 				int CurPos=FilterString.GetLength()-1;
 				bool DoDel=TRUE;
 				if (!IsWordDiv(Opt.strWordDiv,FilterString.At(CurPos)) || IsSpace(FilterString.At(CurPos)))
@@ -1362,7 +1365,7 @@ bool VMenu::AddToFilter(const wchar_t *str)
 		{
 			if( IsFilterEditKey(Key) )
 			{
-				if ( Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_CTRLDEL || Key==KEY_CTRLNUMDEL)
+				if ( Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_RCTRLBS || Key==KEY_CTRLDEL || Key==KEY_RCTRLDEL || Key==KEY_CTRLNUMDEL || Key==KEY_RCTRLNUMDEL)
 					ShortenFilterString(Key);
 				else if (bFilterMaskMode)
 						strMaskFilter += Key;
@@ -1429,9 +1432,10 @@ int VMenu::ProcessKey(int Key)
 
 	if ((GetShowItemCount() == GetShowSeparatorCount()) && !bFilterMaskMode)
 	{
-		if ((Key!=KEY_F1 && Key!=KEY_SHIFTF1 && Key!=KEY_F10 && Key!=KEY_ESC && Key!=KEY_ALTF9))
+		if ((Key!=KEY_F1 && Key!=KEY_SHIFTF1 && Key!=KEY_F10 && Key!=KEY_ESC && Key!=KEY_ALTF9 && Key!=KEY_RALTF9))
 		{
-			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLBS && Key!=KEY_CTRLDEL && Key!=KEY_CTRLALTF && Key!=KEY_CTRLALTM))
+			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLBS && Key!=KEY_RCTRLBS && Key!=KEY_CTRLDEL && Key!=KEY_RCTRLDEL &&
+				Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF && Key!=KEY_CTRLALTM && Key!=KEY_RCTRLRALTM))
 			{
 				Modal::ExitCode = -1;
 				return FALSE;
@@ -1457,6 +1461,7 @@ int VMenu::ProcessKey(int Key)
 	switch (Key)
 	{
 		case KEY_ALTF9:
+		case KEY_RALTF9:
 			FrameManager->ProcessKey(KEY_ALTF9);
 			break;
 		case KEY_NUMENTER:
@@ -1531,10 +1536,12 @@ int VMenu::ProcessKey(int Key)
 			ShowMenu(true);
 			break;
 		}
-		case KEY_ALTHOME:           case KEY_NUMPAD7|KEY_ALT:
-		case KEY_ALTEND:            case KEY_NUMPAD1|KEY_ALT:
+		case KEY_ALTHOME:           case KEY_ALT|KEY_NUMPAD7:
+		case KEY_RALTHOME:          case KEY_RALT|KEY_NUMPAD7:
+		case KEY_ALTEND:            case KEY_ALT|KEY_NUMPAD1:
+		case KEY_RALTEND:           case KEY_RALT|KEY_NUMPAD1:
 		{
-			if (Key == KEY_ALTHOME || Key == (KEY_NUMPAD7|KEY_ALT))
+			if (Key == KEY_ALTHOME || Key == KEY_RALTHOME || Key == (KEY_ALT|KEY_NUMPAD7) || Key == (KEY_RALT|KEY_NUMPAD7))
 			{
 				for (int I=0; I < ItemCount; ++I)
 					Item[I]->ShowPos=0;
@@ -1558,13 +1565,15 @@ int VMenu::ProcessKey(int Key)
 			ShowMenu(true);
 			break;
 		}
-		case KEY_ALTLEFT:  case KEY_NUMPAD4|KEY_ALT: case KEY_MSWHEEL_LEFT:
-		case KEY_ALTRIGHT: case KEY_NUMPAD6|KEY_ALT: case KEY_MSWHEEL_RIGHT:
+		case KEY_ALTLEFT:   case KEY_ALT|KEY_NUMPAD4:  case KEY_MSWHEEL_LEFT:
+		case KEY_RALTLEFT:  case KEY_RALT|KEY_NUMPAD4:
+		case KEY_ALTRIGHT:  case KEY_ALT|KEY_NUMPAD6:  case KEY_MSWHEEL_RIGHT:
+		case KEY_RALTRIGHT: case KEY_RALT|KEY_NUMPAD6:
 		{
 			bool NeedRedraw=false;
 
 			for (int I=0; I < ItemCount; ++I)
-				if (ShiftItemShowPos(I,(Key == KEY_ALTLEFT || Key == (KEY_NUMPAD4|KEY_ALT) || Key == KEY_MSWHEEL_LEFT)?-1:1))
+				if (ShiftItemShowPos(I,(Key == KEY_ALTLEFT || Key == KEY_RALTLEFT || Key == (KEY_ALT|KEY_NUMPAD4) || Key == (KEY_RALT|KEY_NUMPAD4) || Key == KEY_MSWHEEL_LEFT)?-1:1))
 					NeedRedraw=true;
 
 			if (NeedRedraw)
@@ -1572,10 +1581,12 @@ int VMenu::ProcessKey(int Key)
 
 			break;
 		}
-		case KEY_ALTSHIFTLEFT:      case KEY_NUMPAD4|KEY_ALT|KEY_SHIFT:
-		case KEY_ALTSHIFTRIGHT:     case KEY_NUMPAD6|KEY_ALT|KEY_SHIFT:
+		case KEY_ALTSHIFTLEFT:      case KEY_ALT|KEY_SHIFT|KEY_NUMPAD4:
+		case KEY_RALTSHIFTLEFT:     case KEY_RALT|KEY_SHIFT|KEY_NUMPAD4:
+		case KEY_ALTSHIFTRIGHT:     case KEY_ALT|KEY_SHIFT|KEY_NUMPAD6:
+		case KEY_RALTSHIFTRIGHT:    case KEY_RALT|KEY_SHIFT|KEY_NUMPAD6:
 		{
-			if (ShiftItemShowPos(SelectPos,(Key == KEY_ALTSHIFTLEFT || Key == (KEY_NUMPAD4|KEY_ALT|KEY_SHIFT))?-1:1))
+			if (ShiftItemShowPos(SelectPos,(Key == KEY_ALTSHIFTLEFT || Key == KEY_RALTSHIFTLEFT || Key == (KEY_ALT|KEY_SHIFT|KEY_NUMPAD4) || Key == (KEY_RALT|KEY_SHIFT|KEY_NUMPAD4))?-1:1))
 				ShowMenu(true);
 
 			break;
@@ -1597,6 +1608,7 @@ int VMenu::ProcessKey(int Key)
 			break;
 		}
 		case KEY_CTRLALTF:
+		case KEY_RCTRLRALTF:
 		{
 			bFilterEnabled=!bFilterEnabled;
 			bFilterLocked=false;
@@ -1610,6 +1622,7 @@ int VMenu::ProcessKey(int Key)
 			break;
 		}
 		case KEY_CTRLV:
+		case KEY_RCTRLV:
 		case KEY_SHIFTINS:    case KEY_SHIFTNUMPAD0:
 		{
 			if (bFilterEnabled && !bFilterLocked)
@@ -1637,6 +1650,7 @@ int VMenu::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLALTL:
+		case KEY_RCTRLRALTL:
 		{
 			if (bFilterEnabled)
 			{
@@ -1646,6 +1660,7 @@ int VMenu::ProcessKey(int Key)
 			}
 		}
 		case KEY_CTRLALTM:
+		case KEY_RCTRLRALTM:
 		{
 			if (bFilterEnabled)
 			{
@@ -1661,7 +1676,7 @@ int VMenu::ProcessKey(int Key)
 		{
 			if (bFilterEnabled && !bFilterLocked && IsFilterEditKey(Key))
 			{
-				if (Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_CTRLDEL || Key==KEY_CTRLNUMDEL)
+				if (Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_RCTRLBS || Key==KEY_CTRLDEL || Key==KEY_RCTRLDEL || Key==KEY_CTRLNUMDEL || Key==KEY_RCTRLNUMDEL)
 				{
 #if 1 // from DAtaMan
 					ShortenFilterString(Key);
@@ -2781,22 +2796,42 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 	if (CheckFlags(VMENU_LISTBOX))
 		EndLoop = FALSE;
 
-	for (int I=0; I < ItemCount; I++)
+	// ≈сли нажата кнопка с правыми Ctrl или Alt по возможности обработать их как левые
+	bool RightAccel = (Key&(KEY_RCTRL|KEY_RALT))!=0 && (Key&(KEY_CTRL|KEY_ALT))==0;
+	for (int K=RightAccel?0:1; K <= 1; K++)
 	{
-		MenuItemEx *CurItem = Item[I];
-
-		if (ItemCanHaveFocus(CurItem->Flags) && ((!Type && CurItem->AccelKey && Key == CurItem->AccelKey) || (Type && IsKeyHighlighted(CurItem->strName,Key,Translate,CurItem->AmpPos))))
+		for (int I=0; I < ItemCount; I++)
 		{
-			SetSelectPos(I,1);
-			ShowMenu(true);
+			MenuItemEx *CurItem = Item[I];
 
-			if ((!ParentDialog  || CheckFlags(VMENU_COMBOBOX)) && ItemCanBeEntered(Item[SelectPos]->Flags))
+			if (ItemCanHaveFocus(CurItem->Flags) &&
+				((!Type && CurItem->AccelKey && Key == CurItem->AccelKey)
+				|| (Type && IsKeyHighlighted(CurItem->strName,Key,Translate,CurItem->AmpPos))))
 			{
-				Modal::ExitCode = I;
-				EndLoop = TRUE;
-			}
+				SetSelectPos(I,1);
+				ShowMenu(true);
 
-			break;
+				if ((!ParentDialog  || CheckFlags(VMENU_COMBOBOX)) && ItemCanBeEntered(Item[SelectPos]->Flags))
+				{
+					Modal::ExitCode = I;
+					EndLoop = TRUE;
+				}
+
+				break;
+			}
+		}
+		if (RightAccel)
+		{
+			if (Key & KEY_RCTRL)
+			{
+				Key &= ~KEY_RCTRL;
+				Key |= KEY_CTRL;
+			}
+			if (Key & KEY_RALT)
+			{
+				Key &= ~KEY_RALT;
+				Key |= KEY_ALT;
+			}
 		}
 	}
 

@@ -779,6 +779,7 @@ int FilePanels::ProcessKey(int Key)
 			break;
 		}
 		case KEY_CTRLCLEAR:
+		case KEY_RCTRLCLEAR:
 		{
 			if (Opt.WidthDecrement)
 			{
@@ -790,6 +791,7 @@ int FilePanels::ProcessKey(int Key)
 			break;
 		}
 		case KEY_CTRLALTCLEAR:
+		case KEY_RCTRLRALTCLEAR:
 		{
 			bool Set=false;
 			if (Opt.LeftHeightDecrement)
@@ -822,7 +824,7 @@ int FilePanels::ProcessKey(int Key)
 		}
 		default:
 		{
-			if (Key >= KEY_CTRL0 && Key <= KEY_CTRL9)
+			if (Key >= KEY_CTRL0 && Key <= KEY_CTRL9) // только левый
 				ChangePanelViewMode(ActivePanel,Key-KEY_CTRL0,TRUE);
 			else if (!ActivePanel->ProcessKey(Key))
 				CtrlObject->CmdLine->ProcessKey(Key);

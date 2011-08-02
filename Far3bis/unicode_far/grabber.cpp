@@ -281,15 +281,16 @@ int Grabber::ProcessKey(int Key)
 	}
 	else
 	{
-		if ((IntKeyState.ShiftPressed || Key!=KEY_SHIFT) && (Key&KEY_SHIFT) && Key!=KEY_NONE && Key!=KEY_CTRLA && !IntKeyState.AltPressed && ResetArea)
+		if ((IntKeyState.ShiftPressed || Key!=KEY_SHIFT) && (Key&KEY_SHIFT) && Key!=KEY_NONE && Key!=KEY_CTRLA && Key!=KEY_RCTRLA && !IntKeyState.AltPressed && ResetArea)
 			Reset();
-		else if (Key!=KEY_IDLE && Key!=KEY_NONE && Key!=KEY_SHIFT && Key!=KEY_CTRLA && !IntKeyState.ShiftPressed && !IntKeyState.AltPressed && !(Key&KEY_SHIFT))
+		else if (Key!=KEY_IDLE && Key!=KEY_NONE && Key!=KEY_SHIFT && Key!=KEY_CTRLA && Key!=KEY_RCTRLA && !IntKeyState.ShiftPressed && !IntKeyState.AltPressed && !(Key&KEY_SHIFT))
 			ResetArea=TRUE;
 	}
 
 	switch (Key)
 	{
 		case KEY_CTRLU:
+		case KEY_RCTRLU:
 			Reset();
 			GArea.X1=-2;
 			break;
@@ -299,8 +300,10 @@ int Grabber::ProcessKey(int Key)
 		case KEY_NUMENTER:
 		case KEY_ENTER:
 		case KEY_CTRLINS:   case KEY_CTRLNUMPAD0:
+		case KEY_RCTRLINS:  case KEY_RCTRLNUMPAD0:
 		case KEY_CTRLADD:
-			CopyGrabbedArea(Key == KEY_CTRLADD,VerticalBlock);
+		case KEY_RCTRLADD:
+			CopyGrabbedArea(Key == KEY_CTRLADD || Key == KEY_RCTRLADD,VerticalBlock);
 			SetExitCode(1);
 			break;
 		case KEY_LEFT:      case KEY_NUMPAD4:   case L'4':
@@ -356,7 +359,7 @@ int Grabber::ProcessKey(int Key)
 			if ((GArea.CurX-=10)<0)
 				GArea.CurX=0;
 
-			if (Key == KEY_CTRLSHIFTLEFT || Key == KEY_CTRLSHIFTNUMPAD4 || Key == KEY_RCTRLSHIFTLEFT || Key == KEY_RCTRLSHIFTNUMPAD4)
+			if (Key == KEY_CTRLSHIFTLEFT || Key == KEY_RCTRLSHIFTLEFT || Key == KEY_CTRLSHIFTNUMPAD4 || Key == KEY_RCTRLSHIFTNUMPAD4)
 				GArea.X1=GArea.CurX;
 
 			break;
@@ -368,7 +371,7 @@ int Grabber::ProcessKey(int Key)
 			if ((GArea.CurX+=10)>ScrX)
 				GArea.CurX=ScrX;
 
-			if (Key == KEY_CTRLSHIFTRIGHT || Key == KEY_CTRLSHIFTNUMPAD6 || Key == KEY_RCTRLSHIFTRIGHT || Key == KEY_RCTRLSHIFTNUMPAD6)
+			if (Key == KEY_CTRLSHIFTRIGHT || Key == KEY_RCTRLSHIFTRIGHT || Key == KEY_CTRLSHIFTNUMPAD6 || Key == KEY_RCTRLSHIFTNUMPAD6)
 				GArea.X1=GArea.CurX;
 
 			break;
@@ -380,7 +383,7 @@ int Grabber::ProcessKey(int Key)
 			if ((GArea.CurY-=5)<0)
 				GArea.CurY=0;
 
-			if (Key == KEY_CTRLSHIFTUP || Key == KEY_CTRLSHIFTNUMPAD8 || Key == KEY_RCTRLSHIFTUP || Key == KEY_RCTRLSHIFTNUMPAD8)
+			if (Key == KEY_CTRLSHIFTUP || Key == KEY_RCTRLSHIFTUP || Key == KEY_CTRLSHIFTNUMPAD8 || Key == KEY_RCTRLSHIFTNUMPAD8)
 				GArea.Y1=GArea.CurY;
 
 			break;
@@ -392,7 +395,7 @@ int Grabber::ProcessKey(int Key)
 			if ((GArea.CurY+=5)>ScrY)
 				GArea.CurY=ScrY;
 
-			if (Key == KEY_CTRLSHIFTDOWN || Key == KEY_CTRLSHIFTNUMPAD8 || Key == KEY_RCTRLSHIFTDOWN || Key == KEY_RCTRLSHIFTNUMPAD8)
+			if (Key == KEY_CTRLSHIFTDOWN || Key == KEY_RCTRLSHIFTDOWN || Key == KEY_CTRLSHIFTNUMPAD8 || Key == KEY_RCTRLSHIFTNUMPAD8)
 				GArea.Y1=GArea.CurY;
 
 			break;
@@ -442,36 +445,45 @@ int Grabber::ProcessKey(int Key)
 			break;
 
 		case KEY_ALTSHIFTHOME:  case KEY_ALTSHIFTNUMPAD7:
+		case KEY_RALTSHIFTHOME: case KEY_RALTSHIFTNUMPAD7:
 			GArea.X2=0;
 			break;
 		case KEY_ALTSHIFTEND:   case KEY_ALTSHIFTNUMPAD1:
+		case KEY_RALTSHIFTEND:  case KEY_RALTSHIFTNUMPAD1:
 			GArea.X2=ScrX;
 			break;
 		case KEY_ALTSHIFTPGUP:  case KEY_ALTSHIFTNUMPAD9:
+		case KEY_RALTSHIFTPGUP: case KEY_RALTSHIFTNUMPAD9:
 			GArea.Y2=0;
 			break;
 		case KEY_ALTSHIFTPGDN:  case KEY_ALTSHIFTNUMPAD3:
+		case KEY_RALTSHIFTPGDN: case KEY_RALTSHIFTNUMPAD3:
 			GArea.Y2=ScrY;
 			break;
 
 		case KEY_ALTSHIFTLEFT:  case KEY_ALTSHIFTNUMPAD4:
+		case KEY_RALTSHIFTLEFT: case KEY_RALTSHIFTNUMPAD4:
 			if (GArea.X2>0)
 				GArea.X2--;
 			break;
-		case KEY_ALTSHIFTRIGHT: case KEY_ALTSHIFTNUMPAD6:
+		case KEY_ALTSHIFTRIGHT:  case KEY_ALTSHIFTNUMPAD6:
+		case KEY_RALTSHIFTRIGHT: case KEY_RALTSHIFTNUMPAD6:
 			if (GArea.X2<ScrX)
 				GArea.X2++;
 			break;
 		case KEY_ALTSHIFTUP:    case KEY_ALTSHIFTNUMPAD8:
+		case KEY_RALTSHIFTUP:   case KEY_RALTSHIFTNUMPAD8:
 			if (GArea.Y2>0)
 				GArea.Y2--;
 			break;
 		case KEY_ALTSHIFTDOWN:  case KEY_ALTSHIFTNUMPAD2:
+		case KEY_RALTSHIFTDOWN: case KEY_RALTSHIFTNUMPAD2:
 			if (GArea.Y2<ScrY)
 				GArea.Y2++;
 			break;
 
 		case KEY_CTRLA:
+		case KEY_RCTRLA:
 			GArea.X1=GArea.CurX=ScrX;
 			GArea.X2=0;
 			GArea.Y1=GArea.CurY=ScrY;
@@ -479,6 +491,7 @@ int Grabber::ProcessKey(int Key)
 			break;
 
 		case KEY_ALTLEFT:
+		case KEY_RALTLEFT:
 			if ((GArea.X1>0) && (GArea.X2>0))
 			{
 				GArea.X1--;
@@ -488,6 +501,7 @@ int Grabber::ProcessKey(int Key)
 			}
 			break;
 		case KEY_ALTRIGHT:
+		case KEY_RALTRIGHT:
 			if ((GArea.X1<ScrX) && (GArea.X2<ScrX))
 			{
 				GArea.X1++;
@@ -497,6 +511,7 @@ int Grabber::ProcessKey(int Key)
 			}
 			break;
 		case KEY_ALTUP:
+		case KEY_RALTUP:
 			if ((GArea.Y1>0) && (GArea.Y2>0))
 			{
 				GArea.Y1--;
@@ -506,6 +521,7 @@ int Grabber::ProcessKey(int Key)
 			}
 			break;
 		case KEY_ALTDOWN:
+		case KEY_RALTDOWN:
 			if ((GArea.Y1<ScrY) && (GArea.Y2<ScrY))
 			{
 				GArea.Y1++;
@@ -516,18 +532,22 @@ int Grabber::ProcessKey(int Key)
 			break;
 
 		case KEY_ALTHOME:
+		case KEY_RALTHOME:
 			GArea.X1=GArea.CurX=abs(GArea.X1-GArea.X2);
 			GArea.X2=0;
 			break;
 		case KEY_ALTEND:
+		case KEY_RALTEND:
 			GArea.X2=ScrX-abs(GArea.X1-GArea.X2);
 			GArea.X1=GArea.CurX=ScrX;
 			break;
 		case KEY_ALTPGUP:
+		case KEY_RALTPGUP:
 			GArea.Y1=GArea.CurY=abs(GArea.Y1-GArea.Y2);
 			GArea.Y2=0;
 			break;
 		case KEY_ALTPGDN:
+		case KEY_RALTPGDN:
 			GArea.Y2=ScrY-abs(GArea.Y1-GArea.Y2);
 			GArea.Y1=GArea.CurY=ScrY;
 			break;

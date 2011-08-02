@@ -153,7 +153,7 @@ int CommandLine::ProcessKey(int Key)
 	const wchar_t *PStr;
 	string strStr;
 
-	if ((Key==KEY_CTRLEND || Key==KEY_CTRLNUMPAD1 || Key==KEY_RCTRLEND || Key==KEY_RCTRLNUMPAD1) && CmdStr.GetCurPos()==CmdStr.GetLength())
+	if ((Key==KEY_CTRLEND || Key==KEY_RCTRLEND || Key==KEY_CTRLNUMPAD1 || Key==KEY_RCTRLNUMPAD1) && CmdStr.GetCurPos()==CmdStr.GetLength())
 	{
 		if (LastCmdPartLength==-1)
 			strLastCmdStr = CmdStr.GetStringAddr();
@@ -385,7 +385,7 @@ int CommandLine::ProcessKey(int Key)
 			ProcessOSAliases(strStr);
 
 			if (!ActivePanel->ProcessPluginEvent(FE_COMMAND,(void *)strStr.CPtr()))
-				CmdExecute(strStr, false, Key==KEY_SHIFTENTER||Key==KEY_SHIFTNUMENTER, false, false, false, Key == KEY_CTRLALTENTER || Key == KEY_CTRLALTNUMENTER || Key == KEY_RCTRLRALTENTER || Key == KEY_RCTRLRALTNUMENTER);
+				CmdExecute(strStr, false, Key==KEY_SHIFTENTER||Key==KEY_SHIFTNUMENTER, false, false, false, Key == KEY_CTRLALTENTER || Key == KEY_RCTRLRALTENTER || Key == KEY_CTRLALTNUMENTER || Key == KEY_RCTRLRALTNUMENTER);
 		}
 		return TRUE;
 		case KEY_CTRLU:
@@ -410,11 +410,15 @@ int CommandLine::ProcessKey(int Key)
 		   ВНИМАНИЕ!
 		   Для сокращения кода этот кусок должен стоять перед "default"
 		*/
-		case KEY_ALTSHIFTLEFT:  case KEY_ALTSHIFTNUMPAD4:
-		case KEY_ALTSHIFTRIGHT: case KEY_ALTSHIFTNUMPAD6:
-		case KEY_ALTSHIFTEND:   case KEY_ALTSHIFTNUMPAD1:
-		case KEY_ALTSHIFTHOME:  case KEY_ALTSHIFTNUMPAD7:
-			Key&=~KEY_ALT;
+		case KEY_ALTSHIFTLEFT:   case KEY_ALTSHIFTNUMPAD4:
+		case KEY_RALTSHIFTLEFT:  case KEY_RALTSHIFTNUMPAD4:
+		case KEY_ALTSHIFTRIGHT:  case KEY_ALTSHIFTNUMPAD6:
+		case KEY_RALTSHIFTRIGHT: case KEY_RALTSHIFTNUMPAD6:
+		case KEY_ALTSHIFTEND:    case KEY_ALTSHIFTNUMPAD1:
+		case KEY_RALTSHIFTEND:   case KEY_RALTSHIFTNUMPAD1:
+		case KEY_ALTSHIFTHOME:   case KEY_ALTSHIFTNUMPAD7:
+		case KEY_RALTSHIFTHOME:  case KEY_RALTSHIFTNUMPAD7:
+			Key&=~(KEY_ALT|KEY_RALT);
 		default:
 
 			//   Сбрасываем выделение на некоторых клавишах
@@ -454,7 +458,7 @@ int CommandLine::ProcessKey(int Key)
 
 			LastCmdPartLength=-1;
 
-			if(Key == KEY_CTRLSHIFTEND || Key == KEY_CTRLSHIFTNUMPAD1 || Key == KEY_RCTRLSHIFTEND || Key == KEY_RCTRLSHIFTNUMPAD1)
+			if(Key == KEY_CTRLSHIFTEND || Key == KEY_RCTRLSHIFTEND || Key == KEY_CTRLSHIFTNUMPAD1 || Key == KEY_RCTRLSHIFTNUMPAD1)
 			{
 				CmdStr.EnableAC();
 				CmdStr.AutoComplete(true,false);

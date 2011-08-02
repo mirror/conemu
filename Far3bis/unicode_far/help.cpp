@@ -1205,20 +1205,22 @@ int Help::ProcessKey(int Key)
 		  + С альтом скролим по 1 */
 		case KEY_MSWHEEL_UP:
 		case(KEY_MSWHEEL_UP | KEY_ALT):
+		case(KEY_MSWHEEL_UP | KEY_RALT):
 		{
 			if (StackData.TopStr>0)
 			{
-				StackData.TopStr-=Key&KEY_ALT?1:Opt.MsWheelDeltaHelp;
+				StackData.TopStr-=Key&(KEY_ALT|KEY_RALT)?1:Opt.MsWheelDeltaHelp;
 				FastShow();
 			}
 			return TRUE;
 		}
 		case KEY_MSWHEEL_DOWN:
 		case(KEY_MSWHEEL_DOWN | KEY_ALT):
+		case(KEY_MSWHEEL_DOWN | KEY_RALT):
 		{
 			if (StackData.TopStr<StrCount-FixCount-(Y2-Y1-1-FixSize))
 			{
-				StackData.TopStr+=Key&KEY_ALT?1:Opt.MsWheelDeltaHelp;
+				StackData.TopStr+=Key&(KEY_ALT|KEY_RALT)?1:Opt.MsWheelDeltaHelp;
 				FastShow();
 			}
 			return TRUE;

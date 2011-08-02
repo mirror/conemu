@@ -198,6 +198,7 @@ int FolderTree::GetTypeAndName(string &strType, string &strName)
 
 int FolderTree::ProcessKey(int Key)
 {
+	_ASSERTE( (!(Key&(KEY_ALT|KEY_RALT))) || ((Key&(KEY_ALT|KEY_RALT)) && ((Key&0xFFFF)<=255)) );
 	if (Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+255) //BUGBUG: 65535?
 		Key=Lower(Key-KEY_ALT_BASE);
 	else if (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+255) //BUGBUG: 65535?
@@ -247,7 +248,7 @@ int FolderTree::ProcessKey(int Key)
 		{
 			string strName;
 			FindEdit->GetString(strName);
-			Tree->FindPartName(strName,TRUE,Key==KEY_CTRLSHIFTENTER||Key == KEY_CTRLSHIFTNUMENTER?-1:1,1);
+			Tree->FindPartName(strName,TRUE,Key==KEY_CTRLSHIFTENTER||Key==KEY_RCTRLSHIFTENTER||Key == KEY_CTRLSHIFTNUMENTER||Key == KEY_RCTRLSHIFTNUMENTER?-1:1,1);
 			DrawEdit();
 		}
 		break;

@@ -707,7 +707,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		CalcKey&=~0x80000000;
 
 		//???
-		if (!ExcludeMacro && CtrlObject && CtrlObject->Macro.IsRecording() && (CalcKey == (KEY_ALT|KEY_NUMPAD0) || CalcKey == (KEY_ALT|KEY_INS)))
+		if (!ExcludeMacro && CtrlObject && CtrlObject->Macro.IsRecording() &&
+			(CalcKey == (KEY_ALT|KEY_NUMPAD0) || CalcKey == (KEY_RALT|KEY_NUMPAD0) || CalcKey == (KEY_ALT|KEY_INS) || CalcKey == (KEY_RALT|KEY_INS)))
 		{
 			_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(%s)",__LINE__,_FARKEY_ToName(CalcKey)));
 			FrameManager->SetLastInputRecord(rec);
@@ -1395,8 +1396,10 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			   нельзя было использовать в макросах нечто вроде "ShiftMsWheelUp"
 			*/
 			CalcKey |= (CtrlState&SHIFT_PRESSED?KEY_SHIFT:0)|
-			           (CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
-			           (CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
+			           (CtrlState&LEFT_CTRL_PRESSED?KEY_CTRL:0)|
+			           (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
+			           (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
+			           (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
 			memset(rec,0,sizeof(*rec));
 			rec->Event.KeyEvent.wVirtualKeyCode=VK_F24+(CalcKey==KEY_MSWHEEL_UP?2:1);
 			rec->Event.KeyEvent.dwControlKeyState=CtrlState;
@@ -1410,8 +1413,10 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			short zDelta = HIWORD(rec->Event.MouseEvent.dwButtonState);
 			CalcKey = (zDelta>0)?KEY_MSWHEEL_RIGHT:KEY_MSWHEEL_LEFT;
 			CalcKey |= (CtrlState&SHIFT_PRESSED?KEY_SHIFT:0)|
-			           (CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
-			           (CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
+			           (CtrlState&LEFT_CTRL_PRESSED?KEY_CTRL:0)|
+			           (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
+			           (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
+			           (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
 			memset(rec,0,sizeof(*rec));
 			rec->Event.KeyEvent.wVirtualKeyCode=VK_F24+(CalcKey==KEY_MSWHEEL_RIGHT?4:3);
 			rec->Event.KeyEvent.dwControlKeyState=CtrlState;
@@ -1455,8 +1460,10 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 				if (MsCalcKey)
 				{
 					MsCalcKey |= (CtrlState&SHIFT_PRESSED?KEY_SHIFT:0)|
-					             (CtrlState&(LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)?KEY_CTRL:0)|
-					             (CtrlState&(LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED)?KEY_ALT:0);
+					             (CtrlState&LEFT_CTRL_PRESSED?KEY_CTRL:0)|
+					             (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
+					             (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
+					             (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
 
 					// для WaitKey()
 					if (ProcessMouse)
@@ -1924,7 +1931,7 @@ BOOL WINAPI KeyToText(int Key0, string &strKeyText0)
 
 					if (FKey >= L'A' && FKey <= L'Z')
 					{
-						if (Key&(KEY_RCTRL|KEY_CTRL|KEY_ALT)) // ??? а если есть другие модификаторы ???
+						if (Key&(KEY_RCTRL|KEY_CTRL|KEY_RALT|KEY_ALT)) // ??? а если есть другие модификаторы ???
 							KeyText[0]=(wchar_t)FKey; // для клавиш с модификаторами подставляем "латиницу" в верхнем регистре
 						else
 							KeyText[0]=(wchar_t)(Key&0xFFFF);
@@ -1990,11 +1997,11 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 			VirtKey=VkKeyScan(static_cast<WCHAR>(FKey));
 			if (HIBYTE(VirtKey))
 			{
-				VirtKey&=0xFF;
 				FShift|=
 					    (HIBYTE(VirtKey)&1?KEY_SHIFT:0)|
 					    (HIBYTE(VirtKey)&2?KEY_CTRL:0)|
 					    (HIBYTE(VirtKey)&4?KEY_ALT:0);
+				VirtKey&=0xFF;
 			  	ControlState=(FShift&KEY_SHIFT?PKF_SHIFT:0)|
   	        		     (FShift&KEY_ALT?PKF_ALT:0)|
 		 	             (FShift&KEY_RALT?PKF_RALT:0)|
@@ -2053,7 +2060,8 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 				{
 					Rec->Event.KeyEvent.bKeyDown=1;
 					Rec->Event.KeyEvent.wRepeatCount=1;
-					Rec->Event.KeyEvent.wVirtualKeyCode=VirtKey;
+					// При нажатии RCtrl и RAlt в консоль приходит VK_CONTROL и VK_MENU а не их правые аналоги
+					Rec->Event.KeyEvent.wVirtualKeyCode=(VirtKey==VK_RCONTROL)?VK_CONTROL:(VirtKey==VK_RMENU)?VK_MENU:VirtKey;
 					Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
 					Rec->Event.KeyEvent.uChar.UnicodeChar=FKey > WCHAR_MAX?0:FKey;
 
@@ -2147,8 +2155,10 @@ int IsNavKey(DWORD Key)
 	static DWORD NavKeys[][2]=
 	{
 		{0,KEY_CTRLC},
+		{0,KEY_RCTRLC},
 		{0,KEY_INS},      {0,KEY_NUMPAD0},
 		{0,KEY_CTRLINS},  {0,KEY_CTRLNUMPAD0},
+		{0,KEY_RCTRLINS}, {0,KEY_RCTRLNUMPAD0},
 
 		{1,KEY_LEFT},     {1,KEY_NUMPAD4},
 		{1,KEY_RIGHT},    {1,KEY_NUMPAD6},
@@ -2182,35 +2192,65 @@ int IsShiftKey(DWORD Key)
 		KEY_SHIFTPGUP,          KEY_SHIFTNUMPAD9,
 		KEY_SHIFTPGDN,          KEY_SHIFTNUMPAD3,
 		KEY_CTRLSHIFTHOME,      KEY_CTRLSHIFTNUMPAD7,
+		KEY_RCTRLSHIFTHOME,     KEY_RCTRLSHIFTNUMPAD7,
 		KEY_CTRLSHIFTPGUP,      KEY_CTRLSHIFTNUMPAD9,
+		KEY_RCTRLSHIFTPGUP,     KEY_RCTRLSHIFTNUMPAD9,
 		KEY_CTRLSHIFTEND,       KEY_CTRLSHIFTNUMPAD1,
+		KEY_RCTRLSHIFTEND,      KEY_RCTRLSHIFTNUMPAD1,
 		KEY_CTRLSHIFTPGDN,      KEY_CTRLSHIFTNUMPAD3,
+		KEY_RCTRLSHIFTPGDN,     KEY_RCTRLSHIFTNUMPAD3,
 		KEY_CTRLSHIFTLEFT,      KEY_CTRLSHIFTNUMPAD4,
+		KEY_RCTRLSHIFTLEFT,     KEY_RCTRLSHIFTNUMPAD4,
 		KEY_CTRLSHIFTRIGHT,     KEY_CTRLSHIFTNUMPAD6,
+		KEY_RCTRLSHIFTRIGHT,    KEY_RCTRLSHIFTNUMPAD6,
 		KEY_ALTSHIFTDOWN,       KEY_ALTSHIFTNUMPAD2,
+		KEY_RALTSHIFTDOWN,      KEY_RALTSHIFTNUMPAD2,
 		KEY_ALTSHIFTLEFT,       KEY_ALTSHIFTNUMPAD4,
+		KEY_RALTSHIFTLEFT,      KEY_RALTSHIFTNUMPAD4,
 		KEY_ALTSHIFTRIGHT,      KEY_ALTSHIFTNUMPAD6,
+		KEY_RALTSHIFTRIGHT,     KEY_RALTSHIFTNUMPAD6,
 		KEY_ALTSHIFTUP,         KEY_ALTSHIFTNUMPAD8,
+		KEY_RALTSHIFTUP,        KEY_RALTSHIFTNUMPAD8,
 		KEY_ALTSHIFTEND,        KEY_ALTSHIFTNUMPAD1,
+		KEY_RALTSHIFTEND,       KEY_RALTSHIFTNUMPAD1,
 		KEY_ALTSHIFTHOME,       KEY_ALTSHIFTNUMPAD7,
+		KEY_RALTSHIFTHOME,      KEY_RALTSHIFTNUMPAD7,
 		KEY_ALTSHIFTPGDN,       KEY_ALTSHIFTNUMPAD3,
+		KEY_RALTSHIFTPGDN,      KEY_RALTSHIFTNUMPAD3,
 		KEY_ALTSHIFTPGUP,       KEY_ALTSHIFTNUMPAD9,
+		KEY_RALTSHIFTPGUP,      KEY_RALTSHIFTNUMPAD9,
 		KEY_CTRLALTPGUP,        KEY_CTRLALTNUMPAD9,
+		KEY_RCTRLRALTPGUP,      KEY_RCTRLRALTNUMPAD9,
 		KEY_CTRLALTHOME,        KEY_CTRLALTNUMPAD7,
+		KEY_RCTRLRALTHOME,      KEY_RCTRLRALTNUMPAD7,
 		KEY_CTRLALTPGDN,        KEY_CTRLALTNUMPAD2,
+		KEY_RCTRLRALTPGDN,      KEY_RCTRLRALTNUMPAD2,
 		KEY_CTRLALTEND,         KEY_CTRLALTNUMPAD1,
+		KEY_RCTRLRALTEND,       KEY_RCTRLRALTNUMPAD1,
 		KEY_CTRLALTLEFT,        KEY_CTRLALTNUMPAD4,
+		KEY_RCTRLRALTLEFT,      KEY_RCTRLRALTNUMPAD4,
 		KEY_CTRLALTRIGHT,       KEY_CTRLALTNUMPAD6,
+		KEY_RCTRLRALTRIGHT,     KEY_RCTRLRALTNUMPAD6,
 		KEY_ALTUP,
+		KEY_RALTUP,
 		KEY_ALTLEFT,
+		KEY_RALTLEFT,
 		KEY_ALTDOWN,
+		KEY_RALTDOWN,
 		KEY_ALTRIGHT,
+		KEY_RALTRIGHT,
 		KEY_ALTHOME,
+		KEY_RALTHOME,
 		KEY_ALTEND,
+		KEY_RALTEND,
 		KEY_ALTPGUP,
+		KEY_RALTPGUP,
 		KEY_ALTPGDN,
+		KEY_RALTPGDN,
 		KEY_ALT,
+		KEY_RALT,
 		KEY_CTRL,
+		KEY_RCTRL,
 	};
 
 	for (int I=0; I<int(ARRAYSIZE(ShiftKeys)); I++)
@@ -3164,7 +3204,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			if (ProcessCtrlCode)
 			{
 				if (KeyCode == VK_CONTROL)
-					return KEY_CTRL;
+					return (IntKeyState.CtrlPressed && !IntKeyState.RightCtrlPressed)?KEY_CTRL:(IntKeyState.RightCtrlPressed?KEY_RCTRL:KEY_CTRL);
 				else if (KeyCode == VK_RCONTROL)
 					return KEY_RCTRL;
 			}

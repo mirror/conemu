@@ -88,11 +88,11 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 			VirtKey=VkKeyScan(static_cast<WCHAR>(FKey));
 			if (HIBYTE(VirtKey))
 			{
-				VirtKey&=0xFF;
 				FShift|=
 					    (HIBYTE(VirtKey)&1?KEY_SHIFT:0)|
 					    (HIBYTE(VirtKey)&2?KEY_CTRL:0)|
 					    (HIBYTE(VirtKey)&4?KEY_ALT:0);
+				VirtKey&=0xFF;
 			  	ControlState=(FShift&KEY_SHIFT?PKF_SHIFT:0)|
   	        		     (FShift&KEY_ALT?PKF_ALT:0)|
 		 	             (FShift&KEY_RALT?PKF_RALT:0)|
@@ -151,7 +151,7 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 				{
 					Rec->Event.KeyEvent.bKeyDown=1;
 					Rec->Event.KeyEvent.wRepeatCount=1;
-					Rec->Event.KeyEvent.wVirtualKeyCode=VirtKey;
+					Rec->Event.KeyEvent.wVirtualKeyCode=(VirtKey==VK_RCONTROL)?VK_CONTROL:(VirtKey==VK_RMENU)?VK_MENU:VirtKey;
 					Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
 					Rec->Event.KeyEvent.uChar.UnicodeChar=(WORD)(FKey > WCHAR_MAX?0:FKey);
 

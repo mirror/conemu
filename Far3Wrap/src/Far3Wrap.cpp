@@ -344,6 +344,7 @@ struct WrapPluginInfo
 	static int DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3);
 	static void FarColor_2_3(BYTE Color2, FarColor& Color3);
 	static BYTE FarColor_3_2(const FarColor& Color3);
+	static BYTE RefColorToIndex(COLORREF Color);
 	static DWORD FarDialogItemFlags_3_2(FARDIALOGITEMFLAGS Flags3);
 	static FARDIALOGITEMFLAGS FarDialogItemFlags_2_3(DWORD Flags2);
 	void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3);
@@ -1816,17 +1817,18 @@ int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 		int nCmp = 0; //memcmp(&rDbg, Rec, sizeof(rDbg)) != 0;
 		if (r.EventType == KEY_EVENT)
 		{
+			#define CTRLMASK (RIGHT_ALT_PRESSED|LEFT_ALT_PRESSED|RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED|SHIFT_PRESSED)
 			nCmp = (r.Event.KeyEvent.bKeyDown != rDbg.Event.KeyEvent.bKeyDown)
 				|| (r.Event.KeyEvent.wVirtualKeyCode != rDbg.Event.KeyEvent.wVirtualKeyCode)
 				|| (r.Event.KeyEvent.wVirtualScanCode != rDbg.Event.KeyEvent.wVirtualScanCode)
-				|| (r.Event.KeyEvent.uChar.UnicodeChar != rDbg.Event.KeyEvent.uChar.UnicodeChar)
-				|| (r.Event.KeyEvent.dwControlKeyState != rDbg.Event.KeyEvent.dwControlKeyState)
+				|| (r.Event.KeyEvent.uChar.UnicodeChar != rDbg.Event.KeyEvent.uChar.UnicodeChar && !(r.Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED))
+				|| ((r.Event.KeyEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK))
 				;
 		}
 		else if (r.EventType == MOUSE_EVENT)
 		{
 			nCmp = (r.Event.MouseEvent.dwButtonState != rDbg.Event.MouseEvent.dwButtonState)
-				|| (r.Event.MouseEvent.dwControlKeyState != rDbg.Event.MouseEvent.dwControlKeyState)
+				|| ((r.Event.MouseEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.MouseEvent.dwControlKeyState&CTRLMASK))
 				|| (r.Event.MouseEvent.dwEventFlags != rDbg.Event.MouseEvent.dwEventFlags)
 				;
 		}
@@ -2384,17 +2386,69 @@ void WrapPluginInfo::FarColor_2_3(BYTE Color2, FarColor& Color3)
 	Color3.BackgroundColor = (Color2 & 0xF0) >> 4;
 }
 
+BYTE WrapPluginInfo::RefColorToIndex(COLORREF Color)
+{
+	COLORREF crDefConPalette[16] = 
+	{
+		0x00000000, 0x00800000, 0x00008000, 0x00808000, 0x00000080, 0x00800080, 0x00008080, 0x00c0c0c0,
+		0x00808080, 0x00ff0000, 0x0000ff00, 0x00ffff00, 0x000000ff, 0x00ff00ff, 0x0000ffff, 0x00ffffff
+	};
+
+	for (int i = 0; i < ARRAYSIZE(crDefConPalette); i++)
+	{
+		if (crDefConPalette[i] == Color)
+		{
+			return i;
+		}
+	}
+
+	// Если по палитре не нашли - прикинем примерно
+	int B = (Color & 0xFF0000) >> 16;
+	int G = (Color & 0xFF00) >> 8;
+	int R = (Color & 0xFF);
+	int nMax = max(B,max(R,G));
+	
+	BYTE Pal =
+		(((B+32) > nMax) ? 1 : 0) |
+		(((G+32) > nMax) ? 2 : 0) |
+		(((R+32) > nMax) ? 4 : 0);
+
+	return Pal;
+}
+
 BYTE WrapPluginInfo::FarColor_3_2(const FarColor& Color3)
 {
 	BYTE Color2 = 0;
-	if ((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT))
+
+	if (Color3.Flags & FCF_FG_4BIT)
 	{
-		Color2 = (Color3.ForegroundColor & 0xF) | ((Color3.BackgroundColor & 0xF) << 4);
+		Color2 |= (Color3.ForegroundColor & 0xF);
 	}
 	else
 	{
-		_ASSERTE((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) || Color3.Flags == 0);
+		// Нужно подобрать индекс!
+		Color2 |= RefColorToIndex(Color3.ForegroundColor);
 	}
+
+	if (Color3.Flags & FCF_BG_4BIT)
+	{
+		Color2 |= ((Color3.BackgroundColor & 0xF) << 4);
+	}
+	else
+	{
+		// Нужно подобрать индекс!
+		Color2 |= RefColorToIndex(Color3.BackgroundColor);
+	}
+
+	//if ((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT))
+	//{
+	//	Color2 = (Color3.ForegroundColor & 0xF) | ((Color3.BackgroundColor & 0xF) << 4);
+	//}
+	//else
+	//{
+	//	_ASSERTE((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) || Color3.Flags == 0);
+	//}
+
 	return Color2;
 }
 

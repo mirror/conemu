@@ -141,9 +141,9 @@ bool IsKeyHighlighted(const wchar_t *Str,int Key,int Translate,int AmpPos)
 		return UpperStrKey == (int)Upper(Key) || (Translate && KeyToKeyLayoutCompare(Key,UpperStrKey));
 	}
 
-	if (Key&KEY_ALT)
+	if (Key&(KEY_ALT|KEY_RALT))
 	{
-		int AltKey=Key&(~KEY_ALT);
+		int AltKey=Key&(~(KEY_ALT|KEY_RALT));
 
 		if (AltKey < 0xFFFF)
 		{
@@ -2072,7 +2072,7 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 			case KEY_CTRLHOME:  case KEY_CTRLNUMPAD7:
 			case KEY_RCTRLHOME: case KEY_RCTRLNUMPAD7:
 			case KEY_HOME:      case KEY_NUMPAD7:
-				rr=(Key == KEY_CTRLLEFT || Key == KEY_CTRLNUMPAD4 || Key == KEY_RCTRLLEFT || Key == KEY_RCTRLNUMPAD4)?10:X1;
+				rr=(Key == KEY_CTRLLEFT || Key == KEY_RCTRLLEFT || Key == KEY_CTRLNUMPAD4 || Key == KEY_RCTRLNUMPAD4)?10:X1;
 			case KEY_LEFT:      case KEY_NUMPAD4:
 				Hide();
 
@@ -2092,7 +2092,7 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 			case KEY_CTRLEND:    case KEY_CTRLNUMPAD1:
 			case KEY_RCTRLEND:   case KEY_RCTRLNUMPAD1:
 			case KEY_END:       case KEY_NUMPAD1:
-				rr=(Key == KEY_CTRLRIGHT || Key == KEY_CTRLNUMPAD6 || Key == KEY_RCTRLRIGHT || Key == KEY_RCTRLNUMPAD6)?10:Max(0,ScrX-X2);
+				rr=(Key == KEY_CTRLRIGHT || Key == KEY_RCTRLRIGHT || Key == KEY_CTRLNUMPAD6 || Key == KEY_RCTRLNUMPAD6)?10:Max(0,ScrX-X2);
 			case KEY_RIGHT:     case KEY_NUMPAD6:
 				Hide();
 
@@ -2109,8 +2109,10 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 				break;
 			case KEY_PGUP:      case KEY_NUMPAD9:
 			case KEY_CTRLPGUP:  case KEY_CTRLNUMPAD9:
+			case KEY_RCTRLPGUP: case KEY_RCTRLNUMPAD9:
 			case KEY_CTRLUP:    case KEY_CTRLNUMPAD8:
-				rr=Key == KEY_CTRLUP || Key == KEY_CTRLNUMPAD8?5:Y1;
+			case KEY_RCTRLUP:   case KEY_RCTRLNUMPAD8:
+				rr=(Key == KEY_CTRLUP || Key == KEY_RCTRLUP || Key == KEY_CTRLNUMPAD8 || Key == KEY_RCTRLNUMPAD8)?5:Y1;
 			case KEY_UP:        case KEY_NUMPAD8:
 				Hide();
 
@@ -2130,7 +2132,7 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 			case KEY_CTRLPGDN:  case KEY_CTRLNUMPAD3:
 			case KEY_RCTRLPGDN: case KEY_RCTRLNUMPAD3:
 			case KEY_PGDN:      case KEY_NUMPAD3:
-				rr=(Key == KEY_CTRLDOWN || Key == KEY_CTRLNUMPAD2 || Key == KEY_RCTRLDOWN || Key == KEY_RCTRLNUMPAD2)? 5:Max(0,ScrY-Y2);
+				rr=(Key == KEY_CTRLDOWN || Key == KEY_RCTRLDOWN || Key == KEY_CTRLNUMPAD2 || Key == KEY_RCTRLNUMPAD2)? 5:Max(0,ScrY-Y2);
 			case KEY_DOWN:      case KEY_NUMPAD2:
 				Hide();
 
@@ -2148,6 +2150,7 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 			case KEY_NUMENTER:
 			case KEY_ENTER:
 			case KEY_CTRLF5:
+			case KEY_RCTRLF5:
 				DialogMode.Clear(DMODE_DRAGGED); // закончим движение!
 
 				if (!DialogMode.Check(DMODE_ALTDRAGGED))
@@ -2185,7 +2188,7 @@ int Dialog::ProcessMoveDialog(DWORD Key)
 		return (TRUE);
 	}
 
-	if (Key == KEY_CTRLF5 && DialogMode.Check(DMODE_ISCANMOVE))
+	if ((Key == KEY_CTRLF5 || Key == KEY_RCTRLF5) && DialogMode.Check(DMODE_ISCANMOVE))
 	{
 		if (DlgProc(this,DN_DRAGGED,0,0)) // если разрешили перемещать!
 		{
@@ -2492,7 +2495,9 @@ int Dialog::ProcessKey(int Key)
 		case KEY_SPACE:
 			return Do_ProcessSpace();
 		case KEY_CTRLNUMENTER:
+		case KEY_RCTRLNUMENTER:
 		case KEY_CTRLENTER:
+		case KEY_RCTRLENTER:
 		{
 			for (I=0; I<ItemCount; I++)
 				if (Item[I]->Flags&DIF_DEFAULTBUTTON)
@@ -2697,7 +2702,9 @@ int Dialog::ProcessKey(int Key)
 		case KEY_MSWHEEL_UP:
 		case KEY_MSWHEEL_DOWN:
 		case KEY_CTRLUP:      case KEY_CTRLNUMPAD8:
+		case KEY_RCTRLUP:     case KEY_RCTRLNUMPAD8:
 		case KEY_CTRLDOWN:    case KEY_CTRLNUMPAD2:
+		case KEY_RCTRLDOWN:   case KEY_RCTRLNUMPAD2:
 			return ProcessOpenComboBox(Item[FocusPos]->Type,Item[FocusPos],FocusPos);
 			// ЭТО перед default предпоследний!!!
 		case KEY_END:  case KEY_NUMPAD1:
@@ -2772,11 +2779,11 @@ int Dialog::ProcessKey(int Key)
 			{
 				DlgEdit *edt=(DlgEdit *)Item[FocusPos]->ObjPtr;
 
-				if (Key == KEY_CTRLL) // исключим смену режима RO для поля ввода с клавиатуры
+				if (Key == KEY_CTRLL || Key == KEY_RCTRLL) // исключим смену режима RO для поля ввода с клавиатуры
 				{
 					return TRUE;
 				}
-				else if (Key == KEY_CTRLU)
+				else if (Key == KEY_CTRLU || Key == KEY_RCTRLU)
 				{
 					edt->SetClearFlag(0);
 					edt->Select(-1,0);
@@ -2838,6 +2845,7 @@ int Dialog::ProcessKey(int Key)
 							return TRUE;
 						}
 						case KEY_CTRLY:
+						case KEY_RCTRLY:
 						{
 							for (I=FocusPos; I<ItemCount; I++)
 								if (Item[I]->Flags & DIF_EDITOR)
@@ -2957,7 +2965,7 @@ int Dialog::ProcessKey(int Key)
 						if (Item[FocusPos]->Flags & DIF_READONLY)
 							return TRUE;
 
-						if ((Key==KEY_CTRLEND || Key==KEY_CTRLNUMPAD1 || Key==KEY_RCTRLEND || Key==KEY_RCTRLNUMPAD1) && edt->GetCurPos()==edt->GetLength())
+						if ((Key==KEY_CTRLEND || Key==KEY_RCTRLEND || Key==KEY_CTRLNUMPAD1 || Key==KEY_RCTRLNUMPAD1) && edt->GetCurPos()==edt->GetLength())
 						{
 							if (edt->LastPartLength ==-1)
 								edt->strLastStr = edt->GetStringAddr();
@@ -2981,7 +2989,7 @@ int Dialog::ProcessKey(int Key)
 
 						edt->LastPartLength=-1;
 
-						if(Key == KEY_CTRLSHIFTEND || Key == KEY_CTRLSHIFTNUMPAD1)
+						if(Key == KEY_CTRLSHIFTEND || Key == KEY_RCTRLSHIFTEND || Key == KEY_CTRLSHIFTNUMPAD1 || Key == KEY_RCTRLSHIFTNUMPAD1)
 						{
 							edt->EnableAC();
 							edt->AutoComplete(true,false);

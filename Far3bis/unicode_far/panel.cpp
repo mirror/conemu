@@ -665,7 +665,9 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 				}
 				break;
 				case KEY_CTRLPGUP:
+				case KEY_RCTRLPGUP:
 				case KEY_CTRLNUMPAD9:
+				case KEY_RCTRLNUMPAD9:
 				{
 					if (Opt.PgUpChangeDisk)
 						return -1;
@@ -705,6 +707,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 				}
 				break;
 				case KEY_CTRLA:
+				case KEY_RCTRLA:
 				case KEY_F4:
 				{
 					if (item)
@@ -806,6 +809,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 					break;
 				}
 				case KEY_ALTSHIFTF9:
+				case KEY_RALTSHIFTF9:
 
 					if (Opt.ChangeDriveMode&DRIVE_SHOW_PLUGINS)
 					{
@@ -822,6 +826,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 
 					return SelPos;
 				case KEY_CTRLR:
+				case KEY_RCTRLR:
 					return SelPos;
 				default:
 					ChDisk.ProcessInput();
@@ -1307,7 +1312,7 @@ __int64 Panel::VMProcess(int OpCode,void *vParam,__int64 iParam)
 // корректировка букв
 static DWORD _CorrectFastFindKbdLayout(INPUT_RECORD *rec,DWORD Key)
 {
-	if ((Key&KEY_ALT))// && Key!=(KEY_ALT|0x3C))
+	if ((Key&(KEY_ALT|KEY_RALT)))// && Key!=(KEY_ALT|0x3C))
 	{
 		// // _SVS(SysLog(L"_CorrectFastFindKbdLayout>>> %s | %s",_FARKEY_ToName(Key),_INPUT_RECORD_Dump(rec)));
 		if (rec->Event.KeyEvent.uChar.UnicodeChar && (Key&KEY_MASKF) != rec->Event.KeyEvent.uChar.UnicodeChar) //???
@@ -1457,7 +1462,7 @@ void Panel::FastFind(int FirstKey)
 					if ((Key<32 || Key>=65536) && Key!=KEY_BS && Key!=KEY_CTRLY && Key!=KEY_RCTRLY &&
 					        Key!=KEY_CTRLBS && Key!=KEY_RCTRLBS && Key!=KEY_ALT && Key!=KEY_SHIFT &&
 					        Key!=KEY_CTRL && Key!=KEY_RALT && Key!=KEY_RCTRL &&
-					        !(Key==KEY_CTRLINS||Key==KEY_CTRLNUMPAD0||Key==KEY_RCTRLINS||Key==KEY_RCTRLNUMPAD0) &&
+					        !(Key==KEY_CTRLINS||Key==KEY_RCTRLINS||Key==KEY_CTRLNUMPAD0||Key==KEY_RCTRLNUMPAD0) &&
 							!(Key==KEY_SHIFTINS||Key==KEY_SHIFTNUMPAD0))
 					{
 						KeyToProcess=Key;

@@ -1676,6 +1676,7 @@ int PluginManager::Configure(int StartPos)
 
 					case KEY_DEL:
 					case KEY_ALTDEL:
+					case KEY_RALTDEL:
 						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
 						{
 							bool bUnload = (Key==KEY_DEL
@@ -1684,7 +1685,7 @@ int PluginManager::Configure(int StartPos)
 								              && (!item->pPlugin->CheckWorkFlags(PIWF_PRELOADED) || Message(MSG_WARNING,2,MSG(MPluginUnloadPreloadTitle),MSG(MPluginUnloadPreloadMsg),MSG(MPluginUnloadPreloadMsg2),MSG(MNo),MSG(MYes))==1)
 								              ;
 
-							bool bRemove = (Key==KEY_ALTDEL && (Message(0,2,MSG(MPluginRemoveTitle),MSG(MPluginRemoveTitle),MSG(MYes),MSG(MNo))==0));
+							bool bRemove = ((Key==KEY_ALTDEL || Key==KEY_RALTDEL) && (Message(0,2,MSG(MPluginRemoveTitle),MSG(MPluginRemoveTitle),MSG(MYes),MSG(MNo))==0));
 
 							if (bUnload || bRemove)
 							{
@@ -1772,9 +1773,9 @@ int PluginManager::Configure(int StartPos)
 						{
 							PluginList.Hide();
 							string strDirName=g_strFarPath+PluginsFolderName;
-							bool bChangeAnotherPanel=(Key==KEY_CTRLSHIFTPGUP || Key==KEY_CTRLSHIFTHOME || Key==KEY_RCTRLSHIFTPGUP || Key==KEY_RCTRLSHIFTHOME);
+							bool bChangeAnotherPanel=(Key==KEY_CTRLSHIFTPGUP || Key==KEY_RCTRLSHIFTPGUP || Key==KEY_CTRLSHIFTHOME || Key==KEY_RCTRLSHIFTHOME);
 
-							if ((Key==KEY_CTRLPGUP || Key==KEY_CTRLSHIFTPGUP || Key==KEY_RCTRLPGUP || Key==KEY_RCTRLSHIFTPGUP) && PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+							if ((Key==KEY_CTRLPGUP || Key==KEY_RCTRLPGUP || Key==KEY_CTRLSHIFTPGUP || Key==KEY_RCTRLSHIFTPGUP) && PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
 							{
 								strDirName=item->pPlugin->GetModuleName();
 								const wchar_t *NamePtr=PointToName(strDirName);
@@ -1815,6 +1816,7 @@ int PluginManager::Configure(int StartPos)
 						}
 
 					case KEY_CTRLR:
+					case KEY_RCTRLR:
 						{
 							LoadPlugins(true); // перечитать папки плагинов
 							PluginList.Hide();
@@ -1989,6 +1991,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						break;
 
 					case KEY_ALTF11:
+					case KEY_RALTF11:
 						WriteEvent(FLOG_PLUGINSINFO);
 						break;
 
@@ -2012,6 +2015,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						break;
 
 					case KEY_ALTSHIFTF9:
+					case KEY_RALTSHIFTF9:
 					{
 						PluginList.Hide();
 						NeedUpdateItems = true;

@@ -999,7 +999,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			if (ProcessCtrlCode)
 			{
 				if (KeyCode == VK_CONTROL)
-					return KEY_CTRL;
+					return (IntKeyState.CtrlPressed && !IntKeyState.RightCtrlPressed)?KEY_CTRL:(IntKeyState.RightCtrlPressed?KEY_RCTRL:KEY_CTRL);
 				else if (KeyCode == VK_RCONTROL)
 					return KEY_RCTRL;
 			}
