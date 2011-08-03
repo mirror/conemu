@@ -47,7 +47,7 @@ public:
 	//#define CHREQ(s,i,c) ( ((((DWORD)(s)[i])|0x20) == (((DWORD)c)|0x20)) || ((((DWORD)(s)[i])&~0x20) == (((DWORD)c)&~0x20)) )
 	//bool CHREQ(const wchar_t* s, int i, wchar_t c);
 	bool IsFilePath(LPCWSTR apsz);
-	bool IsRegPath(LPCWSTR apsz, HKEY* phRootKey = NULL, LPCWSTR* ppszSubKey = NULL, BOOL abCheckExist = FALSE);
+	//bool IsRegPath(LPCWSTR apsz, HKEY* phRootKey = NULL, LPCWSTR* ppszSubKey = NULL, BOOL abCheckExist = FALSE);
 	void SkipSpaces(wchar_t*& psz);
 	// Получить токен
 	wchar_t* GetToken(wchar_t*& psz, BOOL abForceLast = FALSE);

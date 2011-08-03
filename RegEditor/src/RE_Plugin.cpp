@@ -4,13 +4,16 @@
 #include "TokenHelper.h"
 #include <Tlhelp32.h>
 #include <commctrl.h>
+// Guids
+#include "RE_Guids.h"
+#include "common/DlgBuilder.hpp"
 
 #include "Hooks/RegEditExe.h"
 
 //#define EXECUTE_TRAP
 
 REPlugin *gpActivePlugin = NULL; // Устанавливается на время вызова из ФАР функций нашего плагина
-DWORD gnOpMode = 0;
+u64 gnOpMode = 0;
 
 
 //TODO: поскольку теперь RegFolder может использоваться в более чем одном экземпляре плагина
@@ -35,13 +38,14 @@ REPlugin::REPlugin()
 	mn_ActivatedCount = 0;
 	mb_FindInContents = -1;
 	mb_ShowRegFileMenu = FALSE;
+	mb_Wow64on32 = cfg->getWow64on32();
 
 	// Буфер для отображения "измененности" панели
 	mn_PanelTitleMax = 0; mpsz_PanelTitle = NULL;
 	
 	// путь и тип
 	memset(&m_Key, 0, sizeof(m_Key)); // First entry - zero memory
-	m_Key.Init(RE_WINAPI);
+	m_Key.Init(RE_WINAPI, mb_Wow64on32);
 
 	// элементы
 	//m_Items.Init(&m_Key);
@@ -78,6 +82,32 @@ REPlugin::~REPlugin()
 	SafeFree(mpsz_PanelTitle);
 }
 
+DWORD REPlugin::getWow64on32()
+{
+	if (!this)
+	{
+		InvalidOp();
+		return cfg->getWow64on32();
+	}
+	return mb_Wow64on32;
+}
+
+void REPlugin::setWow64on32(DWORD abWow64on32)
+{
+	if (!this)
+	{
+		InvalidOp();
+		return;
+	}
+	mb_Wow64on32 = abWow64on32;
+	if (mp_Worker)
+		mp_Worker->mb_Wow64on32 = abWow64on32;
+	m_Key.mb_Wow64on32 = abWow64on32;
+	m_Key.Update();
+	CloseItems();
+	mb_ForceReload = TRUE;
+}
+
 // asKey может быть
 // "\\" -- перейти в m_Key.mh_Root=NULL (список из HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER, и т.п.)
 // ".." -- перейти на уровень вверх
@@ -104,10 +134,26 @@ BOOL REPlugin::ChDir(LPCWSTR asKey, BOOL abSilence)
 	return m_Key.ChDir(asKey, abSilence, this);
 }
 
+BOOL REPlugin::SubKeyExists(LPCWSTR asSubkey)
+{
+	BOOL lbSuccess = FALSE;
+	HREGKEY hTest = NULLHKEY, hSub = NULLHKEY;
+
+	if ((m_Key.mh_Root || m_Key.eType == RE_HIVE) && asSubkey && *asSubkey)
+	{
+		if (Worker())
+		{
+			lbSuccess = (mp_Worker->ExistKey(m_Key.mh_Root, m_Key.mpsz_Key, asSubkey) == 0);
+		}
+	}
+	
+	return lbSuccess;
+}
+
 BOOL REPlugin::CheckKeyAvailable(RegPath* apKey, BOOL abSilence /*= FALSE*/)
 {
 	BOOL lbSuccess = TRUE;
-	HKEY hTest = NULL;
+	HREGKEY hTest = NULLHKEY;
 
 	_ASSERTE(apKey->eRights != eRightsNoAdjust);
 	apKey->eRights = eRightsSimple;
@@ -133,7 +179,7 @@ BOOL REPlugin::CheckKeyAvailable(RegPath* apKey, BOOL abSilence /*= FALSE*/)
 			
 			if (hTest)
 			{
-				mp_Worker->CloseKey(hTest); hTest = NULL;
+				mp_Worker->CloseKey(&hTest);
 			}
 		}
 	}
@@ -180,7 +226,7 @@ BOOL REPlugin::SetDirectory(RegItem* pKey, BOOL abSilence)
 
 	//LPCWSTR pszSlash = NULL;
 	//size_t nTokenLen = 0;
-	//HKEY hTest = NULL;
+	//HREGKEY hTest = NULL;
 
 	BOOL lbSuccess = TRUE;
 
@@ -256,7 +302,7 @@ BOOL REPlugin::SetDirectory(LPCWSTR Dir, BOOL abSilence)
 	wchar_t szSubKey[MAX_PATH+1]; _ASSERTE(MAX_REGKEY_NAME <= MAX_PATH);
 	LPCWSTR pszSlash = NULL;
 	size_t nTokenLen = 0;
-	//HKEY hTest = NULL;
+	//HREGKEY hTest = NULL;
 
 	BOOL lbSuccess = TRUE;
 	//BOOL lbNeedClosePlugin = FALSE;
@@ -279,7 +325,7 @@ BOOL REPlugin::SetDirectory(LPCWSTR Dir, BOOL abSilence)
 		{
 			SafeDelete(mp_Worker);
 			m_Key.Release();
-			m_Key.Init(RE_WINAPI);
+			m_Key.Init(RE_WINAPI, mb_Wow64on32);
 		}
 		Dir += 2;
 		if (Dir[0] == 0)
@@ -404,7 +450,7 @@ BOOL REPlugin::SetDirectory(LPCWSTR Dir, BOOL abSilence)
 
 	//if (lbSuccess && lbNeedClosePlugin)
 	//{
-	//	psi.Control((HANDLE)this, FCTL_CLOSEPLUGIN, F757NA 0);
+	//	psiControl((HANDLE)this, FCTL_CLOSEPLUGIN, F757NA 0);
 	//	goto wrap;
 	//}
 	
@@ -482,7 +528,7 @@ void REPlugin::KeyNotExist(RegPath* pKey, LPCTSTR asSubKey)
 		GetMsg(REM_CurrentPath),
 		(pKey->mpsz_Dir && *pKey->mpsz_Dir) ? pKey->mpsz_Dir : _T("\\")
 	};
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_Msg1), FMSG_WARNING|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 
@@ -505,7 +551,7 @@ void REPlugin::KeyNameTooLong(LPCWSTR asSubKey)
 		GetMsg(REM_KeyNameTooLong),
 		sSubKey,
 	};
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_Msg2), FMSG_WARNING|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 
@@ -519,7 +565,7 @@ void REPlugin::ValueNotExist(RegPath* pKey, LPCWSTR asSubKey)
 		GetMsg(REM_ValueNotExists),
 		pKey->mpsz_Dir
 	};
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_Msg3), FMSG_WARNING|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 
@@ -545,7 +591,7 @@ BOOL REPlugin::ValueOperationFailed(RegPath* pKey, LPCWSTR asValueName, BOOL abM
 		nLines--; nBtns--;
 		sLines[nLines-1] = GetMsg(REBtnOK);
 	}
-	int nRc = psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_ERRORTYPE, NULL, 
+	int nRc = psi.Message(_PluginNumber(guid_Msg4), FMSG_WARNING|FMSG_ERRORTYPE, NULL, 
 		sLines, nLines, nBtns);
 	return (abAllowContinue && (nRc == 0));
 }
@@ -571,7 +617,7 @@ BOOL REPlugin::DeleteFailed(RegPath* pKey, LPCWSTR asName, BOOL abKey, BOOL abAl
 		nLines--; nBtns--;
 		sLines[nLines-1] = GetMsg(REBtnOK);
 	}
-	int nRc = psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_ERRORTYPE, NULL, 
+	int nRc = psi.Message(_PluginNumber(guid_Msg5), FMSG_WARNING|FMSG_ERRORTYPE, NULL, 
 		sLines, nLines, nBtns);
 	return (abAllowContinue && (nRc == 0));
 }
@@ -592,7 +638,7 @@ BOOL REPlugin::DeleteFailed(RegPath* pKey, LPCWSTR asName, BOOL abKey, BOOL abAl
 //		GetMsg(REBtnEditor),
 //		GetMsg(REBtnCancel),
 //	};
-//	int nBtn = psi.Message(psi.ModuleNumber, FMSG_WARNING, NULL, 
+//	int nBtn = psi.Message(PluginNumber, FMSG_WARNING, NULL, 
 //		sLines, countof(sLines), 3);
 //	if (nBtn == 0)
 //		return 1;
@@ -615,7 +661,7 @@ void REPlugin::CantOpenKey(RegPath* pKey, int abModify)
 		GetMsg((abModify==1) ? REM_CantOpenKeyWrite : ((abModify==0) ? REM_CantOpenKeyRead : REM_CantOpenKeyDelete)),
 		pKey->mpsz_Dir
 	};
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_Msg6), FMSG_WARNING|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 
@@ -632,7 +678,7 @@ void REPlugin::CantOpenKey(RegPath* pKey, LPCWSTR asSubKey, BOOL abModify)
 		GetMsg(abModify ? REM_CantOpenKeyWrite : REM_CantOpenKeyRead),
 		pKey->mpsz_Dir
 	};
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_Msg7), FMSG_WARNING|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 
@@ -642,11 +688,11 @@ void REPlugin::CantLoadSaveKey(LPCWSTR asSubKey, LPCTSTR asFile, BOOL abSave)
 	const TCHAR* sLines[] = 
 	{
 		GetMsg(REPluginName),
-		GetMsg(abSave ? REM_CantSaveKey : REM_CantLoadKey),
+		GetMsg((abSave == 2) ? REM_CantRenameKey : (abSave ? REM_CantSaveKey : REM_CantLoadKey)),
 		sSubkeyName,
 		asFile
 	};
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_ERRORTYPE|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_Msg8), FMSG_WARNING|FMSG_ERRORTYPE|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 #ifndef _UNICODE
@@ -697,7 +743,7 @@ void REPlugin::CheckItemsLoaded()
 // Загрузить (если были изменения) список подключей и значений
 //WARNING: В режиме OPM_FIND нафиг не нужно загружать описания! И кешировать тоже бы не нужно!
 //Но так просто не получится. При рекурсивном поиске наступает облом, т.к. элементы меняются по указателям.
-BOOL REPlugin::LoadItems(BOOL abSilence, int OpMode)
+BOOL REPlugin::LoadItems(BOOL abSilence, u64 OpMode)
 {
 	BOOL lbForceReload = FALSE;
 	//mb_EnableKeyMonitoring = !abSilence;
@@ -796,14 +842,14 @@ BOOL REPlugin::LoadItems(BOOL abSilence, int OpMode)
 		{
 			for (UINT i = 0; i < mp_Items->mn_ItemCount; i++)
 			{
-				mp_Items->mp_PluginItems[i].FindData.dwFileAttributes = 
+				PanelItemAttributes(mp_Items->mp_PluginItems[i]) = 
 					(mp_Items->mp_Items[i].nValueType == REG__KEY)
 						? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
 			}
 		} else {
 			for (UINT i = 0; i < mp_Items->mn_ItemCount; i++)
 			{
-				mp_Items->mp_PluginItems[i].FindData.dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
+				PanelItemAttributes(mp_Items->mp_PluginItems[i]) = FILE_ATTRIBUTE_NORMAL;
 			}
 		}
 	}
@@ -836,7 +882,7 @@ void REPlugin::SetForceReload()
 	mb_ForceReload = TRUE;
 }
 
-void REPlugin::EditKeyPermissions()
+void REPlugin::EditKeyPermissions(BOOL abVisual)
 {
 	//TODO: Hive?
 	if (m_Key.eType != RE_WINAPI)
@@ -846,7 +892,7 @@ void REPlugin::EditKeyPermissions()
 	if (pItem == NULL && m_Key.mh_Root == NULL)
 		return; // самый корень плагина, выделен ".."
 	
-	//HKEY hkRoot = m_Key.mh_Root;
+	//HREGKEY hkRoot = m_Key.mh_Root;
 	//if (m_Key.mh_Root == NULL) {
 	//	if (!StringKeyToHKey(pItem->pszName, &hkRoot)) {
 	//		_ASSERTE(FALSE);
@@ -874,9 +920,12 @@ void REPlugin::EditKeyPermissions()
 	//}
 	
 	MRegistryBase *pWorker = Worker();
-	if (pWorker) {
-		pWorker->EditKeyPermissions(&m_Key, pItem);
-	} else {
+	if (pWorker)
+	{
+		pWorker->EditKeyPermissions(&m_Key, pItem, abVisual);
+	}
+	else
+	{
 		_ASSERTE(pWorker!=NULL);
 	}
 	
@@ -902,14 +951,21 @@ RegItem* REPlugin::GetCurrentItem(const PluginPanelItem** ppPluginPaneItem /*= N
 	INT_PTR nCurLen = 0;
 	PluginPanelItem* item=NULL;
 
-	if (psi.Control((HANDLE)this, FCTL_GETPANELINFO, F757NA &inf))
+	if (psiControl((HANDLE)this, FCTL_GETPANELINFO, F757NA &inf))
 	{
 		if (inf.ItemsNumber>0 && inf.CurrentItem>0)
 		{
 			#ifdef _UNICODE
-			nCurLen = psi.Control((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, NULL);
+			nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, NULL);
 			item = (PluginPanelItem*)calloc(nCurLen,1);
-			if (!psi.Control((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, (LONG_PTR)item)) {
+			#if FAR_UNICODE>=1906
+			FarGetPluginPanelItem gppi = {nCurLen, item};
+			nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, (FarDlgProcParam2)&gppi);
+			#else
+			nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, (FarDlgProcParam2)item);
+			#endif
+			if (!nCurLen)
+			{
 				SafeFree(item);
 				return NULL;
 			}
@@ -973,7 +1029,7 @@ MRegistryBase* REPlugin::Worker()
 			return NULL;
 		}
 		
-		mp_Worker = new MRegistryWinApi();
+		mp_Worker = new MRegistryWinApi(mb_Wow64on32);
 		if (mb_RemoteMode)
 			mp_Worker->ConnectRemote(ms_RemoteServer);
 		//mp_Worker = MRegistryBase::CreateWorker(m_Key.eType, mb_RemoteMode, ms_RemoteServer, ms_RemoteLogin, ms_RemotePassword);
@@ -986,7 +1042,7 @@ MRegistryBase* REPlugin::Worker()
 void REPlugin::LoadCurrentSortMode(int *pnSortMode, bool *pbReverseSort)
 {
 	PanelInfo pi;
-	if (!psi.Control(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, F757NA &pi))
+	if (!psiControl(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, F757NA &pi))
 		return;
 	*pnSortMode = pi.SortMode;
 	*pbReverseSort = (pi.Flags & PFLAGS_REVERSESORTORDER) == PFLAGS_REVERSESORTORDER;
@@ -1001,16 +1057,16 @@ void REPlugin::ChangeFarSorting(bool abFastAccess)
 	mb_SortingSelfDisabled = abFastAccess;
 
 	#ifdef _UNICODE
-		//psi.Control((HANDLE)this, FCTL_SETNUMERICSORT, nNewNumeric, NULL);
-		psi.Control((HANDLE)this, FCTL_SETSORTMODE, nNewSortMode, NULL);
-		psi.Control((HANDLE)this, FCTL_SETSORTORDER, nNewReverse, NULL);
+		//psiControl((HANDLE)this, FCTL_SETNUMERICSORT, nNewNumeric, NULL);
+		psiControl((HANDLE)this, FCTL_SETSORTMODE, nNewSortMode, NULL);
+		psiControl((HANDLE)this, FCTL_SETSORTORDER, nNewReverse, NULL);
 	#else
 		//TODO: FAR 1.75 валится, аналогично тому, что было в 2.0
 		PanelRedrawInfo pri = {0,0};
-		psi.Control((HANDLE)this, FCTL_REDRAWPANEL, &pri);
-		//psi.Control((HANDLE)this, FCTL_SETNUMERICSORT, &nNewNumeric);
-		psi.Control((HANDLE)this, FCTL_SETSORTMODE, &nNewSortMode);
-		psi.Control((HANDLE)this, FCTL_SETSORTORDER, &nNewReverse);
+		psiControl((HANDLE)this, FCTL_REDRAWPANEL, &pri);
+		//psiControl((HANDLE)this, FCTL_SETNUMERICSORT, &nNewNumeric);
+		psiControl((HANDLE)this, FCTL_SETSORTMODE, &nNewSortMode);
+		psiControl((HANDLE)this, FCTL_SETSORTORDER, &nNewReverse);
 	#endif
 }
 
@@ -1030,14 +1086,14 @@ void REPlugin::NewItem()
 
 	//RegItem* pItem = NULL;
 
-	PluginDialogBuilder val(psi, RENewValueTitle, _T("NewValue"));
+	PluginDialogBuilder val(psi, RENewValueTitle, _T("NewValue"), &guid_NewValue);
 	FarDialogItem* p = NULL;
 
 	TCHAR sValueName[16384]; lstrcpy(sValueName, GetMsg(RENewValueName));
 
 	val.AddText(REValueNameLabel);
 	p = val.AddEditField(sValueName, countof(sValueName), 56, _T("RegistryValueName"));
-	p->Focus = TRUE;
+	val.InitFocus(p);
 
 	val.AddSeparator();
 	REGTYPE nValueType = 0;
@@ -1048,7 +1104,7 @@ void REPlugin::NewItem()
 		RE_REG_MULTI_SZ,
 		RE_REG_BINARY,
 		RE_REG_DWORD,
-		//RE_REG_QWORD,
+		RE_REG_QWORD,
 	};
 	val.AddRadioButtons(&nValueTypeBtn, countof(nTypes), nTypes, 0, TRUE);
 
@@ -1115,7 +1171,8 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 		(pItem->nValueType==REG__KEY) ?
 			(abCopyOnly ? RECopyKeyTitle : RERenameKeyTitle) :
 			(abCopyOnly ? RECopyValueTitle : RERenameValueTitle), 
-		(pItem->nValueType==REG__KEY) ? _T("RenameKey") : _T("RenameValue"));
+		(pItem->nValueType==REG__KEY) ? _T("RenameKey") : _T("RenameValue"),
+		(pItem->nValueType==REG__KEY) ? &guid_RenameKey : &guid_RenameValue);
 	FarDialogItem* p = NULL;
 	LONG hRc;
 	int nValueType = -1;
@@ -1157,7 +1214,7 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 	lstrcpy_t(sNewName, countof(sNewName), pItem->pszName);
 	val.AddText((pItem->nValueType==REG__KEY) ? RERenameKeyLabel : RERenameValueLabel);
 	p = val.AddEditField(sNewName, countof(sNewName), 56+14, (pItem->nValueType == REG__KEY) ? _T("RegistrySubkeyName") : _T("RegistryValueName"));
-	p->Focus = TRUE;
+	val.InitFocus(p);
 
 	BOOL bDontChangeType = FALSE;
 	if (pItem->nValueType != REG__KEY)
@@ -1235,7 +1292,7 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 			pszLines[nLines++] = GetMsg((pItem->nValueType == REG__KEY) ? REM_KeyWillBeErased  : REM_ValueWillBeErased);
 			pszLines[nLines++] = GetMsg(REBtnContinue);
 			pszLines[nLines++] = GetMsg(REBtnCancel);
-			int iBtn = psi.Message(psi.ModuleNumber, FMSG_WARNING, _T("RenameKey"), pszLines, nLines, 2);
+			int iBtn = psi.Message(_PluginNumber(guid_Msg9), FMSG_WARNING, _T("RenameKey"), pszLines, nLines, 2);
 			if (iBtn != 0)
 				return;
 		}
@@ -1249,7 +1306,7 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 		pWorker->RenameKey(&mp_Items->key, abCopyOnly, pItem->pszName, wsNewName, &lbChanged);
 
 	} else {
-		HKEY hKey = NULL;
+		HREGKEY hKey = NULLHKEY;
 		LPBYTE pData = (LPBYTE)malloc(nDataSize);
 		DWORD nSize = nDataSize;
 		LPCWSTR pszComment = NULL;
@@ -1280,7 +1337,7 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 		}
 		// Закрыть ключ
 		if (hKey)
-			mp_Items->CloseKey(pWorker, hKey);
+			mp_Items->CloseKey(pWorker, &hKey);
 		MCHKHEAP;
 	}
 	
@@ -1292,6 +1349,161 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 		RedrawPanel(&item); // Аргумент - имя элемента (точнее, ссылка на RegItem)
 	}
 	MCHKHEAP;
+}
+
+BOOL REPlugin::ChooseImportDataType(LPCWSTR asName, REGTYPE* pnDataType, BOOL* pbUnicodeStrings, BOOL* pbForAll)
+{
+	MCHKHEAP;
+	PluginDialogBuilder val(psi, REImportValueTitle, _T("ImportValue"), &guid_ImportValue);
+	FarDialogItem* p = NULL;
+	int nID = 0;
+	int nValueType = 1;
+	int nTypes[] = {
+		RE_REG_NONE,
+		RE_REG_SZ,
+		RE_REG_EXPAND_SZ,
+		RE_REG_MULTI_SZ,
+		RE_REG_LINK,
+		RE_REG_FULL_RESOURCE_DESCRIPTOR,
+		RE_REG_BINARY,
+		RE_REG_DWORD,
+		RE_REG_DWORD_BIG_ENDIAN,
+		RE_REG_QWORD,
+		RE_REG_RESOURCE_LIST,
+		RE_REG_RESOURCE_REQUIREMENTS_LIST,
+	};
+	REGTYPE nDataType = *pnDataType;
+	MRegistryBase* pWorker = Worker();
+	TCHAR sNewName[MAX_PATH+1];
+
+	for (UINT n = 0; n < countof(nTypes); n++)
+	{
+		if ((DWORD)(nTypes[n] - RE_REG_NONE) == nDataType)
+		{
+			nValueType = n; break;
+		}
+	}
+
+	// Добавить в диалог имя значения/ключа
+	lstrcpy_t(sNewName, countof(sNewName), asName);
+	val.AddText(REImportValueLabel);
+	val.AddText(sNewName);
+
+	val.AddSeparator();
+	nID = val.AddRadioButtons(&nValueType, countof(nTypes), nTypes, 0, TRUE);
+	val.InitFocus(val.GetItemByIndex(nID+nValueType));
+
+	val.AddSeparator();
+	if (pbForAll)
+		val.StartColumns();
+	val.AddCheckbox(REImportUnicodeStrings, pbUnicodeStrings);
+	if (pbForAll)
+	{
+		val.ColumnBreak();
+		val.AddCheckbox(REImportForAll, pbForAll);
+		val.EndColumns();
+	}
+
+	val.AddOKCancel(REBtnOK, REBtnCancel);
+	if (!val.ShowDialog())
+		return FALSE;
+	//MCHKHEAP;
+	//if (pItem->nValueType != REG__KEY && !bDontChangeType)
+	//{
+	//	// Получить в nValueType ИД типа реестра (сейчас в нем индекс кнопки)
+	//	if (nValueType < 0 || nValueType > REG_QWORD)
+	//	{
+	//		_ASSERTE(nValueType >= 0 && nValueType <= REG_QWORD);
+	//		return FALSE;
+	//	}
+	//}
+	if (nValueType >= 0 && nValueType < (int)countof(nTypes)
+		&& RegTypeMsgId2RegType(nTypes[nValueType], pnDataType))
+	{
+		return TRUE;
+	}
+	return FALSE;
+}
+
+// Выбрать тип импорта reg-файла в панель плагина
+// Например, на панели открыт [HKEY_CURRENT_USER\Software\111]
+// F5 на reg-е содержащем [HKEY_CURRENT_USER\Software\222\FM] что с ним делать:
+// ris_Here: создать [HKEY_CURRENT_USER\Software\111\FM]
+// ris_ValuesHere: значения и подключи из [HKEY_CURRENT_USER\Software\222\FM] положить в [HKEY_CURRENT_USER\Software\111]
+// ris_Native, ris_Import32, ris_Import64: импорт как есть, в корень реестра (с делением на 32/64 битный реестр)
+BOOL REPlugin::ChooseImportStyle(LPCWSTR asName, LPCWSTR asFromKey, DWORD anAllowed/*bitmask of RegImportStyle*/,
+								 RegImportStyle& rnImportStyle, BOOL* pbForAll)
+{
+	MCHKHEAP;
+	PluginDialogBuilder val(psi, REImportStyleKeyTitle, _T("ImportKey"), &guid_ImportKey);
+	FarDialogItem* p = NULL;
+	int nID = 0;
+
+	int nImportStyle = 0;
+	RegImportStyle nStylesId[] = {ris_Here, ris_ValuesHere, ris_AsRaw, ris_Native, ris_Import32, ris_Import64};
+	DWORD nStylesMsg[] = {REActionImportHere, REActionImportValuesHere, REActionImportRegAsRaw, REActionImport, REActionImport32, REActionImport64};
+	int nStyles[10] = {};
+	int nStylesCount = 0;
+	for (UINT n = 0; n < countof(nStylesId); n++)
+	{
+		if ((anAllowed & nStylesId[n]))
+		{
+			if (rnImportStyle == nStylesId[n])
+				nImportStyle = nStylesCount;
+			nStyles[nStylesCount++] = nStylesMsg[n];
+		}
+	}
+
+	TCHAR sFileName[MAX_PATH+1], sKeyName[MAX_PATH+1];
+
+	// Добавить в диалог имя файла/ключа
+	if (asName)
+	{
+		lstrcpy_t(sFileName, countof(sFileName), asName);
+		p = val.AddEditField(sFileName, countof(sFileName), 40);
+		p->Flags |= DIF_READONLY;
+		val.AddTextBefore(p, REImportStyleFileLabel);
+	}
+	if (asFromKey)
+	{
+		lstrcpy_t(sKeyName, countof(sKeyName), asFromKey);
+		p = val.AddEditField(sKeyName, countof(sKeyName), 40);
+		p->Flags |= DIF_READONLY;
+		val.AddTextBefore(p, REImportStyleKeyLabel);
+	}
+
+	if (asName || asFromKey)
+		val.AddSeparator();
+
+	nID = val.AddRadioButtons(&nImportStyle, nStylesCount, nStyles, 0, FALSE);
+	val.InitFocus(val.GetItemByIndex(nID+nImportStyle));
+
+	if (pbForAll)
+	{
+		val.AddSeparator();
+		val.AddCheckbox(REImportForAll, pbForAll);
+	}
+
+	val.AddOKCancel(REBtnOK, REBtnCancel);
+	if (!val.ShowDialog())
+		return FALSE;
+	if (nImportStyle < 0 || nImportStyle >= nStylesCount)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+
+	for (int n = 0; n < nStylesCount; n++)
+	{
+		if (nStyles[nImportStyle] == nStylesMsg[n])
+		{
+			rnImportStyle = nStylesId[n];
+			return TRUE;
+		}
+	}
+
+	InvalidOp();
+	return FALSE;
 }
 
 BOOL REPlugin::ConfirmExport(
@@ -1319,13 +1531,18 @@ BOOL REPlugin::ConfirmExport(
 	L====================================================================-	
 	*/
 
-	PluginDialogBuilder cpy(psi, nTitleMsgId, _T("ExportKey"));
-	FarDialogItem* p = NULL, *p1, *p2;
+	PluginDialogBuilder cpy(psi, nTitleMsgId, _T("ExportKey"), &guid_ExportKey);
+	FarDialogItem* p = NULL; //, *p1, *p2;
 	int nLen;
 	TCHAR sLabel[67];
+	BOOL bUnicodeRawStrings = TRUE;
+	#ifndef _UNICODE
+	bUnicodeRawStrings = FALSE;
+	#endif
 	LPCTSTR pszFormat = GetMsg(nExportLabelMsgId);
 	nLen = lstrlen(pszFormat);
-	if (nLen >= 40) {
+	if (nLen >= 40)
+	{
 		InvalidOp();
 		lbExportRc = FALSE; goto wrap;
 	}
@@ -1335,7 +1552,8 @@ BOOL REPlugin::ConfirmExport(
 	_ASSERTE(nMaxNameLen < countof(sPart));
 
 	nLen = lstrlen(asNameForLabel);
-	if (nLen > nMaxNameLen) {
+	if (nLen > nMaxNameLen)
+	{
 		#ifdef _UNICODE
 		lstrcpyn(sPart, asNameForLabel, nMaxNameLen-1);
 		lstrcat(sPart, L"\x2026");
@@ -1343,19 +1561,24 @@ BOOL REPlugin::ConfirmExport(
 		lstrcpyn(sPart, asNameForLabel, nMaxNameLen-3);
 		lstrcat(sPart, "...");
 		#endif
-	} else {
+	}
+	else
+	{
 		lstrcpyn(sPart, asNameForLabel, nMaxNameLen);
 	}
 	if (ItemsNumber == 1)
 	{
 		wsprintf(sLabel, pszFormat, sPart);
-	} else {
+	}
+	else
+	{
 		wsprintf(sLabel, pszFormat, ItemsNumber, sPart);
 	}
 
 
 	nLen = lstrlen(asDestPathOrFile);
-	if ((size_t)nLen >= (countof(ms_CreatedSubkeyBuffer)-2-MAX_PATH)) {
+	if ((size_t)nLen >= (countof(ms_CreatedSubkeyBuffer)-2-MAX_PATH))
+	{
 		InvalidOp();
 		lbExportRc = FALSE; goto wrap;
 	}
@@ -1368,33 +1591,82 @@ BOOL REPlugin::ConfirmExport(
 
 	cpy.AddText(sLabel);
 	p = cpy.AddEditField(ms_CreatedSubkeyBuffer, countof(ms_CreatedSubkeyBuffer), 66, _T("RegistryExportPath"));
-	p->Focus = TRUE;
+	cpy.InitFocus(p);
 
 	cpy.AddSeparator(REExportFormatLabel);
-	int nExportTypes[] = {REExportReg4, REExportReg5, REExportHive};
-	cpy.AddRadioButtons(pnExportMode, abAllowHives ? 3 : 2, nExportTypes);
-	if (abAllowHives && pbHiveAsSubkey)
+	int nExportTypes[] = {REExportReg4, REExportReg5, REExportCmd, REExportHive, REExportRaw};
+	int nRadio = cpy.AddRadioButtons(pnExportMode, countof(nExportTypes), nExportTypes, 0, TRUE);
+	if (!abAllowHives)
 	{
-		p2 = cpy.AddCheckbox(REExportHiveRoot, pbHiveAsSubkey);
-		int Index = cpy.GetItemIndex(p2);
-		p1 = cpy.GetItemByIndex(Index - 1);
-		cpy.MoveItemAfter(p1,p2);
+		// Сюда мы попадаем если сохраняется существующий reg-файл
+		cpy.GetItemByIndex(nRadio+(REExportCmd-REExportReg4))->Flags |= DIF_DISABLE;
+		cpy.GetItemByIndex(nRadio+(REExportHive-REExportReg4))->Flags |= DIF_DISABLE;
+		cpy.GetItemByIndex(nRadio+(REExportRaw-REExportReg4))->Flags |= DIF_DISABLE;
 	}
-
+	cpy.AddSeparator();
+	cpy.StartColumns();
+	p = cpy.AddCheckbox(REExportRawUnicode, &bUnicodeRawStrings);
+	if (!abAllowHives)
+		p->Flags |= DIF_DISABLE;
+	cpy.ColumnBreak();
+	BOOL lbDummy1 = FALSE;
+	p = cpy.AddCheckbox(REExportHiveRoot, pbHiveAsSubkey ? pbHiveAsSubkey : &lbDummy1);
+	if (!(abAllowHives && pbHiveAsSubkey))
+		p->Flags |= DIF_DISABLE;
+	cpy.EndColumns();
+	//if (abAllowHives && pbHiveAsSubkey)
+	//{
+	//	p2 = cpy.AddCheckbox(REExportHiveRoot, pbHiveAsSubkey);
+	//	int Index = cpy.GetItemIndex(p2);
+	//	p1 = cpy.GetItemByIndex(Index - 2);
+	//	cpy.MoveItemAfter(p1,p2);
+	//}
+	//if (abAllowHives)
+	//{
+	//	p2 = cpy.AddCheckbox(REExportRawUnicode, &bUnicodeRawStrings);
+	//	int Index = cpy.GetItemIndex(p2);
+	//	p1 = cpy.GetItemByIndex(Index - ((abAllowHives && pbHiveAsSubkey) ? 2 : 1));
+	//	cpy.MoveItemAfter(p1,p2);
+	//}
+	
 	cpy.AddOKCancel(REBtnOK, nCancelMsgId);
 	if (!cpy.ShowDialog())
 	{
 		lbExportRc = FALSE; goto wrap; // Отмена пользователем
 	}
 
-	if (*pnExportMode > 2) {
+	//if (!abAllowHives && (*pnExportMode >= (REExportHive-REExportReg4)))
+	//	(*pnExportMode)++;
+
+	if ((*pnExportMode) == (REExportCmd-REExportReg4))
+	{
+		int nConfRc = 0;
+		if (bUnicodeRawStrings)
+			nConfRc = Message(REM_CmdWarnUtf8, 0/*FMSG_WARNING*/, 2, _T("ExportKey"));			
+		else
+			nConfRc = Message(REM_CmdWarnOEM, 0/*FMSG_WARNING*/, 2, _T("ExportKey"));
+		if (nConfRc != 0)
+		{
+			lbExportRc = FALSE; goto wrap; // Отмена пользователем
+		}
+	}
+
+	if (*pnExportMode > (REExportRaw-REExportReg4))
+	{
 		InvalidOp();
 		lbExportRc = FALSE; goto wrap;
+	}
+	if (bUnicodeRawStrings
+		&& ((*pnExportMode == (REExportRaw-REExportReg4))
+		 	|| (*pnExportMode == (REExportCmd-REExportReg4))))
+ 	{
+		*pnExportMode |= 0x100;
 	}
 
 	*ppwszDestPath = ExpandPath(ms_CreatedSubkeyBuffer);
 	wchar_t* pszFilePart = (wchar_t*)PointToName(*ppwszDestPath);
-	if (pszFilePart && *pszFilePart) {
+	if (pszFilePart && *pszFilePart)
+	{
 		wchar_t* pszFileExt = (wchar_t*)PointToExt(pszFilePart);
 		// Учесть, что юзер мог ввести расширение в диалоге, тогда ".reg" не добавлять
 		if (pszFileExt && *pszFileExt == L'.')
@@ -1416,13 +1688,97 @@ wrap:
 	return lbExportRc;
 }
 
+BOOL REPlugin::ConfirmCopyMove(BOOL abMove, int ItemsNumber, int nCopyLabelMsgId,
+							   LPCTSTR asNameForLabel, LPCTSTR asDestPathOrFile
+		//BOOL abAllowHives, int* pnExportMode, BOOL* pbHiveAsSubkey, int ItemsNumber,
+		//LPCTSTR asDestPathOrFile, BOOL abDestFileSpecified, LPCTSTR asNameForLabel,
+		//wchar_t** ppwszDestPath, wchar_t* sDefaultName/*[MAX_PATH]*/, wchar_t* wsDefaultExt/*[5]*/,
+		//int nTitleMsgId /*= REExportDlgTitle*/, int nExportLabelMsgId /* = (ItemsNumber == 1) ? REExportItemLabel : REExportItemsLabel*/,
+		//int nCancelMsgId /*= REBtnCancel*/
+		)
+{
+	// Диалог подтверждения экспорта
+	BOOL lbExportRc = FALSE;
+
+	PluginDialogBuilder cpy(psi, RECopyDlgTitle, _T("CopyMove"), &guid_CopyMove);
+	FarDialogItem* p = NULL; //, *p1, *p2;
+	int nLen;
+	TCHAR sLabel[67];
+	LPCTSTR pszFormat = GetMsg(nCopyLabelMsgId);
+	nLen = lstrlen(pszFormat);
+	if (nLen >= 40)
+	{
+		InvalidOp();
+		lbExportRc = FALSE; goto wrap;
+	}
+
+	int nMaxNameLen = countof(sLabel) - 4 - nLen;
+	TCHAR sPart[61];
+	_ASSERTE(nMaxNameLen < countof(sPart));
+
+	nLen = lstrlen(asNameForLabel);
+	if (nLen > nMaxNameLen)
+	{
+		#ifdef _UNICODE
+		lstrcpyn(sPart, asNameForLabel, nMaxNameLen-1);
+		lstrcat(sPart, L"\x2026");
+		#else
+		lstrcpyn(sPart, asNameForLabel, nMaxNameLen-3);
+		lstrcat(sPart, "...");
+		#endif
+	}
+	else
+	{
+		lstrcpyn(sPart, asNameForLabel, nMaxNameLen);
+	}
+	if (ItemsNumber == 1)
+	{
+		wsprintf(sLabel, pszFormat, sPart);
+	}
+	else
+	{
+		wsprintf(sLabel, pszFormat, ItemsNumber, sPart);
+	}
+
+
+	nLen = lstrlen(asDestPathOrFile);
+	if ((size_t)nLen >= (countof(ms_CreatedSubkeyBuffer)-2-MAX_PATH))
+	{
+		InvalidOp();
+		lbExportRc = FALSE; goto wrap;
+	}
+	lstrcpy(ms_CreatedSubkeyBuffer, asDestPathOrFile);
+	if (ms_CreatedSubkeyBuffer[nLen-1] != _T('\\'))
+	{
+		ms_CreatedSubkeyBuffer[nLen++] = _T('\\');
+		ms_CreatedSubkeyBuffer[nLen] = 0;
+	}
+
+	cpy.AddText(sLabel);
+	p = cpy.AddEditField(ms_CreatedSubkeyBuffer, countof(ms_CreatedSubkeyBuffer), 66, _T("RegistryCopyTarget"));
+	cpy.InitFocus(p);
+	p->Flags |= DIF_READONLY;
+
+	
+	cpy.AddOKCancel(REBtnOK, REBtnCancel);
+	if (!cpy.ShowDialog())
+	{
+		lbExportRc = FALSE; goto wrap; // Отмена пользователем
+	}
+
+	lbExportRc = TRUE;
+wrap:
+	return lbExportRc;
+}
+
 BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
-						   const TCHAR *DestPath,int OpMode,const TCHAR** pszDestModified/*=NULL*/)
+						   const TCHAR *DestPath,u64 OpMode,const TCHAR** pszDestModified/*=NULL*/)
 {
 	BOOL lbExportRc = FALSE;
 	wchar_t sDefaultName[MAX_PATH];
-	MFileTxt file;
-	int nExportMode = cfg->bCreateUnicodeFiles ? 1 : 0;
+	//MFileTxt file(mb_Wow64on32);
+	MFileTxt* pFile = NULL;
+	int nExportMode = (cfg->bCreateUnicodeFiles ? REExportReg5 : REExportReg4) - REExportReg4;
 	wchar_t* pwszDestPath = NULL;
 	wchar_t wsDefaultExt[5]; lstrcpyW(wsDefaultExt, L".reg");
 
@@ -1438,7 +1794,7 @@ BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
 	REPlugin *ppp = this;
 #endif
 
-	RegFolder* expFolder = PrepareExportKey(PanelItem, ItemsNumber, sDefaultName, MAX_FILE_NAME-5); // в путь учесть ".reg"
+	RegFolder* expFolder = PrepareExportPanel(PanelItem, ItemsNumber, sDefaultName, MAX_FILE_NAME-5); // в путь учесть ".reg"
 
 	// Если вызов из панели поиска (F3 на найденной строке)
 	if (!lbRawData && expFolder->mn_ItemCount == 1 && ((OpMode & OPM_SILENT) == OPM_SILENT))
@@ -1534,9 +1890,14 @@ BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
 		if (!lbExportRc)
 			goto wrap;
 			
-		if (nExportMode == 2)
+		if (nExportMode == (REExportHive - REExportReg4))
 		{
 			lbExportRc = ExportItems2Hive(expFolder, lbHiveAsSubkey, Move, pwszDestPath, sDefaultName, wsDefaultExt, pszDestModified);
+			goto wrap;
+		}
+		if ((nExportMode & 0xF) == (REExportRaw - REExportReg4))
+		{
+			lbExportRc = ExportItems2Raws(expFolder, (nExportMode & 0x100) == 0x100, Move, pwszDestPath);
 			goto wrap;
 		}
 
@@ -1545,11 +1906,26 @@ BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
 		pwszDestPath = ExpandPath(DestPath);
 	}
 
+	BOOL lbUseUnicode = FALSE, lbNoBOM = FALSE;
+	if ((nExportMode & 0xF) == (REExportCmd - REExportReg4))
+	{
+		lbUseUnicode = (nExportMode & 0x100) == 0x100;
+		lbNoBOM = TRUE;
+		pFile = new MFileTxtCmd(mb_Wow64on32);
+		lstrcpyW(wsDefaultExt, L".cmd");
+	}
+	else
+	{
+		lbUseUnicode = nExportMode == (REExportReg5 - REExportReg4);
+		pFile = new MFileTxtReg(mb_Wow64on32);
+	}
+
 	// Создаем файл
-	if (file.FileCreate(pwszDestPath, sDefaultName, wsDefaultExt, nExportMode, !lbSilence))
+	if (pFile->FileCreate(pwszDestPath, sDefaultName, wsDefaultExt, lbUseUnicode, !lbSilence, lbNoBOM))
 	{
 		if (lbRawData)
 		{
+			// По идее, сюда попадаем только для QView
 			if (expFolder->mp_Items && expFolder->mn_ItemCount > 0)
 			{
 				DWORD nDataSize = 0;
@@ -1557,47 +1933,48 @@ BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
 				LPBYTE pValue = NULL;
 				if (ValueDataGet(expFolder, expFolder->mp_Items, &pValue, &nDataSize, &nDataType, lbSilence) == 0 && pValue)
 				{
-					//TODO: Тут хорошо бы нормальные переводы пихать - наверное построчно писать ...
-					if (nDataType == REG_MULTI_SZ) {
-						lbExportRc = file.FileWriteMSZ((wchar_t*)pValue, nDataSize>>1);
-						//wchar_t* psz = (wchar_t*)pValue;
-						//int nLen = nDataSize>>1;
-						//while ((nLen--)>0)
-						//{
-						//	if (!*psz) *psz = '\n';
-						//}
+					// Тут хорошо бы нормальные переводы пихать - построчно писать ...
+					if (nDataType == REG_MULTI_SZ)
+					{
+						lbExportRc = pFile->FileWriteMSZ((wchar_t*)pValue, nDataSize>>1);
 					}
-					#ifdef _UNICODE
-					lbExportRc = file.FileWriteBuffered(pValue, nDataSize);
-					#else
-					if (nDataType == REG_SZ || nDataType == REG_MULTI_SZ || nDataType == REG_EXPAND_SZ)
-						lbExportRc = file.FileWrite((wchar_t*)pValue, nDataSize>>1);
 					else
-						lbExportRc = file.FileWriteBuffered(pValue, nDataSize);
-					#endif
+					{
+						#ifdef _UNICODE
+						lbExportRc = pFile->FileWriteBuffered(pValue, nDataSize);
+						#else
+						// REG_MULTI_SZ уже обработан выше, но пусть будет для "красивости" условия
+						if (nDataType == REG_SZ || nDataType == REG_MULTI_SZ || nDataType == REG_EXPAND_SZ)
+							lbExportRc = pFile->FileWrite((wchar_t*)pValue, nDataSize>>1);
+						else
+							lbExportRc = pFile->FileWriteBuffered(pValue, nDataSize);
+						#endif
+					}
 				}
 				SafeFree(pValue);
 			}
 
-		} else {
+		}
+		else
+		{
 			// Сформировать заголовок
-			lbExportRc = file.FileWriteRegHeader(mp_Worker);
-			//if (nExportMode == 1) {
-			//	// (BOM уже записан в file.FileCreateTemp)
-			//	lbExportRc = file.FileWrite(L"Windows Registry Editor Version 5.00\r\n");
+			lbExportRc = pFile->FileWriteHeader(mp_Worker);
+			//if (nExportMode == (REExportReg5-REExportReg4)) {
+			//	// (BOM уже записан в pFile->FileCreateTemp)
+			//	lbExportRc = pFile->FileWrite(L"Windows Registry Editor Version 5.00\r\n");
 			//} else {
 			//	LPCSTR pszHeader = "REGEDIT4\r\n";
 			//	int nSize = lstrlenA(pszHeader);
-			//	lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
+			//	lbExportRc = pFile->FileWriteBuffered(pszHeader, nSize);
 			//}
 			//if (mp_Worker && mp_Worker->eType == RE_HIVE)
 			//{
-			//	//lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
-			//	//lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
+			//	//lbExportRc = pFile->FileWriteBuffered(pszHeader, nSize);
+			//	//lbExportRc = pFile->FileWriteBuffered(pszHeader, nSize);
 			//	wchar_t* pwszHost = UnmakeUNCPath_w(((MFileHive*)mp_Worker)->GetFilePathName());
-			//	lbExportRc = file.FileWrite(L"; ") &&
-			//		file.FileWrite(pwszHost) &&
-			//		file.FileWrite(L"\r\n");
+			//	lbExportRc = pFile->FileWrite(L"; ") &&
+			//		pFile->FileWrite(pwszHost) &&
+			//		pFile->FileWrite(L"\r\n");
 			//	SafeFree(pwszHost);
 			//}
 
@@ -1610,7 +1987,7 @@ BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
 					gpProgress = new REProgress(GetMsg(REExportDlgTitle));
 				}
 				// Теперь, собственно экспорт
-				lbExportRc = expFolder->ExportToFile(this, Worker(), &file, cfg->bCreateUnicodeFiles);
+				lbExportRc = expFolder->ExportToFile(this, Worker(), pFile, cfg->bCreateUnicodeFiles);
 				// Удалить, если прогресс создавали
 				if (gpProgress)
 				{
@@ -1619,16 +1996,16 @@ BOOL REPlugin::ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,
 			}
 		}
 		
-		file.FileClose();
+		pFile->FileClose();
 
 		// При успешном экспорте - вернуть реально созданный путь
 		if (lbExportRc && pszDestModified) {
-			lstrcpyn(ms_CreatedSubkeyBuffer, file.GetShowFilePathName(), countof(ms_CreatedSubkeyBuffer));
+			lstrcpyn(ms_CreatedSubkeyBuffer, pFile->GetShowFilePathName(), countof(ms_CreatedSubkeyBuffer));
 			*pszDestModified = ms_CreatedSubkeyBuffer;
 		}
 
 		if (!lbExportRc)
-			file.FileDelete();
+			pFile->FileDelete();
 	}
 
 wrap:
@@ -1637,6 +2014,11 @@ wrap:
 		expFolder->Release();
 		SafeDelete(expFolder);
 	}
+	if (pFile)
+	{
+		delete pFile;
+		pFile = NULL;
+	}
 	SafeFree(pwszDestPath);
 	return lbExportRc;
 }
@@ -1644,7 +2026,8 @@ wrap:
 // По идее, вызывается только в визуальном режиме
 BOOL REPlugin::ExportItems2Hive(RegFolder* expFolder,BOOL abHiveAsSubkey,int Move,LPCWSTR pwszDestPath,LPCWSTR pwszDefaultName,LPCWSTR pwszDefaultExt, const TCHAR** pszDestModified)
 {
-	if (!mp_Worker) {
+	if (!mp_Worker)
+	{
 		InvalidOp();
 		return FALSE;
 	}
@@ -1652,7 +2035,7 @@ BOOL REPlugin::ExportItems2Hive(RegFolder* expFolder,BOOL abHiveAsSubkey,int Mov
 	BOOL lbRc = FALSE;
 	LONG hRc = 0;
 	BOOL bPrivileged = FALSE;
-	HKEY hParent = NULL, hKey = NULL;
+	HREGKEY hParent = NULLHKEY, hKey = NULLHKEY;
 	
 	// Сформировать полное имя файла назначения
 	wchar_t* pwszTargetFile = NULL;
@@ -1717,11 +2100,11 @@ BOOL REPlugin::ExportItems2Hive(RegFolder* expFolder,BOOL abHiveAsSubkey,int Mov
 					pwszTargetFile, TRUE/*abSave*/);
 			if (hKey)
 			{
-				mp_Worker->CloseKey(hKey); hKey = NULL;
+				mp_Worker->CloseKey(&hKey);
 			}
 			if (hParent)
 			{
-				mp_Worker->CloseKey(hParent); hParent = NULL;
+				mp_Worker->CloseKey(&hParent);
 			}
 			lbRc = (hRc == 0);
 		}
@@ -1746,11 +2129,142 @@ wrap:
 	return lbRc;
 }
 
+// Выбросить "сырые" данные. Каждое значение - в свой файл
+BOOL REPlugin::ExportItems2Raws(RegFolder* expFolder,BOOL abUnicodeStrings,int Move,LPCWSTR pwszDestPath)
+{
+	if (!mp_Worker)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	if (!pwszDestPath)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	if (!expFolder)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	
+	BOOL lbRc = FALSE;
+	LONG hRc = 0;
+	HREGKEY hParent = NULLHKEY;
+	REGTYPE DataType;
+	DWORD nMaxDataSize = 65535*sizeof(wchar_t), nDataSize;
+	LPBYTE ptrData = (LPBYTE)malloc(nMaxDataSize);
+	DWORD nMaxAnsiSize = 65535;
+	char* pszDataAnsi = abUnicodeStrings ? NULL : (char*)malloc(nMaxAnsiSize);
+	MFileTxtReg txt(mb_Wow64on32);
+
+	if ((hRc = mp_Worker->OpenKeyEx(expFolder->key.mh_Root, expFolder->key.mpsz_Key, 0, KEY_READ, &hParent, NULL)) != 0)
+	{
+		CantOpenKey(&expFolder->key, FALSE);
+		goto wrap;
+	}
+
+	for (UINT i = 0; i < expFolder->mn_ItemCount; i++)
+	{
+		LPCWSTR pszName = expFolder->mp_Items[i].pszName;
+		txt.ReleasePointers();
+
+		if (expFolder->mp_Items[i].nValueType != REG__KEY)
+		{
+			//if (!txt.FileWriteBuffered(expFolder->mp_Items[i].da
+			hRc = mp_Worker->QueryValueEx(hParent, pszName, NULL, &DataType,
+				ptrData, &(nDataSize = nMaxDataSize));
+			if (hRc == ERROR_MORE_DATA)
+			{
+				_ASSERTE(nDataSize > nMaxDataSize);
+				nMaxDataSize = nDataSize+512;
+				free(ptrData);
+				ptrData = (LPBYTE)malloc(nMaxDataSize);
+				hRc = mp_Worker->QueryValueEx(hParent, pszName, NULL, &DataType,
+					ptrData, &(nDataSize = nMaxDataSize));
+			}
+			if (hRc != 0)
+			{
+				if (!REPlugin::ValueOperationFailed(&expFolder->key, pszName, FALSE, ((i+1) < expFolder->mn_ItemCount)))
+					goto wrap;
+			}
+
+			if (!txt.FileCreate(pwszDestPath,
+				pszName ? pszName : REGEDIT_DEFAULTNAME,
+				L"", abUnicodeStrings, TRUE, TRUE))
+				goto wrap; // ошибка
+			if (nDataSize > 0)
+			{
+				if (abUnicodeStrings || !(DataType == REG_SZ || DataType == REG_EXPAND_SZ || DataType == REG_MULTI_SZ))
+				{
+					if (!txt.FileWriteBuffered(ptrData, nDataSize))
+						goto wrap;
+				}
+				else
+				{
+					if ((nDataSize % 2) != 0)
+					{
+						InvalidOp();
+						goto wrap;
+					}
+					DWORD nAnsiLen = nDataSize >> 1;
+					if (!pszDataAnsi || (nAnsiLen > nMaxAnsiSize))
+					{
+						SafeFree(pszDataAnsi);
+						nMaxAnsiSize = nAnsiLen + 512;
+						pszDataAnsi = (char*)malloc(nMaxAnsiSize);
+					}
+					if (!pszDataAnsi)
+					{
+						InvalidOp();
+						goto wrap;
+					}
+					WideCharToMultiByte(cfg->nAnsiCodePage, 0, (wchar_t*)ptrData, nAnsiLen, pszDataAnsi, nAnsiLen, 0,0);
+					if (!txt.FileWriteBuffered(pszDataAnsi, nAnsiLen))
+						goto wrap;
+				}
+			}
+			txt.FileClose();
+		}
+		else
+		{
+			if (!txt.FileCreate(pwszDestPath, 
+				pszName ? pszName : REGEDIT_DEFAULTNAME,
+				L".reg", abUnicodeStrings, TRUE)
+				|| !txt.FileWriteHeader(mp_Worker))
+				goto wrap; // ошибка
+
+			RegFolder* expKey = new RegFolder;
+			expKey->Init(&expFolder->key);
+			expKey->AllocateItems(1, 0, MAX_PATH, 0);
+			expKey->AddItem(pszName, lstrlenW(expFolder->mp_Items[i].pszName),
+				expFolder->mft_LastSubkey, NULL, NULL, FILE_ATTRIBUTE_DIRECTORY, REG__KEY, 0, 0, NULL);
+			BOOL lbExpRc = expKey->ExportToFile(this, mp_Worker, &txt, abUnicodeStrings);
+			expKey->Release();
+			delete expKey;
+			txt.FileClose();
+
+			if (!lbExpRc)
+				goto wrap;
+		}
+	}
+
+	lbRc = TRUE;
+wrap:
+	SafeFree(pszDataAnsi);
+	SafeFree(ptrData);
+	if (hParent)
+	{
+		mp_Worker->CloseKey(&hParent);
+	}
+	return lbRc;
+}
+
 // Редактирование текущего или выделенных элементов
 void REPlugin::EditItem(bool abOnlyCurrent, bool abForceExport, bool abViewOnly, bool abRawData /*= false*/)
 {
 	BOOL lbExportRc = FALSE;
-	MFileTxt file;
+	MFileTxtReg file(mb_Wow64on32);
 
 	MCHKHEAP;
 	wchar_t sDefaultName[MAX_PATH];
@@ -1758,7 +2272,7 @@ void REPlugin::EditItem(bool abOnlyCurrent, bool abForceExport, bool abViewOnly,
 	REPlugin *ppp = this;
 #endif
 
-	RegFolder* expFolder = PrepareExportKey(abOnlyCurrent, sDefaultName, MAX_FILE_NAME-5); // в путь учесть ".reg"
+	RegFolder* expFolder = PrepareExportKey(abOnlyCurrent, sDefaultName, MAX_FILE_NAME-5, false); // в путь учесть ".reg"
 
 #ifdef _DEBUG
 	_ASSERTE(ppp == this);
@@ -1799,7 +2313,7 @@ void REPlugin::EditItem(bool abOnlyCurrent, bool abForceExport, bool abViewOnly,
 	if (file.FileCreateTemp(sDefaultName, L".reg", cfg->bCreateUnicodeFiles))
 	{
 		// Сформировать заголовок
-		lbExportRc = file.FileWriteRegHeader(mp_Worker);
+		lbExportRc = file.FileWriteHeader(mp_Worker);
 		//if (cfg->bCreateUnicodeFiles) {
 		//	// (BOM уже записан в file.FileCreateTemp)
 		//	lbExportRc = file.FileWrite(L"Windows Registry Editor Version 5.00\r\n");
@@ -1866,10 +2380,10 @@ void REPlugin::EditItem(bool abOnlyCurrent, bool abForceExport, bool abViewOnly,
 				if (nEdtRc == EEC_MODIFIED)
 				{
 					//TODO: Применение изменений, следанных в редакторе *.reg
-					//psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK|FMSG_ALLINONE, NULL, 
+					//psi.Message(PluginNumber, FMSG_WARNING|FMSG_MB_OK|FMSG_ALLINONE, NULL, 
 					//	(const TCHAR * const *)_T("RegEditor\nImporing of *.reg not implemented yet, sorry."), 2,0);
 					// Запускаем импорт
-					MFileReg fileReg;
+					MFileReg fileReg(mb_Wow64on32);
 					gpProgress = new REProgress(GetMsg(REImportDlgTitle), TRUE);
 					LONG hImpRc = MFileReg::LoadRegFile(file.GetFilePathName(), FALSE, Worker(), FALSE, &fileReg);
 					SafeDelete(gpProgress);
@@ -1909,7 +2423,7 @@ wrap:
 	}
 }
 
-RegFolder* REPlugin::PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumber, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen)
+RegFolder* REPlugin::PrepareExportPanel(PluginPanelItem *PanelItem, int ItemsNumber, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen)
 {
 	//bool abOnlyCurrent
 	wchar_t sDefaultName[MAX_PATH+1]; sDefaultName[0] = 0;
@@ -1921,7 +2435,8 @@ RegFolder* REPlugin::PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumbe
 	//PluginPanelItem* item=NULL;
 	RegItem* pItem = NULL;
 	
-	if (m_Key.eType == RE_UNDEFINED) {
+	if (m_Key.eType == RE_UNDEFINED)
+	{
 		_ASSERTE(m_Key.eType != RE_UNDEFINED);
 		return NULL;
 	}
@@ -1934,10 +2449,12 @@ RegFolder* REPlugin::PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumbe
 	// Если выделен ".." то запустить редактирование текущего ключа
 	if (ItemsNumber == 0)
 	{
-		if (expFolder->key.mh_Root == NULL) {
+		if (expFolder->key.mh_Root == NULL)
+		{
 			goto wrap; // мы и так в корне, редактировать выше - нечего
 		}
-		if (!expFolder->key.mpsz_Key || !*expFolder->key.mpsz_Key) {
+		if (!expFolder->key.mpsz_Key || !*expFolder->key.mpsz_Key)
+		{
 			_ASSERTE(expFolder->key.mpsz_Key && expFolder->key.mpsz_Key[0]);
 			goto wrap;
 		}
@@ -1953,15 +2470,20 @@ RegFolder* REPlugin::PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumbe
 		#endif
 		lbSucceeded = true; // OK!
 		
-	} else {
+	}
+	else
+	{
 		_ASSERTE(ItemsNumber>0);
 		pItem = (RegItem*)PanelItem[0].UserData;
-		if (ItemsNumber > 1 || (pItem == NULL) /*|| (pItem && pItem->nValueType != REG__KEY)*/) {
+		if (ItemsNumber > 1 || (pItem == NULL) /*|| (pItem && pItem->nValueType != REG__KEY)*/)
+		{
 			// Имя брать из родительского ключа!
 			if (expFolder->key.mpsz_Key[0])
 			{
 				lstrcpynW(sDefaultName, PointToName(expFolder->key.mpsz_Key), MAX_REGKEY_NAME+1);
-			} else {
+			}
+			else
+			{
 				if (!HKeyToStringKey(expFolder->key.mh_Root, sDefaultName, countof(sDefaultName)))
 					lstrcpynW(sDefaultName, L"InvalidDefaultName", MAX_REGKEY_NAME+1);
 			}
@@ -1977,10 +2499,10 @@ RegFolder* REPlugin::PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumbe
 			pItem = (RegItem*)PanelItem[n].UserData;
 			if (pItem == NULL)
 			{
-				if ((PanelItem[n].FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-					&& FILENAMEPTR(PanelItem[n].FindData)[0] == _T('.')
-					&& FILENAMEPTR(PanelItem[n].FindData)[1] == _T('.')
-					&& FILENAMEPTR(PanelItem[n].FindData)[2] == 0
+				if ((PanelItemAttributes(PanelItem[n]) & FILE_ATTRIBUTE_DIRECTORY)
+					&& FILENAMEPTR(PanelItem[n])[0] == _T('.')
+					&& FILENAMEPTR(PanelItem[n])[1] == _T('.')
+					&& FILENAMEPTR(PanelItem[n])[2] == 0
 					&& (ItemsNumber == 1))
 				{
 					_ASSERTE(sDefaultName[0] != 0);
@@ -1995,15 +2517,19 @@ RegFolder* REPlugin::PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumbe
 				}
 			}
 
-			if (ItemsNumber == 1) {
+			if (ItemsNumber == 1)
+			{
 				// Если выделен только один - брать имя из него
 				lstrcpynW(sDefaultName, pItem->pszName, MAX_REGKEY_NAME+1);
 			}
-			if (ItemsNumber == 1 && pItem->nValueType == REG__KEY) {
+			if (ItemsNumber == 1 && pItem->nValueType == REG__KEY)
+			{
 				// И сразу сменить папку!
 				if (!expFolder->key.ChDir(pItem, false, this))
 					goto wrap;
-			} else {
+			}
+			else
+			{
 				_ASSERTE(pItem->bDefaultValue || (!pItem->bDefaultValue || pItem->nValueType == REG__KEY));
 				expFolder->AddItem(
 					pItem->bDefaultValue ? NULL : pItem->pszName,
@@ -2027,8 +2553,11 @@ wrap:
 	{
 		expFolder->Release();
 		SafeDelete(expFolder);
-	} else {
-		if (psDefaultName) {
+	}
+	else
+	{
+		if (psDefaultName)
+		{
 			CopyFileName(psDefaultName, nMaxDefaultLen, sDefaultName);
 		}
 	}
@@ -2038,7 +2567,10 @@ wrap:
 	return expFolder;
 }
 
-RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen)
+RegFolder* REPlugin::PrepareExportKey(
+			bool abOnlyCurrent,
+			wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen,
+			bool abFavorItem) // если true, элемент - ключ, и он один - то добавить его в список, а не делать ChDir
 {
 	wchar_t sDefaultName[MAX_PATH+1]; sDefaultName[0] = 0;
 
@@ -2049,7 +2581,8 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 	PluginPanelItem* item=NULL;
 	RegItem* pItem = NULL;
 	
-	if (m_Key.eType == RE_UNDEFINED) {
+	if (m_Key.eType == RE_UNDEFINED)
+	{
 		_ASSERTE(m_Key.eType != RE_UNDEFINED);
 		return NULL;
 	}
@@ -2059,14 +2592,16 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 	RegFolder *expFolder = new RegFolder; // не кешируем, т.к. грузить сейчас нужно всё подряд
 	expFolder->Init(&m_Key);
 
-	if (psi.Control((HANDLE)this, FCTL_GETPANELINFO, F757NA &inf))
+	if (psiControl((HANDLE)this, FCTL_GETPANELINFO, F757NA &inf))
 	{
 		// Если выделен ".." то запустить редактирование текущего ключа
 		if (inf.ItemsNumber == 0 
 			|| (inf.CurrentItem == 0 && (abOnlyCurrent || inf.SelectedItemsNumber == 0)))
 		{
-			if (expFolder->key.mh_Root == NULL) {
-				if (m_Key.eType == RE_REGFILE || m_Key.eType == RE_HIVE) {
+			if (expFolder->key.mh_Root == NULL)
+			{
+				if (m_Key.eType == RE_REGFILE || m_Key.eType == RE_HIVE)
+				{
 					LPCTSTR pszFile = PointToName(mpsz_HostFile);
 					lstrcpy_t(sDefaultName, countof(sDefaultName), pszFile ? pszFile : _T(""));
 					lbSucceeded = true; // ОК, выгружаем весь файл
@@ -2074,15 +2609,19 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 				goto wrap; // мы и так в корне, редактировать выше - нечего
 			}
 			// Ключ может быть пустым (например, выгружаем весь HKCR), но память должна быть выделена, иначе это сбой
-			if (!expFolder->key.mpsz_Key /*|| !*expFolder->key.mpsz_Key*/) {
+			if (!expFolder->key.mpsz_Key /*|| !*expFolder->key.mpsz_Key*/)
+			{
 				_ASSERTE(expFolder->key.mpsz_Key /*&& expFolder->key.mpsz_Key[0]*/);
 				InvalidOp();
 				goto wrap;
 			}
 			int nNameLen = 0;
-			if (!*expFolder->key.mpsz_Key) {
+			if (!*expFolder->key.mpsz_Key)
+			{
 				HKeyToStringKey(expFolder->key.mh_Root, sDefaultName, countof(sDefaultName));
-			} else {
+			}
+			else
+			{
 				// Экспортируемое имя - имя текущего ключа
 				LPCWSTR pszLastName = PointToName(expFolder->key.mpsz_Key);
 				nNameLen = lstrlenW(pszLastName);
@@ -2094,13 +2633,21 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 			#endif
 			lbSucceeded = true; // OK!
 			
-		} else
-		if (abOnlyCurrent && inf.CurrentItem>0) {
+		}
+		else if (abOnlyCurrent && inf.CurrentItem>0)
+		{
 			_ASSERTE(item == NULL);
 			#ifdef _UNICODE
-			nCurLen = psi.Control((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, NULL);
+			nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, NULL);
 			item = (PluginPanelItem*)calloc(nCurLen,1);
-			if (!psi.Control((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, (LONG_PTR)item)) {
+			#if FAR_UNICODE>=1906
+			FarGetPluginPanelItem gppi = {nCurLen, item};
+			nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, (FarDlgProcParam2)&gppi);
+			#else
+			nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, inf.CurrentItem, (FarDlgProcParam2)item);
+			#endif
+			if (!nCurLen)
+			{
 				goto wrap;
 			}
 			#else
@@ -2108,19 +2655,24 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 			#endif
 			
 			pItem = (RegItem*)item->UserData;
-			if (pItem == NULL || pItem->nMagic != REGEDIT_MAGIC) {
+			if (pItem == NULL || pItem->nMagic != REGEDIT_MAGIC)
+			{
 				_ASSERTE(pItem != NULL);
 				_ASSERTE(pItem->nMagic == REGEDIT_MAGIC);
 				goto wrap;
 			}
 			
 			lstrcpynW(sDefaultName, pItem->pszName, MAX_PATH+1);
-			if (pItem->nValueType == REG__KEY) {
+			if (pItem->nValueType == REG__KEY)
+			{
 				if (!expFolder->key.ChDir(pItem, false, this))
 					goto wrap;
-			} else {
+			}
+			else
+			{
 				nLen = lstrlenW(pItem->pszName)+1;
-				if (pItem->nValueType != REG__KEY) {
+				if (pItem->nValueType != REG__KEY)
+				{
 					expFolder->AllocateItems(0,1,0,nLen+1);
 					_ASSERTE(pItem->bDefaultValue || (pItem->nValueType != REG__KEY));
 					expFolder->AddItem(
@@ -2131,10 +2683,11 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 			}
 			lbSucceeded = true; // OK!
 			
-		} else
-		if (inf.SelectedItemsNumber>0)
+		}
+		else if (inf.SelectedItemsNumber>0)
 		{
-			if (inf.SelectedItemsNumber > 1) {
+			if (inf.SelectedItemsNumber > 1)
+			{
 				// Имя брать из родительского ключа!
 				if (!expFolder->key.mpsz_Key || !*expFolder->key.mpsz_Key)
 				{
@@ -2152,16 +2705,24 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 			expFolder->AllocateItems(inf.SelectedItemsNumber,0,MAX_PATH+1,0);
 
 			_ASSERTE(item == NULL);
-			for (int n = 0; n < inf.SelectedItemsNumber; n++)
+			for (INT_PTR n = 0; n < (INT_PTR)inf.SelectedItemsNumber; n++)
 			{
 				#ifdef _UNICODE
-				nCurLen = psi.Control((HANDLE)this, FCTL_GETSELECTEDPANELITEM, n, NULL);
-				if (!item || nCurLen > nMaxLen) {
+				nCurLen = psiControl((HANDLE)this, FCTL_GETSELECTEDPANELITEM, n, NULL);
+				if (!item || nCurLen > nMaxLen)
+				{
 					SafeFree(item);
 					nMaxLen = nCurLen + 512;
 					item = (PluginPanelItem*)calloc(nMaxLen,1);
 				}
-				if (!psi.Control((HANDLE)this, FCTL_GETSELECTEDPANELITEM, n, (LONG_PTR)item)) {
+				#if FAR_UNICODE>=1906
+				FarGetPluginPanelItem gppi = {nCurLen, item};
+				nCurLen = psiControl((HANDLE)this, FCTL_GETSELECTEDPANELITEM, n, (FarDlgProcParam2)&gppi);
+				#else
+				nCurLen = psiControl((HANDLE)this, FCTL_GETSELECTEDPANELITEM, n, (FarDlgProcParam2)item);
+				#endif
+				if (!nCurLen)
+				{
 					goto wrap;
 				}
 				#else
@@ -2169,7 +2730,8 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 				#endif
 				
 				pItem = (RegItem*)item->UserData;
-				if (pItem == NULL || pItem->nMagic != REGEDIT_MAGIC) {
+				if (pItem == NULL || pItem->nMagic != REGEDIT_MAGIC)
+				{
 					_ASSERTE(pItem != NULL);
 					_ASSERTE(pItem->nMagic == REGEDIT_MAGIC);
 					goto wrap;
@@ -2181,12 +2743,14 @@ RegFolder* REPlugin::PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName
 					lstrcpynW(sDefaultName, pItem->pszName, MAX_PATH+1);
 				}
 				// Если выделен только один КЛЮЧ - перейти в него
-				if (inf.SelectedItemsNumber == 1 && pItem->nValueType == REG__KEY)
+				if (inf.SelectedItemsNumber == 1 && pItem->nValueType == REG__KEY && !abFavorItem)
 				{
 					// И сразу сменить папку!
 					if (!expFolder->key.ChDir(pItem, false, this))
 						goto wrap;
-				} else {
+				}
+				else
+				{
 					_ASSERTE((pItem->bDefaultValue && (pItem->nValueType != REG__KEY)) || !pItem->bDefaultValue);
 					expFolder->AddItem(
 						pItem->bDefaultValue ? NULL : pItem->pszName,
@@ -2211,8 +2775,11 @@ wrap:
 	{
 		expFolder->Release();
 		SafeDelete(expFolder);
-	} else {
-		if (psDefaultName) {
+	}
+	else
+	{
+		if (psDefaultName)
+		{
 			CopyFileName(psDefaultName, nMaxDefaultLen, sDefaultName);
 		}
 	}
@@ -2242,22 +2809,29 @@ void REPlugin::RedrawPanel(RegItem* pNewSel /*= NULL*/)
 		INT_PTR nCurLen = 0, nMaxLen = 0;
 		PluginPanelItem* item=NULL;
 
-		if (psi.Control((HANDLE)this, FCTL_GETPANELINFO, F757NA &inf))
+		if (psiControl((HANDLE)this, FCTL_GETPANELINFO, F757NA &inf))
 		{
 			ppri = &pri;
 			pri.TopPanelItem = inf.TopPanelItem;
 
-			for (int i = 0; i < inf.ItemsNumber; i++)
+			for (INT_PTR i = 0; i < (INT_PTR)inf.ItemsNumber; i++)
 			{
 				#ifdef _UNICODE
-				nCurLen = psi.Control((HANDLE)this, FCTL_GETPANELITEM, i, NULL);
+				nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, i, NULL);
 				if (!item || nCurLen > nMaxLen)
 				{
 					SafeFree(item);
 					nMaxLen = nCurLen + 512;
 					item = (PluginPanelItem*)calloc(nMaxLen,1);
 				}
-				if (!psi.Control((HANDLE)this, FCTL_GETPANELITEM, i, (LONG_PTR)item)) {
+				#if FAR_UNICODE>=1906
+				FarGetPluginPanelItem gppi = {nCurLen, item};
+				nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, i, (FarDlgProcParam2)&gppi);
+				#else
+				nCurLen = psiControl((HANDLE)this, FCTL_GETPANELITEM, i, (FarDlgProcParam2)item);
+				#endif
+				if (!nCurLen)
+				{
 					continue;
 				}
 				#else
@@ -2287,16 +2861,16 @@ void REPlugin::RedrawPanel(RegItem* pNewSel /*= NULL*/)
 	}
 
 	// Теперь - перерисовываем, с возможным перепозиционированием курсора
-	psi.Control((HANDLE)this, FCTL_REDRAWPANEL, F757NA ppri);
+	psiControl((HANDLE)this, FCTL_REDRAWPANEL, F757NA ppri);
 }
 
 void REPlugin::UpdatePanel(bool abResetSelection)
 {
 	MCHKHEAP;
 	#ifdef _UNICODE
-		psi.Control((HANDLE)this, FCTL_UPDATEPANEL, abResetSelection ? 0 : 1, NULL);
+		psiControl((HANDLE)this, FCTL_UPDATEPANEL, abResetSelection ? 0 : 1, NULL);
 	#else
-		psi.Control((HANDLE)this, FCTL_UPDATEPANEL, (void*)(abResetSelection ? 0 : 1));
+		psiControl((HANDLE)this, FCTL_UPDATEPANEL, (void*)(abResetSelection ? 0 : 1));
 	#endif
 	MCHKHEAP;
 }
@@ -2375,18 +2949,14 @@ int REPlugin::Compare(const struct PluginPanelItem *Item1, const struct PluginPa
 				{
 					// Если в панели отображены два одноименных ключа/значения (один - пометка удален)
 					// то первым показываем удаленный
-					if (Item1->FindData.dwFileAttributes != Item2->FindData.dwFileAttributes)
+					if (PanelItemAttributes(*Item1) != PanelItemAttributes(*Item2))
 					{
 						int iRc;
-						#ifdef _UNICODE
-							iRc = lstrcmpi(Item1->FindData.lpwszFileName, Item2->FindData.lpwszFileName);
-						#else
-							iRc = lstrcmpi(Item1->FindData.cFileName, Item2->FindData.cFileName);
-						#endif
+						iRc = lstrcmpi(PanelItemFileNamePtr(*Item1), PanelItemFileNamePtr(*Item2));
 						// Да, ключи одноименные
 						if (iRc == 0)
 						{
-							return (Item1->FindData.dwFileAttributes & REG_ATTRIBUTE_DELETED) ? -1 : 1;
+							return (PanelItemAttributes(*Item1) & REG_ATTRIBUTE_DELETED) ? -1 : 1;
 						}
 					}
 				}
@@ -2410,8 +2980,8 @@ int REPlugin::Compare(const struct PluginPanelItem *Item1, const struct PluginPa
 	return -2; // Use FAR default sorting
 }
 
-class DwordDialogBuilder;
-DwordDialogBuilder* pDwordDlg = NULL;
+//class DwordDialogBuilder;
+//DwordDialogBuilder* pDwordDlg = NULL;
 
 class DwordDialogBuilder : public PluginDialogBuilder
 {
@@ -2424,53 +2994,94 @@ public:
 
 public:
 	DwordDialogBuilder(int TitleMessageID, const TCHAR *aHelpTopic)
-		: PluginDialogBuilder(psi, TitleMessageID, aHelpTopic)
+		: PluginDialogBuilder(psi, TitleMessageID, aHelpTopic, &guid_DwordDialogBuilder)
 	{
-		pDwordDlg = this;
+		//pDwordDlg = this;
 	}
 
-	~DwordDialogBuilder()
+	virtual ~DwordDialogBuilder()
 	{
-		pDwordDlg = NULL;
+		//pDwordDlg = NULL;
 	}
 
-	TCHAR* FormatNumber(TCHAR* pszText, TCHAR* pszAlt, DWORD nValue)
+	TCHAR* FormatNumber(TCHAR* pszText, TCHAR* pszAlt, u64 nValue64)
 	{
-		if (nValueSize == 4) {
-			if (nCurrentBase == 0) {
-				wsprintf(pszText, _T("%08x"), nValue);
-				if (pszAlt) wsprintf(pszAlt, _T("= %u"), nValue);
-			} else if (nCurrentBase == 1) {
-				wsprintf(pszText, _T("%u"), nValue);
-				if (pszAlt) wsprintf(pszAlt, _T("= 0x%08X"), nValue);
-			} else {
-				wsprintf(pszText, _T("%i"), (int)nValue);
-				if (pszAlt) wsprintf(pszAlt, _T("= 0x%08X"), nValue);
+		if (nValueSize == 8)
+		{
+			BOOL lbLarge = (nValue64 > 0xFFFFFFFFLL);
+			if (nCurrentBase == 0)
+			{
+				_tcsprintf(pszText, lbLarge ? _T("%016I64x") : _T("%08I64x"), nValue64);
+				if (pszAlt) _tcsprintf(pszAlt, _T(" = %I64u"), nValue64);
 			}
-		} else if (nValueSize == 2) {
-			if (nCurrentBase == 0) {
-				wsprintf(pszText, _T("%04x"), (nValue & 0xFFFF));
-				if (pszAlt) wsprintf(pszAlt, _T("= %u"), (nValue & 0xFFFF));
-			} else if (nCurrentBase == 1) {
-				wsprintf(pszText, _T("%u"), (nValue & 0xFFFF));
-				if (pszAlt) wsprintf(pszAlt, _T("= 0x%04X"), (nValue & 0xFFFF));
-			} else {
-				wsprintf(pszText, _T("%i"), (short)(WORD)(nValue & 0xFFFF));
-				if (pszAlt) wsprintf(pszAlt, _T("= 0x%04X"), (nValue & 0xFFFF));
+			else if (nCurrentBase == 1)
+			{
+				_tcsprintf(pszText, _T("%I64u"), nValue64);
+				if (pszAlt) _tcsprintf(pszAlt, lbLarge ? _T(" = 0x%016I64X") : _T(" = 0x%08I64X"), nValue64);
 			}
-		} else if (nValueSize == 1) {
-			if (nCurrentBase == 0) {
-				wsprintf(pszText, _T("%02x"), (DWORD)(nValue & 0xFF));
-				wsprintf(pszAlt, _T("= %u"), (DWORD)(nValue & 0xFF));
-			} else if (nCurrentBase == 1) {
-				wsprintf(pszText, _T("%u"), (nValue & 0xFF));
-				if (pszAlt) wsprintf(pszAlt, _T("= 0x%02X"), (nValue & 0xFF));
-			} else {
-				wsprintf(pszText, _T("%i"), (char)(BYTE)(nValue & 0xFF));
-				if (pszAlt) wsprintf(pszAlt, _T("= 0x%02X"), (nValue & 0xFF));
+			else
+			{
+				_tcsprintf(pszText, _T("%I64i"), (__int64)nValue64);
+				if (pszAlt) _tcsprintf(pszAlt, lbLarge ? _T(" = 0x%016I64X") : _T(" = 0x%08I64X"), nValue64);
 			}
-		} else {
-			_ASSERTE(nValueSize == 1 || nValueSize == 2 || nValueSize == 4);
+		}
+		else if (nValueSize == 4)
+		{
+			if (nCurrentBase == 0)
+			{
+				wsprintf(pszText, _T("%08x"), (DWORD)(nValue64 & 0xFFFFFFFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = %u"), (DWORD)(nValue64 & 0xFFFFFFFF));
+			}
+			else if (nCurrentBase == 1)
+			{
+				wsprintf(pszText, _T("%u"), (DWORD)(nValue64 & 0xFFFFFFFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = 0x%08X"), (DWORD)(nValue64 & 0xFFFFFFFF));
+			}
+			else
+			{
+				wsprintf(pszText, _T("%i"), (int)(DWORD)(nValue64 & 0xFFFFFFFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = 0x%08X"), (DWORD)(nValue64 & 0xFFFFFFFF));
+			}
+		}
+		else if (nValueSize == 2)
+		{
+			if (nCurrentBase == 0)
+			{
+				wsprintf(pszText, _T("%04x"), (DWORD)(nValue64 & 0xFFFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = %u"), (DWORD)(nValue64 & 0xFFFF));
+			}
+			else if (nCurrentBase == 1)
+			{
+				wsprintf(pszText, _T("%u"), (DWORD)(nValue64 & 0xFFFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = 0x%04X"), (DWORD)(nValue64 & 0xFFFF));
+			}
+			else
+			{
+				wsprintf(pszText, _T("%i"), (int)(short)(WORD)(nValue64 & 0xFFFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = 0x%04X"), (DWORD)(nValue64 & 0xFFFF));
+			}
+		}
+		else if (nValueSize == 1)
+		{
+			if (nCurrentBase == 0)
+			{
+				wsprintf(pszText, _T("%02x"), (DWORD)(nValue64 & 0xFF));
+				wsprintf(pszAlt, _T(" = %u"), (DWORD)(nValue64 & 0xFF));
+			}
+			else if (nCurrentBase == 1)
+			{
+				wsprintf(pszText, _T("%u"), (DWORD)(nValue64 & 0xFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = 0x%02X"), (DWORD)(nValue64 & 0xFF));
+			}
+			else
+			{
+				wsprintf(pszText, _T("%i"), (char)(BYTE)(nValue64 & 0xFF));
+				if (pszAlt) wsprintf(pszAlt, _T(" = 0x%02X"), (DWORD)(nValue64 & 0xFF));
+			}
+		}
+		else
+		{
+			_ASSERTE(nValueSize == 1 || nValueSize == 2 || nValueSize == 4 || nValueSize == 8);
 			return NULL;
 		}
 		return pszText;
@@ -2485,7 +3096,7 @@ public:
 		#else
 		LONG_PTR nLen = psi.SendDlgMessage(hDlg,DM_GETTEXTLENGTH,nValueId,0);
 		TCHAR *pszData = (TCHAR*)calloc(nLen+1,1);
-		psi.SendDlgMessage(hDlg,DM_GETTEXTPTR,nValueId,(LONG_PTR)pszData);
+		psi.SendDlgMessage(hDlg,DM_GETTEXTPTR,nValueId,(FarDlgProcParam2)pszData);
 		pszText = pszData;
 #endif
 
@@ -2493,40 +3104,81 @@ public:
 		while (*pszText == L' ') pszText++;
 		int nOldBase = nCurrentBase;
 		nCurrentBase = nNewBase;
-		if (*pszText == 0) {
+		if (*pszText == 0)
+		{
 			FormatNumber(sNewValue, sNewValueAlt, 0);
-		} else {
+		}
+		else
+		{
 			TCHAR* endptr;
-			if (nValueSize == 4) {
-				if (nOldBase == 0) {
+			if (nValueSize == 8)
+			{
+				if (nOldBase == 0)
+				{
+					u64 nValue = _tcstoui64(pszText, &endptr, 16);
+					FormatNumber(sNewValue, sNewValueAlt, nValue);
+				}
+				else if (nOldBase == 1)
+				{
+					u64 nValue = _tcstoui64(pszText, &endptr, 10);
+					FormatNumber(sNewValue, sNewValueAlt, nValue);
+				}
+				else
+				{
+					__int64 nValue = _tcstoi64(pszText, &endptr, 10);
+					FormatNumber(sNewValue, sNewValueAlt, nValue);
+				}
+			}
+			else if (nValueSize == 4)
+			{
+				if (nOldBase == 0)
+				{
 					DWORD nValue = _tcstoul(pszText, &endptr, 16);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
-				} else if (nOldBase == 1) {
+				}
+				else if (nOldBase == 1)
+				{
 					DWORD nValue = _tcstoul(pszText, &endptr, 10);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
-				} else {
+				}
+				else
+				{
 					int nValue = _tcstol(pszText, &endptr, 10);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
 				}
-			} else if (nValueSize == 2) {
-				if (nOldBase == 0) {
+			}
+			else if (nValueSize == 2)
+			{
+				if (nOldBase == 0)
+				{
 					WORD nValue = (WORD)(_tcstoul(pszText, &endptr, 16) & 0xFFFF);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
-				} else if (nOldBase == 1) {
+				}
+				else if (nOldBase == 1)
+				{
 					WORD nValue = (WORD)(_tcstoul(pszText, &endptr, 10) & 0xFFFF);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
-				} else {
+				}
+				else
+				{
 					short nValue = (short)(_tcstol(pszText, &endptr, 10) & 0xFFFF);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
 				}
-			} else {
-				if (nOldBase == 0) {
+			}
+			else
+			{
+				if (nOldBase == 0)
+				{
 					BYTE nValue = (BYTE)(_tcstoul(pszText, &endptr, 16) & 0xFF);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
-				} else if (nOldBase == 1) {
+				}
+				else if (nOldBase == 1)
+				{
 					BYTE nValue = (BYTE)(_tcstoul(pszText, &endptr, 10) & 0xFF);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
-				} else {
+				}
+				else
+				{
 					char nValue = (char)(_tcstol(pszText, &endptr, 10) & 0xFF);
 					FormatNumber(sNewValue, sNewValueAlt, nValue);
 				}
@@ -2534,15 +3186,17 @@ public:
 		}
 		if (nNewBase != nOldBase)
 		{
-			psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,nValueId,(LONG_PTR)sNewValue);
-		} else {
+			psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,nValueId,(FarDlgProcParam2)sNewValue);
+		}
+		else
+		{
 			const TCHAR* psz1 = pszText; const TCHAR* psz2 = sNewValue;
 			while (*psz1 == _T('0') || *psz1 == _T(' ')) psz1++;
 			while (*psz2 == _T('0') || *psz2 == _T(' ')) psz2++;
 			if (lstrcmpi(psz1, psz2))
 				lstrcat(sNewValueAlt, GetMsg(REValueErrorLabel));
 		}
-		psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,nAltValueId,(LONG_PTR)sNewValueAlt);
+		psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,nAltValueId,(FarDlgProcParam2)sNewValueAlt);
 		//BUG: Far ставит курсор на новый элемент, но думает, что фокус еще в радио :(
 		//psi.SendDlgMessage(hDlg,DM_SETFOCUS,nValueId,0);
 		#ifndef _UNICODE
@@ -2550,109 +3204,49 @@ public:
 		#endif
 	}
 
-	static LONG_PTR WINAPI DwordDialogBuilderProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+	//static LONG_PTR WINAPI DwordDialogBuilderProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
+	virtual BOOL PluginDialogProc(HANDLE hDlg, int Msg, int Param1, FarDlgProcParam2 Param2, LONG_PTR& lResult)
 	{
 		if (Msg == DN_INITDIALOG)
 		{
-			TCHAR sSize[64]; wsprintf(sSize, GetMsg(REValueSizeStatic), pDwordDlg->nValueSize);
-			psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,pDwordDlg->nValueSizeId,(LONG_PTR)sSize);
-			psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,pDwordDlg->nAltValueId,(LONG_PTR)pDwordDlg->sValueAlt);
-		} else
-		if (Msg == DN_EDITCHANGE)
+			TCHAR sSize[64]; wsprintf(sSize, GetMsg(REValueSizeStatic), this->nValueSize);
+			psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,this->nValueSizeId,(FarDlgProcParam2)sSize);
+			psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,this->nAltValueId,(FarDlgProcParam2)this->sValueAlt);
+		}
+		else if (Msg == DN_EDITCHANGE)
 		{
-			if (Param1 == pDwordDlg->nValueId)
+			if (Param1 == this->nValueId)
 			{
 				// Обновить Alt-значение
-				pDwordDlg->UpdateValues(hDlg, pDwordDlg->nCurrentBase);
+				this->UpdateValues(hDlg, this->nCurrentBase);
 			}
-		} else
-		if (Msg == DN_BTNCLICK)
+		}
+		else if (Msg == DN_BTNCLICK)
 		{
-			_ASSERTE(pDwordDlg!=NULL);
-			if (Param1 >= pDwordDlg->nFirstBaseId && Param1 <= (pDwordDlg->nFirstBaseId + 2) && Param2)
+			_ASSERTE(this!=NULL);
+			if (Param1 >= this->nFirstBaseId && Param1 <= (this->nFirstBaseId + 2) && Param2)
 			{
 				// Сменить значение
-				pDwordDlg->UpdateValues(hDlg, (Param1 - pDwordDlg->nFirstBaseId));
-
-				//const TCHAR* pszText = NULL;
-				//#ifdef _UNICODE
-				//	pszText = ((const TCHAR *)psi.SendDlgMessage(hDlg,DM_GETCONSTTEXTPTR,pDwordDlg->nValueId,0));
-				//#else
-				//	LONG_PTR nLen = psi.SendDlgMessage(hDlg,DM_GETTEXTLENGTH,pDwordDlg->nValueId,0);
-				//	TCHAR *pszData = (TCHAR*)calloc(nLen+1,1);
-				//	psi.SendDlgMessage(hDlg,DM_GETTEXTPTR,pDwordDlg->nValueId,(LONG_PTR)pszData);
-				//	pszText = pszData;
-				//#endif
-
-				//TCHAR sNewValue[32], sNewValueAlt[32];
-				//while (*pszText == L' ') pszText++;
-				//int nOldBase = pDwordDlg->nCurrentBase;
-				//pDwordDlg->nCurrentBase = (Param1 - pDwordDlg->nFirstBaseId);
-				//if (*pszText == 0) {
-				//	pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, 0);
-				//} else {
-				//	TCHAR* endptr;
-				//	if (pDwordDlg->nValueSize == 4) {
-				//		if (nOldBase == 0) {
-				//			DWORD nValue = _tcstoul(pszText, &endptr, 16);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		} else if (nOldBase == 1) {
-				//			DWORD nValue = _tcstoul(pszText, &endptr, 10);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		} else {
-				//			int nValue = _tcstol(pszText, &endptr, 10);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		}
-				//	} else if (pDwordDlg->nValueSize == 2) {
-				//		if (nOldBase == 0) {
-				//			WORD nValue = (WORD)(_tcstoul(pszText, &endptr, 16) & 0xFFFF);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		} else if (nOldBase == 1) {
-				//			WORD nValue = (WORD)(_tcstoul(pszText, &endptr, 10) & 0xFFFF);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		} else {
-				//			short nValue = (short)(_tcstol(pszText, &endptr, 10) & 0xFFFF);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		}
-				//	} else {
-				//		if (nOldBase == 0) {
-				//			BYTE nValue = (BYTE)(_tcstoul(pszText, &endptr, 16) & 0xFF);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		} else if (nOldBase == 1) {
-				//			BYTE nValue = (BYTE)(_tcstoul(pszText, &endptr, 10) & 0xFF);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		} else {
-				//			char nValue = (char)(_tcstol(pszText, &endptr, 10) & 0xFF);
-				//			pDwordDlg->FormatNumber(sNewValue, sNewValueAlt, nValue);
-				//		}
-				//	}
-				//}
-				//psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,pDwordDlg->nValueId,(LONG_PTR)sNewValue);
-				//psi.SendDlgMessage(hDlg,DM_SETTEXTPTR,pDwordDlg->nAltValueId,(LONG_PTR)sNewValueAlt);
-				////BUG: Far ставит курсор на новый элемент, но думает, что фокус еще в радио :(
-				////psi.SendDlgMessage(hDlg,DM_SETFOCUS,pDwordDlg->nValueId,0);
-				//#ifndef _UNICODE
-				//SafeFree(pszData);
-				//#endif
+				this->UpdateValues(hDlg, (Param1 - this->nFirstBaseId));
 			}
 		}
 
-		return psi.DefDlgProc(hDlg, Msg, Param1, Param2);
+		return FALSE; // позвать psi.DefDlgProc(hDlg, Msg, Param1, Param2);
 	}
 
-	virtual int DoShowDialog()
-	{
-		int Width = DialogItems [0].X2+4;
-		int Height = DialogItems [0].Y2+2;
-		#ifdef UNICODE
-			DialogHandle = Info.DialogInit(Info.ModuleNumber, -1, -1, Width, Height,
-				HelpTopic, DialogItems, DialogItemsCount, 0, 0, DwordDialogBuilderProc, (LONG_PTR)this);
-			return Info.DialogRun(DialogHandle);
-		#else
-			return Info.DialogEx(Info.ModuleNumber, -1, -1, Width, Height,
-				HelpTopic, DialogItems, DialogItemsCount, 0, 0, DwordDialogBuilderProc, (LONG_PTR)this);
-		#endif
-	}
+	//virtual int DoShowDialog()
+	//{
+	//	int Width = DialogItems [0].X2+4;
+	//	int Height = DialogItems [0].Y2+2;
+	//	#ifdef UNICODE
+	//		DialogHandle = Info.DialogInit(PluginNumber, -1, -1, Width, Height,
+	//			HelpTopic, DialogItems, DialogItemsCount, 0, 0, DwordDialogBuilderProc, (FarDlgProcParam2)this);
+	//		return Info.DialogRun(DialogHandle);
+	//	#else
+	//		return Info.DialogEx(PluginNumber, -1, -1, Width, Height,
+	//			HelpTopic, DialogItems, DialogItemsCount, 0, 0, DwordDialogBuilderProc, (FarDlgProcParam2)this);
+	//	#endif
+	//}
 };
 
 // Вернуть TRUE если нажата кнопка OK
@@ -2679,22 +3273,38 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 	int nValueType = ((*pnDataType) == REG_BINARY) ? 0 : 1;
 	int nTypes[] = {
 		RE_REG_BINARY,
-		RE_REG_DWORD,
+		(cbSize == 8) ? RE_REG_QWORD : RE_REG_DWORD,
+		//RE_REG_QWORD,
 	};
 	Edt.nCurrentBase = nValueBase;
 	Edt.nValueSize = cbSize;
 	
-	if (cbSize == 4) {
+	if (cbSize == 8)
+	{
+		if (*((u64*)pNumber) > 0xFFFFFFFFLL)
+			_tcsprintf(sValue, _T("%016I64x"), *((u64*)pNumber));
+		else
+			_tcsprintf(sValue, _T("%08I64x"), *((u64*)pNumber));
+		_tcsprintf(Edt.sValueAlt, _T(" = %I64u"), *((u64*)pNumber));
+	}
+	else if (cbSize == 4)
+	{
 		wsprintf(sValue, _T("%08x"), *((DWORD*)pNumber));
-		wsprintf(Edt.sValueAlt, _T("= %u"), *((DWORD*)pNumber));
-	} else if (cbSize == 2) {
+		wsprintf(Edt.sValueAlt, _T(" = %u"), *((DWORD*)pNumber));
+	}
+	else if (cbSize == 2)
+	{
 		wsprintf(sValue, _T("%04x"), (DWORD)*((WORD*)pNumber));
-		wsprintf(Edt.sValueAlt, _T("= %u"), (DWORD)*((WORD*)pNumber));
-	} else if (cbSize == 1) {
+		wsprintf(Edt.sValueAlt, _T(" = %u"), (DWORD)*((WORD*)pNumber));
+	}
+	else if (cbSize == 1)
+	{
 		wsprintf(sValue, _T("%02x"), (DWORD)*((BYTE*)pNumber));
-		wsprintf(Edt.sValueAlt, _T("= %u"), (DWORD)*((BYTE*)pNumber));
-	} else {
-		_ASSERTE(cbSize == 1 || cbSize == 2 || cbSize == 4);
+		wsprintf(Edt.sValueAlt, _T(" = %u"), (DWORD)*((BYTE*)pNumber));
+	}
+	else
+	{
+		_ASSERTE(cbSize == 1 || cbSize == 2 || cbSize == 4 || cbSize == 8);
 		return FALSE;
 	}
 
@@ -2704,11 +3314,17 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 	lstrcpy(sCurName, sName);
 
 	Edt.AddText(REValueNameLabel);
-	if (bNewValue) {
+	if (bNewValue)
+	{
 		pNameCtrl = Edt.AddEditField(sName, countof(sName), 56, _T("RegistryValueName"));
 		//pNameCtrl->Flags |= DIF_READONLY;
-	} else {
+	}
+	else
+	{
 		pNameCtrl = Edt.AddText(sName);
+		pNameCtrl->X2 = 61;
+		//pNameCtrl = Edt.AddEditField(sName, countof(sName), 56, _T("RegistryValueName"));
+		//pNameCtrl->Flags |= DIF_DISABLE;
 	}
 
 	//p = Edt.AddComboBox((int *) &nDataType, 12, TypesListItems, countof(TypesListItems),
@@ -2719,7 +3335,7 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 
 	Edt.StartColumns();
 	Edt.AddText(REValueTypeLabel);
-	Edt.AddRadioButtons(&nValueType, countof(nTypes), nTypes, ((cbSize == 4) ? 0 : DIF_DISABLE));
+	Edt.AddRadioButtons(&nValueType, countof(nTypes), nTypes, ((cbSize == 4 || cbSize == 8) ? 0 : DIF_DISABLE));
 	p = Edt.AddText(REValueSizeStatic);
 	Edt.nValueSizeId = Edt.GetItemIndex(p);
 	Edt.ColumnBreak();
@@ -2727,27 +3343,31 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 	Edt.nFirstBaseId = Edt.AddRadioButtons(&nValueBase, countof(nBases), nBases);
 	Edt.EndColumns();
 
-	Edt.AddSeparator();
-	Edt.StartColumns();
-	p = Edt.AddEditField(sValue, 11, 12);
+	Edt.AddSeparator(REValueDataLabel);
+	//Edt.StartColumns();
+	p = Edt.AddEditField(sValue, 21, 22);
 	Edt.nValueId = Edt.GetItemIndex(p);
-	p->Focus = TRUE;
-	Edt.AddTextBefore(p, REValueDataLabel);
-	Edt.ColumnBreak();
+	Edt.InitFocus(p);
+	//Edt.ColumnBreak();
 	p = Edt.AddText(REValueShowAltStatic);
+	p->X2 = 40;
 	Edt.nAltValueId = Edt.GetItemIndex(p);
-	Edt.EndColumns();
+	Edt.MoveItemAfter(Edt.GetItemByIndex(Edt.nValueId), p);
+	//Edt.EndColumns();
 
 	Edt.AddOKCancel(REBtnOK, REBtnCancel);
 	BOOL lbOk = FALSE;
-	while (true) {
+	while (true)
+	{
 		lbOk = Edt.ShowDialog();
-		if (!bNewValue && lbOk && sName[0] == 0) {
+		if (!bNewValue && lbOk && sName[0] == 0)
+		{
 			int nErr = Message(REM_NumberRequireName, FMSG_WARNING|FMSG_ALLINONE, 2, _T("ChangeNumber"));
-			if (nErr != 0) {
+			if (nErr != 0)
+			{
 				lbOk = FALSE; break;
 			}
-			pNameCtrl->Focus = TRUE;
+			Edt.InitFocus(pNameCtrl);
 			continue;
 		}
 		break;
@@ -2755,7 +3375,8 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 	MCHKHEAP;
 	if (lbOk)
 	{
-		if (bNewValue) {
+		if (bNewValue)
+		{
 			if (pName && *pName)
 			{
 				// Если пользователь изменил имя - его нужно вернуть в *pName
@@ -2779,19 +3400,39 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 		{
 			*pnDataType = (nValueType == 0) ? REG_BINARY : REG_DWORD;
 		}
+		else if (cbSize == 8)
+		{
+			*pnDataType = (nValueType == 0) ? REG_BINARY : REG_QWORD;
+		}
 
 		const TCHAR* pszText = sValue;
 		while (*pszText == L' ') pszText++;
-		if (*pszText == 0) {
-			if (cbSize == 4)
+		if (*pszText == 0)
+		{
+			if (cbSize == 8)
+				*((u64*)pNumber) = 0;
+			else if (cbSize == 4)
 				*((LPDWORD)pNumber) = 0;
 			else if (cbSize == 2)
 				*((LPWORD)pNumber) = 0;
 			else
 				*((LPBYTE)pNumber) = 0;
-		} else {
+		}
+		else
+		{
 			TCHAR* endptr;
-			if (cbSize == 4) {
+			if (cbSize == 8)
+			{
+				if (nValueBase == 0)
+					*((u64*)pNumber) = _tcstoui64(pszText, &endptr, 16);
+				else if (nValueBase == 1)
+					*((u64*)pNumber) = _tcstoui64(pszText, &endptr, 10);
+				else
+					*((__int64*)pNumber) = _tcstoi64(pszText, &endptr, 10);
+
+			}
+			else if (cbSize == 4)
+			{
 				if (nValueBase == 0)
 					*((DWORD*)pNumber) = _tcstoul(pszText, &endptr, 16);
 				else if (nValueBase == 1)
@@ -2799,7 +3440,9 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 				else
 					*((int*)pNumber) = _tcstol(pszText, &endptr, 10);
 
-			} else if (cbSize == 2) {
+			}
+			else if (cbSize == 2)
+			{
 				if (nValueBase == 0)
 					*((WORD*)pNumber) = (WORD)(_tcstoul(pszText, &endptr, 16) & 0xFFFF);
 				else if (nValueBase == 1)
@@ -2807,7 +3450,9 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 				else
 					*((short*)pNumber) = (short)(_tcstol(pszText, &endptr, 10) & 0xFFFF);
 
-			} else {
+			}
+			else
+			{
 				if (nValueBase == 0)
 					*((BYTE*)pNumber) = (BYTE)(_tcstoul(pszText, &endptr, 16) & 0xFF);
 				else if (nValueBase == 1)
@@ -2873,7 +3518,7 @@ BOOL REPlugin::EditString(wchar_t* pName, wchar_t** pText, REGTYPE nDataType, DW
 		#endif
 			;
 	
-	MFileTxt file;
+	MFileTxtReg file(mb_Wow64on32);
 	if (file.FileCreateTemp(pName, L"", lbUseUnicode))
 	{
 		if (bNewValue)
@@ -3039,7 +3684,7 @@ void REPlugin::EditValueRaw(RegFolder* pFolder, RegItem *pItem, bool abViewOnly)
 	REGTYPE nDataType;
 	LPBYTE pValue = NULL;
 	TCHAR sTitle[MAX_PATH+1];
-	MFileTxt file;
+	MFileTxtReg file(mb_Wow64on32);
 
 	MCHKHEAP;
 	
@@ -3111,7 +3756,7 @@ int REPlugin::EditValue(RegFolder* pFolder, RegItem *pItem, REGTYPE nNewValueTyp
 	int liRc = -1;
 	BOOL lbApplyData = FALSE;
 	//MRegistryBase* pWorker = Worker();
-	//HKEY hKey = NULL;
+	//HREGKEY hKey = NULL;
 	DWORD nDataSize = sizeof(DWORD);
 	REGTYPE nDataType; //, nValue;
 	LPWSTR pszValueName = pItem->bDefaultValue ? NULL : lstrdup(pItem->pszName);
@@ -3131,7 +3776,8 @@ int REPlugin::EditValue(RegFolder* pFolder, RegItem *pItem, REGTYPE nNewValueTyp
 		goto wrap;
 	}
 	
-	if (hRc == 0 && nDataType == REG_BINARY && cfg->bEditBinaryAsText && (nDataSize > 4 || nDataSize == 3))
+	if (hRc == 0 && nDataType == REG_BINARY && cfg->bEditBinaryAsText 
+		&& !(nDataSize==1 || nDataSize==2 || nDataSize==4 || nDataSize==8))
 	{
 		EditValueRaw(pFolder, pItem, false);
 		MCHKHEAP;
@@ -3166,6 +3812,14 @@ int REPlugin::EditValue(RegFolder* pFolder, RegItem *pItem, REGTYPE nNewValueTyp
 			// BYTE[4] <--> DWORD
 			nDataType = nNewValueType;
 		}
+		else if ((nDataSize == 8) &&
+			((nNewValueType == REG_BINARY && nDataType == REG_QWORD)
+			|| (nNewValueType == REG_QWORD && nDataType == REG_BINARY))
+			)
+		{
+			// BYTE[8] <--> QWORD
+			nDataType = nNewValueType;
+		}
 		else if ((nNewValueType == REG_SZ || nNewValueType == REG_EXPAND_SZ) && nDataType == REG_MULTI_SZ)
 		{
 			// чтобы в тексте не появлились левые '\0' - оставим REG_MULTI_SZ
@@ -3196,7 +3850,7 @@ int REPlugin::EditValue(RegFolder* pFolder, RegItem *pItem, REGTYPE nNewValueTyp
 		pszLines[nLines++] = sValueName;
 		pszLines[nLines++] = GetMsg(REBtnContinue);
 		pszLines[nLines++] = GetMsg(REBtnCancel);
-		int iBtn = psi.Message(psi.ModuleNumber, FMSG_WARNING, _T("NewValue"), pszLines, nLines, 2);
+		int iBtn = psi.Message(_PluginNumber(guid_Msg10), FMSG_WARNING, _T("NewValue"), pszLines, nLines, 2);
 		if (iBtn != 0)
 		{
 			liRc = 0; // Отмена пользователем
@@ -3263,6 +3917,7 @@ int REPlugin::EditValue(RegFolder* pFolder, RegItem *pItem, REGTYPE nNewValueTyp
 
 	if (
 		((nDataType == REG_DWORD || nDataType == REG_BINARY) && nDataSize == sizeof(DWORD))
+		|| ((nDataType == REG_QWORD || nDataType == REG_BINARY) && nDataSize == sizeof(u64))
 		|| (nDataType == REG_BINARY && (nDataSize == sizeof(WORD) || nDataSize == sizeof(BYTE)))
 		)
 	{
@@ -3347,7 +4002,7 @@ wrap:
 
 BOOL REPlugin::DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber)
 {
-	if (!(m_Key.eType == RE_WINAPI && m_Key.mh_Root != NULL)
+	if (!((m_Key.eType == RE_WINAPI || m_Key.eType == RE_HIVE) && m_Key.mh_Root != NULL)
 		&& !(m_Key.eType == RE_REGFILE))
 		return FALSE; // В этих случаях - низя
 	if (!mp_Items || !mp_Items->key.IsEqual(&m_Key))
@@ -3356,12 +4011,12 @@ BOOL REPlugin::DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber)
 		return FALSE;
 	}
 
-	//if (psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_ALLINONE, _T("DeleteItems"),
+	//if (psi.Message(PluginNumber, FMSG_WARNING|FMSG_ALLINONE, _T("DeleteItems"),
 	//	(const TCHAR * const *)GetMsg(REM_ConfirmDelete), 1, 2) != 0)
 	//	return FALSE;
 	if (Message(REM_WarningDelete, FMSG_WARNING|FMSG_ALLINONE, 2, _T("DeleteItems")) != 0)
 		return FALSE;
-	if ((psi.AdvControl(psi.ModuleNumber,ACTL_GETCONFIRMATIONS,NULL)&(FCS_DELETE|FCS_DELETENONEMPTYFOLDERS))!=0)
+	if ((psi.AdvControl(PluginNumber,ACTL_GETCONFIRMATIONS,FADV1988 NULL)&(FCS_DELETE|FCS_DELETENONEMPTYFOLDERS))!=0)
 	{
 		int nKeys = 0, nValues = 0;
 		for (int i = 0; i < ItemsNumber; i++) {
@@ -3377,14 +4032,14 @@ BOOL REPlugin::DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber)
 		{
 			TCHAR sConfirm[0x512];
 			wsprintf(sConfirm, GetMsg(REM_ConfirmDelete), nKeys, nValues);
-			if (0 != psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_ALLINONE, _T("DeleteItems"), (const TCHAR * const *)sConfirm, 1, 2))
+			if (0 != psi.Message(_PluginNumber(guid_Msg11), FMSG_WARNING|FMSG_ALLINONE, _T("DeleteItems"), (const TCHAR * const *)sConfirm, 1, 2))
 				return FALSE;
 		}
 	}
 
 	// Поехали
 	BOOL lbRc = FALSE;
-	HKEY hKey = NULL;
+	HREGKEY hKey = NULLHKEY;
 	MRegistryBase* pWorker = Worker();
 	//LONG hRc = pWorker->OpenKeyEx(m_Key.mh_Root, m_Key.mpsz_Key, 0, KEY_ALL_ACCESS, &hKey);
 	DWORD samDesired = DELETE;
@@ -3431,7 +4086,7 @@ BOOL REPlugin::DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber)
 				}
 			}
 		}
-		mp_Items->CloseKey(pWorker, hKey);
+		mp_Items->CloseKey(pWorker, &hKey);
 	}
 
 	if (lbRc)
@@ -3443,7 +4098,7 @@ BOOL REPlugin::DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber)
 // В случае успеха возвращаемое значение должно быть равно 1.
 // В случае провала возвращается 0.
 // Если функция была прервана пользователем, то должно возвращаться -1. 
-int REPlugin::CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, int OpMode)
+int REPlugin::CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, u64 OpMode)
 {
 	//if (m_Key.eType != RE_WINAPI
 	//	|| m_Key.mh_Root == NULL)
@@ -3461,7 +4116,7 @@ int REPlugin::CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, int
 	// Если разрешено изменение имени создаваемой папки
 	if (!(OpMode & OPM_SILENT))
 	{
-		PluginDialogBuilder val(psi, RECreateKeyTitle, _T("CreateSubkey"));
+		PluginDialogBuilder val(psi, RECreateKeyTitle, _T("CreateSubkey"), &guid_CreateSubkey);
 
 		val.AddText(RECreateKeyLabel);
 		val.AddEditField(ms_CreatedSubkeyBuffer, countof(ms_CreatedSubkeyBuffer), 57, _T("RegistrySubkeyName"));
@@ -3495,14 +4150,14 @@ int REPlugin::CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, int
 
 	BOOL lbRc = 0;
 	LONG hRc = 0;
-	HKEY hCreatedKey = NULL;	
+	HREGKEY hCreatedKey = NULLHKEY;	
 	MRegistryBase* pWorker = Worker();
 
 	if (pszSubkey[0] == L'\\') {
 		// Если путь задали в абсолютном формате (\Software\Far2\Plugins\RegEditor)
 		hRc = pWorker->CreateKeyEx(m_Key.mh_Root, pszSubkey, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hCreatedKey, NULL, &m_Key.nKeyFlags);
 	} else {
-		HKEY hKey = NULL;
+		HREGKEY hKey = NULLHKEY;
 		// Путь относительно текущего ключа (ссылки типа ".." не преобразуются, все отдается в API как есть)
 		hRc = mp_Items->OpenKey(pWorker, &hKey, KEY_CREATE_SUB_KEY);
 		if (hRc == 0)
@@ -3510,11 +4165,11 @@ int REPlugin::CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, int
 			//Создаем новый ключ
 			hRc = pWorker->CreateKeyEx(hKey, pszSubkey, 0, NULL, 0, KEY_WRITE, NULL, &hCreatedKey, NULL, NULL);
 			//Закрываем родительский ключ
-			mp_Items->CloseKey(pWorker, hKey);
+			mp_Items->CloseKey(pWorker, &hKey);
 		}
 	}
 	// Сразу закрываем, сам ключ нам не нужен
-	if (hCreatedKey) mp_Items->CloseKey(pWorker, hCreatedKey);
+	if (hCreatedKey) mp_Items->CloseKey(pWorker, &hCreatedKey);
 	// Результат
 	if (hRc == 0)
 	{
@@ -3564,7 +4219,7 @@ int REPlugin::Message(LPCTSTR asMsg, DWORD nFlags/*= FMSG_WARNING|FMSG_MB_OK*/, 
 		InvalidOp();
 		return -1;
 	}
-	int iRc = psi.Message(psi.ModuleNumber, nFlags|FMSG_ALLINONE, asHelpTopic, 
+	int iRc = psi.Message(_PluginNumber(guid_Msg12), nFlags|FMSG_ALLINONE, asHelpTopic, 
 		(const TCHAR * const *)asMsg, 1, nBtnCount);
 	return iRc;
 }
@@ -3572,7 +4227,8 @@ int REPlugin::Message(LPCTSTR asMsg, DWORD nFlags/*= FMSG_WARNING|FMSG_MB_OK*/, 
 int REPlugin::MessageFmt(int nFormatMsgID, LPCWSTR asArgument, DWORD nErrCode /*= 0*/, LPCTSTR asHelpTopic /*= NULL*/, DWORD nFlags /*= FMSG_WARNING|FMSG_MB_OK*/, int nBtnCount /*= 0*/)
 {
 	LPCTSTR pszFormat = GetMsg(nFormatMsgID);
-	if (!pszFormat) {
+	if (!pszFormat)
+	{
 		InvalidOp();
 		return -1;
 	}
@@ -3591,7 +4247,8 @@ int REPlugin::MessageFmt(int nFormatMsgID, LPCWSTR asArgument, DWORD nErrCode /*
 	wsprintf(pszMessage, pszFormat, pszFile ? pszFile : _T(""));
 
 	// Предыдущие функции могли нарушить LastError, поэтому выставим его
-	if (nErrCode) {
+	if (nErrCode)
+	{
 		SetLastError(nErrCode);
 		nFlags |= FMSG_ERRORTYPE;
 	}
@@ -3700,7 +4357,7 @@ BOOL REPlugin::ConfirmOverwriteFile(LPCWSTR asTargetFile, BOOL* pbAppendExisting
 	wsprintf(szFileInfo, GetMsg(REM_FileExistInfo),
 		fnd.nFileSizeLow, st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
 
-	PluginDialogBuilder Cfrm(psi, REM_Warning, _T("ExportKey"));
+	PluginDialogBuilder Cfrm(psi, REM_Warning, _T("SaveRegFile"), pbAppendExisting ? &guid_OverwriteRegFile : &guid_AppendRegFile);
 	//FarDialogItem* p = NULL;
 
 	//Cfrm.CenterText(
@@ -3765,7 +4422,7 @@ void REPlugin::EditDescription()
 
 
 	MCHKHEAP;
-	PluginDialogBuilder val(psi, REChangeDescTitle, _T("EditValue"));
+	PluginDialogBuilder val(psi, REChangeDescTitle, _T("EditValue"), &guid_EditValue);
 	FarDialogItem* p = NULL;
 	LONG hRc;
 	DWORD nDataSize;
@@ -3774,7 +4431,7 @@ void REPlugin::EditDescription()
 	TCHAR sNewName[16384];
 	TCHAR sNewValue[16384];
 	LPBYTE pValue = NULL; DWORD nMaxDataSize = 0;
-	HKEY hKey = NULL, hParent = NULL;
+	HREGKEY hKey = NULLHKEY, hParent = NULLHKEY;
 	LPCWSTR pszValueName = (pItem->nValueType == REG__KEY) ? L"" : (pItem->bDefaultValue ? L"" : pItem->pszName);
 	//BOOL lbChanged = FALSE;
 
@@ -3809,8 +4466,8 @@ void REPlugin::EditDescription()
 		nDataType = REG_SZ; *((wchar_t*)pValue) = 0; nDataSize = 2; hRc = 0;
 	}
 	// Ключ на чтение больше не требуется
-	if (hKey && hKey != hParent) mp_Items->CloseKey(pWorker, hKey); else hKey = NULL;
-	mp_Items->CloseKey(pWorker, hParent);
+	if (hKey && hKey != hParent) mp_Items->CloseKey(pWorker, &hKey); else hKey = NULL;
+	mp_Items->CloseKey(pWorker, &hParent);
 	if (hRc != 0)
 	{
 		ValueOperationFailed(&mp_Items->key, pItem->pszName, FALSE);
@@ -3855,7 +4512,7 @@ void REPlugin::EditDescription()
 	val.AddTextBefore(p, REChangeDescLabel);
 
 	p = val.AddEditField(sNewValue, countof(sNewValue), 56+9);
-	p->Focus = TRUE;
+	val.InitFocus(p);
 
 	//TODO: Добавить кнопку "&Edit" для создания значения через редактор *.reg
 	val.AddOKCancel(REBtnOK, REBtnCancel);
@@ -3890,8 +4547,8 @@ void REPlugin::EditDescription()
 	hRc = pWorker->SetValueEx(hKey, pszValueName, 0, nDataType, (LPBYTE)(pValue ? pValue : (LPBYTE)sNewValue), nDataSize);
 	SafeFree(pValue);
 	// Ключ на чтение больше не требуется
-	if (hKey && hKey != hParent) mp_Items->CloseKey(pWorker, hKey); else hKey = NULL;
-	mp_Items->CloseKey(pWorker, hParent);
+	if (hKey && hKey != hParent) mp_Items->CloseKey(pWorker, &hKey); else hKey = NULL;
+	mp_Items->CloseKey(pWorker, &hParent);
 	if (hRc != 0)
 	{
 		ValueOperationFailed(&mp_Items->key, pItem->pszName, FALSE);
@@ -3954,7 +4611,7 @@ void REPlugin::JumpToRegedit()
 	//{
 	//	BOOL lbSucceeded = FALSE;
 	//	//MRegistryWinApi reg;
-	//	//HKEY hk = NULL;
+	//	//HREGKEY hk = NULL;
 	//	// Для ускорения запуска - попытаемся сбросить стартовый ключ?
 	//	RegPath key = {RE_WINAPI}; key.Init(RE_WINAPI, HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Applets\\Regedit");
 	//	if (0 != reg.CreateKeyEx(HKEY_CURRENT_USER, key.mpsz_Key, 0, 0, 0, KEY_WRITE, 0, &hk, 0))
@@ -4213,7 +4870,7 @@ BOOL REPlugin::ConnectRemote(LPCWSTR asServer /*= NULL*/, LPCWSTR asLogin /*= NU
 	//BOOL lbConnected = TRUE;
 	MRegistryBase *pNewWorker = NULL;
 	TCHAR sServerName[128], sLogin[MAX_PATH], sPassword[MAX_PATH], sNetShare[128];
-	PluginDialogBuilder srv(psi, REChangeDescTitle, _T("RemoteConnect"));
+	PluginDialogBuilder srv(psi, REChangeDescTitle, _T("RemoteConnect"), &guid_RemoteConnect);
 	int nBtns[] = {REBtnConnect,REBtnLocal,REBtnCancel};
 	int nRc = 0;
 
@@ -4234,7 +4891,7 @@ BOOL REPlugin::ConnectRemote(LPCWSTR asServer /*= NULL*/, LPCWSTR asLogin /*= NU
 		lstrcpynW(ms_RemoteServer+2, asServer, countof(ms_RemoteServer)-2);
 		lstrcpynW(ms_RemoteLogin, asLogin, countof(ms_RemoteLogin));
 		//lstrcpynW(ms_RemotePassword, asPassword, countof(ms_RemotePassword));
-		pNewWorker = new MRegistryWinApi();
+		pNewWorker = new MRegistryWinApi(mb_Wow64on32);
 		if (pNewWorker->ConnectRemote(asServer, asLogin, asPassword, NULL))
 		{
 			goto connected;
@@ -4273,7 +4930,7 @@ BOOL REPlugin::ConnectRemote(LPCWSTR asServer /*= NULL*/, LPCWSTR asLogin /*= NU
 		//if (sServerName[0] && sLogin[0])
 		{
 			_ASSERTE(pNewWorker == NULL);
-			pNewWorker = new MRegistryWinApi();
+			pNewWorker = new MRegistryWinApi(mb_Wow64on32);
 			//wchar_t wsServerName[MAX_PATH];
 			//lstrcpy_t(wsServerName, countof(wsServerName), sServerName);
 			if (!pNewWorker->ConnectRemote(sServerName, sLogin, sPassword, sNetShare))
@@ -4363,13 +5020,24 @@ void REPlugin::ShowBookmarks()
 	DWORD  nCount = 0;
 	int    nSelected = -1;
 	bool   bFirstCall = true;
-	int    BreakKeys[] = {VK_INSERT,VK_DELETE,VK_F4,(PKF_CONTROL<<16)|'R',VK_TAB,0}, nBreakCode; //, nRc = -1;
+	#if FAR_UNICODE>=1906
+	//TODO: RIGHT_CTRL_PRESSED
+	FarKey BreakKeys[] = {{VK_INSERT},{VK_DELETE},{VK_F4},{'R',LEFT_CTRL_PRESSED},{VK_TAB},{0}};
+	#else
+	int    BreakKeys[] = {VK_INSERT,VK_DELETE,VK_F4,(PKF_CONTROL<<16)|'R',VK_TAB,0};
+	#endif
+	int nBreakCode = -1;
 	FarMenuItem* pMenuItems = NULL;
 
 	if (m_Key.eType != RE_WINAPI)
 	{
 		cfg->bUseInternalBookmarks = TRUE;
+		#if FAR_UNICODE>=1906
+		//TODO: RIGHT_CTRL_PRESSED
+		BreakKeys[3].VirtualKeyCode = 0; BreakKeys[3].ControlKeyState = 0;
+		#else
 		BreakKeys[3] = 0; // не показывать Favorites
+		#endif
 	}
 	
 	while (true)
@@ -4381,13 +5049,18 @@ void REPlugin::ShowBookmarks()
 		TCHAR* psz = pszBookmarks;
 		for (UINT i = 0; i < nCount; i++)
 		{
-			#ifdef _UNICODE
-			pMenuItems[i].Text = psz;
-			#else
-			lstrcpyn(pMenuItems[i].Text, psz, countof(pMenuItems[i].Text));
-			#endif
 			if (*psz == 0 || (*psz == _T('-') && *(psz+1) == 0))
-				pMenuItems[i].Separator = TRUE;
+			{
+				MenuItemSetSeparator(pMenuItems[i]);
+			}
+			else
+			{
+				#ifdef _UNICODE
+				pMenuItems[i].Text = psz;
+				#else
+				lstrcpyn(pMenuItems[i].Text, psz, countof(pMenuItems[i].Text));
+				#endif
+			}
 			psz += lstrlen(psz)+1;		
 		}
 		#ifdef _UNICODE
@@ -4414,11 +5087,11 @@ void REPlugin::ShowBookmarks()
 		{
 			for (UINT i = 0; i < nCount; i++)
 			{
-				if (pMenuItems[i].Separator || !*pMenuItems[i].Text)
+				if (MenuItemIsSeparator(pMenuItems[i]) || !*pMenuItems[i].Text)
 					continue;
 				if (lstrcmpi(m_Key.mpsz_Dir, pMenuItems[i].Text) == 0)
 				{
-					pMenuItems[i].Selected = TRUE;
+					MenuItemSetSelected(pMenuItems[i]);
 					break;
 				}
 				else if (!_tmemcmp(pMenuItems[i].Text, _T("HKLM\\"), 5)
@@ -4426,7 +5099,7 @@ void REPlugin::ShowBookmarks()
 				{
 					if (!lstrcmpi(m_Key.mpsz_Dir+19, pMenuItems[i].Text+5))
 					{
-						pMenuItems[i].Selected = TRUE;
+						MenuItemSetSelected(pMenuItems[i]);
 						break;
 					}
 				}
@@ -4435,7 +5108,7 @@ void REPlugin::ShowBookmarks()
 				{
 					if (!lstrcmpi(m_Key.mpsz_Dir+18, pMenuItems[i].Text+5))
 					{
-						pMenuItems[i].Selected = TRUE;
+						MenuItemSetSelected(pMenuItems[i]);
 						break;
 					}
 				}
@@ -4444,7 +5117,7 @@ void REPlugin::ShowBookmarks()
 				{
 					if (!lstrcmpi(m_Key.mpsz_Dir+18, pMenuItems[i].Text+5))
 					{
-						pMenuItems[i].Selected = TRUE;
+						MenuItemSetSelected(pMenuItems[i]);
 						break;
 					}
 				}
@@ -4453,7 +5126,7 @@ void REPlugin::ShowBookmarks()
 				{
 					if (!lstrcmpi(m_Key.mpsz_Dir+11, pMenuItems[i].Text+4))
 					{
-						pMenuItems[i].Selected = TRUE;
+						MenuItemSetSelected(pMenuItems[i]);
 						break;
 					}
 				}
@@ -4461,12 +5134,12 @@ void REPlugin::ShowBookmarks()
 		}
 		else if (nSelected >= 0 && (DWORD)nSelected <= nCount)
 		{
-			pMenuItems[nSelected].Selected = TRUE;
+			MenuItemSetSelected(pMenuItems[nSelected]);
 		}
 		bFirstCall = false;
 
 		
-		nSelected = psi.Menu(psi.ModuleNumber, -1,-1,0,
+		nSelected = psi.Menu(_PluginNumber(guid_BookmarksMenu), -1,-1,0,
 			FMENU_AUTOHIGHLIGHT/*|FMENU_CHANGECONSOLETITLE*/|FMENU_WRAPMODE,
 			GetMsg(cfg->bUseInternalBookmarks ? REBookmarksTitle : REBookmarksExtTitle),
 			GetMsg(cfg->bUseInternalBookmarks ? REBookmarksFooter : REBookmarksExtFooter),
@@ -4492,10 +5165,10 @@ void REPlugin::ShowBookmarks()
 					if ((nSelected+1) == nCount && nSelected > 0)
 					{
 						nSelected--;
-						while (nSelected > 0 && pMenuItems[nSelected].Separator)
+						while (nSelected > 0 && MenuItemIsSeparator(pMenuItems[nSelected]))
 							nSelected--;
 					} else {
-						while (nSelected > 0 && (nSelected+1) < (int)nCount && pMenuItems[nSelected+1].Separator)
+						while (nSelected > 0 && (nSelected+1) < (int)nCount && MenuItemIsSeparator(pMenuItems[nSelected+1]))
 							nSelected--;
 					}
 					break;
@@ -4556,7 +5229,7 @@ void REPlugin::ShowBookmarks()
 				GetMsg(REM_KeyNotExists),
 				pszKeyT
 			};
-			psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+			psi.Message(_PluginNumber(guid_Msg13), FMSG_WARNING|FMSG_MB_OK, NULL, 
 				sLines, countof(sLines), 0);
 			SafeFree(pszKeyT);
 			continue;
@@ -4577,7 +5250,7 @@ LONG REPlugin::ValueDataGet(RegFolder* pFolder, RegItem *pItem, LPBYTE* ppData, 
 	
 	MRegistryBase* pWorker = Worker();
 	LPCWSTR pszValueName = pItem->bDefaultValue ? NULL : pItem->pszName;
-	HKEY hKey = NULL;
+	HREGKEY hKey = NULLHKEY;
 	LONG hRc = pFolder->OpenKey(pWorker, &hKey);
 
 	if (hRc != 0) {
@@ -4598,7 +5271,7 @@ LONG REPlugin::ValueDataGet(RegFolder* pFolder, RegItem *pItem, LPBYTE* ppData, 
 			*pnDataType = 0;
 
 		// Ключ на чтение больше не требуется
-		pFolder->CloseKey(pWorker, hKey); _ASSERTE(hKey==NULL);
+		pFolder->CloseKey(pWorker, &hKey); //_ASSERTE(hKey==NULL);
 	}
 	
 	return hRc;
@@ -4620,7 +5293,7 @@ LONG REPlugin::ValueDataSet(RegFolder* pFolder, LPCWSTR asValueName, LPBYTE pDat
 	_ASSERTE(pFolder && pData && cbSize);
 
 	MRegistryBase* pWorker = Worker();
-	HKEY hKey = NULL;
+	HREGKEY hKey = NULLHKEY;
 	LONG hRc = pFolder->CreateKey(pWorker, &hKey, KEY_SET_VALUE);
 
 	if (hRc != 0)
@@ -4637,7 +5310,7 @@ LONG REPlugin::ValueDataSet(RegFolder* pFolder, LPCWSTR asValueName, LPBYTE pDat
 		}
 
 		// Ключ на чтение больше не требуется
-		pFolder->CloseKey(pWorker, hKey); _ASSERTE(hKey==NULL);
+		pFolder->CloseKey(pWorker, &hKey); //_ASSERTE(hKey==NULL);
 	}
 	
 	return hRc;
@@ -4657,10 +5330,10 @@ void REPlugin::SaveRegFile(BOOL abInClose /*= FALSE*/)
 	wchar_t sDefaultName[MAX_PATH];
 	MFileReg *pFileReg = ((MFileReg*)mp_Worker);
 	lstrcpyn(sLabel, PointToName(mpsz_HostFile), countof(sLabel));
-	int nExportMode = pFileReg->IsInitiallyUnicode() ? 1 : 0;
+	int nExportMode = (pFileReg->IsInitiallyUnicode() ? REExportReg5 : REExportReg4) - REExportReg4;
 	wchar_t* pwszDestPath = NULL;
 	RegFolder expFolder; // не кешируем, т.к. грузить сейчас нужно всё подряд
-	MFileTxt file;
+	MFileTxtReg file(mb_Wow64on32);
 	RegPath rootKey = {m_Key.eType};
 	const TCHAR* pszShowFilePathName = pFileReg->GetShowFilePathName();
 	wchar_t* pwszShowFilePathName = NULL;
@@ -4695,11 +5368,11 @@ void REPlugin::SaveRegFile(BOOL abInClose /*= FALSE*/)
 		goto wrap;
 
 	// Создаем файл
-	if (file.FileCreate(pwszDestPath, sDefaultName, L"", nExportMode, lbConfirmOverwrite))
+	if (file.FileCreate(pwszDestPath, sDefaultName, L"", nExportMode == (REExportReg5 - REExportReg4), lbConfirmOverwrite))
 	{
 		// Сформировать заголовок
-		lbExportRc = file.FileWriteRegHeader(mp_Worker);
-		//if (nExportMode == 1) {
+		lbExportRc = file.FileWriteHeader(mp_Worker);
+		//if (nExportMode == (REExportReg5-REExportReg4)) {
 		//	// (BOM уже записан в file.FileCreateTemp)
 		//	lbExportRc = file.FileWrite(L"Windows Registry Editor Version 5.00\r\n");
 		//} else {
@@ -4714,7 +5387,7 @@ void REPlugin::SaveRegFile(BOOL abInClose /*= FALSE*/)
 			_ASSERTE(gpProgress == NULL);
 			gpProgress = new REProgress(GetMsg(RESaveRegDlgTitle));
 			// Теперь, собственно экспорт
-			lbExportRc = expFolder.ExportToFile(this, Worker(), &file, nExportMode==1);
+			lbExportRc = expFolder.ExportToFile(this, Worker(), &file, (nExportMode == (REExportReg5-REExportReg4)));
 			SafeDelete(gpProgress);
 		}
 
@@ -4748,7 +5421,7 @@ BOOL REPlugin::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilence, BOOL abDel
 	CloseItems();
 	MCHKHEAP;
 	m_Key.Release();
-	m_Key.Init(RE_REGFILE); //, NULL, NULL, ft);
+	m_Key.Init(RE_REGFILE, mb_Wow64on32); //, NULL, NULL, ft);
 	MCHKHEAP;
 	ms_RemoteServer[0] = 0;
 	mb_RemoteMode = FALSE;
@@ -4756,7 +5429,7 @@ BOOL REPlugin::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilence, BOOL abDel
 	_ASSERTE(mp_Items == NULL);
 	SafeDelete(mp_Worker);
 
-	mp_Worker = new MFileReg();
+	mp_Worker = new MFileReg(mb_Wow64on32);
 	if (!mp_Worker)
 	{
 		InvalidOp();
@@ -4787,7 +5460,7 @@ BOOL REPlugin::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilence, BOOL abDel
 		SafeDelete(mp_Worker);
 		SafeFree(mpsz_HostFile);
 		// Иначе не перерисуется открытый редактор (если он был открыт в процессе)
-		psi.AdvControl(psi.ModuleNumber, ACTL_REDRAWALL, 0);
+		psi.AdvControl(PluginNumber, ACTL_REDRAWALL, FADV1988 0);
 		return FALSE;
 	}
 
@@ -4822,7 +5495,7 @@ BOOL REPlugin::LoadHiveFile(LPCWSTR asHiveFilePathName, BOOL abSilence, BOOL abD
 	CloseItems();
 	MCHKHEAP;
 	m_Key.Release();
-	m_Key.Init(RE_HIVE); //, HKEY__HIVE); //, NULL, NULL, ft);
+	m_Key.Init(RE_HIVE, mb_Wow64on32); //, HKEY__HIVE); //, NULL, NULL, ft);
 	MCHKHEAP;
 	ms_RemoteServer[0] = 0;
 	mb_RemoteMode = FALSE;
@@ -4830,7 +5503,7 @@ BOOL REPlugin::LoadHiveFile(LPCWSTR asHiveFilePathName, BOOL abSilence, BOOL abD
 	_ASSERTE(mp_Items == NULL);
 	SafeDelete(mp_Worker);
 
-	mp_Worker = new MFileHive();
+	mp_Worker = new MFileHive(mb_Wow64on32);
 	if (!mp_Worker) {
 		InvalidOp();
 		return FALSE;
@@ -4867,6 +5540,7 @@ void REPlugin::PreClosePlugin()
 
 
 // вернет -1, если плагин нужно закрыть
+//        -2, в случае ошибки или отказа пользователя
 int REPlugin::ShowRegMenu(bool abForceImport, MRegistryBase* apTarget)
 {
 	if (!mb_ShowRegFileMenu && !abForceImport)
@@ -4900,74 +5574,83 @@ int REPlugin::ShowRegMenu(bool abForceImport, MRegistryBase* apTarget)
 	if (!abForceImport)
 	{
 		nBrowse = nItems; SETMENUITEM(nItems++, GetMsg(REActionBrowse));
-		items[nItems++].Separator = TRUE;
+		MenuItemSetSeparator(items[nItems++]);
 	}
-	
-	if (cfg->is64bitOs)
-	{
-		// Проверить, есть ли в reg-файле HKLM или HKCR
-		if (mp_Worker->ExistKey(HKEY_LOCAL_MACHINE,0,0) && mp_Worker->ExistKey(HKEY_CLASSES_ROOT,0,0))
-		{
-			// В этом случае (HKCU) импорт ведется без разницы 32/64
-			nImportNative = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport));
-		}
-		else
-		{		
-			if (mp_Worker->ExistKey(HKEY_LOCAL_MACHINE, L"SOFTWARE", L"Wow6432Node") == 0)
-			{
-				nImport64 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport64));
-			}
-			else
-			{
-				nImportNative = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport));
-				nImport32 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport32));
-				nImport64 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport64));
-			}
-		}
-	}
-	else
-	{
-		// x86 OS, различий веток реестра (32bit/64bit) нет вообще
+
+	DWORD nAllowed = mp_Worker->GetAllowedImportStyles();
+	if ((nAllowed & ris_Native))
 		nImportNative = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport));
-	}
+	if ((nAllowed & ris_Import32))
+		nImport32 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport32));
+	if ((nAllowed & ris_Import64))
+		nImport64 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport64));
+	//if (cfg->is64bitOs)
+	//{
+	//	// ExistKey возвращает 0 - если ключ есть
+
+	//	// Проверить, есть ли в reg-файле HKLM или HKCR
+	//	if (mp_Worker->ExistKey(HKEY_LOCAL_MACHINE,0,0) && mp_Worker->ExistKey(HKEY_CLASSES_ROOT,0,0))
+	//	{
+	//		// В этом случае (HKCU) импорт ведется без разницы 32/64
+	//		nImportNative = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport));
+	//	}
+	//	else
+	//	{		
+	//		if (mp_Worker->ExistKey(HKEY_LOCAL_MACHINE, L"SOFTWARE", L"Wow6432Node") == 0)
+	//		{
+	//			nImport64 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport64));
+	//		}
+	//		else
+	//		{
+	//			nImportNative = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport));
+	//			nImport32 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport32));
+	//			nImport64 = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport64));
+	//		}
+	//	}
+	//}
+	//else
+	//{
+	//	// x86 OS, различий веток реестра (32bit/64bit) нет вообще
+	//	nImportNative = nItems; SETMENUITEM(nItems++, GetMsg(REActionImport));
+	//}
 
 	int nCmd;
 
 	if (nItems == 0)
 		nCmd = -1;
-	else if (abForceImport && nItems == 1)
-		nCmd = 0;
+	//else if (abForceImport && nItems == 1)
+	//	nCmd = 0;
 	else	
-		nCmd = psi.Menu(psi.ModuleNumber, -1,-1,0, FMENU_CHANGECONSOLETITLE|FMENU_WRAPMODE,
+		nCmd = psi.Menu(_PluginNumber(guid_ActionMenu), -1,-1,0, FMENU_CHANGECONSOLETITLE|FMENU_WRAPMODE,
 						GetMsg(REPluginName), NULL, NULL/*HelpTopic*/, NULL,NULL, items, nItems);
 	if (nCmd < 0)
-		return -1; // Если юзер отказался - FAR сразу вернется в файловую панель
+		return -2; // Если юзер отказался - FAR сразу вернется в файловую панель
 	if (nBrowse != -1 && nCmd == nBrowse)
 		return 0; // Продолжить, т.е. открыть reg-файл на панели
 
 	// Выполнить импорт
-	MFileReg fileReg;
+	MFileReg fileReg(mb_Wow64on32);
 	//MRegistryWinApi winReg;
 	
-	BOOL bSaveWow64on32 = cfg->bWow64on32;
+	BOOL bSaveWow64on32 = apTarget->mb_Wow64on32;
 	if (cfg->is64bitOs)
 	{
 		if (nCmd == nImportNative)
 		{
-			cfg->bWow64on32 = 2; // as native for FAR manager
+			apTarget->mb_Wow64on32 = 2; // as native for FAR manager
 		}
 		else if (nCmd == nImport32)
 		{
-			cfg->bWow64on32 = 0; // Import to the 32 bit registry
+			apTarget->mb_Wow64on32 = 0; // Import to the 32 bit registry
 		}
 		else if (nCmd == nImport64)
 		{
-			cfg->bWow64on32 = 1; // Import to then 64 bit registry
+			apTarget->mb_Wow64on32 = 1; // Import to then 64 bit registry
 		}
 		else
 		{
 			_ASSERTE(nCmd == nImportNative || nCmd == nImport32 || nCmd == nImport64);
-			cfg->bWow64on32 = 2; // as native for FAR manager
+			apTarget->mb_Wow64on32 = 2; // as native for FAR manager
 		}
 	}
 	
@@ -4977,9 +5660,10 @@ int REPlugin::ShowRegMenu(bool abForceImport, MRegistryBase* apTarget)
 	LONG hRc = MFileReg::LoadRegFile(pszRegFile, FALSE, apTarget, FALSE, &fileReg);
 	
 	// Сразу вернуть настройку
-	cfg->bWow64on32 = bSaveWow64on32;
+	apTarget->mb_Wow64on32 = bSaveWow64on32;
 	
 	SafeDelete(gpProgress);
+	int res = -1;
 	if (hRc == 0)
 	{
 		if (cfg->bShowImportResult)
@@ -4988,7 +5672,102 @@ int REPlugin::ShowRegMenu(bool abForceImport, MRegistryBase* apTarget)
 	else
 	{
 		REPlugin::MessageFmt(REM_ImportFailed, mpsz_HostFile);
+		res = -2;
 	}
 
-	return -1; // Не открывать панель плагина - возврат в FAR
+	return res; // Не открывать панель плагина - возврат в FAR
+}
+
+BOOL REPlugin::Transfer(REPlugin* pDstPlugin, BOOL abMove)
+{
+	BOOL lbRc = FALSE;
+
+	//RegFolder folderFrom; //-- memset(&folderFrom, 0, sizeof(folderFrom));
+	//folderFrom.bForceRelease = TRUE;
+	//folderFrom.Init(&m_Key);
+	RegFolder* folderFrom = PrepareExportKey(false, NULL, 0, true); // в путь учесть ".reg"
+	if (!folderFrom)
+	{
+		return FALSE;
+	}
+
+	HREGKEY hKey = NULLHKEY;
+	LONG hRc = 0, nItemsNumber;
+	LPCTSTR pszName4Label = NULL, pszDir = NULL;
+	MRegistryBase* pSource = Worker();
+	MRegistryBase* pTarget = pDstPlugin->Worker();
+#ifndef _UNICODE
+	TCHAR szName4Label[MAX_PATH];
+#endif
+	if (!pSource || !pTarget)
+	{
+		InvalidOp();
+		goto wrap;
+	}
+
+	if (folderFrom->mn_ItemCount > 0)
+	{
+		nItemsNumber = folderFrom->mn_ItemCount;
+		if (folderFrom->mn_ItemCount == 1)
+		{
+			if (!folderFrom->mp_Items->pszName || !*folderFrom->mp_Items->pszName)
+			{
+				pszName4Label = REGEDIT_DEFAULTNAME_T;
+			}
+			else
+			{
+			#ifdef _UNICODE
+				pszName4Label = folderFrom->mp_Items->pszName;
+			#else
+				lstrcpy_t(szName4Label, countof(szName4Label), folderFrom->mp_Items->pszName);
+				pszName4Label = szName4Label;
+			#endif
+			}
+		}
+		else
+		{
+			pszName4Label = PointToName(folderFrom->key.mpsz_Dir);
+		}
+	}
+	else
+	{
+		nItemsNumber = 1;
+		pszName4Label = PointToName(folderFrom->key.mpsz_Dir);
+	}
+
+	pszDir = pDstPlugin->m_Key.mpsz_Dir;
+	if (pszDir && pszDir[0] == _T('\\') && pszDir[1] && pszDir[1] != _T('\\'))
+		pszDir++;
+
+	if (!ConfirmCopyMove(abMove, nItemsNumber,
+			(nItemsNumber == 1) ? RECopyItemLabel : RECopyItemsLabel,
+			pszName4Label ? pszName4Label : _T(""),
+			pszDir ? pszDir : _T("")))
+	{
+		goto wrap;
+	}
+
+	hRc = pDstPlugin->mp_Items->CreateKey(pTarget, &hKey, KEY_WRITE);
+	if (hRc != 0)
+	{
+		pDstPlugin->CantOpenKey(&pDstPlugin->mp_Items->key, TRUE);
+	}
+	else
+	{
+		lbRc = folderFrom->Transfer(pDstPlugin, pSource, pDstPlugin->mp_Items, pTarget);
+		pTarget->CloseKey(&hKey);
+		hKey = NULL;
+	}
+
+wrap:
+	if (folderFrom)
+	{
+		folderFrom->Release();
+		SafeDelete(folderFrom);
+	}
+	pDstPlugin->UpdatePanel(FALSE);
+	pDstPlugin->RedrawPanel();
+	this->UpdatePanel(lbRc!=FALSE);
+	this->RedrawPanel();
+	return lbRc;
 }

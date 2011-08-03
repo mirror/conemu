@@ -7,10 +7,13 @@
 
 */
 
+#define MAX_FORMAT_KEY_LEN  0x8000
+#define MAX_FORMAT_KEY_SIZE ((MAX_FORMAT_KEY_LEN+0x80)*2)
+
 BOOL MFileTxt::bBadMszDoubleZero = FALSE;
 
-MFileTxt::MFileTxt()
-	: MRegistryBase()
+MFileTxt::MFileTxt(BOOL abWow64on32)
+	: MRegistryBase(abWow64on32)
 {
 	eType = RE_REGFILE;
 
@@ -59,6 +62,20 @@ MFileTxt::~MFileTxt()
 	SafeFree(pExportFormatted);
 	SafeFree(pExportCPConvert);
 	SafeFree(pszExportHexValues);
+}
+
+void MFileTxt::ReleasePointers()
+{
+	SafeFree(psTempDirectory);
+	SafeFree(psFilePathName);
+	SafeFree(psShowFilePathName);
+}
+
+MRegistryBase* MFileTxt::Duplicate()
+{
+	_ASSERTE(FALSE);
+	InvalidOp();
+	return NULL;
 }
 
 #ifndef _UNICODE
@@ -211,17 +228,21 @@ LONG MFileTxt::LoadTextMSZ(LPCWSTR asFilePathName, BOOL abUseUnicode, wchar_t** 
 		//	pszLnEnd++;
 		//}
 		pszLnEnd = wcspbrk(pszLnStart, L"\r\n");
-		if (!pszLnEnd) {
+		if (!pszLnEnd)
+		{
 			pszLnEnd = pszEnd - 1;
 			pszLnNext = pszEnd;
-		} else {
+		}
+		else
+		{
 			if (pszLnEnd[0] == L'\r' && pszLnEnd[1] == L'\n')
 				pszLnNext = pszLnEnd + 2;
 			else
 				pszLnNext = pszLnEnd + 1;
 		}
 
-		if (pszDst != pszLnStart) {
+		if (pszDst != pszLnStart)
+		{
 			_ASSERTE(pszDst < pszLnStart);
 			memmove(pszDst, pszLnStart, (pszLnEnd - pszLnStart)*2);
 		}
@@ -231,7 +252,9 @@ LONG MFileTxt::LoadTextMSZ(LPCWSTR asFilePathName, BOOL abUseUnicode, wchar_t** 
 		if (*pszLnNext == L'\r' || *pszLnNext == L'\n')
 		{
 			*(pszDst++) = L'\n';
-		} else {
+		}
+		else
+		{
 			*(pszDst++) = 0;
 		}
 		pszLnStart = pszLnNext;
@@ -318,7 +341,8 @@ LONG MFileTxt::LoadData(LPCWSTR asFilePathName, void** pData, DWORD* pcbSize, si
 	}
 	
 	DWORD nRead = 0;
-	if (!ReadFile(lhFile, *pData, lSize.LowPart, &nRead, NULL))
+	// Если файл пустой - то читать нет смысла
+	if (lSize.LowPart && !ReadFile(lhFile, *pData, lSize.LowPart, &nRead, NULL))
 	{
 		lLoadRc = GetLastError();
 		if (lLoadRc == 0) lLoadRc = -1;
@@ -397,7 +421,7 @@ BOOL MFileTxt::FileCreateTemp(LPCWSTR asDefaultName, LPCWSTR asExtension, BOOL a
 	return bLastRc;
 }
 
-BOOL MFileTxt::FileCreate(LPCWSTR asPath/*only directory!*/, LPCWSTR asDefaultName, LPCWSTR asExtension, BOOL abUnicode, BOOL abConfirmOverwrite)
+BOOL MFileTxt::FileCreate(LPCWSTR asPath/*only directory!*/, LPCWSTR asDefaultName, LPCWSTR asExtension, BOOL abUnicode, BOOL abConfirmOverwrite, BOOL abNoBOM /*= FALSE*/)
 {
 	int nLen, nFullLen;
 
@@ -418,11 +442,14 @@ BOOL MFileTxt::FileCreate(LPCWSTR asPath/*only directory!*/, LPCWSTR asDefaultNa
 	if (!asExtension)
 		asExtension = L""; //L".txt"; -- без расширения, чтобы колорер нормально раскраску подхватывал
 
-	if (!asPath || !*asPath) {
+	if (!asPath || !*asPath)
+	{
 		//TODO: Использовать текущую папку фара (получать через API)
 		_ASSERTE(asPath && *asPath);
 		return FALSE;
-	} else {
+	}
+	else
+	{
 		//TODO: Развернуть возможные ".\", "..\" и т.п.
 		nLen = lstrlenW(asPath);
 		//if (asPath[nLen-1] == _T('\\')) nLen--;
@@ -432,7 +459,8 @@ BOOL MFileTxt::FileCreate(LPCWSTR asPath/*only directory!*/, LPCWSTR asDefaultNa
 	psFilePathName = (wchar_t*)malloc(nFullLen*sizeof(wchar_t));
 
 	nLen = CopyUNCPath(psFilePathName, nFullLen, asPath);
-	if (psFilePathName[nLen-1] == L'\\') {
+	if (psFilePathName[nLen-1] == L'\\')
+	{
 		psFilePathName[nLen--] = 0;
 	}
 
@@ -461,7 +489,7 @@ BOOL MFileTxt::FileCreate(LPCWSTR asPath/*only directory!*/, LPCWSTR asDefaultNa
 	}
 
 	// Создаем файл (имя файла скопирует он сам)
-	bLastRc = FileCreateApi(psFilePathName, abUnicode, lbAppendExisting);
+	bLastRc = FileCreateApi(psFilePathName, abUnicode, lbAppendExisting, abNoBOM);
 
 	return bLastRc;
 }
@@ -481,7 +509,7 @@ LPCTSTR MFileTxt::GetShowFilePathName()
 	return psShowFilePathName;
 }
 
-BOOL MFileTxt::FileCreateApi(LPCWSTR asFilePathName, BOOL abUnicode, BOOL abAppendExisting)
+BOOL MFileTxt::FileCreateApi(LPCWSTR asFilePathName, BOOL abUnicode, BOOL abAppendExisting, BOOL abNoBOM)
 {
 	FileClose(); // На всякий случай
 	
@@ -548,7 +576,7 @@ BOOL MFileTxt::FileCreateApi(LPCWSTR asFilePathName, BOOL abUnicode, BOOL abAppe
 	}
 	
 	// Если это НЕ дописывание в конец
-	if (abUnicode && !abAppendExisting)
+	if (abUnicode && !abAppendExisting && !abNoBOM)
 	{
 		WORD nBOM = 0xFEFF;
 		if (!FileWriteBuffered(&nBOM, sizeof(nBOM)))
@@ -579,9 +607,11 @@ BOOL MFileTxt::FileCreateApi(LPCWSTR asFilePathName, BOOL abUnicode, BOOL abAppe
 
 void MFileTxt::FileClose()
 {
-	if (hFile && hFile != INVALID_HANDLE_VALUE) {
+	if (hFile && hFile != INVALID_HANDLE_VALUE)
+	{
 		// Если что-то осталось в кеше записи
-		if (ptrWriteBuffer && nWriteBufferLen) {
+		if (ptrWriteBuffer && nWriteBufferLen)
+		{
 			//FileWriteBuffered(NULL, -1); // сбросит кеш на диск
 			Flush(); // сбросит кеш на диск
 		}
@@ -598,30 +628,42 @@ void MFileTxt::FileDelete()
 	FileClose();
 
 	// Удалить файл
-	if (psFilePathName) {
-		if (*psFilePathName) {
+	if (psFilePathName)
+	{
+		if (*psFilePathName)
+		{
 			bLastRc = DeleteFileW(psFilePathName);
 			if (!bLastRc) nLastErr = GetLastError();
-		} else {
+		}
+		else
+		{
 			bLastRc = FALSE; nLastErr = -1;
 		}
 		SafeFree(psFilePathName);
 	}
 	
 	// Удалить созданную нами временную папку
-	if (psTempDirectory) {
-		if (*psTempDirectory) {
+	if (psTempDirectory)
+	{
+		if (*psTempDirectory)
+		{
 			int nLen = lstrlenW(psTempDirectory);
-			if (psTempDirectory[nLen-1] == _T('\\')) {
+			if (psTempDirectory[nLen-1] == _T('\\'))
+			{
 				psTempDirectory[nLen-1] = 0; nLen--;
 			}
-			if (psTempDirectory[nLen-1] == _T(':')) {
+			if (psTempDirectory[nLen-1] == _T(':'))
+			{
 				bLastRc = TRUE;
-			} else {
+			}
+			else
+			{
 				bLastRc = RemoveDirectoryW(psTempDirectory);
 				if (!bLastRc) nLastErr = GetLastError();
 			}
-		} else {
+		}
+		else
+		{
 			bLastRc = FALSE; nLastErr = -1;
 		}
 		SafeFree(psTempDirectory);
@@ -631,7 +673,8 @@ void MFileTxt::FileDelete()
 BOOL MFileTxt::Flush()
 {
 	_ASSERTE(ptrWriteBuffer != NULL);
-	if (nWriteBufferLen > 0 && ptrWriteBuffer) {
+	if (nWriteBufferLen > 0 && ptrWriteBuffer)
+	{
 		DWORD nWritten = 0;
 		bLastRc = WriteFile(hFile, ptrWriteBuffer, nWriteBufferLen, &nWritten, NULL);
 		if (!bLastRc) {
@@ -643,30 +686,42 @@ BOOL MFileTxt::Flush()
 	return bLastRc;
 }
 
-BOOL MFileTxt::FileWriteRegHeader(MRegistryBase* pWorker)
+// Запись в файл REG_MULTI_SZ значений, с преобразованием в человеческий вид (разбиение на строки через \r\n)
+BOOL MFileTxt::FileWriteMSZ(LPCWSTR aszText, DWORD anLen)
 {
-	BOOL lbExportRc = TRUE;
-
-	if (bUnicode) {
-		// (BOM уже записан в file.FileCreateTemp)
-		lbExportRc = FileWrite(L"Windows Registry Editor Version 5.00\r\n");
-	} else {
-		LPCSTR pszHeader = "REGEDIT4\r\n";
-		int nSize = lstrlenA(pszHeader);
-		lbExportRc = FileWriteBuffered(pszHeader, nSize);
-	}
-
-	if (lbExportRc && pWorker && pWorker->eType == RE_HIVE)
+	const wchar_t* psz = aszText;
+	const wchar_t* pszEnd = aszText + anLen;
+	#ifdef _DEBUG
+	if (pszEnd > psz)
 	{
-		//lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
-		//lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
-		wchar_t* pwszHost = UnmakeUNCPath_w(((MFileHive*)pWorker)->GetFilePathName());
-		lbExportRc = FileWrite(L"\r\n;RootFile=") &&
-			FileWrite(pwszHost) &&
-			FileWrite(L"\r\n");
-		SafeFree(pwszHost);
+		_ASSERTE(*(pszEnd-1) == 0);
 	}
-
+	#endif
+	BOOL lbExportRc = TRUE; // Может быть пустой!
+	int nDoubleZero = 0;
+	while (psz < pszEnd)
+	{
+		if (*psz)
+		{
+			int nLen = lstrlenW(psz);
+			if (!(lbExportRc = FileWrite(psz, nLen)))
+				break; // ошибка записи
+			psz += nLen+1;
+			if (nDoubleZero>0) MFileTxt::bBadMszDoubleZero = TRUE;
+			nDoubleZero = 0;
+		}
+		else
+		{
+			if ((psz+1) >= pszEnd)
+				break;
+			psz++; // просто записать перевод строки
+			nDoubleZero++;
+		}
+		// Просто "\n" пишется для унификации пустых строк - они в реестр заносятся как "\n"
+		if (!(lbExportRc = FileWrite(L"\n", 1)))
+			break; // ошибка записи
+	}
+	if (nDoubleZero>1) MFileTxt::bBadMszDoubleZero = TRUE;
 	return lbExportRc;
 }
 
@@ -742,44 +797,6 @@ BOOL MFileTxt::FileWriteBuffered(LPCVOID apData, DWORD nDataSize)
 	return bLastRc;
 }
 
-BOOL MFileTxt::FileWriteMSZ(LPCWSTR aszText, DWORD anLen)
-{
-	const wchar_t* psz = aszText;
-	const wchar_t* pszEnd = aszText + anLen;
-	#ifdef _DEBUG
-	if (pszEnd > psz)
-	{
-		_ASSERTE(*(pszEnd-1) == 0);
-	}
-	#endif
-	BOOL lbExportRc = TRUE; // Может быть пустой!
-	int nDoubleZero = 0;
-	while (psz < pszEnd)
-	{
-		if (*psz)
-		{
-			int nLen = lstrlenW(psz);
-			if (!(lbExportRc = FileWrite(psz, nLen)))
-				break; // ошибка записи
-			psz += nLen+1;
-			if (nDoubleZero>0) MFileTxt::bBadMszDoubleZero = TRUE;
-			nDoubleZero = 0;
-		}
-		else
-		{
-			if ((psz+1) >= pszEnd)
-				break;
-			psz++; // просто записать перевод строки
-			nDoubleZero++;
-		}
-		// Просто "\n" пишется для унификации пустых строк - они в реестр заносятся как "\n"
-		if (!(lbExportRc = FileWrite(L"\n", 1)))
-			break; // ошибка записи
-	}
-	if (nDoubleZero>1) MFileTxt::bBadMszDoubleZero = TRUE;
-	return lbExportRc;
-}
-
 BOOL MFileTxt::FileWrite(LPCWSTR aszText, int anLen/*=-1*/)
 {
 	if (aszText == NULL)
@@ -819,8 +836,202 @@ BOOL MFileTxt::FileWrite(LPCWSTR aszText, int anLen/*=-1*/)
 	return bLastRc;
 }
 
-BOOL MFileTxt::FileWriteValue(LPCWSTR pszValueName, REGTYPE nDataType, const BYTE* pData, DWORD nDataSize, LPCWSTR pszComment)
+// --> pExportBufferData
+LPBYTE MFileTxt::GetExportBuffer(DWORD cbSize)
 {
+	if (!pExportBufferData || cbSize > cbExportBufferData)
+	{
+		SafeFree(pExportBufferData);
+		cbExportBufferData = cbSize;
+		pExportBufferData = (LPBYTE)malloc(cbExportBufferData);
+	}
+	return pExportBufferData;
+}
+
+// --> pExportFormatted
+LPBYTE MFileTxt::GetFormatBuffer(DWORD cbSize)
+{
+	// буфер должен быть достаточно большим для принятия 
+	// отформатированных hex данных и имени значения реестра
+	unsigned __int64 tSize = (cbSize*16)+MAX_FORMAT_KEY_SIZE;
+	if (tSize != (tSize & 0xFFFFFFFF))
+	{
+		// В принципе, размер значений ограничен только объемом памяти
+		// но должны же быть какие-то пределы!
+		_ASSERTE(tSize == (tSize & 0xFFFFFFFF));
+		return NULL;
+	}
+	else
+	{
+		cbSize = (DWORD)tSize;
+	}
+	
+	if (!pExportFormatted || cbSize > cbExportFormatted)
+	{
+		SafeFree(pExportFormatted);
+		cbExportFormatted = cbSize;
+		pExportFormatted = (LPBYTE)malloc(cbExportFormatted);
+	}
+	return pExportFormatted;
+}
+
+LPBYTE MFileTxt::GetConvertBuffer(DWORD cbSize) // --> pExportCPConvert
+{
+	_ASSERTE(cbSize!=0);
+	
+	if (!pExportCPConvert || cbSize > cbExportCPConvert)
+	{
+		SafeFree(pExportCPConvert);
+		cbExportCPConvert = cbSize;
+		pExportCPConvert = (LPBYTE)malloc(cbExportCPConvert);
+	}
+	return pExportCPConvert;
+}
+
+
+//LONG MFileTxt::NotifyChangeKeyValue(RegFolder *pFolder, HKEY hKey)
+//{
+//	return 0;
+//}
+
+// Wrappers
+LONG MFileTxt::SetValueEx(HKEY hKey, LPCWSTR lpValueName, DWORD Reserved, REGTYPE nDataType, const BYTE *lpData, DWORD cbData, LPCWSTR pszComment /*= NULL*/)
+{
+	BOOL lbRc = FileWriteValue(lpValueName, nDataType, lpData, cbData, pszComment);
+	return (lbRc ? 0 : -1);
+}
+
+//LONG MFileTxt::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, HKEY* phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/)
+//{
+//	return -1;
+//}
+//LONG MFileTxt::CloseKey(HKEY* phKey)
+//{
+//	return 0;
+//}
+//LONG MFileTxt::QueryInfoKey(HKEY hKey, LPWSTR lpClass, LPDWORD lpcClass, LPDWORD lpReserved, LPDWORD lpcSubKeys, LPDWORD lpcMaxSubKeyLen, LPDWORD lpcMaxClassLen, LPDWORD lpcValues, LPDWORD lpcMaxValueNameLen, LPDWORD lpcMaxValueLen, LPDWORD lpcbSecurityDescriptor, REGFILETIME* lpftLastWriteTime)
+//{
+//	return -1;
+//}
+//LONG MFileTxt::EnumValue(HKEY hKey, DWORD dwIndex, LPWSTR lpValueName, LPDWORD lpcchValueName, LPDWORD lpReserved, REGTYPE* lpDataType, LPBYTE lpData, LPDWORD lpcbData, BOOL abEnumComments, LPCWSTR* ppszValueComment /*= NULL*/)
+//{
+//	// pParent->dwValIndex = -1; pParent->pValIndex = -1;
+//	return -1;
+//}
+//LONG MFileTxt::EnumKeyEx(HKEY hKey, DWORD dwIndex, LPWSTR lpName, LPDWORD lpcName, LPDWORD lpReserved, LPWSTR lpClass, LPDWORD lpcClass, REGFILETIME* lpftLastWriteTime, DWORD* pnKeyFlags /*= NULL*/, TCHAR* lpDefValue /*= NULL*/, DWORD cchDefValueMax /*= 0*/, LPCWSTR* ppszKeyComment /*= NULL*/)
+//{
+//	// pParent->dwKeyIndex = -1; pParent->pKeyIndex = -1;
+//	return -1;
+//}
+//LONG MFileTxt::QueryValueEx(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, REGTYPE* lpDataType, LPBYTE lpData, LPDWORD lpcbData, LPCWSTR* ppszValueComment /*= NULL*/)
+//{
+//	return -1;
+//}
+//LONG MFileTxt::RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey, LPCWSTR lpNewSubKey, BOOL* pbRegChanged)
+//{
+//	return -1;
+//}
+
+//int MFileTxt::CopyPath(wchar_t* pszDest, const char* pszSrc, int nMaxChars)
+//{
+//	bool lbIsFull = false, lbIsNetwork = false;
+//	if (pszSrc[0] == '\\' && pszSrc[1] == '\\') {
+//		if ((pszSrc[2] == '?' || pszSrc[2] == '.') && pszSrc[3] == '\\') {
+//			lbIsFull = true;
+//		} else {
+//			lbIsNetwork = true;
+//		}
+//	}
+//	// "\\?\" X:\...
+//	// "\\?\UNC\" server\share\...
+//	if (lbIsFull) {
+//		lstrcpy_t(pszDest, nMaxChars, pszSrc);
+//	} else {
+//		lstrcpyW(pszDest, L"\\\\?\\");
+//		if (lbIsNetwork) {
+//			lstrcpyW(pszDest+4, L"UNC\\");
+//			lstrcpy_t(pszDest+8, nMaxChars-8, pszSrc+2);
+//		} else {
+//			lstrcpy_t(pszDest+4, nMaxChars-4, pszSrc);
+//		}
+//	}
+//
+//	int nLen = lstrlenW(pszDest);
+//	return nLen;
+//}
+//
+//int MFileTxt::CopyPath(wchar_t* pszDest, const wchar_t* pszSrc, int nMaxChars)
+//{
+//	bool lbIsFull = false, lbIsNetwork = false;
+//	if (pszSrc[0] == L'\\' && pszSrc[1] == L'\\') {
+//		if ((pszSrc[2] == L'?' || pszSrc[2] == L'.') && pszSrc[3] == L'\\') {
+//			lbIsFull = true;
+//		} else {
+//			lbIsNetwork = true;
+//		}
+//	}
+//	// "\\?\" X:\...
+//	// "\\?\UNC\" server\share\...
+//	if (lbIsFull) {
+//		lstrcpyW(pszDest, pszSrc);
+//	} else {
+//		lstrcpyW(pszDest, L"\\\\?\\");
+//		if (lbIsNetwork) {
+//			lstrcpyW(pszDest+4, L"UNC\\");
+//			lstrcpyW(pszDest+8, pszSrc+2);
+//		} else {
+//			lstrcpyW(pszDest+4, pszSrc);
+//		}
+//	}
+//
+//	int nLen = lstrlenW(pszDest);
+//	return nLen;
+//}
+
+
+
+MFileTxtReg::MFileTxtReg(BOOL abWow64on32)
+	: MFileTxt(abWow64on32)
+{
+}
+
+MFileTxtReg::~MFileTxtReg()
+{
+}
+
+BOOL MFileTxtReg::FileWriteHeader(MRegistryBase* pWorker)
+{
+	BOOL lbExportRc = TRUE;
+
+	if (bUnicode)
+	{
+		// (BOM уже записан в file.FileCreateTemp)
+		lbExportRc = FileWrite(L"Windows Registry Editor Version 5.00\r\n");
+	}
+	else
+	{
+		LPCSTR pszHeader = "REGEDIT4\r\n";
+		int nSize = lstrlenA(pszHeader);
+		lbExportRc = FileWriteBuffered(pszHeader, nSize);
+	}
+
+	if (lbExportRc && pWorker && pWorker->eType == RE_HIVE)
+	{
+		//lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
+		//lbExportRc = file.FileWriteBuffered(pszHeader, nSize);
+		wchar_t* pwszHost = UnmakeUNCPath_w(((MFileHive*)pWorker)->GetFilePathName());
+		lbExportRc = FileWrite(L"\r\n;RootFile=") &&
+			FileWrite(pwszHost) &&
+			FileWrite(L"\r\n");
+		SafeFree(pwszHost);
+	}
+
+	return lbExportRc;
+}
+
+BOOL MFileTxtReg::FileWriteValue(LPCWSTR pszValueName, REGTYPE nDataType, const BYTE* pData, DWORD nDataSize, LPCWSTR pszComment)
+{
+	// nDataSize - в байтах
 	wchar_t* psz = (wchar_t*)GetFormatBuffer(max(0xFFFF,nDataSize));
 	
 	if (nDataType == REG__KEY)
@@ -847,6 +1058,8 @@ BOOL MFileTxt::FileWriteValue(LPCWSTR pszValueName, REGTYPE nDataType, const BYT
 		return TRUE;
 	}
 
+	// Для REG_SZ это не нужно, конвертацию сделает FileWrite
+	// А вот REG_EXPAND_SZ/REG_MULTI_SZ выкидываются как hex, поэтому нужно конвертить в ANSI
 	if (!bUnicode && nDataSize && (nDataType == REG_EXPAND_SZ || nDataType == REG_MULTI_SZ))
 	{
 		size_t nLen = (nDataSize>>1);
@@ -1018,72 +1231,9 @@ BOOL MFileTxt::FileWriteValue(LPCWSTR pszValueName, REGTYPE nDataType, const BYT
 	return TRUE;
 }
 
-LPBYTE MFileTxt::GetExportBuffer(DWORD cbSize) // --> pExportBufferData
-{
-	if (!pExportBufferData || cbSize > cbExportBufferData)
-	{
-		SafeFree(pExportBufferData);
-		cbExportBufferData = cbSize;
-		pExportBufferData = (LPBYTE)malloc(cbExportBufferData);
-	}
-	return pExportBufferData;
-}
-
-LPBYTE MFileTxt::GetFormatBuffer(DWORD cbSize) // --> pExportFormatted
-{
-	// буфер должен быть достаточно большим для принятия 
-	// отформатированных hex данных и имени значения реестра
-	unsigned __int64 tSize = cbSize*16+0x10000;
-	if (tSize != (tSize & 0xFFFFFFFF))
-	{
-		// В принципе, размер значений ограничен только объемом памяти
-		// но должны же быть какие-то пределы!
-		_ASSERTE(tSize == (tSize & 0xFFFFFFFF));
-		return NULL;
-	}
-	else
-	{
-		cbSize = (DWORD)tSize;
-	}
-	
-	if (!pExportFormatted || cbSize > cbExportFormatted) {
-		SafeFree(pExportFormatted);
-		cbExportFormatted = cbSize;
-		pExportFormatted = (LPBYTE)malloc(cbExportFormatted);
-	}
-	return pExportFormatted;
-}
-
-LPBYTE MFileTxt::GetConvertBuffer(DWORD cbSize) // --> pExportCPConvert
-{
-	_ASSERTE(cbSize!=0);
-	
-	if (!pExportCPConvert || cbSize > cbExportCPConvert)
-	{
-		SafeFree(pExportCPConvert);
-		cbExportCPConvert = cbSize;
-		pExportCPConvert = (LPBYTE)malloc(cbExportCPConvert);
-	}
-	return pExportCPConvert;
-}
-
-// ***
-MRegistryBase* MFileTxt::Duplicate()
-{
-	_ASSERTE(FALSE);
-	InvalidOp();
-	return NULL;
-}
-
-//LONG MFileTxt::NotifyChangeKeyValue(RegFolder *pFolder, HKEY hKey)
-//{
-//	return 0;
-//}
-
-// Wrappers
-LONG MFileTxt::CreateKeyEx(
+LONG MFileTxtReg::CreateKeyEx(
 		HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired,
-		LPSECURITY_ATTRIBUTES lpSecurityAttributes, PHKEY phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags,
+		LPSECURITY_ATTRIBUTES lpSecurityAttributes, HKEY* phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags,
 		RegKeyOpenRights *apRights /*= NULL*/, LPCWSTR pszComment /*= NULL*/)
 {
 	if (!FileWrite(L"\r\n", 2))
@@ -1145,94 +1295,785 @@ LONG MFileTxt::CreateKeyEx(
 	//bKeyWasCreated = TRUE;
 	return 0;
 }
-LONG MFileTxt::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/)
+
+
+
+
+
+MFileTxtCmd::MFileTxtCmd(BOOL abWow64on32)
+	: MFileTxt(abWow64on32)
 {
-	return -1;
-}
-LONG MFileTxt::CloseKey(HKEY hKey)
-{
-	return 0;
-}
-LONG MFileTxt::QueryInfoKey(HKEY hKey, LPWSTR lpClass, LPDWORD lpcClass, LPDWORD lpReserved, LPDWORD lpcSubKeys, LPDWORD lpcMaxSubKeyLen, LPDWORD lpcMaxClassLen, LPDWORD lpcValues, LPDWORD lpcMaxValueNameLen, LPDWORD lpcMaxValueLen, LPDWORD lpcbSecurityDescriptor, REGFILETIME* lpftLastWriteTime)
-{
-	return -1;
-}
-LONG MFileTxt::EnumValue(HKEY hKey, DWORD dwIndex, LPWSTR lpValueName, LPDWORD lpcchValueName, LPDWORD lpReserved, REGTYPE* lpDataType, LPBYTE lpData, LPDWORD lpcbData, BOOL abEnumComments, LPCWSTR* ppszValueComment /*= NULL*/)
-{
-	// pParent->dwValIndex = -1; pParent->pValIndex = -1;
-	return -1;
-}
-LONG MFileTxt::EnumKeyEx(HKEY hKey, DWORD dwIndex, LPWSTR lpName, LPDWORD lpcName, LPDWORD lpReserved, LPWSTR lpClass, LPDWORD lpcClass, REGFILETIME* lpftLastWriteTime, DWORD* pnKeyFlags /*= NULL*/, TCHAR* lpDefValue /*= NULL*/, DWORD cchDefValueMax /*= 0*/, LPCWSTR* ppszKeyComment /*= NULL*/)
-{
-	// pParent->dwKeyIndex = -1; pParent->pKeyIndex = -1;
-	return -1;
-}
-LONG MFileTxt::QueryValueEx(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, REGTYPE* lpDataType, LPBYTE lpData, LPDWORD lpcbData, LPCWSTR* ppszValueComment /*= NULL*/)
-{
-	return -1;
-}
-LONG MFileTxt::SetValueEx(HKEY hKey, LPCWSTR lpValueName, DWORD Reserved, REGTYPE nDataType, const BYTE *lpData, DWORD cbData, LPCWSTR pszComment /*= NULL*/)
-{
-	BOOL lbRc = FileWriteValue(lpValueName, nDataType, lpData, cbData, pszComment);
-	return (lbRc ? 0 : -1);
-}
-LONG MFileTxt::RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey, LPCWSTR lpNewSubKey, BOOL* pbRegChanged)
-{
-	return -1;
+	nKeyBufferSize = 16384;
+	psKeyBuffer = (char*)malloc(nKeyBufferSize);
+	if (psKeyBuffer)
+		psKeyBuffer[0] = 0;
+	bRequestUnicode = FALSE;
+	
+	mb_KeyWriteWaiting = FALSE;
+	mb_LastKeyHasValues = FALSE;
+	mn_LastSubKeyLen = 0;
+	mn_LastSubKeyCch = nKeyBufferSize;
+	mh_LastRoot = NULL;
+	ms_LastSubKey = (wchar_t*)malloc(mn_LastSubKeyCch*sizeof(wchar_t));
+	if (ms_LastSubKey)
+		ms_LastSubKey[0] = 0;
+
+	#ifndef _UNICODE
+	ms_RECmdHeader = GetMsg(RECmdHeader);   // "@echo off\r\nrem \r\nrem Reg.exe has several restrictions\r\nrem * REG_QWORD (and other 'specials') is not supported\r\nrem * Strings, value names and keys can't contains \\r\\n\r\nrem * REG_MULTI_SZ may fails, if value contains \\\\0\r\nrem * Empty keys can't be created w/o default value\r\nrem \r\n"
+	ms_RECmdVarReset = GetMsg(RECmdVarReset); // "set FarRegEditRc=""""\r\n"
+	ms_RECmdUTF8Warn = GetMsg(RECmdUTF8Warn); // "\r\nrem Required for Unicode string support"
+	ms_RECmdErrCheck = GetMsg(RECmdErrCheck); // "if errorlevel 1 if %FarRegEditRc%=="""" set FarRegEditRc="
+	ms_RECmdErrFin = GetMsg(RECmdErrFin);   // "if NOT %FarRegEditRc%=="""" echo At least on value/key failed: %FarRegEditRc%\r\n"
+	#else
+	wchar_t* pwsz;
+	int nWLen;
+	struct { int nMsgId; char** ppsz; int* pnlen; } Vars[] = {
+		{ RECmdHeader, &ms_RECmdHeader, &mn_RECmdHeader },
+		{ RECmdVarReset, &ms_RECmdVarReset, &mn_RECmdVarReset },
+		{ RECmdUTF8Warn, &ms_RECmdUTF8Warn, &mn_RECmdUTF8Warn },
+		{ RECmdErrCheck, &ms_RECmdErrCheck, &mn_RECmdErrCheck },
+		{ RECmdErrFin, &ms_RECmdErrFin, &mn_RECmdErrFin}
+	};
+	for (UINT i = 0; i < countof(Vars); i++)
+		*Vars[i].ppsz = NULL;
+	for (UINT i = 0; i < countof(Vars); i++)
+	{
+		pwsz = GetMsg(Vars[i].nMsgId);
+		nWLen = lstrlenW(pwsz);
+		*Vars[i].ppsz = (char*)calloc((nWLen+1),3);
+		if (*Vars[i].ppsz == NULL)
+		{
+			InvalidOp();
+			break;
+		}
+		WideCharToMultiByte(CP_UTF8, 0, pwsz, nWLen+1, *Vars[i].ppsz, (nWLen+1)*3, 0,0);
+		*Vars[i].pnlen = lstrlenA(*Vars[i].ppsz);
+	}
+	#endif
+	mn_RECmdHeader = ms_RECmdHeader ? lstrlenA(ms_RECmdHeader) : 0;
+	mn_RECmdVarReset = ms_RECmdVarReset ? lstrlenA(ms_RECmdVarReset) : 0;
+	mn_RECmdUTF8Warn = ms_RECmdUTF8Warn ? lstrlenA(ms_RECmdUTF8Warn) : 0;
+	mn_RECmdErrCheck = ms_RECmdErrCheck ? lstrlenA(ms_RECmdErrCheck) : 0;
+	mn_RECmdErrFin = ms_RECmdErrFin ? lstrlenA(ms_RECmdErrFin) : 0;
 }
 
-//int MFileTxt::CopyPath(wchar_t* pszDest, const char* pszSrc, int nMaxChars)
-//{
-//	bool lbIsFull = false, lbIsNetwork = false;
-//	if (pszSrc[0] == '\\' && pszSrc[1] == '\\') {
-//		if ((pszSrc[2] == '?' || pszSrc[2] == '.') && pszSrc[3] == '\\') {
-//			lbIsFull = true;
-//		} else {
-//			lbIsNetwork = true;
-//		}
-//	}
-//	// "\\?\" X:\...
-//	// "\\?\UNC\" server\share\...
-//	if (lbIsFull) {
-//		lstrcpy_t(pszDest, nMaxChars, pszSrc);
-//	} else {
-//		lstrcpyW(pszDest, L"\\\\?\\");
-//		if (lbIsNetwork) {
-//			lstrcpyW(pszDest+4, L"UNC\\");
-//			lstrcpy_t(pszDest+8, nMaxChars-8, pszSrc+2);
-//		} else {
-//			lstrcpy_t(pszDest+4, nMaxChars-4, pszSrc);
-//		}
-//	}
-//
-//	int nLen = lstrlenW(pszDest);
-//	return nLen;
-//}
-//
-//int MFileTxt::CopyPath(wchar_t* pszDest, const wchar_t* pszSrc, int nMaxChars)
-//{
-//	bool lbIsFull = false, lbIsNetwork = false;
-//	if (pszSrc[0] == L'\\' && pszSrc[1] == L'\\') {
-//		if ((pszSrc[2] == L'?' || pszSrc[2] == L'.') && pszSrc[3] == L'\\') {
-//			lbIsFull = true;
-//		} else {
-//			lbIsNetwork = true;
-//		}
-//	}
-//	// "\\?\" X:\...
-//	// "\\?\UNC\" server\share\...
-//	if (lbIsFull) {
-//		lstrcpyW(pszDest, pszSrc);
-//	} else {
-//		lstrcpyW(pszDest, L"\\\\?\\");
-//		if (lbIsNetwork) {
-//			lstrcpyW(pszDest+4, L"UNC\\");
-//			lstrcpyW(pszDest+8, pszSrc+2);
-//		} else {
-//			lstrcpyW(pszDest+4, pszSrc);
-//		}
-//	}
-//
-//	int nLen = lstrlenW(pszDest);
-//	return nLen;
-//}
+MFileTxtCmd::~MFileTxtCmd()
+{
+	SafeFree(psKeyBuffer);
+	SafeFree(ms_LastSubKey);
+	
+	#ifdef _UNICODE
+	SafeFree(ms_RECmdHeader);
+	SafeFree(ms_RECmdVarReset);
+	SafeFree(ms_RECmdUTF8Warn);
+	SafeFree(ms_RECmdErrCheck);
+	SafeFree(ms_RECmdErrFin);
+	#endif
+}
+
+BOOL MFileTxtCmd::FileWriteHeader(MRegistryBase* pWorker)
+{
+	BOOL lbExportRc = TRUE;
+	//LPCSTR pszHeader;
+	//int nSize;
+	
+	bRequestUnicode = bUnicode;
+	bUnicode = FALSE;
+	nAnsiCP = bRequestUnicode ? CP_UTF8 : GetOEMCP();
+	
+	//pszHeader = 
+	//	"@echo off" "\r\n"
+	//	"rem " "\r\n"
+	//	"rem Reg.exe has several restrictions" "\r\n"
+	//	"rem * REG_QWORD (and other 'specials') is not supported" "\r\n"
+	//	"rem * Strings, value names and keys can't contains \\r\\n" "\r\n"
+	//	"rem * REG_MULTI_SZ may fails, if value contains \\\\0" "\r\n"
+	//	"rem * Empty keys can't be created w/o default value" "\r\n"
+	//	"rem " "\r\n"
+	//	;
+	//nSize = lstrlenA(pszHeader);
+	//lbExportRc = FileWriteBuffered(pszHeader, nSize);
+	if (lbExportRc && ms_RECmdHeader && *ms_RECmdHeader)
+	{
+		lbExportRc = FileWriteBuffered(ms_RECmdHeader, mn_RECmdHeader);
+	}
+
+	// "set FarRegEditRc=""""\r\n"
+	if (lbExportRc && ms_RECmdVarReset && *ms_RECmdVarReset)
+	{
+		lbExportRc = FileWriteBuffered(ms_RECmdVarReset, mn_RECmdVarReset);
+	}
+
+	// "\r\nrem Required for Unicode string support"
+	if (lbExportRc)
+	{
+		if (bRequestUnicode && ms_RECmdUTF8Warn && *ms_RECmdUTF8Warn)
+		{
+			lbExportRc = FileWriteBuffered(ms_RECmdUTF8Warn, mn_RECmdUTF8Warn);
+		}
+	}
+
+	if (lbExportRc)
+	{
+		char szCHCP[64];
+		wsprintfA(szCHCP, "\r\nchcp %u\r\n\r\n", nAnsiCP);
+		lbExportRc = FileWriteBuffered(szCHCP, lstrlenA(szCHCP));
+	}
+
+	return lbExportRc;
+}
+
+BOOL MFileTxtCmd::FileWriteValue(LPCWSTR pszValueName, REGTYPE nDataType, const BYTE* pData, DWORD nDataSize, LPCWSTR pszComment)
+{
+	if (nDataType == REG__KEY)
+	{
+		_ASSERTE(nDataType!=REG__KEY);
+		InvalidOp();
+		return FALSE;
+	}
+	if (!psKeyBuffer || !*psKeyBuffer)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+
+	if (mb_KeyWriteWaiting) // поскольку создается значение, то САМ ключ явно создавать не нужно
+		mb_KeyWriteWaiting = FALSE;
+	if (!mb_LastKeyHasValues)
+		mb_LastKeyHasValues = TRUE;
+	
+	char* pszCmd = (char*)GetFormatBuffer(max(0xFFFF,nDataSize));
+	if (!pszCmd)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	*pszCmd = 0;
+	
+	if (nDataType == REG__COMMENT)
+	{
+		//TODO: Выкинуть в cmd комментарии как "rem ...", учесть, что они могут содержать \r\n
+#if 0
+		if (!bOneKeyCreated)
+		{
+			bOneKeyCreated = TRUE;
+			if (!FileWrite(L"\r\n", 2))
+				return FALSE;
+		}
+
+		if (!FileWrite(pszValueName, -1))
+			return FALSE;
+		//if (pszComment && !FileWrite(pszComment, -1))
+		//	return FALSE;
+		if (!FileWrite(L"\r\n", 2))
+			return FALSE;
+#endif
+		return TRUE;
+	}
+	
+	char* psz = pszCmd;
+	if (!PrepareCmd(psz, (nDataType == REG__DELETE) ? "DELETE" : "ADD", psKeyBuffer))
+		return -1; // ошибка уже показана
+
+	char* pszValueNameA = NULL; size_t nValueNameA = 0;
+		
+	if (!pszValueName || !*pszValueName)
+	{
+		// "/ve" - значение по умолчанию
+		*(psz++) = '/'; *(psz++) = 'v'; *(psz++) = 'e'; *(psz++) = ' '; *psz = 0;
+	}
+	else
+	{
+		if (wcspbrk(pszValueName, L"\r\n\""))
+		{
+			REPlugin::MessageFmt(REM_CmdBadValueName, pszValueName);
+			return -1;
+		}
+	
+		*(psz++) = '/'; *(psz++) = 'v'; *(psz++) = ' '; *(psz++) = '"'; *psz = 0;
+		int nCchLeft = cbExportFormatted - (int)(psz - pszCmd);
+		pszValueNameA = psz;
+		if (!PrepareString(psz, pszValueName, lstrlenW(pszValueName), nCchLeft))
+			return -1; // ошибка уже показана
+		nValueNameA = psz - pszValueNameA;
+		*(psz++) = '"'; *(psz++) = ' '; *psz = 0; // закрыть кавыку
+	}
+	
+	if (nDataType == REG__DELETE)
+	{
+		// больше ничего писать не нужно
+	}
+	else if (nDataType == REG_SZ || nDataType == REG_EXPAND_SZ)
+	{
+		lstrcpyA(psz, (nDataType == REG_SZ) ? "/t REG_SZ " : "/t REG_EXPAND_SZ ");
+		psz += lstrlenA(psz);
+		
+		if ((nDataSize >=2 ) && pData && *((wchar_t*)pData))
+		{
+			*(psz++) = '/'; *(psz++) = 'd'; *(psz++) = ' '; *(psz++) = '"'; *psz = 0;
+			int nCchLeft = cbExportFormatted - (int)(psz - pszCmd);
+			if (!PrepareString(psz, (wchar_t*)pData, nDataSize>>1, nCchLeft))
+				return -1; // ошибка уже показана
+			*(psz++) = '"'; *psz = 0; // закрыть кавыку
+		}
+		
+	}
+	else if (nDataType == REG_MULTI_SZ)
+	{
+		lstrcpyA(psz, "/t REG_MULTI_SZ ");
+		psz += lstrlenA(psz);
+
+		if ((nDataSize >=2 ) && pData && *((wchar_t*)pData))
+		{
+			//*(psz++) = '/'; *(psz++) = 'd'; *(psz++) = ' '; *(psz++) = '"'; *psz = 0;
+			int nCchLeft = cbExportFormatted - (int)(psz - pszCmd);
+			if (!PrepareMSZ(psz, (wchar_t*)pData, nDataSize>>1, nCchLeft, pszValueName))
+				return -1; // ошибка уже показана
+			//*(psz++) = '"'; *psz = 0; // закрыть кавыку
+		}
+		//return FALSE;
+	}
+	else if ((nDataType == REG_DWORD) && (nDataSize == sizeof(DWORD)))
+	{
+		wsprintfA(psz, "/t REG_DWORD /d %u", *((DWORD*)pData));
+		psz += lstrlenA(psz);
+	}
+	else
+	{
+		// Все остальное - как Binary
+		lstrcpyA(psz, "/t REG_BINARY ");
+		psz += lstrlenA(psz);
+		
+		if (nDataSize)
+		{
+			*(psz++) = '/'; *(psz++) = 'd'; *(psz++) = ' '; *psz = 0;
+			for (UINT i = 0; i < nDataSize; i++)
+			{
+				//TODO: //OPTIMIZE: !!!
+				wsprintfA(psz, "%02X", (DWORD)(pData[i]));
+				psz += 2;
+			}
+			*psz = 0;
+		}
+	}
+	
+	if (!FileWriteBuffered(pszCmd, (int)(psz - pszCmd)))
+		return FALSE;
+
+	if (!FileWriteBuffered("\r\n", 2))
+		return FALSE;
+		
+	if (mn_RECmdErrCheck)
+	{
+		if (pszValueNameA && nValueNameA)
+			pszValueNameA[nValueNameA] = 0;
+		if (!WriteRegCheck((nDataType == REG__DELETE), (pszValueNameA && *pszValueNameA) ? pszValueNameA : "(Default)"))
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+LONG MFileTxtCmd::CreateKeyEx(
+		HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired,
+		LPSECURITY_ATTRIBUTES lpSecurityAttributes, HKEY* phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags,
+		RegKeyOpenRights *apRights /*= NULL*/, LPCWSTR pszComment /*= NULL*/)
+{
+	BOOL bKeyDeletion = (dwOptions & REG__OPTION_CREATE_DELETED) == REG__OPTION_CREATE_DELETED;
+	
+	LPCSTR pszFullKey = PrepareKey(hKey, lpSubKey);
+	if (!pszFullKey)
+		return -1; // ошибка уже показана
+	_ASSERTE(pszFullKey == psKeyBuffer);
+	
+	if (bKeyDeletion)
+	{
+		if (!WriteCurrentKey(bKeyDeletion, TRUE))
+			return -1;
+	}
+	else if (mb_LastKeyHasValues)
+	{
+		mb_LastKeyHasValues = FALSE;
+		// cmd-файлы строго в однобайтовых кодировках (с UTF-8)
+		if (!FileWriteBuffered("\r\n", 2))
+			return FALSE;
+	}
+		
+	// Если в ключе будут создаваться подключи или значения,
+	// то не нужно создавать сам ключ,
+	// а то "REG" создаст в нем пустое и не нужное значение по умолчанию
+	if (!mb_KeyWriteWaiting) // если еще не...
+	{
+		if (!IsPredefined(hKey) || (lpSubKey && *lpSubKey))
+			mb_KeyWriteWaiting = TRUE;
+	}
+	
+	// Что-то отличное от NULL нужно вернуть!
+	*phkResult = HKEY__HIVE;
+
+	return 0;
+}
+
+BOOL MFileTxtCmd::WriteCurrentKey(BOOL bKeyDeletion, BOOL bAddRN)
+{
+	if (!mb_KeyWriteWaiting)
+		return TRUE; // ничего не ожидается
+
+	if (bAddRN)
+	{
+		// cmd-файлы строго в однобайтовых кодировках (с UTF-8)
+		if (!FileWriteBuffered("\r\n", 2))
+			return FALSE;
+	}
+
+	// Если в ключе будут создаваться подключи или значения,
+	// то не нужно создавать сам ключ,
+	// а то "REG" создаст в нем пустое и не нужное значение по умолчанию
+	mb_KeyWriteWaiting = FALSE; // чтобы повторно не писать
+	
+	char* pszCmd = (char*)GetFormatBuffer(255); // без разницы, здесь можно и 0 передать
+	if (!pszCmd)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	
+	char* psz = pszCmd;
+	*pszCmd = 0;
+	if (!PrepareCmd(psz, bKeyDeletion ? "DELETE" : "ADD", psKeyBuffer))
+		return FALSE; // ошибка уже показана
+
+	if (!FileWriteBuffered(pszCmd, lstrlenA(pszCmd)) ||
+		!FileWriteBuffered("\r\n", 2))
+	{
+		return FALSE;
+	}
+
+	if (mn_RECmdErrCheck)
+	{
+		if (!WriteRegCheck(bKeyDeletion, NULL))
+			return FALSE;
+	}
+	
+	//bKeyWasCreated = TRUE;
+	return TRUE;
+}
+
+// Сконвертить psKey в UTF8
+// Может вернуть NULL, если ключ содержит недопустимые для cmd символы
+// в этом случае ошибка уже показана
+LPCSTR MFileTxtCmd::PrepareKey(HKEY hKey, LPCWSTR lpSubKey)
+{
+	DWORD nSubKeyLen = lpSubKey ? lstrlenW(lpSubKey) : 0;
+	
+	if (!ms_LastSubKey)
+	{
+		InvalidOp();
+		return NULL;
+	}
+	if (nSubKeyLen >= mn_LastSubKeyCch)
+	{
+		InvalidOp();
+		return NULL;
+	}
+	
+	if (mb_KeyWriteWaiting)
+	{
+		BOOL lbParentChanged = TRUE;
+		if ((hKey == mh_LastRoot) && nSubKeyLen)
+		{
+			if ((nSubKeyLen > mn_LastSubKeyLen)
+				&& (lpSubKey[mn_LastSubKeyLen] == L'\\'))
+			{
+				if (memcmp(ms_LastSubKey, lpSubKey, mn_LastSubKeyLen*sizeof(wchar_t)) == 0)
+					lbParentChanged = FALSE;
+			}
+		}
+		if (lbParentChanged)
+		{
+			// Сменился родительский ключ, нужно таки создать пустой текущий ключ
+			BOOL lbAddRN = mb_LastKeyHasValues; mb_LastKeyHasValues = FALSE;
+			if (!WriteCurrentKey(FALSE, lbAddRN)
+				|| !FileWriteBuffered("\r\n", 2))
+			{
+				if (psKeyBuffer)
+					*psKeyBuffer = 0; // чтобы в cmd-случайно не попали значения от "не созданного" ключа
+				return NULL;
+			}
+		}
+	}
+	// сразу сохранить копию последнего ключа
+	mh_LastRoot = hKey; mn_LastSubKeyLen = nSubKeyLen;
+	lstrcpyW(ms_LastSubKey, lpSubKey ? lpSubKey : L"");
+	
+
+	// поехали
+	LPCSTR pszRoot = NULL;
+	if (hKey == HKEY_CURRENT_USER)
+		pszRoot = "HKCU";
+	else if (hKey == HKEY_LOCAL_MACHINE)
+		pszRoot = "HKLM";
+	else if (hKey == HKEY_USERS)
+		pszRoot = "HKU";
+	else if (hKey == HKEY_CLASSES_ROOT)
+		pszRoot = "HKCR";
+	else if (hKey == HKEY_CURRENT_CONFIG)
+		pszRoot = "HKCC";
+	else
+	{
+		InvalidOp();
+		if (psKeyBuffer)
+			*psKeyBuffer = 0; // чтобы в cmd-случайно не попали значения от "не созданного" ключа
+		return NULL;
+	}
+	
+	if (lpSubKey && *lpSubKey)
+	{
+		if (wcspbrk(lpSubKey, L"\r\n\""))
+		{
+			REPlugin::MessageFmt(REM_CmdBadKeyName, lpSubKey);
+			if (psKeyBuffer)
+				*psKeyBuffer = 0; // чтобы в cmd-случайно не попали значения от "не созданного" ключа
+			return NULL;
+		}
+	}
+
+	DWORD nLen = lstrlenA(pszRoot) + (lpSubKey ? lstrlenW(lpSubKey) : 0) + 2;
+	if (!psKeyBuffer || ((nLen * 6) > nKeyBufferSize))
+	{
+		SafeFree(psKeyBuffer);
+		nKeyBufferSize = (nLen * 6);
+		psKeyBuffer = (char*)malloc(nKeyBufferSize);
+		if (!psKeyBuffer)
+		{
+			InvalidOp();
+			return NULL;
+		}
+	}
+
+	lstrcpyA(psKeyBuffer, pszRoot);
+	if (lpSubKey && *lpSubKey)
+	{
+		nLen = lstrlenA(psKeyBuffer);
+		psKeyBuffer[nLen++] = '\\'; psKeyBuffer[nLen] = 0;
+		WideCharToMultiByte(nAnsiCP/*CP_UTF8*/, 0, lpSubKey, -1, psKeyBuffer+nLen, nKeyBufferSize-nLen, 0,0);
+	}
+	
+	// В готовом UTF-8 нужно заменить " на ""
+	char* pszQ = strchr(psKeyBuffer, '"');
+	if (pszQ)
+	{
+		nLen = lstrlenA(psKeyBuffer);
+		while (pszQ)
+		{
+			memmove(pszQ+1, pszQ, nLen - (pszQ-psKeyBuffer) + 1); // + '\0'
+			nLen++;
+			pszQ = strchr(pszQ+2, '"');
+		}
+		if ((nLen >= nKeyBufferSize) || (nLen >= MAX_FORMAT_KEY_LEN))
+		{
+			InvalidOp();
+			*psKeyBuffer = 0; // чтобы в cmd-случайно не попали значения от "не созданного" ключа
+			return NULL;
+		}
+	}
+	pszQ = strchr(psKeyBuffer, '%');
+	if (pszQ)
+	{
+		nLen = lstrlenA(psKeyBuffer);
+		while (pszQ)
+		{
+			memmove(pszQ+1, pszQ, nLen - (pszQ-psKeyBuffer) + 1); // + '\0'
+			nLen++;
+			pszQ = strchr(pszQ+2, '%');
+		}
+		if ((nLen >= nKeyBufferSize) || (nLen >= MAX_FORMAT_KEY_LEN))
+		{
+			InvalidOp();
+			*psKeyBuffer = 0; // чтобы в cmd-случайно не попали значения от "не созданного" ключа
+			return NULL;
+		}
+	}
+	
+	return psKeyBuffer;
+}
+
+// psz == GetFormatBuffer()
+// psVerb == "add" или "delete"
+// psKeyUTF8 обычно просто == psKeyBuffer
+BOOL MFileTxtCmd::PrepareCmd(char*& psz, LPCSTR psVerb, LPCSTR psKeyUTF8)
+{
+	if (!psKeyUTF8 || !*psKeyUTF8)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	_ASSERTE(psVerb!=NULL);
+	
+	lstrcpyA(psz, "reg "); psz += 4;
+	lstrcpyA(psz, psVerb); psz += lstrlenA(psVerb);
+	*(psz++) = ' '; *psz = 0;
+	
+	// Теперь - ключ
+	*(psz++) = '"';
+	lstrcpyA(psz, psKeyUTF8); psz += lstrlenA(psKeyUTF8);
+	*(psz++) = '"'; *(psz++) = ' '; // закрыть кавыку
+	*(psz++) = '/'; *(psz++) = 'f'; *(psz++) = ' '; // добавить "/f" чтобы вопросов не задавала
+	*psz = 0; // fin
+	
+	return TRUE;
+}
+
+BOOL MFileTxtCmd::PrepareString(char*& psz, LPCWSTR psText, int nLen, int nCchLeft)
+{
+	//if (((LPBYTE)psz < pExportFormatted) || !pExportFormatted || !psz || !psText)
+	//{
+	//	_ASSERTE(psz);
+	//	_ASSERTE(pExportFormatted);
+	//	_ASSERTE(psText);
+	//	_ASSERTE((LPBYTE)psz >= pExportFormatted);
+	//	InvalidOp();
+	//	return FALSE;
+	//}
+	
+	if (nLen == 0)
+		return TRUE; // пустая строка, ничего не делать
+	if (!psText)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	if (nLen < 0)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	
+	while ((nLen > 0) && (psText[nLen-1] == 0))
+		nLen--; // В cmd не нужно выкидывать \0
+
+	//size_t nCurLen = ((LPBYTE)psz) - pExportFormatted;
+	//if (nCurLen > cbExportFormatted || ((int)nCurLen) < 0)
+	//{
+	//	InvalidOp();
+	//	return FALSE;
+	//}
+	//int nLeft = cbExportFormatted - (int)nCurLen;
+	if ((nLen*4) >= nCchLeft)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+
+	//nLen = lstrlenA(psText); -- нельзя, может быть НЕ \0-terminated
+	int nCvtLen = WideCharToMultiByte(nAnsiCP/*CP_UTF8*/, 0, psText, nLen, psz, nCchLeft, 0,0);
+	psz[nCvtLen] = 0;
+	
+	// В готовом UTF-8 нужно заменить " на ""
+	char* pszQ = strchr(psz, '"');
+	if (pszQ)
+	{
+		while (pszQ)
+		{
+			memmove(pszQ+1, pszQ, nCvtLen - (pszQ-psz) + 1); // + '\0'
+			nCvtLen++;
+			pszQ = strchr(pszQ+2, '"');
+		}
+		if (nCvtLen >= nCchLeft)
+		{
+			InvalidOp();
+			return FALSE;
+		}
+	}
+	pszQ = strchr(psz, '%');
+	if (pszQ)
+	{
+		while (pszQ)
+		{
+			memmove(pszQ+1, pszQ, nCvtLen - (pszQ-psz) + 1); // + '\0'
+			nCvtLen++;
+			pszQ = strchr(pszQ+2, '%');
+		}
+		if (nCvtLen >= nCchLeft)
+		{
+			InvalidOp();
+			return FALSE;
+		}
+	}
+	
+	psz += nCvtLen;
+	_ASSERTE(*psz == 0);
+	*psz = 0;
+	return TRUE;
+}
+
+BOOL MFileTxtCmd::PrepareMSZ(char*& psz, LPCWSTR psText, int nLen, int nCchLeft, LPCWSTR pszValueName)
+{
+	if (nLen == 0)
+		return TRUE; // пустая строка, ничего не делать
+	if (!psText)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	if (nLen < 0)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	
+	while ((nLen > 0) && (psText[nLen-1] == 0))
+		nLen--; // В cmd не нужно выкидывать завешающий \0
+	if (nLen == 0)
+		return TRUE; // пустая строка, ничего не делать
+		
+	// Для тестов нужно сначала сконвертить строку в кодировку cmd файла
+	if ((nLen*3) >= nCchLeft)
+	{
+		InvalidOp();
+		return FALSE; // буфер должен был быть выделен достаточно размера для преобразования в UTF8!
+	}
+	int nCvtLen = WideCharToMultiByte(nAnsiCP/*CP_UTF8*/, 0, psText, nLen, psz, nCchLeft, 0,0);
+	psz[nCvtLen] = 0;
+
+	int nLineLen;
+	// Теперь можно определить разделитель, который можно использовать в cmd
+	char szDelim[3] = "\\0"; // по умолчанию
+	BOOL lbFailed = FALSE;
+	LPCSTR pszLine = psz;
+	// Поехали (шаг1)
+	while (*pszLine)
+	{
+		// Нужно пробежаться по всем строкам, чтобы проверить валидность MSZ (в середине не должно быть \0\0)
+		if (!lbFailed && strstr(pszLine, szDelim))
+		{
+			lbFailed = TRUE; // Разделитель "\\0" использовать нельзя - он встречается в тексте
+		}
+		nLineLen = lstrlenA(pszLine);
+		pszLine += nLineLen+1;
+	}
+	// Сравниваем именно с nCvtLen, т.к. UTF8 может быть длиннее nLen
+	if ((pszLine - psz) < nCvtLen)
+	{
+		REPlugin::MessageFmt(REM_CmdErrMsz0, pszValueName);
+		return FALSE;
+	}
+	// Если "\\0" использовать нельзя - попытаемся подобрать разделитель из нижней части ASCII
+	if (lbFailed)
+	{
+		for (int c = 1; c <= 127; c++)
+		{
+			if (c == 8 || c == '\r' || c == '\n' || c == '/' || c == '\\' || c == '"')
+				continue; // этими символами разделять не будем
+
+			lbFailed = FALSE;
+			szDelim[0] = c; szDelim[1] = 0; // односимвольный
+			
+			pszLine = psz;
+			// Поехали (шаг2)
+			while (*pszLine)
+			{
+				// Нужно пробежаться по всем строкам, чтобы проверить валидность MSZ (в середине не должно быть \0\0)
+				if (strchr(pszLine, c))
+				{
+					lbFailed = TRUE; // Разделитель «c» использовать нельзя - он встречается в тексте
+					break;
+				}
+				nLineLen = lstrlenA(pszLine);
+				pszLine += nLineLen+1;
+			}
+			if (!lbFailed)
+				break; // подобрали
+		} // end for
+		
+		// Получилось?
+		if (lbFailed)
+		{
+			REPlugin::MessageFmt(REM_CmdBadValueMSZ, pszValueName);
+			return FALSE;
+		}
+	}
+	
+	// Раз все хорошо - можно выгружать
+	pszLine = psz; // чтобы nCchLeft поправить
+	
+	// Разделитель
+	int nDelim = lstrlenA(szDelim);
+	_ASSERTE((nDelim==1 && szDelim[0]!=L'\\') || (nDelim==2 && szDelim[0]==L'\\'));
+	if (szDelim[0] != '\\')
+	{
+		*(psz++) = '/'; *(psz++) = 's'; *(psz++) = ' '; *(psz++) = szDelim[0]; *(psz++) = ' ';
+	}
+	*(psz++) = '/'; *(psz++) = 'd'; *(psz++) = ' '; *(psz++) = '"';
+	
+	// Сколько в буфере осталось?
+	nCchLeft -= (int)(psz - pszLine) + 2;
+	if (nCchLeft <= 0)
+	{
+		InvalidOp();
+		return FALSE;
+	}
+	
+	// Поехали
+	*psz = 0;
+	LPCWSTR pwszSrc = psText;
+	while (*pwszSrc)
+	{
+		nLineLen = lstrlenW(pwszSrc);
+		pszLine = psz; // чтобы nCchLeft поправить
+		if (!PrepareString(psz, pwszSrc, nLineLen, nCchLeft))
+			return -1; // ошибка уже показана
+		pwszSrc += nLineLen+1;
+		nCchLeft -= (int)(psz - pszLine) + nDelim;
+		if (nCchLeft <= 0)
+		{
+			InvalidOp();
+			return FALSE;
+		}
+		if (*pwszSrc)
+		{
+			*(psz++) = szDelim[0];
+			if (szDelim[1])
+				*(psz++) = szDelim[1];
+		}
+	}
+	*(psz++) = '"'; *psz = 0; // закрыть кавыку
+	
+	return TRUE; // OK
+}
+
+void MFileTxtCmd::FileClose()
+{
+	if (hFile && (hFile != INVALID_HANDLE_VALUE))
+	{
+		if (mb_KeyWriteWaiting)
+			WriteCurrentKey(FALSE, mb_LastKeyHasValues);
+		if (ms_RECmdErrFin && mn_RECmdErrFin) // // "if NOT %FarRegEditRc%=="""" echo At least on value/key failed: %FarRegEditRc%\r\n"
+			FileWriteBuffered(ms_RECmdErrFin, mn_RECmdErrFin);
+	}
+	MFileTxt::FileClose();
+}
+
+BOOL MFileTxtCmd::WriteRegCheck(BOOL bDeletion, LPCSTR psValueName)
+{
+	if (!FileWriteBuffered(ms_RECmdErrCheck, mn_RECmdErrCheck))
+		return FALSE;
+	// Если & попадается МЕЖДУ кавычками - то cmd ест нормально.
+	LPCSTR psz = bDeletion ? "\"DELETE " : "\"ADD ";
+	if (!FileWriteBuffered(psz, lstrlenA(psz)))
+		return FALSE;
+	if (psKeyBuffer)
+	{
+		if (!FileWriteBuffered(psKeyBuffer, lstrlenA(psKeyBuffer)))
+			return FALSE;
+	}
+	if (psValueName)
+	{
+		if (!FileWriteBuffered(" :: ", 4) ||
+			!FileWriteBuffered(psValueName, lstrlenA(psValueName)))
+			return FALSE;
+	}
+	if (!FileWriteBuffered("\"\r\n", 3))
+		return FALSE;
+	return TRUE;
+}

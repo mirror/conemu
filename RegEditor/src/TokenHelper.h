@@ -10,9 +10,10 @@ protected:
 	TOKEN_PRIVILEGES *tp_prev; DWORD prev_size;
 	DWORD  dwErr;
 public:
-	CAdjustProcessToken() {
+	CAdjustProcessToken()
+	{
 		hToken = NULL; tp_prev = NULL; tp = NULL;
-		bEnabled = FALSE;
+		bEnabled = FALSE; dwErr = 0;
 		if (!OpenProcessToken(GetCurrentProcess(), 
 				//TOKEN_ASSIGN_PRIMARY|TOKEN_DUPLICATE|TOKEN_QUERY|TOKEN_ADJUST_DEFAULT,
 				//TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY | 
@@ -23,8 +24,10 @@ public:
 			hToken = NULL;
 		}
 	};
-	~CAdjustProcessToken() {
-		if (bEnabled && tp_prev) {
+	void Release()
+	{
+		if (bEnabled && tp_prev)
+		{
 			if ( !AdjustTokenPrivileges(
 				   hToken, 
 				   FALSE, 
@@ -36,16 +39,27 @@ public:
 				  dwErr = GetLastError();
 			} 
 		}
-		if (hToken) {
-			CloseHandle(hToken); hToken = NULL;
+		bEnabled = FALSE;
+		if (tp_prev)
+		{
+			free(tp_prev); tp_prev = NULL;
 		}
-		if (tp_prev) {
-			SafeFree(tp_prev);
-		}
-		if (tp) {
-			SafeFree(tp);
+		if (tp)
+		{
+			free(tp); tp = NULL;
 		}
 	};
+	~CAdjustProcessToken()
+	{
+		Release();
+		if (hToken)
+		{
+			CloseHandle(hToken); hToken = NULL;
+		}
+	};
+	// Возвращает 1, если все привилегии успешно подняты
+	//  0 - если частично?
+	// -1 - при ошибке, или если hToken уже был инициализирован
 	int Enable(LPCTSTR* lpszPrivilege /* SE_BACKUP_NAME */, int nCount)
 	{
 		LUID luid;
@@ -107,5 +121,25 @@ public:
 		}
 
 		return 1;
+	};
+	int Enable(int nCount, ... /*LPCTSTR lpszPrivilege = SE_BACKUP_NAME, ...*/ )
+	{
+		va_list argptr;
+		va_start(argptr, nCount);
+		LPCTSTR* pszList = (LPCTSTR*)calloc(nCount, sizeof(LPCTSTR));
+		
+		for (int i = 0; i < nCount; i++)
+		{
+			pszList[i] = va_arg( argptr, LPCTSTR );
+		}
+		
+		int lRc = Enable(pszList, nCount);
+		
+		free(pszList);
+		return lRc;
+	};
+	DWORD LastErrorCode()
+	{
+		return dwErr;
 	};
 };

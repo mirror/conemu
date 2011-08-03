@@ -86,7 +86,7 @@ struct RegFolder
 	// инициализаци€ в NULL
 	void Init(RegPath* apKey);
 	// «агрузить (если были изменени€) список подключей и значений
-	BOOL LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum aKeysFirst, BOOL abForceReload, BOOL abSilence, BOOL abLoadDesc, MRegistryBase* file = NULL, HKEY hKeyWrite = NULL);
+	BOOL LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum aKeysFirst, BOOL abForceReload, BOOL abSilence, BOOL abLoadDesc, MRegistryBase* file = NULL, HKEY hKeyWrite = NULLHKEY);
 	// убедитьс€, что выделено достаточно пам€ти
 	void AllocateItems(/*RegPath* apKey,*/ int anSubkeys, int anValues, int anMaxKeyLen, int anMaxValueNameLen);
 	// добавить в список, при необходимости - увеличит выделенную пам€ть
@@ -110,10 +110,11 @@ struct RegFolder
 	// Wrappers
 	LONG OpenKey(MRegistryBase* pWorker, HKEY* phKey, DWORD anRights = KEY_READ);
 	LONG CreateKey(MRegistryBase* pWorker, HKEY* phKey, DWORD anRights /*= (KEY_READ|KEY_WRITE)*/);
-	void CloseKey(MRegistryBase* pWorker, HKEY& hKey);
+	void CloseKey(MRegistryBase* pWorker, HKEY* phKey);
 	
 	// Serialize
 	BOOL ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistryBase* file, BOOL abUnicode);
+	BOOL Transfer(REPlugin* pPlugin, MRegistryBase* pSrcWorker, RegFolder *pDstFolder, MRegistryBase* pDstWorker);
 	//BOOL ExportToFileAnsi(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistryBase* file);
 	//BOOL ExportToFileUnicode(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistryBase* file);
 	

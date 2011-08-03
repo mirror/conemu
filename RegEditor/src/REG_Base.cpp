@@ -2,12 +2,15 @@
 #include "header.h"
 
 
-MRegistryBase::MRegistryBase()
+MRegistryBase::MRegistryBase(BOOL abWow64on32)
 {
 	eType = RE_UNDEFINED;
 	bRemote = FALSE;
 	sRemoteServer[0] = /*sRemoteLogin[0] = sRemotePassword[0] =*/ sRemoteResource[0] = 0;
 	bDirty = false;
+	mb_Wow64on32 = abWow64on32;
+	mp_TempExportBuffer = NULL;
+	mn_TempExportBuffer = 0;
 	//bRemote = abRemote;
 	//if (bRemote && asRemoteServer) {
 	//	while (*asRemoteServer == L'\\' || *asRemoteServer == '/') asRemoteServer++;
@@ -25,7 +28,22 @@ MRegistryBase::~MRegistryBase()
 {
 	// отключиться, если было подключение
 	ConnectLocal();
+	//
+	SafeFree(mp_TempExportBuffer);
 }
+
+//DWORD MRegistryBase::SamDesired()
+//{
+//	switch (mb_Wow64on32)
+//	{
+//	case 0:
+//		return KEY_WOW64_32KEY;
+//	case 1:
+//		return KEY_WOW64_64KEY;
+//	default:
+//		return 0;
+//	}
+//}
 
 //MRegistryBase* MRegistryBase::CreateWorker(RegWorkType aType, bool abRemote, LPCWSTR asRemoteServer, LPCWSTR asRemoteLogin, LPCWSTR asRemotePassword)
 //{
@@ -68,12 +86,16 @@ BOOL MRegistryBase::ConnectRemote(LPCWSTR asServer, LPCWSTR asLogin /*= NULL*/, 
 			if (asResource && asResource[0] == L'\\' && asResource[1] == L'\\')
 			{
 				lstrcpynW(sRemoteResource, asResource, countof(sRemoteResource));
-			} else {
+			}
+			else
+			{
 				lstrcpynW(sRemoteResource, sRemoteServer, countof(sRemoteResource));
 				if (asResource && asResource[0] == L'\\')
 				{
 					lstrcatW(sRemoteResource, asResource);
-				} else {
+				}
+				else
+				{
 					lstrcatW(sRemoteResource, L"\\");
 					if (asResource && *asResource)
 						lstrcatW(sRemoteResource, asResource);
@@ -125,7 +147,7 @@ void MRegistryBase::ConnectLocal()
 	bRemote = false; sRemoteServer[0] = 0; sRemoteResource[0] = 0;
 }
 
-RegFolder* MRegistryBase::GetFolder(RegPath* apKey, int OpMode)
+RegFolder* MRegistryBase::GetFolder(RegPath* apKey, u64 OpMode)
 {
 	return m_Cache.GetFolder(apKey, OpMode);
 }
@@ -163,4 +185,55 @@ BOOL MRegistryBase::IsPredefined(HKEY hKey)
 	if (hKey && (((ULONG_PTR)hKey) & HKEY__PREDEFINED_MASK) == HKEY__PREDEFINED_TEST)
 		return TRUE;
 	return FALSE;
+}
+
+LPBYTE MRegistryBase::GetExportBuffer(DWORD cbSize)
+{
+	if (mp_TempExportBuffer && mn_TempExportBuffer >= cbSize)
+		return mp_TempExportBuffer;
+	SafeFree(mp_TempExportBuffer);
+	mn_TempExportBuffer = cbSize;
+	mp_TempExportBuffer = (LPBYTE)malloc(cbSize);
+	return mp_TempExportBuffer;
+}
+
+// возвращает битмаск из 'enum RegImportStyle'
+DWORD MRegistryBase::GetAllowedImportStyles()
+{
+	DWORD nAllowed = 0;
+
+	// ExistKey возвращает 0 - если ключ есть
+	if (!ExistKey(HKEY__HIVE,0,0))
+	{
+		// Допустим только импорт "по месту", импорт в корень - невозможен
+	}
+	else if (cfg->is64bitOs)
+	{
+		// ExistKey возвращает 0 - если ключ есть
+
+		// Проверить, есть ли в reg-файле HKLM или HKCR
+		if (ExistKey(HKEY_LOCAL_MACHINE,0,0) && ExistKey(HKEY_CLASSES_ROOT,0,0))
+		{
+			// В этом случае (HKCU) импорт ведется без разницы 32/64
+			nAllowed = ris_Native;
+		}
+		else
+		{		
+			if (ExistKey(HKEY_LOCAL_MACHINE, L"SOFTWARE", L"Wow6432Node") == 0)
+			{
+				// Допустим импорт только в 64битном режиме (это выгрузка 64битного ключа, раз он содержит Wow6432Node)
+				nAllowed = ris_Import64;
+			}
+			else
+			{
+				nAllowed = ris_Native|ris_Import32|ris_Import64;
+			}
+		}
+	}
+	else
+	{
+		// x86 OS, различий веток реестра (32bit/64bit) нет вообще
+		nAllowed = ris_Native;
+	}
+	return nAllowed;
 }

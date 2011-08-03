@@ -294,6 +294,9 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 					case L'R':
 						ColumnType|=COLUMN_RIGHTALIGN;
 						break;
+					case L'F':
+						ColumnType|=COLUMN_RIGHTALIGNFORCE;
+						break;
 					case L'N':
 						ColumnType|=COLUMN_NOEXTENSION;
 						break;
@@ -468,7 +471,11 @@ void ViewSettingsToText(unsigned int *ViewColumnTypes,int *ViewColumnWidths,int 
 				strType += L"O";
 
 			if (ViewColumnTypes[I] & COLUMN_RIGHTALIGN)
+			{
 				strType += L"R";
+				if (ViewColumnTypes[I] & COLUMN_RIGHTALIGNFORCE)
+					strType += L"F";
+			}
 
 			if (ViewColumnTypes[I] & COLUMN_NOEXTENSION)
 				strType += L"N";

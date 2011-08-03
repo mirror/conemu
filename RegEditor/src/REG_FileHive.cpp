@@ -3,8 +3,8 @@
 
 #define USERS_HIVE_NAME_FORMAT L"FarRegEdit-%08x"
 
-MFileHive::MFileHive()
-	: MRegistryWinApi()
+MFileHive::MFileHive(BOOL abWow64on32)
+	: MRegistryWinApi(abWow64on32)
 {
 	eType = RE_HIVE;
 	sHiveSubkeyName[0] = 0;
@@ -226,23 +226,26 @@ LONG MFileHive::RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKe
 	return MRegistryWinApi::RenameKey(apParent, abCopyOnly, lpOldSubKey, lpNewSubKey, pbRegChanged);
 }
 
-LONG MFileHive::CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, PHKEY phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/, LPCWSTR pszComment /*= NULL*/)
+LONG MFileHive::CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, HKEY* phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/, LPCWSTR pszComment /*= NULL*/)
 {
 	FixHiveKey(hKey);
 	return MRegistryWinApi::CreateKeyEx(hKey, lpSubKey, Reserved, lpClass, dwOptions, samDesired, lpSecurityAttributes, phkResult, lpdwDisposition, pnKeyFlags, apRights, pszComment);
 }
 
-LONG MFileHive::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/)
+LONG MFileHive::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, HKEY* phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/)
 {
 	FixHiveKey(hKey);
 	return MRegistryWinApi::OpenKeyEx(hKey, lpSubKey, ulOptions, samDesired, phkResult, pnKeyFlags, apRights);
 }
 
-LONG MFileHive::CloseKey(HKEY hKey)
+LONG MFileHive::CloseKey(HKEY* phKey)
 {
-	if (hKey == hHiveKey)
+	if (*phKey == hHiveKey || *phKey == HKEY__HIVE)
+	{
+		*phKey = NULL;
 		return 0;
-	return MRegistryWinApi::CloseKey(hKey);
+	}
+	return MRegistryWinApi::CloseKey(phKey);
 }
 
 LONG MFileHive::QueryInfoKey(
@@ -285,7 +288,7 @@ LONG MFileHive::SetValueEx(HKEY hKey, LPCWSTR lpValueName, DWORD Reserved, REGTY
 
 
 // Service - TRUE, если права были изменены
-BOOL MFileHive::EditKeyPermissions(RegPath *pKey, RegItem* pItem)
+BOOL MFileHive::EditKeyPermissions(RegPath *pKey, RegItem* pItem, BOOL abVisual)
 {
 	return FALSE; // пока - FALSE
 }

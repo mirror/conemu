@@ -38,7 +38,7 @@ RegFolderCache::~RegFolderCache()
 //		FreeItems();
 //}
 
-RegFolder* RegFolderCache::GetFolder(RegPath* apKey, int OpMode)
+RegFolder* RegFolderCache::GetFolder(RegPath* apKey, u64 OpMode)
 {
 	if (apKey->eType == RE_UNDEFINED)
 	{

@@ -103,28 +103,53 @@ REPlugin* REPluginList::GetOpposite(REPlugin* pPlugin)
 		PanelInfo inf; memset(&inf, 0, sizeof(inf));
 		int nFRc;
 		#ifdef _UNICODE
-		nFRc = psi.Control((HANDLE)Plugins[i], FCTL_GETPANELINFO, 0, (LONG_PTR)&inf);
+			#if FAR_UNICODE>=1988
+				nFRc = psiControl((HANDLE)Plugins[i], FCTL_GETPANELINFO, 0, &inf);
+			#else
+				nFRc = psiControl((HANDLE)Plugins[i], FCTL_GETPANELINFO, 0, (LONG_PTR)&inf);
+			#endif
 		#else
-		nFRc = psi.Control((HANDLE)Plugins[i], FCTL_GETPANELSHORTINFO, &inf);
+		nFRc = psiControl((HANDLE)Plugins[i], FCTL_GETPANELSHORTINFO, &inf);
 		#endif
 		if (nFRc)
 		{
-			if (inf.Plugin && inf.Visible)
-			{
-				return Plugins[i];
-			}
+			#if FAR_UNICODE>=1906
+				if ((inf.Flags & (PFLAGS_PLUGIN|PFLAGS_VISIBLE)) == (PFLAGS_PLUGIN|PFLAGS_VISIBLE))
+				{
+					return Plugins[i];
+				}
+			#else
+				if (inf.Plugin && inf.Visible)
+				{
+					return Plugins[i];
+				}
+			#endif
 		}
 	}
 	return NULL;
 }
 
-void REPluginList::UpdateAllTitles()
+//void REPluginList::UpdateAllTitles()
+//{
+//	for (UINT i = 0; i < countof(Plugins); i++)
+//	{
+//		if (Plugins[i])
+//		{
+//			Plugins[i]->m_Key.Update();
+//		}
+//	}
+//}
+
+void REPluginList::OnSettingsChanged(DWORD abWow64on32)
 {
 	for (UINT i = 0; i < countof(Plugins); i++)
 	{
 		if (Plugins[i])
 		{
+			Plugins[i]->setWow64on32(abWow64on32);
 			Plugins[i]->m_Key.Update();
+			Plugins[i]->UpdatePanel(false);
+			Plugins[i]->RedrawPanel();
 		}
 	}
 }
@@ -339,7 +364,7 @@ BOOL REPluginList::ConnectRegedit(DWORD& nRegeditPID, HANDLE& hProcess, HWND& hP
 	//{
 	//	BOOL lbSucceeded = FALSE;
 	//	//MRegistryWinApi reg;
-	//	//HKEY hk = NULL;
+	//	//HREGKEY hk = NULL;
 	//	// Для ускорения запуска - попытаемся сбросить стартовый ключ?
 	//	RegPath key = {RE_WINAPI}; key.Init(RE_WINAPI, HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Applets\\Regedit");
 	//	if (0 != reg.CreateKeyEx(HKEY_CURRENT_USER, key.mpsz_Key, 0, 0, 0, KEY_WRITE, 0, &hk, 0))

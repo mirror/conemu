@@ -17,7 +17,7 @@ public:
 	//void AddRef(REPlugin* pPlugin);
 	//void Release(REPlugin* pPlugin);
 	
-	RegFolder* GetFolder(RegPath* apKey, int OpMode);
+	RegFolder* GetFolder(RegPath* apKey, u64 OpMode);
 	RegFolder* FindByPanelItems(struct PluginPanelItem *PanelItem);
 
 	//REPlugin* Plugins[10];

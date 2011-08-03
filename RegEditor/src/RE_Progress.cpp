@@ -1,5 +1,6 @@
 
 #include "header.h"
+#include "RE_Guids.h"
 
 /*
 
@@ -45,7 +46,7 @@ REProgress::REProgress(const TCHAR* aszTitle, BOOL abGraphic /*= FALSE*/, const 
 	nStepDuration = 1000; nCounter = 0; sFileInfo[0] = 0;
 	if (aszFileInfo) lstrcpyn(sFileInfo, aszFileInfo, countof(sFileInfo));
 	nStartTick = GetTickCount();
-	Update((aszFileInfo && aszFileInfo[0]) ? aszFileInfo : NULL);
+	Update(/*(aszFileInfo && aszFileInfo[0]) ? aszFileInfo : NULL*/);
 }
 REProgress::REProgress(const TCHAR* aszMsg, const TCHAR* aszTitle)
 	: CScreenRestore(aszMsg, aszTitle)
@@ -71,7 +72,7 @@ REProgress::~REProgress()
 		REPlugin::Message(REM_OperationCancelledByUser);
 	if (bGraphic) {
 		#ifdef _UNICODE
-		psi.AdvControl(psi.ModuleNumber, ACTL_SETPROGRESSSTATE, (void*)PS_NOPROGRESS);
+		psi.AdvControl(PluginNumber, ACTL_SETPROGRESSSTATE, FADV1988 (void*)PS_NOPROGRESS);
 		#endif
 	}
 	if (psLastTitle) {
@@ -100,14 +101,40 @@ BOOL REProgress::CheckForEsc(BOOL abForceRead /*= FALSE*/)
 				i=0;
 				while (i < ReadCnt)
 				{
-					if (InputRec[i].EventType == KEY_EVENT && InputRec[i].Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE)
+					if (InputRec[i].EventType == KEY_EVENT
+						&& InputRec[i].Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE)
 					{
+						BOOL lbKeyDown = InputRec[i].Event.KeyEvent.bKeyDown;
 						while (((i+1) < ReadCnt)
 							&& InputRec[i+1].EventType == KEY_EVENT
 							&& InputRec[i+1].Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE)
-								i++;
-						bEscaped = TRUE;
-						ReadConsoleInput(Console,InputRec,i+1,&ReadCnt);
+						{
+							if (!lbKeyDown && InputRec[i].Event.KeyEvent.bKeyDown)
+								lbKeyDown = TRUE;
+							i++;
+						}
+						// Останов - только если кнопка была НАЖАТА, а не "отпущена"
+						if (lbKeyDown)
+						{
+							// Подтвердить останов
+							bEscaped = (psi.Message(_PluginNumber(guid_ConfirmCancel),FMSG_WARNING|FMSG_ALLINONE,NULL,
+								(const TCHAR * const *)GetMsg(REM_ConfirmOperationCancel),0,2) == 0);
+							if (!PeekConsoleInput(Console,InputRec,NumberOfEvents,&ReadCnt))
+								ReadCnt = 0;
+						}
+						else
+						{
+							ReadCnt = i+1;
+						}
+						// После отображенного диалога - событий в буфере может уже и не быть
+						//ReadConsoleInput(Console,InputRec,i+1,&ReadCnt);
+						if(ReadCnt)
+						{
+							//if (InputRec[0].EventType == KEY_EVENT && InputRec[0].Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE)
+							{
+								ReadConsoleInput(Console,InputRec,ReadCnt,&ReadCnt);
+							}
+						}
 						break;
 					}
 					i++;
@@ -119,7 +146,7 @@ BOOL REProgress::CheckForEsc(BOOL abForceRead /*= FALSE*/)
 
 	return bEscaped;
 }
-void REProgress::Update(LPCTSTR asFileName /*= NULL*/)
+void REProgress::Update(/*LPCTSTR asFileName = NULL*/)
 {
 	// hScreen == NULL, если FAR в режиме DisableScreenOutput
 	if (hScreen != NULL)
@@ -148,16 +175,22 @@ void REProgress::Update(LPCTSTR asFileName /*= NULL*/)
 			sProgress[nProgressLen] = 0;
 
 			#ifdef _UNICODE
+			#if FAR_UNICODE>=1900
+			#define PROGRESSVALUE ProgressValue
+			#endif
 			PROGRESSVALUE pv = {nCurrent,nAllCount};
-			psi.AdvControl(psi.ModuleNumber, ACTL_SETPROGRESSSTATE, (void*)PS_NORMAL);
-			psi.AdvControl(psi.ModuleNumber, ACTL_SETPROGRESSVALUE, (void*)&pv);
+			psi.AdvControl(PluginNumber, ACTL_SETPROGRESSSTATE, FADV1988 (void*)PS_NORMAL);
+			psi.AdvControl(PluginNumber, ACTL_SETPROGRESSVALUE, FADV1988 (void*)&pv);
 			#endif
 
-			if (asFileName) {
+			if (sFileInfo[0])
+			{
 				pszMsg = sProgress;
 				const TCHAR *MsgItems[]={pszTitle,sProgress,sFileInfo};
-				psi.Message(psi.ModuleNumber,FMSG_LEFTALIGN,NULL,MsgItems,sizeof(MsgItems)/sizeof(MsgItems[0]),0);
-			} else {
+				psi.Message(_PluginNumber(guid_PluginGuid),FMSG_LEFTALIGN,NULL,MsgItems,sizeof(MsgItems)/sizeof(MsgItems[0]),0);
+			}
+			else
+			{
 				Message(sProgress, FALSE);
 			}
 
@@ -236,17 +269,26 @@ BOOL REProgress::SetStep(unsigned __int64 anAllStep, BOOL abForce /*= FALSE*/, L
 		|| (/*nCounter >= 10 &&*/ (GetTickCount() - nLastTick) >= nStepDuration)
 		)
 	{
-		if (asFileName) {
+		if (asFileName && *asFileName)
+		{
 			int nLen = lstrlenW(asFileName), nSize = countof(sFileInfo);
-			if (nLen >= nSize) {
+			if (nLen >= nSize)
+			{
 				lstrcpy_t(sFileInfo, nSize-3, asFileName);
 				lstrcat(sFileInfo, _T("..."));
-			} else {
+			}
+			else
+			{
 				lstrcpy_t(sFileInfo, nSize, asFileName);
 			}
 		}
+		else if (sFileInfo[0])
+		{
+			// Иначе на экране появляются неприятные артефакты от удаленной строки
+			sFileInfo[0] = _T(' '); sFileInfo[1] = 0;
+		}
 
-		Update(sFileInfo[0] ? sFileInfo : NULL);
+		Update(/*sFileInfo[0] ? sFileInfo : NULL*/);
 	}
 	return (!bEscaped);
 }

@@ -19,12 +19,12 @@ protected:
 	TCHAR* psLastTitle;
 	DWORD  nLastTick, nStepDuration, nStartTick;
 	BOOL   bGraphic;
-	void   Update(LPCTSTR asFileName = NULL);
+	void   Update(/*LPCTSTR asFileName = NULL*/);
 	BOOL   bEscaped;
 public:
 	REProgress(const TCHAR* aszTitle, BOOL abGraphic = FALSE, const TCHAR* aszFileInfo = NULL);
 	REProgress(const TCHAR* aszMsg, const TCHAR* aszTitle);
-	~REProgress();
+	virtual ~REProgress();
 public:
 	BOOL IncAll(size_t anAddAllCount = 1);
 	BOOL Step(size_t anProcessed = 1);

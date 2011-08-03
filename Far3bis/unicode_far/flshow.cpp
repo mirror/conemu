@@ -583,7 +583,7 @@ int FileList::ConvertName(const wchar_t *SrcName,string &strDest,int MaxLength,i
 	wmemset(lpwszDest,L' ',MaxLength);
 	int SrcLength=StrLength(SrcName);
 
-	if (RightAlign)
+	if ((RightAlign & COLUMN_RIGHTALIGNFORCE) || (RightAlign && (SrcLength>MaxLength)))
 	{
 		if (SrcLength>MaxLength)
 			wmemcpy(lpwszDest,SrcName+SrcLength-MaxLength,MaxLength);
@@ -1114,7 +1114,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							}
 
 							int CurLeftPos=0;
-							int RightAlign=(ViewFlags & COLUMN_RIGHTALIGN);
+							int RightAlign=(ViewFlags & (COLUMN_RIGHTALIGN|COLUMN_RIGHTALIGNFORCE));
 							int LeftBracket=FALSE,RightBracket=FALSE;
 
 							if (!ShowStatus && LeftPos)
@@ -1149,7 +1149,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 										else
 										{
 											RightBracket=TRUE;
-											LeftBracket=TRUE;
+											LeftBracket=(ViewFlags & COLUMN_RIGHTALIGNFORCE)==COLUMN_RIGHTALIGNFORCE;
 										}
 
 										NamePtr += Length+CurRightPos-Width;

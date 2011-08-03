@@ -71,6 +71,65 @@ void InternalInvalidOp(LPCWSTR asFile, int nLine);
 #endif
 
 
+#ifdef _DEBUG
+	//#undef USE_HREGKEY
+	#define USE_HREGKEY
+#else
+	#undef USE_HREGKEY
+#endif
+
+#ifdef USE_HREGKEY
+	struct HREGKEY
+	{
+		HKEY h;
+		operator HKEY() const
+		{
+			return h;
+		};
+		//operator PHKEY()
+		//{
+		//	return &h;
+		//};
+		//operator ULONG_PTR() const
+		//{
+		//	return (ULONG_PTR)h;
+		//};
+		struct HREGKEY& operator=(HKEY ah)
+		{
+			h = ah;
+			return *this;
+		};
+		HKEY* operator&()
+		{
+			return &h;
+		};
+		//bool operator != (const HREGKEY& ah)
+		//{
+		//	return (h!=ah.h);
+		//}
+		//bool operator == (const HREGKEY& ah)
+		//{
+		//	return (h==ah.h);
+		//}
+		HREGKEY()
+		{
+			h = NULL;
+		};
+		HREGKEY(HKEY ah)
+		{
+			h = ah;
+		};
+		~HREGKEY()
+		{
+			_ASSERTE(h==NULL);
+		};
+	};
+	extern HREGKEY NULLHKEY;
+#else
+	#define HREGKEY HKEY
+	#define NULLHKEY NULL
+#endif
+
 
 //#if (defined(__GNUC__)) || (defined(_MSC_VER) && _MSC_VER<1600)
 //#define nullptr NULL
@@ -118,7 +177,7 @@ typedef unsigned __int64 REGTYPE;
 #define REG__KEY     ((REGTYPE)0x100000001)
 #define REG__COMMENT ((REGTYPE)0x100000002)
 #define REG__DELETE  ((REGTYPE)0x100000003)
-#define REG__INTERNAL_TYPES REG__KEY
+#define REG__INTERNAL_TYPES ((REGTYPE)0x100000000) // bitmask для проверки, что это НЕ Win32 тип реестра (а наш внутренний)
 
 
 
@@ -134,15 +193,18 @@ typedef unsigned __int64 REGTYPE;
 
 
 #define REG_ATTRIBUTE_DELETED   (FILE_ATTRIBUTE_OFFLINE)  // 0x1000
-#define REG_ATTRIBUTE_INDIRECT  (FILE_ATTRIBUTE_ARCHIVE)
+#define REG_ATTRIBUTE_INDIRECT  (FILE_ATTRIBUTE_ARCHIVE)  // 0x0020
+//#define REG_ATTRIBUTE_NOTEMPTY  (FILE_ATTRIBUTE_NOT_CONTENT_INDEXED) // 0x2000
 
 #define REGF_DELETED   REG_ATTRIBUTE_DELETED
 #define REGF_INDIRECT  REG_ATTRIBUTE_INDIRECT
-#define REGF_ALL_MASK  (REGF_DELETED | REGF_INDIRECT)
+//#define REGF_NOTEMPTY  REG_ATTRIBUTE_NOTEMPTY
+#define REGF_ALL_MASK  (REGF_DELETED | REGF_INDIRECT /*| REGF_NOTEMPTY*/)
 
 
-#define REG__OPTION_CREATE_DELETED 0x1000000
-//#define REG__OPTION_ENUM_COMMENTS  0x2000000
+#define REG__OPTION_CREATE_DELETED  0x1000000
+//#define REG__OPTION_CREATE_NOTEMPTY 0x2000000
+#define REG__OPTION_CREATE_MASK (REG__OPTION_CREATE_DELETED/*|REG__OPTION_CREATE_NOTEMPTY*/)
 
 #ifndef KEY_WOW64_64KEY
 #define KEY_WOW64_32KEY         (0x0200)
@@ -166,6 +228,20 @@ typedef unsigned __int64 REGTYPE;
 bool StringKeyToHKey(LPCWSTR asKey, HKEY* phkey);
 bool HKeyToStringKey(HKEY hkey, wchar_t* pszKey, int nMaxLen);
 LPCWSTR HKeyToStringKey(HKEY hkey);
+
+const TCHAR* BitSuffix(DWORD abWow64on32);
+DWORD SamDesired(DWORD abWow64on32);
+//{
+//	switch (mb_Wow64on32)
+//	{
+//	case 0:
+//		return KEY_WOW64_32KEY;
+//	case 1:
+//		return KEY_WOW64_64KEY;
+//	default:
+//		return 0;
+//	}
+//}
 
 
 
@@ -270,11 +346,12 @@ wchar_t* lstrdup_w(LPCSTR asText);
 #ifndef _UNICODE
 	char* lstrdup(LPCSTR asText);
 #else
-	#define lstrdup_w lstrdup
+	//#define lstrdup_w lstrdup // 26.05.2011 Maks - Уже! определена функция lstrdup_w
 #endif
 TCHAR* lstrdup_t(LPCWSTR asText);
 void lstrcpy_t(TCHAR* pszDst, int cMaxSize, const wchar_t* pszSrc);
 void lstrcpy_t(wchar_t* pszDst, int cMaxSize, const char* pszSrc);
+//LPCTSTR msprintf(LPTSTR lpOut, size_t cchOutMax, LPCTSTR lpFmt, ...);
 void CopyFileName(wchar_t* pszDst, int cMaxSize, const wchar_t* pszSrc);
 #ifndef _UNICODE
 	void CopyFileName(char* pszDst, int cMaxSize, const wchar_t* pszSrc);
@@ -306,6 +383,8 @@ bool ValidatePath(LPCWSTR asFullOrRelPath);
 BOOL DetectFileFormat(const unsigned char *Data,int DataSize, int* pnFormat, BOOL* pbUnicode, BOOL* pbBOM);
 BOOL DetectFileFormat(LPCWSTR apszFileName, int* pnFormat, BOOL* pbUnicode, BOOL* pbBOM);
 
+bool IsRegPath(LPCWSTR apsz, HKEY* phRootKey = NULL, LPCWSTR* ppszSubKey = NULL, BOOL abCheckExist = FALSE);
+
 void FormatDataVisual(REGTYPE nDataType, LPBYTE pData, DWORD dwDataSize, TCHAR* szDesc/*[128]*/);
 
 #ifdef _DEBUG
@@ -320,7 +399,7 @@ bool CHREQ(const wchar_t* s, int i, wchar_t c);
 
 class REPlugin;
 extern REPlugin *gpActivePlugin; // Устанавливается на время вызова из ФАР функций нашего плагина
-extern DWORD gnOpMode;
+extern u64 gnOpMode;
 // Дополнительные флаги для gnOpMode
 #define OPM_DISABLE_NONMODAL_EDIT 0x20000
 
@@ -330,9 +409,9 @@ class CPluginActivator
 public:
 	REPlugin* pBefore;
 	REPlugin* pWasSet;
-	DWORD nBeforeOpMode;
+	u64 nBeforeOpMode;
 public:
-	CPluginActivator(HANDLE hPlugin, DWORD anOpMode);
+	CPluginActivator(HANDLE hPlugin, u64 anOpMode);
 	~CPluginActivator();
 };
 
@@ -342,21 +421,3 @@ public:
 
 // FAR Macro and Routines
 extern TCHAR *GetMsg(int MsgId);
-
-#ifdef _UNICODE
-    #define SETMENUTEXT(itm,txt) itm.Text = txt;
-    #define F757NA 0, (LONG_PTR)
-    #define _GetCheck(i) (int)psi.SendDlgMessage(hDlg,DM_GETCHECK,i,0)
-    #define GetDataPtr(i) ((const TCHAR *)psi.SendDlgMessage(hDlg,DM_GETCONSTTEXTPTR,i,0))
-    #define SETTEXT(itm,txt) itm.PtrData = txt
-    #define SETTEXTPRINT(itm,fmt,arg) wsprintf(pszBuf, fmt, arg); SETTEXT(itm,pszBuf); pszBuf+=lstrlen(pszBuf)+2;
-	#define FILENAMEPTR(p) (p).lpwszFileName
-#else
-    #define SETMENUTEXT(itm,txt) lstrcpy(itm.Text, txt);
-    #define F757NA (void*)
-    #define _GetCheck(i) items[i].Selected
-    #define GetDataPtr(i) items[i].Ptr.PtrData
-    #define SETTEXT(itm,txt) lstrcpy(itm.Data, txt)
-    #define SETTEXTPRINT(itm,fmt,arg) wsprintf(itm.Data, fmt, arg)
-	#define FILENAMEPTR(p) (p).cFileName
-#endif

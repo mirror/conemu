@@ -390,11 +390,9 @@ int CommandLine::ProcessKey(int Key)
 		return TRUE;
 		case KEY_CTRLU:
 		case KEY_RCTRLU:
-		{
 			CmdStr.Select(-1,0);
 			CmdStr.Show();
 			return TRUE;
-		}
 		case KEY_OP_XLAT:
 		{
 			// 13.12.2000 SVS - ! Для CmdLine - если нет выделения, преобразуем всю строку (XLat)

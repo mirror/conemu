@@ -845,6 +845,7 @@ int TreeList::ProcessKey(int Key)
 
 	string strTemp;
 
+	//BUGBUG: RCtrl/RAlt?
 	if ((Key>=KEY_CTRLSHIFT0 && Key<=KEY_CTRLSHIFT9) || (Key>=KEY_CTRLALT0 && Key<=KEY_CTRLALT9))
 	{
 		bool Add = (Key>=KEY_CTRLALT0 && Key<=KEY_CTRLALT9);

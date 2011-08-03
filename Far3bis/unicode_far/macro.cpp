@@ -7271,7 +7271,7 @@ int KeyMacro::PopState()
 // ‘ункци€ получени€ индекса нужного макроса в массиве
 // Ret=-1 - не найден таковой.
 // если CheckMode=-1 - значит пофигу в каком режиме, т.е. первый попавшийс€
-int KeyMacro::GetIndex(int Key, int ChechMode, bool UseCommon)
+int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon)
 {
 	if (MacroLIB)
 	{
@@ -7280,19 +7280,19 @@ int KeyMacro::GetIndex(int Key, int ChechMode, bool UseCommon)
 			int Pos,Len;
 			MacroRecord *MPtr=nullptr;
 
-			if (ChechMode == -1)
+			if (CheckMode == -1)
 			{
 				Len=MacroLIBCount;
 				MPtr=MacroLIB;
 			}
-			else if (ChechMode >= 0 && ChechMode < MACRO_LAST)
+			else if (CheckMode >= 0 && CheckMode < MACRO_LAST)
 			{
-				Len=IndexMode[ChechMode][1];
+				Len=IndexMode[CheckMode][1];
 
 				if (Len)
-					MPtr=MacroLIB+IndexMode[ChechMode][0];
+					MPtr=MacroLIB+IndexMode[CheckMode][0];
 
-				//_SVS(SysLog(L"ChechMode=%d (%d,%d)",ChechMode,IndexMode[ChechMode][0],IndexMode[ChechMode][1]));
+				//_SVS(SysLog(L"CheckMode=%d (%d,%d)",CheckMode,IndexMode[CheckMode][0],IndexMode[CheckMode][1]));
 			}
 			else
 			{
@@ -7301,23 +7301,42 @@ int KeyMacro::GetIndex(int Key, int ChechMode, bool UseCommon)
 
 			if (Len)
 			{
-				for (Pos=0; Pos < Len; ++Pos, ++MPtr)
+				int ctrl = ((Key&(KEY_RCTRL|KEY_RALT)) && !(Key&(KEY_CTRL|KEY_ALT))) ? 0 : 1;
+				MacroRecord *MPtrSave=MPtr;
+				for (; ctrl < 2; ctrl++)
 				{
-					if (!((MPtr->Key ^ Key) & ~0xFFFF) &&
-					        (Upper(static_cast<WCHAR>(MPtr->Key))==Upper(static_cast<WCHAR>(Key))) &&
-					        (MPtr->BufferSize > 0))
+					for (Pos=0; Pos < Len; ++Pos, ++MPtr)
 					{
-						//        && (ChechMode == -1 || (MPtr->Flags&MFLAGS_MODEMASK) == ChechMode))
-						//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
-						if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
-							return Pos+((ChechMode >= 0)?IndexMode[ChechMode][0]:0);
+						if (!((MPtr->Key ^ Key) & ~0xFFFF) &&
+								(Upper(static_cast<WCHAR>(MPtr->Key))==Upper(static_cast<WCHAR>(Key))) &&
+								(MPtr->BufferSize > 0))
+						{
+							//        && (CheckMode == -1 || (MPtr->Flags&MFLAGS_MODEMASK) == CheckMode))
+							//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
+							if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
+								return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
+						}
+					}
+					if (!ctrl)
+					{
+						if (Key & KEY_RCTRL)
+						{
+							Key &= ~KEY_RCTRL;
+							Key |= KEY_CTRL;
+						}
+						if (Key & KEY_RALT)
+						{
+							Key &= ~KEY_RALT;
+							Key |= KEY_ALT;
+						}
+						MPtr = MPtrSave;
 					}
 				}
 			}
 
 			// здесь смотрим на MACRO_COMMON
-			if (ChechMode != -1 && !I && UseCommon)
-				ChechMode=MACRO_COMMON;
+			if (CheckMode != -1 && !I && UseCommon)
+				CheckMode=MACRO_COMMON;
 			else
 				break;
 		}

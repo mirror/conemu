@@ -1,6 +1,7 @@
 
 #include "header.h"
 #include "RE_CmdLine.h"
+#include "RE_Guids.h"
 
 OpenPluginArg::OpenPluginArg()
 {
@@ -71,68 +72,68 @@ bool OpenPluginArg::IsFilePath(LPCWSTR apsz)
 	return false;
 }
 
-bool OpenPluginArg::IsRegPath(LPCWSTR apsz, HKEY* phRootKey /*= NULL*/, LPCWSTR* ppszSubKey /*= NULL*/, BOOL abCheckExist /*= FALSE*/)
-{
-	if (*apsz == L'\\' || *apsz == L'"' || *apsz == L'[') apsz++;
-
-	HKEY hRoot = NULL;
-	wchar_t sFirstToken[MAX_REGKEY_NAME+1];
-	LPCWSTR pszSlash = wcschr(apsz, L'\\');
-	int nLen;
-	if (pszSlash) {
-		nLen = pszSlash - apsz;
-		if (nLen > MAX_REGKEY_NAME)
-			return false;
-		memmove(sFirstToken, apsz, 2*nLen);
-		sFirstToken[nLen] = 0;
-	} else {
-		nLen = lstrlenW(apsz);
-		if (nLen > MAX_REGKEY_NAME)
-			return false;
-		lstrcpynW(sFirstToken, apsz, MAX_REGKEY_NAME+1);
-	}
-	if (!StringKeyToHKey(sFirstToken, &hRoot))
-		return false;
-	if ((((ULONG_PTR)hRoot) < HKEY__FIRST) || (((ULONG_PTR)hRoot) > HKEY__LAST))
-		return false;
-	
-	if (phRootKey)
-		*phRootKey = hRoot;
-
-	if (!pszSlash)
-	{
-		if (ppszSubKey) *ppszSubKey = apsz+lstrlenW(apsz);
-		return true;
-	}
-
-	apsz = pszSlash+1;
-	if (ppszSubKey) *ppszSubKey = apsz;
-
-	if (!abCheckExist)
-	{
-		return true;
-	}
-	
-	pszSlash = wcschr(apsz, L'\\');
-	if (pszSlash) {
-		nLen = pszSlash - apsz;
-		if (nLen > MAX_REGKEY_NAME)
-			return false;
-		memmove(sFirstToken, apsz, 2*nLen);
-		sFirstToken[nLen] = 0;
-	} else {
-		nLen = lstrlenW(apsz);
-		if (nLen > MAX_REGKEY_NAME)
-			return false;
-		lstrcpynW(sFirstToken, apsz, MAX_REGKEY_NAME+1);
-	}
-
-	MRegistryWinApi reg;
-	if (reg.ExistKey(hRoot, sFirstToken, NULL) == 0)
-		return true;
-
-	return false;
-}
+//bool OpenPluginArg::IsRegPath(LPCWSTR apsz, HKEY* phRootKey /*= NULL*/, LPCWSTR* ppszSubKey /*= NULL*/, BOOL abCheckExist /*= FALSE*/)
+//{
+//	if (*apsz == L'\\' || *apsz == L'"' || *apsz == L'[') apsz++;
+//
+//	HKEY hRoot = NULL;
+//	wchar_t sFirstToken[MAX_REGKEY_NAME+1];
+//	LPCWSTR pszSlash = wcschr(apsz, L'\\');
+//	int nLen;
+//	if (pszSlash) {
+//		nLen = pszSlash - apsz;
+//		if (nLen > MAX_REGKEY_NAME)
+//			return false;
+//		memmove(sFirstToken, apsz, 2*nLen);
+//		sFirstToken[nLen] = 0;
+//	} else {
+//		nLen = lstrlenW(apsz);
+//		if (nLen > MAX_REGKEY_NAME)
+//			return false;
+//		lstrcpynW(sFirstToken, apsz, MAX_REGKEY_NAME+1);
+//	}
+//	if (!StringKeyToHKey(sFirstToken, &hRoot))
+//		return false;
+//	if ((((ULONG_PTR)hRoot) < HKEY__FIRST) || (((ULONG_PTR)hRoot) > HKEY__LAST))
+//		return false;
+//	
+//	if (phRootKey)
+//		*phRootKey = hRoot;
+//
+//	if (!pszSlash)
+//	{
+//		if (ppszSubKey) *ppszSubKey = apsz+lstrlenW(apsz);
+//		return true;
+//	}
+//
+//	apsz = pszSlash+1;
+//	if (ppszSubKey) *ppszSubKey = apsz;
+//
+//	if (!abCheckExist)
+//	{
+//		return true;
+//	}
+//	
+//	pszSlash = wcschr(apsz, L'\\');
+//	if (pszSlash) {
+//		nLen = pszSlash - apsz;
+//		if (nLen > MAX_REGKEY_NAME)
+//			return false;
+//		memmove(sFirstToken, apsz, 2*nLen);
+//		sFirstToken[nLen] = 0;
+//	} else {
+//		nLen = lstrlenW(apsz);
+//		if (nLen > MAX_REGKEY_NAME)
+//			return false;
+//		lstrcpynW(sFirstToken, apsz, MAX_REGKEY_NAME+1);
+//	}
+//
+//	MRegistryWinApi reg;
+//	if (reg.ExistKey(hRoot, sFirstToken, NULL) == 0)
+//		return true;
+//
+//	return false;
+//}
 
 void OpenPluginArg::SkipSpaces(wchar_t*& psz)
 {
@@ -366,7 +367,8 @@ int OpenPluginArg::ParseCommandLine(LPCTSTR asCmdLine)
 			)
 		{
 			// Это может быть путь реестра HKEY или HKCR,...
-			if (IsRegPath(psz)) {
+			if (IsRegPath(psz))
+			{
 				eAction = aBrowseLocal; SkipSpaces(psz);
 				// GetToken все поправит с учетом возможных кавычек
 				wchar_t* pszKeyStart = GetToken(psz, TRUE);
@@ -484,7 +486,7 @@ int OpenPluginArg::ParseCommandLine(LPCTSTR asCmdLine)
 			GetMsg(REM_CmdLineFail_UnknownCommand),
 			asCmdLine ? asCmdLine : _T("\"\"")
 		};
-		psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, _T("CommandLine"),
+		psi.Message(_PluginNumber(guid_UnknownCmd), FMSG_WARNING|FMSG_MB_OK, _T("CommandLine"),
 			sLines, countof(sLines), 0);
 	}
 	MCHKHEAP;

@@ -1,6 +1,16 @@
 
 #pragma once
 
+enum RegImportStyle
+{
+	ris_Native = 1,      // импорт *.reg целиком как есть (в корень реестра, текущий ключ панели не учитывается)
+	ris_Import32 = 2,    // аналогично ris_Native, но насильно указано, что импортить нужно в 32битный реестр
+	ris_Import64 = 4,    // аналогично ris_Native, но насильно указано, что импортить нужно в 64битный реестр
+	ris_Browse = 8,      // импортить не нужно, просто открыть панель с *.reg файлом
+	ris_Here = 16,       // копирование корневого ключа (GetFirstKeyFilled) из *.reg в текущий ключ панели
+	ris_ValuesHere = 32, // копирование корневого ключа (GetFirstKeyFilled) из *.reg в текущий ключ панели
+	ris_AsRaw = 64,      // импорт *.reg файла как значения
+};
 
 
 class REPlugin
@@ -32,13 +42,16 @@ public:
 	// При входе в reg-файл показать пользователю список действий (Browse/Import32/Import64)
 	BOOL   mb_ShowRegFileMenu;
 
+	DWORD  getWow64on32();
+	void   setWow64on32(DWORD abWow64on32);
 private:
+	BOOL   mb_Wow64on32;
 	MRegistryBase *mp_Worker;
 	//RegFolder m_TempItems;
 	TCHAR* mpsz_PanelTitle;
 	int mn_PanelTitleMax;
-	TCHAR* mpsz_PanelPath;
-	int mn_PanelPathMax;
+	//TCHAR* mpsz_PanelPath;
+	//int mn_PanelPathMax;
 	
 public:
 	REPlugin();
@@ -49,6 +62,7 @@ public:
 	BOOL SetDirectory(RegItem* pKey, BOOL abSilence);
 	LPCTSTR GetPanelTitle();
 	BOOL CheckKeyAvailable(RegPath* apKey, BOOL abSilence = FALSE);
+	BOOL SubKeyExists(LPCWSTR asSubkey);
 	BOOL LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilence, BOOL abDelayLoading, BOOL abAllowUserMenu);
 	void SaveRegFile(BOOL abInClose = FALSE);
 	BOOL LoadHiveFile(LPCWSTR asHiveFilePathName, BOOL abSilence, BOOL abDelayLoading);
@@ -86,10 +100,10 @@ public:
 	void CloseItems();
 	//void UpdateTitle();
 	BOOL AllowCacheFolder();
-	BOOL LoadItems(BOOL abSilence, int OpMode);
+	BOOL LoadItems(BOOL abSilence, u64 OpMode);
 	void CheckItemsLoaded();
 	void FreeFindData(struct PluginPanelItem *PanelItem,int ItemsNumber);
-	void EditKeyPermissions();
+	void EditKeyPermissions(BOOL abVisual);
 	BOOL ConfirmExport(
 		BOOL abAllowHives, int* pnExportMode, BOOL* pbHiveAsSubkey, int ItemsNumber,
 		LPCTSTR asDestPathOrFile, BOOL abDestFileSpecified, LPCTSTR asNameForLabel,
@@ -97,8 +111,10 @@ public:
 		int nTitleMsgId = REExportDlgTitle, int nExportLabelMsgId = REExportItemLabel /*(ItemsNumber == 1) ? REExportItemLabel : REExportItemsLabel*/,
 		int nCancelMsgId = REBtnCancel
 		);
-	BOOL ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,const TCHAR *DestPath,int OpMode,const TCHAR** pszDestModified=NULL);
+	BOOL ConfirmCopyMove(BOOL abMove, int ItemsNumber, int nCopyLabelMsgId, LPCTSTR asNameForLabel, LPCTSTR asDestPathOrFile);
+	BOOL ExportItems(PluginPanelItem *PanelItem,int ItemsNumber,int Move,const TCHAR *DestPath,u64 OpMode,const TCHAR** pszDestModified=NULL);
 	BOOL ExportItems2Hive(RegFolder* expFolder,BOOL abHiveAsSubkey,int Move,LPCWSTR pwszDestPath,LPCWSTR pwszDefaultName,LPCWSTR pwszDefaultExt, const TCHAR** pszDestModified);
+	BOOL ExportItems2Raws(RegFolder* expFolder,BOOL abUnicodeStrings,int Move,LPCWSTR pwszDestPath);
 	void EditItem(bool abOnlyCurrent, bool abForceExport, bool abViewOnly, bool abRawData = false);
 	BOOL EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, DWORD cbSize, BOOL bNewValue = FALSE);
 	BOOL EditString(wchar_t* pName, wchar_t** pText, REGTYPE nDataType, DWORD* cbSize, BOOL bNewValue = FALSE);
@@ -109,12 +125,14 @@ public:
 	LONG ValueDataSet(RegFolder* pFolder, LPCWSTR asValueName, LPBYTE pData, DWORD cbSize, REGTYPE nDataType);
 	void NewItem();
 	void RenameOrCopyItem(BOOL abCopyOnly = FALSE);
+	BOOL ChooseImportDataType(LPCWSTR asName, REGTYPE* pnDataType, BOOL* pbUnicodeStrings, BOOL* pbForAll);
+	BOOL ChooseImportStyle(LPCWSTR asName, LPCWSTR asFromKey, DWORD anAllowed/*bitmask of RegImportStyle*/, RegImportStyle& rnImportStyle, BOOL* pbForAll);
 	void EditDescription();
 	void JumpToRegedit();
 	BOOL ConnectRemote(LPCWSTR asServer = NULL, LPCWSTR asLogin = NULL, LPCWSTR asPassword = NULL);
 	void ShowBookmarks();
-	RegFolder* PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen);
-	RegFolder* PrepareExportKey(PluginPanelItem *PanelItem, int ItemsNumber, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen);
+	RegFolder* PrepareExportKey(bool abOnlyCurrent, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen, bool abFavorItem);
+	RegFolder* PrepareExportPanel(PluginPanelItem *PanelItem, int ItemsNumber, wchar_t *psDefaultName/*[nMaxDefaultLen]*/, int nMaxDefaultLen);
 	void ChangeFarSorting(bool abFastAccess);
 	BOOL RegTypeMsgId2RegType(DWORD nMsgId, REGTYPE* pnRegType);
 	// Api wrappers
@@ -123,7 +141,8 @@ public:
 	void OnIdle();
 	int  Compare(const struct PluginPanelItem *Item1, const struct PluginPanelItem *Item2, unsigned int Mode);
 	BOOL DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber);
-	int  CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, int OpMode);
+	int  CreateSubkey(const TCHAR* aszSubkey, const TCHAR** pszCreated, u64 OpMode);
+	BOOL Transfer(REPlugin* pDstPlugin, BOOL abMove);
 protected:
 	BOOL mb_ForceReload;
 	//BOOL mb_EnableKeyMonitoring;

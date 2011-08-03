@@ -1,5 +1,6 @@
 
 #include "header.h"
+#include "RE_Guids.h"
 
 //#define SHOW_DURATION
 #define USE_REAL_CRC32
@@ -144,8 +145,8 @@ void FileRegCrcCache::DeleteItem(FileRegItem *pItem)
 
 #define RETURN(n) { /*nLastErr = (n);*/ return (n); }
 
-MFileReg::MFileReg()
-	: MRegistryBase()
+MFileReg::MFileReg(BOOL abWow64on32)
+	: MRegistryBase(abWow64on32)
 {
 	eType = RE_REGFILE;
 
@@ -453,14 +454,14 @@ LONG MFileReg::RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey
 		return E_INVALIDARG;
 	}
 
-	HRESULT hr = OpenKeyEx(apParent->mh_Root, apParent->mpsz_Key, 0, KEY_ALL_ACCESS, (PHKEY)&pParent, &apParent->nKeyFlags);
+	HRESULT hr = OpenKeyEx(apParent->mh_Root, apParent->mpsz_Key, 0, KEY_ALL_ACCESS, (HKEY*)&pParent, &apParent->nKeyFlags);
 	if (hr != 0 || pParent == NULL)
 	{
 		//TODO: Показать ошибку?
 		return (hr ? hr : ERROR_FILE_NOT_FOUND);
 	}
 
-	hr = OpenKeyEx((HKEY)pParent, lpOldSubKey, 0, KEY_ALL_ACCESS, (PHKEY)&pKey, NULL);
+	hr = OpenKeyEx((HKEY)pParent, lpOldSubKey, 0, KEY_ALL_ACCESS, (HKEY*)&pKey, NULL);
 	if (hr != 0)
 		RETURN(hr);
 
@@ -475,14 +476,14 @@ LONG MFileReg::RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey
 		if (lstrcmpiW(lpOldSubKey, lpNewSubKey) != 0)
 		{
 			FileRegItem *pNewName = NULL;
-			hr = OpenKeyEx((HKEY)pParent, lpNewSubKey, REG__OPTION_CREATE_DELETED, KEY_ALL_ACCESS, (PHKEY)&pNewName, NULL);
+			hr = OpenKeyEx((HKEY)pParent, lpNewSubKey, REG__OPTION_CREATE_DELETED, KEY_ALL_ACCESS, (HKEY*)&pNewName, NULL);
 			if (hr == S_OK && pNewName)
 			{
 				_ASSERTE(pParent == pNewName->pParent);
 				TreeDeleteChild(pParent, pNewName);
 				*pbRegChanged = TRUE;
 			}
-			hr = OpenKeyEx((HKEY)pParent, lpNewSubKey, 0, KEY_ALL_ACCESS, (PHKEY)&pNewName, NULL);
+			hr = OpenKeyEx((HKEY)pParent, lpNewSubKey, 0, KEY_ALL_ACCESS, (HKEY*)&pNewName, NULL);
 			if (hr == S_OK && pNewName)
 			{
 				_ASSERTE(pParent == pNewName->pParent);
@@ -525,7 +526,7 @@ LONG MFileReg::RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey
 	return S_OK;
 }
 
-LONG MFileReg::CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, PHKEY phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/, LPCWSTR pszComment /*= NULL*/)
+LONG MFileReg::CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, HKEY* phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/, LPCWSTR pszComment /*= NULL*/)
 {
 	_ASSERTE(phkResult != NULL);
 	*phkResult = NULL;
@@ -563,7 +564,7 @@ LONG MFileReg::CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR l
 
 	RETURN(hRc);
 }
-LONG MFileReg::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/)
+LONG MFileReg::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, HKEY* phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights /*= NULL*/)
 {
 	_ASSERTE(phkResult != NULL);
 	*phkResult = NULL;
@@ -590,9 +591,10 @@ LONG MFileReg::OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM sa
 	}
 	RETURN(hRc);
 }
-LONG MFileReg::CloseKey(HKEY hKey)
+LONG MFileReg::CloseKey(HKEY* phKey)
 {
 	// hKey это просто указатели на наше дерево, ничего освобождать не нужно
+	*phKey = NULL;
 	RETURN(0);
 }
 LONG MFileReg::QueryInfoKey(HKEY hKey, LPWSTR lpClass, LPDWORD lpcClass, LPDWORD lpReserved, LPDWORD lpcSubKeys, LPDWORD lpcMaxSubKeyLen, LPDWORD lpcMaxClassLen, LPDWORD lpcValues, LPDWORD lpcMaxValueNameLen, LPDWORD lpcMaxValueLen, LPDWORD lpcbSecurityDescriptor, REGFILETIME* lpftLastWriteTime)
@@ -635,21 +637,32 @@ LONG MFileReg::EnumValue(HKEY hKey, DWORD dwIndex, LPWSTR lpValueName, LPDWORD l
 	if (!pParent)
 		RETURN(E_INVALIDARG);
 
+	// nValCommentCount - общее количество комментариев и значений
+	// nValCount - "выжимка" только по значениям
 	UINT lnCount = (abEnumComments ? pParent->nValCommentCount : pParent->nValCount);
 	if (dwIndex >= lnCount)
 		RETURN(ERROR_NO_MORE_ITEMS);
 
 	FileRegItem* p = NULL;
-	if (pParent->dwValIndex == dwIndex && pParent->pValIndex)
+	if (pParent->bValIndexComment == abEnumComments && pParent->dwValIndex == dwIndex && pParent->pValIndex)
 	{
 		p = pParent->pValIndex;
-	} else if (pParent->pFirstVal && dwIndex < lnCount) {
+	}
+	else if (pParent->pFirstVal && dwIndex < lnCount)
+	{
 		DWORD nSkipItems = 0;
-		if (dwIndex < pParent->dwValIndex || !pParent->pValIndex)
+
+		//// Защита от сбоев в кешировании?
+		//for (int iStep = 2; iStep; iStep--)
+		//{
+
+		if (dwIndex < pParent->dwValIndex || !pParent->pValIndex || pParent->bValIndexComment != abEnumComments)
 		{
 			nSkipItems = dwIndex;
 			p = pParent->pFirstVal;
-		} else {
+		}
+		else
+		{
 			nSkipItems = dwIndex - pParent->dwValIndex;
 			p = pParent->pValIndex;
 		}
@@ -682,13 +695,22 @@ LONG MFileReg::EnumValue(HKEY hKey, DWORD dwIndex, LPWSTR lpValueName, LPDWORD l
 		}
 		
 		// Проверяем, должен быть, если количество правильно посчитано
-		_ASSERTE(p!=NULL);
+		//if (!p)
+		//{
+			_ASSERTE(p!=NULL);
+		//}
+		//else
+		//{
+		//	break;
+		//}
+		//}
 	}
 	
 	if (!p)
 		RETURN(ERROR_NO_MORE_ITEMS);
 
 	pParent->dwValIndex = dwIndex;
+	pParent->bValIndexComment = abEnumComments;
 	pParent->pValIndex = p;
 	
 	// Name and Data
@@ -1023,7 +1045,7 @@ LONG MFileReg::ExistValue(HKEY hKey, LPCWSTR lpszKey, LPCWSTR lpValueName, REGTY
 {
 	FileRegItem* pParent = NULL; //ItemFromHkey(hKey);
 
-	HRESULT hr = OpenKeyEx(hKey, lpszKey, 0, KEY_READ, (PHKEY)&pParent, NULL);
+	HRESULT hr = OpenKeyEx(hKey, lpszKey, 0, KEY_READ, (HKEY*)&pParent, NULL);
 	if (hr != 0)
 		RETURN(hr);
 
@@ -1054,7 +1076,7 @@ LONG MFileReg::ExistKey(HKEY hKey, LPCWSTR lpszKey, LPCWSTR lpSubKey)
 		return 0;
 	}
 
-	HRESULT hr = OpenKeyEx(hKey, lpszKey, 0, KEY_READ, (PHKEY)&pParent, NULL);
+	HRESULT hr = OpenKeyEx(hKey, lpszKey, 0, KEY_READ, (HKEY*)&pParent, NULL);
 	if (hr != 0)
 		RETURN(hr);
 
@@ -1077,7 +1099,7 @@ LONG MFileReg::GetSubkeyInfo(HKEY hKey, LPCWSTR lpszSubkey, LPTSTR pszDesc, DWOR
 	FileRegItem* p = NULL;
 
 	DWORD nKeyFlagsRet = 0;
-	hRc = OpenKeyEx(hKey, lpszSubkey, 0, KEY_READ, (PHKEY)p, &nKeyFlagsRet);
+	hRc = OpenKeyEx(hKey, lpszSubkey, 0, KEY_READ, (HKEY*)p, &nKeyFlagsRet);
 	if (hRc != 0)
 	{
 		// Значения по умолчанию нет, но поскольку это используется только для
@@ -1199,9 +1221,9 @@ LONG MFileReg::TreeCreateKey(FileRegItem* pParent, const wchar_t *apszKeyPath, D
 	// может такой ключ уже был создан?
 	LONG hRc = 0;
 	//if (abAllowCreate)
-	//	hRc = CreateKeyEx(ahPredefinedKey, apszKeyPath, 0, 0, abDeletion ? REG__OPTION_CREATE_DELETED : 0, 0, 0, (PHKEY)ppKey, NULL);
+	//	hRc = CreateKeyEx(ahPredefinedKey, apszKeyPath, 0, 0, abDeletion ? REG__OPTION_CREATE_DELETED : 0, 0, 0, (HREGKEY*)ppKey, NULL);
 	//else if (!abDeletion)
-	//	hRc = OpenKeyEx(ahPredefinedKey, apszKeyPath, 0, 0, (PHKEY)ppKey);
+	//	hRc = OpenKeyEx(ahPredefinedKey, apszKeyPath, 0, 0, (HREGKEY*)ppKey);
 	//else
 	//	hRc = ERROR_FILE_NOT_FOUND;
 	
@@ -1210,7 +1232,7 @@ LONG MFileReg::TreeCreateKey(FileRegItem* pParent, const wchar_t *apszKeyPath, D
 	wchar_t szSubKey[MAX_PATH+1], szSubKeyLwr[MAX_PATH+1];
 	int nSubKeyLen;
 	DWORD nSubKeyCRC32;
-	//HKEY hPredefined = NULL;
+	//HREGKEY hPredefined = NULL;
 	//bool bFirstToken;
 	FileRegItem* pKey = pParent;
 	FileRegItem* p = NULL;
@@ -1965,11 +1987,14 @@ void MFileReg::TreeDeleteChild(FileRegItem* pParent, FileRegItem* pChild)
 
 	if (pParent == NULL)
 	{
-		if (pChild != &TreeRoot) {
+		if (pChild != &TreeRoot)
+		{
 			_ASSERTE(pParent);
 			_ASSERTE(pParent == pChild->pParent);
 		}
-	} else {	
+	}
+	else
+	{	
 		_ASSERTE(pParent);
 		_ASSERTE(pParent == pChild->pParent);
 		
@@ -1994,30 +2019,37 @@ void MFileReg::TreeDeleteChild(FileRegItem* pParent, FileRegItem* pChild)
 		#endif
 		
 		// Key	
-		if (pParent->pFirstKey == pChild) {
+		if (pParent->pFirstKey == pChild)
+		{
 			_ASSERTE(pChild->pPrevSibling == NULL);
 			pParent->pFirstKey = pChild->pNextSibling;
 		}
-		if (pParent->pLastKey == pChild) {
+		if (pParent->pLastKey == pChild)
+		{
 			_ASSERTE(pChild->pNextSibling == NULL);
 			pParent->pLastKey = pChild->pPrevSibling;
 		}
-		if (pParent->pCachedFindKey == pChild) {
+		if (pParent->pCachedFindKey == pChild)
+		{
 			pParent->pCachedFindKey = NULL;
 		}
 		// Value
-		if (pParent->pFirstVal == pChild) {
+		if (pParent->pFirstVal == pChild)
+		{
 			_ASSERTE(pChild->pPrevSibling == NULL);
 			pParent->pFirstVal = pChild->pNextSibling;
 		}
-		if (pParent->pLastVal == pChild) {
+		if (pParent->pLastVal == pChild)
+		{
 			_ASSERTE(pChild->pNextSibling == NULL);
 			pParent->pLastVal = pChild->pPrevSibling;
 		}
-		if (pParent->pDefaultVal == pChild) {
+		if (pParent->pDefaultVal == pChild)
+		{
 			pParent->pDefaultVal = NULL;
 		}
-		if (pParent->pCachedFindVal == pChild) {
+		if (pParent->pCachedFindVal == pChild)
+		{
 			pParent->pCachedFindVal = NULL;
 		}
 		
@@ -2026,7 +2058,9 @@ void MFileReg::TreeDeleteChild(FileRegItem* pParent, FileRegItem* pChild)
 		{
 			_ASSERTE(pParent->nKeyCount > 0);
 			if (pParent->nKeyCount) pParent->nKeyCount--;
-		} else {	
+		}
+		else
+		{	
 			if (pChild->nValueType != REG__COMMENT)
 			{
 				_ASSERTE(pParent->nValCount > 0);
@@ -2037,10 +2071,13 @@ void MFileReg::TreeDeleteChild(FileRegItem* pParent, FileRegItem* pChild)
 		}
 
 		// При удалении - сбрасываем последние полученные по индексу	
-		if (pChild->nValueType == REG__KEY) {
+		if (pChild->nValueType == REG__KEY)
+		{
 			pParent->dwKeyIndex = 0; pParent->pKeyIndex = NULL;
-		} else {
-			pParent->dwValIndex = 0; pParent->pValIndex = NULL;
+		}
+		else
+		{
+			pParent->dwValIndex = 0; pParent->pValIndex = NULL; pParent->bValIndexComment = FALSE;
 		}
 		
 		//// И обновляем дату
@@ -2146,7 +2183,9 @@ FileRegItem* MFileReg::ItemFromHkey(HKEY hKey)
 			MCHKHEAP;
 		}
 		
-	} else {
+	}
+	else
+	{
 
 		pParent = (FileRegItem*)hKey;
 		if (pParent != &TreeRoot && pParent->nValueType!=REG__KEY)
@@ -2273,11 +2312,11 @@ BOOL MFileReg::GetKeyFromLine(
 	}
 
 	//! Засада
-	//[HKEY\SYSTEM\ControlSet001\Control\MediaProperties\PrivateProperties\Midi\Ports\Creative [Emulated]] ; 5555
+	//[HREGKEY\SYSTEM\ControlSet001\Control\MediaProperties\PrivateProperties\Midi\Ports\Creative [Emulated]] ; 5555
 	//Закрывающая скобка может быть НЕ последней,
 	//и даже после последней скобки - может идти мусор.
 	//Или еще хуже
-	//[HKEY\SYSTEM\ControlSet001\Control\MediaProperties\PrivateProperties\Midi\Ports\Creative [Emulated]] ; 5555] ; и только теперь - комментарий
+	//[HREGKEY\SYSTEM\ControlSet001\Control\MediaProperties\PrivateProperties\Midi\Ports\Creative [Emulated]] ; 5555] ; и только теперь - комментарий
 
 	pszKeyEnd = pszFind - 1;
 	while (*pszKeyEnd != L']' && pszKeyEnd > pszKeyName)
@@ -2784,7 +2823,7 @@ int MFileReg::RegFormatFailed(LPCTSTR asFile, DWORD nLine, DWORD nCol)
 		GetMsg(REBtnEditor),
 		GetMsg(REBtnCancel),
 	};
-	int nBtn = psi.Message(psi.ModuleNumber, FMSG_WARNING, NULL, 
+	int nBtn = psi.Message(_PluginNumber(guid_RegFormatFailed), FMSG_WARNING, NULL, 
 		sLines, countof(sLines), 3);
  	if (nBtn == 0)
 		return (nContinueRc = 1);
@@ -2802,7 +2841,7 @@ void MFileReg::RegLoadingFailed(int anMsgId, LPCTSTR asFile, DWORD anErrCode)
 		asFile ? asFile : _T(""),
 	};
 	if (anErrCode) SetLastError(anErrCode);
-	psi.Message(psi.ModuleNumber, FMSG_WARNING|(anErrCode ? FMSG_ERRORTYPE : 0)|FMSG_MB_OK, NULL, 
+	psi.Message(_PluginNumber(guid_RegLoadFailed), FMSG_WARNING|(anErrCode ? FMSG_ERRORTYPE : 0)|FMSG_MB_OK, NULL, 
 		sLines, countof(sLines), 0);
 }
 
@@ -2834,8 +2873,8 @@ FileRegItem* MFileReg::FindExistKey(FileRegItem* pParent, LPCWSTR apszSubKey, DW
 	if (nFullPathLen < anSubkeyLen)
 	{
 		// Идеальный вариант - подключ предыдущего
-		// [HKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers]
-		// [HKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers\DCI]
+		// [HREGKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers]
+		// [HREGKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers\DCI]
 		// Сразу возвращаем предыдущий ключ
 		nCmpRc = wmemcmp(apszSubKey, pszLast, nFullPathLen);
 		if (nCmpRc == 0 && apszSubKey[nFullPathLen] == L'\\') {
@@ -2845,14 +2884,14 @@ FileRegItem* MFileReg::FindExistKey(FileRegItem* pParent, LPCWSTR apszSubKey, DW
 	}
 	
 	// Это может быть переход на уровень вверх (только скрипты, исправленные вручную)
-	// [HKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers\DCI]
-	// [HKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers]
-	// Нужно вернуть общий ключ [HKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers]
+	// [HREGKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers\DCI]
+	// [HREGKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers]
+	// Нужно вернуть общий ключ [HREGKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers]
 	//
 		// Или, возможно, что это переключение вида
-	// [HKEY\SYSTEM\ControlSet001\Control\DeviceClasses\{ffbb6e3f-ccfe-4d84-90d9-421418b03a8e}]
-	// [HKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers\DCI]
-	// Тоже нужно вернуть общий ключ [HKEY\SYSTEM\ControlSet001\Control]
+	// [HREGKEY\SYSTEM\ControlSet001\Control\DeviceClasses\{ffbb6e3f-ccfe-4d84-90d9-421418b03a8e}]
+	// [HREGKEY\SYSTEM\ControlSet001\Control\GraphicsDrivers\DCI]
+	// Тоже нужно вернуть общий ключ [HREGKEY\SYSTEM\ControlSet001\Control]
 
 	for (int i = (nFullPathLen-1); i > 0; i--)
 	{
@@ -2949,7 +2988,7 @@ LONG MFileReg::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilent, MRegistryBa
 	FileRegItem* pCommentKey = NULL;
 	FileRegItem* pVal = NULL;
 	HKEY hKeyRoot = NULL; // Это один из HKEY_xxx
-	HKEY hWorkKey = NULL; // А вот этот - нужно закрывать
+	HREGKEY hWorkKey = NULLHKEY; // А вот этот - нужно закрывать
 	wchar_t sLower[32768];
 	int nNameLen = 0;
 	DWORD nNameCRC32 = 0;
@@ -2979,7 +3018,9 @@ LONG MFileReg::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilent, MRegistryBa
 
 	if (gpProgress)
 	{
-		if (!gpProgress->SetStep(0, TRUE, L" "))
+		wchar_t szMsg[128];
+		lstrcpy_t(szMsg, countof(szMsg), GetMsg(RELoadingRegFileTitle));
+		if (!gpProgress->SetStep(0, TRUE, szMsg/*L" "*/))
 			goto wrap; // Esc pressed
 	}
 
@@ -3129,7 +3170,7 @@ LONG MFileReg::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilent, MRegistryBa
 				if (!apTargetWorker)
 				{
 					MCHKHEAP;
-					//hRc = CreateKeyEx(hKeyRoot, pszKeyName, 0, 0, bKeyDeletion ? REG__OPTION_CREATE_DELETED : 0, 0, 0, (PHKEY)&pKey, NULL);
+					//hRc = CreateKeyEx(hKeyRoot, pszKeyName, 0, 0, bKeyDeletion ? REG__OPTION_CREATE_DELETED : 0, 0, 0, (HREGKEY*)&pKey, NULL);
 					
 					FileRegItem* pRoot  = lpFileReg->ItemFromHkey(hKeyRoot);
 					if (!pRoot)
@@ -3170,7 +3211,8 @@ LONG MFileReg::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilent, MRegistryBa
 					//	InvalidOp();
 					//}
 				} else {
-					if (hWorkKey) { apTargetWorker->CloseKey(hWorkKey); hWorkKey = NULL; }
+					if (hWorkKey)
+						apTargetWorker->CloseKey(&hWorkKey);
 					MCHKHEAP;
 					if (bKeyDeletion)
 					{
@@ -3224,7 +3266,7 @@ LONG MFileReg::LoadRegFile(LPCWSTR asRegFilePathName, BOOL abSilent, MRegistryBa
 				}
 			}
 			bFileIsDirty = true;
-			// Тут именно KEY. Если ранее был удаляемый ключ [-HKEY...], то все что до следующего ключа [HKEY] - пропускается!
+			// Тут именно KEY. Если ранее был удаляемый ключ [-HREGKEY...], то все что до следующего ключа [HREGKEY] - пропускается!
 			if (bKeyDeletion)
 			{
 				if (!apFileReg->bSilent)
@@ -3415,10 +3457,7 @@ wrap:
 	//apFileReg->bInternalRegParsing = FALSE;
 	// Release work key
 	if (apTargetWorker && hWorkKey)
-	{
-		apTargetWorker->CloseKey(hWorkKey);
-		hWorkKey = NULL;
-	}
+		apTargetWorker->CloseKey(&hWorkKey);
 	// Release pointers
 	if (pszData && bSzAllocated)
 		SafeFree(pszData);

@@ -920,7 +920,7 @@ int Editor::ProcessKey(int Key)
 		case KEY_SHIFTNUMPAD8:   case KEY_SHIFTNUMPAD2:
 		case KEY_SHIFTNUMPAD7:   case KEY_SHIFTNUMPAD1:
 		case KEY_CTRLSHIFTLEFT:  case KEY_CTRLSHIFTNUMPAD4:   /* 12.11.2002 DJ */
-		case KEY_RCTRLSHIFTLEFT: case KEY_RCTRLSHIFTNUMPAD4:   /* 12.11.2002 DJ */
+		case KEY_RCTRLSHIFTLEFT: case KEY_RCTRLSHIFTNUMPAD4:
 		{
 			_KEYMACRO(CleverSysLog SL(L"Editor::ProcessKey(KEY_SHIFT*)"));
 			_SVS(SysLog(L"[%d] SelStart=%d, SelEnd=%d",__LINE__,SelStart,SelEnd));

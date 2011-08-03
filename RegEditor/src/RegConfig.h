@@ -6,17 +6,32 @@ struct RegPath;
 
 class RegConfig {
 public:
-	static void Init(LPCTSTR asRootKey, LPCTSTR asModuleName);
+	static void Init(
+			 #if FAR_UNICODE>=1900
+			 LPCTSTR asModuleName
+			 #else
+			 LPCTSTR asRootKey, LPCTSTR asModuleName
+			 #endif
+		);
 	
-	RegConfig(LPCTSTR asRootKey, LPCTSTR asModuleName);
+	RegConfig(
+			 #if FAR_UNICODE>=1900
+			 LPCTSTR asModuleName
+			 #else
+			 LPCTSTR asRootKey, LPCTSTR asModuleName
+			 #endif
+		);
 	~RegConfig();
 
 	void LoadConfiguration();
 	void SaveConfiguration();
+	BOOL mb_SettingsChanged;
 	BOOL Configure();
+	BOOL ConfigureVisual();
 	
-	DWORD samDesired();
-	const TCHAR* bitSuffix();
+	//DWORD samDesired_();
+	BOOL  getWow64on32();
+	//const TCHAR* bitSuffix();
 	void LoadVersionInfo(LPCTSTR asModuleName);
 	#ifdef _UNICODE
 	UINT EditorCodePage();
@@ -26,13 +41,17 @@ public:
 	
 	void SetLastRegPath(HKEY ahKey, LPCWSTR asSubKey);
 public:
+#ifndef FAR_UNICODE
 	TCHAR *pszPluginKey;
+#endif
 	TCHAR sCommandPrefix[16];
 	TCHAR sRegTitlePrefix[20];
 	TCHAR sRegTitleDirty[20];
 	BOOL  is64bitOs; // 64-битная операционка
 	BOOL  isWow64process; // 32-битное приложение запущено в x64 среде
-	BOOL  bWow64on32; // 2-Auto. 1-Отображать 64-битный реестр, 0-32-битный
+private:
+	BOOL  bWow64on32_; // 2-Auto. 1-Отображать 64-битный реестр, 0-32-битный
+public:
 	BOOL  bVirtualize; // отображать виртуализированные значения реестра
 	BOOL  bAddToDisksMenu;
 	TCHAR cDiskMenuHotkey[2];
@@ -55,6 +74,7 @@ public:
 	BOOL  bCheckMacrosInVars;   // "%%variable"
 	BOOL  bRefreshChanges; // 0-только по CtrlR, 1-автоматически
 	DWORD nRefreshKeyTimeout, nRefreshSubkeyTimeout;
+	BOOL  bRestorePanelMode;
 	wchar_t* pszLastRegPath; int nMaxRegPath; // полный путь вроде (HKEY_CURRENT_USER\\Software\\FAR2)
 	TCHAR sVersionInfo[128];
 

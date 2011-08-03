@@ -1818,12 +1818,35 @@ int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 		if (r.EventType == KEY_EVENT)
 		{
 			#define CTRLMASK (RIGHT_ALT_PRESSED|LEFT_ALT_PRESSED|RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED|SHIFT_PRESSED)
-			nCmp = (r.Event.KeyEvent.bKeyDown != rDbg.Event.KeyEvent.bKeyDown)
-				|| (r.Event.KeyEvent.wVirtualKeyCode != rDbg.Event.KeyEvent.wVirtualKeyCode)
-				|| (r.Event.KeyEvent.wVirtualScanCode != rDbg.Event.KeyEvent.wVirtualScanCode)
-				|| (r.Event.KeyEvent.uChar.UnicodeChar != rDbg.Event.KeyEvent.uChar.UnicodeChar && !(r.Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED))
-				|| ((r.Event.KeyEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK))
-				;
+			if (r.Event.KeyEvent.bKeyDown != rDbg.Event.KeyEvent.bKeyDown)
+				nCmp = 1;
+			if (r.Event.KeyEvent.wVirtualKeyCode && rDbg.Event.KeyEvent.wVirtualKeyCode)
+			{
+				// Цифры на цифровой клавиатуре
+				if (!((r.Event.KeyEvent.uChar.UnicodeChar == rDbg.Event.KeyEvent.uChar.UnicodeChar)
+						&& ((r.Event.KeyEvent.uChar.UnicodeChar >= '0' && r.Event.KeyEvent.uChar.UnicodeChar <='9')
+							|| (r.Event.KeyEvent.uChar.UnicodeChar=='.'))))
+				{
+					if (r.Event.KeyEvent.wVirtualKeyCode != rDbg.Event.KeyEvent.wVirtualKeyCode)
+						nCmp = 1;
+					else
+					{
+						if ((r.Event.KeyEvent.wVirtualKeyCode != VK_SHIFT // Правый/Левый Shift имеют разные Scan-коды
+							&& r.Event.KeyEvent.wVirtualKeyCode != VK_PAUSE // Scan для "Pause" не детектится
+							)
+						&& (r.Event.KeyEvent.wVirtualScanCode != rDbg.Event.KeyEvent.wVirtualScanCode))
+							nCmp = 1;
+					}
+				}
+			}
+			if (r.Event.KeyEvent.uChar.UnicodeChar != rDbg.Event.KeyEvent.uChar.UnicodeChar
+					&& !(r.Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED))
+				nCmp = 1;
+			if ((r.Event.KeyEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)
+					&& !((r.Event.KeyEvent.dwControlKeyState&CTRLMASK)==SHIFT_PRESSED
+							&& (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)==0
+							&& (r.Event.KeyEvent.wVirtualKeyCode>='A' && r.Event.KeyEvent.wVirtualKeyCode<='Z')))
+				nCmp = 1;
 		}
 		else if (r.EventType == MOUSE_EVENT)
 		{

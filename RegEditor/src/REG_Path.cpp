@@ -4,10 +4,10 @@
 void RegPath::Init(RegPath* apKey)
 {
 	MCHKHEAP;
-	Init(apKey->eType, apKey->mh_Root, apKey->mpsz_Key, &(apKey->ftModified), apKey->mpsz_TitlePrefix, apKey->eRights, apKey->nKeyFlags, apKey->mpsz_Server);
+	Init(apKey->eType, apKey->mb_Wow64on32, apKey->mh_Root, apKey->mpsz_Key, &(apKey->ftModified), apKey->mpsz_TitlePrefix, apKey->eRights, apKey->nKeyFlags, apKey->mpsz_Server);
 }
 
-void RegPath::Init(RegWorkType aType, HKEY ahRoot /*= NULL*/, LPCWSTR asKey /*= NULL*/, REGFILETIME* aftModified /*= NULL*/, LPCTSTR asPrefix /*= NULL*/, RegKeyOpenRights aRights /*= eRightsSimple*/, DWORD anKeyFlags /*= 0*/, LPCTSTR asServer /*= NULL*/)
+void RegPath::Init(RegWorkType aType, DWORD abWow64on32, HKEY ahRoot /*= NULL*/, LPCWSTR asKey /*= NULL*/, REGFILETIME* aftModified /*= NULL*/, LPCTSTR asPrefix /*= NULL*/, RegKeyOpenRights aRights /*= eRightsSimple*/, DWORD anKeyFlags /*= 0*/, LPCTSTR asServer /*= NULL*/)
 {
 	_ASSERTE(aType != RE_UNDEFINED);
 	_ASSERTE(!mpsz_Key && !mpsz_Title && !mpsz_Dir && !mpsz_TitlePrefix && !mpsz_Server);
@@ -28,6 +28,7 @@ void RegPath::Init(RegWorkType aType, HKEY ahRoot /*= NULL*/, LPCWSTR asKey /*= 
 	mpsz_Server = NULL; mn_ServerLen = 0;
 	eRights = aRights;
 	nKeyFlags = anKeyFlags;
+	mb_Wow64on32 = abWow64on32;
 	
 	//// Host пока отдельно
 	//mpsz_HostFile = NULL;
@@ -153,6 +154,16 @@ void RegPath::Release()
 	nKeyFlags = 0;
 }
 
+bool RegPath::IsEmpty()
+{
+	if (mpsz_Key && *mpsz_Key)
+		return false;
+	else if (mh_Root)
+		return false;
+	else
+		return true;
+}
+
 // сравнить ключи
 bool RegPath::IsEqual(struct RegPath *p)
 {
@@ -165,6 +176,9 @@ bool RegPath::IsEqual(struct RegPath *p)
 		return true;
 		
 	if (!mpsz_Key || !p->mpsz_Key)
+		return false;
+
+	if (mb_Wow64on32 != p->mb_Wow64on32)
 		return false;
 		
 	int nCmp = lstrcmpiW(mpsz_Key, p->mpsz_Key);
@@ -278,7 +292,7 @@ void RegPath::Update()
 	
 	MCHKHEAP;
 	lstrcpy(mpsz_Title, cfg->sRegTitlePrefix);
-	lstrcat(mpsz_Title, cfg->bitSuffix());
+	lstrcat(mpsz_Title, BitSuffix(mb_Wow64on32));
 	if (pszBackupRestore && *pszBackupRestore) lstrcat(mpsz_Title, pszBackupRestore);
 	lstrcat(mpsz_Title, _T(":"));
 	MCHKHEAP;

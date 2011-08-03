@@ -72,7 +72,8 @@ BOOL RegFolder::AddItem(
 	_ASSERTE(mn_MaxItemCount>0 && mn_MaxHolderSize>0);
 
 	bool lbDefaultValue = false;
-	if (!aszName || !*aszName) {
+	if (!aszName || !*aszName)
+	{
 		//TODO: пустых ключей и значений вроде быть не может?
 		aszName = REGEDIT_DEFAULTNAME;
 		anNameLen = lstrlenW(aszName);
@@ -83,7 +84,8 @@ BOOL RegFolder::AddItem(
 	// По идее, такого быть не должно, 
 	// но теоретически во время сканирования ключа могут быть добавлены
 	// новые подключи или значения
-	if (mn_ItemCount >= mn_MaxItemCount) {
+	if (mn_ItemCount >= mn_MaxItemCount)
+	{
 		RequireItemsLock();
 		
 		_ASSERTE(mn_ItemCount == mn_MaxItemCount);
@@ -109,7 +111,8 @@ BOOL RegFolder::AddItem(
 	}
 	
 	// И этого тоже быть по идее не должно, под строки уже выделено достаточно памяти, но проверим
-	if ((mn_HolderLen+anNameLen+1) > mn_MaxHolderSize) {
+	if ((mn_HolderLen+anNameLen+1) > mn_MaxHolderSize)
+	{
 		mn_MaxHolderSize += MAX_PATH+anNameLen;
 		wchar_t* pszNew = (wchar_t*)malloc(mn_MaxHolderSize*sizeof(wchar_t));
 		if (mn_HolderLen > 0)
@@ -120,14 +123,15 @@ BOOL RegFolder::AddItem(
 		{
 			mp_Items[k].pszName = pszNew+(mp_Items[k].pszName - mpsz_NamesHolder);
 			#ifdef _UNICODE
-			mp_PluginItems[k].FindData.lpwszFileName = mp_Items[k].pszName;
+			PanelItemFileNamePtr(mp_PluginItems[k]) = mp_Items[k].pszName;
 			#endif
 		}
 		mpsz_NamesHolder = pszNew;
 	}
 	
 	#ifdef _DEBUG
-	if ((adwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+	if ((adwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+	{
 		_ASSERTE(anValueType == REG__KEY);
 	}
 	#endif
@@ -165,32 +169,39 @@ BOOL RegFolder::AddItem(
 	//pItem->pi = (mp_PluginItems+mn_ItemCount);
 	mp_PluginItems[mn_ItemCount].UserData = (DWORD_PTR)(mp_Items+mn_ItemCount);
 
-	if ((adwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !bShowKeysAsDirs) {
-		mp_PluginItems[mn_ItemCount].FindData.dwFileAttributes = (adwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY) | FILE_ATTRIBUTE_COMPRESSED;
-	} else {
-		mp_PluginItems[mn_ItemCount].FindData.dwFileAttributes = adwFileAttributes;
+	if ((adwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !bShowKeysAsDirs)
+	{
+		PanelItemAttributes(mp_PluginItems[mn_ItemCount]) = (adwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY) | FILE_ATTRIBUTE_COMPRESSED;
 	}
-	mp_PluginItems[mn_ItemCount].FindData.ftCreationTime = aftModified;
-	mp_PluginItems[mn_ItemCount].FindData.ftLastAccessTime = aftModified;
-	mp_PluginItems[mn_ItemCount].FindData.ftLastWriteTime = aftModified;
-	#ifdef _UNICODE
-	mp_PluginItems[mn_ItemCount].FindData.nFileSize = anValueSize;
-	mp_PluginItems[mn_ItemCount].FindData.nPackSize = anValueSize;
-	#else
-	mp_PluginItems[mn_ItemCount].FindData.nFileSizeLow = anValueSize;
+	else
+	{
+		PanelItemAttributes(mp_PluginItems[mn_ItemCount]) = adwFileAttributes;
+	}
+	PanelItemCreation(mp_PluginItems[mn_ItemCount]) = aftModified;
+	PanelItemAccess(mp_PluginItems[mn_ItemCount]) = aftModified;
+	PanelItemWrite(mp_PluginItems[mn_ItemCount]) = aftModified;
+	#if FAR_UNICODE>=1906
+	PanelItemChange(mp_PluginItems[mn_ItemCount]) = aftModified;
+	#endif
+	
+	PanelItemFileSize(mp_PluginItems[mn_ItemCount]) = anValueSize;
+	PanelItemPackSize(mp_PluginItems[mn_ItemCount]) = anValueSize;
+	#ifndef _UNICODE
 	mp_PluginItems[mn_ItemCount].FindData.nFileSizeHigh = 0;
-	mp_PluginItems[mn_ItemCount].PackSize = anValueSize;
 	mp_PluginItems[mn_ItemCount].PackSizeHigh = 0;
 	#endif
 	
 	#ifdef _UNICODE
-	if (pwsz[0] == L'.' && pwsz[1] == L'.' && pwsz[2] == 0) {
+	if (pwsz[0] == L'.' && pwsz[1] == L'.' && pwsz[2] == 0)
+	{
 		lstrcpyW(pItem->szTwoDots, REGEDIT_REPLACETWODOTS);
-		mp_PluginItems[mn_ItemCount].FindData.lpwszFileName = pItem->szTwoDots;
-	} else {
-		mp_PluginItems[mn_ItemCount].FindData.lpwszFileName = pwsz;
+		PanelItemFileNamePtr(mp_PluginItems[mn_ItemCount]) = pItem->szTwoDots;
 	}
-	mp_PluginItems[mn_ItemCount].FindData.lpwszAlternateFileName = NULL;
+	else
+	{
+		PanelItemFileNamePtr(mp_PluginItems[mn_ItemCount]) = pwsz;
+	}
+	PanelItemAltNamePtr(mp_PluginItems[mn_ItemCount]) = NULL;
 	#else
 	if (pwsz[0] == L'.' && pwsz[1] == L'.' && pwsz[2] == 0) {
 		lstrcpyA(pItem->szTwoDots, REGEDIT_REPLACETWODOTS);
@@ -223,6 +234,7 @@ void RegFolder::Reset()
 {
 	RequireItemsLock();
 	//key.Release(); -- низя. только в FinalRelease!
+	//key.nKeyFlags &= ~REGF_NOTEMPTY;
 	mn_ItemCount = 0;
 	bHaveDefaultValue = false;
 	mn_HolderLen = 0;
@@ -310,8 +322,18 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 						BOOL abForceReload, BOOL abSilence, BOOL abLoadDesc, MRegistryBase* file /*= NULL*/,
 						HKEY hKeyWrite /* = NULL*/)
 {
+	BOOL lbSucceeded = FALSE;
 	REGFILETIME ft; SYSTEMTIME st;
 	MCHKHEAP;
+    HREGKEY hKey = NULLHKEY;
+    WCHAR *pwszName = NULL;
+	LPCWSTR pwszComment = NULL;
+    DWORD dwLen = 0, dwDataSize = 0;
+	REGTYPE nDataType = 0;
+    TCHAR szDesc[128];
+    //TCHAR szOwner[64];
+    UINT i;
+    TCHAR szKeyDeletedDesc[128];
 
 #ifdef _DEBUG
 	sDbgKeyPath[0] = 0;
@@ -322,7 +344,8 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 	if ((abSilence || file) && abLoadDesc) abLoadDesc = FALSE;
 	
 
-	if (mn_ItemCount > 0) {
+	if (mn_ItemCount > 0)
+	{
 		// Проверить, изменился ли ключ?
 		if (!abForceReload)
 		{
@@ -340,8 +363,11 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 
 				if (bShowKeysAsDirs != cfg->bShowKeysAsDirs)
 					UpdateShowKeysAsDirs();
-				return TRUE;
-			} else {
+				lbSucceeded = TRUE;
+				goto wrap;
+			}
+			else
+			{
 				abForceReload = TRUE;
 			}
 		}
@@ -350,26 +376,21 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 
 		// сброс количества элементов, память не освобождвается
 		Reset();
-	} else {
+	}
+	else
+	{
 
 		RequireItemsLock();
 	}
 	
-    HKEY hKey = NULL;
-    WCHAR *pwszName = NULL;
-	LPCWSTR pwszComment = NULL;
-    DWORD dwLen = 0, dwDataSize = 0;
-	REGTYPE nDataType = 0;
-    TCHAR szDesc[128];
-    //TCHAR szOwner[64];
-    UINT i;
-    TCHAR szKeyDeletedDesc[128];
 	lstrcpyn(szKeyDeletedDesc, GetMsg(REDeletedKey), 127);
 
-	if (!key.mpsz_Key) {
+	if (!key.mpsz_Key)
+	{
 		_ASSERTE(key.mpsz_Key!=NULL);
 		Reset();
-		return FALSE;
+		lbSucceeded = FALSE;
+		goto wrap;
 	}
 	
 	// Сбросить флажок mb_RegistryChanged
@@ -377,8 +398,10 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 
     LONG hRc = OpenKey(pWorker, &hKey);
 
-    if (ERROR_SUCCESS != hRc) {
-    	if (!abSilence && pPlugin) {
+    if (ERROR_SUCCESS != hRc)
+    {
+    	if (!abSilence && pPlugin)
+    	{
 			SetLastError(hRc);
 			pPlugin->CantOpenKey(&key, FALSE);
 		}
@@ -407,7 +430,15 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
         	cMaxSubKeyLen = 16383;
         	cMaxValueNameLen = 16383;
         	cMaxValueLen = 32767;
+			//key.nKeyFlags &= ~REGF_NOTEMPTY;
     	}
+		//else
+		//{
+		//	if (cValues || cSubKeys)
+		//		key.nKeyFlags |= REGF_NOTEMPTY;
+		//	else
+		//		key.nKeyFlags &= ~REGF_NOTEMPTY;
+		//}
     	cMaxSubKeyLen++; cMaxValueNameLen++;
     	if (cMaxValueLen <= 32767)
     		cMaxValueLen = 32767;
@@ -473,7 +504,8 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 		        //TODO: обработка cfg->bExportDefaultValueFirst
 				bool bDefaultFirst = (cfg->bExportDefaultValueFirst && file);
 				int nFrom = bDefaultFirst ? -1 : 0;
-		        for (int j = nFrom;; j++) {
+		        for (int j = nFrom;; j++)
+		        {
 		            dwLen = 16384;
 					if (lbStoreData)
 					{
@@ -483,20 +515,29 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 							pData = mptr_DataHolder+mn_DataHolderLen;
 							// с прицелом на 64бит
 							dwDataSize = min(0x7FFFFFFF, (mn_MaxDataHolderSize-mn_DataHolderLen));
-						} else {
+						}
+						else
+						{
 							pData = NULL;
 						}
-					} else {
+					}
+					else
+					{
 						dwDataSize = cMaxValueLen;
 						pData = pDataHolder;
 					}
 					szDesc[0] = 0;
-					if (j == -1) {
+					if (j == -1)
+					{
 						hRc = pWorker->QueryValueEx(hKey, NULL, NULL, &nDataType,
 							lbLoadData ? (LPBYTE)pData : NULL, &dwDataSize, &pwszComment);
-					} else {
+					}
+					else
+					{
 						hRc = pWorker->EnumValue(hKey, j, pwszName, &dwLen, NULL, &nDataType,
 							lbLoadData ? (LPBYTE)pData : NULL, &dwDataSize, (file!=NULL), &pwszComment);
+						// Комментарии допустимы только в *.reg файлах.
+						//_ASSERTE(file->eType == RE_REGFILE);
 					}
 					if (hRc == ERROR_ACCESS_DENIED) {
 						_ASSERTE(hRc != ERROR_ACCESS_DENIED);
@@ -511,36 +552,50 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 					{
 						_ASSERTE(lbStoreData == FALSE);
 		            	// По идее не должно так быть, сверху мы запросили максимальный размер значения в ключе
-						if (hKey != HKEY_PERFORMANCE_DATA) {
+						if (hKey != HKEY_PERFORMANCE_DATA)
+						{
 		            		_ASSERTE(hRc != ERROR_MORE_DATA);
 						}
 		            	szDesc[0] = 0;
-		            	if (file != NULL && !lbStoreData) {
+		            	if (file != NULL && !lbStoreData)
+		            	{
 		            		_ASSERTE(dwDataSize > cMaxValueLen);
 		            		cMaxValueLen = dwDataSize;
 		            		SafeFree(pData);
 		            		pData = (LPBYTE)malloc(cMaxValueLen);
-							if (j == -1) {
+							if (j == -1)
+							{
 								hRc = pWorker->QueryValueEx(hKey, NULL, NULL, &nDataType,
 									(LPBYTE)pData, &dwDataSize);
-							} else {
+							}
+							else
+							{
 			            		hRc = pWorker->QueryValueEx(hKey, pwszName, NULL, &nDataType,
 									(LPBYTE)pData, &dwDataSize);
 							}
-		            		if (hRc != 0) {
+		            		if (hRc != 0)
+		            		{
 			            		_ASSERTE(hRc == 0);
 			            		//TODO: показать ошибку
 		            		}
-		            	} else {
+		            	}
+		            	else
+		            	{
 		            		hRc = ERROR_SUCCESS;
 							pData = NULL;
 	            		}
-					} else if ((j == -1) && (hRc == ERROR_FILE_NOT_FOUND)) {
+					}
+					else if ((j == -1) && (hRc == ERROR_FILE_NOT_FOUND))
+					{
 						continue; // значения по умолчанию в этом ключе нет, переходим к обычному EnumValues
-					} else if (hRc != ERROR_SUCCESS) {
+					}
+					else if (hRc != ERROR_SUCCESS)
+					{
 						//InvalidOp();
 						break;
-		            } else if (!file && abLoadDesc) {
+		            }
+		            else if (!file && abLoadDesc)
+		            {
 		            	FormatDataVisual(nDataType, pData, dwDataSize, szDesc);
 		            }
 		            //if (ERROR_SUCCESS != hRc)
@@ -549,7 +604,8 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 					if (bDefaultFirst && !*pwszName && j >= 0)
 						continue; // 
 
-					if (file == NULL) {
+					if (file == NULL)
+					{
 						// Как обычно, формируем свой каталог
 		            	AddItem(pwszName, dwLen, key.ftModified, szDesc, NULL, FILE_ATTRIBUTE_NORMAL,
 							nDataType, dwDataSize, lbStoreData ? pData : NULL,
@@ -558,10 +614,17 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 						{
 							mn_DataHolderLen += dwDataSize;
 						}
-	            	} else {
+	            	}
+	            	else
+	            	{
 	            		// Выгрузка значения в *.reg
 						//if (!file->FileWriteValue(pwszName, nDataType, pData, dwDataSize))
 						//TODO: Обработка значение bDeletion!
+						if ((nDataType & REG__INTERNAL_TYPES) && (file->eType != RE_REGFILE))
+						{
+							// Комментарии допустимы только в *.reg файлах.
+							_ASSERTE(file->eType == RE_REGFILE);
+						}
 						if (0 != file->SetValueEx(hKeyWrite, pwszName, 0, nDataType, pData, dwDataSize, pwszComment))
 						{
 							//TODO: Показать ошибку
@@ -590,7 +653,8 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 		        // после них - подключи
 		        UINT nFirstKeyIdx = mn_ItemCount;
 				DWORD nKeyFlags = 0;
-		        for (i=0;; i++) {
+		        for (i=0;; i++)
+		        {
 		            dwLen = 16384;
 		            //OPTIMIZE: наиболее "толстый" здесь это вызов, но его не оптимизируешь
 		            hRc = pWorker->EnumKeyEx(hKey, i, pwszName, &dwLen, NULL, NULL, NULL, &ft, 
@@ -606,14 +670,16 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 						REG__KEY, 0, NULL, pwszComment);
 		        }
 		        bDescrWasUpdated = FALSE;
-		        if (abLoadDesc && key.mh_Root != NULL) {
+		        if (abLoadDesc && key.mh_Root != NULL)
+		        {
 		        	DWORD nStartTick = GetTickCount();
 		        	DWORD nProcessed = 0; bool lbStartFailed = false;
 					BOOL bAllowBackground = (key.eType == RE_WINAPI) && (cfg->nLargeKeyTimeout);
 					
-			        for (i = nFirstKeyIdx; i < mn_ItemCount; i++) {
+			        for (i = nFirstKeyIdx; i < mn_ItemCount; i++)
+			        {
 						if (mp_Items[i].szDescription[0] || // Уже может быть проставлено в EnumKeyEx (*.reg)
-							(mp_PluginItems[i].FindData.dwFileAttributes & REG_ATTRIBUTE_DELETED))
+							(PanelItemAttributes(mp_PluginItems[i]) & REG_ATTRIBUTE_DELETED))
 							continue; // Для "удаленных" Desc уже проставлен!
 							
 			    		if (0 != pWorker->GetSubkeyInfo(hKey, mp_Items[i].pszName, 
@@ -627,14 +693,14 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 							lstrcpy(mp_Items[i].szOwner, _T(" "));
 			    		}
 			    		
-			        	//HKEY hSubKey = NULL;
+			        	//HREGKEY hSubKey = NULL;
 						//// Не пытаться выполнить AjustTokenPrivileges
 			        	//if (0 == pWorker->OpenKeyEx(hKey,
 			        	//		mp_Items[i].pszName, 0, KEY_READ, &hSubKey, TRUE))
 			        	//{
-						//	if (hSubKey==NULL || hSubKey==(HKEY)-1)
+						//	if (hSubKey==NULL || hSubKey==(HREGKEY)-1)
 						//	{
-						//		_ASSERTE(hSubKey!=NULL && hSubKey!=(HKEY)-1);
+						//		_ASSERTE(hSubKey!=NULL && hSubKey!=(HREGKEY)-1);
 						//		InvalidOp();
 						//		break;
 						//	}
@@ -653,16 +719,22 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 			        	//}
 			        	
 			        	nProcessed++;
-			        	if (bAllowBackground && nProcessed > 100) {
+			        	if (bAllowBackground && nProcessed > 100)
+			        	{
 			        		nProcessed = 0;
-			        		if (!lbStartFailed && cfg->nLargeKeyTimeout) {
+			        		if (!lbStartFailed && cfg->nLargeKeyTimeout)
+			        		{
 				        		DWORD nDelta = GetTickCount() - nStartTick;
-				        		if (cfg->nLargeKeyTimeout && nDelta > cfg->nLargeKeyTimeout) {
+				        		if (cfg->nLargeKeyTimeout && nDelta > cfg->nLargeKeyTimeout)
+				        		{
 				        			BOOL lbStarted = CreateDescReadThread(pPlugin, pWorker);
-				        			if (!lbStarted) {
+				        			if (!lbStarted)
+				        			{
 				        				_ASSERTE(lbStarted);
 				        				lbStartFailed = true;
-			        				} else {
+			        				}
+			        				else
+			        				{
 			        					break; // дочитывать описания будет фоновая нить
 			        				}
 				        		}
@@ -690,11 +762,13 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 		mn_LastKeyStamp = mn_LastSubkeyStamp = GetTickCount();
         
 		// Закрывает только если ключ != key.mh_Root
-		CloseKey(pWorker, hKey);
+		CloseKey(pWorker, &hKey);
     }
 	
 	MCHKHEAP;
-	return TRUE;
+	lbSucceeded = TRUE;
+wrap:
+	return lbSucceeded;
 }
 
 //void RegFolder::FormatDataVisual(REGTYPE nDataType, LPBYTE pData, DWORD dwDataSize, wchar_t* szDesc/*[128]*/)
@@ -774,9 +848,288 @@ BOOL RegFolder::LoadKey(REPlugin* pPlugin, MRegistryBase* pWorker, KeyFirstEnum 
 //	}
 //}
 
+BOOL RegFolder::Transfer(REPlugin* pPlugin, MRegistryBase* pSrcWorker, RegFolder *pDstFolder, MRegistryBase* pDstWorker)
+{
+	BOOL lbSucceeded = TRUE;
+	HREGKEY hWriteKey = NULLHKEY;
+	RegPath *pDstKey = NULL;
+	MCHKHEAP;
+
+	_ASSERTE(key.mh_Root || key.eType != RE_HIVE);
+	
+	// Выделение памяти под чтение значений реестра
+	pDstWorker->GetExportBuffer(32767);
+	
+
+	if (key.mh_Root == NULL && key.eType != RE_REGFILE && key.eType != RE_HIVE)
+	{
+		_ASSERTE(key.mh_Root != NULL);
+		lbSucceeded = FALSE; goto wrap;
+	}
+	
+	lbSucceeded = TRUE;
+	
+	// Флаги могут быть еще не обновлены и при F4 на ".." не выгрузится [ключ] в *.reg файл
+	if (key.eType == RE_REGFILE && /*key.mh_Root &&*/ key.mpsz_Key && *key.mpsz_Key && !key.nKeyFlags)
+	{
+		HREGKEY hTest = NULLHKEY;
+		if (!OpenKey(pSrcWorker, &hTest, KEY_READ))
+			CloseKey(pSrcWorker, &hTest);
+	}
+
+	pDstKey = &pDstFolder->key;
+	if ((key.mh_Root != NULL || (key.mpsz_Key && *key.mpsz_Key)) && (key.nKeyFlags || key.eType != RE_REGFILE))
+	{
+		if ((pDstKey->mh_Root != NULL) || (pDstKey->mpsz_Key && *pDstKey->mpsz_Key) || (pDstKey->eType == RE_REGFILE))
+		{
+			DWORD dwDeleteOption = (key.nKeyFlags & REGF_DELETED) ? REG__OPTION_CREATE_DELETED : 0;
+			LONG lWriteRc = pDstWorker->CreateKeyEx(pDstKey->mh_Root, pDstKey->mpsz_Key, 0, 0,
+				dwDeleteOption, KEY_WRITE, 0, &hWriteKey, 0,
+				&key.nKeyFlags, FALSE, key.pszComment);
+			if (0 != lWriteRc && !dwDeleteOption)
+			{
+				InvalidOp();
+				lbSucceeded = FALSE; goto wrap;
+			}
+		}
+		else
+		{
+			InvalidOp();
+			lbSucceeded = FALSE; goto wrap;
+		}
+	}
+
+	// В "Удаленных" ключах могут быть комментарии
+	//// В "Удаленных" ключах значений быть не может!
+	//if (key.bDeletion)
+	//	{ lbSucceeded = FALSE; goto wrap; }
+
+	//Reset(); -- низя. уже могли запихнуть желаемые ключи/значения!
+	
+	BOOL bExportSelected = (mn_ItemCount > 0);
+	
+	// Эта ветка активируется, если выгружается ключ целиком
+	// LoadKey сразу выгрузит значения (при EnumValue)
+	if (!bExportSelected)
+	{
+		// В принципе, хорошо бы наверное совместить считывание списка значений с их выгрузкой
+		if (!LoadKey(pPlugin, pSrcWorker, eValuesFirst/*abKeysFirst*/, TRUE/*abForceReload*/, FALSE/*abSilence*/,
+					 FALSE/*abLoadDesc*/, pDstWorker, hWriteKey))
+		{
+			if (hWriteKey)
+				pDstWorker->CloseKey(&hWriteKey);
+			//TODO: Показать ошибку? хотя она уже должна быть показана в функции LoadKey. Тогда надо abSilence=TRUE в нее передавать
+			lbSucceeded = FALSE; goto wrap;
+		}
+	}
+
+	#ifdef _DEBUG
+	if (mn_ItemCount > 0)
+	{
+		// debug - чтобы мусора не оказалось
+		_ASSERTE(mp_Items[0].pszName[0] < 0xd000);
+	}
+	#endif
+
+	//int i = 0;
+	if (gpProgress)
+	{
+		DWORD nAddKeys = 0;
+		for (UINT k = 0; k < mn_ItemCount; k++)
+		{
+			if (mp_Items[k].nValueType == REG__KEY) nAddKeys++;
+		}
+		if (nAddKeys)
+			gpProgress->IncAll(nAddKeys);
+	}
+
+	// Эта ветка активируется, если выгружаются избранные значения (по запросу из FAR)
+	//if (mn_ItemCount > 0 && mp_Items[0].nValueType != REG__KEY) -- некорректно: mn_ItemCount меняется в LoadKey, ключи и значения могут быть вперемешку
+	if (bExportSelected)
+	{
+	    HREGKEY hKey = NULLHKEY;
+		LONG hRc = OpenKey(pSrcWorker, &hKey);
+		if (hRc != 0)
+		{
+			//TODO: показать ошибку!
+			InvalidOp();
+			if (hWriteKey)
+				pDstWorker->CloseKey(&hWriteKey);
+			lbSucceeded = FALSE; goto wrap;
+		}
+		
+		DWORD  cbExportBufferData = 32767;
+		LPBYTE pExportBufferData = pDstWorker->GetExportBuffer(cbExportBufferData);
+		if (!pExportBufferData)
+		{
+			_ASSERTE(pExportBufferData);
+			InvalidOp();
+			if (hWriteKey)
+				pDstWorker->CloseKey(&hWriteKey);
+			lbSucceeded = FALSE; goto wrap;
+		}
+		
+		//WARNING!!! Тут значения и ключи могут оказаться вперемешку!
+		
+		// Сначала выгружаем значения
+		DWORD dwLen;
+		REGTYPE nDataType;
+		BOOL bDefaultFirst = cfg->bExportDefaultValueFirst;
+		int i = bDefaultFirst ? -1 : 0; // сначала - @
+		LPCWSTR pszValueName = NULL;
+		while (lbSucceeded && i < (int)mn_ItemCount)
+		{
+			if (i == -1)
+			{
+				pszValueName = NULL;
+			}
+			else
+			{
+				if (mp_Items[i].nValueType == REG__KEY)
+				{
+					i++; continue; // значения и ключи могут оказаться вперемешку
+				}
+
+				if (mp_Items[i].bDefaultValue)
+				{
+					if (bDefaultFirst) {
+						i++; continue; // уже обработано первым
+					}
+					else
+					{
+						pszValueName = NULL;
+					}
+				}
+				else
+				{
+					pszValueName = mp_Items[i].pszName;
+				}
+			}
+		
+			// Загрузить значение
+			dwLen = cbExportBufferData;
+			
+			// Эта ветка активируется только в том случае, если LoadKey не вызывался (выгрузка избранных значений)
+			// поэтому никакого дублирования нет
+			LPCWSTR pszComment = NULL;
+			hRc = pSrcWorker->QueryValueEx(hKey, pszValueName, NULL, &nDataType, (LPBYTE)pExportBufferData, &dwLen, &pszComment);
+			if (hRc == ERROR_MORE_DATA)
+			{
+				_ASSERTE(dwLen > cbExportBufferData);
+				cbExportBufferData = dwLen;
+				pExportBufferData = pDstWorker->GetExportBuffer(cbExportBufferData);
+				if (!pExportBufferData)
+				{
+					_ASSERTE(pExportBufferData);
+					InvalidOp();
+					lbSucceeded = FALSE; break;
+				}
+				hRc = pSrcWorker->QueryValueEx(hKey, pszValueName, NULL, &nDataType, (LPBYTE)pExportBufferData, &dwLen);
+			}
+			if (hRc != ERROR_FILE_NOT_FOUND)
+			{
+				if (hRc != 0)
+				{
+					//TODO: Показать ошибку
+					InvalidOp();
+					lbSucceeded = FALSE; break;
+				}
+				if (!hWriteKey)
+				{
+					InvalidOp();
+					lbSucceeded = FALSE; break;
+				}
+		
+				if (0 != pDstWorker->SetValueEx(hWriteKey, pszValueName, 0, nDataType, pExportBufferData, dwLen, pszComment))
+				{
+					//TODO: Показать ошибку
+					InvalidOp();
+					lbSucceeded = FALSE; break;
+				}
+			}
+		
+			// Следующее
+			i++;
+		} // while (lbSucceeded && i < (int)mn_ItemCount)
+		
+		// Закрывает только если ключ не совпадает с key.mh_Root
+		CloseKey(pSrcWorker, &hKey);
+	}
+
+
+	LPCWSTR pszSubKeyName = NULL;
+	if (lbSucceeded && mn_ItemCount > 0)
+	{
+		UINT i = 0; // Поскольку ключи и значения могут оказатьяс перемешаны - сканируем с начала
+		//if (i < 0) {
+		//	_ASSERTE(i >= 0);
+		//} else {
+		RegFolder SubKey; //memset(&SubKey, 0, sizeof(SubKey)); -- больше низя! инициализиуется конструктором!
+		SubKey.Init(&key);
+		SubKey.key.AllocateAddLen(MAX_PATH*2);
+		wchar_t* pszSubKey = SubKey.key.mpsz_Key;
+		if (*pszSubKey)
+		{
+			pszSubKey += lstrlenW(SubKey.key.mpsz_Key);
+			*(pszSubKey++) = L'\\';
+		}
+
+		while (lbSucceeded && i < mn_ItemCount)
+		{
+			if (mp_Items[i].nValueType != REG__KEY)
+			{
+				//_ASSERTE(mp_Items[i].nValueType == REG__KEY); -- ok, ключи и значения могут оказатьяс перемешаны
+				i++; continue;
+			}
+
+			pszSubKeyName = mp_Items[i].pszName;
+			if (!pszSubKeyName || !*pszSubKeyName)
+			{
+				_ASSERTE(pszSubKeyName!=NULL && *pszSubKeyName!=NULL);
+				i++; continue;
+			}
+
+			int nKeyNameLen = lstrlenW(pszSubKeyName)+1;
+			memmove(pszSubKey, pszSubKeyName, nKeyNameLen*2);
+			SubKey.Reset();
+			SubKey.key.nKeyFlags = mp_Items[i].nFlags;
+			SubKey.key.pszComment = mp_Items[i].pszComment;
+
+			RegPath DstSubKey; memset(&DstSubKey, 0, sizeof(DstSubKey));
+			DstSubKey.Init(&pDstFolder->key);
+			DstSubKey.ChDir(pszSubKeyName, TRUE, NULL, TRUE);
+			RegFolder DstSubFolder; // -- memset(&DstSubFolder, 0, sizeof(DstSubFolder));
+			DstSubFolder.bForceRelease = TRUE;
+			DstSubFolder.Init(&DstSubKey);
+			DstSubKey.Release();
+
+			if (!SubKey.Transfer(pPlugin, pSrcWorker, &DstSubFolder, pDstWorker))
+				lbSucceeded = FALSE;
+
+			DstSubFolder.Release();
+			
+			if (!lbSucceeded)
+				break;
+
+			i++;
+		}
+		
+		SubKey.Release();
+		//}
+	}
+
+	if (lbSucceeded && gpProgress)
+		gpProgress->Step();
+wrap:
+	if (hWriteKey)
+		pDstWorker->CloseKey(&hWriteKey);
+	return lbSucceeded;
+}
+
 BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistryBase* file, BOOL abUnicode)
 {
 	BOOL lbSucceeded = TRUE;
+	HREGKEY hWriteKey = NULLHKEY;
 	MCHKHEAP;
 
 	_ASSERTE(key.mh_Root || key.eType != RE_HIVE);
@@ -792,9 +1145,10 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 	//MCHKHEAP;
 	//return lbSucceeded;
 
-	if (key.mh_Root == NULL && key.eType != RE_REGFILE && key.eType != RE_HIVE) {
+	if (key.mh_Root == NULL && key.eType != RE_REGFILE && key.eType != RE_HIVE)
+	{
 		_ASSERTE(key.mh_Root != NULL);
-		return FALSE;
+		lbSucceeded = FALSE; goto wrap;
 	}
 	
 	lbSucceeded = TRUE;
@@ -803,39 +1157,38 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 	//HKeyToStringKey(key.mh_Root, sTemp+1, 40);
 	//// Заголовок ключа
 	//if (!file->FileWrite(sTemp))
-	//	return FALSE;
+	//	{ lbSucceeded = FALSE; goto wrap; }
 	//if (key.mpsz_Key && key.mpsz_Key[0]) {
 	//	if (!file->FileWrite(L"\\", 1) ||
 	//		!file->FileWrite(key.mpsz_Key))
-	//		return FALSE;
+	//		{ lbSucceeded = FALSE; goto wrap; }
 	//}
 	//if (!file->FileWrite(L"]\r\n", 3))
-	//	return FALSE;
+	//	{ lbSucceeded = FALSE; goto wrap; }
 	
 	// Флаги могут быть еще не обновлены и при F4 на ".." не выгрузится [ключ] в *.reg файл
 	if (key.eType == RE_REGFILE && /*key.mh_Root &&*/ key.mpsz_Key && *key.mpsz_Key && !key.nKeyFlags)
 	{
-		HKEY hTest = NULL;
+		HREGKEY hTest = NULLHKEY;
 		if (!OpenKey(pWorker, &hTest, KEY_READ))
-			CloseKey(pWorker, hTest);
+			CloseKey(pWorker, &hTest);
 	}
 
-	HKEY hWriteKey = NULL;
 	if ((key.mh_Root != NULL || (key.mpsz_Key && *key.mpsz_Key)) && (key.nKeyFlags || key.eType != RE_REGFILE))
 	{
 		if (0 != file->CreateKeyEx(key.mh_Root, key.mpsz_Key, 0, 0,
 			(key.nKeyFlags & REGF_DELETED) ? REG__OPTION_CREATE_DELETED : 0, 0, 0, &hWriteKey, 0,
 			&key.nKeyFlags, FALSE, key.pszComment))
 		{
-			InvalidOp();
-			return FALSE;
+			//InvalidOp(); -- ошибка уже должна быть показана
+			lbSucceeded = FALSE; goto wrap;
 		}
 	}
 
 	// В "Удаленных" ключах могут быть комментарии
 	//// В "Удаленных" ключах значений быть не может!
 	//if (key.bDeletion)
-	//	return TRUE;
+	//	{ lbSucceeded = FALSE; goto wrap; }
 
 	//Reset(); -- низя. уже могли запихнуть желаемые ключи/значения!
 	
@@ -846,10 +1199,11 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 	if (!bExportSelected)
 	{
 		// В принципе, хорошо бы наверное совместить считывание списка значений с их выгрузкой
-		if (!LoadKey(pPlugin, pWorker, eValuesFirst/*abKeysFirst*/, TRUE/*abForceReload*/, FALSE/*abSilence*/, FALSE/*abLoadDesc*/, file))
+		// % раньше в LoadKey не передавалось hWriteKey, хотя по идее - должно
+		if (!LoadKey(pPlugin, pWorker, eValuesFirst/*abKeysFirst*/, TRUE/*abForceReload*/, FALSE/*abSilence*/, FALSE/*abLoadDesc*/, file, hWriteKey))
 		{
 			//TODO: Показать ошибку? хотя она уже должна быть показана в функции LoadKey. Тогда надо abSilence=TRUE в нее передавать
-			return FALSE;
+			lbSucceeded = FALSE; goto wrap;
 		}
 	}
 
@@ -876,20 +1230,22 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 	//if (mn_ItemCount > 0 && mp_Items[0].nValueType != REG__KEY) -- некорректно: mn_ItemCount меняется в LoadKey, ключи и значения могут быть вперемешку
 	if (bExportSelected)
 	{
-	    HKEY hKey = NULL;
+	    HREGKEY hKey = NULLHKEY;
 		LONG hRc = OpenKey(pWorker, &hKey);
-		if (hRc != 0) {
+		if (hRc != 0)
+		{
 			//TODO: показать ошибку!
 			InvalidOp();
-			return FALSE;
+			lbSucceeded = FALSE; goto wrap;
 		}
 		
 		DWORD  cbExportBufferData = 32767;
 		LPBYTE pExportBufferData = file->GetExportBuffer(cbExportBufferData);
-		if (!pExportBufferData) {
+		if (!pExportBufferData)
+		{
 			_ASSERTE(pExportBufferData);
 			InvalidOp();
-			return FALSE;
+			lbSucceeded = FALSE; goto wrap;
 		}
 		
 		//WARNING!!! Тут значения и ключи могут оказаться вперемешку!
@@ -902,9 +1258,12 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 		LPCWSTR pszValueName = NULL;
 		while (lbSucceeded && i < (int)mn_ItemCount)
 		{
-			if (i == -1) {
+			if (i == -1)
+			{
 				pszValueName = NULL;
-			} else {
+			}
+			else
+			{
 				if (mp_Items[i].nValueType == REG__KEY)
 				{
 					i++; continue; // значения и ключи могут оказаться вперемешку
@@ -912,12 +1271,17 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 
 				if (mp_Items[i].bDefaultValue)
 				{
-					if (bDefaultFirst) {
+					if (bDefaultFirst)
+					{
 						i++; continue; // уже обработано первым
-					} else {
+					}
+					else
+					{
 						pszValueName = NULL;
 					}
-				} else {
+				}
+				else
+				{
 					pszValueName = mp_Items[i].pszName;
 				}
 			}
@@ -931,15 +1295,23 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 			hRc = pWorker->QueryValueEx(hKey, pszValueName, NULL, &nDataType, (LPBYTE)pExportBufferData, &dwLen, &pszComment);
 			if (hRc == ERROR_MORE_DATA)
 			{
-				_ASSERTE(dwLen > cbExportBufferData);
-				cbExportBufferData = dwLen;
-				pExportBufferData = file->GetExportBuffer(cbExportBufferData);
-				if (!pExportBufferData) {
-					_ASSERTE(pExportBufferData);
-					InvalidOp();
-					lbSucceeded = FALSE; break;
+				//Contents of dwLen for HKEY_PERFORMANCE_DATA is unpredictable if RegQueryValueEx fails, which is why
+				//you need to increment BufferSize and use it to set dwLen.
+				_ASSERTE(dwLen > cbExportBufferData || hKey == HKEY_PERFORMANCE_DATA);
+				int nMaxTries = 100;
+				while ((hRc == ERROR_MORE_DATA) && ((nMaxTries--) > 0))
+				{
+					cbExportBufferData += max(dwLen,(512<<10));
+					pExportBufferData = file->GetExportBuffer(cbExportBufferData);
+					if (!pExportBufferData)
+					{
+						_ASSERTE(pExportBufferData);
+						InvalidOp();
+						lbSucceeded = FALSE; break;
+					}
+					dwLen = cbExportBufferData;
+					hRc = pWorker->QueryValueEx(hKey, pszValueName, NULL, &nDataType, (LPBYTE)pExportBufferData, &dwLen);
 				}
-				hRc = pWorker->QueryValueEx(hKey, pszValueName, NULL, &nDataType, (LPBYTE)pExportBufferData, &dwLen);
 			}
 			if (hRc != ERROR_FILE_NOT_FOUND)
 			{
@@ -969,7 +1341,7 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 		} // while (lbSucceeded && i < (int)mn_ItemCount)
 		
 		// Закрывает только если ключ не совпадает с key.mh_Root
-		CloseKey(pWorker, hKey);
+		CloseKey(pWorker, &hKey);
 	}
 
 	//if (lbSucceeded) {
@@ -1029,8 +1401,19 @@ BOOL RegFolder::ExportToFile(REPlugin* pPlugin, MRegistryBase* pWorker, MRegistr
 	}
 
 	if (lbSucceeded && gpProgress)
-		gpProgress->Step();
+	{
+		if (!gpProgress->Step())
+		{
+			// Значит был нажат Esc, остановить операцию
+			//TODO: Спросить подтверждения у пользователя
+			lbSucceeded = FALSE;
+			goto wrap;
+		}
+	}
 
+wrap:
+	if (hWriteKey != NULL)
+		file->CloseKey(&hWriteKey);
 	return lbSucceeded;
 }
 
@@ -1094,10 +1477,13 @@ DWORD RegFolder::DescReadThread(LPVOID lpParameter)
 	//REGTYPE nDataType;
     LPBYTE pData = pArgs->pData; _ASSERTE(pData!=NULL && lcMaxValueLen > 0);
     LONG hRc;
-    HKEY hKey;
-    if (pFolder->key.mpsz_Key && pFolder->key.mpsz_Key[0]) {
+    HREGKEY hKey;
+    if (pFolder->key.mpsz_Key && pFolder->key.mpsz_Key[0])
+	{
     	hRc = pWorker->OpenKeyEx(pFolder->key.mh_Root, pFolder->key.mpsz_Key, 0, KEY_READ, &hKey, &pFolder->key.nKeyFlags);
-	} else {
+	}
+	else
+	{
 		hKey = pFolder->key.mh_Root;
 	}
     
@@ -1117,7 +1503,7 @@ DWORD RegFolder::DescReadThread(LPVOID lpParameter)
 				lstrcpy(pFolder->mp_Items[i].szTempOwner, _T(" "));
     		}
     	
-	    	//HKEY hSubKey = NULL;
+	    	//HREGKEY hSubKey = NULL;
 			//// Не пытаться выполнить AjustTokenPrivileges
 	    	//if (0 == pWorker->OpenKeyEx(hKey,
 	    	//		pFolder->mp_Items[i].pszName, 0, KEY_READ, &hSubKey, TRUE))
@@ -1148,15 +1534,19 @@ DWORD RegFolder::DescReadThread(LPVOID lpParameter)
 
 	MCHKHEAP;
 
-    if (hKey && hKey != pFolder->key.mh_Root) {
-    	pWorker->CloseKey(hKey); hKey=NULL;
+    if (hKey)
+	{
+		if (hKey != pFolder->key.mh_Root)
+    		pWorker->CloseKey(&hKey);
+		else
+			hKey = NULL; // для четкости
 	}
 	pFolder->bDescrWasUpdated = lbSucceeded;
 #ifdef _UNICODE
 	if (lbSucceeded)
 	{
 		pFolder->m_SyncArg.nEvent = REGEDIT_SYNCHRO_DESC_FINISHED; pFolder->m_SyncArg.pPlugin = pPlugin;
-		psi.AdvControl(psi.ModuleNumber,ACTL_SYNCHRO,&pFolder->m_SyncArg);
+		psi.AdvControl(PluginNumber,ACTL_SYNCHRO,FADV1988 &pFolder->m_SyncArg);
 	}
 #endif
 	MCHKHEAP;
@@ -1329,10 +1719,9 @@ BOOL RegFolder::CheckRegistryChanged(REPlugin *pPlugin, MRegistryBase* pWorker, 
 
 	MCHKHEAP;
 
-	// Закрыть HKEY, если открыли здесь
-	if (lbKeySelfOpened) {
-		CloseKey(pWorker, hKey);
-	}
+	// Закрыть HREGKEY, если открыли здесь
+	if (lbKeySelfOpened)
+		CloseKey(pWorker, &hKey);
 
 	if (lbChanged)
 		mb_RegistryChanged = TRUE;
@@ -1392,32 +1781,37 @@ LONG RegFolder::OpenKey(MRegistryBase* pWorker, HKEY* phKey, DWORD anRights /* =
 
 LONG RegFolder::CreateKey(MRegistryBase* pWorker, HKEY* phKey, DWORD anRights /*= (KEY_READ|KEY_WRITE)*/)
 {
-	if (!pWorker) {
+	if (!pWorker)
+	{
 		InvalidOp();
 		return ERROR_INVALID_PARAMETER;
 	}
 	LONG hRc = 0;
-	if (key.mpsz_Key && key.mpsz_Key[0]) {
+	if (key.eType == RE_REGFILE || (key.mpsz_Key && key.mpsz_Key[0]))
+	{
 		hRc = pWorker->CreateKeyEx(key.mh_Root, key.mpsz_Key, 0, NULL, 0, anRights, NULL, phKey, NULL, &key.nKeyFlags);
-		if (hRc == 0) {
+		if (hRc == 0)
+		{
 			_ASSERTE(*phKey != NULL);
-		} else {
+		}
+		else
+		{
 			*phKey = NULL;
 		}
-	} else {
+	}
+	else
+	{
 		_ASSERTE(key.mh_Root != NULL);
 		*phKey = key.mh_Root;
 	}
 	return hRc;
 }
 
-void RegFolder::CloseKey(MRegistryBase* pWorker, HKEY& hKey)
+void RegFolder::CloseKey(MRegistryBase* pWorker, HKEY* phKey)
 {
-	if (hKey && hKey != key.mh_Root) {
-		pWorker->CloseKey(hKey); hKey=NULL;
-	} else if (hKey) {
-		hKey = 0;
-	}
+	if (*phKey && *phKey != key.mh_Root)
+		pWorker->CloseKey(phKey); 
+	*phKey = NULL;
 }
 
 void RegFolder::UpdateShowKeysAsDirs()
@@ -1430,12 +1824,15 @@ void RegFolder::UpdateShowKeysAsDirs()
 	{
 		if (mp_Items[i].nValueType == REG__KEY)
 		{
-			if (bShowKeysAsDirs) {
-				mp_PluginItems[i].FindData.dwFileAttributes |= FILE_ATTRIBUTE_DIRECTORY;
-				mp_PluginItems[i].FindData.dwFileAttributes &= ~FILE_ATTRIBUTE_COMPRESSED;
-			} else {
-				mp_PluginItems[i].FindData.dwFileAttributes &= ~FILE_ATTRIBUTE_DIRECTORY;
-				mp_PluginItems[i].FindData.dwFileAttributes |= FILE_ATTRIBUTE_COMPRESSED;
+			if (bShowKeysAsDirs)
+			{
+				PanelItemAttributes(mp_PluginItems[i]) |= FILE_ATTRIBUTE_DIRECTORY;
+				PanelItemAttributes(mp_PluginItems[i]) &= ~FILE_ATTRIBUTE_COMPRESSED;
+			}
+			else
+			{
+				PanelItemAttributes(mp_PluginItems[i]) &= ~FILE_ATTRIBUTE_DIRECTORY;
+				PanelItemAttributes(mp_PluginItems[i]) |= FILE_ATTRIBUTE_COMPRESSED;
 			}
 		}
 	}

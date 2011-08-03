@@ -28,16 +28,18 @@ struct RegPath
 	DWORD       nKeyFlags;  // KEYF_xxx
 	LPCWSTR     pszComment; // Это ТОЛЬКО ссылка. Память не выделяется, значение не копируется!
 	RegKeyOpenRights eRights;
+	DWORD       mb_Wow64on32;
 	
 	// инициализация переменных
 	void Init(RegPath* apKey);
-	void Init(RegWorkType aType, HKEY ahRoot = NULL, LPCWSTR asKey = NULL, REGFILETIME* aftModified = NULL, LPCTSTR asPrefix = NULL, RegKeyOpenRights aRights = eRightsSimple, DWORD anKeyFlags = 0, LPCTSTR asServer = NULL);
+	void Init(RegWorkType aType, DWORD abWow64on32, HKEY ahRoot = NULL, LPCWSTR asKey = NULL, REGFILETIME* aftModified = NULL, LPCTSTR asPrefix = NULL, RegKeyOpenRights aRights = eRightsSimple, DWORD anKeyFlags = 0, LPCTSTR asServer = NULL);
 	// Functions
 	void SetTitlePrefix(LPCSTR asPrefix, BOOL abNoUpdate = FALSE);
 	void SetTitlePrefix(LPCWSTR asPrefix, BOOL abNoUpdate = FALSE);
 	void SetServer(LPCSTR asServer, BOOL abNoUpdate = FALSE);
 	void SetServer(LPCWSTR asServer, BOOL abNoUpdate = FALSE);
 	void Release(); // освободить память
+	bool IsEmpty();
 	bool IsEqual(struct RegPath *p); // сравнить ключи
 	void AllocateAddLen(int anAddLen); // Убедиться, что выделено достаточно памяти под все поля
 	void ReallocTitleDir();

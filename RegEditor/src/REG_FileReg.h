@@ -81,7 +81,7 @@ struct FileRegItem
 	#endif
 	#endif
 	DWORD dwKeyIndex; FileRegItem *pKeyIndex;
-	DWORD dwValIndex; FileRegItem *pValIndex;
+	DWORD dwValIndex; FileRegItem *pValIndex; BOOL bValIndexComment/*TRUE - если возвращались И комментарии!*/;
 	// Temp buffers, когда размер нового имени/значения превышает выделенный ранее
 	//DWORD nNameBufferSize; wchar_t* pszTempBuffer;
 	DWORD nDataBufferSize; LPBYTE   pTempBuffer;
@@ -169,7 +169,7 @@ protected:
 	//__inline void* InternalMalloc(size_t anSize);
 	//void ReleaseMalloc();
 public:
-	MFileReg();
+	MFileReg(BOOL abWow64on32);
 	virtual ~MFileReg();
 	//virtual BOOL AllowCaching() { return FALSE; };
 	// Возвращает имя загруженного файла (LoadRegFile)
@@ -191,9 +191,9 @@ public:
 	//virtual LONG NotifyChangeKeyValue(RegFolder *pFolder, HKEY hKey);
 	virtual LONG RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey, LPCWSTR lpNewSubKey, BOOL* pbRegChanged);
 	// Wrappers
-	virtual LONG CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, PHKEY phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL, LPCWSTR pszComment = NULL);
-	virtual LONG OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL);
-	virtual LONG CloseKey(HKEY hKey);
+	virtual LONG CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, HKEY* phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL, LPCWSTR pszComment = NULL);
+	virtual LONG OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, HKEY* phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL);
+	virtual LONG CloseKey(HKEY* phKey);
 	virtual LONG QueryInfoKey(HKEY hKey, LPWSTR lpClass, LPDWORD lpcClass, LPDWORD lpReserved, LPDWORD lpcSubKeys, LPDWORD lpcMaxSubKeyLen, LPDWORD lpcMaxClassLen, LPDWORD lpcValues, LPDWORD lpcMaxValueNameLen, LPDWORD lpcMaxValueLen, LPDWORD lpcbSecurityDescriptor, REGFILETIME* lpftLastWriteTime);
 	virtual LONG EnumValue(HKEY hKey, DWORD dwIndex, LPWSTR lpValueName, LPDWORD lpcchValueName, LPDWORD lpReserved, REGTYPE* lpDataType, LPBYTE lpData, LPDWORD lpcbData, BOOL abEnumComments, LPCWSTR* ppszValueComment = NULL);
 	virtual LONG EnumKeyEx(HKEY hKey, DWORD dwIndex, LPWSTR lpName, LPDWORD lpcName, LPDWORD lpReserved, LPWSTR lpClass, LPDWORD lpcClass, REGFILETIME* lpftLastWriteTime, DWORD* pnKeyFlags = NULL, TCHAR* lpDefValue = NULL, DWORD cchDefValueMax = 0, LPCWSTR* ppszKeyComment = NULL);
@@ -209,5 +209,5 @@ public:
 
 public:
 	// Service - TRUE, если права были изменены
-	virtual BOOL EditKeyPermissions(RegPath *pKey, RegItem* pItem) { return FALSE; };
+	virtual BOOL EditKeyPermissions(RegPath *pKey, RegItem* pItem, BOOL abVisual) { return FALSE; };
 };

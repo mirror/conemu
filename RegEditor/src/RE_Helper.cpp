@@ -1,7 +1,12 @@
 
 #include "header.h"
+#include "RE_Guids.h"
 
 extern HANDLE ghHeap;
+
+#ifdef USE_HREGKEY
+HREGKEY NULLHKEY;
+#endif
 
 LPCWSTR HKeyToStringKey(HKEY hkey)
 {
@@ -313,7 +318,7 @@ void __cdecl operator delete[] (void *p)
 
 //LONG GetString(LPCWSTR asKey, LPCWSTR asName, wchar_t* pszValue, DWORD cCount)
 //{
-//	HKEY hk; LONG nRegRc; DWORD nSize;
+//	HREGKEY hk; LONG nRegRc; DWORD nSize;
 //	
 //	pszValue[0] = 0;
 //
@@ -392,6 +397,183 @@ void lstrcpy_t(wchar_t* pszDst, int cMaxSize, const char* pszSrc)
 {
 	MultiByteToWideChar(CP_OEMCP, 0, pszSrc, -1, pszDst, cMaxSize);
 }
+
+#if 0
+LPCTSTR msprintf(LPTSTR lpOut, size_t cchOutMax, LPCTSTR lpFmt, ...)
+{
+	va_list argptr;
+	va_start(argptr, lpFmt);
+	
+	const TCHAR* pszSrc = lpFmt;
+	TCHAR* pszDst = lpOut;
+	TCHAR  szValue[16];
+	TCHAR* pszValue;
+
+	while (*pszSrc)
+	{
+		if (*pszSrc == _T('%'))
+		{
+			pszSrc++;
+			switch (*pszSrc)
+			{
+			case _T('%'):
+				{
+					*(pszDst++) = _T('%');
+					pszSrc++;
+					continue;
+				}
+			case _T('c'):
+				{
+					// GCC: 'wchar_t' is promoted to 'int' when passed through '...'
+					TCHAR c = va_arg( argptr, int );
+					*(pszDst++) = c;
+					pszSrc++;
+					continue;
+				}
+			case _T('s'):
+				{
+					pszValue = va_arg( argptr, TCHAR* );
+					if (pszValue)
+					{
+						while (*pszValue)
+						{
+							*(pszDst++) = *(pszValue++);
+						}
+					}
+					pszSrc++;
+					continue;
+				}
+			case _T('S'):
+				{
+					#ifdef _UNICODE
+					char* pszValueA = va_arg( argptr, char* );
+					#else
+					wchar_t* pszValueA = va_arg( argptr, char* );
+					#endif
+					if (pszValueA)
+					{
+						// по хорошему, тут бы MultiByteToWideChar звать, но
+						// эта ветка должна по идее только для отладки использоваться
+						while (*pszValueA)
+						{
+							*(pszDst++) = (TCHAR)*(pszValueA++);
+						}
+					}
+					pszSrc++;
+					continue;
+				}
+			case _T('u'):
+			case _T('i'):
+				{
+					UINT nValue = 0;
+					if (*pszSrc == _T('i'))
+					{
+						int n = va_arg( argptr, int );
+						if (n < 0)
+						{
+							*(pszDst++) = L'-';
+							nValue = -n;
+						}
+						else
+						{
+							nValue = n;
+						}
+					}
+					else
+					{
+						nValue = va_arg( argptr, UINT );
+					}
+					pszSrc++;
+					pszValue = szValue;
+					while (nValue)
+					{
+						WORD n = (WORD)(nValue % 10);
+						*(pszValue++) = (wchar_t)(L'0' + n);
+						nValue = (nValue - n) / 10;
+					}
+					if (pszValue == szValue)
+						*(pszValue++) = L'0';
+					// Теперь перекинуть в szGuiPipeName
+					while (pszValue > szValue)
+					{
+						*(pszDst++) = *(--pszValue);
+					}
+					continue;
+				}
+			case L'0':
+			case L'X':
+			case L'x':
+				{
+					int nLen = 0;
+					DWORD nValue;
+					wchar_t cBase = L'A';
+					if (pszSrc[0] == L'0' && pszSrc[1] == L'8' && (pszSrc[2] == L'X' || pszSrc[2] == L'x'))
+					{
+						if (pszSrc[2] == L'x')
+							cBase = L'a';
+						memmove(szValue, L"00000000", 16);
+						nLen = 8;
+						pszSrc += 3;
+					}
+					else if (pszSrc[0] == L'X' || pszSrc[0] == L'x')
+					{
+						if (pszSrc[0] == L'x')
+							cBase = L'a';
+						pszSrc++;
+					}
+					else
+					{
+						_ASSERTE(*pszSrc == L'u' || *pszSrc == L's' || *pszSrc == L'c' || *pszSrc == L'i' || *pszSrc == L'X');
+						goto wrap;
+					}
+					
+					
+					nValue = va_arg( argptr, UINT );
+					pszValue = szValue;
+					while (nValue)
+					{
+						WORD n = (WORD)(nValue & 0xF);
+						if (n <= 9)
+							*(pszValue++) = (wchar_t)(L'0' + n);
+						else
+							*(pszValue++) = (wchar_t)(cBase + n - 10);
+						nValue = nValue >> 4;
+					}
+					if (!nLen)
+					{
+						nLen = (int)(pszValue - szValue);
+						if (!nLen)
+						{
+							*pszValue = L'0';
+							nLen = 1;
+						}
+					}
+					else
+					{
+						pszValue = (szValue+nLen);
+					}
+					// Теперь перекинуть в szGuiPipeName
+					while (pszValue > szValue)
+					{
+						*(pszDst++) = *(--pszValue);
+					}
+					continue;
+				}
+			default:
+				_ASSERTE(*pszSrc == L'u' || *pszSrc == L's' || *pszSrc == L'c' || *pszSrc == L'i' || *pszSrc == L'X');
+			}
+		}
+		else
+		{
+			*(pszDst++) = *(pszSrc++);
+		}
+	}
+wrap:
+	*pszDst = 0;
+	_ASSERTE(lstrlen(lpOut) < (int)cchOutMax);
+	return lpOut;
+}
+#endif
 
 void CopyFileName(wchar_t* pszDst, int cMaxSize, const wchar_t* pszSrc)
 {
@@ -823,7 +1005,7 @@ bool ValidatePath(LPCWSTR asFullOrRelPath)
 
 TCHAR *GetMsg(int MsgId)
 {
-	TCHAR* psz = (TCHAR*)psi.GetMsg(psi.ModuleNumber, MsgId);
+	TCHAR* psz = (TCHAR*)psi.GetMsg(PluginNumber, MsgId);
 	_ASSERTE(psz);
 	return psz;
 }
@@ -855,7 +1037,7 @@ void InternalInvalidOp(LPCWSTR asFile, int nLine)
 			sFileLine,
 			cfg->sVersionInfo
 		};
-		psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_MB_OK, NULL, 
+		psi.Message(_PluginNumber(guid_InvalidOp), FMSG_WARNING|FMSG_MB_OK, NULL, 
 			sLines, countof(sLines), 0);
 	}
 }
@@ -956,9 +1138,100 @@ BOOL DetectFileFormat(LPCWSTR apszFileName, int* pnFormat, BOOL* pbUnicode, BOOL
 	return lbRc;
 }
 
+DWORD SamDesired(DWORD abWow64on32)
+{
+	switch (abWow64on32)
+	{
+	case 0:
+		return KEY_WOW64_32KEY;
+	case 1:
+		return KEY_WOW64_64KEY;
+	default:
+		return 0;
+	}
+}
+
+const TCHAR* BitSuffix(DWORD abWow64on32)
+{
+	switch (abWow64on32)
+	{
+	case 0:
+		return GetMsg(cfg->bVirtualize ? REPanelx32VirtLabel : REPanelx32Label);
+	case 1:
+		return GetMsg(cfg->bVirtualize ? REPanelx64VirtLabel : REPanelx64Label);
+	default:
+		return cfg->bVirtualize ? GetMsg(REPanelVirtLabel) : _T("");
+	}
+}
+
+bool IsRegPath(LPCWSTR apsz, HKEY* phRootKey /*= NULL*/, LPCWSTR* ppszSubKey /*= NULL*/, BOOL abCheckExist /*= FALSE*/)
+{
+	if (*apsz == L'\\' || *apsz == L'"' || *apsz == L'[') apsz++;
+
+	HKEY hRoot = NULL;
+	wchar_t sFirstToken[MAX_REGKEY_NAME+1];
+	LPCWSTR pszSlash = wcschr(apsz, L'\\');
+	int nLen;
+	if (pszSlash) {
+		nLen = pszSlash - apsz;
+		if (nLen > MAX_REGKEY_NAME)
+			return false;
+		memmove(sFirstToken, apsz, 2*nLen);
+		sFirstToken[nLen] = 0;
+	} else {
+		nLen = lstrlenW(apsz);
+		if (nLen > MAX_REGKEY_NAME)
+			return false;
+		lstrcpynW(sFirstToken, apsz, MAX_REGKEY_NAME+1);
+	}
+	if (!StringKeyToHKey(sFirstToken, &hRoot))
+		return false;
+	if ((((ULONG_PTR)hRoot) < HKEY__FIRST) || (((ULONG_PTR)hRoot) > HKEY__LAST))
+		return false;
+	
+	if (phRootKey)
+		*phRootKey = hRoot;
+
+	if (!pszSlash)
+	{
+		if (ppszSubKey) *ppszSubKey = apsz+lstrlenW(apsz);
+		return true;
+	}
+
+	apsz = pszSlash+1;
+	if (ppszSubKey) *ppszSubKey = apsz;
+
+	if (!abCheckExist)
+	{
+		return true;
+	}
+	
+	pszSlash = wcschr(apsz, L'\\');
+	if (pszSlash) {
+		nLen = pszSlash - apsz;
+		if (nLen > MAX_REGKEY_NAME)
+			return false;
+		memmove(sFirstToken, apsz, 2*nLen);
+		sFirstToken[nLen] = 0;
+	} else {
+		nLen = lstrlenW(apsz);
+		if (nLen > MAX_REGKEY_NAME)
+			return false;
+		lstrcpynW(sFirstToken, apsz, MAX_REGKEY_NAME+1);
+	}
+
+	MRegistryWinApi reg(0);
+	if (reg.ExistKey(hRoot, sFirstToken, NULL) == 0)
+		return true;
+
+	return false;
+}
+
+
 void FormatDataVisual(REGTYPE nDataType, LPBYTE pData, DWORD dwDataSize, TCHAR* szDesc/*[128]*/)
 {
-	if (dwDataSize == 0) {
+	if (dwDataSize == 0)
+	{
 		szDesc[0] = 0;
 		return;
 	}
@@ -967,8 +1240,14 @@ void FormatDataVisual(REGTYPE nDataType, LPBYTE pData, DWORD dwDataSize, TCHAR* 
 	
 	//[HKEY_CURRENT_USER\Software\Far\Users\Zeroes_And_Ones\Plugins\DialogM\PluginHotkeys]
 	//"zg_case"=hex(4):31
-	if (nDataType == REG_DWORD && dwDataSize != 4)
+	if ((nDataType == REG_DWORD || nDataType == REG_DWORD_BIG_ENDIAN) && dwDataSize != 4)
+	{
 		nDataType = REG_BINARY;
+	}
+	else if (nDataType == REG_QWORD && dwDataSize != 8)
+	{
+		nDataType = REG_BINARY;
+	}
 
 	switch(nDataType) {
 		case REG__KEY:
@@ -978,6 +1257,20 @@ void FormatDataVisual(REGTYPE nDataType, LPBYTE pData, DWORD dwDataSize, TCHAR* 
 		case REG_DWORD:
 			_ASSERTE(dwDataSize == 4);
 			wsprintf(szDesc, _T("0x%08X (%i)"), *((DWORD*)pData), (int)*((int*)pData));
+			break;
+		case REG_DWORD_BIG_ENDIAN:
+			_ASSERTE(dwDataSize == 4);
+			wsprintf(szDesc, _T("0x%08X (%i) B"), *((DWORD*)pData), (int)*((int*)pData));
+			break;
+		case REG_QWORD:
+			{
+				_ASSERTE(dwDataSize == 8);
+				u64 data = *((u64*)pData);
+				if (!(data >> 32))
+					wsprintf(szDesc, _T("0x%08X (%u) Q"), (DWORD)data, (DWORD)data);
+				else
+					wsprintf(szDesc, _T("0x%08X%08X"), (DWORD)((data & 0xFFFFFFFF00000000LL)>>32), (DWORD)(data & 0xFFFFFFFFLL));
+			}
 			break;
 		case REG_SZ:
 		case REG_EXPAND_SZ:
@@ -1028,22 +1321,29 @@ void FormatDataVisual(REGTYPE nDataType, LPBYTE pData, DWORD dwDataSize, TCHAR* 
 		{
 			szDesc[0] = 0; TCHAR* psz = szDesc;
 			int nMax = min(41,dwDataSize);
-			for (int i = 0; i < nMax; i++) {
+			for (int i = 0; i < nMax; i++)
+			{
 				//TODO: //OPTIMIZE: !!!
 				wsprintf(psz, _T("%02X "), (DWORD)(BYTE)(pData[i]));
 				psz += 3;
 			}
 			*psz = 0;
-			if (dwDataSize == 4) {
+			if (dwDataSize == 4)
+			{
 				wsprintf(psz, _T("(%i)"), (int)*((int*)pData));
-			} else if (dwDataSize == 2) {
+			}
+			else if (dwDataSize == 2)
+			{
 				wsprintf(psz, _T("(%i)"), (DWORD)*((WORD*)pData));
-			} else if (dwDataSize == 1) {
+			}
+			else if (dwDataSize == 1)
+			{
 				wsprintf(psz, _T("(%u)"), (DWORD)*((BYTE*)pData));
 			}
 		}
 	}
 }
+
 
 
 #ifdef _DEBUG
@@ -1188,7 +1488,7 @@ void DebracketRegPath(wchar_t* asRegPath)
 
 
 
-CPluginActivator::CPluginActivator(HANDLE hPlugin, DWORD anOpMode)
+CPluginActivator::CPluginActivator(HANDLE hPlugin, u64 anOpMode)
 {
 	_ASSERTE((gpActivePlugin == NULL || (gpPluginList && gpPluginList->IsValid(gpActivePlugin))) || gpActivePlugin == (REPlugin*)hPlugin);
 	pBefore = gpActivePlugin;

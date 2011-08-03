@@ -85,19 +85,27 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 			VirtKey=FKey-KEY_FKEY_BEGIN;
 		else if (FKey && FKey < WCHAR_MAX)
 		{
-			VirtKey=VkKeyScan(static_cast<WCHAR>(FKey));
-			if (HIBYTE(VirtKey))
+			short Vk = VkKeyScan(static_cast<WCHAR>(FKey));
+			if (Vk == -1)
 			{
-				FShift|=
-					    (HIBYTE(VirtKey)&1?KEY_SHIFT:0)|
-					    (HIBYTE(VirtKey)&2?KEY_CTRL:0)|
-					    (HIBYTE(VirtKey)&4?KEY_ALT:0);
-				VirtKey&=0xFF;
-			  	ControlState=(FShift&KEY_SHIFT?PKF_SHIFT:0)|
-  	        		     (FShift&KEY_ALT?PKF_ALT:0)|
-		 	             (FShift&KEY_RALT?PKF_RALT:0)|
- 	    		         (FShift&KEY_RCTRL?PKF_RCONTROL:0)|
-  	            		 (FShift&KEY_CTRL?PKF_CONTROL:0);
+				// «аполнить хот€ бы .UnicodeChar = FKey
+				VirtKey = -1;
+			}
+			else
+			{
+				VirtKey = Vk&0xFF;
+				if (HIBYTE(Vk))
+				{
+					FShift|=
+							(HIBYTE(Vk)&1?KEY_SHIFT:0)|
+							(HIBYTE(Vk)&2?KEY_CTRL:0)|
+							(HIBYTE(Vk)&4?KEY_ALT:0);
+			  		ControlState=(FShift&KEY_SHIFT?PKF_SHIFT:0)|
+  	        				 (FShift&KEY_ALT?PKF_ALT:0)|
+		 					 (FShift&KEY_RALT?PKF_RALT:0)|
+ 	    					 (FShift&KEY_RCTRL?PKF_RCONTROL:0)|
+  	            			 (FShift&KEY_CTRL?PKF_CONTROL:0);
+				}
 			}
 
 		}
@@ -151,8 +159,17 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 				{
 					Rec->Event.KeyEvent.bKeyDown=1;
 					Rec->Event.KeyEvent.wRepeatCount=1;
-					Rec->Event.KeyEvent.wVirtualKeyCode=(VirtKey==VK_RCONTROL)?VK_CONTROL:(VirtKey==VK_RMENU)?VK_MENU:VirtKey;
-					Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
+					if (VirtKey != -1)
+					{
+						// ѕри нажатии RCtrl и RAlt в консоль приходит VK_CONTROL и VK_MENU а не их правые аналоги
+						Rec->Event.KeyEvent.wVirtualKeyCode = (VirtKey==VK_RCONTROL)?VK_CONTROL:(VirtKey==VK_RMENU)?VK_MENU:VirtKey;
+						Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
+					}
+					else
+					{
+						Rec->Event.KeyEvent.wVirtualKeyCode = 0;
+						Rec->Event.KeyEvent.wVirtualScanCode = 0;
+					}
 					Rec->Event.KeyEvent.uChar.UnicodeChar=(WORD)(FKey > WCHAR_MAX?0:FKey);
 
 					// здесь подход к Shift-клавишам другой, нежели дл€ ControlState

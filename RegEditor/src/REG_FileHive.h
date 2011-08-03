@@ -7,13 +7,13 @@ protected:
 	/*
 	**** унаследованы от MRegistryWinApi ***
 	struct {
-		HKEY    hKey, hKeyRemote;
+		HREGKEY    hKey, hKeyRemote;
 		wchar_t szKey[32];
 		bool    bSlow;
 	} hkPredefined[10];
 	DWORD nPredefined;
 	BOOL  bTokenAquired;
-	HKEY  hAcquiredHkey;
+	HREGKEY  hAcquiredHkey;
 	*/
 	/* 
 	**** унаследованы от MRegistryBase ***
@@ -26,14 +26,14 @@ protected:
 	wchar_t *psTempDirectory;
 	wchar_t *psFilePathName;
 	TCHAR   *psShowFilePathName;
-	HKEY hHiveKey;
-	typedef LONG (WINAPI* RegLoadAppKey_t)(LPCWSTR lpFile,PHKEY phkResult,REGSAM samDesired,DWORD dwOptions,DWORD Reserved);
+	HREGKEY hHiveKey;
+	typedef LONG (WINAPI* RegLoadAppKey_t)(LPCWSTR lpFile,HKEY* phkResult,REGSAM samDesired,DWORD dwOptions,DWORD Reserved);
 	RegLoadAppKey_t fRegLoadAppKey;
 private:
 	LONG UnmountHive();
 	void FixHiveKey(HKEY& ahKey);
 public:
-	MFileHive();
+	MFileHive(BOOL abWow64on32);
 	virtual ~MFileHive();
 	// ¬озвращает им€ загруженного файла (LoadHiveFile)
 	LPCWSTR GetFilePathName();
@@ -50,9 +50,9 @@ public:
 	virtual BOOL IsPredefined(HKEY hKey);
 	virtual LONG RenameKey(RegPath* apParent, BOOL abCopyOnly, LPCWSTR lpOldSubKey, LPCWSTR lpNewSubKey, BOOL* pbRegChanged);
 	// Wrappers
-	virtual LONG CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, PHKEY phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL, LPCWSTR pszComment = NULL);
-	virtual LONG OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL);
-	virtual LONG CloseKey(HKEY hKey);
+	virtual LONG CreateKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD Reserved, LPWSTR lpClass, DWORD dwOptions, REGSAM samDesired, LPSECURITY_ATTRIBUTES lpSecurityAttributes, HKEY* phkResult, LPDWORD lpdwDisposition, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL, LPCWSTR pszComment = NULL);
+	virtual LONG OpenKeyEx(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, HKEY* phkResult, DWORD *pnKeyFlags, RegKeyOpenRights *apRights = NULL);
+	virtual LONG CloseKey(HKEY* phKey);
 	virtual LONG QueryInfoKey(HKEY hKey, LPWSTR lpClass, LPDWORD lpcClass, LPDWORD lpReserved, LPDWORD lpcSubKeys, LPDWORD lpcMaxSubKeyLen, LPDWORD lpcMaxClassLen, LPDWORD lpcValues, LPDWORD lpcMaxValueNameLen, LPDWORD lpcMaxValueLen, LPDWORD lpcbSecurityDescriptor, REGFILETIME* lpftLastWriteTime);
 	virtual LONG EnumValue(HKEY hKey, DWORD dwIndex, LPWSTR lpValueName, LPDWORD lpcchValueName, LPDWORD lpReserved, REGTYPE* lpDataType, LPBYTE lpData, LPDWORD lpcbData, BOOL abEnumComments, LPCWSTR* ppszValueComment = NULL);
 	virtual LONG EnumKeyEx(HKEY hKey, DWORD dwIndex, LPWSTR lpName, LPDWORD lpcName, LPDWORD lpReserved, LPWSTR lpClass, LPDWORD lpcClass, REGFILETIME* lpftLastWriteTime, DWORD* pnKeyFlags = NULL, TCHAR* lpDefValue = NULL, DWORD cchDefValueMax = 0, LPCWSTR* ppszKeyComment = NULL);
@@ -67,5 +67,5 @@ public:
 	virtual LONG GetSubkeyInfo(HKEY hKey, LPCWSTR lpszSubkey, LPTSTR pszDesc, DWORD cchMaxDesc, LPTSTR pszOwner, DWORD cchMaxOwner);
 
 public:
-	BOOL EditKeyPermissions(RegPath *pKey, RegItem* pItem);
+	BOOL EditKeyPermissions(RegPath *pKey, RegItem* pItem, BOOL abVisual);
 };

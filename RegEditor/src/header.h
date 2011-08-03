@@ -11,11 +11,19 @@
 //#undef MVALIDATE_POINTERS
 //#undef MVALIDATE_HEAP
 
+#ifndef _CRT_NON_CONFORMING_SWPRINTFS
+#define _CRT_NON_CONFORMING_SWPRINTFS
+#endif
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 
 #ifdef _WIN32_WINNT
 #undef _WIN32_WINNT
 #endif
 #define _WIN32_WINNT 0x0500
+
 
 #include <windows.h>
 #include <stdlib.h>
@@ -45,14 +53,28 @@ typedef const BYTE *LPCBYTE;
 
 
 #ifdef _UNICODE
-	#include "common/unicode/pluginW.hpp"
-	#include "common/unicode/farcolor.hpp"
+	#if FAR_UNICODE>=1906
+		#include "common/far3/pluginW3.hpp"
+		#include "common/far3/farcolor.hpp"
+	#else
+		#include "common/unicode/pluginW.hpp"
+		#include "common/unicode/farcolor.hpp"
+	#endif
 #else
 	#include "common/ascii/pluginA.hpp"
 	#include "common/ascii/farcolor.hpp"
+	#include <stdio.h> // ANSI sprintf, cause of "%016I64x" i.e.
 #endif
-#include "common/DlgBuilder.hpp"
+//#include "common/DlgBuilder.hpp"
 #include "common/FarHelper.h"
+
+#ifdef _UNICODE
+	#define _tcsprintf swprintf
+	//#defome _tcstoul64 _wcstoui64
+#else
+	#define _tcsprintf sprintf
+	//#defome _tcstoul64 _strtoui64
+#endif
 
 #if defined(_MSC_VER) && defined(PRINT_FAR_VERSION)
 	#ifndef FAR_VERSION_PRINTED
@@ -111,3 +133,12 @@ class MFileTxt;
 // Класс плагина
 #include "RE_Plugin.h"
 #include "RE_PluginList.h"
+
+struct FarVersionInfo
+{
+	int Major;
+	int Minor;
+	int Revision;
+	int Build;
+	int Stage;
+};

@@ -11,6 +11,7 @@ namespace Far3
 };
 
 #include <wchar.h>
+#include <crtdbg.h>
 
 inline wchar_t __cdecl Upper(wchar_t Ch) { CharUpperBuff(&Ch, 1); return Ch; }
 

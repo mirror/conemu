@@ -18,7 +18,8 @@ public:
 	
 	REPlugin* Plugins[10];
 	
-	void UpdateAllTitles();
+	//void UpdateAllTitles();
+	void OnSettingsChanged(DWORD abWow64on32);
 protected:
 	int mn_PlugCount;
 

@@ -2,41 +2,69 @@
 #include "header.h"
 // Helpers
 #include "TokenHelper.h"
+// Guids
+#include "RE_Guids.h"
+#include "common/DlgBuilder.hpp"
 
 #pragma comment(lib, "version.lib")
 
+//const GUID guid_Configuration = { /* 8DF2FA9E-5BCA-4710-B518-CE1CE7E6C88F */
+//    0x8DF2FA9E,
+//    0x5BCA,
+//    0x4710,
+//    {0xB5, 0x18, 0xCE, 0x1C, 0xE7, 0xE6, 0xC8, 0x8F}
+//  };
+
 RegConfig *cfg = NULL;
-extern DWORD gnFarVersion;
+//extern DWORD gnFarVersion;
+extern FarVersionInfo gFarVersion;
 
 typedef BOOL (WINAPI* IsWow64Process_t)(HANDLE hProcess, PBOOL Wow64Process);
 
-static LONG GetString(HKEY hk, LPCWSTR asName, wchar_t* pszValue, DWORD cCount)
+static LONG GetString(HANDLE hk, LPCWSTR asName, wchar_t* pszValue, DWORD cCount)
 {
-	LONG nRegRc; DWORD nSize;
-	wchar_t sValue[128] = {0};
+	LONG nRegRc = -1;
 	_ASSERTE(cCount<=128);
 	
-	nSize = sizeof(sValue)-2;
-	nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, (LPBYTE)sValue, &nSize);
-	if (nRegRc == 0) {
-		lstrcpynW(pszValue, sValue, cCount);
-	} else {
-		if (cfg) cfg->bSomeValuesMissed = TRUE;
-	}
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_STRING;
+		//if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi) && (fsi.Data.Size == sizeof(DWORD)))
+		if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi))
+		{
+			lstrcpynW(pszValue, fsi.String, cCount);
+			nRegRc = 0;
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#else
+		wchar_t sValue[128] = {0};
+		DWORD nSize = sizeof(sValue)-2;
+		nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, (LPBYTE)sValue, &nSize);
+		if (nRegRc == 0)
+		{
+			lstrcpynW(pszValue, sValue, cCount);
+		}
+		else
+		{
+			if (cfg) cfg->bSomeValuesMissed = TRUE;
+		}
+	#endif
 	MCHKHEAP;
 
 	return nRegRc;
 }
 
 #ifndef _UNICODE
-static LONG GetString(HKEY hk, LPCWSTR asName, char* pszValue, DWORD cCount)
+static LONG GetString(HANDLE hk, LPCWSTR asName, char* pszValue, DWORD cCount)
 {
 	LONG nRegRc; DWORD nSize;
 	wchar_t sValue[128] = {0};
 	_ASSERTE(cCount<=128);
 	
 	nSize = sizeof(sValue)-2;
-	nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, (LPBYTE)sValue, &nSize);
+	nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, (LPBYTE)sValue, &nSize);
 	if (nRegRc == 0) {
 		lstrcpy_t(pszValue, cCount, sValue);
 	} else {
@@ -48,118 +76,222 @@ static LONG GetString(HKEY hk, LPCWSTR asName, char* pszValue, DWORD cCount)
 }
 #endif
 
-static LONG GetString(HKEY hk, LPCWSTR asName, wchar_t** pszValue)
+static LONG GetString(HANDLE hk, LPCWSTR asName, wchar_t** pszValue)
 {
-	LONG nRegRc; DWORD nSize = 0;
+	LONG nRegRc = -1;
 	
-	nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, NULL, &nSize);
-	if (nRegRc == 0) {
-		_ASSERTE(*pszValue == NULL);
-		*pszValue = (wchar_t*)calloc(nSize+2,1);
-		nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, (LPBYTE)*pszValue, &nSize);
-	} else {
-		if (cfg) cfg->bSomeValuesMissed = TRUE;
-	}
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_STRING;
+		//if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi) && (fsi.Data.Size == sizeof(DWORD)))
+		if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi))
+		{
+			*pszValue = lstrdup(fsi.String);
+			nRegRc = 0;
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#else
+		DWORD nSize = 0;
+		nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, NULL, &nSize);
+		if (nRegRc == 0)
+		{
+			_ASSERTE(*pszValue == NULL);
+			*pszValue = (wchar_t*)calloc(nSize+2,1);
+			nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, (LPBYTE)*pszValue, &nSize);
+		}
+		else
+		{
+			if (cfg) cfg->bSomeValuesMissed = TRUE;
+		}
+	#endif
 	MCHKHEAP;
 	
 	return nRegRc;
 }
 
-static LONG SetString(HKEY hk, LPCWSTR asName, const wchar_t* pszValue)
+static LONG SetString(HANDLE hk, LPCWSTR asName, const wchar_t* pszValue)
 {
-	LONG nRegRc; DWORD nSize;
+	LONG nRegRc = -1;
 	
-	nSize = (lstrlenW(pszValue)+1)*2;
-	nRegRc = RegSetValueExW(hk, asName, 0, REG_SZ, (LPBYTE)pszValue, nSize);
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_STRING;
+		fsi.String = pszValue;
+		if (psi.SettingsControl(hk, SCTL_SET, 0, &fsi))
+			nRegRc = 0;
+	#else
+		DWORD nSize = (lstrlenW(pszValue)+1)*2;
+		nRegRc = RegSetValueExW((HKEY)hk, asName, 0, REG_SZ, (LPBYTE)pszValue, nSize);
+	#endif
 	
 	return nRegRc;
 }
 
 #ifndef _UNICODE
-static LONG SetString(HKEY hk, LPCTSTR asName, const char* pszValue)
+static LONG SetString(HANDLE hk, LPCTSTR asName, const char* pszValue)
 {
 	LONG nRegRc; DWORD nSize;
 	
 	nSize = (lstrlenA(pszValue)+1);
-	nRegRc = RegSetValueExA(hk, asName, 0, REG_SZ, (LPBYTE)pszValue, nSize);
+	nRegRc = RegSetValueExA((HKEY)hk, asName, 0, REG_SZ, (LPBYTE)pszValue, nSize);
 	
 	return nRegRc;
 }
 #endif
 
-static LONG GetDWORD(HKEY hk, LPCWSTR asName, DWORD* pnValue)
+static LONG GetDWORD(HANDLE hk, LPCWSTR asName, DWORD* pnValue)
 {
-	LONG nRegRc; DWORD nSize, nValue = 0;
+	LONG nRegRc = -1;
 
-	nSize = sizeof(nValue);
-	nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, (LPBYTE)&nValue, &nSize);
-	if (nRegRc == 0) {
-		*pnValue = nValue;
-	} else {
-		if (cfg) cfg->bSomeValuesMissed = TRUE;
-	}
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_DATA;
+		if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi) && (fsi.Data.Size == sizeof(DWORD)))
+		{
+			*pnValue = *(DWORD*)fsi.Data.Data;
+			nRegRc = 0;
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#else
+		DWORD nValue = 0;
+		DWORD nSize = sizeof(nValue);
+		nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, (LPBYTE)&nValue, &nSize);
+		if (nRegRc == 0)
+		{
+			*pnValue = nValue;
+		}
+		else
+		{
+			if (cfg) cfg->bSomeValuesMissed = TRUE;
+		}
+	#endif
 	
 	return nRegRc;
 }
 
-static LONG SetDWORD(HKEY hk, LPCWSTR asName, DWORD nValue)
+static LONG SetDWORD(HANDLE hk, LPCWSTR asName, DWORD nValue)
 {
-	LONG nRegRc; DWORD nSize;
+	LONG nRegRc = -1;
 
-	nSize = sizeof(nValue);
-	nRegRc = RegSetValueExW(hk, asName, 0, REG_DWORD, (LPBYTE)&nValue, nSize);
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_DATA;
+		fsi.Data.Size = sizeof(nValue); 
+		fsi.Data.Data = &nValue;
+		if (psi.SettingsControl(hk, SCTL_SET, 0, &fsi))
+			nRegRc = 0;
+	#else
+		DWORD nSize = sizeof(nValue);
+		nRegRc = RegSetValueExW((HKEY)hk, asName, 0, REG_DWORD, (LPBYTE)&nValue, nSize);
+	#endif
 	
 	return nRegRc;
 }
 
-static LONG GetBool(HKEY hk, LPCWSTR asName, BOOL* pbValue)
+static LONG GetBool(HANDLE hk, LPCWSTR asName, BOOL* pbValue)
 {
-	LONG nRegRc; DWORD nSize; BYTE nValue = 0;
+	LONG nRegRc = -1;
 
-	nSize = sizeof(nValue);
-	nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, (LPBYTE)&nValue, &nSize);
-	if (nRegRc == 0) {
-		*pbValue = (nValue != 0);
-	} else {
-		if (cfg) cfg->bSomeValuesMissed = TRUE;
-	}
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_DATA;
+		if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi) && (fsi.Data.Size == sizeof(BYTE)))
+		{
+			*pbValue = *(BYTE*)fsi.Data.Data;
+			nRegRc = 0;
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#else
+		DWORD nSize; BYTE nValue = 0;
+		nSize = sizeof(nValue);
+		nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, (LPBYTE)&nValue, &nSize);
+		if (nRegRc == 0)
+		{
+			*pbValue = (nValue != 0);
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#endif
 	
 	return nRegRc;
 }
 
-static LONG SetBool(HKEY hk, LPCWSTR asName, BOOL bValue)
+static LONG SetBool(HANDLE hk, LPCWSTR asName, BOOL bValue)
 {
-	LONG nRegRc; DWORD nSize;
+	LONG nRegRc = -1;
 	BYTE b = (BYTE)(bValue & 0xFF);
 
-	nSize = sizeof(b);
-	nRegRc = RegSetValueExW(hk, asName, 0, REG_BINARY, (LPBYTE)&b, nSize);
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_DATA;
+		fsi.Data.Size = sizeof(b);
+		fsi.Data.Data = &b;
+		if (psi.SettingsControl(hk, SCTL_SET, 0, &fsi))
+			nRegRc = 0;
+	#else
+		DWORD nSize = sizeof(b);
+		nRegRc = RegSetValueExW((HKEY)hk, asName, 0, REG_BINARY, (LPBYTE)&b, nSize);
+	#endif
 	
 	return nRegRc;
 }
 
-static LONG GetByte(HKEY hk, LPCWSTR asName, BOOL* pbValue)
+static LONG GetByte(HANDLE hk, LPCWSTR asName, BOOL* pbValue)
 {
-	LONG nRegRc; DWORD nSize; BYTE nValue = 0;
+	LONG nRegRc = -1;
 
-	nSize = sizeof(nValue);
-	nRegRc = RegQueryValueExW(hk, asName, NULL, NULL, (LPBYTE)&nValue, &nSize);
-	if (nRegRc == 0) {
-		*pbValue = nValue;
-	} else {
-		if (cfg) cfg->bSomeValuesMissed = TRUE;
-	}
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_DATA;
+		if (psi.SettingsControl(hk, SCTL_GET, 0, &fsi) && (fsi.Data.Size == sizeof(BYTE)))
+		{
+			*pbValue = *(BYTE*)fsi.Data.Data;
+			nRegRc = 0;
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#else
+		DWORD nSize; BYTE nValue = 0;
+		nSize = sizeof(nValue);
+		nRegRc = RegQueryValueExW((HKEY)hk, asName, NULL, NULL, (LPBYTE)&nValue, &nSize);
+		if (nRegRc == 0)
+		{
+			*pbValue = nValue;
+		}
+		else if (cfg)
+			cfg->bSomeValuesMissed = TRUE;
+	#endif
 
 	return nRegRc;
 }
 
-static LONG SetByte(HKEY hk, LPCWSTR asName, BOOL bValue)
+static LONG SetByte(HANDLE hk, LPCWSTR asName, BOOL bValue)
 {
-	LONG nRegRc; DWORD nSize;
+	LONG nRegRc = -1;
 	BYTE b = (BYTE)(bValue & 0xFF);
-
-	nSize = sizeof(b);
-	nRegRc = RegSetValueExW(hk, asName, 0, REG_BINARY, (LPBYTE)&b, nSize);
+	
+	#if FAR_UNICODE>=1900
+		FarSettingsItem fsi = {0};
+		fsi.Name = asName;
+		fsi.Type = FST_DATA;
+		fsi.Data.Size = sizeof(b); 
+		fsi.Data.Data = &b;
+		if (psi.SettingsControl(hk, SCTL_SET, 0, &fsi))
+			nRegRc = 0;
+	#else
+		DWORD nSize = sizeof(b);
+		nRegRc = RegSetValueExW((HKEY)hk, asName, 0, REG_BINARY, (LPBYTE)&b, nSize);
+	#endif
 
 	return nRegRc;
 }
@@ -170,10 +302,10 @@ void RegConfig::LoadVersionInfo(LPCTSTR asModuleName)
 	WCHAR ErrText[512]; ErrText[0] = 0; //DWORD dwErr = 0;
 	sVersionInfo[0] = 0;
 
-	DWORD nFarVer = 0;
-	psi.AdvControl(psi.ModuleNumber, ACTL_GETFARVERSION, (void*)&nFarVer);
+	//DWORD nFarVer = 0;
+	//psi.AdvControl(PluginNumber, ACTL_GETFARVERSION, (void*)&nFarVer);
 	wsprintf(sVersionInfo, _T("Far %i.%i.%i, RegEdit "), 
-		(UINT)HIBYTE(LOWORD(nFarVer)), (UINT)LOBYTE(LOWORD(nFarVer)), (UINT)HIWORD(nFarVer));
+		gFarVersion.Major, gFarVersion.Minor, gFarVersion.Build);
 
 	DWORD dwRsrvd = 0;
 	DWORD dwSize = GetFileVersionInfoSize(asModuleName, &dwRsrvd);
@@ -214,27 +346,48 @@ void RegConfig::LoadVersionInfo(LPCTSTR asModuleName)
 		);
 }
 
-void RegConfig::Init(LPCTSTR asRootKey, LPCTSTR asModuleName)
+void RegConfig::Init(
+					 #if FAR_UNICODE>=1900
+					 LPCTSTR asModuleName
+					 #else
+					 LPCTSTR asRootKey, LPCTSTR asModuleName
+					 #endif
+					 )
 {
 	if (cfg) return;
+	_ASSERTE(gFarVersion.Major!=0);
+	#if FAR_UNICODE>=1900
+	cfg = new RegConfig(asModuleName);
+	#else
 	cfg = new RegConfig(asRootKey, asModuleName);
+	#endif
 	cfg->LoadConfiguration();
 }
 
-RegConfig::RegConfig(LPCTSTR asRootKey, LPCTSTR asModuleName)
+RegConfig::RegConfig(
+					 #if FAR_UNICODE>=1900
+					 LPCTSTR asModuleName
+					 #else
+					 LPCTSTR asRootKey, LPCTSTR asModuleName
+					 #endif
+					 )
 {
+	#ifndef FAR_UNICODE
 	size_t nLen = _tcslen(asRootKey);
 	pszPluginKey = (TCHAR*)malloc((nLen+16)*sizeof(TCHAR));
 	lstrcpy(pszPluginKey, asRootKey);
 	lstrcat(pszPluginKey, _T("\\RegEditor"));
+	#endif
 
 	sVersionInfo[0] = 0;
 	LoadVersionInfo(asModuleName);
 
 	mp_Token = NULL; mb_TokenWarnedOnce = FALSE; mn_TokenRef = 0; mb_RestoreAquired = FALSE;
+	
+	mb_SettingsChanged = FALSE;
 
 	// Значения по умолчанию!	
-	bWow64on32 = 2; // 2-Auto. 1-Отображать 64-битный реестр, 0-32-битный
+	bWow64on32_ = 2; // 2-Auto. 1-Отображать 64-битный реестр, 0-32-битный
 	bVirtualize = FALSE;
 	lstrcpy(sCommandPrefix, _T("reg2"));
 	lstrcpy(sRegTitlePrefix, _T("REG2"));
@@ -265,6 +418,7 @@ RegConfig::RegConfig(LPCTSTR asRootKey, LPCTSTR asModuleName)
 	nRefreshSubkeyTimeout = 10000;
 	pszLastRegPath = NULL; nMaxRegPath = 0;
 	bConfirmImport = TRUE; bShowImportResult = TRUE;
+	bRestorePanelMode = FALSE;
 	
 	bSomeValuesMissed = FALSE;
 	
@@ -294,7 +448,9 @@ RegConfig::RegConfig(LPCTSTR asRootKey, LPCTSTR asModuleName)
 
 RegConfig::~RegConfig()
 {
+#ifndef FAR_UNICODE
 	SafeFree(pszPluginKey);
+#endif
 	SafeFree(pszLastRegPath);
 	nMaxRegPath = 0;
 	if (mp_Token)
@@ -307,15 +463,26 @@ RegConfig::~RegConfig()
 
 void RegConfig::LoadConfiguration()
 {
-	HKEY hk;
+	HANDLE hk;
 	bSomeValuesMissed = FALSE;
-	if (0 != RegOpenKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, KEY_READ, &hk))
+	BOOL lbKeyOpened = FALSE;
+
+	#if FAR_UNICODE>=1900
+	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_PluginGuid, INVALID_HANDLE_VALUE};
+	FarSettingsItem fsi = {0};
+	lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc) != 0;
+	hk = sc.Handle;
+	#else
+	lbKeyOpened = (0 == RegOpenKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, KEY_READ, (HKEY*)&hk));
+	#endif
+	
+	if (!lbKeyOpened)
 	{
 		// Если ключа не было - сразу создать в реестре значения по умолчанию!
 		bSomeValuesMissed = TRUE;
 		
 	} else {
-		GetByte(hk, L"Wow64on32", &bWow64on32); // Отображать 64-битный реестр в FAR.x32
+		GetByte(hk, L"Wow64on32", &bWow64on32_); // Отображать 64-битный реестр в FAR.x32
 		GetByte(hk, L"Virtualize", &bVirtualize); // Отображать виртуализированные значения реестра
 		GetString(hk, L"CommandPrefix", sCommandPrefix, countof(sCommandPrefix)); // _T("reg2")
 		GetString(hk, L"RegTitlePrefix", sRegTitlePrefix, countof(sRegTitlePrefix)); // _T("REG2")
@@ -347,12 +514,18 @@ void RegConfig::LoadConfiguration()
 		GetDWORD(hk, L"RefreshSubkeyTimeout", &nRefreshSubkeyTimeout);
 		GetString(hk, L"LastRegPath", &pszLastRegPath);
 		nMaxRegPath = (pszLastRegPath == 0) ? 0 : (lstrlenW(pszLastRegPath)+1);
+		GetBool(hk, L"RestorePanelMode", &bRestorePanelMode);
 		
-		RegCloseKey(hk);
+		#if FAR_UNICODE>=1900
+		psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+		#else
+		RegCloseKey((HKEY)hk);
+		#endif
 	}
 	
 	// Если ключа не было, или в плагине появились новые параметры - сразу сохранить наши текущие настройки (умолчания)
-	if (bSomeValuesMissed) {
+	if (bSomeValuesMissed)
+	{
 		SaveConfiguration();
 	}
 }
@@ -363,11 +536,23 @@ void RegConfig::SaveConfiguration()
 	if (nAnsiCodePage == CP_UTF7 || nAnsiCodePage == CP_UTF8) nAnsiCodePage = 1251;
 	
 	// Сохраняем
-	HKEY hk; DWORD dwDisp = 0;
+	HANDLE hk; DWORD dwDisp = 0;
 	bSomeValuesMissed = FALSE;
-	if (0 == RegCreateKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hk, &dwDisp))
+	//if (0 == RegCreateKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hk, &dwDisp))
+	
+	BOOL lbKeyOpened = FALSE;
+	#if FAR_UNICODE>=1900
+	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_PluginGuid, INVALID_HANDLE_VALUE};
+	FarSettingsItem fsi = {0};
+	lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc) != 0;
+	hk = sc.Handle;
+	#else
+	lbKeyOpened = (0 == RegCreateKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, NULL, 0, KEY_ALL_ACCESS, NULL, (HKEY*)&hk, &dwDisp));
+	#endif
+	
+	if (lbKeyOpened)
 	{
-		SetByte(hk, L"Wow64on32", bWow64on32); // Отображать 64-битный реестр в FAR.x32
+		SetByte(hk, L"Wow64on32", bWow64on32_); // Отображать 64-битный реестр в FAR.x32
 		SetByte(hk, L"Virtualize", bVirtualize);// отображать виртуализированные значения реестра
 		SetString(hk, _T("CommandPrefix"), sCommandPrefix); // _T("reg2")
 		SetString(hk, _T("RegTitlePrefix"), sRegTitlePrefix); // _T("REG2")
@@ -397,17 +582,46 @@ void RegConfig::SaveConfiguration()
 		SetBool(hk, L"ShowImportResult", bShowImportResult);
 		SetDWORD(hk, L"RefreshKeyTimeout", nRefreshKeyTimeout);
 		SetDWORD(hk, L"RefreshSubkeyTimeout", nRefreshSubkeyTimeout);
+		SetBool(hk, L"RestorePanelMode", bRestorePanelMode);
 		if (pszLastRegPath != NULL)
 			SetString(hk, L"LastRegPath", pszLastRegPath);
 		
-		RegCloseKey(hk);
+		#if FAR_UNICODE>=1900
+		psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+		#else
+		RegCloseKey((HKEY)hk);
+		#endif
 	}
 }
+
+class RegConfigDlg : public PluginDialogBuilder
+{
+public:
+	int nBtnVisualID;
+
+	RegConfigDlg(const PluginStartupInfo &aInfo, int TitleMessageID, const TCHAR *aHelpTopic, const GUID* aDlgGuid)
+		: PluginDialogBuilder(aInfo, TitleMessageID, aHelpTopic, aDlgGuid)
+	{
+		nBtnVisualID = -1;
+	};
+	virtual BOOL PluginDialogProc(HANDLE hDlg, int Msg, int Param1, FarDlgProcParam2 Param2, LONG_PTR& lResult)
+	{
+		if ((Msg == DN_BTNCLICK) && (Param1 == nBtnVisualID))
+		{
+			cfg->ConfigureVisual();
+			return TRUE;
+		}
+		// Если возвращается FALSE - вызовется DefDlgProc(hDlg, Msg, Param1, Param2)
+		return PluginDialogBuilder::PluginDialogProc(hDlg, Msg, Param1, Param2, lResult);
+	};
+	
+};
 
 BOOL RegConfig::Configure()
 {
 	//TODO: Открыть диалог с настройками
-	PluginDialogBuilder Config(psi, REConfigTitle, _T("Configuration"));
+	mb_SettingsChanged = FALSE;
+	RegConfigDlg Config(psi, REConfigTitle, _T("Configuration"), &guid_Configuration);
 	
 	FarDialogItem *p1, *p2;
 	
@@ -418,8 +632,11 @@ BOOL RegConfig::Configure()
 	Config.EndColumns();
 	bool lbNeedDiskNumbers = true;
 #ifdef _UNICODE
-	if (HIWORD(gnFarVersion) >= 1692)
+	#if FAR_UNICODE>=1906
 		lbNeedDiskNumbers = false;
+	#else
+		lbNeedDiskNumbers = (gFarVersion.Build < 1692);
+	#endif
 #endif
 	if (lbNeedDiskNumbers)
 	{
@@ -439,7 +656,7 @@ BOOL RegConfig::Configure()
 
 	Config.AddSeparator(REWow6432);
 	Config.StartColumns();
-	Config.AddCheckbox(REWow64on32, &bWow64on32)->Flags |= DIF_3STATE;
+	Config.AddCheckbox(REWow64on32, &bWow64on32_)->Flags |= DIF_3STATE;
 	Config.ColumnBreak();
 	Config.AddCheckbox(REWow64process, &is64bitOs)->Flags |= DIF_DISABLE;
 	Config.EndColumns();
@@ -478,6 +695,56 @@ BOOL RegConfig::Configure()
 	Config.AddCheckbox(RECheckMacroVar, &bCheckMacrosInVars);
 	Config.EndColumns();
 
+	//// Speed up browsing of large keys (HKCR\\CLSID, and so on)
+	//Config.AddSeparator(RESpeedUpLargeKeysSeparator);
+	//Config.AddCheckbox(REUnsortLargeKeys, &bUnsortLargeKeys);
+	//Config.SlideItemUp(Config.AddIntEditField((int*)&nLargeKeyCount, 7));
+	//Config.AddCheckbox(RELoadDescriptions, &bLoadDescriptions);
+	//Config.SlideItemUp(Config.AddIntEditField((int*)&nLargeKeyTimeout, 7));
+	//
+	//// 
+	//Config.AddSeparator(REAutoRefreshSeparator);
+	//Config.AddCheckbox(REAutoRefreshChanges, &bRefreshChanges);
+	//Config.StartColumns();
+	//p1 = Config.AddText(RERefreshKeyTimeoutLabel); p2 = Config.AddIntEditField((int*)&nRefreshKeyTimeout, 6);
+	//Config.MoveItemAfter(p1,p2);
+	//Config.ColumnBreak();
+	//p1 = Config.AddText(RERefreshSubkeyTimeoutLabel); p2 = Config.AddIntEditField((int*)&nRefreshSubkeyTimeout, 6);
+	//Config.MoveItemAfter(p1,p2);
+	//Config.EndColumns();
+
+
+	int nOkBtn = Config.AddFooterButtons(REBtnOK, REBtnVisual, REBtnCancel, 0);
+	Config.nBtnVisualID = nOkBtn+1;
+	Config.GetItemByIndex(Config.nBtnVisualID)->Flags |= DIF_BTNNOCLOSE;
+
+	if (Config.ShowDialog())
+	{
+		mb_SettingsChanged = TRUE;
+		if (nAnsiCodePage == CP_UTF8 || nAnsiCodePage == CP_UTF7)
+		{
+			InvalidOp(); nAnsiCodePage = 1251;
+		}
+		bBrowseRegFiles = (lbBrowseRegFiles == 1) ? 2 : (lbBrowseRegFiles == 2) ? 1 : 0;
+		// сохраним в реестр
+		SaveConfiguration();
+		// Обновить Wow64on32 и заголовки
+		gpPluginList->OnSettingsChanged(bWow64on32_);
+	}
+	
+	// Вернуть TRUE, если фар нужно передернуть
+	return mb_SettingsChanged;
+}
+
+BOOL RegConfig::ConfigureVisual()
+{
+	//TODO: Открыть диалог с настройками
+	RegConfigDlg Config(psi, REConfigTitle, _T("Configuration"), &guid_Configuration2);
+	
+	FarDialogItem *p1, *p2;
+	
+	Config.AddCheckbox(REStorePanelMode, &bRestorePanelMode);
+
 	// Speed up browsing of large keys (HKCR\\CLSID, and so on)
 	Config.AddSeparator(RESpeedUpLargeKeysSeparator);
 	Config.AddCheckbox(REUnsortLargeKeys, &bUnsortLargeKeys);
@@ -497,67 +764,51 @@ BOOL RegConfig::Configure()
 	Config.EndColumns();
 
 
-
-	Config.AddOKCancel(REBtnOK, REBtnCancel);
+	int nOkBtn = Config.AddFooterButtons(REBtnOK, REBtnCancel, 0);
 
 	if (Config.ShowDialog())
 	{
-		if (nAnsiCodePage == CP_UTF8 || nAnsiCodePage == CP_UTF7)
-		{
-			InvalidOp(); nAnsiCodePage = 1251;
-		}
-		bBrowseRegFiles = (lbBrowseRegFiles == 1) ? 2 : (lbBrowseRegFiles == 2) ? 1 : 0;
+		mb_SettingsChanged = TRUE;
 		// сохраним в реестр
 		SaveConfiguration();
-		// Обновить заголовки
-		gpPluginList->UpdateAllTitles();
+		// Обновить Wow64on32 и заголовки
+		gpPluginList->OnSettingsChanged(bWow64on32_);
 	}
 	
-	// Вернуть TRUE, если нужно обновить панели
-	return FALSE;
+	// Вернуть TRUE, если фар нужно передернуть
+	return mb_SettingsChanged;
 }
 
-DWORD RegConfig::samDesired()
+BOOL RegConfig::getWow64on32()
 {
-	switch (bWow64on32)
-	{
-	case 0:
-		return KEY_WOW64_32KEY;
-	case 1:
-		return KEY_WOW64_64KEY;
-	default:
-		return 0;
-	}
-	//if (is64bitOs) {
-	//	if (bWow64on32)
-	//		return KEY_WOW64_64KEY;
-	//	else
-	//		return KEY_WOW64_32KEY;
-	//} else {
-	//	return 0;
-	//}
+	return bWow64on32_;
 }
 
-const TCHAR* RegConfig::bitSuffix()
-{
-	switch (bWow64on32)
-	{
-	case 0:
-		return GetMsg(bVirtualize ? REPanelx32VirtLabel : REPanelx32Label);
-	case 1:
-		return GetMsg(bVirtualize ? REPanelx64VirtLabel : REPanelx64Label);
-	default:
-		return bVirtualize ? GetMsg(REPanelVirtLabel) : _T("");
-	}
-	//if (is64bitOs) {
-	//	if (bWow64on32)
-	//		return GetMsg(REPanelx64Label);
-	//	else
-	//		return GetMsg(REPanelx32Label);
-	//} else {
-	//	return _T("");
-	//}
-}
+//DWORD RegConfig::samDesired_()
+//{
+//	switch (bWow64on32_)
+//	{
+//	case 0:
+//		return KEY_WOW64_32KEY;
+//	case 1:
+//		return KEY_WOW64_64KEY;
+//	default:
+//		return 0;
+//	}
+//}
+
+//const TCHAR* RegConfig::bitSuffix()
+//{
+//	switch (bWow64on32_)
+//	{
+//	case 0:
+//		return GetMsg(bVirtualize ? REPanelx32VirtLabel : REPanelx32Label);
+//	case 1:
+//		return GetMsg(bVirtualize ? REPanelx64VirtLabel : REPanelx64Label);
+//	default:
+//		return bVirtualize ? GetMsg(REPanelVirtLabel) : _T("");
+//	}
+//}
 
 #ifdef _UNICODE
 UINT RegConfig::EditorCodePage()
@@ -578,34 +829,55 @@ void RegConfig::SetLastRegPath(HKEY ahKey, LPCWSTR asSubKey)
 {
 	MCHKHEAP;
 	int nLen = lstrlenW(asSubKey);
-	if (!pszLastRegPath || (nLen + 40) >= nMaxRegPath) {
+	if (!pszLastRegPath || (nLen + 40) >= nMaxRegPath)
+	{
 		SafeFree(pszLastRegPath);
 		nMaxRegPath = nLen + MAX_PATH; // с запасом
 		pszLastRegPath = (wchar_t*)malloc(nMaxRegPath*2);
 	}
 	pszLastRegPath[0] = 0;
 	MCHKHEAP;
-	if (ahKey) {
-		if (!HKeyToStringKey(ahKey, pszLastRegPath, 40)) {
+	if (ahKey)
+	{
+		if (!HKeyToStringKey(ahKey, pszLastRegPath, 40))
+		{
 			// Неизвестный ключ!
 			_ASSERTE(ahKey==HKEY_CLASSES_ROOT);
-		} else if (asSubKey && *asSubKey) {
+		}
+		else if (asSubKey && *asSubKey)
+		{
 			lstrcatW(pszLastRegPath, L"\\");
 			lstrcatW(pszLastRegPath, asSubKey);
 		}
-	} else {
+	}
+	else
+	{
 		_ASSERTE(asSubKey == NULL || *asSubKey == 0);
 	}
 	MCHKHEAP;
+	
 	// Записать в реестр
+	_ASSERTE(sizeof(*pszLastRegPath)==2);
+	DWORD nSize = (lstrlenW(pszLastRegPath)+1)*2;
+	#if FAR_UNICODE>=1900
+	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_PluginGuid, INVALID_HANDLE_VALUE};
+	if (psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc))
+	{
+		FarSettingsItem fsi = {0};
+		fsi.Name = L"LastRegPath";
+		fsi.Type = FST_STRING;
+		fsi.String = pszLastRegPath;
+		psi.SettingsControl(sc.Handle, SCTL_SET, 0, &fsi);
+		psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+	}
+	#else
 	HKEY hk;
 	if (0 == RegCreateKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hk, NULL))
 	{
-		_ASSERTE(sizeof(*pszLastRegPath)==2);
-		DWORD nSize = (lstrlenW(pszLastRegPath)+1)*2;
 		RegSetValueExW(hk, L"LastRegPath", 0, REG_SZ, (LPBYTE)pszLastRegPath, nSize);
 		RegCloseKey(hk);
 	}
+	#endif
 	MCHKHEAP;
 }
 
@@ -632,12 +904,17 @@ BOOL RegConfig::BackupPrivilegesAcuire(BOOL abRequireRestore)
 		int iRc = mp_Token->Enable(pszPriv, abRequireRestore ? 2 : 1);
 		if (iRc != 1)
 		{
-			if (!mb_TokenWarnedOnce && !bSkipPrivilegesDeniedMessage) {
+			DWORD dwErr = mp_Token->LastErrorCode();
+			if (!dwErr) dwErr = ERROR_ACCESS_DENIED;
+			if (!mb_TokenWarnedOnce && !bSkipPrivilegesDeniedMessage)
+			{
 				mb_TokenWarnedOnce = TRUE;
-				psi.Message(psi.ModuleNumber, FMSG_WARNING|FMSG_ERRORTYPE|FMSG_MB_OK|FMSG_ALLINONE, NULL, 
+				psi.Message(_PluginNumber(guid_PrivError), FMSG_WARNING|FMSG_ERRORTYPE|FMSG_MB_OK|FMSG_ALLINONE, NULL, 
 					(const TCHAR * const *)GetMsg(REM_CantAjustPrivileges), 1, 0);
+				dwErr = 0; // ошибка уже показана!
 			}
 			SafeDelete(mp_Token);
+			SetLastError(dwErr);
 			mn_TokenRef = 0; mb_RestoreAquired = FALSE;
 		} else {
 			// Если удалось поднять хотя бы одну привилегию
@@ -708,7 +985,11 @@ void RegConfig::BookmarksReset(RegPath* pKey, BOOL bRemote)
 	if (pKey->eType == RE_WINAPI)
 	{
 		#ifdef _UNICODE
+		#if FAR_UNICODE>=2000
+		BookmarkInsertInt(-1, L"HKEY_CURRENT_USER\\Software\\Far Manager", FALSE);
+		#else
 		BookmarkInsertInt(-1, L"HKEY_CURRENT_USER\\Software\\Far2", FALSE);
+		#endif
 		#else
 		BookmarkInsertInt(-1, L"HKEY_CURRENT_USER\\Software\\Far", FALSE);
 		#endif
@@ -775,8 +1056,7 @@ void RegConfig::BookmarksReset(RegPath* pKey, BOOL bRemote)
 }
 void RegConfig::BookmarksLoadInt(RegPath* pKey, BOOL bRemote)
 {
-	LONG nRegRc;
-	HKEY hk;
+	LONG nRegRc = -1;
 	BOOL bNoBookmarks = FALSE;
 	
 	SafeFree(pszBookmarks);
@@ -795,7 +1075,19 @@ void RegConfig::BookmarksLoadInt(RegPath* pKey, BOOL bRemote)
 	}
 
 	cchBookmarksLen = 0;
-	if (0 != RegOpenKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, KEY_READ, &hk))
+
+	BOOL lbKeyOpened = FALSE;
+
+	#if FAR_UNICODE>=1900
+	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_PluginGuid, INVALID_HANDLE_VALUE};
+	FarSettingsItem fsi = {0};
+	lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc) != 0;
+	#else
+	HANDLE hk = NULL;
+	lbKeyOpened = (0 == RegOpenKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, KEY_READ, (HKEY*)&hk));
+	#endif
+	
+	if (!lbKeyOpened)
 	{
 		// Если ключа не было - сразу создать в реестре значения по умолчанию!
 		bNoBookmarks = TRUE;
@@ -804,38 +1096,35 @@ void RegConfig::BookmarksLoadInt(RegPath* pKey, BOOL bRemote)
 	else
 	{
 		DWORD nSize = 0;
-		nRegRc = RegQueryValueExW(hk, szBookmarksValueName, NULL, NULL, NULL, &nSize);
-		if (nRegRc == 0)
-		{
-			_ASSERTE(pszBookmarks == NULL);
-			wchar_t* pszNew = (wchar_t*)calloc(nSize+4,1);
-			nRegRc = RegQueryValueExW(hk, szBookmarksValueName, NULL, NULL, (LPBYTE)pszNew, &nSize);
+		wchar_t* pszNew = NULL;
+
+		nRegRc = -1;
+		#if FAR_UNICODE>=1900
+			FarSettingsItem fsi = {0};
+			fsi.Name = szBookmarksValueName;
+			fsi.Type = FST_DATA; // Именно DATA, ибо попадаются \0
+			if (psi.SettingsControl(sc.Handle, SCTL_GET, 0, &fsi))
+			{
+				nSize = (DWORD)fsi.Data.Size;
+				pszNew = (wchar_t*)calloc(nSize+4,1);
+				memmove(pszNew, fsi.Data.Data, nSize);
+				MCHKHEAP;
+				nRegRc = 0;
+			}
+		#else
+			nRegRc = RegQueryValueExW((HKEY)hk, szBookmarksValueName, NULL, NULL, NULL, &nSize);
 			if (nRegRc == 0)
 			{
-				BookmarkParse(pszNew, nSize/2);
-				SafeFree(pszNew);
-				//SafeFree(pszBookmarks);
-				//pszBookmarks = (wchar_t*)calloc(nSize*2+4,1);
-				//wchar_t *pszSrc = pszNew, *pszDst = pszBookmarks, *pszEnd = (;
-				////while (
-				////pszBookmarks = pszNew;
-				//cchBookmarksMaxCount = ((nSize>>1) + 512)*2;
-				//cchBookmarksLen = nSize>>1;
-				//while (cchBookmarksLen > 2 && pszBookmarks[cchBookmarksLen-1] == 0 && pszBookmarks[cchBookmarksLen-2] == 0)
-				//	cchBookmarksLen--;
-				//// Должно быть два закрывающих нуля!
-				//if (cchBookmarksLen < 2)
-				//{
-				//	cchBookmarksLen = 1; pszBookmarks[0] = pszBookmarks[1] = 0;
-				//}
-				//else
-				//{
-				//	if (cchBookmarksLen<1 || pszBookmarks[cchBookmarksLen-1] != 0)
-				//		pszBookmarks[cchBookmarksLen++] = 0;
-				//	if (cchBookmarksLen<2 || pszBookmarks[cchBookmarksLen-2] != 0)
-				//		pszBookmarks[cchBookmarksLen++] = 0;
-				//}
+				_ASSERTE(pszBookmarks == NULL);
+				pszNew = (wchar_t*)calloc(nSize+4,1);
+				nRegRc = RegQueryValueExW((HKEY)hk, szBookmarksValueName, NULL, NULL, (LPBYTE)pszNew, &nSize);
 			}
+		#endif
+		
+		if (nRegRc == 0)
+		{
+			BookmarkParse(pszNew, nSize/2);
+			SafeFree(pszNew);
 		}
 		else
 		{
@@ -845,7 +1134,11 @@ void RegConfig::BookmarksLoadInt(RegPath* pKey, BOOL bRemote)
 		_ASSERTE(cchBookmarksLen < 1 || pszBookmarks[cchBookmarksLen-1] == 0);
 		_ASSERTE(cchBookmarksLen < 2 || pszBookmarks[cchBookmarksLen-2] == 0);
 
-		RegCloseKey(hk);
+		#if FAR_UNICODE>=1900
+		psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+		#else
+		RegCloseKey((HKEY)hk);
+		#endif
 	}
 	
 	// Если закладок в реестре еще не было - создать умолчания и сохранить
@@ -1084,7 +1377,7 @@ void RegConfig::BookmarksEdit()
 		return;
 	}
 	
-	MFileTxt file;
+	MFileTxtReg file(bWow64on32_);
 	BOOL lbFarUnicode =
 	#ifdef _UNICODE
 		TRUE
@@ -1179,13 +1472,27 @@ void RegConfig::BookmarksSaveInt()
 	}
 	
 	// Сохраняем
+	#if FAR_UNICODE>=1900
+	FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_PluginGuid, INVALID_HANDLE_VALUE};
+	if (psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc))
+	{
+		FarSettingsItem fsi = {0};
+		fsi.Name = szBookmarksValueName;
+		fsi.Type = FST_DATA; // Именно DATA, ибо попадаются \0
+		fsi.Data.Size = nSize*2;
+		fsi.Data.Data = pszBookmarks;
+		psi.SettingsControl(sc.Handle, SCTL_SET, 0, &fsi);
+		psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+	}
+	#else
 	HKEY hk; DWORD dwDisp = 0;
-	bSomeValuesMissed = FALSE;
 	if (0 == RegCreateKeyEx(HKEY_CURRENT_USER, pszPluginKey, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &hk, &dwDisp))
 	{
 		RegSetValueExW(hk, szBookmarksValueName, 0, REG_MULTI_SZ, (LPBYTE)pszBookmarks, nSize*2);
 		RegCloseKey(hk);
 	}
+	#endif
+	bSomeValuesMissed = FALSE;
 }
 DWORD RegConfig::BookmarksLen(DWORD* pnBookmarksCount)
 {
