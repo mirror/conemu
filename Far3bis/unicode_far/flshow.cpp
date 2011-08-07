@@ -577,7 +577,7 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 	}
 }
 
-int FileList::ConvertName(const wchar_t *SrcName,string &strDest,int MaxLength,int RightAlign,int ShowStatus,DWORD FileAttr)
+int FileList::ConvertName(const wchar_t *SrcName,string &strDest,int MaxLength,unsigned __int64 RightAlign,int ShowStatus,DWORD FileAttr)
 {
 	wchar_t *lpwszDest = strDest.GetBuffer(MaxLength+1);
 	wmemset(lpwszDest,L' ',MaxLength);
@@ -745,7 +745,7 @@ int FileList::PreparePanelView(PanelViewSettings *PanelView)
 }
 
 
-int FileList::PrepareColumnWidths(unsigned int *ColumnTypes, int *ColumnWidths, int *ColumnWidthsTypes, int &ColumnCount, bool FullScreen, bool StatusLine)
+int FileList::PrepareColumnWidths(unsigned __int64 *ColumnTypes, int *ColumnWidths, int *ColumnWidthsTypes, int &ColumnCount, bool FullScreen, bool StatusLine)
 {
 	int TotalWidth,TotalPercentWidth,TotalPercentCount,ZeroLengthCount,EmptyColumns,I;
 	ZeroLengthCount=EmptyColumns=0;
@@ -910,10 +910,10 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	int MaxLeftPos=0,MinLeftPos=FALSE;
 	int ColumnCount=ShowStatus ? ViewSettings.StatusColumnCount:ViewSettings.ColumnCount;
 	int StatusHeight=GetPanelStatusHeight();
-	unsigned int *ColumnTypes=ShowStatus ? ViewSettings.StatusColumnType:ViewSettings.ColumnType;
+	unsigned __int64 *ColumnTypes=ShowStatus ? ViewSettings.StatusColumnType:ViewSettings.ColumnType;
 	int *ColumnWidths=ShowStatus ? ViewSettings.StatusColumnWidth:ViewSettings.ColumnWidth;
 	int K0=0;
-	int StatusAlign=0;
+	unsigned __int64 StatusAlign=0;
 	
 
 	if (ShowStatus)
@@ -986,7 +986,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			int CurX=WhereX();
 			int CurY=WhereY();
 			int ShowDivider=TRUE;
-			int ColumnType=ColumnTypes[K] & 0xff;
+			int ColumnType=static_cast<int>(ColumnTypes[K] & 0xff);
 			int ColumnWidth=ColumnWidths[K];
 
 			if (ColumnWidth<0)
@@ -1060,7 +1060,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						case NAME_COLUMN:
 						{
 							int Width=ColumnWidth;
-							int ViewFlags=ColumnTypes[K];
+							unsigned __int64 ViewFlags=ColumnTypes[K];
 
 							if ((ViewFlags & COLUMN_MARK) && Width>2)
 							{
@@ -1114,7 +1114,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							}
 
 							int CurLeftPos=0;
-							int RightAlign=(ViewFlags & (COLUMN_RIGHTALIGN|COLUMN_RIGHTALIGNFORCE));
+							unsigned __int64 RightAlign=(ViewFlags & (COLUMN_RIGHTALIGN|COLUMN_RIGHTALIGNFORCE));
 							int LeftBracket=FALSE,RightBracket=FALSE;
 
 							if (!ShowStatus && LeftPos)

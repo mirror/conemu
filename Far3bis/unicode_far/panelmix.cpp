@@ -48,7 +48,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "datetime.hpp"
 
-int ColumnTypeWidth[]={0, 6, 6, 8, 5, 14, 14, 14, 14, 6, 0, 0, 3, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int ColumnTypeWidth[]={0, 6, 6, 8, 5, 14, 14, 14, 14, 6, 0, 0, 3, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 static const wchar_t *ColumnSymbol[]={L"N",L"S",L"P",L"D",L"T",L"DM",L"DC",L"DA",L"DE",L"A",L"Z",L"O",L"LN",L"F",L"G",L"C0",L"C1",L"C2",L"C3",L"C4",L"C5",L"C6",L"C7",L"C8",L"C9",L"X",L"B"};
 
@@ -262,9 +262,10 @@ int _MakePath1(DWORD Key, string &strPathName, const wchar_t *Param2,int ShortNa
 
 
 void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,bool StatusLine,
-						unsigned int *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int &ColumnCount)
+						unsigned __int64 *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int &ColumnCount)
 {
 	const wchar_t *TextPtr=ColumnTitles;
+	_ASSERTE(ARRAYSIZE(ColumnTypeWidth)==ARRAYSIZE(ColumnSymbol));
 
 	for (ColumnCount=0; ColumnCount < PANEL_COLUMNCOUNT; ColumnCount++)
 	{
@@ -277,7 +278,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 
 		if (strArgName.At(0)==L'N')
 		{
-			unsigned int &ColumnType=ViewColumnTypes[ColumnCount];
+			unsigned __int64 &ColumnType=ViewColumnTypes[ColumnCount];
 			ColumnType=NAME_COLUMN;
 			const wchar_t *Ptr = strArgName.CPtr()+1;
 
@@ -309,7 +310,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 		{
 			if (strArgName.At(0)==L'S' || strArgName.At(0)==L'P' || strArgName.At(0)==L'G')
 			{
-				unsigned int &ColumnType=ViewColumnTypes[ColumnCount];
+				unsigned __int64 &ColumnType=ViewColumnTypes[ColumnCount];
 				ColumnType=(strArgName.At(0)==L'S') ? SIZE_COLUMN:(strArgName.At(0)==L'P')?PACKED_COLUMN:STREAMSSIZE_COLUMN;
 				const wchar_t *Ptr = strArgName.CPtr()+1;
 
@@ -338,7 +339,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 			{
 				if (!StrCmpN(strArgName,L"DM",2) || !StrCmpN(strArgName,L"DC",2) || !StrCmpN(strArgName,L"DA",2) || !StrCmpN(strArgName,L"DE",2))
 				{
-					unsigned int &ColumnType=ViewColumnTypes[ColumnCount];
+					unsigned __int64 &ColumnType=ViewColumnTypes[ColumnCount];
 
 					switch (strArgName.At(1))
 					{
@@ -377,7 +378,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 				{
 					if (strArgName.At(0)==L'O')
 					{
-						unsigned int &ColumnType=ViewColumnTypes[ColumnCount];
+						unsigned __int64 &ColumnType=ViewColumnTypes[ColumnCount];
 						ColumnType=OWNER_COLUMN;
 
 						if (strArgName.At(1)==L'L')
@@ -387,7 +388,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 					{
 						if (strArgName.At(0)==L'B')
 						{
-							unsigned int &ColumnType=ViewColumnTypes[ColumnCount];
+							unsigned __int64 &ColumnType=ViewColumnTypes[ColumnCount];
 							ColumnType=LINEBREAK_COLUMN;
 							const wchar_t *Ptr = strArgName.CPtr()+1;
 
@@ -450,7 +451,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 }
 
 
-void ViewSettingsToText(unsigned int *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int ColumnCount,
+void ViewSettingsToText(unsigned __int64 *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int ColumnCount,
 						bool StatusLine,string &strColumnTitles,string &strColumnWidths)
 {
 	strColumnTitles.Clear();
@@ -459,7 +460,7 @@ void ViewSettingsToText(unsigned int *ViewColumnTypes,int *ViewColumnWidths,int 
 	for (int I=0; I<ColumnCount; I++)
 	{
 		string strType;
-		int ColumnType=ViewColumnTypes[I] & 0xff;
+		int ColumnType=static_cast<int>(ViewColumnTypes[I] & 0xff);
 		strType = ColumnSymbol[ColumnType];
 
 		if (ColumnType==NAME_COLUMN)
@@ -567,7 +568,7 @@ const string FormatStr_Attribute(DWORD FileAttributes,int Width)
 	return strResult;
 }
 
-const string FormatStr_DateTime(const FILETIME *FileTime,int ColumnType,DWORD Flags,int Width)
+const string FormatStr_DateTime(const FILETIME *FileTime,int ColumnType,unsigned __int64 Flags,int Width)
 {
 	FormatString strResult;
 
@@ -580,8 +581,8 @@ const string FormatStr_DateTime(const FILETIME *FileTime,int ColumnType,DWORD Fl
 	}
 
 	int ColumnWidth=Width;
-	int Brief=Flags & COLUMN_BRIEF;
-	int TextMonth=Flags & COLUMN_MONTH;
+	unsigned __int64 Brief=Flags & COLUMN_BRIEF;
+	unsigned __int64 TextMonth=Flags & COLUMN_MONTH;
 	int FullYear=FALSE;
 
 	switch(ColumnType)
@@ -635,7 +636,7 @@ const string FormatStr_DateTime(const FILETIME *FileTime,int ColumnType,DWORD Fl
 	return strResult;
 }
 
-const string FormatStr_Size(__int64 UnpSize, __int64 PackSize, __int64 StreamsSize, const string& strName,DWORD FileAttributes,DWORD ShowFolderSize,DWORD ReparseTag,int ColumnType,DWORD Flags,int Width)
+const string FormatStr_Size(__int64 UnpSize, __int64 PackSize, __int64 StreamsSize, const string& strName,DWORD FileAttributes,DWORD ShowFolderSize,DWORD ReparseTag,int ColumnType,unsigned __int64 Flags,int Width)
 {
 	FormatString strResult;
 

@@ -845,7 +845,6 @@ int TreeList::ProcessKey(int Key)
 
 	string strTemp;
 
-	//BUGBUG: RCtrl/RAlt?
 	if ((Key>=KEY_CTRLSHIFT0 && Key<=KEY_CTRLSHIFT9) || (Key>=KEY_CTRLALT0 && Key<=KEY_CTRLALT9))
 	{
 		bool Add = (Key>=KEY_CTRLALT0 && Key<=KEY_CTRLALT9);
@@ -1162,10 +1161,8 @@ int TreeList::ProcessKey(int Key)
 			return TRUE;
 		}
 		default:
-
-			//BUGBUG: 65535???
-			if ((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+255) || (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+255) ||
-			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+255) || (Key>=KEY_RALTSHIFT_BASE+0x01 && Key<=KEY_RALTSHIFT_BASE+255))
+			if ((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+65535) || (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+65535) ||
+			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+65535) || (Key>=KEY_RALTSHIFT_BASE+0x01 && Key<=KEY_RALTSHIFT_BASE+65535))
 			{
 				FastFind(Key);
 

@@ -780,7 +780,7 @@ int KeyMacro::ProcessKey(int Key)
 			else
 			{
 				// в области common будем искать только при удалении
-				int Pos=GetIndex(MacroKey,StartMode,!(RecBuffer && RecBufferSize));
+				int Pos=GetIndex(MacroKey,StartMode,!(RecBuffer && RecBufferSize),true);
 
 				if (Pos == -1)
 				{
@@ -2705,10 +2705,10 @@ static bool menushowFunc(const TMacroFunction*)
 				break;
 
 			case KEY_CTRLADD:
-			case KEY_RCTRLADD:
 			case KEY_CTRLSUBTRACT:
-			case KEY_RCTRLSUBTRACT:
 			case KEY_CTRLMULTIPLY:
+			case KEY_RCTRLADD:
+			case KEY_RCTRLSUBTRACT:
 			case KEY_RCTRLMULTIPLY:
 				if (bMultiSelect)
 				{
@@ -6649,7 +6649,7 @@ M1:
 		KeyToText((int)key,strKeyText);
 
 		// если УЖЕ есть такой макрос...
-		if ((Index=MacroDlg->GetIndex((int)key,KMParam->Mode)) != -1)
+		if ((Index=MacroDlg->GetIndex((int)key,KMParam->Mode,true,true)) != -1)
 		{
 			MacroRecord *Mac=MacroDlg->MacroLIB+Index;
 
@@ -7271,7 +7271,8 @@ int KeyMacro::PopState()
 // Функция получения индекса нужного макроса в массиве
 // Ret=-1 - не найден таковой.
 // если CheckMode=-1 - значит пофигу в каком режиме, т.е. первый попавшийся
-int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon)
+// StrictKeys=true - не пытаться подменить Левый Ctrl/Alt Правым (если Левый не нашли)
+int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
 {
 	if (MacroLIB)
 	{
@@ -7301,7 +7302,7 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon)
 
 			if (Len)
 			{
-				int ctrl = ((Key&(KEY_RCTRL|KEY_RALT)) && !(Key&(KEY_CTRL|KEY_ALT))) ? 0 : 1;
+				int ctrl = (!StrictKeys && (Key&(KEY_RCTRL|KEY_RALT)) && !(Key&(KEY_CTRL|KEY_ALT))) ? 0 : 1;
 				MacroRecord *MPtrSave=MPtr;
 				for (; ctrl < 2; ctrl++)
 				{
@@ -7345,11 +7346,13 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon)
 	return -1;
 }
 
+#if 0
 // получение размера, занимаемого указанным макросом
 // Ret= 0 - не найден таковой.
 // если CheckMode=-1 - значит пофигу в каком режиме, т.е. первый попавшийся
 int KeyMacro::GetRecordSize(int Key, int CheckMode)
 {
+	//BUGBUG: StrictKeys?
 	int Pos=GetIndex(Key,CheckMode);
 
 	if (Pos == -1)
@@ -7357,6 +7360,7 @@ int KeyMacro::GetRecordSize(int Key, int CheckMode)
 
 	return sizeof(MacroRecord)+MacroLIB[Pos].BufferSize;
 }
+#endif
 
 // получить название моды по коду
 const wchar_t* KeyMacro::GetSubKey(int Mode)

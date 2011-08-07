@@ -403,7 +403,7 @@ struct FindFileOptions
 	string strSearchOutFormat;
 	string strSearchOutFormatWidth;
 	int OutColumnCount;
-	unsigned int OutColumnTypes[20];
+	unsigned __int64 OutColumnTypes[20];
 	int OutColumnWidths[20];
 	int OutColumnWidthType[20];
 };
@@ -687,6 +687,8 @@ struct Options
 	string strTitleAddons;
 
 	int ElevationMode;
+	int CurrentElevationMode;
+
 	BOOL WindowMode;
 
 	string ProfilePath;

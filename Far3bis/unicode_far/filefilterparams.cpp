@@ -63,7 +63,7 @@ FileFilterParams::FileFilterParams()
 	{
 		for(size_t j = 0; j < 4; ++j)
 		{
-			FHighlight.Colors.Color[i][j].ForegroundColor|=0xff000000;
+			MAKE_OPAQUE(FHighlight.Colors.Color[i][j].ForegroundColor);
 		}
 	}
 
@@ -163,7 +163,7 @@ void FileFilterParams::SetMask(bool Used, const wchar_t *Mask)
 			else
 			{
 				string strTmp = strMask;
-				strTmp.LShift(posSeparator+1);
+				strTmp.LShift(posSeparator);
 				strMask.SetLength(posSeparator);
 				Add_PATHEXT(strMask);
 				strMask += strTmp;
@@ -612,9 +612,9 @@ void HighlightDlgUpdateUserControl(FAR_CHAR_INFO *VBufColorExample,HighlightData
 	{
 		Color=Colors.Color[HIGHLIGHTCOLORTYPE_FILE][i];
 
-		if (!(Color.BackgroundColor&0x00ffffff) && !(Color.ForegroundColor&0x00ffffff))
+		if (!COLORVALUE(Color.BackgroundColor) && !COLORVALUE(Color.ForegroundColor))
 		{
-			FARCOLORFLAGS ExFlags = Color.Flags&~FCF_4BITMASK;
+			FARCOLORFLAGS ExFlags = Color.Flags&FCF_EXTENDEDFLAGS;
 			Color=ColorIndexToColor(PalColor[i]);
 			Color.Flags|=ExFlags;
 
@@ -636,14 +636,14 @@ void HighlightDlgUpdateUserControl(FAR_CHAR_INFO *VBufColorExample,HighlightData
 		if (LOWORD(Colors.MarkChar))
 		{
 			VBufColorExample[15*i+1].Char=LOWORD(Colors.MarkChar);
-			if ((Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].ForegroundColor&0x00FFFFFF) || (Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].BackgroundColor&0x00FFFFFF))
+			if (COLORVALUE(Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].ForegroundColor) || COLORVALUE(Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].BackgroundColor))
 			{
 				VBufColorExample[15*i+1].Attributes=Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i];
 			}
 			else
 			{
 				// apply all except color mode
-				FARCOLORFLAGS ExFlags = Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].Flags&~FCF_4BITMASK;
+				FARCOLORFLAGS ExFlags = Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].Flags&FCF_EXTENDEDFLAGS;
 				VBufColorExample[15*i+1].Attributes.Flags|=ExFlags;
 			}
 		}
@@ -763,8 +763,8 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 				for (int i=0; i<2; i++)
 					for (int j=0; j<4; j++)
 					{
-						Colors->Color[i][j].ForegroundColor&=0x00ffffff;
-						Colors->Color[i][j].BackgroundColor&=0x00ffffff;
+						MAKE_TRANSPARENT(Colors->Color[i][j].ForegroundColor);
+						MAKE_TRANSPARENT(Colors->Color[i][j].BackgroundColor);
 					}
 
 				SendDlgMessage(hDlg,DM_SETCHECK,ID_HER_MARKTRANSPARENT,ToPtr(BSTATE_CHECKED));
@@ -796,7 +796,8 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 				Console.GetColorDialog(Color,true,true);
 				EditData->Color[(Param1-ID_HER_NORMALFILE)&1][(Param1-ID_HER_NORMALFILE)/2]=Color;
 				
-				FarGetDialogItem gdi = {SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,0), (FarDialogItem *)xf_malloc(gdi.Size)};
+				size_t Size = SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,0);
+				FarGetDialogItem gdi = {Size, static_cast<FarDialogItem*>(xf_malloc(Size))};
 				SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,&gdi);
 				wchar_t MarkChar[2];
 				//MarkChar это FIXEDIT размером в 1 символ так что проверять размер строки не надо
@@ -814,7 +815,8 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 			if (Param1 == ID_HER_MARKEDIT)
 			{
 				HighlightDataColor *EditData = (HighlightDataColor *) SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
-				FarGetDialogItem gdi = {SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,0), (FarDialogItem *)xf_malloc(gdi.Size)};
+				size_t Size = SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,0);
+				FarGetDialogItem gdi = {Size, static_cast<FarDialogItem*>(xf_malloc(Size))};
 				SendDlgMessage(hDlg,DM_GETDLGITEM,ID_HER_COLOREXAMPLE,&gdi);
 				wchar_t MarkChar[2];
 				//MarkChar это FIXEDIT размером в 1 символ так что проверять размер строки не надо

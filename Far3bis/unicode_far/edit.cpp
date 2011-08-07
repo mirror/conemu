@@ -1061,12 +1061,12 @@ int Edit::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLT:
-		case KEY_RCTRLT:
 		case KEY_CTRLDEL:
-		case KEY_RCTRLDEL:
 		case KEY_CTRLNUMDEL:
-		case KEY_RCTRLNUMDEL:
 		case KEY_CTRLDECIMAL:
+		case KEY_RCTRLT:
+		case KEY_RCTRLDEL:
+		case KEY_RCTRLNUMDEL:
 		case KEY_RCTRLDECIMAL:
 		{
 			if (CurPos>=StrSize)
@@ -2798,7 +2798,8 @@ void Edit::ApplyColor()
 			    Y1,
 			    CurItem->Color,
 			    // Не раскрашиваем выделение
-			    SelColor
+			    SelColor,
+			    true
 			);
 		}
 	}
@@ -3400,12 +3401,12 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 							case KEY_PGDN:
 							case KEY_NUMPAD3:
 							case KEY_ALTLEFT:
-							case KEY_RALTLEFT:
 							case KEY_ALTRIGHT:
-							case KEY_RALTRIGHT:
 							case KEY_ALTHOME:
-							case KEY_RALTHOME:
 							case KEY_ALTEND:
+							case KEY_RALTLEFT:
+							case KEY_RALTRIGHT:
+							case KEY_RALTHOME:
 							case KEY_RALTEND:
 							case KEY_MSWHEEL_UP:
 							case KEY_MSWHEEL_DOWN:
