@@ -55,7 +55,7 @@ typedef const BYTE *LPCBYTE;
 #ifdef _UNICODE
 	#if FAR_UNICODE>=1906
 		#include "common/far3/pluginW3.hpp"
-		#include "common/far3/farcolor.hpp"
+		//#include "common/far3/farcolor.hpp"
 	#else
 		#include "common/unicode/pluginW.hpp"
 		#include "common/unicode/farcolor.hpp"

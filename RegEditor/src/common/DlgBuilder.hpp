@@ -6,7 +6,7 @@ DlgBuilder.hpp
 Динамическое конструирование диалогов
 */
 /*
-Copyright (c) 2009 Far Group
+Copyright © 2009 Far Group
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -84,7 +84,7 @@ struct CheckBoxBinding: public DialogItemBinding<T>
 
 		virtual void SaveValue(T *Item, int RadioGroupIndex)
 		{
-			if (Mask == 0)
+			if (!Mask)
 			{
 				*Value = Item->Selected;
 			}
@@ -125,7 +125,7 @@ struct ComboBoxBinding: public DialogItemBinding<T>
 	{
 	}
 
-	~ComboBoxBinding()
+	virtual ~ComboBoxBinding()
 	{
 		delete [] List->Items;
 		delete List;
@@ -156,7 +156,13 @@ checkbox и radio button вычисляется автоматически, для других элементов передаёт
 - добавляются контролы для второй колонки
 - EndColumns()
 
-Базовая версия класса используется как внутри кода FAR, так и в плагинах.
+Поддерживается также возможность расположения контролов внутри бокса. Используется следующим
+образом:
+- StartSingleBox()
+- добавляются контролы
+- EndSingleBox()
+
+Базовая версия класса используется как внутри кода Far, так и в плагинах.
 */
 
 template<class T>
@@ -168,6 +174,8 @@ class DialogBuilderBase
 		int DialogItemsCount;
 		int DialogItemsAllocated;
 		int NextY;
+		int Indent;
+		int SingleBoxIndex;
 		int OKButtonID, CancelButtonID;
 		int ColumnStartIndex;
 		int ColumnBreakIndex;
@@ -186,7 +194,7 @@ class DialogBuilderBase
 			// чтобы все нормальные диалоги помещались без реаллокации
 			// TODO хорошо бы, чтобы они вообще не инвалидировались
 			DialogItemsAllocated += 128;
-			if (DialogItems == nullptr)
+			if (!DialogItems)
 			{
 				DialogItems = new T[DialogItemsAllocated];
 				Bindings = new DialogItemBinding<T> * [DialogItemsAllocated];
@@ -226,7 +234,7 @@ class DialogBuilderBase
 public:
 		void SetNextY(T *Item)
 		{
-			Item->X1 = 5;
+			Item->X1 = 5 + Indent;
 			Item->Y1 = Item->Y2 = NextY++;
 		}
 
@@ -253,12 +261,14 @@ public:
 
 			case DI_CHECKBOX:
 			case DI_RADIOBUTTON:
+			case DI_BUTTON:
 				Width = TextWidth(Item) + 4;
 				break;
 
 			case DI_EDIT:
 			case DI_FIXEDIT:
 			case DI_COMBOBOX:
+			case DI_PSWEDIT:
 				Width = Item.X2 - Item.X1 + 1;
 				/* стрелка history занимает дополнительное место, но раньше она рисовалась поверх рамки
 				if (Item.Flags & DIF_HISTORY)
@@ -280,6 +290,18 @@ public:
 			T *Title = &DialogItems[0];
 			Title->X2 = Title->X1 + MaxTextWidth() + 3;
 			Title->Y2 = DialogItems [DialogItemsCount-1].Y2 + 1;
+
+			for (int i=1; i<DialogItemsCount; i++)
+			{
+				if (DialogItems[i].Type == DI_SINGLEBOX)
+				{
+					Indent = 2;
+					DialogItems[i].X2 = Title->X2;
+				}
+			}
+
+			Title->X2 += Indent;
+			Indent = 0;
 		}
 
 		int MaxTextWidth()
@@ -422,7 +444,7 @@ public:
 		}
 
 		DialogBuilderBase(const GUID* aDlgGuid)
-			: DialogItems(nullptr), DialogItemsCount(0), DialogItemsAllocated(0), NextY(2),
+			: DialogItems(nullptr), DialogItemsCount(0), DialogItemsAllocated(0), NextY(2), Indent(0), SingleBoxIndex(-1),
 			  ColumnStartIndex(-1), ColumnBreakIndex(-1), ColumnMinWidth(0), DlgGuid(*aDlgGuid)
 		{
 		}
@@ -439,16 +461,24 @@ public:
 		}
 
 	public:
+
+		int GetLastID()
+		{
+			return DialogItemsCount-1;
+		}
+
 		// Добавляет статический текст, расположенный на отдельной строке в диалоге.
 		T *AddText(int LabelId)
 		{
-			T *Item = AddDialogItem(DI_TEXT, GetLangString(LabelId));
+			T *Item = AddDialogItem(DI_TEXT, LabelId == -1 ? EMPTY_TEXT : GetLangString(LabelId));
 			SetNextY(Item);
 			return Item;
 		}
-		T *AddText(const TCHAR* asText)
+
+		// Добавляет статический текст, расположенный на отдельной строке в диалоге.
+		T *AddText(const TCHAR* Label)
 		{
-			T *Item = AddDialogItem(DI_TEXT, asText);
+			T *Item = AddDialogItem(DI_TEXT, Label);
 			SetNextY(Item);
 			return Item;
 		}
@@ -459,22 +489,24 @@ public:
 		//}
 
 		// Добавляет чекбокс.
-		T *AddCheckbox(int TextMessageId, BOOL *Value, int Mask=0)
+		T *AddCheckbox(int TextMessageId, BOOL *Value, int Mask=0, bool ThreeState=false)
 		{
 			T *Item = AddDialogItem(DI_CHECKBOX, GetLangString(TextMessageId));
+			if (ThreeState && !Mask)
+				Item->Flags |= DIF_3STATE;
 			SetNextY(Item);
 			Item->X2 = Item->X1 + ItemWidth(*Item);
-			if (Mask == 0)
+			if (!Mask)
 				Item->Selected = *Value;
 			else
-				Item->Selected = (*Value & Mask) != 0;
+				Item->Selected = (*Value & Mask) ? TRUE : FALSE ;
 			SetLastItemBinding(CreateCheckBoxBinding(Value, Mask));
 			return Item;
 		}
 
 		// Добавляет группу радиокнопок.
 		// Возвращает ИД(Index) первой добавленной кнопки
-		int AddRadioButtons(int *Value, int OptionCount, int MessageIDs[], DWORD AddFlags=0, BOOL abTwoColumns = FALSE)
+		int AddRadioButtons(int *Value, int OptionCount, int MessageIDs[], bool FocusOnSelected=false, unsigned __int64 AddFlags=0, BOOL abTwoColumns = FALSE)
 		{
 			if (abTwoColumns && (ColumnStartIndex != -1 || OptionCount < 2))
 				abTwoColumns = FALSE;
@@ -488,12 +520,18 @@ public:
 				T *Item = AddDialogItem(DI_RADIOBUTTON, GetLangString(MessageIDs[i]));
 				SetNextY(Item);
 				Item->X2 = Item->X1 + ItemWidth(*Item);
-				if (i == 0)
+				if (!i)
 					Item->Flags |= DIF_GROUP;
-				if (*Value == i)
-					Item->Selected = TRUE;
 				if (AddFlags)
 					Item->Flags |= AddFlags;
+				if (*Value == i)
+				{
+					Item->Selected = TRUE;
+					#if FAR_UNICODE>=1988
+					if (FocusOnSelected)
+						Item->Flags |= DIF_FOCUS;
+					#endif
+				}
 				SetLastItemBinding(CreateRadioButtonBinding(Value));
 				if (i == nBreakColumn)
 					ColumnBreak();
@@ -514,7 +552,7 @@ public:
 		{
 			T *Item = AddDialogItem(DI_TEXT, GetLangString(LabelId));
 			Item->Y1 = Item->Y2 = RelativeTo->Y1;
-			Item->X1 = 5;
+			Item->X1 = 5 + Indent;
 			Item->X2 = Item->X1 + ItemWidth(*Item) - 1;
 
 			int RelativeToWidth = RelativeTo->X2 - RelativeTo->X1;
@@ -536,7 +574,35 @@ public:
 
 			return Item;
 		}
-		
+
+		// Добавляет указанную текстовую строку справа от элемента RelativeTo.
+		T *AddTextAfter(T *RelativeTo, int LabelId)
+		{
+			T *Item = AddDialogItem(DI_TEXT, GetLangString(LabelId));
+			Item->Y1 = Item->Y2 = RelativeTo->Y1;
+			Item->X1 = RelativeTo->X1 + ItemWidth(*RelativeTo) - 1 + 2;
+
+			DialogItemBinding<T> *Binding = FindBinding(RelativeTo);
+			if (Binding)
+				Binding->AfterLabelID = GetItemID(Item);
+
+			return Item;
+		}
+
+		// Добавляет кнопку справа от элемента RelativeTo.
+		T *AddButtonAfter(T *RelativeTo, int LabelId)
+		{
+			T *Item = AddDialogItem(DI_BUTTON, GetLangString(LabelId));
+			Item->Y1 = Item->Y2 = RelativeTo->Y1;
+			Item->X1 = RelativeTo->X1 + ItemWidth(*RelativeTo) - 1 + 2;
+
+			DialogItemBinding<T> *Binding = FindBinding(RelativeTo);
+			if (Binding)
+				Binding->AfterLabelID = GetItemID(Item);
+
+			return Item;
+		}
+
 		// Подвязать (a'la AddTextAfter) любой элемент к любому элементу
 		void MoveItemAfter(T *FirstItem, T *AfterItem)
 		{
@@ -556,20 +622,6 @@ public:
 			}
 
 			NextY--;
-		}
-
-		// Добавляет указанную текстовую строку справа от элемента RelativeTo.
-		T *AddTextAfter(T *RelativeTo, int LabelId)
-		{
-			T *Item = AddDialogItem(DI_TEXT, GetLangString(LabelId));
-			Item->Y1 = Item->Y2 = RelativeTo->Y1;
-			Item->X1 = RelativeTo->X2 + 2;
-
-			DialogItemBinding<T> *Binding = FindBinding(RelativeTo);
-			if (Binding)
-				Binding->AfterLabelID = GetItemID(Item);
-
-			return Item;
 		}
 
 		// Начинает располагать поля диалога в две колонки.
@@ -619,6 +671,28 @@ public:
 			ColumnBreakIndex = -1;
 		}
 
+		// Начинает располагать поля диалога внутри single box
+		void StartSingleBox(int MessageId=-1, bool LeftAlign=false)
+		{
+			T *SingleBox = AddDialogItem(DI_SINGLEBOX, MessageId == -1 ? EMPTY_TEXT : GetLangString(MessageId));
+			SingleBox->Flags = LeftAlign ? DIF_LEFTTEXT : DIF_NONE;
+			SingleBox->X1 = 5;
+			SingleBox->Y1 = NextY++;
+			Indent = 2;
+			SingleBoxIndex = DialogItemsCount - 1;
+		}
+
+		// Завершает расположение полей диалога внутри single box
+		void EndSingleBox()
+		{
+			if (SingleBoxIndex != -1)
+			{
+				DialogItems[SingleBoxIndex].Y2 = NextY++;
+				Indent = 0;
+				SingleBoxIndex = -1;
+			}
+		}
+
 		// Добавляет пустую строку.
 		void AddEmptyLine()
 		{
@@ -637,9 +711,10 @@ public:
 		// Добавляет сепаратор, кнопки OK и Cancel.
 		// см. также ниже AddFooterButtons
 		// возвращает индекс первой добавленной кнопки
-		int AddOKCancel(int OKMessageId, int CancelMessageId)
+		int AddOKCancel(int OKMessageId, int CancelMessageId, bool Separator=true)
 		{
-			AddSeparator();
+			if (Separator)
+				AddSeparator();
 
 			T *OKButton = AddDialogItem(DI_BUTTON, GetLangString(OKMessageId));
 			OKButton->Flags |= DIF_CENTERGROUP;
@@ -762,7 +837,7 @@ public:
 	virtual void SaveValue(FarDialogItem *Item, int RadioGroupIndex)
 	{
 		BOOL Selected = static_cast<BOOL>(Info.SendDlgMessage(*DialogHandle, DM_GETCHECK, ID, 0));
-		if (Mask == 0)
+		if (!Mask)
 		{
 			*Value = Selected;
 		}
@@ -828,7 +903,7 @@ public:
 		: DialogAPIBinding(aInfo, aHandle, aID),
 		  Value(aValue)
 	{
-		aInfo.FSF->itoa(*aValue, Buffer, 10);
+		aInfo.FSF->sprintf(Buffer, L"%u", *aValue);
 		int MaskWidth = Width < 31 ? Width : 31;
 		for(int i=0; i<MaskWidth; i++)
 			Mask[i] = '9';
@@ -903,7 +978,7 @@ public:
 #endif
 
 /*
-Версия класса для динамического построения диалогов, используемая в плагинах к FAR.
+Версия класса для динамического построения диалогов, используемая в плагинах к Far.
 */
 class PluginDialogBuilder: public DialogBuilderBase<FarDialogItem>
 {

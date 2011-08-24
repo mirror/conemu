@@ -2290,10 +2290,12 @@ or the drive selection menu (if the Network plugin is not available).
   #Far window title addons#
   Дополнительная информация, выводимая в заголовке окна консоли.
 Может содержать любой текст, включая следующие переменные:
-  #%Ver# - версия Far;
-  #%Build# - номер сборки Far;
-  #%Platform# - архитектура Far;
-  #%Admin# - слово "Администратор", если Far запущен от имени администратора, иначе пустая строка.
+  - #%Ver# - версия Far;
+  - #%Build# - номер сборки Far;
+  - #%Platform# - архитектура Far;
+  - #%Admin# - ^<wrap>слово "Администратор", если Far запущен от имени администратора, иначе пустая строка.
+  - #%PID# - ИД текущего процесса Far;
+
 
 @DialogSettings
 $ #Settings dialog: dialogs#
@@ -2783,17 +2785,17 @@ helps applications to identify the codepage of this file.
 
 
 @EditorGotoPos
-$ #Editor: go to specified line and column#
+$ #Editor: go to specified line and character#
     This dialog allows to change the position in the internal editor.
 
-    You can enter a #row# or a #column#, or both.
+    You can enter a #row# or a #character#, or both.
 
     The first number will be interpreted as a row number, the second as a
-column number. Numbers must be delimited by one of the following characters:
+character number. Numbers must be delimited by one of the following characters:
 "," "." ";" ":" or space.
 
-    If you enter the value in the form ",Col", the editor will jump to the
-specified column in the current line.
+    If you enter the value in the form ",Ch", the editor will jump to the
+specified character in the current line.
 
     If you enter the row with "%" at the end, the editor will jump to the
 specified percent of the file. For example, if you enter #50%#, the editor will
@@ -3411,13 +3413,17 @@ on. The last item, "Alternative full", corresponds to view mode called with
   - #Column types# - column types are encoded as one or several
 characters, delimited with commas. Allowed column types are:
 
-    N[M,O,R]   - file name
+    N[M,O,R[F],N] - file name
                  where: M - show selection marks;
                         O - show names without paths
                             (intended mainly for plugins);
-                        R - right aligned names;
+                        R - right align names that do not fit in column
+                            where: F - right align all names;
+                        N - do not show extensions in name column;
                  These modifiers may be used in combination,
                  for example NMR
+
+    X          - file extension
 
     S[C,T,F,E] - file size
     P[C,T,F,E] - packed file size
@@ -3451,6 +3457,15 @@ characters, delimited with commas. Allowed column types are:
     LN         - number of hard links
 
     F          - number of streams
+
+    B[C,R]     - ^<wrap>(only for status line) fictive column,
+means column break, so, you can set up multiline status area;
+you must specify column width (even if 0) must be specified.
+                 You may supply one of align modificators,
+                 where: C - ^<wrap>center align, leading and trailing spaces will be omitted;
+                        R - right align;
+                 ^<wrap>You may supply B column as first column
+for aligning first status line.
 
     If the column types description contains more than one file name column,
 the file panel will be displayed in multicolumn form.

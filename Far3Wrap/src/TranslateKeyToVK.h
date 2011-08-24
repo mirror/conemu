@@ -83,6 +83,8 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
  		//	VirtKey=FKey-KEY_FKEY_BEGIN;
 		else if (FKey > KEY_FKEY_BEGIN && FKey < KEY_END_FKEY)
 			VirtKey=FKey-KEY_FKEY_BEGIN;
+		else if (FKey == VK_CONTROL || FKey == VK_MENU || FKey == VK_SHIFT)
+			VirtKey=FKey; // изыски, ConEmu может послать такое событие, чтобы в Far не провалился Alt (его "отпускание) после нажатия AltTab
 		else if (FKey && FKey < WCHAR_MAX)
 		{
 			short Vk = VkKeyScan(static_cast<WCHAR>(FKey));

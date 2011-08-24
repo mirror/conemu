@@ -119,6 +119,8 @@ TMacroKeywords MKeywords[] =
 	{2,  L"Far.Width",          MCODE_V_FAR_WIDTH,0},
 	{2,  L"Far.Height",         MCODE_V_FAR_HEIGHT,0},
 	{2,  L"Far.Title",          MCODE_V_FAR_TITLE,0},
+	{2,  L"Far.UpTime",         MCODE_V_FAR_UPTIME,0},
+	{2,  L"Far.PID",            MCODE_V_FAR_PID,0},
 	{2,  L"MacroArea",          MCODE_V_MACROAREA,0},
 
 	{2,  L"ItemCount",          MCODE_V_ITEMCOUNT,0},  // ItemCount - число элементов в текущем объекте
@@ -565,26 +567,41 @@ KeyMacro::~KeyMacro()
 	if (Work.AllocVarTable && Work.locVarTable)
 		xf_free(Work.locVarTable);
 
+	DestroyMacroLib();
+
 	UnregMacroFunction(-1);
+}
+
+void KeyMacro::DestroyMacroLib()
+{
+	if (MacroLIB)
+	{
+		while(MacroLIBCount) DelMacro(MacroLIBCount-1);
+		xf_free(MacroLIB);
+		MacroLIB=nullptr;
+	}
 }
 
 void KeyMacro::InitInternalLIBVars()
 {
 	if (MacroLIB)
 	{
-		for (int I=0; I<MacroLIBCount; I++)
+		for (int ii=0;ii<MacroLIBCount;)
 		{
-			if (MacroLIB[I].BufferSize > 1 && MacroLIB[I].Buffer)
-				xf_free(MacroLIB[I].Buffer);
-
-			if (MacroLIB[I].Src)
-				xf_free(MacroLIB[I].Src);
-
-			if (MacroLIB[I].Description)
-				xf_free(MacroLIB[I].Description);
+			if (IsEqualGUID(FarGuid,MacroLIB[ii].Guid))
+				DelMacro(ii);
+			else
+				++ii;
 		}
-
-		xf_free(MacroLIB);
+		if (0==MacroLIBCount)
+		{
+			xf_free(MacroLIB);
+			MacroLIB=nullptr;
+		}
+	}
+	else
+	{
+		MacroLIBCount=0;
 	}
 
 	if (RecBuffer)
@@ -593,8 +610,8 @@ void KeyMacro::InitInternalLIBVars()
 	RecBufferSize=0;
 
 	memset(&IndexMode,0,sizeof(IndexMode));
-	MacroLIBCount=0;
-	MacroLIB=nullptr;
+ 	//MacroLIBCount=0;
+ 	//MacroLIB=nullptr;
 	//LastOpCodeUF=KEY_MACRO_U_BASE;
 }
 
@@ -660,14 +677,14 @@ void KeyMacro::ReleaseWORKBuffer(BOOL All)
 		}
 		else
 		{
-			if (Work.MacroWORK->BufferSize > 1 && Work.MacroWORK->Buffer)
-				xf_free(Work.MacroWORK->Buffer);
+			if (Work.MacroWORK[0].BufferSize > 1 && Work.MacroWORK[0].Buffer)
+				xf_free(Work.MacroWORK[0].Buffer);
 
-			if (Work.MacroWORK->Src)
-				xf_free(Work.MacroWORK->Src);
+			if (Work.MacroWORK[0].Src)
+				xf_free(Work.MacroWORK[0].Src);
 
-			if (Work.MacroWORK->Description)
-				xf_free(Work.MacroWORK->Description);
+			if (Work.MacroWORK[0].Description)
+				xf_free(Work.MacroWORK[0].Description);
 
 			if (Work.AllocVarTable)
 			{
@@ -742,7 +759,9 @@ int KeyMacro::ProcessKey(int Key)
 
 	if (Recording) // Идет запись?
 	{
-		if ((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot) // признак конца записи?
+		// признак конца записи?
+		if ((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlDot
+			|| (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot)
 		{
 			_KEYMACRO(CleverSysLog Clev(L"MACRO End record..."));
 			DWORD MacroKey;
@@ -759,7 +778,8 @@ int KeyMacro::ProcessKey(int Key)
 			// добавим проверку на удаление
 			// если удаляем, то не нужно выдавать диалог настройки.
 			//if (MacroKey != (DWORD)-1 && (Key==KEY_CTRLSHIFTDOT || Recording==2) && RecBufferSize)
-			if (MacroKey != (DWORD)-1 && (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot && RecBufferSize)
+			if (MacroKey != (DWORD)-1 && RecBufferSize
+				&& ((unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot))
 			{
 				if (!GetMacroSettings(MacroKey,Flags))
 					MacroKey=(DWORD)-1;
@@ -879,7 +899,9 @@ int KeyMacro::ProcessKey(int Key)
 			return FALSE;
 		}
 	}
-	else if ((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot) // Начало записи?
+	// Начало записи?
+	else if ((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlDot
+			|| (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot)
 	{
 		_KEYMACRO(CleverSysLog Clev(L"MACRO Begin record..."));
 
@@ -899,7 +921,7 @@ int KeyMacro::ProcessKey(int Key)
 		// тип записи - с вызовом диалога настроек или...
 		// В зависимости от того, КАК НАЧАЛИ писать макрос, различаем общий режим (Ctrl-.
 		// с передачей плагину кеев) или специальный (Ctrl-Shift-. - без передачи клавиш плагину)
-		Recording=((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot) ? MACROMODE_RECORDING_COMMON:MACROMODE_RECORDING;
+		Recording=((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlDot) ? MACROMODE_RECORDING_COMMON:MACROMODE_RECORDING;
 
 		if (RecBuffer)
 			xf_free(RecBuffer);
@@ -1070,6 +1092,17 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 					Console.GetTitle(strFileName);
 					Cond=strFileName.CPtr();
 					break;
+				case MCODE_V_FAR_PID:
+					Cond=(__int64)GetCurrentProcessId();
+					break;
+				case MCODE_V_FAR_UPTIME:
+				{
+					LARGE_INTEGER Frequency, Counter;
+					QueryPerformanceFrequency(&Frequency);
+					QueryPerformanceCounter(&Counter);
+					Cond=((Counter.QuadPart-FarUpTime.QuadPart)*1000)/Frequency.QuadPart;
+					break;
+				}
 				case MCODE_V_MACROAREA:
 					Cond=GetSubKey(CtrlObject->Macro.GetMode());
 					break;
@@ -2361,17 +2394,14 @@ static bool kbdLayoutFunc(const TMacroFunction*)
 	DWORD dwLayout = (DWORD)VMStack.Pop().getInteger();
 
 	BOOL Ret=TRUE;
-	HKL  Layout=(HKL)0, RetLayout=(HKL)0;
+	HKL  Layout=0, RetLayout=0;
 
-	if (ifn.pfnGetConsoleKeyboardLayoutName)
+	wchar_t LayoutName[1024]={}; // BUGBUG!!!
+	if (ifn.GetConsoleKeyboardLayoutName(LayoutName))
 	{
-		wchar_t LayoutName[1024]={}; // BUGBUG!!!
-		if (ifn.pfnGetConsoleKeyboardLayoutName(LayoutName))
-		{
-			wchar_t *endptr;
-			DWORD res=(DWORD)wcstoul(LayoutName, &endptr, 16);
-			RetLayout=(HKL)(INT_PTR)(HIWORD(res)? res : MAKELONG(res,res));
-		}
+		wchar_t *endptr;
+		DWORD res=wcstoul(LayoutName, &endptr, 16);
+		RetLayout=(HKL)(INT_PTR)(HIWORD(res)? res : MAKELONG(res,res));
 	}
 
 	HWND hWnd = Console.GetWindow();
@@ -2439,7 +2469,7 @@ static bool promptFunc(const TMacroFunction*)
 		const wchar_t *title=NullToEmpty(ValTitle.toString());
 		string strDest;
 
-		if (GetString(title,prompt,history,src,strDest,nullptr,Flags&~FIB_CHECKBOX,nullptr,nullptr))
+		if (GetString(title,prompt,history,src,strDest,nullptr,(Flags&~FIB_CHECKBOX)|FIB_ENABLEEMPTY,nullptr,nullptr))
 		{
 			Result=strDest.CPtr();
 			Result.toString();
@@ -2683,6 +2713,11 @@ static bool menushowFunc(const TMacroFunction*)
 		}
 	}
 
+	Frame *frame;
+
+	if ((frame=FrameManager->GetBottomFrame()) )
+		frame->Lock();
+
 	Menu.Show();
 	int PrevSelectedPos=Menu.GetSelectPos();
 	DWORD Key=0;
@@ -2819,6 +2854,9 @@ static bool menushowFunc(const TMacroFunction*)
 				Result=L"";
 		}
 	}
+
+	if (frame )
+		frame->Unlock();
 
 	VMStack.Push(Result);
 	return true;
@@ -4134,7 +4172,7 @@ static bool chrFunc(const TMacroFunction*)
 
 	if (tmpVar.isInteger())
 	{
-		const wchar_t tmp[]={tmpVar.i()&0xFFFF,L'\0'};
+		const wchar_t tmp[]={static_cast<wchar_t>(tmpVar.i()), L'\0'};
 		tmpVar = tmp;
 		tmpVar.toString();
 	}
@@ -4661,7 +4699,7 @@ int KeyMacro::GetKey()
 		*/
 		//if(Work.MacroWORK)
 		{
-			Work.Executing=Work.MacroWORK->Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
+			Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
 			Work.ExecLIBPos=0; //?????????????????????????????????
 		}
 		//else
@@ -4749,7 +4787,7 @@ done:
 	}
 
 	if (!Work.ExecLIBPos)
-		Work.Executing=Work.MacroWORK->Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
+		Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
 
 	// Mantis#0000581: Добавить возможность прервать выполнение макроса
 	{
@@ -4917,9 +4955,7 @@ done:
 		case MCODE_OP_REP:
 		{
 			// получим текущее значение счетчика
-			LARGE_INTEGER Counter;
-			Counter.u.HighPart=GetOpCode(MR,Work.ExecLIBPos);
-			Counter.u.LowPart=GetOpCode(MR,Work.ExecLIBPos+1);
+			LARGE_INTEGER Counter ={GetOpCode(MR,Work.ExecLIBPos+1), GetOpCode(MR,Work.ExecLIBPos)};
 			// и положим его на вершину стека
 			VMStack.Push(Counter.QuadPart);
 			SetMacroConst(constRCounter,Counter.QuadPart);
@@ -5064,18 +5100,16 @@ done:
 		}
 		case MCODE_OP_PUSHFLOAT:
 		{
-			union { struct { DWORD l, h; }; double d; } u;
-			u.h = GetOpCode(MR,Work.ExecLIBPos++);   //???
-			u.l = GetOpCode(MR,Work.ExecLIBPos++);    //???
+			union { struct { DWORD l, h; }; double d; } u = {GetOpCode(MR,Work.ExecLIBPos+1), GetOpCode(MR,Work.ExecLIBPos)};
+			Work.ExecLIBPos+=2;
 			VMStack.Push(u.d);
 			goto begin;
 		}
 		case MCODE_OP_PUSHUNKNOWN:
 		case MCODE_OP_PUSHINT: // Положить целое значение на стек.
 		{
-			LARGE_INTEGER i64;
-			i64.u.HighPart=GetOpCode(MR,Work.ExecLIBPos++);   //???
-			i64.u.LowPart=GetOpCode(MR,Work.ExecLIBPos++);    //???
+			LARGE_INTEGER i64 = {GetOpCode(MR,Work.ExecLIBPos+1), GetOpCode(MR,Work.ExecLIBPos)};
+			Work.ExecLIBPos+=2;
 			TVar *ptrVar=VMStack.Push(i64.QuadPart);
 			if (Key == MCODE_OP_PUSHUNKNOWN)
 				ptrVar->SetType(vtUnknown);
@@ -5796,6 +5830,8 @@ void KeyMacro::SaveMacros(BOOL AllSaved)
 	for (int I=0; I<MacroLIBCount; I++)
 	{
 		if (!AllSaved  && !(MacroLIB[I].Flags&MFLAGS_NEEDSAVEMACRO))
+			continue;
+		if (!IsEqualGUID(FarGuid,MacroLIB[I].Guid))
 			continue;
 
 		MkRegKeyName(I, strRegKeyName);
@@ -7114,8 +7150,8 @@ int KeyMacro::PostNewMacro(const wchar_t *PlainText,UINT64 Flags,DWORD AKey,BOOL
 	*NewMacroWORK=NewMacroWORK2;
 	Work.MacroWORKCount++;
 
-	//Work.Executing=Work.MacroWORK->Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
-	if (Work.ExecLIBPos == Work.MacroWORK->BufferSize)
+	//Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
+	if (Work.ExecLIBPos == Work.MacroWORK[0].BufferSize)
 		Work.ExecLIBPos=0;
 
 	return TRUE;
@@ -7169,8 +7205,8 @@ int KeyMacro::PostNewMacro(MacroRecord *MRec,BOOL NeedAddSendFlag,BOOL IsPluginS
 	*NewMacroWORK=NewMacroWORK2;
 	Work.MacroWORKCount++;
 
-	//Work.Executing=Work.MacroWORK->Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
-	if (Work.ExecLIBPos == Work.MacroWORK->BufferSize)
+	//Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
+	if (Work.ExecLIBPos == Work.MacroWORK[0].BufferSize)
 		Work.ExecLIBPos=0;
 
 	return TRUE;
@@ -7276,10 +7312,12 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
 {
 	if (MacroLIB)
 	{
+		int KeyParam=Key;
 		for (int I=0; I < 2; ++I)
 		{
 			int Pos,Len;
 			MacroRecord *MPtr=nullptr;
+			Key=KeyParam;
 
 			if (CheckMode == -1)
 			{
@@ -7315,7 +7353,10 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
 							//        && (CheckMode == -1 || (MPtr->Flags&MFLAGS_MODEMASK) == CheckMode))
 							//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
 							if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
-								return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
+							{
+							    if(!MPtr->Callback||MPtr->Callback(MPtr->Id,AKMFLAGS_NONE))
+							    	return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
+							}
 						}
 					}
 					if (!ctrl)
@@ -7662,7 +7703,7 @@ BOOL KeyMacro::CheckCurMacroFlags(DWORD Flags)
 {
 	if (Work.Executing && Work.MacroWORK)
 	{
-		return (Work.MacroWORK->Flags&Flags)?TRUE:FALSE;
+		return (Work.MacroWORK[0].Flags&Flags)?TRUE:FALSE;
 	}
 
 	return FALSE;
@@ -7708,15 +7749,16 @@ bool KeyMacro::IsHistroyEnable(int TypeHistory)
 
 static int __cdecl SortMacros(const MacroRecord *el1,const MacroRecord *el2)
 {
-	int Mode1, Mode2;
-
-	if ((Mode1=(el1->Flags&MFLAGS_MODEMASK)) == (Mode2=(el2->Flags&MFLAGS_MODEMASK)))
-		return 0;
-
-	if (Mode1 < Mode2)
-		return -1;
-
-	return 1;
+	int result=(el1->Flags&MFLAGS_MODEMASK)-(el2->Flags&MFLAGS_MODEMASK);
+	if (result==0)
+	{
+		result=memcmp(&el1->Guid,&el2->Guid,sizeof(GUID));
+		if (result==0)
+		{
+			result=static_cast<char*>(el1->Id)-static_cast<char*>(el2->Id);
+		}
+	}
+	return result;
 }
 
 // Сортировка элементов списка
@@ -7790,7 +7832,7 @@ int KeyMacro::IsExecutingLastKey()
 {
 	if (Work.Executing && Work.MacroWORK)
 	{
-		return (Work.ExecLIBPos == Work.MacroWORK->BufferSize-1);
+		return (Work.ExecLIBPos == Work.MacroWORK[0].BufferSize-1);
 	}
 
 	return FALSE;
@@ -7883,4 +7925,58 @@ static LONG _RegWriteString(const wchar_t *Key,const wchar_t *ValueName,const wc
 	}
 
 	return Ret;
+}
+
+int KeyMacro::AddMacro(const wchar_t *PlainText,const wchar_t *Description,FARKEYMACROFLAGS Flags,const INPUT_RECORD& AKey,const GUID& PluginId,void* Id,FARMACROCALLBACK Callback)
+{
+	MacroRecord CurMacro={0};
+	CurMacro.Flags=MACRO_COMMON;
+	if (Flags&KMFLAGS_DISABLEOUTPUT) CurMacro.Flags|=MFLAGS_DISABLEOUTPUT;
+	if (Flags&KMFLAGS_NOSENDKEYSTOPLUGINS) CurMacro.Flags|=MFLAGS_NOSENDKEYSTOPLUGINS;
+	CurMacro.Key=InputRecordToKey(&AKey);
+	CurMacro.Src=xf_wcsdup(PlainText);
+	CurMacro.Description=xf_wcsdup(Description);
+	CurMacro.Guid=PluginId;
+	CurMacro.Id=Id;
+	CurMacro.Callback=Callback;
+	if (ParseMacroString(&CurMacro,PlainText,false))
+	{
+		MacroRecord *NewMacroLIB=(MacroRecord *)xf_realloc(MacroLIB,sizeof(*MacroLIB)*(MacroLIBCount+1));
+		if (NewMacroLIB)
+		{
+			MacroLIB=NewMacroLIB;
+			MacroLIB[MacroLIBCount]=CurMacro;
+			++MacroLIBCount;
+			KeyMacro::Sort();
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+int KeyMacro::DelMacro(const GUID& PluginId,void* Id)
+{
+	size_t size=IndexMode[MACRO_COMMON][0]+IndexMode[MACRO_COMMON][1];
+	for(size_t ii=IndexMode[MACRO_COMMON][0];ii<size;++ii)
+	{
+		if(MacroLIB[ii].Id==Id&&IsEqualGUID(MacroLIB[ii].Guid,PluginId))
+		{
+			DelMacro(ii);
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+void KeyMacro::DelMacro(size_t Index)
+{
+	if (MacroLIB[Index].BufferSize > 1 && MacroLIB[Index].Buffer)
+		xf_free(MacroLIB[Index].Buffer);
+	if (MacroLIB[Index].Src)
+		xf_free(MacroLIB[Index].Src);
+	if (MacroLIB[Index].Description)
+		xf_free(MacroLIB[Index].Description);
+	memcpy(MacroLIB+Index,MacroLIB+Index+1,(MacroLIBCount-Index-1)*sizeof(MacroLIB[0]));
+	--MacroLIBCount;
+	KeyMacro::Sort();
 }

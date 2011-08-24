@@ -277,7 +277,7 @@ void ChangeVideoMode(int Maximized)
 
 void ChangeVideoMode(int NumLines,int NumColumns)
 {
-	int xSize=NumColumns,ySize=NumLines;
+	short xSize=NumColumns,ySize=NumLines;
 
 	COORD Size;
 	Console.GetSize(Size);
@@ -501,7 +501,7 @@ void GetCursorType(bool& Visible, DWORD& Size)
 
 void MoveRealCursor(int X,int Y)
 {
-	COORD C={X,Y};
+	COORD C={static_cast<SHORT>(X),static_cast<SHORT>(Y)};
 	Console.SetCursorPosition(C);
 }
 
@@ -565,7 +565,7 @@ void InitRecodeOutTable()
 			0x256A, 0x2518, 0x250C, 0x2588, 0x2584, 0x258C, 0x2590, 0x2580,
 		};
 		// перед [пере]инициализацией восстановим буфер (либо из реестра, либо...)
-		GeneralCfg->GetValue(L"System",L"BoxSymbols",(char *)BoxSymbols,sizeof(_BoxSymbols),(const char *)_BoxSymbols);
+		GeneralCfg->GetValue(L"System",L"BoxSymbols", BoxSymbols, sizeof(_BoxSymbols), _BoxSymbols);
 
 		if (Opt.NoGraphics)
 		{

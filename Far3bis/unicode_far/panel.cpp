@@ -451,7 +451,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 			if (!(DiskMask & 1))   //нету диска
 				continue;
 
-			wchar_t Drv[]={L'&',L'A'+I,L':',L'\\',L'\0'};
+			wchar_t Drv[]={L'&',static_cast<wchar_t>(L'A'+I),L':',L'\\',L'\0'};
 			strRootDir=Drv+1;
 			Drv[3]=L' ';
 			strMenuText=Drv;
@@ -1252,9 +1252,9 @@ int Panel::ProcessDelDisk(wchar_t Drive, int DriveType,VMenu *ChDiskMenu)
 				vst.VendorId=VIRTUAL_STORAGE_TYPE_VENDOR_MICROSOFT;
 				OPEN_VIRTUAL_DISK_PARAMETERS ovdp = {OPEN_VIRTUAL_DISK_VERSION_1, 0};
 				HANDLE Handle;
-				if(ifn.pfnOpenVirtualDisk(&vst, strVhdPath, VIRTUAL_DISK_ACCESS_DETACH, OPEN_VIRTUAL_DISK_FLAG_NONE, &ovdp, &Handle) == ERROR_SUCCESS)
+				if(ifn.OpenVirtualDisk(&vst, strVhdPath, VIRTUAL_DISK_ACCESS_DETACH, OPEN_VIRTUAL_DISK_FLAG_NONE, &ovdp, &Handle) == ERROR_SUCCESS)
 				{
-					int Result = ifn.pfnDetachVirtualDisk(Handle, DETACH_VIRTUAL_DISK_FLAG_NONE, 0) == ERROR_SUCCESS? DRIVE_DEL_SUCCESS : DRIVE_DEL_FAIL;
+					int Result = ifn.DetachVirtualDisk(Handle, DETACH_VIRTUAL_DISK_FLAG_NONE, 0) == ERROR_SUCCESS? DRIVE_DEL_SUCCESS : DRIVE_DEL_FAIL;
 					CloseHandle(Handle);
 					return Result;
 				}

@@ -358,9 +358,7 @@ bool FileFilterParams::FileInFilter(const FAR_FIND_DATA_EX& fde, unsigned __int6
 					ft=&fde.ftLastWriteTime;
 			}
 
-			ULARGE_INTEGER ftime;
-			ftime.u.LowPart  = ft->dwLowDateTime;
-			ftime.u.HighPart = ft->dwHighDateTime;
+			ULARGE_INTEGER ftime = {ft->dwLowDateTime, ft->dwHighDateTime};
 
 			if (FDate.bRelative)
 			{
@@ -630,11 +628,11 @@ void HighlightDlgUpdateUserControl(FAR_CHAR_INFO *VBufColorExample,HighlightData
 			VBufColorExample[15*i+k].Char=ptr[k];
 			VBufColorExample[15*i+k].Attributes=Color;
 		}
-		// inherit only color mode, not style
-		VBufColorExample[15*i+1].Attributes.Flags = Color.Flags&FCF_4BITMASK;
 
 		if (LOWORD(Colors.MarkChar))
 		{
+			// inherit only color mode, not style
+			VBufColorExample[15*i+1].Attributes.Flags = Color.Flags&FCF_4BITMASK;
 			VBufColorExample[15*i+1].Char=LOWORD(Colors.MarkChar);
 			if (COLORVALUE(Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].ForegroundColor) || COLORVALUE(Colors.Color[HIGHLIGHTCOLORTYPE_MARKCHAR][i].BackgroundColor))
 			{
@@ -1018,7 +1016,7 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 	FF->GetColors(&Colors);
 	HighlightDlgUpdateUserControl(VBufColorExample,Colors);
 	FilterDlg[ID_HER_COLOREXAMPLE].VBuf=VBufColorExample;
-	wchar_t MarkChar[] = {(wchar_t)Colors.MarkChar&0x0000FFFF, 0};
+	wchar_t MarkChar[] = {static_cast<wchar_t>(Colors.MarkChar), 0};
 	FilterDlg[ID_HER_MARKEDIT].strData=MarkChar;
 	FilterDlg[ID_HER_MARKTRANSPARENT].Selected=(Colors.MarkChar&0xFF0000?1:0);
 	FilterDlg[ID_HER_CONTINUEPROCESSING].Selected=(FF->GetContinueProcessing()?1:0);

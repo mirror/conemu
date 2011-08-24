@@ -114,3 +114,5 @@ SYSTEM_INFO SystemInfo;
 FormatScreen FS;
 
 DWORD ErrorMode;
+
+LARGE_INTEGER FarUpTime;

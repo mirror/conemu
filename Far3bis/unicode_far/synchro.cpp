@@ -41,75 +41,62 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 PluginSynchro PluginSynchroManager;
 
-PluginSynchro::PluginSynchro():
-	Mutex(CreateMutex(nullptr,FALSE,nullptr))
+PluginSynchro::PluginSynchro()
 {
 }
 
 PluginSynchro::~PluginSynchro()
 {
-	CloseHandle(Mutex);
 }
 
 void PluginSynchro::Synchro(bool Plugin, const GUID& PluginId,void* Param)
 {
-	if (Mutex)
-	{
-		if (WaitForSingleObject(Mutex,INFINITE)==WAIT_OBJECT_0)
-		{
-			SynchroData* item=Data.Push();
-			item->Plugin=Plugin;
-			item->PluginId=PluginId;
-			item->Param=Param;
-			ReleaseMutex(Mutex);
-		}
-	}
+	CriticalSectionLock Lock(CS);
+	SynchroData* item=Data.Push();
+	item->Plugin=Plugin;
+	item->PluginId=PluginId;
+	item->Param=Param;
 }
 
 bool PluginSynchro::Process(void)
 {
 	bool res=false;
-
-	if (Mutex)
+	bool process=false; bool plugin=false; GUID PluginId=FarGuid; void* param=nullptr;
 	{
-		bool process=false; bool plugin=false; GUID PluginId=FarGuid; void* param=nullptr;
+		CriticalSectionLock Lock(CS);
+		SynchroData* item=Data.First();
 
-		if (WaitForSingleObject(Mutex,INFINITE)==WAIT_OBJECT_0)
+		if (item)
 		{
-			SynchroData* item=Data.First();
-
-			if (item)
-			{
-				process=true;
-				plugin=item->Plugin;
-				PluginId=item->PluginId;
-				param=item->Param;
-				Data.Delete(item);
-			}
-
-			ReleaseMutex(Mutex);
+			process=true;
+			plugin=item->Plugin;
+			PluginId=item->PluginId;
+			param=item->Param;
+			Data.Delete(item);
 		}
+	}
 
-		if (process)
+	if (process)
+	{
+		if(plugin)
 		{
-			if(plugin)
-			{
-				Plugin* pPlugin=CtrlObject?CtrlObject->Plugins.FindPlugin(PluginId):nullptr;
+			Plugin* pPlugin=CtrlObject?CtrlObject->Plugins.FindPlugin(PluginId):nullptr;
 
-				// Здесь не проверялась валидность pPlugin. Он мог быть выгружен (например через FarCmd -> unload:)
-				if (pPlugin && CtrlObject->Plugins.IsPluginValid(pPlugin))
-				{
-					pPlugin->ProcessSynchroEvent(SE_COMMONSYNCHRO,param);
-					res=true;
-				}
-			}
-			else
+			// Здесь не проверялась валидность pPlugin. Он мог быть выгружен (например через FarCmd -> unload:)
+			if (pPlugin && CtrlObject->Plugins.IsPluginValid(pPlugin))
+
 			{
-				ElevationApproveDlgSync(param);
+				pPlugin->ProcessSynchroEvent(SE_COMMONSYNCHRO,param);
 				res=true;
 			}
 		}
+		else
+		{
+			ElevationApproveDlgSync(param);
+			res=true;
+		}
 	}
+
 
 	return res;
 }

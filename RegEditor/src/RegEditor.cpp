@@ -105,7 +105,14 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
 	memset(Info, 0, sizeof(GlobalInfo));
 	Info->StructSize = sizeof(GlobalInfo);
 	
-	Info->MinFarVersion = FARMANAGERVERSION;
+	// Пока можем работать и в 2098 и в 2159
+	Info->MinFarVersion = /*FARMANAGERVERSION*/
+		MAKEFARVERSION(
+			FARMANAGERVERSION_MAJOR,
+			FARMANAGERVERSION_MINOR,
+			FARMANAGERVERSION_REVISION,
+			2098/*FARMANAGERVERSION_BUILD*/,
+			FARMANAGERVERSION_STAGE);
 	
 	// Build: YYMMDDX (YY - две цифры года, MM - месяц, DD - день, X - 0 и выше-номер подсборки)
 	Info->Version = MAKEFARVERSION(MVV_1,MVV_2,MVV_3,((MVV_1 % 100)*100000) + (MVV_2*1000) + (MVV_3*10) + (MVV_4 % 10),VS_RELEASE);
@@ -126,7 +133,7 @@ int WINAPI GetMinFarVersionW(void)
 	#ifdef _UNICODE
 		#if FAR_UNICODE>=1906
 			// Чтобы в Far2 не загружался
-			MAKEFARVERSION2(FARMANAGERVERSION_MAJOR,FARMANAGERVERSION_MINOR,FARMANAGERVERSION_BUILD)
+			MAKEFARVERSION2(FARMANAGERVERSION_MAJOR,FARMANAGERVERSION_MINOR,2098/*FARMANAGERVERSION_BUILD*/)
 		#else
 			// 1607 - только там поправлено падение фара при FCTL_SETNUMERICSORT
 			MAKEFARVERSION(FARMANAGERVERSION_MAJOR,FARMANAGERVERSION_MINOR,max(FARMANAGERVERSION_BUILD,1607))
@@ -1710,7 +1717,8 @@ int WINAPI ProcessEditorEventW(
 								MacroCheckMacroText mcr = {{sizeof(MacroCheckMacroText)}};
 								mcr.Text.SequenceText = pszMacro;
 								mcr.Text.Flags = KMFLAGS_SILENTCHECK;
-								psi.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
+								#define MCTLARG0 ((gFarVersion.Build>=2159) ? &guid_PluginGuid : (GUID*)INVALID_HANDLE_VALUE)
+								psi.MacroControl(MCTLARG0, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
 								Result = mcr.Result;
 								#else
 								ActlKeyMacro mcr = {MCMD_CHECKMACRO};

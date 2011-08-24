@@ -1230,7 +1230,7 @@ void REPlugin::RenameOrCopyItem(BOOL abCopyOnly /*= FALSE*/)
 			}
 		}
 		//nValueType = nDataType;
-		val.AddRadioButtons(&nValueType, countof(nTypes), nTypes, bDontChangeType ? DIF_DISABLE : 0, TRUE);
+		val.AddRadioButtons(&nValueType, countof(nTypes), nTypes, false, bDontChangeType ? DIF_DISABLE : 0, TRUE);
 	}
 
 	//TODO: Добавить кнопку "&Edit" для создания значения через редактор *.reg
@@ -3335,7 +3335,7 @@ BOOL REPlugin::EditNumber(wchar_t** pName, LPVOID pNumber, REGTYPE* pnDataType, 
 
 	Edt.StartColumns();
 	Edt.AddText(REValueTypeLabel);
-	Edt.AddRadioButtons(&nValueType, countof(nTypes), nTypes, ((cbSize == 4 || cbSize == 8) ? 0 : DIF_DISABLE));
+	Edt.AddRadioButtons(&nValueType, countof(nTypes), nTypes, false, ((cbSize == 4 || cbSize == 8) ? 0 : DIF_DISABLE));
 	p = Edt.AddText(REValueSizeStatic);
 	Edt.nValueSizeId = Edt.GetItemIndex(p);
 	Edt.ColumnBreak();

@@ -2798,6 +2798,7 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 
 	// ≈сли нажата кнопка с правыми Ctrl или Alt по возможности обработать их как левые
 	bool RightAccel = (Key&(KEY_RCTRL|KEY_RALT))!=0 && (Key&(KEY_CTRL|KEY_ALT))==0;
+	bool KeyFound = false;
 	for (int K=RightAccel?0:1; K <= 1; K++)
 	{
 		for (int I=0; I < ItemCount; I++)
@@ -2817,8 +2818,13 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 					EndLoop = TRUE;
 				}
 
+				KeyFound = true;
 				break;
 			}
+		}
+		if (KeyFound)
+		{
+			break;
 		}
 		if (RightAccel)
 		{

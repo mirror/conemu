@@ -88,10 +88,15 @@ namespace Far2
 //namespace Far3
 //{
 #undef __PLUGIN_HPP__
-#if MVV_3>=2103
+#if MVV_3>=2159
 	#include "pluginW3.hpp"
+	#define MCTLARG(g) &g
+#elif MVV_3>=2103
+	#include "pluginW3#2124.hpp"
+	#define MCTLARG(g) INVALID_HANDLE_VALUE
 #else
 	#include "pluginW3#2098.hpp"
+	#define MCTLARG(g) INVALID_HANDLE_VALUE
 #endif
 #undef __FARKEYS_HPP__
 #if MVV_3<=2102
@@ -1825,7 +1830,7 @@ int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 				// Цифры на цифровой клавиатуре
 				if (!((r.Event.KeyEvent.uChar.UnicodeChar == rDbg.Event.KeyEvent.uChar.UnicodeChar)
 						&& ((r.Event.KeyEvent.uChar.UnicodeChar >= '0' && r.Event.KeyEvent.uChar.UnicodeChar <='9')
-							|| (r.Event.KeyEvent.uChar.UnicodeChar=='.'))))
+							|| (r.Event.KeyEvent.uChar.UnicodeChar=='.') || (r.Event.KeyEvent.uChar.UnicodeChar==','))))
 				{
 					if (r.Event.KeyEvent.wVirtualKeyCode != rDbg.Event.KeyEvent.wVirtualKeyCode)
 						nCmp = 1;
@@ -1845,7 +1850,13 @@ int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 			if ((r.Event.KeyEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)
 					&& !((r.Event.KeyEvent.dwControlKeyState&CTRLMASK)==SHIFT_PRESSED
 							&& (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)==0
-							&& (r.Event.KeyEvent.wVirtualKeyCode>='A' && r.Event.KeyEvent.wVirtualKeyCode<='Z')))
+							&& (r.Event.KeyEvent.wVirtualKeyCode>='A' && r.Event.KeyEvent.wVirtualKeyCode<='Z'
+								||(r.Event.KeyEvent.wVirtualKeyCode==0xBA/*Ж*/)))
+					&& !(r.Event.KeyEvent.wVirtualKeyCode == VK_CONTROL
+							&& (r.Event.KeyEvent.dwControlKeyState&RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED)
+							&& (rDbg.Event.KeyEvent.dwControlKeyState&RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED))
+					&& !((r.Event.KeyEvent.uChar.UnicodeChar=='.') || (r.Event.KeyEvent.uChar.UnicodeChar==','))
+				)
 				nCmp = 1;
 		}
 		else if (r.EventType == MOUSE_EVENT)
@@ -4307,6 +4318,39 @@ int WrapPluginInfo::FarApiEditor(const wchar_t *FileName, const wchar_t *Title, 
 		| ((Flags & Far2::EF_DELETEONCLOSE) ? EF_DELETEONCLOSE : 0)
 		| ((Flags & Far2::EF_IMMEDIATERETURN) ? EF_IMMEDIATERETURN : 0)
 		| ((Flags & Far2::EF_DELETEONLYFILEONCLOSE) ? EF_DELETEONLYFILEONCLOSE : 0);
+	// Нельзя. DirSync должен открываться НЕмодально
+#if 0
+	// Проверим, а можно ли немодальный редактор вызывать?
+	if (Flags3 & EF_NONMODAL)
+	{
+		INT_PTR nArea = psi3.MacroControl(MCTLARG(guid), MCTL_GETAREA, 0, 0);
+		switch(nArea)
+		{
+			case MACROAREA_SHELL:
+			case MACROAREA_INFOPANEL:
+			case MACROAREA_QVIEWPANEL:
+			case MACROAREA_TREEPANEL:
+			case MACROAREA_VIEWER:
+			case MACROAREA_EDITOR:
+			case MACROAREA_SEARCH:
+			case MACROAREA_AUTOCOMPLETION:
+				break;
+			case MACROAREA_DIALOG:
+			case MACROAREA_DISKS:
+			case MACROAREA_FINDFOLDER:
+			case MACROAREA_HELP:
+			case MACROAREA_MAINMENU:
+			case MACROAREA_MENU:
+			case MACROAREA_USERMENU:
+			case MACROAREA_OTHER:
+				Flags3 &= ~EF_NONMODAL;
+				break;
+			default:
+				_ASSERTE(FALSE); // неизвестная область?
+				Flags3 &= ~EF_NONMODAL;				
+		}
+	}
+#endif
 	int iRc = psi3.Editor(FileName, Title, X1,Y1,X2,Y2, Flags3, StartLine, StartChar, CodePage);
 	return iRc;
 }
@@ -4880,10 +4924,10 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				switch (p2->Command)
 				{
 				case Far2::MCMD_LOADALL:
-					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_LOADALL, 0, 0);
+					iRc = psi3.MacroControl(MCTLARG(guid), MCTL_LOADALL, 0, 0);
 					break;
 				case Far2::MCMD_SAVEALL:
-					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_LOADALL, 0, 0);
+					iRc = psi3.MacroControl(MCTLARG(guid), MCTL_LOADALL, 0, 0);
 					break;
 				case Far2::MCMD_POSTMACROSTRING:
 					{
@@ -5056,7 +5100,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
 							//| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+						iRc = psi3.MacroControl(MCTLARG(guid), MCTL_SENDSTRING, 0, &mcr);
 						if (pszUpper)
 							free(pszUpper);
 						if (pszChanged)
@@ -5080,7 +5124,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
 							//| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
+						iRc = psi3.MacroControl(MCTLARG(guid), MCTL_SENDSTRING, MSSC_CHECK, &mcr);
 						p2->Param.MacroResult.ErrCode = mcr.Result.ErrCode;
 						p2->Param.MacroResult.ErrPos = mcr.Result.ErrPos;
 						p2->Param.MacroResult.ErrSrc = mcr.Result.ErrSrc;
@@ -5089,7 +5133,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					}
 					break;
 				case Far2::MCMD_GETSTATE:
-					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETSTATE, 0, 0);
+					iRc = psi3.MacroControl(MCTLARG(guid), MCTL_GETSTATE, 0, 0);
 					break;
 				case Far2::MCMD_GETAREA:
 					_ASSERTE(Far2::MACROAREA_OTHER==MACROAREA_OTHER);
@@ -5108,7 +5152,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					_ASSERTE(Far2::MACROAREA_FINDFOLDER==MACROAREA_FINDFOLDER);
 					_ASSERTE(Far2::MACROAREA_USERMENU==MACROAREA_USERMENU);
 					_ASSERTE(Far2::MACROAREA_AUTOCOMPLETION==MACROAREA_AUTOCOMPLETION);
-					iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
+					iRc = psi3.MacroControl(MCTLARG(guid), MCTL_GETAREA, 0, 0);
 					break;
 				}
 			}
@@ -5146,7 +5190,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 							| ((p2->Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
 							| ((p2->Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
 							;
-						iRc = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+						iRc = psi3.MacroControl(MCTLARG(guid), MCTL_SENDSTRING, 0, &mcr);
 					}
 					
 					free(pszMacro);
@@ -5237,7 +5281,7 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					//BUGBUG: Поскольку ACTL_GETWINDOWINFO нифига не ThreadSafe - юзаем MCTL_GETAREA
 					iRc = TRUE;
 					//iRc = psi3.AdvControl(&guid, ACTL_GETSHORTWINDOWINFO, Param);
-					INT_PTR nArea = psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_GETAREA, 0, 0);
+					INT_PTR nArea = psi3.MacroControl(MCTLARG(guid), MCTL_GETAREA, 0, 0);
 					switch(nArea)
 					{
 						case MACROAREA_SHELL:
@@ -6366,7 +6410,7 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 			MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
 			mcr.SequenceText = L"$if (Menu) Esc $end";
 			mcr.Flags = KMFLAGS_DISABLEOUTPUT;
-			psi3.MacroControl(INVALID_HANDLE_VALUE, MCTL_SENDSTRING, 0, &mcr);
+			psi3.MacroControl(MCTLARG(mguid_Plugin), MCTL_SENDSTRING, 0, &mcr);
 		}
 		return TRUE;
 	}

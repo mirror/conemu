@@ -1268,6 +1268,8 @@ int Viewer::ProcessKey(int Key)
 				if (!apiGetFindDataEx(strFullFileName, NewViewFindData))
 					return TRUE;
 
+				ViewFile.GetSize(NewViewFindData.nFileSize); // Required! -- thanks Dzirt2005
+
 				if (ViewFindData.ftLastWriteTime.dwLowDateTime!=NewViewFindData.ftLastWriteTime.dwLowDateTime
 				 || ViewFindData.ftLastWriteTime.dwHighDateTime!=NewViewFindData.ftLastWriteTime.dwHighDateTime
 				 || ViewFindData.nFileSize != NewViewFindData.nFileSize)
@@ -1964,7 +1966,7 @@ void Viewer::CacheLine( __int64 start, int length, bool have_eol )
 	else
 	{
 #if defined(_DEBUG) && 1 // it is legal case if file changed...
-		assert(start >= lcache_first && start+length <= lcache_last);
+		_ASSERTE(start >= lcache_first && start+length <= lcache_last);
 		int i = CacheFindUp(start+length);
 		_ASSERTE(i >= 0 && _abs64(lcache_lines[i]) == start);
 #endif

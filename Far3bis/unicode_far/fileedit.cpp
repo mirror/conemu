@@ -1156,6 +1156,11 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						}
 						Done=TRUE;
 					}
+					else if (SaveResult==SAVEFILE_CANCEL)
+					{
+						// Если был отказ от сохранения - не нужно повторно спрашивать (по ShiftF10), сохранить или нет
+						return FALSE;
+					}
 					else
 					{
 						Done=TRUE;
@@ -2281,8 +2286,7 @@ void FileEditor::ShowStatus()
 	string strLineStr;
 	string strLocalTitle;
 	GetTitle(strLocalTitle);
-	int NameLength = Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN) ? 17:23;
-
+	int NameLength = (Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN)) ? 15:21;
 	if (X2 > 80)
 		NameLength += (X2-80);
 
@@ -2307,12 +2311,18 @@ void FileEditor::ShowStatus()
 	(m_editor->Flags.Check(FEDITOR_MODIFIED) ? L'*':L' ')<<
 	(m_editor->Flags.Check(FEDITOR_LOCKMODE) ? L'-':L' ')<<
 	(m_editor->Flags.Check(FEDITOR_PROCESSCTRLQ) ? L'"':L' ')<<
-	fmt::Width(5)<<m_codepage<<L' '<<fmt::Width(7)<<MSG(MEditStatusLine)<<L' '<<
+	fmt::Width(5)<<m_codepage<<L' '<<fmt::Width(3)<<MSG(MEditStatusLine)<<L' '<<
 	fmt::Width(SizeLineStr)<<fmt::Precision(SizeLineStr)<<strLineStr<<L' '<<
-	fmt::Width(5)<<MSG(MEditStatusCol)<<L' '<<
+	
+	fmt::Width(3)<<MSG(MEditStatusCol)<<L' '<<
 	fmt::LeftAlign()<<fmt::Width(4)<<m_editor->CurLine->GetTabCurPos()+1<<L' '<<
+
+	fmt::Width(2)<<MSG(MEditStatusChar)<<L' '<<
+	fmt::LeftAlign()<<fmt::Width(4)<<m_editor->CurLine->GetCurPos()+1<<L' '<<
+
+
 	fmt::Width(3)<<strAttr;
-	int StatusWidth=ObjWidth - (Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN)?5:0);
+	int StatusWidth=ObjWidth - ((Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN))?5:0);
 
 	if (StatusWidth<0)
 		StatusWidth=0;
@@ -2326,7 +2336,7 @@ void FileEditor::ShowStatus()
 
 		if (CurPos<Length)
 		{
-			GotoXY(X2-(Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN) ? 14:8)-(!m_editor->EdOpt.CharCodeBase?3:0),Y1);
+			GotoXY(X2-((Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN)) ? 14:8)-(!m_editor->EdOpt.CharCodeBase?3:0),Y1);
 			SetColor(COL_EDITORSTATUS);
 			/* $ 27.02.2001 SVS
 			Показываем в зависимости от базы */

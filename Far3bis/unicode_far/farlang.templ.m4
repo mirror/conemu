@@ -1608,6 +1608,24 @@ MConfigShowSortMode
 "Wyświetl l&iterę trybu sortowania"
 "Mostrar letra para &modo de orden"
 
+MConfigHighlightColumnSeparator
+"Подсвечивать разделители колонок"
+"Highlight column separators"
+upd:"Highlight column separators"
+upd:"Highlight column separators"
+upd:"Highlight column separators"
+upd:"Highlight column separators"
+upd:"Highlight column separators"
+
+MConfigDoubleGlobalColumnSeparator
+"Удваивать глобальные разделители колонок"
+"Double global column separators"
+upd:"Double global column separators"
+upd:"Double global column separators"
+upd:"Double global column separators"
+upd:"Double global column separators"
+upd:"Double global column separators"
+
 MConfigInterfaceTitle
 l:
 "Настройки интерфейса"
@@ -4109,23 +4127,35 @@ MEditSaving
 "Zapisuję plik"
 "Guardando el archivo"
 
+# 3 max
 MEditStatusLine
-"Строка"
-"Line"
-"Řádek"
-"Zeile"
-"Sor"
-"linia"
-"Línea"
+"Стр"
+"Ln"
+upd:"Řádek"
+upd:"Zeile"
+upd:"Sor"
+upd:"linia"
+upd:"Línea"
 
+# 3 max
 MEditStatusCol
 "Кол"
 "Col"
-"Sloupec"
-"Spal"
-"Oszlop"
-"kolumna"
-"Col"
+upd:"Sloupec"
+upd:"Spal"
+upd:"Oszlop"
+upd:"kolumna"
+upd:"Col"
+
+# 2 max
+MEditStatusChar
+"С"
+"Ch"
+upd:"Ch"
+upd:"Ch"
+upd:"Ch"
+upd:"Ch"
+upd:"Ch"
 
 MEditRSH
 l:

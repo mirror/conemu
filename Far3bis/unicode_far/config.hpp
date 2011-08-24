@@ -33,6 +33,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "panelctype.hpp"
+
 //  +CASR_* ѕоведение Ctrl-Alt-Shift дл€ AllCtrlAltShiftRule
 enum
 {
@@ -403,9 +405,9 @@ struct FindFileOptions
 	string strSearchOutFormat;
 	string strSearchOutFormatWidth;
 	int OutColumnCount;
-	unsigned __int64 OutColumnTypes[20];
-	int OutColumnWidths[20];
-	int OutColumnWidthType[20];
+	unsigned __int64 OutColumnTypes[PANEL_COLUMNCOUNT];
+	int OutColumnWidths[PANEL_COLUMNCOUNT];
+	int OutColumnWidthType[PANEL_COLUMNCOUNT];
 };
 
 struct InfoPanelOptions
@@ -445,8 +447,8 @@ struct MacroOptions
 {
 	int MacroReuseRules; // ѕравило на счет повторно использовани€ забинденных клавиш
 	DWORD DisableMacro; // параметры /m или /ma или /m....
-	DWORD KeyMacroCtrlDot; // ал€ KEY_CTRLDOT
-	DWORD KeyMacroCtrlShiftDot; // ал€ KEY_CTRLSHIFTDOT
+	DWORD KeyMacroCtrlDot, KeyMacroRCtrlDot; // ал€ KEY_CTRLDOT/KEY_RCTRLDOT
+	DWORD KeyMacroCtrlShiftDot, KeyMacroRCtrlShiftDot; // ал€ KEY_CTRLSHIFTDOT/KEY_RCTRLSHIFTDOT
 	int CallPluginRules; // 0 - блокировать макросы при вызове плагина, 1 - разрешить макросы (ахтунг!)
 	string strMacroCONVFMT; // формат преобразовани€ double в строку
 	string strDateFormat; // ƒл€ $Date
@@ -528,6 +530,9 @@ struct Options
 	int ShowPanelStatus;
 	int ShowPanelTotals;
 	int ShowPanelFree;
+	int HighlightColumnSeparator;
+	int DoubleGlobalColumnSeparator;
+
 	int ShowPanelScrollbar;
 	int ShowMenuScrollbar; // $ 29.06.2000 SVS ƒобавлен атрибут показа Scroll Bar в меню.
 	int ShowScreensNumber;

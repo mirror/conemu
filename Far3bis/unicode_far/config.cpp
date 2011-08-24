@@ -74,7 +74,9 @@ const wchar_t *constBatchExt=L".BAT;.CMD;";
 
 string strKeyNameConsoleDetachKey;
 static const wchar_t szCtrlDot[]=L"Ctrl.";
+static const wchar_t szRCtrlDot[]=L"RCtrl.";
 static const wchar_t szCtrlShiftDot[]=L"CtrlShift.";
+static const wchar_t szRCtrlShiftDot[]=L"RCtrlShift.";
 
 // KeyName
 const wchar_t NKeyColors[]=L"Colors";
@@ -183,6 +185,8 @@ void PanelSettings()
 	Builder.AddCheckbox(MConfigShowScrollbar, &Opt.ShowPanelScrollbar);
 	Builder.AddCheckbox(MConfigShowScreensNumber, &Opt.ShowScreensNumber);
 	Builder.AddCheckbox(MConfigShowSortMode, &Opt.ShowSortMode);
+	Builder.AddCheckbox(MConfigHighlightColumnSeparator, &Opt.HighlightColumnSeparator);
+	Builder.AddCheckbox(MConfigDoubleGlobalColumnSeparator, &Opt.DoubleGlobalColumnSeparator);
 	Builder.AddOKCancel();
 
 	if (Builder.ShowDialog())
@@ -812,6 +816,8 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, NKeyPanelLayout,L"ScrollbarMenu",&Opt.ShowMenuScrollbar,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyPanelLayout,L"ScreensNumber",&Opt.ShowScreensNumber,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyPanelLayout,L"SortMode",&Opt.ShowSortMode,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, NKeyPanelLayout,L"ColoredGlobalColumnSeparator",&Opt.HighlightColumnSeparator,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, NKeyPanelLayout,L"DoubleGlobalColumnSeparator",&Opt.DoubleGlobalColumnSeparator,0, 0},
 
 	{1, GeneralConfig::TYPE_INTEGER, NKeyLayout,L"LeftHeightDecrement",&Opt.LeftHeightDecrement,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyLayout,L"RightHeightDecrement",&Opt.RightHeightDecrement,0, 0},
@@ -937,14 +943,20 @@ void ReadConfig()
 	string strKeyNameFromCfg;
 
 	GeneralCfg->GetValue(NKeyKeyMacros,L"KeyRecordCtrlDot",strKeyNameFromCfg,szCtrlDot);
-
 	if ((Opt.Macro.KeyMacroCtrlDot=KeyNameToKey(strKeyNameFromCfg)) == (DWORD)-1)
 		Opt.Macro.KeyMacroCtrlDot=KEY_CTRLDOT;
 
-	GeneralCfg->GetValue(NKeyKeyMacros,L"KeyRecordCtrlShiftDot",strKeyNameFromCfg,szCtrlShiftDot);
+	GeneralCfg->GetValue(NKeyKeyMacros,L"KeyRecordRCtrlDot",strKeyNameFromCfg,szRCtrlDot);
+	if ((Opt.Macro.KeyMacroRCtrlDot=KeyNameToKey(strKeyNameFromCfg)) == (DWORD)-1)
+		Opt.Macro.KeyMacroRCtrlDot=KEY_RCTRLDOT;
 
+	GeneralCfg->GetValue(NKeyKeyMacros,L"KeyRecordCtrlShiftDot",strKeyNameFromCfg,szCtrlShiftDot);
 	if ((Opt.Macro.KeyMacroCtrlShiftDot=KeyNameToKey(strKeyNameFromCfg)) == (DWORD)-1)
 		Opt.Macro.KeyMacroCtrlShiftDot=KEY_CTRLSHIFTDOT;
+
+	GeneralCfg->GetValue(NKeyKeyMacros,L"KeyRecordRCtrlShiftDot",strKeyNameFromCfg,szRCtrlShiftDot);
+	if ((Opt.Macro.KeyMacroRCtrlShiftDot=KeyNameToKey(strKeyNameFromCfg)) == (DWORD)-1)
+		Opt.Macro.KeyMacroRCtrlShiftDot=KEY_RCTRL|KEY_SHIFT|KEY_DOT;
 
 	Opt.EdOpt.strWordDiv = Opt.strWordDiv;
 	FileList::ReadPanelModes();

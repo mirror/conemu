@@ -58,6 +58,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "history.hpp"
 #include "FarGuid.hpp"
+#include "colormix.hpp"
 
 // debug
 #include "plugapi.hpp"
@@ -419,6 +420,11 @@ void Dialog::CheckDialogCoord()
 void Dialog::InitDialog()
 {
 	CriticalSectionLock Lock(CS);
+
+	if(CloseFAR)
+	{
+		SetDialogMode(DMODE_NOPLUGINS);
+	}
 
 	if (!DialogMode.Check(DMODE_INITOBJECTS))      // самодостаточный вариант, когда
 	{                      //  элементы инициализируются при первом вызове.
@@ -3389,18 +3395,10 @@ int Dialog::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 				for (;;)
 				{
 					DWORD Mb=IsMouseButtonPressed();
-					int mx,my,X0,Y0;
 
 					if (Mb==FROM_LEFT_1ST_BUTTON_PRESSED) // still dragging
 					{
-						int AdjX=0,AdjY=0;
-						int OX1=X1;
-						int OY1=Y1;
-						int NX1=X0=X1;
-						int NX2=X2;
-						int NY1=Y0=Y1;
-						int NY2=Y2;
-
+						int mx,my;
 						if (IntKeyState.MouseX==IntKeyState.PrevMouseX)
 							mx=X1;
 						else
@@ -3411,12 +3409,11 @@ int Dialog::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 						else
 							my=IntKeyState.MouseY-MsY;
 
-						NX2=mx+(X2-X1);
-						NX1=mx;
-						AdjX=NX1-X0;
-						NY2=my+(Y2-Y1);
-						NY1=my;
-						AdjY=NY1-Y0;
+						int X0=X1, Y0=Y1;
+						int OX1=X1 ,OY1=Y1;
+						int NX1=mx, NX2=mx+(X2-X1);
+						int NY1=my, NY2=my+(Y2-Y1);
+						int AdjX=NX1-X0, AdjY=NY1-Y0;
 
 						// "А был ли мальчик?" (про холостой ход)
 						if (OX1 != NX1 || OY1 != NY1)
@@ -4448,7 +4445,7 @@ void Dialog::ResizeConsole()
 		Hide();
 	}
 
-	COORD c = {ScrX+1, ScrY+1};
+	COORD c = {static_cast<SHORT>(ScrX+1), static_cast<SHORT>(ScrY+1)};
 	SendDlgMessage(static_cast<HANDLE>(this), DN_RESIZECONSOLE, 0, &c);
 
 	int x1, y1, x2, y2;

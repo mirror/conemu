@@ -837,7 +837,10 @@ int WINAPI FarMenuFn(
 		VMenu FarMenu(Title,nullptr,0,MaxHeight);
 		CtrlObject->Macro.SetMode(MACRO_MENU);
 		FarMenu.SetPosition(X,Y,0,0);
-		FarMenu.SetId(*Id);
+		if(Id)
+		{
+			FarMenu.SetId(*Id);
+		}
 
 		if (BreakCode)
 			*BreakCode=-1;
@@ -2387,7 +2390,7 @@ size_t WINAPI farGetPathRoot(const wchar_t *Path, wchar_t *Root, size_t DestSize
 	}
 }
 
-INT_PTR WINAPI farMacroControl(HANDLE hHandle, FAR_MACRO_CONTROL_COMMANDS Command, int Param1, void* Param2)
+INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	if (CtrlObject) // все зависит от этой бад€ги.
 	{
@@ -2482,6 +2485,23 @@ INT_PTR WINAPI farMacroControl(HANDLE hHandle, FAR_MACRO_CONTROL_COMMANDS Comman
 			case MCTL_GETAREA:
 			{
 				return Macro.GetMode();
+			}
+
+			case MCTL_ADDMACRO:
+			{
+				if (!Param2)
+					break;
+				MacroAddMacro *Data=(MacroAddMacro*)Param2;
+				if (Data->SequenceText && *Data->SequenceText)
+				{
+					return Macro.AddMacro(Data->SequenceText,Data->Description,Data->Flags,Data->AKey,*PluginId,Data->Id,Data->Callback);
+				}
+				break;
+			}
+
+			case MCTL_DELMACRO:
+			{
+				return Macro.DelMacro(*PluginId,Param2);
 			}
 		}
 	}

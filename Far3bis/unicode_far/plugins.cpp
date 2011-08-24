@@ -1492,6 +1492,9 @@ int PluginManager::Configure(int StartPos)
 	if (Opt.Policies.DisabledOptions&FFPOL_MAINMENUPLUGINS)
 		return 1;
 
+	int PrevMacroMode = CtrlObject->Macro.GetMode();
+	CtrlObject->Macro.SetMode(MACRO_MENU);
+
 	{
 		VMenu PluginList(MSG(MPluginConfigTitle),nullptr,0,ScrY-4);
 		PluginList.SetFlags(VMENU_WRAPMODE);
@@ -1572,11 +1575,11 @@ int PluginManager::Configure(int StartPos)
 						MenuItemEx ListItem;
 						ListItem.Clear();
 
-#ifndef NO_WRAPPER
-						if (pPlugin->IsOemPlugin())
-							ListItem.Flags=LIF_CHECKED|L'A';
-						else if (pPlugin->IsFar2Plugin())
+						if (pPlugin->IsFar2Plugin())
 							ListItem.Flags=LIF_CHECKED|L'2';
+#ifndef NO_WRAPPER
+						else if (pPlugin->IsOemPlugin())
+							ListItem.Flags=LIF_CHECKED|L'A';
 #endif // NO_WRAPPER
 						if (!bNext)
 							ListItem.Flags|=MIF_SUBMENU;
@@ -1632,6 +1635,7 @@ int PluginManager::Configure(int StartPos)
 
 			while (!PluginList.Done())
 			{
+				CtrlObject->Macro.SetMode(MACRO_MENU);
 				DWORD Key=PluginList.ReadInput();
 				int SelPos=PluginList.GetSelectPos();
 				PluginMenuItemData *item = (PluginMenuItemData*)PluginList.GetUserData(nullptr,0,SelPos);
@@ -1800,6 +1804,7 @@ int PluginManager::Configure(int StartPos)
 							//pPanel->GoToFile(strFileName);
 							pPanel->Show();
 							pPanel->SetFocus();
+							CtrlObject->Macro.SetMode(PrevMacroMode);
 							return -1;       //  !!! дл€ выхода с игнорированием ћеню плагинов/дисков
 						}
 
@@ -1853,6 +1858,9 @@ int PluginManager::Configure(int StartPos)
 			}
 		}
 	}
+
+	CtrlObject->Macro.SetMode(PrevMacroMode);
+
 	return 1;
 }
 
@@ -1946,11 +1954,12 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						GetPluginHotKey(pPlugin,guid,PluginsHotkeysConfig::PLUGINS_MENU,strHotKey);
 						MenuItemEx ListItem;
 						ListItem.Clear();
-#ifndef NO_WRAPPER
-						if (pPlugin->IsOemPlugin())
-							ListItem.Flags=LIF_CHECKED|L'A';
-						else if (pPlugin->IsFar2Plugin())
+
+						if (pPlugin->IsFar2Plugin())
 							ListItem.Flags=LIF_CHECKED|L'2';
+#ifndef NO_WRAPPER
+						else if (pPlugin->IsOemPlugin())
+							ListItem.Flags=LIF_CHECKED|L'A';
 #endif // NO_WRAPPER
 						if (!HotKeysPresent)
 							ListItem.strName = strName;
@@ -1979,6 +1988,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 
 			while (!PluginList.Done())
 			{
+				CtrlObject->Macro.SetMode(MACRO_MENU);
 				DWORD Key=PluginList.ReadInput();
 				int SelPos=PluginList.GetSelectPos();
 				PluginMenuItemData *item = (PluginMenuItemData*)PluginList.GetUserData(nullptr,0,SelPos);

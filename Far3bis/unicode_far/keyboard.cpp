@@ -850,8 +850,10 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		if (Opt.Mouse) // А нужно ли это условие???
 			SetFarConsoleMode();
 
-		if (CloseFAR)
+		static bool ExitInProcess = false;
+		if (CloseFAR && !ExitInProcess)
 		{
+			ExitInProcess = true;
 //      CloseFAR=FALSE;
 			/* $ 30.08.2001 IS
 			   При принудительном закрытии Фара пытаемся вести себя так же, как и при
@@ -1239,7 +1241,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 				return(Key);
 		}
 
-		ShiftPressedLast=RightShiftPressedLast=FALSE;
+		RightShiftPressedLast=FALSE;
 		CtrlPressedLast=RightCtrlPressedLast=FALSE;
 		AltPressedLast=RightAltPressedLast=FALSE;
 		ShiftPressedLast=(KeyCode==VK_SHIFT && rec->Event.KeyEvent.bKeyDown) ||
@@ -3174,13 +3176,13 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			case VK_OEM_COMMA:
 				return(ModifCtrl|KEY_COMMA);
 			case VK_OEM_PERIOD:
-				return(KEY_CTRLDOT);
+				return(ModifCtrl|KEY_DOT);
 			case VK_OEM_2:
 				return(ModifCtrl|KEY_SLASH);
 			case VK_OEM_4:
 				return(ModifCtrl|KEY_BRACKET);
 			case VK_OEM_5:
-				return(KEY_CTRLBACKSLASH); //BUGBUG: Не стал ModifCtrl ставить, чтобы не слетела вдруг обработка Ctrl\ ...
+				return(ModifCtrl|KEY_BACKSLASH);
 			case VK_OEM_6:
 				return(ModifCtrl|KEY_BACKBRACKET);
 			case VK_OEM_7:
