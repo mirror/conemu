@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <malloc.h>
+#include "COMMON.H"
+
+extern UnDecorateSymbolName_t UnDecorate_Dbghelp;
+extern HMODULE ghDbghelp;
 
 static const TCHAR cszOwnerDescCols[] = _T("N,O,Z");
 //static const TCHAR szOwnerDescWidths[] = _T("0,14,8");
@@ -389,9 +393,17 @@ void MPanelItem::SetData(const BYTE* apData, DWORD anSize, BOOL bIsCopy /*= FALS
 		}
 	}
 
-	if (IsBadReadPtr(apData, anSize)) {
+
+	if (!bIsCopy && !ValidateMemory(apData, anSize))
+	{
 		this->printf(_T("\n<Can't access memory: %i bytes at 0x%08X>\n"), anSize, (DWORD)(apData-g_pMappedFileBase));
-	} else {
+	}
+	else if (bIsCopy && IsBadReadPtr(apData, anSize))
+	{
+		this->printf(_T("\n<Can't access memory: %i bytes at 0x%08X>\n"), anSize, (DWORD)(apData-g_pMappedFileBase));
+	}
+	else
+	{
 		if (pBinaryData) {
 			_ASSERTE(pBinaryData==NULL);
 			free(pBinaryData); nBinarySize = 0;
@@ -567,6 +579,7 @@ void MPanelItem::SetErrorPtr(LPCVOID ptr, DWORD nSize)
 	TCHAR szErrInfo[128];
 	wsprintf(szErrInfo, _T("Can't access %u bytes at 0x%08X"), nSize, (DWORD)(((LPBYTE)ptr)-g_pMappedFileBase));
 	this->AddText(szErrInfo, -1, TRUE);
+	this->SetColumns(szErrInfo, NULL);
 	Parent()->SetError(szErrInfo);
 }
 
@@ -669,6 +682,15 @@ extern bool DumpFile(MPanelItem* pRoot, LPCTSTR filename, bool abForceDetect);
 //DumpFile(MPanelItem* pRoot, LPTSTR filename, bool abForceDetect)
 HANDLE MImpEx::Open(LPCTSTR asFileName, bool abForceDetect)
 {
+	if (!ghDbghelp)
+	{
+		ghDbghelp = LoadLibrary(_T("Dbghelp.dll"));
+		if (ghDbghelp)
+		{
+			UnDecorate_Dbghelp = (UnDecorateSymbolName_t)GetProcAddress(ghDbghelp, "UnDecorateSymbolName");
+		}
+	}
+
 	MImpEx* pImpEx = new MImpEx(asFileName);
 
 	LPCTSTR pszName = asFileName;

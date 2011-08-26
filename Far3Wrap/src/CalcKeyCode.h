@@ -1,8 +1,8 @@
 
 //Extract from Far3
 
-
-DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlCode)
+// LeftOnly = true - значит для совместимости, можно возвращать только левые модификаторы LCtrl/LAlt
+DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlCode)
 {
 	/* from global Far3 variables */
 	struct {
@@ -60,6 +60,14 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		IntKeyState.RightCtrlPressed=(CtrlState & RIGHT_CTRL_PRESSED);
 		IntKeyState.RightAltPressed=(CtrlState & RIGHT_ALT_PRESSED);
 		IntKeyState.RightShiftPressed=(CtrlState & SHIFT_PRESSED);
+	}
+
+	if (LeftOnly)
+	{
+		// LeftOnly = true - значит для совместимости, можно возвращать только левые модификаторы LCtrl/LAlt
+		IntKeyState.RightCtrlPressed=FALSE;
+		IntKeyState.RightAltPressed=FALSE;
+		IntKeyState.RightShiftPressed=FALSE;
 	}
 
 	DWORD Modif=0;

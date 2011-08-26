@@ -56,6 +56,69 @@ WORD_FLAG_DESCRIPTIONS ImageFileHeaderCharacteristics[] =
 #define NUMBER_IMAGE_HEADER_FLAGS \
     (sizeof(ImageFileHeaderCharacteristics) / sizeof(WORD_FLAG_DESCRIPTIONS))
 
+void DumpHeader(MPanelItem *pRoot, PIMAGE_DOS_HEADER pDos)
+{
+    UINT headerFieldWidth = 35;
+    //UINT i;
+
+	MPanelItem *pChild = pRoot->AddFile(_T("DOS_Header"), sizeof(*pDos));
+	pChild->SetData((const BYTE*)pDos, sizeof(*pDos));
+    
+	//MPanelItem *pChild = pRoot->AddFolder(_T("File Header"));
+	pChild = pRoot->AddFile(_T("DOS_Header.txt"));
+    
+    pChild->AddText(_T("<DOS Header>\n"));
+    
+    if (!ValidateMemory(pDos, sizeof(*pDos)))
+    {
+    	pChild->SetErrorPtr(pDos, sizeof(*pDos)); return;
+    }
+
+    //pChild->printf("  %-*s%04X (%s)\n", headerFieldWidth, "Machine:", 
+    //            pImageFileHeader->Machine,
+    //            GetMachineTypeName(pImageFileHeader->Machine) );
+    pChild->printf(_T("  %-*s%04X (%c%c)\n"), headerFieldWidth,
+    		_T("Magic number:"), pDos->e_magic, (TCHAR)(pDos->e_magic & 0xFF), (TCHAR)((pDos->e_magic & 0xFF00)>>8));
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Bytes on last page of file:"), pDos->e_cblp, pDos->e_cblp);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Pages in file:"), pDos->e_cp, pDos->e_cp);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Relocations:"), pDos->e_crlc, pDos->e_crlc);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Size of header in paragraphs:"), pDos->e_cparhdr, pDos->e_cparhdr);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Minimum extra paragraphs needed:"), pDos->e_minalloc, pDos->e_minalloc);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Maximum extra paragraphs needed:"), pDos->e_maxalloc, pDos->e_maxalloc);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Initial (relative) SS value:"), pDos->e_ss, pDos->e_ss);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Initial SP value:"), pDos->e_sp, pDos->e_sp);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Checksum:"), pDos->e_csum, pDos->e_csum);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Initial IP value:"), pDos->e_ip, pDos->e_ip);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Initial (relative) CS value:"), pDos->e_cs, pDos->e_cs);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("File address of relocation table:"), pDos->e_lfarlc, pDos->e_lfarlc);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("Overlay number:"), pDos->e_ovno, pDos->e_ovno);
+    pChild->printf(_T("  %-*sx%04hX,x%04hX,x%04hX,x%04hX\n"), headerFieldWidth,
+    		_T("Reserved words (4):"), pDos->e_res[0], pDos->e_res[1], pDos->e_res[2], pDos->e_res[3]);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("OEM identifier:"), pDos->e_oemid, pDos->e_oemid);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("OEM information:"), pDos->e_oeminfo, pDos->e_oeminfo);
+    pChild->printf(_T("  %-*s%04X (%hu)\n"), headerFieldWidth,
+    		_T("File address of new exe header:"), pDos->e_lfanew, pDos->e_lfanew);
+    pChild->printf(_T("  %-*sx%04hX,x%04hX,x%04hX,x%04hX,x%04hX,x%04hX,x%04hX,x%04hX,x%04hX,x%04hX\n"), headerFieldWidth,
+    		_T("Reserved words (10):"), pDos->e_res2[0], pDos->e_res2[1], pDos->e_res2[2], pDos->e_res2[3],
+    		pDos->e_res2[4], pDos->e_res2[5], pDos->e_res2[6], pDos->e_res2[7],
+    		pDos->e_res2[8], pDos->e_res2[9]);
+}
+    
 //
 // Dump the IMAGE_FILE_HEADER for a PE file or an OBJ
 //
@@ -64,10 +127,19 @@ void DumpHeader(MPanelItem *pRoot, PIMAGE_FILE_HEADER pImageFileHeader)
     UINT headerFieldWidth = 30;
     UINT i;
 
-	MPanelItem *pChild = pRoot->AddFolder(_T("File Header"));
+	//MPanelItem *pChild = pRoot->AddFolder(_T("File Header"));
+	MPanelItem *pChild = pRoot->AddFile(_T("FILE_Header"), sizeof(*pImageFileHeader));
+    if (!ValidateMemory(pImageFileHeader, sizeof(*pImageFileHeader)))
+    {
+    	pChild->SetErrorPtr(pImageFileHeader, sizeof(*pImageFileHeader)); return;
+    }
+	pChild->SetData((const BYTE*)pImageFileHeader, sizeof(*pImageFileHeader));	
+	
+	
+	pChild = pRoot->AddFile(_T("FILE_Header.txt"));
     
     pChild->AddText(_T("<File Header>\n"));
-
+    
     pChild->printf("  %-*s%04X (%s)\n", headerFieldWidth, "Machine:", 
                 pImageFileHeader->Machine,
                 GetMachineTypeName(pImageFileHeader->Machine) );

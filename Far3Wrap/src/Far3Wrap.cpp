@@ -88,15 +88,18 @@ namespace Far2
 //namespace Far3
 //{
 #undef __PLUGIN_HPP__
-#if MVV_3>=2159
-	#include "pluginW3.hpp"
-	#define MCTLARG(g) &g
-#elif MVV_3>=2103
-	#include "pluginW3#2124.hpp"
-	#define MCTLARG(g) INVALID_HANDLE_VALUE
-#else
+#if MVV_3<=2102
 	#include "pluginW3#2098.hpp"
 	#define MCTLARG(g) INVALID_HANDLE_VALUE
+#elif MVV_3<=2124
+	#include "pluginW3#2124.hpp"
+	#define MCTLARG(g) INVALID_HANDLE_VALUE
+#elif MVV_3<=2172
+	#include "pluginW3#2163.hpp"
+	#define MCTLARG(g) &g
+#else
+	#include "pluginW3.hpp"
+	#define MCTLARG(g) &g
 #endif
 #undef __FARKEYS_HPP__
 #if MVV_3<=2102
@@ -104,6 +107,10 @@ namespace Far2
 #endif
 #undef __COLORS_HPP__
 #include "farcolor3.hpp"
+#ifndef MAKE_OPAQUE
+	#define MAKE_OPAQUE(x)
+#endif
+#include "ConEmuColors3.h"
 //};
 
 #include "Far3Wrap.h"
@@ -132,6 +139,19 @@ DWORD gnMainThreadId = 0;
 
 struct WrapPluginInfo;
 
+struct WRAP_CHAR_INFO
+{
+	size_t nCount;
+	CHAR_INFO* p2;
+	bool isExt;
+};
+
+struct WRAP_FAR_CHAR_INFO
+{
+	size_t nCount;
+	FAR_CHAR_INFO* p;
+};
+
 struct Far2Dialog
 {
 	// Far3
@@ -146,13 +166,19 @@ struct Far2Dialog
     FarDialogItem *m_Items3;
     FarList *mp_ListInit3;
 	//CHAR_INFO * const *mpp_FarCharInfo2;
-    FAR_CHAR_INFO **mpp_FarCharInfo3;
+	WRAP_CHAR_INFO *mpp_FarCharInfo2; // [m_ItemsNumber]
+	WRAP_CHAR_INFO mp_FarCharInfoDummy2;
+    WRAP_FAR_CHAR_INFO *mpp_FarCharInfo3;
+	WRAP_FAR_CHAR_INFO mp_FarCharInfoDummy3;
     UINT m_ItemsNumber;
     DWORD m_Flags;
     Far2::FARWINDOWPROC m_DlgProc;
     LONG_PTR m_Param;
     BOOL m_GuidChecked;
     GUID m_PluginGuid, m_Guid, m_DefGuid;
+
+	WRAP_CHAR_INFO& GetVBufPtr2(UINT DlgItem);
+	WRAP_FAR_CHAR_INFO& GetVBufPtr3(UINT DlgItem);
     
     void FreeDlg();
 	static INT_PTR WINAPI Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2);
@@ -195,7 +221,7 @@ static const LoaderFunctions3
 
 //std::vector<WrapUpdateFunctions> UpdateFunc;
 
-#define IsFarColorValid(c) ( ((c).Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) && ((c).Flags & ~0xFF) == 0 )
+//#define IsFarColorValid(c) ( ((c).Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) && ((c).Flags & ~0xFF) == 0 )
 
 struct WrapPluginInfo
 {
@@ -229,8 +255,8 @@ struct WrapPluginInfo
 	KeyBarLabel    m_KeyBarLabels[7*12];
 	Far2::FarList m_ListItems2;
 	FarList m_ListItems3;
-	CHAR_INFO* m_FarCharInfo2;
-	FAR_CHAR_INFO* m_FarCharInfo3;
+	WRAP_CHAR_INFO m_FarCharInfo2;
+	WRAP_FAR_CHAR_INFO m_FarCharInfo3;
 	BYTE m_BufColors[255]; // буфер для конвертации DN_CTLCOLORDLGLIST
 
 	unsigned mn_EditorColorPriority;
@@ -338,6 +364,7 @@ struct WrapPluginInfo
 	Far2::PluginPanelItem* PluginPanelItems_3_2(const PluginPanelItem* pItems, int ItemsNumber);
 	static void FarKey_2_3(int Key2, INPUT_RECORD *r);
 	static int WINAPI FarKey_3_2(const INPUT_RECORD *Rec);
+	static int FarKeyEx_3_2(const INPUT_RECORD *Rec, bool LeftOnly = false);
 	#if MVV_3>=2103
 	static size_t WINAPI FarKeyToName3(int Key2,wchar_t *KeyText,size_t Size);
 	static int WINAPI FarNameToKey3(const wchar_t *Name);
@@ -348,16 +375,16 @@ struct WrapPluginInfo
 	static FARDIALOGITEMTYPES DialogItemTypes_2_3(int ItemType2);
 	static int DialogItemTypes_3_2(FARDIALOGITEMTYPES ItemType3);
 	static void FarColor_2_3(BYTE Color2, FarColor& Color3);
-	static BYTE FarColor_3_2(const FarColor& Color3);
-	static BYTE RefColorToIndex(COLORREF Color);
+	//static BYTE FarColor_3_2(const FarColor& Color3);
+	//static BYTE RefColorToIndex(COLORREF Color);
 	static DWORD FarDialogItemFlags_3_2(FARDIALOGITEMFLAGS Flags3);
 	static FARDIALOGITEMFLAGS FarDialogItemFlags_2_3(DWORD Flags2);
 	void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3);
 	void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2);
-	void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, FAR_CHAR_INFO*& pChars3);
-	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, CHAR_INFO*& pChars2);
+	void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, WRAP_FAR_CHAR_INFO& pChars3);
+	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, WRAP_CHAR_INFO& pVBuf2);
 	LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2, const int Param1, LONG_PTR Param2);
-	Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Param2);
+	Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Param2, Far2Dialog* pDlg);
 	void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc);
 	InfoPanelLine* InfoLines_2_3(const Far2::InfoPanelLine *InfoLines, int InfoLinesNumber);
 	PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber);
@@ -634,7 +661,8 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 	m_AnalyzeMode = 2;
 	ZeroStruct(m_ListItems2); ZeroStruct(m_ListItems3);
 	ZeroStruct(m_GetDlgItem);
-	m_FarCharInfo2 = NULL; m_FarCharInfo3 = NULL;
+	ZeroStruct(m_FarCharInfo2);
+	ZeroStruct(m_FarCharInfo3);
 	mn_EditorColorPriority = 0;
 
 	gnMsg_2 = 0; gnParam1_2 = 0; gnParam1_3 = 0;
@@ -716,15 +744,16 @@ WrapPluginInfo::~WrapPluginInfo()
 		free(m_ListItems3.Items);
 		m_ListItems3.Items = NULL;
 	}
-	if (m_FarCharInfo2)
+	if (m_FarCharInfo2.p2)
 	{
-		free(m_FarCharInfo2);
-		m_FarCharInfo2 = NULL;
+		if (!m_FarCharInfo2.isExt)
+			free(m_FarCharInfo2.p2);
+		m_FarCharInfo2.p2 = NULL;
 	}
-	if (m_FarCharInfo3)
+	if (m_FarCharInfo3.p)
 	{
-		free(m_FarCharInfo3);
-		m_FarCharInfo3 = NULL;
+		free(m_FarCharInfo3.p);
+		m_FarCharInfo3.p = NULL;
 	}
 	if (mguids_PluginMenu)
 		free(mguids_PluginMenu);
@@ -1800,10 +1829,20 @@ void WrapPluginInfo::FarKey_2_3(int Key2, INPUT_RECORD *r)
 }
 
 #if MVV_3>=2103
-DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey=FALSE,int *NotMacros=NULL,bool ProcessCtrlCode=true);
+DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey=FALSE,int *NotMacros=NULL,bool ProcessCtrlCode=true);
 #endif
 
 int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
+{
+	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
+	DWORD Key2 = 0;
+
+	Key2 = FarKeyEx_3_2(Rec);
+
+	return Key2;
+}
+
+int WrapPluginInfo::FarKeyEx_3_2(const INPUT_RECORD *Rec, bool LeftOnly /*= false*/)
 {
 	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
 	DWORD Key2 = 0;
@@ -1812,10 +1851,10 @@ int WrapPluginInfo::FarKey_3_2(const INPUT_RECORD *Rec)
 
 	// Начиная с Far3 build 2103 FarInputRecordToKey похерен
 	INPUT_RECORD r = *Rec;
-	Key2 = CalcKeyCode(&r);
+	Key2 = CalcKeyCode(LeftOnly, &r);
 
 #ifdef _DEBUG
-	if (Key2 != Far2::KEY_NONE)
+	if (Key2 != Far2::KEY_NONE && !LeftOnly)
 	{
 		INPUT_RECORD rDbg = {};
 		FarKey_2_3(Key2, &rDbg);
@@ -2417,74 +2456,76 @@ void WrapPluginInfo::FarColor_2_3(BYTE Color2, FarColor& Color3)
 	ZeroStruct(Color3);
 	Color3.Flags = FCF_FG_4BIT|FCF_BG_4BIT;
 	Color3.ForegroundColor = Color2 & 0xF;
+	MAKE_OPAQUE(Color3.ForegroundColor);
 	Color3.BackgroundColor = (Color2 & 0xF0) >> 4;
+	MAKE_OPAQUE(Color3.BackgroundColor);
 }
 
-BYTE WrapPluginInfo::RefColorToIndex(COLORREF Color)
-{
-	COLORREF crDefConPalette[16] = 
-	{
-		0x00000000, 0x00800000, 0x00008000, 0x00808000, 0x00000080, 0x00800080, 0x00008080, 0x00c0c0c0,
-		0x00808080, 0x00ff0000, 0x0000ff00, 0x00ffff00, 0x000000ff, 0x00ff00ff, 0x0000ffff, 0x00ffffff
-	};
+//BYTE WrapPluginInfo::RefColorToIndex(COLORREF Color)
+//{
+//	COLORREF crDefConPalette[16] = 
+//	{
+//		0x00000000, 0x00800000, 0x00008000, 0x00808000, 0x00000080, 0x00800080, 0x00008080, 0x00c0c0c0,
+//		0x00808080, 0x00ff0000, 0x0000ff00, 0x00ffff00, 0x000000ff, 0x00ff00ff, 0x0000ffff, 0x00ffffff
+//	};
+//
+//	for (int i = 0; i < ARRAYSIZE(crDefConPalette); i++)
+//	{
+//		if (crDefConPalette[i] == Color)
+//		{
+//			return i;
+//		}
+//	}
+//
+//	// Если по палитре не нашли - прикинем примерно
+//	int B = (Color & 0xFF0000) >> 16;
+//	int G = (Color & 0xFF00) >> 8;
+//	int R = (Color & 0xFF);
+//	int nMax = max(B,max(R,G));
+//	
+//	BYTE Pal =
+//		(((B+32) > nMax) ? 1 : 0) |
+//		(((G+32) > nMax) ? 2 : 0) |
+//		(((R+32) > nMax) ? 4 : 0);
+//
+//	return Pal;
+//}
 
-	for (int i = 0; i < ARRAYSIZE(crDefConPalette); i++)
-	{
-		if (crDefConPalette[i] == Color)
-		{
-			return i;
-		}
-	}
-
-	// Если по палитре не нашли - прикинем примерно
-	int B = (Color & 0xFF0000) >> 16;
-	int G = (Color & 0xFF00) >> 8;
-	int R = (Color & 0xFF);
-	int nMax = max(B,max(R,G));
-	
-	BYTE Pal =
-		(((B+32) > nMax) ? 1 : 0) |
-		(((G+32) > nMax) ? 2 : 0) |
-		(((R+32) > nMax) ? 4 : 0);
-
-	return Pal;
-}
-
-BYTE WrapPluginInfo::FarColor_3_2(const FarColor& Color3)
-{
-	BYTE Color2 = 0;
-
-	if (Color3.Flags & FCF_FG_4BIT)
-	{
-		Color2 |= (Color3.ForegroundColor & 0xF);
-	}
-	else
-	{
-		// Нужно подобрать индекс!
-		Color2 |= RefColorToIndex(Color3.ForegroundColor);
-	}
-
-	if (Color3.Flags & FCF_BG_4BIT)
-	{
-		Color2 |= ((Color3.BackgroundColor & 0xF) << 4);
-	}
-	else
-	{
-		// Нужно подобрать индекс!
-		Color2 |= RefColorToIndex(Color3.BackgroundColor);
-	}
-
-	//if ((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT))
-	//{
-	//	Color2 = (Color3.ForegroundColor & 0xF) | ((Color3.BackgroundColor & 0xF) << 4);
-	//}
-	//else
-	//{
-	//	_ASSERTE((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) || Color3.Flags == 0);
-	//}
-
-	return Color2;
-}
+//BYTE WrapPluginInfo::FarColor_3_2(const FarColor& Color3)
+//{
+//	BYTE Color2 = 0;
+//
+//	if (Color3.Flags & FCF_FG_4BIT)
+//	{
+//		Color2 |= (Color3.ForegroundColor & 0xF);
+//	}
+//	else
+//	{
+//		// Нужно подобрать индекс!
+//		Color2 |= RefColorToIndex(Color3.ForegroundColor);
+//	}
+//
+//	if (Color3.Flags & FCF_BG_4BIT)
+//	{
+//		Color2 |= ((Color3.BackgroundColor & 0xF) << 4);
+//	}
+//	else
+//	{
+//		// Нужно подобрать индекс!
+//		Color2 |= RefColorToIndex(Color3.BackgroundColor);
+//	}
+//
+//	//if ((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT))
+//	//{
+//	//	Color2 = (Color3.ForegroundColor & 0xF) | ((Color3.BackgroundColor & 0xF) << 4);
+//	//}
+//	//else
+//	//{
+//	//	_ASSERTE((Color3.Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) || Color3.Flags == 0);
+//	//}
+//
+//	return Color2;
+//}
 
 DWORD WrapPluginInfo::FarDialogItemFlags_3_2(FARDIALOGITEMFLAGS Flags3)
 {
@@ -2623,7 +2664,7 @@ void WrapPluginInfo::FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p
 #define VBufDim(Item) (((Item)->X2-(Item)->X1+1)*((Item)->Y2-(Item)->Y1+1))
 
 // pnColor2 - флаг DIF_SETCOLOR и DIF_COLORMASK (то, что раньше было в Far2)
-void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, FAR_CHAR_INFO*& pChars3)
+void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, WRAP_FAR_CHAR_INFO& pChars3)
 {
 	p3->Reserved = 0;
 
@@ -2676,24 +2717,28 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 	}
 	else if (p3->Type == DI_USERCONTROL)
 	{
-		if (pChars3)
+		size_t nCount = VBufDim(p2);
+		if (pChars3.p && (pChars3.nCount < nCount))
 		{
-			free(pChars3);
-			pChars3 = NULL;
+			free(pChars3.p);
+			pChars3.p = NULL;
 		}
 		if (!p2->Param.VBuf)
 			p3->VBuf = NULL;
 		else
 		{
-			size_t nCount = VBufDim(p2);
-			pChars3 = (FAR_CHAR_INFO*)malloc(nCount*sizeof(*pChars3));
+			if (!pChars3.p)
+			{
+				pChars3.nCount = nCount;
+				pChars3.p = (FAR_CHAR_INFO*)malloc(nCount*sizeof(*pChars3.p));
+			}
 			for (size_t i = 0; i < nCount; i++)
 			{
-				pChars3[i].Char = p2->Param.VBuf[i].Char.UnicodeChar;
+				pChars3.p[i].Char = p2->Param.VBuf[i].Char.UnicodeChar;
 				//TODO: COMMON_LVB_UNDERSCORE/COMMON_LVB_REVERSE_VIDEO/COMMON_LVB_GRID_RVERTICAL/COMMON_LVB_GRID_LVERTICAL/COMMON_LVB_GRID_HORIZONTAL/COMMON_LVB_TRAILING_BYTE/COMMON_LVB_LEADING_BYTE
-				FarColor_2_3((BYTE)(p2->Param.VBuf[i].Attributes & 0xFF), pChars3[i].Attributes);
+				FarColor_2_3((BYTE)(p2->Param.VBuf[i].Attributes & 0xFF), pChars3.p[i].Attributes);
 			}
-			p3->VBuf = pChars3;
+			p3->VBuf = pChars3.p;
 		}
 	}
 	else
@@ -2702,7 +2747,7 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 	}
 }
 
-void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, CHAR_INFO*& pChars2)
+void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, WRAP_CHAR_INFO& pVBuf2)
 {
 	p2->Param.Reserved = 0;
 
@@ -2766,24 +2811,35 @@ void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAlloca
 	else if (p3->Type == DI_USERCONTROL)
 	{
 		//p2->Param.VBuf = p3->VBuf;
-		if (pChars2)
-		{
-			free(pChars2);
-			pChars2 = NULL;
-		}
 		if (!p3->VBuf)
 			p2->Param.VBuf = NULL;
 		else
 		{
-			size_t nCount = VBufDim(p3);
-			pChars2 = (CHAR_INFO*)malloc(nCount*sizeof(*pChars2));
-			for (size_t i = 0; i < nCount; i++)
+			if (!pVBuf2.isExt)
 			{
-				pChars2[i].Char.UnicodeChar = p3->VBuf[i].Char;
-				//TODO: COMMON_LVB_UNDERSCORE/COMMON_LVB_REVERSE_VIDEO/COMMON_LVB_GRID_RVERTICAL/COMMON_LVB_GRID_LVERTICAL/COMMON_LVB_GRID_HORIZONTAL/COMMON_LVB_TRAILING_BYTE/COMMON_LVB_LEADING_BYTE
-				pChars2[i].Attributes = FarColor_3_2(p3->VBuf[i].Attributes);
+				size_t nCount = VBufDim(p3);
+				if (pVBuf2.p2 && (pVBuf2.nCount < nCount))
+				{
+					free(pVBuf2.p2);
+					pVBuf2.p2 = NULL;
+				}
+
+				if (!pVBuf2.p2)
+				{
+					pVBuf2.nCount = nCount;
+					pVBuf2.p2 = (CHAR_INFO*)malloc(nCount*sizeof(*pVBuf2.p2));
+				}
+
+				_ASSERTE((void*)pVBuf2.p2!=(void*)p3->VBuf && pVBuf2.p2);
+				for (size_t i = 0; i < nCount; i++)
+				{
+					pVBuf2.p2[i].Char.UnicodeChar = p3->VBuf[i].Char;
+					//TODO: COMMON_LVB_UNDERSCORE/COMMON_LVB_REVERSE_VIDEO/COMMON_LVB_GRID_RVERTICAL/COMMON_LVB_GRID_LVERTICAL/COMMON_LVB_GRID_HORIZONTAL/COMMON_LVB_TRAILING_BYTE/COMMON_LVB_LEADING_BYTE
+					pVBuf2.p2[i].Attributes = FarColor_3_2(p3->VBuf[i].Attributes);
+				}
 			}
-			p2->Param.VBuf = pChars2;
+
+			p2->Param.VBuf = pVBuf2.p2;
 		}
 	}
 	else
@@ -2809,10 +2865,12 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		return 0;
 	}
 	LONG_PTR lRc = 0;
-	HANDLE hDlg3 = (*gpMapDlg_2_3)[(Far2Dialog*)hDlg2];
+	Far2Dialog* pDlg = (Far2Dialog*)hDlg2;
+	HANDLE hDlg3 = (*gpMapDlg_2_3)[pDlg];
 	if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	{
 		hDlg3 = hDlg2;
+		pDlg = NULL;
 	}
 
 	FARMESSAGE Msg3 = DM_FIRST;
@@ -2838,7 +2896,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	DialogInfo di3;
 	FarDialogItemColors fdic3;
 	FarColor colors[32];
-	FAR_CHAR_INFO* pfci = NULL;
+	WRAP_FAR_CHAR_INFO pfci = {};
 
 	//TODO: Сохранять gnMsg_2/gnMsg_3 только если они <DM_USER!
 	if (Msg2 == gnMsg_2 && gnMsg_3 != DM_FIRST
@@ -3332,6 +3390,12 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DM_SETDLGITEMSHORT:
 		case Far2::DN_EDITCHANGE:
 		case Far2::DN_DRAWDLGITEM:
+			#ifdef _DEBUG
+			if (Msg2 == Far2::DN_DRAWDLGITEM)
+			{
+				int nDbg = 0;
+			}
+			#endif
 			if (!Param2)
 			{
 				_ASSERTE(Param2!=0);
@@ -3341,26 +3405,43 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				const Far2::FarDialogItem* p2 = (const Far2::FarDialogItem*)Param2;
 				//static FarDialogItem p3;
 				ZeroStruct(fdi3);
-				FarDialogItem_2_3(p2, &fdi3, &m_ListItems3, pfci);
+				FarDialogItem_2_3(p2, &fdi3, &m_ListItems3, pDlg ? pDlg->GetVBufPtr3(Param1) : pfci);
 				Param2 = (LONG_PTR)&fdi3;
 				switch (Msg2)
 				{
 				//case Far2::DM_GETDLGITEM: Msg3 = DM_GETDLGITEM; break;
 				//case Far2::DM_GETDLGITEMSHORT: Msg3 = DM_GETDLGITEMSHORT; break;
-				case Far2::DM_SETDLGITEM: Msg3 = DM_SETDLGITEM; break;
-				case Far2::DM_SETDLGITEMSHORT: Msg3 = DM_SETDLGITEMSHORT; break;
-				case Far2::DN_EDITCHANGE: Msg3 = DN_EDITCHANGE; break;
-				case Far2::DN_DRAWDLGITEM: Msg3 = DN_DRAWDLGITEM; break;
+				case Far2::DM_SETDLGITEM:
+					Msg3 = DM_SETDLGITEM; break;
+				case Far2::DM_SETDLGITEMSHORT:
+					Msg3 = DM_SETDLGITEMSHORT; break;
+				case Far2::DN_EDITCHANGE:
+					Msg3 = DN_EDITCHANGE; break;
+				case Far2::DN_DRAWDLGITEM:
+					Msg3 = DN_DRAWDLGITEM; break;
 				}
 				if (Msg3 == DM_SETDLGITEM || Msg3 == DM_SETDLGITEMSHORT)
 				{
 					Far2Dialog* p = (*gpMapDlg_3_2)[hDlg3];
-					if (p && p->m_Colors2 && (p->m_ItemsNumber > (UINT)Param1))
+					if (p)
 					{
-						if (p2->Flags & Far2::DIF_SETCOLOR)
-							p->m_Colors2[Param1] = p2->Flags & (Far2::DIF_COLORMASK|Far2::DIF_SETCOLOR);
-						else
-							p->m_Colors2[Param1] = 0;
+						if (p->m_Colors2 && (p->m_ItemsNumber > (UINT)Param1))
+						{
+							if (p2->Flags & Far2::DIF_SETCOLOR)
+								p->m_Colors2[Param1] = p2->Flags & (Far2::DIF_COLORMASK|Far2::DIF_SETCOLOR);
+							else
+								p->m_Colors2[Param1] = 0;
+						}
+
+						if (p2->Type == Far2::DI_USERCONTROL && p2->Param.VBuf)
+						{
+							WRAP_CHAR_INFO& pVBuf2 = p->GetVBufPtr2(Param1);
+							if (!pVBuf2.isExt && pVBuf2.p2)
+								free(pVBuf2.p2);
+							pVBuf2.nCount = VBufDim(p2);
+							pVBuf2.p2 = p2->Param.VBuf;
+							pVBuf2.isExt = true;
+						}
 					}
 				}
 			}
@@ -3383,9 +3464,10 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DN_MOUSECLICK:
 			// DN_KEY и DN_MOUSECLICK объеденены в DN_CONTROLINPUT. 
 			// Param2 указывает на INPUT_RECORD. в будущем планируется приход и других событий.
-			_ASSERTE(Msg2 != Far2::DN_MOUSECLICK);
+			ZeroStruct(r);
+			r.EventType = MOUSE_EVENT;
+			r.Event.MouseEvent = *(MOUSE_EVENT_RECORD*)Param2;
 			Msg3 = DN_CONTROLINPUT;
-			Msg3 = DM_FIRST;
 			break;
 		case Far2::DN_DRAGGED:
 			Msg3 = DN_DRAGGED; break;
@@ -3395,9 +3477,12 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 			// DN_MOUSEEVENT переименовано в DN_INPUT. Param2 указывает на INPUT_RECORD. 
 			// в будущем планируется приход не только мышиных событий, поэтому настоятельно 
 			// рекомендуется проверять EventType.
+			ZeroStruct(r);
+			r.EventType = MOUSE_EVENT;
+			r.Event.MouseEvent = *(MOUSE_EVENT_RECORD*)Param2;
 			_ASSERTE(Msg2 != Far2::DN_MOUSEEVENT);
-			Msg3 = DN_INPUT;
-			Msg3 = DM_FIRST;
+			//TODO: Что тут нужно? DN_CONTROLINPUT или DN_INPUT?
+			Msg3 = DN_CONTROLINPUT;
 			break;
 		case Far2::DN_DRAWDIALOGDONE:
 			Msg3 = DN_DRAWDIALOGDONE; break;
@@ -3523,12 +3608,12 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		}
 	}
 
-	if (pfci != NULL)
-		free(pfci);
+	if (pfci.p != NULL)
+		free(pfci.p);
 	return lRc;
 }
 
-Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int Param1, void*& Param2)
+Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int Param1, void*& Param2, Far2Dialog* pDlg)
 {
 	Far2::FarMessagesProc Msg2 = Far2::DM_FIRST;
 	//if (Msg3 < DM_USER)
@@ -3570,7 +3655,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 				}
 				else if (p->EventType == KEY_EVENT)
 				{
-					Param2 = (void*)FarKey_3_2(p);
+					Param2 = (void*)FarKeyEx_3_2(p, true);
 					Msg2 = (Msg3 == DM_KEY) ? Far2::DM_KEY : Far2::DN_KEY;
 				}
 				else
@@ -3932,13 +4017,13 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 				FarDialogItemColors* p3 = (FarDialogItemColors*)Param2;
 				//_ASSERTE((p3->Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT));
 				LONG_PTR Color2 = 0;
-				if (p3->ColorsCount >= 1 && IsFarColorValid(p3->Colors[0]))
+				if (p3->ColorsCount >= 1 /*&& IsFarColorValid(p3->Colors[0])*/)
 					Color2 |= FarColor_3_2(p3->Colors[0]);
-				if (p3->ColorsCount >= 2 && IsFarColorValid(p3->Colors[1]))
+				if (p3->ColorsCount >= 2 /*&& IsFarColorValid(p3->Colors[1])*/)
 					Color2 |= (((DWORD)FarColor_3_2(p3->Colors[1])) << 8);
-				if (p3->ColorsCount >= 3 && IsFarColorValid(p3->Colors[2]))
+				if (p3->ColorsCount >= 3 /*&& IsFarColorValid(p3->Colors[2])*/)
 					Color2 |= (((DWORD)FarColor_3_2(p3->Colors[2])) << 16);
-				if (p3->ColorsCount >= 4 && IsFarColorValid(p3->Colors[3]))
+				if (p3->ColorsCount >= 4 /*&& IsFarColorValid(p3->Colors[3])*/)
 					Color2 |= (((DWORD)FarColor_3_2(p3->Colors[3])) << 24);
 				Param2 = (void*)Color2;
 			}
@@ -3974,8 +4059,14 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			break;
 		case DM_SETDLGITEM:
 		case DM_SETDLGITEMSHORT:
-		case DN_DRAWDLGITEM:
 		case DN_EDITCHANGE:
+		case DN_DRAWDLGITEM:
+			#ifdef _DEBUG
+			if (Msg3 == DN_DRAWDLGITEM)
+			{
+				int nDbg = 0;
+			}
+			#endif
 			if (!Param2)
 			{
 				_ASSERTE(Param2!=0);
@@ -3985,13 +4076,14 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 				const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 				static Far2::FarDialogItem p2;
 				memset(&p2, 0, sizeof(p2));
-				FarDialogItem_3_2(p3, /*0,*/ &p2, &m_ListItems2, m_FarCharInfo2);
+				FarDialogItem_3_2(p3, /*0,*/ &p2, &m_ListItems2, (pDlg==NULL) ? m_FarCharInfo2 : pDlg->GetVBufPtr2(Param1));
 				Param2 = &p2;
 				switch (Msg3)
 				{
 				//case DM_GETDLGITEM:Msg2 = Far2::DM_GETDLGITEM; break;
 				//case DM_GETDLGITEMSHORT: Msg2 = Far2::DM_GETDLGITEMSHORT; break;
-				case DM_SETDLGITEM: Msg2 = Far2::DM_SETDLGITEM; break;
+				case DM_SETDLGITEM:
+					Msg2 = Far2::DM_SETDLGITEM; break;
 				case DM_SETDLGITEMSHORT:
 					Msg2 = Far2::DM_SETDLGITEMSHORT; break;
 				case DN_DRAWDLGITEM:
@@ -4112,6 +4204,7 @@ void WrapPluginInfo::FarMessageParam_2_3(const int Msg2, const int Param1, const
 			if (p2->Type == Far2::DI_USERCONTROL && p2->Param.VBuf)
 			{
 				size_t nCount = VBufDim(p2);
+				_ASSERTE((void*)p3->VBuf!=(void*)p2->Param.VBuf);
 				FAR_CHAR_INFO* pChars3 = p3->VBuf; // для удобства
 				for (size_t i = 0; i < nCount; i++)
 				{
@@ -5415,12 +5508,53 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 	switch (Command)
 	{
 	case Far2::ECTL_GETSTRING:
-		ASSERTSTRUCT(EditorGetString);
-		nRc = psi3.EditorControl(-1, ECTL_GETSTRING, 0, (void*)Param);
+		{
+			if (Param)
+			{
+				EditorGetString egs3 = {};
+				Far2::EditorGetString* egs2 = (Far2::EditorGetString*)Param;
+				egs3.StringNumber = egs2->StringNumber;
+				egs3.StringText = egs2->StringText;
+				egs3.StringEOL = egs2->StringEOL;
+				egs3.StringLength = egs2->StringLength;
+				egs3.SelStart = egs2->SelStart;
+				egs3.SelEnd = egs2->SelEnd;
+				nRc = psi3.EditorControl(-1, ECTL_GETSTRING, 0, &egs3);
+				egs2->StringNumber = egs3.StringNumber;
+				egs2->StringText = egs3.StringText;
+				egs2->StringEOL = egs3.StringEOL;
+				egs2->StringLength = egs3.StringLength;
+				egs2->SelStart = egs3.SelStart;
+				egs2->SelEnd = egs3.SelEnd;
+			}
+			else
+			{
+				nRc = psi3.EditorControl(-1, ECTL_GETSTRING, 0, NULL);
+			}
+		}
 		break;
 	case Far2::ECTL_SETSTRING:
-		ASSERTSTRUCT(EditorSetString);
-		nRc = psi3.EditorControl(-1, ECTL_SETSTRING, 0, (void*)Param);
+		{
+			if (Param)
+			{
+				EditorSetString ess3 = {};
+				Far2::EditorSetString* ess2 = (Far2::EditorSetString*)Param;
+				ess3.StringNumber = ess2->StringNumber;
+				ess3.StringText = ess2->StringText;
+				ess3.StringEOL = ess2->StringEOL;
+				ess3.StringLength = ess2->StringLength;
+				nRc = psi3.EditorControl(-1, ECTL_SETSTRING, 0, &ess3);
+				ess2->StringNumber = ess3.StringNumber;
+				ess2->StringText = ess3.StringText;
+				ess2->StringEOL = ess3.StringEOL;
+				ess2->StringLength = ess3.StringLength;
+			}
+			else
+			{
+				_ASSERTE(Param!=NULL);
+				nRc = psi3.EditorControl(-1, ECTL_SETSTRING, 0, NULL);
+			}
+		}
 		break;
 	case Far2::ECTL_INSERTSTRING:
 		nRc = psi3.EditorControl(-1, ECTL_INSERTSTRING, 0, (void*)Param);
@@ -6638,8 +6772,9 @@ int    WrapPluginInfo::ProcessDialogEventW3(const struct ProcessDialogEventInfo 
 		}
 		FarDialogEvent* p3 = (FarDialogEvent*)Info->Param;
 		Far2::FarDialogEvent p2 = {p3->hDlg, 0, p3->Param1, (LONG_PTR)p3->Param2, p3->Result};
+		Far2Dialog* pDlg = (*gpMapDlg_3_2)[p3->hDlg];
 		//TODO: Конвертация VBuf?
-		p2.Msg = FarMessage_3_2(p3->Msg, p2.Param1, (void*&)p2.Param2);
+		p2.Msg = FarMessage_3_2(p3->Msg, p2.Param1, (void*&)p2.Param2, pDlg);
 		if (p2.Msg != DM_FIRST)
 		{
 			lRc = ProcessDialogEventW(Event2, &p2);
@@ -7140,8 +7275,10 @@ Far2Dialog::Far2Dialog(WrapPluginInfo* pwpi,
     m_ItemsNumber = ItemsNumber;
     m_Items2 = NULL;
     m_Colors2 = NULL;
-	//mpp_FarCharInfo2 = NULL;
+	mpp_FarCharInfo2 = NULL;
+	mp_FarCharInfoDummy2.p2 = NULL;
     mpp_FarCharInfo3 = NULL;
+	mp_FarCharInfoDummy3.p = NULL;
     
     if (ItemsNumber > 0 && Items)
     {
@@ -7160,11 +7297,20 @@ Far2Dialog::Far2Dialog(WrapPluginInfo* pwpi,
     	//memmove(m_Items2, Items, ItemsNumber*sizeof(*m_Items2));
 		m_Items2 = Items;
     	m_Colors2 = (DWORD*)calloc(ItemsNumber, sizeof(*m_Colors2));
-		//mpp_FarCharInfo2 = (CHAR_INFO**)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo2));
-    	mpp_FarCharInfo3 = (FAR_CHAR_INFO**)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo3));
+		mpp_FarCharInfo2 = (WRAP_CHAR_INFO*)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo2));
+    	mpp_FarCharInfo3 = (WRAP_FAR_CHAR_INFO*)calloc(ItemsNumber,sizeof(*mpp_FarCharInfo3));
     	for (UINT i = 0; i < ItemsNumber; i++)
 		{
     		m_Colors2[i] = Items[i].Flags & (Far2::DIF_COLORMASK|Far2::DIF_SETCOLOR);
+			if (Items[i].Type == DI_USERCONTROL)
+			{
+				if (Items[i].Param.VBuf != NULL)
+				{
+					mpp_FarCharInfo2[i].nCount = VBufDim(Items+i);
+					mpp_FarCharInfo2[i].isExt = true;
+					mpp_FarCharInfo2[i].p2 = Items[i].Param.VBuf;
+				}
+			}
 			//mpp_FarCharInfo2[i] = (Items[i].Type == DI_USERCONTROL) ? Items[i].VBuf : NULL;
 		}
     }
@@ -7197,15 +7343,35 @@ Far2Dialog::~Far2Dialog()
 		free(m_Colors2);
 		m_Colors2 = NULL;
 	}
+	if (mpp_FarCharInfo2)
+	{
+		for (UINT i = 0; i < m_ItemsNumber; i++)
+		{
+			if (!mpp_FarCharInfo2[i].isExt && mpp_FarCharInfo2[i].p2)
+				free(mpp_FarCharInfo2[i].p2);
+		}
+		free(mpp_FarCharInfo2);
+		mpp_FarCharInfo2 = NULL;
+	}
+	if (mp_FarCharInfoDummy2.p2)
+	{
+		free(mp_FarCharInfoDummy2.p2);
+		mp_FarCharInfoDummy2.p2 = NULL;
+	}
 	if (mpp_FarCharInfo3)
 	{
 		for (UINT i = 0; i < m_ItemsNumber; i++)
 		{
-			if (mpp_FarCharInfo3[i])
-				free(mpp_FarCharInfo3[i]);
+			if (mpp_FarCharInfo3[i].p)
+				free(mpp_FarCharInfo3[i].p);
 		}
 		free(mpp_FarCharInfo3);
 		mpp_FarCharInfo3 = NULL;
+	}
+	if (mp_FarCharInfoDummy3.p)
+	{
+		free(mp_FarCharInfoDummy3.p);
+		mp_FarCharInfoDummy3.p = NULL;
 	}
 	if (mp_ListInit3)
 	{
@@ -7223,6 +7389,20 @@ Far2Dialog::~Far2Dialog()
 	}
 };
 
+WRAP_CHAR_INFO& Far2Dialog::GetVBufPtr2(UINT DlgItem)
+{
+	if (mpp_FarCharInfo2 && (DlgItem >= 0) && (DlgItem < this->m_ItemsNumber))
+		return mpp_FarCharInfo2[DlgItem];
+	return mp_FarCharInfoDummy2;
+}
+
+WRAP_FAR_CHAR_INFO& Far2Dialog::GetVBufPtr3(UINT DlgItem)
+{
+	if (mpp_FarCharInfo3 && (DlgItem >= 0) && (DlgItem < this->m_ItemsNumber))
+		return mpp_FarCharInfo3[DlgItem];
+	return mp_FarCharInfoDummy3;
+}
+
 void Far2Dialog::FreeDlg()
 {
 	(*gpMapDlg_2_3).erase(this);
@@ -7236,6 +7416,10 @@ void Far2Dialog::FreeDlg()
 
 INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
+#ifdef _DEBUG
+	FARMESSAGE Msg3 = (FARMESSAGE)Msg;
+#endif
+
 	Far2Dialog* p = (*gpMapDlg_3_2)[hDlg];
 	INT_PTR lRc = 0;
 	
@@ -7252,7 +7436,7 @@ INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 	
 	if (p->m_DlgProc)
 	{
-		Far2::FarMessagesProc Msg2 = p->wpi->FarMessage_3_2(Msg, Param1, Param2);
+		Far2::FarMessagesProc Msg2 = p->wpi->FarMessage_3_2(Msg, Param1, Param2, p);
 		_ASSERTE(Msg2!=Far2::DM_FIRST);
 		if (Msg > DM_FIRST && Msg < DM_USER && Msg2 != Far2::DM_FIRST)
 		{

@@ -157,11 +157,11 @@ void __cdecl xf_free
 	}
 
 	p->bBlockUsed = FALSE;
-#ifdef CONEMU_MINIMAL
-	lstrcpynA(p->sCreatedFrom, PointToName(lpszFileName), sizeof(p->sCreatedFrom)/sizeof(p->sCreatedFrom[0]));
-#else
-	wsprintfA(p->sCreatedFrom, "-- %s:%i", PointToName(lpszFileName), nLine);
-#endif
+	//#ifdef CONEMU_MINIMAL
+	//	lstrcpynA(p->sCreatedFrom, PointToName(lpszFileName), sizeof(p->sCreatedFrom)/sizeof(p->sCreatedFrom[0]));
+	//#else
+	//	wsprintfA(p->sCreatedFrom, "-- %s:%i", PointToName(lpszFileName), nLine);
+	//#endif
 	_Memory = (void*)p;
 #endif
 #ifdef _DEBUG

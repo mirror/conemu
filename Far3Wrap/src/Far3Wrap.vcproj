@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9,00"
+	Version="9.00"
 	Name="Far3Wrap"
 	ProjectGUID="{7E9CF007-1CAE-477B-859A-82C8B3D9D638}"
 	RootNamespace="Far3Wrap"
@@ -82,7 +82,7 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib Rpcrt4.lib"
-				OutputFile="\Far3\Far3Wrap.dll"
+				OutputFile="\Far3.2110\Far3Wrap.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile="Far3Wrap.def"
@@ -481,6 +481,10 @@
 			Filter="h;hpp;hxx;hm;inl"
 			>
 			<File
+				RelativePath=".\CalcKeyCode.h"
+				>
+			</File>
+			<File
 				RelativePath=".\Far3Wrap.h"
 				>
 			</File>
@@ -518,6 +522,10 @@
 			</File>
 			<File
 				RelativePath=".\resource.h"
+				>
+			</File>
+			<File
+				RelativePath=".\TranslateKeyToVK.h"
 				>
 			</File>
 		</Filter>

@@ -53,11 +53,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #if FAR_UNICODE>=1906
-GUID guid_BlockEditor = { /* 05E884B0-8603-4B35-A4D2-9CEAD36A4B68 */
-	0x05E884B0,
-	0x8603,
-	0x4B35,
-	{0xA4, 0xD2, 0x9C, 0xEA, 0xD3, 0x6A, 0x4B, 0x68}
+GUID guid_BlockEditor = { /* D82D6847-0C7B-4BF4-9A31-B0B929707854 */
+	0xD82D6847,
+	0x0C7B,
+	0x4BF4,
+	{0x9A, 0x31, 0xB0, 0xB9, 0x29, 0x70, 0x78, 0x54}
 };
 
 GUID guid_BlockEditorPluginMenu = { /* 186dd20d-43e9-4a39-8d4b-9e74e9c5b7a1 */                                                  
@@ -66,6 +66,20 @@ GUID guid_BlockEditorPluginMenu = { /* 186dd20d-43e9-4a39-8d4b-9e74e9c5b7a1 */
     0x4a39,                                                                                                   
     {0x8d, 0x4b, 0x9e, 0x74, 0xe9, 0xc5, 0xb7, 0xa1}                                                          
 };
+
+GUID guid_Menu1 = { /* 965a8475-e260-472c-81f7-8d66a6c34e3b */
+    0x965a8475,
+    0xe260,
+    0x472c,
+    {0x81, 0xf7, 0x8d, 0x66, 0xa6, 0xc3, 0x4e, 0x3b}
+};
+GUID guid_Menu2 = { /* 161d063a-4bf9-498d-adab-4aec1a0892cf */
+    0x161d063a,
+    0x4bf9,
+    0x498d,
+    {0xad, 0xab, 0x4a, 0xec, 0x1a, 0x08, 0x92, 0xcf}
+};
+
 #endif
 
 #ifndef MDEBUG
@@ -127,7 +141,7 @@ void WINAPI SetStartupInfoW(struct PluginStartupInfo *Info)
 		Info->MinFarVersion = FARMANAGERVERSION;
 
 		// Build: YYMMDDX (YY - две цифры года, MM - мес€ц, DD - день, X - 0 и выше-номер подсборки)
-		Info->Version = MAKEFARVERSION(MVV_1,MVV_2,MVV_3,((MVV_1 % 100)*100000) + (MVV_2*1000) + (MVV_3*10) + (MVV_4 % 10));
+		Info->Version = MAKEFARVERSION(MVV_1,MVV_2,MVV_3,((MVV_1 % 100)*100000) + (MVV_2*1000) + (MVV_3*10) + (MVV_4 % 10), VS_RELEASE);
 		
 		Info->Guid = guid_BlockEditor;
 		Info->Title = L"MBlockEditor";
@@ -218,7 +232,7 @@ int EditCtrl(int Cmd, void* Parm)
 {
 	int iRc;
 	#if FAR_UNICODE>=1906
-	iRc = psi.EditorControl(-1, (EDITOR_CONTROL_COMMANDS)Cmd, 0, (INT_PTR)Parm);
+	iRc = psi.EditorControl(-1, (EDITOR_CONTROL_COMMANDS)Cmd, 0, Parm);
 	#else
 	iRc = psi.EditorControl(Cmd, Parm);
 	#endif
@@ -232,7 +246,7 @@ HANDLE OpenKey(LPCTSTR pszSubKey)
 
 		FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_BlockEditor, INVALID_HANDLE_VALUE};
 		FarSettingsItem fsi = {0};
-		BOOL lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, (INT_PTR)&sc) != 0;
+		BOOL lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc) != 0;
 		if (lbKeyOpened)
 			hKey = sc.Handle;
 
@@ -272,7 +286,7 @@ BOOL QueryValue(HANDLE hKey, LPCTSTR pszName, LPTSTR pszValue, int cchValueMax)
 		FarSettingsItem fsi = {0};
 		fsi.Name = pszName;
 		fsi.Type = FST_STRING;
-		if (psi.SettingsControl(hKey, SCTL_GET, 0, (INT_PTR)&fsi))
+		if (psi.SettingsControl(hKey, SCTL_GET, 0, &fsi))
 		{
 			lstrcpynW(pszValue, fsi.String, cchValueMax-1);
 			lbRc = TRUE;
@@ -602,7 +616,7 @@ BOOL PrepareCommentParams()
 
 			int nSel = -1;
 			#if FAR_UNICODE>=1900
-			nSel = psi.Menu(&guid_BlockEditor,
+			nSel = psi.Menu(&guid_BlockEditor, &guid_Menu1,
 				-1,-1, 0, /*FMENU_CHANGECONSOLETITLE|*/FMENU_WRAPMODE,
 				_T(szMsgBlockEditorPlugin), NULL, NULL,
 				NULL, NULL, pItems, nCount);
@@ -1679,7 +1693,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 
 		//int nMode = lmMenu.DoModal();
 		#if FAR_UNICODE>=1900
-		nMode = psi.Menu(&guid_BlockEditor,
+		nMode = psi.Menu(&guid_BlockEditor, &guid_Menu2,
 			-1,-1, 0, /*FMENU_CHANGECONSOLETITLE|*/FMENU_WRAPMODE,
 			_T(szMsgBlockEditorPlugin), NULL, NULL,
 			NULL, NULL, pItems, ARRAYSIZE(pItems));

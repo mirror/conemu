@@ -53,71 +53,152 @@ l:// Keybar titles
 "Ключи..."
 "Keys..."
 
+REBarShiftF1L
+l:// Keybar titles
+"Ключи..."
+"Keys..."
+
 REBarShiftF2
 "Сохр..."
+"Save..."
+
+REBarShiftF2L
+"Сохранить..."
 "Save..."
 
 REBarShiftF2Virt
 "Вирт."
 "Virtual"
 
+REBarShiftF2VirtL
+"Виртуализация"
+"Virtualization"
+
 REBarF3
 "Просм"
+"View"
+
+REBarF3L
+"Просмотр"
 "View"
 
 REBarAltF3
 "#Просм"
 "#View"
 
+REBarAltF3L
+"#Просмотр"
+"#View"
+
 REBarAltShiftF3
 "&Просм"
+"&View"
+
+REBarAltShiftF3L
+"&Просмотр"
 "&View"
 
 REBarShiftF3
 "32/64"
 "32/64"
 
+REBarShiftF3L
+"32/64"
+"32/64"
+
+REBarCtrlAltF3
+"ТПрава..."
+"TPerms..."
+
+REBarCtrlAltF3L
+"ТекстПрава..."
+"TextPermissions..."
+
 REBarF4
 "Редакт"
+"Edit"
+
+REBarF4L
+"Редактировать"
 "Edit"
 
 REBarAltF4
 "#Редакт"
 "#Edit"
 
+REBarAltF4L
+"#Редактировать"
+"#Edit"
+
 REBarAltShiftF4
 "&Редакт"
 "&Edit"
 
-REBarCtrlShiftF4
+REBarAltShiftF4L
+"&Редактировать"
+"&Edit"
+
+REBarCtrlAltF4
 "Права..."
 "Perms..."
 
+REBarCtrlAltF4L
+"Права..."
+"Permissions..."
+
 REBarShiftF4
 "Значен..."
+"Value..."
+
+REBarShiftF4L
+"Значение..."
 "Value..."
 
 REBarF5
 "Копир"
 "Copy"
 
+REBarF5L
+"Копировать"
+"Copy"
+
 REBarShiftF5
 "#Копир"
+"#Copy"
+
+REBarShiftF5L
+"#Копирировать"
 "#Copy"
 
 REBarShiftF6
 "#Переим"
 "#Rename"
 
+REBarShiftF6L
+"#Переименовать"
+"#Rename"
+
 REBarF7
 "Созд"
+"MkKey"
+
+REBarF7L
+"Создать ключ"
 "MkKey"
 
 REBarAltShiftF7
 "Сервер"
 "Remote"
 
+REBarAltShiftF7L
+"Сервер"
+"Remote"
+
 REBarShiftF7
+"Режим"
+"DirMod"
+
+REBarShiftF7L
 "Режим"
 "DirMod"
 
@@ -299,6 +380,10 @@ RECheckMacroVar
 "и макросы в %%переменных"
 "and macr&o in %%variables"
 
+REStorePanelMode
+"&Восстанавливать режим панелей"
+"&Restore panel mode"
+
 REBtnOK
 "OK"
 "OK"
@@ -327,6 +412,10 @@ REBtnAppend
 "&Дописать"
 "&Append"
 
+REBtnVisual
+"&Визуальные"
+"Visu&al"
+
 REChangeNumber
 l:// Value editor dialogs
 "RegEdit - Редактирование числа"
@@ -341,8 +430,8 @@ REValueTypeLabel
 "Value type:"
 
 REValueDataLabel
-"&Значение:    "
-"&Value data:"
+"&Значение"
+"&Value data"
 
 REValueBaseLabel
 "Основание числа:"
@@ -426,6 +515,31 @@ RECreateKeyLabel
 "Name for the new subkey, or subkeys, divided by '\\':"
 
 
+REImportValueTitle
+"Импорт значения"
+"Import value"
+
+REImportValueLabel
+"Импортируемый файл:"
+"Importing file name:"
+
+REImportUnicodeStrings
+"&Юникодные строки"
+"&Unicode strings"
+
+REImportForAll
+"Для &всех последующих"
+"For &all next"
+
+
+REGuiPermissionEdit
+"Открываем диалог редактирования прав"
+"Permissions dialog is open"
+
+REGuiPermissionTitle
+"Разрешения для %s"
+"Permissions for %s"
+
 REConnectRemoteTitle
 "Подключение к серверу"
 "Connect to server"
@@ -479,6 +593,18 @@ REExportItemsProgress
 "Экспортировано %u из %u"
 "Exported %u from %u"
 
+RECopyDlgTitle
+"Копировать"
+"Copy"
+
+RECopyItemLabel
+"&Копировать \"%s\" в:"
+"&Copy \"%s\" to:"
+
+RECopyItemsLabel
+"&Копировать %i элементов из \"%s\" в:"
+"&Copy %i items from \"%s\" to:"
+
 REImportDlgTitle
 "Импорт ключей/значений"
 "Import keys/values"
@@ -496,20 +622,32 @@ REExportFormatLabel
 "Export format"
 
 REExportReg4
-"файлы REGEDIT&4"
-"REGEDIT&4 files"
+"файл REGEDIT&4"
+"REGEDIT&4 file"
 
 REExportReg5
-"файлы REGEDIT&5 (Unicode)"
-"REGEDIT&5 (Unicode) files"
+"файл REGEDIT&5 (Unicode)"
+"REGEDIT&5 (Unicode) file"
+
+REExportCmd
+"&cmd-файл (OEM/UTF-8)"
+"&cmd-file (OEM/UTF-8)"
 
 REExportHive
-"&Двоичные файлы (\"кусты\") "
-"&Binary files (\"hives\")   "
+"&Двоичный файлы (\"куст\")  "
+"&Binary files (\"hive\")  "
+
+REExportRaw
+"Двоичный &файл (\"данные\") "
+"Binary file (\"&raw\")    "
 
 REExportHiveRoot
 "&Как подключ"
 "Export &as subkey"
+
+REExportRawUnicode
+"&Юникодные строки/файлы"
+"&Unicode strings/files"
 
 
 REFormatFailLabel
@@ -536,6 +674,30 @@ REActionImport32
 REActionImport64
 "Импортировать в реестр (&64бит)"
 "Import to the registry (&64bit)"
+
+REActionImportHere
+"Импортировать в &текущий ключ"
+"Import to the &current key"
+
+REActionImportValuesHere
+"Импортировать &значения в текущий ключ"
+"Import &values to the current key"
+
+REActionImportRegAsRaw
+"Импортировать &как значение"
+"Import &as value"
+
+REImportStyleKeyTitle
+"Импорт ключа"
+"Importing key"
+
+REImportStyleFileLabel
+"Импортируемый файл:"
+"Importing file:"
+
+REImportStyleKeyLabel
+"Импортируемый ключ:"
+"Importing key: "
 
 
 RE_REG_NONE
@@ -588,6 +750,38 @@ RE_REG_QWORD
 "REG_&QWORD"
 
 
+
+RECmdHeader
+l:// Export to cmd
+"@echo off\r\nrem \r\nrem Reg.exe has many restrictions, for example:\r\nrem * Unicode (UTF-8) supported in Win7 or higher\r\nrem * REG_QWORD (and other 'specials') is not supported\r\nrem * Value names and keys can't contains quotation symbols\r\nrem * Strings, value names and keys can't contains \\r\\n\r\nrem * REG_MULTI_SZ may fails, if value contains \\\\0\r\nrem * Empty keys can't be created w/o default value\r\nrem \r\n"
+"@echo off\r\nrem \r\nrem Reg.exe has many restrictions, for example:\r\nrem * Unicode (UTF-8) supported in Win7 or higher\r\nrem * REG_QWORD (and other 'specials') is not supported\r\nrem * Value names and keys can't contains quotation symbols\r\nrem * Strings, value names and keys can't contains \\r\\n\r\nrem * REG_MULTI_SZ may fails, if value contains \\\\0\r\nrem * Empty keys can't be created w/o default value\r\nrem \r\n"
+
+RECmdVarReset
+"set FarRegEditRc=\r\n"
+"set FarRegEditRc=\r\n"
+
+RECmdUTF8Warn
+"\r\nrem Required for Unicode strings support"
+"\r\nrem Required for Unicode strings support"
+
+RECmdErrCheck
+"  if errorlevel 1 if NOT DEFINED FarRegEditRc set FarRegEditRc="
+"  if errorlevel 1 if NOT DEFINED FarRegEditRc set FarRegEditRc="
+
+RECmdErrFin
+"\r\n\r\nif NOT DEFINED FarRegEditRc (\r\n  echo Import succeeded\r\n) else (\r\n  echo At least one value/key failed: %FarRegEditRc%\r\n)\r\n"
+"\r\n\r\nif NOT DEFINED FarRegEditRc (\r\n  echo Import succeeded\r\n) else (\r\n  echo At least one value/key failed: %FarRegEditRc%\r\n)\r\n"
+
+REM_CmdWarnUtf8
+"ВНИМАНИЕ!\ncmd-файл в кодировке UTF-8 будет работать\nтолько в Windows 7 или выше\nПродолжить\nОтмена"
+"WARNING!\nUTF-8 cmd-file will works in Windows 7 or higher\nContinue\nCancel"
+
+REM_CmdWarnOEM
+"ВНИМАНИЕ!\nПри экспорте в OEM cmd-файл могут быть\nпроблемы с Unicode ключами/значениями\nПродолжить\nОтмена"
+"WARNING!\nExporting to the OEM cmd-file you may have\nproblems with Unicode keys/values\nContinue\nCancel"
+
+
+
 REM_Warning
 l:// Error and confirmation messages
 "ВНИМАНИЕ!"
@@ -598,8 +792,8 @@ REM_WarningDelete
 "WARNING!\nDeleting some entries may seriously damage your system!\nDo you want to delete the selected entry from the registry?\nDelete\nCancel"
 
 REM_ConfirmDelete
-"RegEditor\nDo you wish to delete\n%i keys, %i values\nDelete\nCancel"
 "RegEditor\nВы действительно хотите удалить\n%i ключей, %i значений\nУдалить\nОтмена"
+"RegEditor\nDo you wish to delete\n%i keys, %i values\nDelete\nCancel"
 
 REM_NumberRequireName
 "RegEditor\nПустое имя значения не допускается!\nПовторить ввод имени?\nПовторить\nОтмена"
@@ -681,8 +875,12 @@ REM_CantLoadKey
 "Не удалось загрузить ключ из файла"
 "Can't load registry key from file"
 
+REM_CantRenameKey
+"Не удалось переименовать ключ"
+"Rename key failed"
+
 REM_CantDeleteKey
-"Не удалось ключ"
+"Не удалось удалить ключ"
 "Delete key failed"
 
 REM_CantDeleteValue
@@ -769,6 +967,10 @@ REM_OperationCancelledByUser
 "RegEditor\nОперация была отменена пользователем (Esc)"
 "RegEditor\nOperation was cancelled by user (Esc)"
 
+REM_ConfirmOperationCancel
+"RegEditor\nОстановить выполняемую операцию?\nОстановить\nПродолжить"
+"RegEditor\nStop current operation?\nStop\nContinue"
+
 REM_SetDirectoryFailed
 "RegEditor\nОшибка SetDirectory\n'%s'"
 "RegEditor\nSetDirectory failed\n'%s'"
@@ -849,6 +1051,22 @@ REM_EmptyValueNameNotAllowed
 REM_BadDoubleZero
 "RegEditor\nВ середине строки формата REG_MULTI_SZ '\\0\\0' недопустимо!\n'\\0\\0' заменен на перевод строки '\\n'!"
 "RegEditor\n'\\0\\0' are prohibited in the center of REG_MULTI_SZ!\n'\\0\\0' was replaced with '\\n'!"
+
+REM_CmdBadKeyName
+"RegEditor\nИмя ключа содержит недопустимые символы\n%s\nВыгрузка в cmd-файл невозможна"
+"RegEditor\nKey name contains invalid characters\n%s\nExporting to cmd-file is impossible"
+
+REM_CmdBadValueName
+"RegEditor\nИмя значения содержит недопустимые символы\n%s\nВыгрузка в cmd-файл невозможна"
+"RegEditor\nValue name contains invalid characters\n%s\nExporting to cmd-file is impossible"
+
+REM_CmdBadValueMSZ
+"RegEditor\nЗначение (MSZ) содержит все допустимые символы-разделители\n%s\nВыгрузка в cmd-файл невозможна"
+"RegEditor\nValue (MSZ) contains all valid delim-characters\n%s\nExporting to cmd-file is impossible"
+
+REM_CmdErrMsz0
+"RegEditor\nВ середине строки формата REG_MULTI_SZ '\\0\\0' недопустимо!\n%s\nВыгрузка в cmd-файл невозможна"
+"RegEditor\n'\\0\\0' are prohibited in the center of REG_MULTI_SZ!\n%s\nExporting to cmd-file is impossible"
 
 
 REM_CreateToolhelp32SnapshotFailed
@@ -993,3 +1211,24 @@ REM_MPEC_INTPARSERERROR
 REM_MPEC_CONTINUE_OTL
 "RegEditor\nОшибка проверки макропоследовательности\nОператор $Continue вне цикла\nСтрока %u, Колонка %u"
 "RegEditor\nError parsing macro\nOperator $Continue out of loop\nLine %u, Col %u"
+
+
+REM_GetKeySecurityFail
+"RegEditor\nНе удалось получить информацию о разрешениях\nключ: %s"
+"RegEditor\nQuering security information failed\nkey: %s"
+
+REM_SetKeyOwnerFail
+"RegEditor\nНе удалось изменить информацию о владельце ключа\n%s"
+"RegEditor\nSet key owner failed\nkey: %s"
+
+REM_SetKeySecurityFail
+"RegEditor\nНе удалось изменить информацию о разрешениях\nключ: %s"
+"RegEditor\nSet security information failed\nkey: %s"
+
+REM_DescrToStringFail
+"RegEditor\nНе удалось преобразовать в строковую форму разрешения\nключ: %s"
+"RegEditor\nSecurity descriptor to string form failed\nkey: %s"
+
+REM_StringToDescrFail
+"RegEditor\nНе удалось преобразовать из строковой формы разрешения\nключ: %s"
+"RegEditor\nString form to security descriptor failed\nkey: %s"

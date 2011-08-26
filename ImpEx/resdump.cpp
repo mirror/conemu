@@ -21,6 +21,8 @@
 #include "extrnvar.h"
 #include "resdump.h"
 
+extern bool gbDecimalIds;
+
 static const TCHAR cszLanguage[] = _T("Lang");
 static const TCHAR cszString[] = _T("String value");
 static const TCHAR cszType[] = _T("Type");
@@ -201,7 +203,7 @@ void GetResourceTypeName(DWORD type, PSTR buffer, UINT cBytes)
     if ( type <= (WORD)RT_MANIFEST )
         strncpy(buffer, SzResourceTypes[type], cBytes);
     else
-        sprintf(buffer, "0x%X", type);
+		sprintf(buffer, gbDecimalIds ? "%05u" : "0x%X", type);
 }
 
 //
@@ -218,7 +220,7 @@ void GetResourceNameFromId
     // If it's a regular ID, just format it.
     if ( !(id & IMAGE_RESOURCE_NAME_IS_STRING) )
     {
-        sprintf(buffer, "0x%04X", id);
+        sprintf(buffer, gbDecimalIds ? "%05u" : "0x%04X", id);
         return;
     }
     
@@ -505,7 +507,8 @@ void ParseVersionInfoFixed(MPanelItem *pRoot, char* fileNameBuffer, MPanelItem *
 	psz += wcslen(psz);
 }
 
-#define ALIGN_TOKEN(p) p = (LPWORD)( ((((DWORD_PTR)p) + 3) >> 2) << 2 );
+//#define ALIGN_TOKEN(p) p = (LPWORD)( ((((DWORD_PTR)p) + 3) >> 2) << 2 );
+#define ALIGN_TOKEN(p) p = (LPWORD)( ((( ((DWORD_PTR)p) - ((DWORD_PTR)ptrRes) + 3) >> 2) << 2 ) + ((DWORD_PTR)ptrRes))
 
 void ParseVersionInfoVariableString(MPanelItem *pRoot, char* fileNameBuffer, MPanelItem *&pChild, LPVOID ptrRes, DWORD &resSize, LPBYTE &ptrBuf, BOOL &bIsCopy, LPWORD pToken, wchar_t* &psz)
 {

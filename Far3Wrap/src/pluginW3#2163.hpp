@@ -5,7 +5,7 @@
 /*
   plugin.hpp
 
-  Plugin API for Far Manager 3.0 build 2174
+  Plugin API for Far Manager 3.0 build 2163
 */
 
 /*
@@ -43,7 +43,7 @@ other possible license with no implications from the above license on them.
 #define FARMANAGERVERSION_MAJOR 3
 #define FARMANAGERVERSION_MINOR 0
 #define FARMANAGERVERSION_REVISION 0
-#define FARMANAGERVERSION_BUILD 2174
+#define FARMANAGERVERSION_BUILD 2163
 #define FARMANAGERVERSION_STAGE VS_RELEASE
 
 #ifndef RC_INVOKED
@@ -53,7 +53,6 @@ other possible license with no implications from the above license on them.
 #undef DefDlgProc
 
 #define FARMACRO_KEY_EVENT  (KEY_EVENT|0x8000)
-
 
 #define CP_UNICODE 1200
 #define CP_REVERSEBOM 1201
@@ -65,8 +64,7 @@ static const FARCOLORFLAGS
 	FCF_NONE          = 0,
 	FCF_FG_4BIT       = 0x0000000000000001ULL,
 	FCF_BG_4BIT       = 0x0000000000000002ULL,
-
-	FCF_4BITMASK      = 0x0000000000000003ULL, // FCF_FG_4BIT|FCF_BG_4BIT
+	FCF_4BITMASK      = 0x0000000000000003ULL, //FCF_FG_4BIT|FCF_BG_4BIT
 
 	FCF_EXTENDEDFLAGS = 0xFFFFFFFFFFFFFFFCULL, // ~FCF_4BITMASK
 
@@ -133,20 +131,20 @@ typedef int (WINAPI *FARAPIMESSAGE)(
 
 enum FARDIALOGITEMTYPES
 {
-	DI_TEXT                         =  0,
-	DI_VTEXT                        =  1,
-	DI_SINGLEBOX                    =  2,
-	DI_DOUBLEBOX                    =  3,
-	DI_EDIT                         =  4,
-	DI_PSWEDIT                      =  5,
-	DI_FIXEDIT                      =  6,
-	DI_BUTTON                       =  7,
-	DI_CHECKBOX                     =  8,
-	DI_RADIOBUTTON                  =  9,
-	DI_COMBOBOX                     = 10,
-	DI_LISTBOX                      = 11,
+	DI_TEXT,
+	DI_VTEXT,
+	DI_SINGLEBOX,
+	DI_DOUBLEBOX,
+	DI_EDIT,
+	DI_PSWEDIT,
+	DI_FIXEDIT,
+	DI_BUTTON,
+	DI_CHECKBOX,
+	DI_RADIOBUTTON,
+	DI_COMBOBOX,
+	DI_LISTBOX,
 
-	DI_USERCONTROL                  =255,
+	DI_USERCONTROL=255,
 };
 
 /*
@@ -209,7 +207,7 @@ static const FARDIALOGITEMFLAGS
 
 enum FARMESSAGE
 {
-	DM_FIRST                        = 0,
+	DM_FIRST=0,
 	DM_CLOSE                        = 1,
 	DM_ENABLE                       = 2,
 	DM_ENABLEREDRAW                 = 3,
@@ -316,7 +314,7 @@ enum FARMESSAGE
 	DN_CONTROLINPUT                 = 4116,
 	DN_CLOSE                        = 4117,
 
-	DM_USER                         = 0x4000,
+	DM_USER=0x4000,
 
 };
 
@@ -432,9 +430,9 @@ struct FarList
 
 struct FarListTitles
 {
-	size_t   TitleLen;
+	int   TitleLen;
 	const wchar_t *Title;
-	size_t   BottomLen;
+	int   BottomLen;
 	const wchar_t *Bottom;
 };
 
@@ -652,6 +650,7 @@ static const PLUGINPANELITEMFLAGS
 
 struct PluginPanelItem
 {
+	DWORD    FileAttributes;
 	FILETIME CreationTime;
 	FILETIME LastAccessTime;
 	FILETIME LastWriteTime;
@@ -660,16 +659,15 @@ struct PluginPanelItem
 	unsigned __int64 PackSize;
 	const wchar_t *FileName;
 	const wchar_t *AlternateFileName;
+	PLUGINPANELITEMFLAGS Flags;
+	DWORD         NumberOfLinks;
 	const wchar_t *Description;
 	const wchar_t *Owner;
 	const wchar_t * const *CustomColumnData;
-	size_t CustomColumnNumber;
-	DWORD_PTR UserData;
-	PLUGINPANELITEMFLAGS Flags;
-	DWORD FileAttributes;
-	DWORD NumberOfLinks;
-	DWORD CRC32;
-	DWORD_PTR Reserved[2];
+	size_t           CustomColumnNumber;
+	DWORD_PTR     UserData;
+	DWORD         CRC32;
+	DWORD_PTR     Reserved[2];
 };
 
 struct FarGetPluginPanelItem
@@ -937,6 +935,7 @@ enum ADVANCED_CONTROL_COMMANDS
 
 };
 
+
 enum FarSystemSettings
 {
 	FSS_CLEARROATTRIBUTE               = 0x00000001,
@@ -1165,7 +1164,7 @@ struct FarSetColors
 
 enum WINDOWINFO_TYPE
 {
-	WTYPE_PANELS                    = 1,
+	WTYPE_PANELS=1,
 	WTYPE_VIEWER                    = 2,
 	WTYPE_EDITOR                    = 3,
 	WTYPE_DIALOG                    = 4,
@@ -1182,13 +1181,13 @@ struct WindowInfo
 {
 	size_t StructSize;
 	INT_PTR Id;
-	wchar_t *TypeName;
-	wchar_t *Name;
-	int TypeNameSize;
-	int NameSize;
-	int Pos;
+	int  Pos;
 	enum WINDOWINFO_TYPE Type;
 	WINDOWINFO_FLAGS Flags;
+	wchar_t *TypeName;
+	int TypeNameSize;
+	wchar_t *Name;
+	int NameSize;
 };
 
 struct WindowType
@@ -1288,16 +1287,16 @@ struct ViewerMode
 struct ViewerInfo
 {
 	size_t StructSize;
-	struct ViewerMode CurMode;
+	int    ViewerID;
+	const wchar_t *FileName;
 	__int64 FileSize;
 	__int64 FilePos;
+	int    WindowSizeX;
+	int    WindowSizeY;
+	VIEWER_OPTIONS  Options;
+	int    TabSize;
+	struct ViewerMode CurMode;
 	__int64 LeftPos;
-	VIEWER_OPTIONS Options;
-	const wchar_t *FileName;
-	int ViewerID;
-	int WindowSizeX;
-	int WindowSizeY;
-	int TabSize;
 };
 
 enum VIEWER_EVENTS
@@ -1430,9 +1429,9 @@ struct EditorUndoRedo
 struct EditorGetString
 {
 	int StringNumber;
-	int StringLength;
 	const wchar_t *StringText;
 	const wchar_t *StringEOL;
+	int StringLength;
 	int SelStart;
 	int SelEnd;
 };
@@ -1441,9 +1440,9 @@ struct EditorGetString
 struct EditorSetString
 {
 	int StringNumber;
-	int StringLength;
 	const wchar_t *StringText;
 	const wchar_t *StringEOL;
+	int StringLength;
 };
 
 enum EXPAND_TABS
@@ -1616,7 +1615,7 @@ enum FAR_PLUGIN_LOAD_TYPE
 
 enum FAR_FILE_FILTER_CONTROL_COMMANDS
 {
-	FFCTL_CREATEFILEFILTER          = 0,
+	FFCTL_CREATEFILEFILTER = 0,
 	FFCTL_FREEFILEFILTER            = 1,
 	FFCTL_OPENFILTERSMENU           = 2,
 	FFCTL_STARTINGTOFILTER          = 3,
@@ -1625,7 +1624,7 @@ enum FAR_FILE_FILTER_CONTROL_COMMANDS
 
 enum FAR_FILE_FILTER_TYPE
 {
-	FFT_PANEL                       = 0,
+	FFT_PANEL = 0,
 	FFT_FINDFILE                    = 1,
 	FFT_COPY                        = 2,
 	FFT_SELECT                      = 3,
@@ -1634,7 +1633,7 @@ enum FAR_FILE_FILTER_TYPE
 
 enum FAR_REGEXP_CONTROL_COMMANDS
 {
-	RECTL_CREATE                    = 0,
+	RECTL_CREATE=0,
 	RECTL_FREE                      = 1,
 	RECTL_COMPILE                   = 2,
 	RECTL_OPTIMIZE                  = 3,
@@ -1660,7 +1659,7 @@ struct RegExpSearch
 
 enum FAR_SETTINGS_CONTROL_COMMANDS
 {
-	SCTL_CREATE                     = 0,
+	SCTL_CREATE=0,
 	SCTL_FREE                       = 1,
 	SCTL_SET                        = 2,
 	SCTL_GET                        = 3,
@@ -1999,7 +1998,6 @@ struct PluginStartupInfo
 	FARAPISETTINGSCONTROL  SettingsControl;
 };
 
-
 typedef unsigned __int64 PLUGIN_FLAGS;
 static const PLUGIN_FLAGS
 	PF_NONE           = 0,
@@ -2194,7 +2192,6 @@ enum OPENFROM
 	OPEN_FROMMACRO          = 0x00010000,
 	OPEN_FROMMACROSTRING    = 0x00020000,
 };
-
 
 enum FAR_EVENTS
 {

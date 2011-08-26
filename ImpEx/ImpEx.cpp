@@ -12,7 +12,24 @@
 //1. В заголовке плагина показывать "ImpEx:<PEFileName> [<CurFolderName>]"
 //2. CTRLZ - всплывать свой диалог со строками Owner/Description
 
+#ifdef _UNICODE
+#define OPEN_ANALYSE 9
+struct AnalyseData
+{
+	int StructSize;
+	const wchar_t *lpwszFileName;
+	const unsigned char *pBuffer;
+	DWORD dwBufferSize;
+	int OpMode;
+};
+struct AnalyseData *gpLastAnalyse = NULL;
+#endif
+
 bool gbUseMenu = true, gbUseEnter = true, gbUseCtrlPgDn = true, gbLibRegUnreg = true, gbLibLoadUnload = true;
+bool gbUseUndecorate = true;
+bool gbDecimalIds = true;
+UnDecorateSymbolName_t UnDecorate_Dbghelp = NULL;
+HMODULE ghDbghelp = NULL;
 void LoadSettings();
 bool IsKeyPressed(WORD vk);
 //#define IMPEX_USEMENU TRUE
@@ -105,27 +122,15 @@ void WINAPI ClosePluginW(HANDLE hPlugin)
 //}
 //#endif
 
-HANDLE WINAPI OpenFilePluginW(
-  TCHAR *Name,
-  const unsigned char *Data,
-  int DataSize
-#ifdef _UNICODE
-  ,int OpMode
-#endif
-)
+BOOL IsFileSupported(const TCHAR *Name, const unsigned char *Data, int DataSize)
 {
 	if (!Name || !*Name)
-		return INVALID_HANDLE_VALUE; // ShiftF1
+		return FALSE; // ShiftF1
 	
 	_ASSERTE(sizeof(IMAGE_FILE_HEADER) < sizeof(IMAGE_DOS_HEADER));
-	if (
-		#ifdef _UNICODE
-		(OpMode & OPM_FIND) != 0 ||
-		#endif
-		!Data || DataSize < sizeof(IMAGE_DOS_HEADER)
-	   )
+	if (!Data || DataSize < sizeof(IMAGE_DOS_HEADER))
 	{
-		return INVALID_HANDLE_VALUE;
+		return FALSE;
 	}
 
 	LPCTSTR pszNameOnly = psi.FSF->PointToName(Name);
@@ -156,23 +161,120 @@ HANDLE WINAPI OpenFilePluginW(
 	}
 
 	if (!lbFormat)
-		return INVALID_HANDLE_VALUE;
+		return FALSE;
 
 	LoadSettings();
 	if (!gbUseEnter && !gbUseCtrlPgDn)
 	{
-		return INVALID_HANDLE_VALUE;
+		return FALSE;
 	}
 	else if (!gbUseEnter)
 	{
 		if (!IsKeyPressed(VK_CONTROL))
-			return INVALID_HANDLE_VALUE;
+			return FALSE;
 	}
+	
+	return TRUE;
+}
+
+#ifdef _UNICODE
+int WINAPI AnalyseW(const AnalyseData *pData)
+{
+	int nFormat = -1;
+
+	SAFEFREE(gpLastAnalyse);
+
+	if (!IsFileSupported(pData->lpwszFileName, pData->pBuffer, pData->dwBufferSize))
+		return 0;
+
+	// Запомнить
+	int nAllSize = (int)sizeof(*gpLastAnalyse) + pData->dwBufferSize;
+	gpLastAnalyse = (struct AnalyseData*)malloc(nAllSize);
+	*gpLastAnalyse = *pData;
+	gpLastAnalyse->pBuffer = ((const unsigned char*)gpLastAnalyse) + sizeof(*gpLastAnalyse);
+	memmove((void*)gpLastAnalyse->pBuffer, pData->pBuffer, pData->dwBufferSize);
+
+	return TRUE;
+}
+#endif
+
+
+HANDLE WINAPI OpenFilePluginW(
+  const TCHAR *Name,
+  const unsigned char *Data,
+  int DataSize
+#ifdef _UNICODE
+  ,int OpMode
+#endif
+)
+{
+	if (!Name || !*Name)
+		return INVALID_HANDLE_VALUE; // ShiftF1
+
+	#ifdef _UNICODE
+	if ((OpMode & OPM_FIND) != 0)
+		return INVALID_HANDLE_VALUE;
+	#endif
+		
+	if (!IsFileSupported(Name, Data, DataSize))
+		return INVALID_HANDLE_VALUE;
+	
+	//_ASSERTE(sizeof(IMAGE_FILE_HEADER) < sizeof(IMAGE_DOS_HEADER));
+	//if (
+	//	#ifdef _UNICODE
+	//	(OpMode & OPM_FIND) != 0 ||
+	//	#endif
+	//	!Data || DataSize < sizeof(IMAGE_DOS_HEADER)
+	//   )
+	//{
+	//	return INVALID_HANDLE_VALUE;
+	//}
+	//
+	//LPCTSTR pszNameOnly = psi.FSF->PointToName(Name);
+	//LPCTSTR pszExt = pszNameOnly ? _tcsrchr(pszNameOnly, _T('.')) : NULL;
+	//if (!pszExt) pszExt = _T("");
+	//
+	//bool lbFormat = false;
+	//PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)Data;
+	//PIMAGE_FILE_HEADER pImgFileHdr = (PIMAGE_FILE_HEADER)Data;
+	//if ( pDosHeader->e_magic == IMAGE_DOS_SIGNATURE )
+	//{
+	//	lbFormat = true;
+	//}
+	//else if ( pDosHeader->e_magic == IMAGE_SEPARATE_DEBUG_SIGNATURE )
+	//{
+	//	lbFormat = true;
+	//}
+	//else if ( IsValidMachineType(pImgFileHdr->Machine, TRUE) )
+	//{
+	//	if ( 0 == pImgFileHdr->SizeOfOptionalHeader && lstrcmpi(pszExt, _T(".obj")) == 0 )	// 0 optional header
+	//		lbFormat = true;
+	//	else if ( pImgFileHdr->SizeOfOptionalHeader == IMAGE_SIZEOF_ROM_OPTIONAL_HEADER )
+	//		lbFormat = true;
+	//}
+	//else if ( 0 == strncmp((char *)Data, IMAGE_ARCHIVE_START, IMAGE_ARCHIVE_START_SIZE) )
+	//{
+	//	lbFormat = true;
+	//}
+	//
+	//if (!lbFormat)
+	//	return INVALID_HANDLE_VALUE;
+	//
+	//LoadSettings();
+	//if (!gbUseEnter && !gbUseCtrlPgDn)
+	//{
+	//	return INVALID_HANDLE_VALUE;
+	//}
+	//else if (!gbUseEnter)
+	//{
+	//	if (!IsKeyPressed(VK_CONTROL))
+	//		return INVALID_HANDLE_VALUE;
+	//}
 
 
 	HANDLE hPlugin = NULL;
 	
-    TCHAR* pszFull = NULL;
+    //TCHAR* pszFull = NULL;
     
     //#ifdef _UNICODE
 	//	int nLen = (int)((FarStandardFunctions*)fsf)->ConvertPath(CPM_FULL, Name, NULL, 0);
@@ -189,7 +291,7 @@ HANDLE WINAPI OpenFilePluginW(
 	#endif
 	//gbAutoMode = TRUE;
 	
-	hPlugin = MImpEx::Open(pszFull ? pszFull : Name, false);
+	hPlugin = MImpEx::Open(/*pszFull ? pszFull :*/ Name, false);
 	
 	//if (pszFull) {
 	//	free(pszFull);
@@ -205,12 +307,30 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	//gbAutoMode = FALSE;
 	gbSilentMode = FALSE;
 	
-    if (OpenFrom==OPEN_PLUGINSMENU) {
+	#ifdef _UNICODE
+	// После AnalyseW вызывается OpenPluginW, а не OpenFilePluginW
+	if (OpenFrom == OPEN_ANALYSE)
+	{
+		hPlugin = OpenFilePluginW(gpLastAnalyse->lpwszFileName,
+			gpLastAnalyse->pBuffer, gpLastAnalyse->dwBufferSize, 0/*OpMode*/);
+		SAFEFREE(gpLastAnalyse);
+		if (hPlugin == (HANDLE)-2)
+			hPlugin = INVALID_HANDLE_VALUE;
+		return hPlugin;
+	}
+	SAFEFREE(gpLastAnalyse);
+	#endif
+
+	
+    if (OpenFrom==OPEN_PLUGINSMENU)
+    {
         // Плагин пытаются открыть из плагиновского меню
         PanelInfo pi; memset(&pi, 0, sizeof(pi));
-        if (psi.Control(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, F757NA (LONG_PTR)&pi)) {
+        if (psi.Control(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, F757NA (LONG_PTR)&pi))
+        {
 			
-            if (pi.PanelType==PTYPE_FILEPANEL && pi.ItemsNumber>0 /*&& pi.CurrentItem>0*/) {
+            if (pi.PanelType==PTYPE_FILEPANEL && pi.ItemsNumber>0 /*&& pi.CurrentItem>0*/)
+            {
                 //
                 BOOL    lbOpenMode = FALSE;
 				FAR_FIND_DATA* pData = NULL;
@@ -235,18 +355,21 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 				#endif
 
 				pszFileName = FILENAMEPTR(*pData);
-                if (*pszFileName && _tcscmp(pszFileName, _T(".."))!=0) {
+                if (*pszFileName && _tcscmp(pszFileName, _T(".."))!=0)
+                {
                     lbOpenMode = TRUE;
                 }
 
                 
-                if (lbOpenMode) {
+                if (lbOpenMode)
+                {
                     int nLen = 0;
                     TCHAR* pszFull = NULL;
                     
                     #ifdef _UNICODE
 						nLen = (int)fsf.ConvertPath(CPM_FULL, pszFileName, NULL, 0);
-						if (nLen > 0) {
+						if (nLen > 0)
+						{
 							pszFull = (TCHAR*)calloc(nLen,sizeof(TCHAR));
 							fsf.ConvertPath(CPM_FULL, pszFileName, pszFull, nLen);
 						}
@@ -255,14 +378,16 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
                     	nLen = nDirLen+3+lstrlen(pszFileName);
                     	pszFull = (TCHAR*)calloc(nLen,sizeof(TCHAR));
                     	lstrcpy(pszFull, pi.CurDir);
-                    	if (nDirLen && pszFull[nDirLen-1] != '\\') {
+                    	if (nDirLen && pszFull[nDirLen-1] != '\\')
+                    	{
                     		pszFull[nDirLen++] = '\\';
                     		pszFull[nDirLen] = 0;
                     	}
                     	lstrcpy(pszFull+nDirLen, pszFileName);
                     #endif
 
-					if (pszFull) {
+					if (pszFull)
+					{
                     	hPlugin = MImpEx::Open(pszFull, true);
                     	free(pszFull);
                 	}
@@ -275,12 +400,16 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 				#endif
             }
         }
-    } else if (OpenFrom==OPEN_COMMANDLINE) {
-		if (Item) {
+    }
+    else if (OpenFrom==OPEN_COMMANDLINE)
+    {
+		if (Item)
+		{
 			TCHAR *pszTemp = NULL;
 			TCHAR *pszFull = NULL;
 			LPCTSTR pszName = (LPCTSTR)Item;
-			if (*pszName == _T('"')) {
+			if (*pszName == _T('"'))
+			{
 				pszTemp = _tcsdup(pszName+1);
 				TCHAR* pszQ = _tcschr(pszTemp, _T('"'));
 				if (pszQ) *pszQ = 0;
@@ -289,7 +418,8 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 
 			#ifdef _UNICODE
 				int nLen = (int)fsf.ConvertPath(CPM_FULL, pszName, NULL, 0);
-				if (nLen > 0) {
+				if (nLen > 0)
+				{
 					pszFull = (TCHAR*)calloc(nLen,sizeof(TCHAR));
 					fsf.ConvertPath(CPM_FULL, pszName, pszFull, nLen);
 					pszName = pszFull;
@@ -375,6 +505,10 @@ int WINAPI GetFilesW(
 
 void WINAPI _export ExitFARW(void)
 {
+	#ifdef _UNICODE
+	SAFEFREE(gpLastAnalyse);
+	#endif
+
 	if (gsRootKey)
 	{
 		free(gsRootKey); gsRootKey = NULL;
@@ -382,6 +516,12 @@ void WINAPI _export ExitFARW(void)
 	if (hConEmuCtrlPressed)
 	{
 		CloseHandle(hConEmuCtrlPressed); hConEmuCtrlPressed = NULL;
+	}
+	if (ghDbghelp)
+	{
+		FreeLibrary(ghDbghelp);
+		ghDbghelp = NULL;
+		UnDecorate_Dbghelp = NULL;
 	}
 }
 
@@ -404,7 +544,9 @@ void LoadSettings()
 			{&gbUseEnter, _T("UseEnter")},
 			{&gbUseCtrlPgDn, _T("UseCtrlPgDn")},
 			{&gbLibRegUnreg, _T("LibRegUnreg")},
-			{&gbLibLoadUnload, _T("LibLoadUnload")}
+			{&gbLibLoadUnload, _T("LibLoadUnload")},
+			{&gbUseUndecorate, _T("UseUndecorate")},
+			{&gbDecimalIds, _T("DecimalIds")},
 		};
 		for (int i = 0; i < countof(Settings); i++)
 		{

@@ -7,6 +7,11 @@
 #define IMAGE_SIZEOF_NT_OPTIONAL32_HEADER    224
 #define IMAGE_SIZEOF_NT_OPTIONAL64_HEADER    240
 
+extern bool gbUseUndecorate;
+typedef DWORD (WINAPI* UnDecorateSymbolName_t)(const char* DecoratedName, char* UnDecoratedName, DWORD UndecoratedLength, DWORD Flags);
+extern UnDecorateSymbolName_t UnDecorate_Dbghelp;
+
+
 // MakePtr is a macro that allows you to easily add to values (including
 // pointers) together without dealing with C's pointer arithmetic.  It
 // essentially treats the last two parameters as DWORDs.  The first
@@ -16,6 +21,7 @@
 bool ValidateMemory(LPCVOID ptr, size_t nSize);
 
 void DumpHeader(MPanelItem *pRoot, PIMAGE_FILE_HEADER pImageFileHeader);
+void DumpHeader(MPanelItem *pRoot, PIMAGE_DOS_HEADER pDos);
 void DumpSectionTable(MPanelItem *pRoot, PIMAGE_SECTION_HEADER section,
                       unsigned cSections,
                       BOOL IsEXE);

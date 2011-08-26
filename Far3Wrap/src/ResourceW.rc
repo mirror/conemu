@@ -1,0 +1,37 @@
+
+/////////////////////////////////////////////////////////////////////////////
+// Neutral resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_NEU)
+#ifdef _WIN32
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+#pragma code_page(1251)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// LOADERS
+//
+
+//#ifdef _WIN64
+//IDR_LOADER64_FULL         LOADERS                 "..\\Loader64.dll"
+//IDR_LOADER64_ARC          LOADERS                 "..\\Loader64_ARC.dll"
+//IDR_LOADER64_CUSTOM       LOADERS                 "..\\Loader64_CUSTOM.dll"
+//IDR_LOADER64_DIALOG       LOADERS                 "..\\Loader64_DIALOG.dll"
+//IDR_LOADER64_EDITOR       LOADERS                 "..\\Loader64_EDITOR.dll"
+//IDR_LOADER64_VIEWER       LOADERS                 "..\\Loader64_VIEWER.dll"
+//IDR_LOADER64_WINDOW       LOADERS                 "..\\Loader64_WINDOW.dll"
+//IDR_LOADER64_FINDLIST     LOADERS                 "..\\Loader64_FINDLIST.dll"
+//#else
+//IDR_LOADER_FULL         LOADERS                 "..\\Loader.dll"
+//IDR_LOADER_ARC          LOADERS                 "..\\Loader_ARC.dll"
+//IDR_LOADER_CUSTOM       LOADERS                 "..\\Loader_CUSTOM.dll"
+//IDR_LOADER_DIALOG       LOADERS                 "..\\Loader_DIALOG.dll"
+//IDR_LOADER_EDITOR       LOADERS                 "..\\Loader_EDITOR.dll"
+//IDR_LOADER_VIEWER       LOADERS                 "..\\Loader_VIEWER.dll"
+//IDR_LOADER_WINDOW       LOADERS                 "..\\Loader_WINDOW.dll"
+//IDR_LOADER_FINDLIST     LOADERS                 "..\\Loader_FINDLIST.dll"
+//#endif
+
+#endif    // Neutral resources
+/////////////////////////////////////////////////////////////////////////////

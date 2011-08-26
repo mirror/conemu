@@ -1,6 +1,7 @@
 
 #include "stdafx.h"
 #include <stdio.h>
+#include "COMMON.H"
 
 // This is 16bit PE browser
 
@@ -46,7 +47,7 @@ void DumpNEResourceTable(MPanelItem *pRoot, PIMAGE_DOS_HEADER dosHeader, LPBYTE 
 
 	// минимальный размер
 	size_t nReqSize = sizeof(OS2RC_TYPEINFO)+12;
-	if (IsBadReadPtr(pResourceTable, nReqSize)) {
+	if (!ValidateMemory(pResourceTable, nReqSize)) {
 		pChild->printf(_T("!!! Can't read memory at offset:  0x%08X\n"),
 			(DWORD)(pResourceTable - pImageBase));
 		return;
@@ -66,7 +67,7 @@ void DumpNEResourceTable(MPanelItem *pRoot, PIMAGE_DOS_HEADER dosHeader, LPBYTE 
 
 		// Next resource type
 		pTypeInfo = (OS2RC_TYPEINFO*)(pResName+pTypeInfo->rtResourceCount);
-		if (IsBadReadPtr(pTypeInfo, 2)) {
+		if (!ValidateMemory(pTypeInfo, 2)) {
 			pChild->printf(_T("!!! Can't read memory at offset:  0x%08X\n"),
 				(DWORD)(((LPBYTE)pTypeInfo) - pImageBase));
 			return;
@@ -92,11 +93,11 @@ void DumpNEResourceTable(MPanelItem *pRoot, PIMAGE_DOS_HEADER dosHeader, LPBYTE 
 
 			szResName[0] = 0;
 			if (pNames) {
-				if (IsBadReadPtr(pNames, 1)) {
+				if (!ValidateMemory(pNames, 1)) {
 					pChild->printf(_T("!!! Can't read memory at offset:  0x%08X\n"),
 						(DWORD)(pNames - pImageBase));
 					pNames = NULL;
-				} else if (IsBadReadPtr(pNames, 1+(*pNames))) {
+				} else if (!ValidateMemory(pNames, 1+(*pNames))) {
 					pChild->printf(_T("!!! Can't read memory at offset:  0x%08X\n"),
 						(DWORD)(pNames - pImageBase));
 					pNames = NULL;
@@ -146,11 +147,15 @@ bool DumpExeFileNE( MPanelItem *pRoot, PIMAGE_DOS_HEADER dosHeader, PIMAGE_OS2_H
 
 	pRoot->Root()->AddFlags(_T("16BIT"));
 
-	MPanelItem* pChild = pRoot->AddFolder(_T("OS2 Header"));
-	pChild->AddText(_T("<OS2 Header>\n"));
 
-	MPanelItem* pDos = pRoot->AddFile(_T("DOS_Header"), sizeof(*dosHeader));
-	pDos->SetData((const BYTE*)dosHeader, sizeof(*dosHeader));
+	//MPanelItem* pDos = pRoot->AddFile(_T("DOS_Header"), sizeof(*dosHeader));
+	//pDos->SetData((const BYTE*)dosHeader, sizeof(*dosHeader));
+	DumpHeader(pRoot, dosHeader);
+
+	
+	//MPanelItem* pChild = pRoot->AddFolder(_T("OS2 Header"));
+	MPanelItem* pChild = pRoot->AddFile(_T("OS2_Header.txt"));
+	pChild->AddText(_T("<OS2 Header>\n"));
 
 	MPanelItem* pOS2 = pRoot->AddFile(_T("OS2_Header"), sizeof(*pOS2Header));
 	pOS2->SetData((const BYTE*)pOS2Header, sizeof(*pOS2Header));
@@ -161,37 +166,37 @@ bool DumpExeFileNE( MPanelItem *pRoot, PIMAGE_DOS_HEADER dosHeader, PIMAGE_OS2_H
 		return true;
 	}
 
-	pChild->AddText(_T("  Signature:         IMAGE_OS2_SIGNATURE\n"));  
+	pChild->AddText(_T("  Signature:                          IMAGE_OS2_SIGNATURE\n"));  
 
-	pChild->printf(_T("  Version number:                     %02u\n"), (UINT)pOS2Header->ne_ver);
-	pChild->printf(_T("  Revision number:                    %02u\n"), (UINT)pOS2Header->ne_rev);
-	pChild->printf(_T("  Offset of Entry Table:              %04u\n"), (UINT)pOS2Header->ne_enttab);
-	pChild->printf(_T("  Number of bytes in Entry Table:     %04u\n"), (UINT)pOS2Header->ne_cbenttab);
-	pChild->printf(_T("  Checksum of whole file:             %08u\n"), (UINT)pOS2Header->ne_crc);
-	pChild->printf(_T("  Flag word:                          %04u\n"), (UINT)pOS2Header->ne_flags);
-	pChild->printf(_T("  Automatic data segment number:      %04u\n"), (UINT)pOS2Header->ne_autodata);
-	pChild->printf(_T("  Initial heap allocation:            %04u\n"), (UINT)pOS2Header->ne_heap);
-	pChild->printf(_T("  Initial stack allocation:           %04u\n"), (UINT)pOS2Header->ne_stack);
-	pChild->printf(_T("  Initial CS:IP setting:              %08u\n"), (UINT)pOS2Header->ne_csip);
-	pChild->printf(_T("  Initial SS:SP setting:              %08u\n"), (UINT)pOS2Header->ne_sssp);
-	pChild->printf(_T("  Count of file segments:             %04u\n"), (UINT)pOS2Header->ne_cseg);
-	pChild->printf(_T("  Entries in Module Reference Table:  %04u\n"), (UINT)pOS2Header->ne_cmod);
-	pChild->printf(_T("  Size of non-resident name table:    %04u\n"), (UINT)pOS2Header->ne_cbnrestab);
-	pChild->printf(_T("  Offset of Segment Table:            %04u\n"), (UINT)pOS2Header->ne_segtab);
-	pChild->printf(_T("  Offset of Resource Table:           %04u\n"), (UINT)pOS2Header->ne_rsrctab);
-	pChild->printf(_T("  Offset of resident name table:      %04u\n"), (UINT)pOS2Header->ne_restab);
-	pChild->printf(_T("  Offset of Module Reference Table:   %04u\n"), (UINT)pOS2Header->ne_modtab);
-	pChild->printf(_T("  Offset of Imported Names Table:     %04u\n"), (UINT)pOS2Header->ne_imptab);
-	pChild->printf(_T("  Offset of Non-resident Names Table: %08u\n"), (UINT)pOS2Header->ne_nrestab);
-	pChild->printf(_T("  Count of movable entries:           %04u\n"), (UINT)pOS2Header->ne_cmovent);
-	pChild->printf(_T("  Segment alignment shift count:      %04u\n"), (UINT)pOS2Header->ne_align);
-	pChild->printf(_T("  Count of resource segments:         %04u\n"), (UINT)pOS2Header->ne_cres);
-	pChild->printf(_T("  Target Operating system:            %02u\n"), (UINT)pOS2Header->ne_exetyp);
-	pChild->printf(_T("  Other .EXE flags:                   %02u\n"), (UINT)pOS2Header->ne_flagsothers);
-	pChild->printf(_T("  offset to return thunks:            %04u\n"), (UINT)pOS2Header->ne_pretthunks);
-	pChild->printf(_T("  offset to segment ref. bytes:       %04u\n"), (UINT)pOS2Header->ne_psegrefbytes);
-	pChild->printf(_T("  Minimum code swap area size:        %04u\n"), (UINT)pOS2Header->ne_swaparea);
-	pChild->printf(_T("  Expected Windows version number:    %04u\n"), (UINT)pOS2Header->ne_expver);
+	pChild->printf(_T("  Version number:                     %u\n"), (UINT)pOS2Header->ne_ver);
+	pChild->printf(_T("  Revision number:                    %u\n"), (UINT)pOS2Header->ne_rev);
+	pChild->printf(_T("  Offset of Entry Table:              %u\n"), (UINT)pOS2Header->ne_enttab);
+	pChild->printf(_T("  Number of bytes in Entry Table:     %u\n"), (UINT)pOS2Header->ne_cbenttab);
+	pChild->printf(_T("  Checksum of whole file:             0x%08X\n"), (UINT)pOS2Header->ne_crc);
+	pChild->printf(_T("  Flag word:                          0x%04X\n"), (UINT)pOS2Header->ne_flags);
+	pChild->printf(_T("  Automatic data segment number:      %u\n"), (UINT)pOS2Header->ne_autodata);
+	pChild->printf(_T("  Initial heap allocation:            %u\n"), (UINT)pOS2Header->ne_heap);
+	pChild->printf(_T("  Initial stack allocation:           %u\n"), (UINT)pOS2Header->ne_stack);
+	pChild->printf(_T("  Initial CS:IP setting:              0x%08X\n"), (UINT)pOS2Header->ne_csip);
+	pChild->printf(_T("  Initial SS:SP setting:              0x%08X\n"), (UINT)pOS2Header->ne_sssp);
+	pChild->printf(_T("  Count of file segments:             %u\n"), (UINT)pOS2Header->ne_cseg);
+	pChild->printf(_T("  Entries in Module Reference Table:  %u\n"), (UINT)pOS2Header->ne_cmod);
+	pChild->printf(_T("  Size of non-resident name table:    %u\n"), (UINT)pOS2Header->ne_cbnrestab);
+	pChild->printf(_T("  Offset of Segment Table:            %u\n"), (UINT)pOS2Header->ne_segtab);
+	pChild->printf(_T("  Offset of Resource Table:           %u\n"), (UINT)pOS2Header->ne_rsrctab);
+	pChild->printf(_T("  Offset of resident name table:      %u\n"), (UINT)pOS2Header->ne_restab);
+	pChild->printf(_T("  Offset of Module Reference Table:   %u\n"), (UINT)pOS2Header->ne_modtab);
+	pChild->printf(_T("  Offset of Imported Names Table:     %u\n"), (UINT)pOS2Header->ne_imptab);
+	pChild->printf(_T("  Offset of Non-resident Names Table: %u\n"), (UINT)pOS2Header->ne_nrestab);
+	pChild->printf(_T("  Count of movable entries:           %u\n"), (UINT)pOS2Header->ne_cmovent);
+	pChild->printf(_T("  Segment alignment shift count:      %u\n"), (UINT)pOS2Header->ne_align);
+	pChild->printf(_T("  Count of resource segments:         %u\n"), (UINT)pOS2Header->ne_cres);
+	pChild->printf(_T("  Target Operating system:            %u\n"), (UINT)pOS2Header->ne_exetyp);
+	pChild->printf(_T("  Other .EXE flags:                   0x%02X\n"), (UINT)pOS2Header->ne_flagsothers);
+	pChild->printf(_T("  offset to return thunks:            %u\n"), (UINT)pOS2Header->ne_pretthunks);
+	pChild->printf(_T("  offset to segment ref. bytes:       %u\n"), (UINT)pOS2Header->ne_psegrefbytes);
+	pChild->printf(_T("  Minimum code swap area size:        %u\n"), (UINT)pOS2Header->ne_swaparea);
+	pChild->printf(_T("  Expected Windows version number:    %u.%u\n"), (UINT)HIBYTE(pOS2Header->ne_expver), (UINT)LOBYTE(pOS2Header->ne_expver));
 
 	pChild->AddText(_T("\n"));
 

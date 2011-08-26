@@ -47,12 +47,14 @@ namespace Far2
 //namespace Far3
 //{
 #undef __PLUGIN_HPP__
-#if MVV_3>=2159
-	#include "pluginW3.hpp"
-#elif MVV_3>=2103
-	#include "pluginW3#2124.hpp"
-#else
+#if MVV_3<=2102
 	#include "pluginW3#2098.hpp"
+#elif MVV_3<=2124
+	#include "pluginW3#2124.hpp"
+#elif MVV_3<=2172
+	#include "pluginW3#2163.hpp"
+#else
+	#include "pluginW3.hpp"
 #endif
 //#undef __FARKEYS_HPP__
 //#include "farkeys3.hpp"

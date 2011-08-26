@@ -1,3 +1,15 @@
+* Support of 'plain DOS' executables.
+* Some VersionInfo parsing fails.
+* Using AnalyzeW.
+* Demangling of Imports and Exports using Dbghelp.dll.
+* Virtual folder 'File Header' replaced with virtual file 'DOS_Header.txt'.
+* 'Exception while dumping' on bad 'Base relocation' tables.
+* Column '#Ord' in the 'Imports Table' and 'Delay Imports Table' sections was renamed to 'Hint'. It is not an Ordinal, PE loader uses it as a suggested starting value for the exported function.
+* Flag 'COM' for COM servers (looking for DllRegisterServer export).
+* ?Equiped? with TestLib32.exe and TestLib64.exe for easy testing of LoadLibrary.
+* 'DecimalIds' setting in registry.
+* 'FAR3' flag.
+
 v0.8.8
 * "Couldn't map view of file..." on large files (i.e. *.iso).
 
