@@ -97,6 +97,12 @@ namespace Far2
 #elif MVV_3<=2172
 	#include "pluginW3#2163.hpp"
 	#define MCTLARG(g) &g
+#elif MVV_3<=2176
+	#include "pluginW3#2174.hpp"
+	#define MCTLARG(g) &g
+#elif MVV_3<=2183
+	#include "pluginW3#2180.hpp"
+	#define MCTLARG(g) &g
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -5684,7 +5690,17 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 		}
 		break;
 	case Far2::ECTL_PROCESSKEY:
-		nRc = psi3.EditorControl(-1, ECTL_PROCESSKEY, 0, (void*)Param); break;
+		{
+			#if MVV_3>=2184
+			INPUT_RECORD r = {};
+			int VirtKey = 0, ControlState = 0;
+			TranslateKeyToVK((DWORD_PTR)Param, VirtKey, ControlState, &r);
+			nRc = psi3.EditorControl(-1, ECTL_PROCESSINPUT, 0, &r);
+			#else
+			nRc = psi3.EditorControl(-1, ECTL_PROCESSKEY, 0, (void*)Param);
+			#endif
+		}
+		break;
 	case Far2::ECTL_SETPARAM:
 		{
 			const Far2::EditorSetParameter* p2 = (const Far2::EditorSetParameter*)Param;

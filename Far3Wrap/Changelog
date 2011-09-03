@@ -1,3 +1,6 @@
+ver 1.17.2184
+[*] Far3 build 2184.
+
 ver 1.17.2174
 [*] Поддержка изменений Far3 Api (EditorControl, MacroControl).
 [%] Падение на диалогах, содержащих более одного DI_USERCONTROL с VBuf.
