@@ -1811,9 +1811,9 @@ int WINAPI ProcessKeyW(HANDLE hPlugin, int Key, unsigned int ControlState)
 	#define ALL_MODS (LEFT_ALT_PRESSED|LEFT_CTRL_PRESSED|RIGHT_ALT_PRESSED|RIGHT_CTRL_PRESSED|SHIFT_PRESSED)
 	#define IsModNone ((Info->Rec.Event.KeyEvent.dwControlKeyState & ALL_MODS) == 0)
 	//
-	#define IsShift ((Info->Rec.Event.KeyEvent.dwControlKeyState & ALL_MODS) == SHIFT_PRESSED)
-	#define IsAlt (((Info->Rec.Event.KeyEvent.dwControlKeyState & LEFT_ALT_PRESSED) == LEFT_ALT_PRESSED) || ((Info->Rec.Event.KeyEvent.dwControlKeyState & RIGHT_ALT_PRESSED) == RIGHT_ALT_PRESSED))
-	#define IsCtrl (((Info->Rec.Event.KeyEvent.dwControlKeyState & LEFT_CTRL_PRESSED) == LEFT_CTRL_PRESSED) || ((Info->Rec.Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED) == RIGHT_CTRL_PRESSED))
+	bool IsShift = ((Info->Rec.Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED) == SHIFT_PRESSED);
+	bool IsAlt = (((Info->Rec.Event.KeyEvent.dwControlKeyState & LEFT_ALT_PRESSED) == LEFT_ALT_PRESSED) || ((Info->Rec.Event.KeyEvent.dwControlKeyState & RIGHT_ALT_PRESSED) == RIGHT_ALT_PRESSED));
+	bool IsCtrl = (((Info->Rec.Event.KeyEvent.dwControlKeyState & LEFT_CTRL_PRESSED) == LEFT_CTRL_PRESSED) || ((Info->Rec.Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED) == RIGHT_CTRL_PRESSED));
 	//
 	#define IsModShift (IsShift && !IsAlt && !IsCtrl)
 	#define IsModAlt (!IsShift && IsAlt && !IsCtrl)
