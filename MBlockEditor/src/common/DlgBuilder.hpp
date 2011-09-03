@@ -39,9 +39,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #if FAR_UNICODE>=1906
-extern const GUID guid_PluginGuid;
+extern GUID guid_PluginGuid;
+#define FarDlgProcParam2 void*
 #else
 #define FARDIALOGITEMTYPES int
+#define FarDlgProcParam2 LONG_PTR
 #endif
 
 // Элемент выпадающего списка в диалоге.
@@ -633,7 +635,9 @@ public:
 		}
 
 		// Добавляет сепаратор, кнопки OK и Cancel.
-		void AddOKCancel(int OKMessageId, int CancelMessageId)
+		// см. также ниже AddFooterButtons
+		// возвращает индекс первой добавленной кнопки
+		int AddOKCancel(int OKMessageId, int CancelMessageId)
 		{
 			AddSeparator();
 
@@ -651,9 +655,12 @@ public:
 			CancelButton->Flags = DIF_CENTERGROUP;
 			CancelButton->Y1 = CancelButton->Y2 = OKButton->Y1;
 			CancelButtonID = DialogItemsCount-1;
+			
+			return OKButtonID;
 		}
 
-		void AddFooterButtons(int* BtnID, int nBtnCount)
+		// Добавляет сепаратор, указанные кнопки, возвращает индекс первой добавленной кнопки
+		int AddFooterButtons(int* BtnID, int nBtnCount)
 		{
 			AddSeparator();
 
@@ -661,20 +668,53 @@ public:
 			{
 				T *Button = AddDialogItem(DI_BUTTON, GetLangString(BtnID[i]));
 				Button->Flags |= DIF_CENTERGROUP;
-				#if FAR_UNICODE>=1906
-				Button->Flags |= DIF_DEFAULTBUTTON;
-				#else
-				Button->DefaultButton = TRUE;
-				#endif
-				Button->Y1 = Button->Y2 = NextY;
 				if (i == 0)
+				{
+					#if FAR_UNICODE>=1906
+					Button->Flags |= DIF_DEFAULTBUTTON;
+					#else
+					Button->DefaultButton = TRUE;
+					#endif
 					OKButtonID = DialogItemsCount-1;
+				}
+				Button->Y1 = Button->Y2 = NextY;
 			}
 			CancelButtonID = DialogItemsCount-1;
 
 			NextY++;
+			
+			return OKButtonID;
 		}
 
+		// Добавляет сепаратор, указанные кнопки, возвращает индекс первой добавленной кнопки
+		int AddFooterButtons(int FirstBtn, ...)
+		{
+			va_list argptr;
+			va_start(argptr, FirstBtn);
+			int nBtns[100] = {FirstBtn}, nCount = 1, nNext;
+			
+			while ((nCount < ARRAYSIZE(nBtns))
+				&& ((nNext = va_arg( argptr, int )) != 0))
+			{
+				#ifdef _DEBUG
+				if (nNext>1024 || nNext<0)
+				{
+					_ASSERTE(nNext>0 && nNext<=1024);
+					break;
+				}
+				#endif
+				nBtns[nCount++] = nNext;
+			}
+			
+			if (nCount > 0)
+			{
+				AddFooterButtons(nBtns, nCount);
+				return OKButtonID;
+			}
+			
+			return -1;
+		}
+		
 		bool ShowDialog(int *pnBtnNo = NULL)
 		{
 			_ASSERTE(OKButtonID > 0 && OKButtonID < DialogItemsCount);
@@ -881,7 +921,11 @@ class PluginDialogBuilder: public DialogBuilderBase<FarDialogItem>
 		{
 			memset(Item, 0, sizeof(FarDialogItem));
 #ifdef UNICODE
+	#if FAR_UNICODE>=1962
+			Item->Data = Text;
+	#else
 			Item->PtrData = Text;
+	#endif
 #else
 			lstrcpyn(Item->Data, Text, sizeof(Item->Data)/sizeof(Item->Data[0]));
 #endif
@@ -890,7 +934,11 @@ class PluginDialogBuilder: public DialogBuilderBase<FarDialogItem>
 		virtual int TextWidth(const FarDialogItem &Item)
 		{
 #ifdef UNICODE
+	#if FAR_UNICODE>=1962
+			return lstrlen(Item.Data);
+	#else
 			return lstrlen(Item.PtrData);
+	#endif
 #else
 			return lstrlen(Item.Data);
 #endif
@@ -907,7 +955,7 @@ class PluginDialogBuilder: public DialogBuilderBase<FarDialogItem>
 			return pszMsg;
 		}
 		
-		virtual BOOL PluginDialogProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2, LONG_PTR& lResult)
+		virtual BOOL PluginDialogProc(HANDLE hDlg, int Msg, int Param1, FarDlgProcParam2 Param2, LONG_PTR& lResult)
 		{
 			#ifdef _UNICODE
 			if (Msg == DM_GETDIALOGINFO)
@@ -923,8 +971,8 @@ class PluginDialogBuilder: public DialogBuilderBase<FarDialogItem>
 			return FALSE;
 		}
 
-		#if FAR_UNICODE>=1906
-		static INT_PTR WINAPI PluginDialogBuilderStaticProc(HANDLE hDlg, int Msg, int Param1, INT_PTR Param2)
+		#if FAR_UNICODE>=1988
+		static INT_PTR WINAPI PluginDialogBuilderStaticProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 		#else
 		static LONG_PTR WINAPI PluginDialogBuilderStaticProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2)
 		#endif
@@ -946,11 +994,11 @@ class PluginDialogBuilder: public DialogBuilderBase<FarDialogItem>
 			int Height = DialogItems [0].Y2+2;
 			
 			#ifdef UNICODE
-				#if FAR_UNICODE>=1906
+				#if FAR_UNICODE>=1988
 					DialogHandle = Info.DialogInit(&guid_PluginGuid, &DlgGuid,
 											 -1, -1, Width, Height,
 											 HelpTopic, DialogItems, DialogItemsCount, 
-											 0, DialogFlags, PluginDialogBuilderStaticProc, (LONG_PTR)this);
+											 0, DialogFlags, PluginDialogBuilderStaticProc, (FarDlgProcParam2)this);
 				#else
 					DialogHandle = Info.DialogInit(Info.ModuleNumber, -1, -1, Width, Height,
 						HelpTopic, DialogItems, DialogItemsCount, 0, DialogFlags, PluginDialogBuilderStaticProc, (LONG_PTR)this);
@@ -1020,7 +1068,11 @@ public:
 			PluginIntEditFieldBinding *Binding;
 #ifdef UNICODE
 			Binding = new PluginIntEditFieldBinding(Info, &DialogHandle, DialogItemsCount-1, Value, Width);
+	#if FAR_UNICODE>=1962
+			Item->Data = Binding->GetBuffer();
+	#else
 			Item->PtrData = Binding->GetBuffer();
+	#endif
 #else
 			Binding = new PluginIntEditFieldBinding(Info, Value, Width);
 			Info.FSF->itoa(*Value, (TCHAR *) Item->Data, 10);

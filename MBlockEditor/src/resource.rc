@@ -42,7 +42,7 @@ END
 
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""resource2.rc""\r\n"
+    "#include ""Resource.rc2""\r\n"
     "\r\n"
     "\0"
 END
@@ -105,7 +105,7 @@ END
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
-#include "resource2.rc"
+#include "Resource.rc2"
 
 
 /////////////////////////////////////////////////////////////////////////////

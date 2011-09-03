@@ -83,7 +83,11 @@ GUID guid_Menu2 = { /* 161d063a-4bf9-498d-adab-4aec1a0892cf */
 #endif
 
 #ifndef MDEBUG
-#define MCHKHEAP
+	#define MCHKHEAP
+	#define _ASSERTE(x)
+#else
+	#include <crtdbg.h>
+	#define MCHKHEAP _ASSERTE(_CrtCheckMemory())
 #endif
 
 #define InvalidOp()
@@ -105,15 +109,24 @@ extern "C"{
 #endif
 
 
-BOOL APIENTRY DllMain( HANDLE hModule, 
-                       DWORD  ul_reason_for_call, 
-                       LPVOID lpReserved
-                     )
-{
-    if (ghInstance==NULL)
-        ghInstance = (HMODULE)hModule;
-    return TRUE;
-}
+
+#ifdef CRTSTARTUP
+	extern "C"{
+		BOOL WINAPI _DllMainCRTStartup(HANDLE hModule,DWORD dwReason,LPVOID lpReserved)
+		{
+		    if (ghInstance==NULL)
+		        ghInstance = (HMODULE)hModule;
+		    return TRUE;
+		};
+	};
+#else
+	BOOL APIENTRY DllMain(HANDLE hModule,DWORD dwReason,LPVOID lpReserved)
+	{
+	    if (ghInstance==NULL)
+	        ghInstance = (HMODULE)hModule;
+	    return TRUE;
+	}
+#endif
 
 #ifndef _UNICODE
 DWORD gdwFarVersion = MAKEFARVERSION(1,70,70);
@@ -148,14 +161,20 @@ void WINAPI SetStartupInfoW(struct PluginStartupInfo *Info)
 		Info->Description = L"Tabulate and comment in the Editor";
 		Info->Author = L"ConEmu.Maximus5@gmail.com";
 	}
+	
+	int WINAPI GetMinFarVersionW()
+	{
+		#define MAKEFARVERSION2(major,minor,build) ( ((major)<<8) | (minor) | ((build)<<16))
+		return MAKEFARVERSION2(FARMANAGERVERSION_MAJOR,FARMANAGERVERSION_MINOR,FARMANAGERVERSION_BUILD);
+	}
 #else
 	int WINAPI GetMinFarVersionW()
 	{
-	  #ifdef _UNICODE
-	  return MAKEFARVERSION(2,0,1017);
-	  #else
-	  return MAKEFARVERSION(1,70,146);
-	  #endif
+		#ifdef _UNICODE
+			return MAKEFARVERSION(2,0,1017);
+		#else
+			return MAKEFARVERSION(1,70,146);
+		#endif
 	}
 #endif
 
@@ -228,9 +247,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *Info)
 }
 #endif
 
-int EditCtrl(int Cmd, void* Parm)
+INT_PTR EditCtrl(int Cmd, void* Parm)
 {
-	int iRc;
+	INT_PTR iRc;
 	#if FAR_UNICODE>=1906
 	iRc = psi.EditorControl(-1, (EDITOR_CONTROL_COMMANDS)Cmd, 0, Parm);
 	#else
@@ -1119,6 +1138,17 @@ BOOL DoUnComment()
         MCHKHEAP;
         if (!EditCtrl(ECTL_GETSTRING,&egs))
 			break;
+		MCHKHEAP;
+
+		// При снятии потокового комментария, если весь комментарий не был выделен,
+		// следующая строка может оказаться длиннее текущей
+		if (egs.StringLength > nMaxStrLen)
+		{
+			nMaxStrLen = egs.StringLength;
+			free(lsText);
+			lsText = (TCHAR*)calloc(nMaxStrLen,sizeof(TCHAR));
+			if (!lsText) return FALSE;
+		}
         
 		//if (nMode == ewmUncommentAuto || nMode == ewmUncommentBlock || nMode == ewmUncommentStream)
 		{
@@ -1360,6 +1390,7 @@ BOOL DoUnComment()
 								X2 -= lstrlen(psCommCurr);
 						}
 
+						MCHKHEAP;
 						if (psComm > egs.StringText)
 						{
 							// Комментарий НЕ с начала строки
@@ -1372,9 +1403,11 @@ BOOL DoUnComment()
 							// Комментарий с начала строки - просто "отбросить" кусок (передвинуть указатель)
 							egs.StringText += lstrlen(psCommCurr);
 						}
+						MCHKHEAP;
 					}
 					else
 					{
+						MCHKHEAP;
 						size_t n = 0;
 						LPCTSTR pszNextPart = egs.StringText;
 						LPCTSTR pszEndComm = NULL;
@@ -1384,9 +1417,12 @@ BOOL DoUnComment()
 							{
 								memcpy(lsText+n, egs.StringText, (psComm-egs.StringText)*sizeof(TCHAR));
 								n += (psComm-egs.StringText);
+								MCHKHEAP;
 							}
 							pszNextPart = psComm + lstrlen(psCommCurr);
 						}
+
+						MCHKHEAP;
 						if (egs.StringNumber == nEndLine)
 						{
 							if (lbFirstUncommented)
@@ -1422,21 +1458,27 @@ BOOL DoUnComment()
 								if (!pszEndComm && (ei.BlockType == BTYPE_NONE) && (nEndLine < ei.TotalLines))
 									nEndLine++;
 							}
+							MCHKHEAP;
 							if (pszEndComm)
 							{
+								_ASSERTE(nMaxStrLen > (pszEndComm-psComm));
 								memcpy(lsText+n, psComm, (pszEndComm-psComm)*sizeof(TCHAR));
+								MCHKHEAP;
 								n += (pszEndComm-psComm);
 								lstrcpy(lsText+n, pszEndComm+nCommentEndLen);
+								MCHKHEAP;
 							}
 							else
 							{
 								// Просто докопировать остаток (чтобы не потерять ничего)
 								lstrcpy(lsText+n, pszNextPart);
+								MCHKHEAP;
 							}
 						}
 						else
 						{
 							lstrcpy(lsText+n, pszNextPart);
+							MCHKHEAP;
 						}
 
 						// Коррекция будущего выделения
@@ -1716,7 +1758,7 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	EditorUndoRedo eur = {EUR_BEGIN};
 	EditCtrl(ECTL_UNDOREDO,&eur);
 
-	int nLen = EditCtrl(ECTL_GETFILENAME,NULL);
+	INT_PTR nLen = EditCtrl(ECTL_GETFILENAME,NULL);
 	wchar_t *pszFileName = (wchar_t*)calloc(nLen+1,2);
 	EditCtrl(ECTL_GETFILENAME,pszFileName);
 	#else
