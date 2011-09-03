@@ -891,7 +891,7 @@ DWORD SHErrorToWinError(DWORD SHError)
 
 bool MoveToRecycleBinInternal(LPCWSTR Object)
 {
-	SHFILEOPSTRUCT fop={0};
+	SHFILEOPSTRUCT fop={};
 	fop.wFunc=FO_DELETE;
 	fop.pFrom=Object;
 	fop.pTo = L"\0\0";

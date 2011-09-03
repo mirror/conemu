@@ -614,7 +614,7 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		{
 			__int64 Ret=-1;
 			int Val[1];
-			EditorBookMarks ebm={0};
+			EditorBookMarks ebm={};
 			int iMode=(int)((INT_PTR)vParam);
 
 			switch (iMode)
@@ -2859,7 +2859,7 @@ int Editor::ProcessKey(int Key)
 						int NewLength;
 						CurLine->GetBinaryString(&NewCmpStr,nullptr,NewLength);
 
-						if (NewLength!=Length || memcmp(CmpStr,NewCmpStr,Length*sizeof(wchar_t)))
+						if (NewLength!=Length || memcmp(CmpStr,NewCmpStr,Length*sizeof(wchar_t))!=0)
 						{
 							AddUndoData(UNDO_EDIT,CmpStr,CurLine->GetEOL(),NumLine,CurPos,Length); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
 							TextChanged(1);
@@ -2989,7 +2989,7 @@ int Editor::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 	if (MouseEvent->dwButtonState&FROM_LEFT_1ST_BUTTON_PRESSED)
 	{
 		static int EditorPrevDoubleClick=0;
-		static COORD EditorPrevPosition={0,0};
+		static COORD EditorPrevPosition={};
 
 		if (GetTickCount()-EditorPrevDoubleClick<=GetDoubleClickTime() && MouseEvent->dwEventFlags!=MOUSE_MOVED &&
 		        EditorPrevPosition.X == MouseEvent->dwMousePosition.X && EditorPrevPosition.Y == MouseEvent->dwMousePosition.Y)
@@ -5920,13 +5920,6 @@ int Editor::EditorControl(int Command,void *Param)
 			}
 
 			break;
-		}
-		// должно выполняется в FileEditor::EditorControl()
-		case ECTL_PROCESSKEY:
-		{
-			_ECTLLOG(SysLog(L"Key = %s",_FARKEY_ToName((DWORD)Param)));
-			ProcessKey((int)(INT_PTR)Param);
-			return TRUE;
 		}
 		/* $ 16.02.2001 IS
 		     Изменение некоторых внутренних настроек редактора. Param указывает на

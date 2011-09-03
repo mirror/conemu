@@ -818,9 +818,9 @@ void AdvancedDialog()
 		Opt.FindOpt.strSearchOutFormat = AdvancedDlg[AD_EDIT_COLUMNSFORMAT].strData;
 		Opt.FindOpt.strSearchOutFormatWidth = AdvancedDlg[AD_EDIT_COLUMNSWIDTH].strData;
 
-		memset(Opt.FindOpt.OutColumnTypes,0,sizeof(Opt.FindOpt.OutColumnTypes));
-		memset(Opt.FindOpt.OutColumnWidths,0,sizeof(Opt.FindOpt.OutColumnWidths));
-		memset(Opt.FindOpt.OutColumnWidthType,0,sizeof(Opt.FindOpt.OutColumnWidthType));
+		ClearArray(Opt.FindOpt.OutColumnTypes);
+		ClearArray(Opt.FindOpt.OutColumnWidths);
+		ClearArray(Opt.FindOpt.OutColumnWidthType);
 		Opt.FindOpt.OutColumnCount=0;
 
 		if (!Opt.FindOpt.strSearchOutFormat.IsEmpty())
@@ -2448,9 +2448,7 @@ void ArchiveSearch(HANDLE hDlg, const wchar_t *ArcName)
 	if (hArc==(HANDLE)-2)
 	{
 		// Не, ну с какой радости ОСТАНАВЛИВАТЬ поиск, если я отказался от обработки ОДНОГО ФАЙЛА?
-		#if 0
-		StopEvent.Set();
-		#endif
+		//StopEvent.Set(); // ??
 		_ALGO(SysLog(L"return: hArc==(HANDLE)-2"));
 		return;
 	}
@@ -2898,7 +2896,7 @@ struct THREADPARAM
 	HANDLE hDlg;
 };
 
-DWORD WINAPI ThreadRoutine(LPVOID Param)
+unsigned int WINAPI ThreadRoutine(LPVOID Param)
 {
 	__try
 	{
@@ -3023,7 +3021,7 @@ bool FindFilesProcess(Vars& v)
 	strLastDirName.Clear();
 
 	THREADPARAM Param={v.PluginMode,static_cast<HANDLE>(&Dlg)};
-	HANDLE Thread = CreateThread(nullptr, 0, ThreadRoutine, &Param, 0, nullptr);
+	HANDLE Thread = reinterpret_cast<HANDLE>(_beginthreadex(nullptr, 0, ThreadRoutine, &Param, 0, nullptr));
 	if (Thread)
 	{
 		v.TB=new TaskBar;
@@ -3084,7 +3082,7 @@ bool FindFilesProcess(Vars& v)
 								itd.SetFindListItem(i, FindItem);
 							}
 							PluginPanelItem *pi=&PanelItems[ItemsNumber++];
-							memset(pi,0,sizeof(*pi));
+							ClearStruct(*pi);
 							FindDataExToPluginPanelItem(&FindItem.FindData, pi);
 
 							if (IsArchive)
@@ -3322,7 +3320,7 @@ FindFiles::FindFiles()
 			if (!(Info.Flags & OPIF_REALNAMES))
 				FindAskDlg[FAD_CHECKBOX_ARC].Flags |= DIF_DISABLE;
 
-			if (FADC_ALLDISKS+SearchMode==FADC_ALLDISKS || FADC_ALLDISKS+SearchMode==FADC_ALLBUTNET)
+			if (SearchMode == FINDAREA_ALL || SearchMode == FINDAREA_ALL_BUTNETWORK)
 			{
 				li[FADC_ALLDISKS].Flags=0;
 				li[FADC_ALLBUTNET].Flags=0;

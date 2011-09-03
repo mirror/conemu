@@ -1307,14 +1307,16 @@ void apiEnableLowFragmentationHeap()
 {
 	if (ifn.HeapSetInformationPresent())
 	{
-		DWORD NumHeaps = GetProcessHeaps(0, nullptr);
-		if (NumHeaps == 0)
-			return;
+		DWORD NumHeaps = 10;
 		HANDLE* Heaps = new HANDLE[NumHeaps];
-		if (Heaps == nullptr)
-			return;
-		NumHeaps = GetProcessHeaps(NumHeaps, Heaps);
-		for (DWORD i = 0; i < NumHeaps; i++)
+		DWORD ActualNumHeaps = GetProcessHeaps(NumHeaps, Heaps);
+		if(ActualNumHeaps > NumHeaps)
+		{
+			delete[] Heaps;
+			Heaps = new HANDLE[ActualNumHeaps];
+			GetProcessHeaps(ActualNumHeaps, Heaps);
+		}
+		for (DWORD i = 0; i < ActualNumHeaps; i++)
 		{
 			ULONG HeapFragValue = 2;
 			ifn.HeapSetInformation(Heaps[i], HeapCompatibilityInformation, &HeapFragValue, sizeof(HeapFragValue));

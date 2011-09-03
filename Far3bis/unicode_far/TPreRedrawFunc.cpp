@@ -39,7 +39,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 TPreRedrawFunc PreRedraw;
 
-PreRedrawItem TPreRedrawFunc::errorStack={0};
+PreRedrawItem TPreRedrawFunc::errorStack={};
 
 PreRedrawItem TPreRedrawFunc::Pop()
 {
@@ -97,7 +97,7 @@ PreRedrawItem TPreRedrawFunc::Push(PREREDRAWFUNC Func,PreRedrawParamStruct *Para
 	if (Param)
 		Source.Param=*Param;
 	else
-		memset(&Source.Param,0,sizeof(PreRedrawParamStruct));
+		ClearStruct(Source.Param);
 
 	return Push(Source);
 }

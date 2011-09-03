@@ -62,16 +62,17 @@ class CallBackStack
 	private:
 		struct ListNode
 		{
-			ListNode *Next;
-
 			UINT64 Flags;             // флаги
-			int   TopStr;            // номер верхней видимой строки темы
-			int   CurX,CurY;         // координаты (???)
+
+			ListNode *Next;
 
 			string strHelpTopic;        // текущий топик
 			string strHelpPath;         // путь к хелпам
 			string strSelTopic;         // текущее выделение
 			string strHelpMask;         // маска
+
+			int   TopStr;            // номер верхней видимой строки темы
+			int   CurX,CurY;         // координаты (???)
 
 			ListNode(const StackHelpData *Data, ListNode* n=nullptr)
 			{
@@ -1658,7 +1659,7 @@ int Help::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		ProcessKey(KEY_ENTER);
 	}
 
-	if(MsX != IntKeyState.PrevMouseX || MsY != IntKeyState.PrevMouseY)
+	if(StackData.CurX != MsX-X1-1 || StackData.CurY!=MsY-Y1-1-FixSize)
 	{
 		StackData.CurX=MsX-X1-1;
 		StackData.CurY=MsY-Y1-1-FixSize;
@@ -2065,9 +2066,8 @@ static int RunURL(const wchar_t *Protocol, wchar_t *URLPath)
 						}
 						else
 						{
-							STARTUPINFO si={0};
-							PROCESS_INFORMATION pi={0};
-							si.cb=sizeof(si);
+							STARTUPINFO si={sizeof(si)};
+							PROCESS_INFORMATION pi={};
 							strAction+=URLPath;
 
 							if (!CreateProcess(nullptr,const_cast<wchar_t*>(strAction.CPtr()),nullptr,nullptr,TRUE,0,nullptr,strCurDir,&si,&pi))

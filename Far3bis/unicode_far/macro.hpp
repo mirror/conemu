@@ -129,20 +129,20 @@ enum INTMF_FLAGS{
 struct TMacroFunction
 {
 	const wchar_t *Name;             // имя функции
-	int nParam;                      // количество параметров
-	int oParam;                      // необязательные параметры
-	TMacroOpCode Code;               // байткод функции
 	const wchar_t *fnGUID;           // GUID обработчика функции
 
-	int    BufferSize;               // Размер буфера компилированной последовательности
-	DWORD *Buffer;                   // компилированная последовательность (OpCode) макроса
 	//wchar_t  *Src;                   // оригинальный "текст" макроса
 	//wchar_t  *Description;           // описание макроса
 
 	const wchar_t *Syntax;           // Синтаксис функции
 
-	DWORD IntFlags;                  // флаги из INTMF_FLAGS (в основном отвечающие "как вызывать функцию")
 	INTMACROFUNC Func;               // функция
+	DWORD *Buffer;                   // компилированная последовательность (OpCode) макроса
+	int    BufferSize;               // Размер буфера компилированной последовательности
+	DWORD IntFlags;                  // флаги из INTMF_FLAGS (в основном отвечающие "как вызывать функцию")
+	TMacroOpCode Code;               // байткод функции
+	int nParam;                      // количество параметров
+	int oParam;                      // необязательные параметры
 };
 
 struct MacroRecord
@@ -163,29 +163,28 @@ struct MacroRecord
 
 struct MacroState
 {
-	int KeyProcess;
+	INPUT_RECORD cRec; // "описание реально нажатой клавиши"
 	int Executing;
+	struct MacroRecord *MacroWORK; // т.н. текущее исполнение
+	TVarTable *locVarTable;
+	int KeyProcess;
 	int MacroPC;
 	int ExecLIBPos;
 	int MacroWORKCount;
 	DWORD HistroyEnable;
 	bool UseInternalClipboard;
-	struct MacroRecord *MacroWORK; // т.н. текущее исполнение
-	INPUT_RECORD cRec; // "описание реально нажатой клавиши"
-
 	bool AllocVarTable;
-	TVarTable *locVarTable;
 
 	void Init(TVarTable *tbl);
 };
 
 
 struct MacroPanelSelect {
+	__int64 Index;
+	TVar    *Item;
 	int     Action;
 	DWORD   ActionFlags;
 	int     Mode;
-	__int64 Index;
-	TVar    *Item;
 };
 
 /* $TODO:
@@ -267,7 +266,7 @@ class KeyMacro
 		~KeyMacro();
 
 	public:
-		int ProcessKey(int Key);
+		int ProcessEvent(const struct FAR_INPUT_RECORD *Rec);
 		int GetKey();
 		int PeekKey();
 		bool IsOpCode(DWORD p);
@@ -320,6 +319,8 @@ class KeyMacro
 		BOOL CheckCurMacroFlags(DWORD Flags);
 
 		bool IsHistroyEnable(int TypeHistory);
+		DWORD SetHistroyEnableMask(DWORD Mask);
+		DWORD GetHistroyEnableMask();
 
 		static const wchar_t* GetSubKey(int Mode);
 		static int   GetSubKey(const wchar_t *Mode);

@@ -678,8 +678,6 @@ __int64 FileList::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		case MCODE_V_PPANEL_PREFIX:           // PPanel.Prefix
 		{
 			PluginInfo *PInfo=(PluginInfo *)vParam;
-			memset(PInfo,0,sizeof(PInfo));
-			PInfo->StructSize=sizeof(PInfo);
 			if (GetMode() == PLUGIN_PANEL && hPlugin != INVALID_HANDLE_VALUE && ((PluginHandle*)hPlugin)->pPlugin)
 				return ((PluginHandle*)hPlugin)->pPlugin->GetPluginInfo(PInfo)?1:0;
 			return 0;
@@ -1163,7 +1161,7 @@ int FileList::ProcessKey(int Key)
 
 					if (Key==KEY_CTRLF || Key==KEY_RCTRLF || Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF)
 					{
-						OpenPanelInfo Info={0};
+						OpenPanelInfo Info={};
 
 						if (PanelMode==PLUGIN_PANEL)
 						{
@@ -1444,7 +1442,7 @@ int FileList::ProcessKey(int Key)
 		{
 			_ALGO(CleverSysLog clv(L"Edit/View"));
 			_ALGO(SysLog(L"%s, FileCount=%d Key=%s",(PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(Key)));
-			OpenPanelInfo Info={0};
+			OpenPanelInfo Info={};
 			BOOL RefreshedPanel=TRUE;
 
 			if (PanelMode==PLUGIN_PANEL)
@@ -3988,7 +3986,7 @@ void FileList::CopyFiles()
 
 void FileList::CopyNames(bool FillPathName, bool UNC)
 {
-	OpenPanelInfo Info={0};
+	OpenPanelInfo Info={};
 	wchar_t *CopyData=nullptr;
 	long DataSize=0;
 	string strSelName, strSelShortName, strQuotedName;
@@ -5029,7 +5027,7 @@ string &FileList::AddPluginPrefix(FileList *SrcPanel,string &strPrefix)
 
 		if (!(Info.Flags & OPIF_REALNAMES))
 		{
-			PluginInfo PInfo;
+			PluginInfo PInfo = {sizeof(PInfo)};
 			ph->pPlugin->GetPluginInfo(&PInfo);
 
 			if (PInfo.CommandPrefix && *PInfo.CommandPrefix)

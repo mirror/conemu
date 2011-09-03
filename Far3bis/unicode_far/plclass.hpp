@@ -42,7 +42,6 @@ class AncientPlugin
 class PluginManager;
 struct ExecuteStruct
 {
-	int id; //function id
 	union
 	{
 		INT_PTR nResult;
@@ -56,7 +55,7 @@ struct ExecuteStruct
 		HANDLE hDefaultResult;
 		BOOL bDefaultResult;
 	};
-
+	int id; //function id
 	bool bUnloaded;
 };
 
@@ -187,8 +186,8 @@ public:
 	virtual void ExitFAR(const ExitInfo *Info);
 #ifndef NO_WRAPPER
 	virtual bool IsOemPlugin() const { return false; }
-	virtual bool IsFar2Plugin() const { return HasWrapperFunction2(); }
 #endif // NO_WRAPPER
+	virtual bool IsFar2Plugin() const { return HasWrapperFunction2(); }
 	virtual const wchar_t *GetHotkeyName() const { return m_strGuid; }
 
 	virtual bool InitLang(const wchar_t *Path) { return PluginLang.Init(Path); }
@@ -233,10 +232,8 @@ public:
 
 	bool HasOpenFilePlugin()      const { return Exports[iOpenFilePlugin]!=nullptr; }
 	bool HasMinFarVersion()       const { return Exports[iGetMinFarVersion]!=nullptr; }
-	
-#ifndef NO_WRAPPER
+
 	bool HasWrapperFunction2()    const { return Exports[iWrapperFunction2]!=nullptr; }
-#endif // NO_WRAPPER
 
 	const string &GetModuleName() const { return m_strModuleName; }
 	const wchar_t *GetCacheName() const  { return m_strCacheName; }

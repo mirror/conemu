@@ -135,8 +135,6 @@ class SQLiteStmt {
 
 protected:
 	sqlite3_stmt *pStmt;
-public:
-	void CheckStmt() { _ASSERTE(pStmt!=nullptr); }
 
 public:
 
@@ -144,7 +142,7 @@ public:
 
 	~SQLiteStmt() { sqlite3_finalize(pStmt); }
 
-	SQLiteStmt& Reset() { param=1; _ASSERTE(pStmt); sqlite3_clear_bindings(pStmt); sqlite3_reset(pStmt); return *this; }
+	SQLiteStmt& Reset() { param=1; sqlite3_clear_bindings(pStmt); sqlite3_reset(pStmt); return *this; }
 
 	bool Step() { return sqlite3_step(pStmt) == SQLITE_ROW; }
 
@@ -183,8 +181,6 @@ public:
 
 	friend class SQLiteDb;
 };
-
-extern DWORD gnMainThreadId;
 
 class SQLiteDb {
 	sqlite3 *pDb;
@@ -232,13 +228,8 @@ public:
 	bool InitStmt(SQLiteStmt &stmtStmt, const wchar_t *Stmt)
 	{
 #if defined(_DEBUG)
-		_ASSERTE(GetCurrentThreadId()==gnMainThreadId);
-		int nRc = sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr);
-		bool b = (nRc == SQLITE_OK);
-		if (stmtStmt.pStmt == nullptr)
-		{
-			_ASSERTE(stmtStmt.pStmt != nullptr);
-		}
+		bool b = sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr) == SQLITE_OK;
+		assert(stmtStmt.pStmt != nullptr);
 		return b;
 #else
 		return sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr) == SQLITE_OK;
@@ -249,7 +240,7 @@ public:
 
 	unsigned __int64 LastInsertRowID() { return sqlite3_last_insert_rowid(pDb); }
 
-	bool Close() { _ASSERTE(GetCurrentThreadId()==gnMainThreadId); return sqlite3_close(pDb) == SQLITE_OK; }
+	bool Close() { return sqlite3_close(pDb) == SQLITE_OK; }
 
 	bool SetWALJournalingMode() { return Exec("PRAGMA journal_mode = WAL;"); }
 
@@ -549,49 +540,47 @@ public:
 
 	explicit HierarchicalConfigDb(const wchar_t *DbName)
 	{
-		bool b;
 		if (!db.Open(DbName))
 			return;
 
 		//schema
-		b = db.EnableForeignKeysConstraints();
-		b = db.Exec(
+		db.EnableForeignKeysConstraints();
+		db.Exec(
 			"CREATE TABLE IF NOT EXISTS table_keys(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, FOREIGN KEY(parent_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, UNIQUE (parent_id,name));"
 			"CREATE TABLE IF NOT EXISTS table_values(key_id INTEGER NOT NULL, name TEXT NOT NULL, value BLOB, FOREIGN KEY(key_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (key_id, name), CHECK (key_id <> 0));"
 		);
 
 		//root key (needs to be before the transaction start)
-		b = db.Exec("INSERT INTO table_keys VALUES (0,0,\"\",\"Root - do not edit\");");
+		db.Exec("INSERT INTO table_keys VALUES (0,0,\"\",\"Root - do not edit\");");
 
-		b = db.BeginTransaction();
+		db.BeginTransaction();
 
 		//create key statement
-		b = db.InitStmt(stmtCreateKey, L"INSERT INTO table_keys VALUES (NULL,?1,?2,?3);");
+		db.InitStmt(stmtCreateKey, L"INSERT INTO table_keys VALUES (NULL,?1,?2,?3);");
 
 		//find key statement
-		b = db.InitStmt(stmtFindKey, L"SELECT id FROM table_keys WHERE parent_id=?1 AND name=?2 AND id<>0;");
-		stmtFindKey.CheckStmt();
+		db.InitStmt(stmtFindKey, L"SELECT id FROM table_keys WHERE parent_id=?1 AND name=?2 AND id<>0;");
 
 		//set key description statement
-		b = db.InitStmt(stmtSetKeyDescription, L"UPDATE table_keys SET description=?1 WHERE id=?2 AND id<>0 AND description<>?1;");
+		db.InitStmt(stmtSetKeyDescription, L"UPDATE table_keys SET description=?1 WHERE id=?2 AND id<>0 AND description<>?1;");
 
 		//set value statement
-		b = db.InitStmt(stmtSetValue, L"INSERT OR REPLACE INTO table_values VALUES (?1,?2,?3);");
+		db.InitStmt(stmtSetValue, L"INSERT OR REPLACE INTO table_values VALUES (?1,?2,?3);");
 
 		//get value statement
-		b = db.InitStmt(stmtGetValue, L"SELECT value FROM table_values WHERE key_id=?1 AND name=?2;");
+		db.InitStmt(stmtGetValue, L"SELECT value FROM table_values WHERE key_id=?1 AND name=?2;");
 
 		//enum keys statement
-		b = db.InitStmt(stmtEnumKeys, L"SELECT name FROM table_keys WHERE parent_id=?1 AND id<>0;");
+		db.InitStmt(stmtEnumKeys, L"SELECT name FROM table_keys WHERE parent_id=?1 AND id<>0;");
 
 		//enum values statement
-		b = db.InitStmt(stmtEnumValues, L"SELECT name, value FROM table_values WHERE key_id=?1;");
+		db.InitStmt(stmtEnumValues, L"SELECT name, value FROM table_values WHERE key_id=?1;");
 
 		//delete value statement
-		b = db.InitStmt(stmtDelValue, L"DELETE FROM table_values WHERE key_id=?1 AND name=?2;");
+		db.InitStmt(stmtDelValue, L"DELETE FROM table_values WHERE key_id=?1 AND name=?2;");
 
 		//delete tree statement
-		b = db.InitStmt(stmtDeleteTree, L"DELETE FROM table_keys WHERE id=?1 AND id<>0;");
+		db.InitStmt(stmtDeleteTree, L"DELETE FROM table_keys WHERE id=?1 AND id<>0;");
 	}
 
 	virtual ~HierarchicalConfigDb() { db.EndTransaction(); }
@@ -616,7 +605,6 @@ public:
 	unsigned __int64 GetKeyID(unsigned __int64 Root, const wchar_t *Name)
 	{
 		unsigned __int64 id = 0;
-		stmtFindKey.CheckStmt();
 		if (stmtFindKey.Bind(Root).Bind(Name).Step())
 			id = stmtFindKey.GetColInt64(0);
 		stmtFindKey.Reset();
@@ -1356,7 +1344,7 @@ public:
 		void *enabled = nullptr;
 		if (stmtGetExportState.Bind(id).Bind(ExportName).Step())
 			if (stmtGetExportState.GetColInt(0) > 0)
-				enabled = (void *)1;
+				enabled = ToPtr(1);
 		stmtGetExportState.Reset();
 		return enabled;
 	}
@@ -1478,12 +1466,12 @@ public:
 
 	bool SetMinFarVersion(unsigned __int64 id, const VersionInfo *Version)
 	{
-		return stmtSetMinFarVersion.Bind(id).Bind((const char *)Version,(int)sizeof(VersionInfo)).StepAndReset();
+		return stmtSetMinFarVersion.Bind(id).Bind(Version, sizeof(VersionInfo)).StepAndReset();
 	}
 
 	bool SetVersion(unsigned __int64 id, const VersionInfo *Version)
 	{
-		return stmtSetVersion.Bind(id).Bind((const char *)Version,(int)sizeof(VersionInfo)).StepAndReset();
+		return stmtSetVersion.Bind(id).Bind(Version,sizeof(VersionInfo)).StepAndReset();
 	}
 
 	bool SetGuid(unsigned __int64 id, const wchar_t *Guid)

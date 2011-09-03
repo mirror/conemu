@@ -62,13 +62,7 @@ Manager *FrameManager;
 long CurrentWindowType=-1;
 
 Manager::Manager():
-	ModalStack(nullptr),
-	ModalStackCount(0),
-	ModalStackSize(0),
 	FrameCount(0),
-	FrameList(static_cast<Frame **>(xf_malloc(sizeof(Frame*)*(FrameCount+1)))),
-	FrameListSize(0),
-	FramePos(-1),
 	InsertedFrame(nullptr),
 	DeletedFrame(nullptr),
 	ActivatedFrame(nullptr),
@@ -78,6 +72,12 @@ Manager::Manager():
 	DeactivatedFrame(nullptr),
 	ExecutedFrame(nullptr),
 	CurrentFrame(nullptr),
+	ModalStack(nullptr),
+	FrameList(static_cast<Frame **>(xf_malloc(sizeof(Frame*)*(FrameCount+1)))),
+	ModalStackCount(0),
+	ModalStackSize(0),
+	FrameListSize(0),
+	FramePos(-1),
 	ModalEVCount(0),
 	EndLoop(FALSE),
 	StartManager(FALSE)
@@ -746,7 +746,6 @@ void Manager::ExitMainLoop(int Ask)
 }
 
 #if defined(FAR_ALPHA_VERSION)
-#include <float.h>
 #if defined(_MSC_VER)
 #pragma warning( push )
 #pragma warning( disable : 4717)
@@ -925,8 +924,7 @@ int Manager::ProcessKey(DWORD Key)
 #ifdef _M_IA64
 				case 7:
 				{
-					BYTE temp[10];
-					memset(temp, 0, 10);
+					BYTE temp[10]={};
 					double* val;
 					val = (double*)(&temp[3]);
 					printf("%lf\n", *val);

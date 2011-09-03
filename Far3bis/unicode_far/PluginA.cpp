@@ -1117,7 +1117,7 @@ int WINAPI InputRecordToKeyA(const INPUT_RECORD *r)
 char* WINAPI FarMkTempA(char *Dest, const char *Prefix)
 {
 	string strP(Prefix);
-	wchar_t D[oldfar::NM] = {0};
+	wchar_t D[oldfar::NM] = {};
 	NativeFSF.MkTemp(D,ARRAYSIZE(D),strP);
 	UnicodeToOEM(D,Dest,sizeof(D));
 	return Dest;
@@ -1199,7 +1199,7 @@ struct FAR_SEARCH_A_CALLBACK_PARAM
 static int WINAPI FarRecursiveSearchA_Callback(const PluginPanelItem *FData,const wchar_t *FullName,void *param)
 {
 	FAR_SEARCH_A_CALLBACK_PARAM* pCallbackParam = static_cast<FAR_SEARCH_A_CALLBACK_PARAM*>(param);
-	WIN32_FIND_DATAA FindData={0};
+	WIN32_FIND_DATAA FindData={};
 	FindData.dwFileAttributes = FData->FileAttributes;
 	FindData.ftCreationTime = FData->CreationTime;
 	FindData.ftLastAccessTime = FData->LastAccessTime;
@@ -1829,7 +1829,7 @@ void AnsiDialogItemToUnicodeSafe(oldfar::FarDialogItem &diA, FarDialogItem &di)
 
 void AnsiDialogItemToUnicode(oldfar::FarDialogItem &diA, FarDialogItem &di,FarList &l)
 {
-	memset(&di,0,sizeof(FarDialogItem));
+	ClearStruct(di);
 	AnsiDialogItemToUnicodeSafe(diA,di);
 
 	switch (di.Type)
@@ -2119,7 +2119,7 @@ oldfar::FarDialogItem* UnicodeDialogItemToAnsi(FarDialogItem &di,HANDLE hDlg,int
 			xf_free(OneDialogItem);
 
 		OneDialogItem=(oldfar::FarDialogItem*)xf_malloc(sizeof(oldfar::FarDialogItem));
-		memset(OneDialogItem,0,sizeof(oldfar::FarDialogItem));
+		ClearStruct(*OneDialogItem);
 		diA=OneDialogItem;
 	}
 
@@ -2554,7 +2554,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTADD:
 		{
-			FarList newlist = {0,0};
+			FarList newlist = {};
 
 			if (Param2)
 			{
@@ -2602,7 +2602,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTUPDATE:
 		{
-			FarListUpdate newui = {0,0};
+			FarListUpdate newui = {};
 
 			if (Param2)
 			{
@@ -2619,7 +2619,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTINSERT:
 		{
-			FarListInsert newli = {0,0};
+			FarListInsert newli = {};
 
 			if (Param2)
 			{
@@ -2636,7 +2636,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTFINDSTRING:
 		{
-			FarListFind newlf = {0,0,0,0};
+			FarListFind newlf = {};
 
 			if (Param2)
 			{
@@ -2675,7 +2675,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		case oldfar::DM_LISTGETDATA:	Msg = DM_LISTGETDATA; break;
 		case oldfar::DM_LISTSETDATA:
 		{
-			FarListItemData newlid = {0,0,0,0};
+			FarListItemData newlid = {};
 
 			if (Param2)
 			{
@@ -2707,7 +2707,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 			if (Param2)
 			{
 				oldfar::FarListTitles *OldListTitle=(oldfar::FarListTitles *)Param2;
-				FarListTitles ListTitle={0,nullptr,0,nullptr};
+				FarListTitles ListTitle={};
 
 				if (OldListTitle->Title)
 				{
@@ -2763,7 +2763,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		case oldfar::DM_SETITEMDATA:         Msg = DM_SETITEMDATA; break;
 		case oldfar::DM_LISTSET:
 		{
-			FarList newlist = {0,0};
+			FarList newlist = {};
 
 			if (Param2)
 			{
@@ -3062,12 +3062,12 @@ void FreeAnsiPanelInfo(oldfar::PanelInfo* PIA)
 	if (PIA->SelectedItems)
 		FreePanelItemA(PIA->SelectedItems,PIA->SelectedItemsNumber);
 
-	memset(PIA,0,sizeof(oldfar::PanelInfo));
+	ClearStruct(*PIA);
 }
 
 int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 {
-	static oldfar::PanelInfo PanelInfoA={0},AnotherPanelInfoA={0};
+	static oldfar::PanelInfo PanelInfoA={},AnotherPanelInfoA={};
 	static int Reenter=0;
 
 	if (hPlugin==INVALID_HANDLE_VALUE)
@@ -3209,7 +3209,7 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 			}
 			else
 			{
-				memset((oldfar::PanelInfo*)Param,0,sizeof(oldfar::PanelInfo));
+				ClearStruct(*(oldfar::PanelInfo*)Param);
 			}
 
 			Reenter--;
@@ -3222,7 +3222,7 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 				return FALSE;
 
 			oldfar::PanelInfo *OldPI=(oldfar::PanelInfo*)Param;
-			memset(OldPI,0,sizeof(oldfar::PanelInfo));
+			ClearStruct(*OldPI);
 
 			if (Command==oldfar::FCTL_GETANOTHERPANELSHORTINFO)
 				hPlugin=PANEL_PASSIVE;
@@ -3595,7 +3595,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			int Param1=0;
 			bool Process=true;
 
-			MacroCheckMacroText kmW={0};
+			MacroCheckMacroText kmW={};
 			kmW.Text.StructSize=sizeof(MacroParseResult);
 
 			switch (kmA->Command)
@@ -3685,7 +3685,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			if (!ksA->Count || !ksA->Sequence)
 				return FALSE;
 
-			MacroRecord MRec={0};
+			MacroRecord MRec={};
 
 			if (ksA->Flags&oldfar::KSFLAGS_DISABLEOUTPUT)
 				MRec.Flags|=MFLAGS_DISABLEOUTPUT;
@@ -3956,7 +3956,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 
 UINT GetEditorCodePageA()
 {
-	EditorInfo info={0};
+	EditorInfo info={};
 	NativeInfo.EditorControl(-1,ECTL_GETINFO,0,&info);
 	UINT CodePage=info.CodePage;
 	CPINFO cpi;
@@ -4150,7 +4150,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 		}
 		case oldfar::ECTL_GETINFO:
 		{
-			EditorInfo ei={0};
+			EditorInfo ei={};
 			oldfar::EditorInfo *oei=(oldfar::EditorInfo *)Param;
 
 			if (!oei)
@@ -4163,8 +4163,8 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 				if (fn)
 					xf_free(fn);
 
-				memset(oei,0,sizeof(*oei));
-				size_t FileNameSize=static_cast<int>(NativeInfo.EditorControl(-1,ECTL_GETFILENAME,0,0));
+				ClearStruct(*oei);
+				size_t FileNameSize=NativeInfo.EditorControl(-1,ECTL_GETFILENAME,0,0);
 
 				if (FileNameSize)
 				{
@@ -4211,7 +4211,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 		}
 		case oldfar::ECTL_SAVEFILE:
 		{
-			EditorSaveFile newsf = {0,0};
+			EditorSaveFile newsf = {};
 
 			if (Param)
 			{
@@ -4259,7 +4259,9 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 		}
 		case oldfar::ECTL_PROCESSKEY:
 		{
-			return static_cast<int>(NativeInfo.EditorControl(-1,ECTL_PROCESSKEY, 0, (void*)(DWORD_PTR)OldKeyToKey((DWORD)(DWORD_PTR)Param)));
+			INPUT_RECORD r={};
+			KeyToInputRecord(OldKeyToKey(static_cast<int>(reinterpret_cast<INT_PTR>(Param))),&r);
+			return static_cast<int>(NativeInfo.EditorControl(-1,ECTL_PROCESSINPUT, 0, &r));
 		}
 		case oldfar::ECTL_READINPUT:	//BUGBUG?
 		{
@@ -4385,7 +4387,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 						newsp.Type = ESPT_GETWORDDIV;
 						newsp.wszParam = nullptr;
 						newsp.Size = 0;
-						newsp.Size = static_cast<int>(NativeInfo.EditorControl(-1,ECTL_SETPARAM, 0, &newsp));
+						newsp.Size = NativeInfo.EditorControl(-1,ECTL_SETPARAM, 0, &newsp);
 						newsp.wszParam = (wchar_t*)xf_malloc(newsp.Size*sizeof(wchar_t));
 
 						if (newsp.wszParam)
@@ -4414,7 +4416,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 		}
 		case oldfar::ECTL_SETSTRING:
 		{
-			EditorSetString newss = {0,0,0,0};
+			EditorSetString newss = {};
 
 			if (Param)
 			{
@@ -4711,8 +4713,8 @@ PluginA::PluginA(PluginManager *owner, const wchar_t *lpwszModuleName):
 {
 	ExportsNamesW = _ExportsNamesW;
 	ExportsNamesA = _ExportsNamesA;
-	memset(&PI,0,sizeof(PI));
-	memset(&OPI,0,sizeof(OPI));
+	ClearStruct(PI);
+	ClearStruct(OPI);
 }
 
 PluginA::~PluginA()
@@ -4736,7 +4738,7 @@ oldfar::FarStandardFunctions StandardFunctions =
 	nullptr, // copy from NativeFSF
 	nullptr, // copy from NativeFSF
 	_snprintf,
-	{0},
+	{},
 	LocalIslower,
 	LocalIsupper,
 	LocalIsalpha,
@@ -5492,7 +5494,7 @@ void PluginA::FreeOpenPanelInfo()
 	if (OPI.ShortcutData)
 		xf_free((void *)OPI.ShortcutData);
 
-	memset(&OPI,0,sizeof(OPI));
+	ClearStruct(OPI);
 }
 
 void PluginA::ConvertOpenPanelInfo(oldfar::OpenPanelInfo &Src, OpenPanelInfo *Dest)
@@ -5613,7 +5615,7 @@ void PluginA::GetOpenPanelInfo(
 	{
 		ExecuteStruct es;
 		es.id = EXCEPT_GETOPENPANELINFO;
-		oldfar::OpenPanelInfo InfoA={0};
+		oldfar::OpenPanelInfo InfoA={};
 		EXECUTE_FUNCTION(FUNCTION(iGetOpenPanelInfo)(hPlugin, &InfoA), es);
 		ConvertOpenPanelInfo(InfoA,pInfo);
 	}
@@ -5668,7 +5670,7 @@ void PluginA::FreePluginInfo()
 	if (PI.CommandPrefix)
 		xf_free((void *)PI.CommandPrefix);
 
-	memset(&PI,0,sizeof(PI));
+	ClearStruct(PI);
 }
 
 void PluginA::ConvertPluginInfo(oldfar::PluginInfo &Src, PluginInfo *Dest)
@@ -5748,13 +5750,13 @@ void PluginA::ConvertPluginInfo(oldfar::PluginInfo &Src, PluginInfo *Dest)
 
 bool PluginA::GetPluginInfo(PluginInfo *pi)
 {
-	memset(pi, 0, sizeof(PluginInfo));
+	ClearStruct(*pi);
 
 	if (Exports[iGetPluginInfo] && !ProcessException)
 	{
 		ExecuteStruct es;
 		es.id = EXCEPT_GETPLUGININFO;
-		oldfar::PluginInfo InfoA={0};
+		oldfar::PluginInfo InfoA={};
 		EXECUTE_FUNCTION(FUNCTION(iGetPluginInfo)(&InfoA), es);
 
 		if (!es.bUnloaded)

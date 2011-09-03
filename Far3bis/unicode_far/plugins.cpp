@@ -187,7 +187,7 @@ PluginType IsModulePlugin2(
 		if (!dwExportAddr)
 			return NOT_PLUGIN;
 
-		PIMAGE_SECTION_HEADER pSection = (PIMAGE_SECTION_HEADER)IMAGE_FIRST_SECTION(pPEHeader);
+		PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pPEHeader);
 
 		for (int i = 0; i < pPEHeader->FileHeader.NumberOfSections; i++)
 		{
@@ -1367,7 +1367,7 @@ void PluginManager::GetOpenPanelInfo(
 	if (!Info)
 		return;
 
-	memset(Info, 0, sizeof(*Info));
+	ClearStruct(*Info);
 	PluginHandle *ph = (PluginHandle*)hPlugin;
 	ph->pPlugin->GetOpenPanelInfo(ph->hPlugin, Info);
 
@@ -1515,7 +1515,7 @@ int PluginManager::Configure(int StartPos)
 				LoadIfCacheAbsent();
 				string strHotKey, strName;
 				GUID guid;
-				PluginInfo Info={0};
+				PluginInfo Info = {sizeof(Info)};
 
 				for (int I=0; I<PluginsCount; I++)
 				{
@@ -1603,13 +1603,19 @@ int PluginManager::Configure(int StartPos)
 
 
 						if (!HotKeysPresent)
-							//ListItem.strName = strName;
+							/*
+							ListItem.strName = strName;
+							*/
 							ListItem.strName=strNameTmp;
 						else if (!strHotKey.IsEmpty())
-							//ListItem.strName.Format(L"&%c%s  %s",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
+							/*
+							ListItem.strName.Format(L"&%c%s  %s",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
+							*/
 							ListItem.strName.Format(L"&%c%s  %s", strHotKey.At(0), (strHotKey.At(0)==L'&'?L"&":L""), (const wchar_t*)strNameTmp);
 						else
-							//ListItem.strName.Format(L"   %s", strName.CPtr());
+							/*
+							ListItem.strName.Format(L"   %s", strName.CPtr());
+							*/
 							ListItem.strName.Format(L"   %s", (const wchar_t*)strNameTmp);
 
 						//ListItem.SetSelect(MenuItemNumber++ == StartPos);
@@ -1624,7 +1630,9 @@ int PluginManager::Configure(int StartPos)
 				PluginList.AssignHighlights(FALSE);
 				PluginList.SetBottomTitle(MSG(MPluginHotKeyBottomCfg));
 				PluginList.ClearDone();
-				//PluginList.SortItems(0,HotKeysPresent?3:0);
+				/*
+				PluginList.SortItems(0,HotKeysPresent?3:0);
+				*/
 				PluginList.SortItems(0,HotKeysPresent?6:3);
 				PluginList.SetSelectPos(StartPos,1);
 				NeedUpdateItems = false;
@@ -1655,12 +1663,12 @@ int PluginManager::Configure(int StartPos)
 					case KEY_F4:
 						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
 						{
-							#if 0
+							/*
 							string strTitle;
 							int nOffset = HotKeysPresent?3:0;
 							strTitle = PluginList.GetItemPtr()->strName.CPtr()+nOffset;
 							RemoveExternalSpaces(strTitle);
-							#endif
+							*/
 							size_t nOffset;
 							if (!PluginList.GetItemPtr()->strName.Pos(nOffset,BoxSymbols[BS_V1]))
 								nOffset = 0;
@@ -1902,7 +1910,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 				PluginList.SetPosition(-1,-1,0,0);
 				LoadIfCacheAbsent();
 				string strHotKey, strName;
-				PluginInfo Info={0};
+				PluginInfo Info = {sizeof(Info)};
 				GUID guid;
 
 				for (int I=0; I<PluginsCount; I++)
@@ -2032,7 +2040,9 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						StartPos = SelPos;
 
 						if (Configure() > 0)
+						{
 							PluginList.SetExitCode(SelPos);
+						}
 						else                              // значит вышли из Configure() по Ctrl-PgUp
 						{                                 // ћеню плагинов надо пропустить
 							PluginList.SetExitCode(-1);
@@ -2246,7 +2256,7 @@ bool PluginManager::GetDiskMenuItem(
 	}
 	else
 	{
-		PluginInfo Info;
+		PluginInfo Info = {sizeof(Info)};
 
 		if (!pPlugin->GetPluginInfo(&Info) || Info.DiskMenu.Count <= PluginItem)
 		{
@@ -2394,7 +2404,7 @@ int PluginManager::ProcessCommandLine(const wchar_t *CommandParam,Panel *Target)
 		}
 		else
 		{
-			PluginInfo Info;
+			PluginInfo Info = {sizeof(Info)};
 
 			if (PluginsData[I]->GetPluginInfo(&Info))
 			{
@@ -2612,6 +2622,18 @@ HANDLE PluginManager::Open(Plugin *pPlugin,int OpenFrom,const GUID& Guid,INT_PTR
 	return hPlugin;
 }
 
+bool PluginManager::HasGetCustomData()
+{
+	for (int i=0; i<PluginsCount; i++)
+	{
+		if (PluginsData[i]->HasGetCustomData())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void PluginManager::GetCustomData(FileListItem *ListItem)
 {
 	NTPath FilePath(ListItem->strName);
@@ -2647,16 +2669,4 @@ void PluginManager::GetCustomData(FileListItem *ListItem)
 	}
 
 	ListItem->CustomDataLoaded = true;
-}
-
-bool PluginManager::HasGetCustomData()
-{
-	for (int i=0; i<PluginsCount; i++)
-	{
-		if (PluginsData[i]->HasGetCustomData())
-		{
-			return true;
-		}
-	}
-	return false;
 }

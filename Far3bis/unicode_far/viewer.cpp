@@ -92,7 +92,6 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	for (int i=0; i <= MAXSCRY; i++)
 	{
 		Strings[i] = new ViewerString();
-		memset(Strings[i], 0, sizeof(ViewerString));
 	}
 
 	strLastSearchStr = strGlobalSearchString;
@@ -136,7 +135,7 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	vgetc_cb = vgetc_ib = 0;
 	vgetc_composite = L'\0';
 
-	vread_buffer_size = (MAX_VIEWLINEB < 8192 ? 8192 : MAX_VIEWLINEB);
+	vread_buffer_size = Max(MAX_VIEWLINEB, 8192);
 	vread_buffer = new char[vread_buffer_size];
 
 	lcache_first = lcache_last = -1;
@@ -146,17 +145,17 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	lcache_ready = false;
 	lcache_wrap = lcache_wwrap = lcache_width = -1;
 
-	int cached_buffer_size = (Opt.ViOpt.MaxLineSize*2*64 > 64*1024 ? Opt.ViOpt.MaxLineSize*2*64 : 64*1024);
+	int cached_buffer_size = 64*Max(Opt.ViOpt.MaxLineSize*2, 1024);
 	max_backward_size = ViewerOptions::eMaxLineSize*3;
 	if ( max_backward_size > cached_buffer_size/2 )
 		max_backward_size = cached_buffer_size / 2;
 	llengths_size = max_backward_size / 40;
 	llengths = new int[llengths_size];
 
-	Search_buffer_size = 3 * (MAX_VIEWLINEB < 8000 ? 8000 : MAX_VIEWLINEB);
+	Search_buffer_size = 3 * Max(MAX_VIEWLINEB, 8000);
 	Search_buffer = new wchar_t[Search_buffer_size];
 
-	memset(&vString, 0, sizeof(vString));
+	ClearStruct(vString);
 	vString.lpData = new wchar_t[MAX_VIEWLINEB];
 }
 
@@ -1268,35 +1267,44 @@ int Viewer::ProcessKey(int Key)
 				if (!apiGetFindDataEx(strFullFileName, NewViewFindData))
 					return TRUE;
 
-				ViewFile.GetSize(NewViewFindData.nFileSize); // Required! -- thanks Dzirt2005
-
-				if (ViewFindData.ftLastWriteTime.dwLowDateTime!=NewViewFindData.ftLastWriteTime.dwLowDateTime
-				 || ViewFindData.ftLastWriteTime.dwHighDateTime!=NewViewFindData.ftLastWriteTime.dwHighDateTime
-				 || ViewFindData.nFileSize != NewViewFindData.nFileSize)
-				{
+				// Smart file change check -- thanks Dzirt2005
+				//
+				bool changed = (
+					ViewFindData.ftLastWriteTime.dwLowDateTime!=NewViewFindData.ftLastWriteTime.dwLowDateTime ||
+					ViewFindData.ftLastWriteTime.dwHighDateTime!=NewViewFindData.ftLastWriteTime.dwHighDateTime ||
+					ViewFindData.nFileSize != NewViewFindData.nFileSize
+				);
+				if ( changed )
 					ViewFindData = NewViewFindData;
-					SetFileSize();
+				else {
+					if ( !ViewFile.GetSize(NewViewFindData.nFileSize) || FileSize == static_cast<__int64>(NewViewFindData.nFileSize) )
+						return TRUE;
+					changed = FileSize > static_cast<__int64>(NewViewFindData.nFileSize); // true if file shrank
+				}
 
+				SetFileSize();
+				if ( changed ) // do not reset caches if file just enlarged [make sense on Win7, doesn't matter on XP]
+				{
 					Reader.Clear(); // иначе зачем вся эта возня?
 					ViewFile.FlushBuffers();
 					vseek(0, SEEK_CUR); // reset vgetc state
 					lcache_ready = false; // reset start-lines cache
+				}
 
-					if (FilePos>FileSize)
+				if (FilePos > FileSize)
+				{
+					ProcessKey(KEY_CTRLEND);
+				}
+				else
+				{
+					__int64 PrevLastPage=LastPage;
+					LastPage = 0;
+					Show();
+
+					if (PrevLastPage && !LastPage)
 					{
 						ProcessKey(KEY_CTRLEND);
-					}
-					else
-					{
-						__int64 PrevLastPage=LastPage;
-						LastPage = 0;
-						Show();
-
-						if (PrevLastPage && !LastPage)
-						{
-							ProcessKey(KEY_CTRLEND);
-							LastPage=TRUE;
-						}
+						LastPage=TRUE;
 					}
 				}
 			}
@@ -3090,7 +3098,7 @@ void Viewer::Search(int Next,int FirstChar)
 		my.hex_mode = (LastSearchHex != 0);
 		my.recursive = false;
 		//
-		SearchDlg[SD_EDIT_TEXT].UserData = &my;
+		SearchDlg[SD_EDIT_TEXT].UserData = (DWORD_PTR)&my;
 
 		Dialog Dlg(SearchDlg,ARRAYSIZE(SearchDlg),ViewerSearchDlgProc);
 		Dlg.SetPosition(-1,-1,76,13);
@@ -3958,7 +3966,7 @@ int Viewer::ViewerControl(int Command,void *Param)
 			if (Param)
 			{
 				ViewerInfo *Info=(ViewerInfo *)Param;
-				memset(&Info->ViewerID,0,Info->StructSize-sizeof(Info->StructSize));
+				memset(((LPBYTE)Info)+sizeof(Info->StructSize), 0, Info->StructSize-sizeof(Info->StructSize));
 				Info->ViewerID=Viewer::ViewerID;
 				Info->FileName=strFullFileName;
 				Info->WindowSizeX=ObjWidth;

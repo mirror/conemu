@@ -80,6 +80,8 @@ static void show_help()
 	    L"          for the passive panel\n\n"
 	    L"The following switches may be used in the command line:\n\n"
 	    L" /?   This help.\n"
+	    L" /export <out.xml> [<configpath>]\n"
+   	    L" /import <in.xml> [<configpath>]\n"
 	    L" /a   Disable display of characters with codes 0 - 31 and 255.\n"
 	    L" /ag  Disable display of pseudographics characters.\n"
 	    L" /co  Forces FAR to load plugins from the cache only.\n"
@@ -102,6 +104,12 @@ static void show_help()
 	    L"      View the specified file. If <filename> is -, data is read from the stdin.\n"
 	    L" /w   Stretch to console window instead of console buffer.\n"
 	    L" /x   Disable exception handling.\n"
+	    L" /clearcache [profilepath]\n"
+	    L"      Clear plugins cache.\n"
+	    L" /export <out.xml> [profilepath]\n"
+	    L"      Export settings.\n"
+	    L" /import <in.xml> [profilepath]\n"
+	    L"      Import settings.\n"
 #ifdef _DEBUGEXC
 	    L" /xd  Enable exception handling.\n"
 #endif

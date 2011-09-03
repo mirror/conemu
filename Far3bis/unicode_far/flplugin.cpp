@@ -74,7 +74,7 @@ void FileList::PushPlugin(HANDLE hPlugin,const wchar_t *HostFile)
 
 int FileList::PopPlugin(int EnableRestoreViewMode)
 {
-	OpenPanelInfo Info={0};
+	OpenPanelInfo Info={};
 
 	if (PluginsList.Empty())
 	{
@@ -106,7 +106,7 @@ int FileList::PopPlugin(int EnableRestoreViewMode)
 
 		if (PStack->Modified)
 		{
-			PluginPanelItem PanelItem={0};
+			PluginPanelItem PanelItem={};
 			string strSaveDir;
 			apiGetCurrentDirectory(strSaveDir);
 
@@ -164,7 +164,7 @@ int FileList::FileNameToPluginItem(const wchar_t *Name,PluginPanelItem *pi)
 		return FALSE;
 
 	FarChDir(strTempDir);
-	memset(pi,0,sizeof(*pi));
+	ClearStruct(*pi);
 	FAR_FIND_DATA_EX fdata;
 
 	if (apiGetFindDataEx(Name, fdata))
@@ -531,7 +531,7 @@ void FileList::PutDizToPlugin(FileList *DestPanel,PluginPanelItem *ItemList,
 					CtrlObject->Plugins.PutFiles(DestPanel->hPlugin,&PanelItem,1,FALSE,OPM_SILENT|OPM_DESCR);
 				else if (Delete)
 				{
-					PluginPanelItem pi={0};
+					PluginPanelItem pi={};
 					pi.FileName = xf_wcsdup(DestPanel->strPluginDizName);
 					CtrlObject->Plugins.DeleteFiles(DestPanel->hPlugin,&pi,1,OPM_SILENT);
 					xf_free(pi.FileName);
@@ -868,7 +868,7 @@ void FileList::GetOpenPanelInfo(OpenPanelInfo *Info)
 {
 	_ALGO(CleverSysLog clv(L"FileList::GetOpenPanelInfo()"));
 	//_ALGO(SysLog(L"FileName='%s'",(FileName?FileName:"(nullptr)")));
-	memset(Info,0,sizeof(*Info));
+	ClearStruct(*Info);
 
 	if (PanelMode==PLUGIN_PANEL)
 		CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,Info);

@@ -363,7 +363,7 @@ void Dialog::Init(FARWINDOWPROC DlgProc,      // Диалоговая процедура
 	// запоминаем предыдущий заголовок консоли
 	OldTitle=new ConsoleTitle;
 	IdExist=false;
-	memset(&Id,0,sizeof(Id));
+	ClearStruct(Id);
 	bInitOK = true;
 }
 
@@ -1002,7 +1002,7 @@ void Dialog::ProcessLastHistory(DialogItemEx *CurItem, int MsgIndex)
 			// диалоговую функцию
 			FarDialogItemData IData;
 			IData.PtrData=const_cast<wchar_t*>(strData.CPtr());
-			IData.PtrLength=(int)strData.GetLength();
+			IData.PtrLength=strData.GetLength();
 			SendDlgMessage(this,DM_SETTEXT,MsgIndex,&IData);
 		}
 	}
@@ -1501,7 +1501,7 @@ INT_PTR Dialog::CtlColorDlgItem(FarColor Color[4],int ItemPos,int Type,int Focus
 			break;
 		}
 	}
-	FarDialogItemColors ItemColors = {0};
+	FarDialogItemColors ItemColors = {};
 	ItemColors.ColorsCount=4;
 	ItemColors.Colors=Color;
 	return DlgProc(this, DN_CTLCOLORDLGITEM, ItemPos, &ItemColors);
@@ -1523,7 +1523,7 @@ void Dialog::ShowDialog(unsigned ID)
 	DialogItemEx *CurItem;
 	int X,Y;
 	unsigned I,DrawItemCount;
-	FarColor ItemColor[4] = {}; // во избежание недоразумений в плагинах!
+	FarColor ItemColor[4] = {};
 
 	//   Если не разрешена отрисовка, то вываливаем.
 	if (IsEnableRedraw ||                // разрешена прорисовка ?
@@ -1954,8 +1954,8 @@ void Dialog::ShowDialog(unsigned ID)
 				if (CurItem->ListPtr)
 				{
 					//   Перед отрисовкой спросим об изменении цветовых атрибутов
-					FarColor RealColors[VMENU_COLOR_COUNT];
-					FarDialogItemColors ListColors={0};
+					FarColor RealColors[VMENU_COLOR_COUNT] = {};
+					FarDialogItemColors ListColors={};
 					ListColors.ColorsCount=VMENU_COLOR_COUNT;
 					ListColors.Colors=RealColors;
 					CurItem->ListPtr->GetColors(&ListColors);
@@ -3044,8 +3044,7 @@ int Dialog::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 	int MsX,MsY;
 	FARDIALOGITEMTYPES Type;
 	SMALL_RECT Rect;
-	INPUT_RECORD mouse;
-	memset(&mouse,0,sizeof(mouse));
+	INPUT_RECORD mouse = {};
 	mouse.EventType=MOUSE_EVENT;
 	mouse.Event.MouseEvent=*MouseEvent;
 
@@ -3919,8 +3918,8 @@ int Dialog::SelectFromComboBox(
 		SetDropDownOpened(TRUE); // Установим флаг "открытия" комбобокса.
 		SetComboBoxPos(CurItem);
 		// Перед отрисовкой спросим об изменении цветовых атрибутов
-		FarColor RealColors[VMENU_COLOR_COUNT];
-		FarDialogItemColors ListColors={0};
+		FarColor RealColors[VMENU_COLOR_COUNT] = {};
+		FarDialogItemColors ListColors={};
 		ListColors.ColorsCount=VMENU_COLOR_COUNT;
 		ListColors.Colors=RealColors;
 		ComboBox->SetColors(nullptr);
@@ -4151,7 +4150,10 @@ int Dialog::ProcessHighlighting(int Key,unsigned FocusPos,int Translate)
 	FARDIALOGITEMFLAGS Flags;
 
 	INPUT_RECORD rec;
-	if(!KeyToInputRecord(Key,&rec)) memset(&rec,0,sizeof(rec));
+	if(!KeyToInputRecord(Key,&rec))
+	{
+		ClearStruct(rec);
+	}
 
 	for (unsigned I=0; I<ItemCount; I++)
 	{
@@ -5108,7 +5110,7 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 							{
 								//ListItems->ItemIndex=1;
 								FarListItem *Item=&ListItems->Item;
-								memset(Item,0,sizeof(FarListItem));
+								ClearStruct(*Item);
 								Item->Flags=ListMenuItem->Flags;
 								Item->Text=ListMenuItem->strName;
 								/*
@@ -5828,7 +5830,7 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 					case DI_FIXEDIT:
 					case DI_LISTBOX: // меняет только текущий итем
 						CurItem->strData = did->PtrData;
-						Len = (int)CurItem->strData.GetLength();
+						Len = CurItem->strData.GetLength();
 						break;
 					default:
 						Len=0;
@@ -6114,14 +6116,14 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 			/*****************************************************************/
 		case DM_SETITEMDATA:
 		{
-			void* PrewDataDialog=CurItem->UserData;
-			CurItem->UserData=Param2;
-			return reinterpret_cast<INT_PTR>(PrewDataDialog);
+			DWORD_PTR PrewDataDialog=CurItem->UserData;
+			CurItem->UserData=(DWORD_PTR)Param2;
+			return PrewDataDialog;
 		}
 		/*****************************************************************/
 		case DM_GETITEMDATA:
 		{
-			return reinterpret_cast<INT_PTR>(CurItem->UserData);
+			return CurItem->UserData;
 		}
 		/*****************************************************************/
 		case DM_EDITUNCHANGEDFLAG: // -1 Get, 0 - Skip, 1 - Set; Выделение блока снимается.

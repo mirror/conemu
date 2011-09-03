@@ -2122,7 +2122,7 @@ int Edit::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 	if (MouseEvent->dwButtonState&FROM_LEFT_1ST_BUTTON_PRESSED)
 	{
 		static int PrevDoubleClick=0;
-		static COORD PrevPosition={0,0};
+		static COORD PrevPosition={};
 
 		if (GetTickCount()-PrevDoubleClick<=GetDoubleClickTime() && MouseEvent->dwEventFlags!=MOUSE_MOVED &&
 		        PrevPosition.X == MouseEvent->dwMousePosition.X && PrevPosition.Y == MouseEvent->dwMousePosition.Y)
@@ -3131,7 +3131,7 @@ void EnumFiles(VMenu& Menu, const wchar_t* Str)
 					{
 						if(Menu.GetItemCount())
 						{
-							MenuItemEx Item={0};
+							MenuItemEx Item={};
 							Item.strName = MSG(MCompletionFilesTitle);
 							Item.Flags=LIF_SEPARATOR;
 							Menu.AddItem(&Item);
@@ -3210,7 +3210,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 			if(Opt.AutoComplete.ShowList)
 			{
 				ChangeMacroMode MacroMode(MACRO_AUTOCOMPLETION);
-				MenuItemEx EmptyItem={0};
+				MenuItemEx EmptyItem={};
 				ComplMenu.AddItem(&EmptyItem,0);
 				SetMenuPos(ComplMenu);
 				ComplMenu.SetSelectPos(0,0);
@@ -3473,7 +3473,8 @@ void EditControl::AutoComplete(bool Manual,bool DelBlock)
 		// BUGBUG, hack
 		int Wait=WaitInMainLoop;
 		WaitInMainLoop=1;
-		if(!CtrlObject->Macro.ProcessKey(Key))
+		struct FAR_INPUT_RECORD irec={Key};
+		if(!CtrlObject->Macro.ProcessEvent(&irec))
 			pOwner->ProcessKey(Key);
 		WaitInMainLoop=Wait;
 		Show();

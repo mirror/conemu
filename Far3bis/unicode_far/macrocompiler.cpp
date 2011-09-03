@@ -83,7 +83,7 @@ static wchar_t nameString[1024];
 static wchar_t *sSrcString;
 static const wchar_t *pSrcString = nullptr;
 static wchar_t *oSrcString = nullptr;
-static wchar_t emptyString[1]={0};
+static wchar_t emptyString[1]={};
 
 static TToken currTok = tNo;
 static TVar currVar;
@@ -205,9 +205,9 @@ static void putstr(const wchar_t *s)
 {
 	_KEYMACRO(CleverSysLog Clev(L"putstr"));
 	_KEYMACRO(SysLog(L"s[%p]='%s'", s,s));
-	int Length = (StrLength(s)+1)*sizeof(wchar_t);
+	size_t Length = (StrLength(s)+1)*sizeof(wchar_t);
 	// строка должна быть выровнена на 4
-	int nSize = Length/sizeof(DWORD);
+	size_t nSize = Length/sizeof(DWORD);
 	memmove(&exprBuff[exprBuffSize],s,Length);
 
 	if (Length == sizeof(wchar_t) || (Length % sizeof(DWORD)) )    // дополнение до sizeof(DWORD) нулями.
@@ -215,7 +215,7 @@ static void putstr(const wchar_t *s)
 
 	memset(&exprBuff[exprBuffSize],0,nSize*sizeof(DWORD));
 	memmove(&exprBuff[exprBuffSize],s,Length);
-	exprBuffSize+=nSize;
+	exprBuffSize+=static_cast<int>(nSize);
 }
 
 static void keyMacroParseError(int err, const wchar_t *s, const wchar_t *p, const wchar_t *c)
@@ -346,6 +346,13 @@ static void calcFunc()
 
 					if (currTok != tRp)
 						foundparam++;
+
+					if ( currTok == tComma) // Mantis#0001863: Отсутствие строки как параметр функции
+					{
+						put(MCODE_OP_PUSHUNKNOWN);
+						put64(0);
+						continue;
+					}
 
 					expr();
 					xwcsncpy(nameString,nameString0,ARRAYSIZE(nameString));
@@ -1489,7 +1496,7 @@ int __parseMacroString(DWORD *&CurMacroBuffer, int &CurMacroBufferSize, const wc
 	//	MacroSrcList.Reset();
 	//}
 
-	int SizeCurKeyText = (int)(StrLength(BufPtr)*2)*sizeof(wchar_t);
+	size_t SizeCurKeyText = (StrLength(BufPtr)*2)*sizeof(wchar_t);
 	string strCurrKeyText;
 	//- AN ----------------------------------------------
 	//  Буфер под парсинг выражений
@@ -1564,7 +1571,7 @@ int __parseMacroString(DWORD *&CurMacroBuffer, int &CurMacroBufferSize, const wc
 					BufPtr++;
 				}
 
-				memset(varName, 0, sizeof(varName));
+				ClearArray(varName);
 				KeyCode = MCODE_OP_SAVE;
 				wchar_t* p = varName;
 				const wchar_t* s = strCurrKeyText.CPtr()+1;
@@ -1579,9 +1586,9 @@ int __parseMacroString(DWORD *&CurMacroBuffer, int &CurMacroBufferSize, const wc
 					*p++ = ch;
 
 				*p = 0;
-				int Length = (int)(StrLength(varName)+1)*sizeof(wchar_t);
+				size_t Length = (StrLength(varName)+1)*sizeof(wchar_t);
 				// строка должна быть выровнена на 4
-				SizeVarName = Length/sizeof(DWORD);
+				SizeVarName = static_cast<int>(Length/sizeof(DWORD));
 
 				if (Length == sizeof(wchar_t) || (Length % sizeof(DWORD)) )    // дополнение до sizeof(DWORD) нулями.
 					SizeVarName++;
@@ -1651,7 +1658,7 @@ int __parseMacroString(DWORD *&CurMacroBuffer, int &CurMacroBufferSize, const wc
 					{
 						KeyCode=MCODE_OP_SAVE;
 						SizeVarName=1;
-						memset(varName, 0, sizeof(varName));
+						ClearArray(varName);
 					}
 				}
 				else

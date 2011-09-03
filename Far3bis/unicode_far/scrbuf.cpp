@@ -68,11 +68,11 @@ ScreenBuf ScrBuf;
 ScreenBuf::ScreenBuf():
 	Buf(nullptr),
 	Shadow(nullptr),
-	MacroCharUsed(false),
-	ElevationCharUsed(false),
+	LockCount(0),
 	BufX(0),
 	BufY(0),
-	LockCount(0)
+	MacroCharUsed(false),
+	ElevationCharUsed(false)
 {
 	SBFlags.Set(SBFLAGS_FLUSHED|SBFLAGS_FLUSHEDCURPOS|SBFLAGS_FLUSHEDCURTYPE);
 }
@@ -109,7 +109,7 @@ void ScreenBuf::AllocBuf(int X,int Y)
 void ScreenBuf::FillBuf()
 {
 	CriticalSectionLock Lock(CS);
-	COORD BufferSize={BufX, BufY}, BufferCoord={0, 0};
+	COORD BufferSize={BufX, BufY}, BufferCoord={};
 	SMALL_RECT ReadRegion={0, 0, static_cast<SHORT>(BufX-1), static_cast<SHORT>(BufY-1)};
 	Console.ReadOutput(Buf, BufferSize, BufferCoord, ReadRegion);
 	memcpy(Shadow,Buf,BufX*BufY*sizeof(FAR_CHAR_INFO));
@@ -411,7 +411,7 @@ void ScreenBuf::Flush()
 						WriteRegion.Top=I;
 						WriteRegion.Bottom=I-1;
 
-						while (I<BufY && memcmp(PtrBuf,PtrShadow,BufX*sizeof(FAR_CHAR_INFO)))
+						while (I<BufY && memcmp(PtrBuf,PtrShadow,BufX*sizeof(FAR_CHAR_INFO))!=0)
 						{
 							I++;
 							PtrBuf+=BufX;
@@ -435,7 +435,7 @@ void ScreenBuf::Flush()
 					{
 						for (SHORT J=0; J<BufX; J++,++PtrBuf,++PtrShadow)
 						{
-							if (memcmp(PtrBuf,PtrShadow,sizeof(FAR_CHAR_INFO)))
+							if (memcmp(PtrBuf,PtrShadow,sizeof(FAR_CHAR_INFO))!=0)
 							{
 								WriteRegion.Left=Min(WriteRegion.Left,J);
 								WriteRegion.Top=Min(WriteRegion.Top,I);

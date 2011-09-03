@@ -1890,6 +1890,7 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 		File EditFile;
 		DWORD dwWritten=0;
 		// Don't use CreationDisposition=CREATE_ALWAYS here - it's kills alternate streams
+		// TRUNCATE_EXISTING may cause errors - http://forum.farmanager.com/viewtopic.php?p=84675#p84675
 		if(!EditFile.Open(Name, GENERIC_WRITE, FILE_SHARE_READ, nullptr, Flags.Check(FFILEEDIT_NEW)?CREATE_NEW:TRUNCATE_EXISTING, FILE_ATTRIBUTE_ARCHIVE|FILE_FLAG_SEQUENTIAL_SCAN))
 		{
 			//_SVS(SysLogLastError();SysLog(L"Name='%s',FileAttributes=%d",Name,FileAttributes));
@@ -1992,7 +1993,7 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 			{
 				if (Length)
 				{
-					DWORD length = (codepage == CP_REVERSEBOM?Length*sizeof(wchar_t):WideCharToMultiByte(codepage, 0, SaveStr, Length, nullptr, 0, nullptr, nullptr));
+					DWORD length = (codepage == CP_REVERSEBOM?static_cast<DWORD>(Length*sizeof(wchar_t)):WideCharToMultiByte(codepage, 0, SaveStr, Length, nullptr, 0, nullptr, nullptr));
 					char *SaveStrCopy=(char *)xf_malloc(length);
 
 					if (SaveStrCopy)
@@ -2018,7 +2019,7 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 				{
 					if (EndLength)
 					{
-						DWORD endlength = (codepage == CP_REVERSEBOM?EndLength*sizeof(wchar_t):WideCharToMultiByte(codepage, 0, EndSeq, EndLength, nullptr, 0, nullptr, nullptr));
+						DWORD endlength = (codepage == CP_REVERSEBOM?static_cast<DWORD>(EndLength*sizeof(wchar_t)):WideCharToMultiByte(codepage, 0, EndSeq, EndLength, nullptr, 0, nullptr, nullptr));
 						char *EndSeqCopy=(char *)xf_malloc(endlength);
 
 						if (EndSeqCopy)
@@ -2059,6 +2060,8 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 		else
 		{
 			SysErrorCode=GetLastError();
+			//BUGBUG: в некоторых случаях происходит облом (сетевая шара MacOS)
+			//  ErrCode=0x0000003A (58) - The specified server cannot perform the requested operation.
 			EditFile.Close();
 			apiDeleteFile(Name);
 			RetCode=SAVEFILE_ERROR;
@@ -2313,7 +2316,7 @@ void FileEditor::ShowStatus()
 	(m_editor->Flags.Check(FEDITOR_PROCESSCTRLQ) ? L'"':L' ')<<
 	fmt::Width(5)<<m_codepage<<L' '<<fmt::Width(3)<<MSG(MEditStatusLine)<<L' '<<
 	fmt::Width(SizeLineStr)<<fmt::Precision(SizeLineStr)<<strLineStr<<L' '<<
-	
+
 	fmt::Width(3)<<MSG(MEditStatusCol)<<L' '<<
 	fmt::LeftAlign()<<fmt::Width(4)<<m_editor->CurLine->GetTabCurPos()+1<<L' '<<
 
@@ -2684,7 +2687,7 @@ int FileEditor::EditorControl(int Command, void *Param)
 				if (rec->EventType == KEY_EVENT)
 				{
 					SysLog(L"ECTL_READINPUT={%s,{%d,%d,Vk=0x%04X,0x%08X}}",
-					       (rec->EventType == FARMACRO_KEY_EVENT?"FARMACRO_KEY_EVENT":"KEY_EVENT"),
+					       (rec->EventType == FARMACRO_KEY_EVENT?L"FARMACRO_KEY_EVENT":L"KEY_EVENT"),
 					       rec->Event.KeyEvent.bKeyDown,
 					       rec->Event.KeyEvent.wRepeatCount,
 					       rec->Event.KeyEvent.wVirtualKeyCode,
@@ -2715,7 +2718,7 @@ int FileEditor::EditorControl(int Command, void *Param)
 					if (!rec->EventType || rec->EventType == KEY_EVENT || rec->EventType == FARMACRO_KEY_EVENT)
 					{
 						SysLog(L"ECTL_PROCESSINPUT={%s,{%d,%d,Vk=0x%04X,0x%08X}}",
-						       (rec->EventType == FARMACRO_KEY_EVENT?"FARMACRO_KEY_EVENT":"KEY_EVENT"),
+						       (rec->EventType == FARMACRO_KEY_EVENT?L"FARMACRO_KEY_EVENT":L"KEY_EVENT"),
 						       rec->Event.KeyEvent.bKeyDown,
 						       rec->Event.KeyEvent.wRepeatCount,
 						       rec->Event.KeyEvent.wVirtualKeyCode,
@@ -2731,11 +2734,6 @@ int FileEditor::EditorControl(int Command, void *Param)
 			}
 
 			return FALSE;
-		}
-		case ECTL_PROCESSKEY:
-		{
-			ReProcessKey((int)(INT_PTR)Param);
-			return TRUE;
 		}
 		case ECTL_SETPARAM:
 		{

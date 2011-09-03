@@ -89,10 +89,10 @@ class FileFilterParams
 
 		struct
 		{
-			bool Used;
-			enumFDateType DateType;
 			ULARGE_INTEGER DateAfter;
 			ULARGE_INTEGER DateBefore;
+			enumFDateType DateType;
+			bool Used;
 			bool bRelative;
 		} FDate;
 
@@ -136,7 +136,7 @@ class FileFilterParams
 		void SetSortGroup(int SortGroup) { FHighlight.SortGroup = SortGroup; }
 		void SetContinueProcessing(bool bContinueProcessing) { FHighlight.bContinueProcessing = bContinueProcessing; }
 		void SetFlags(enumFileFilterFlagsType FType, DWORD Flags) { FFlags[FType] = Flags; }
-		void ClearAllFlags() { memset(FFlags,0,sizeof(FFlags)); }
+		void ClearAllFlags() { ClearArray(FFlags); }
 
 		const wchar_t *GetTitle() const;
 		bool  GetMask(const wchar_t **Mask) const;

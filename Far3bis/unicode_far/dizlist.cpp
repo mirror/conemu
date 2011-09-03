@@ -102,6 +102,7 @@ void DizList::Reset()
 
 void DizList::PR_ReadingMsg()
 {
+	//BUGBUG: Warning: Похоже, что эта гадость с экрана не убирается?
 	Message(0,0,L"",MSG(MReadingDiz));
 }
 
@@ -482,10 +483,8 @@ bool DizList::Flush(const wchar_t *Path,const wchar_t *DizName)
 		{
 			//Maximus5: На некоторых сетевых устройствах атрибуты вообще не устанавливаются
 			// Поэтому возвращается ошибка, и производится попытка Elevation (что бессмысленно)
-			DWORD oldElevation = Opt.ElevationMode;
-			Opt.ElevationMode &= ~ELEVATION_MODIFY_REQUEST;
+			DisableElevation DE;
 			apiSetFileAttributes(strDizFileName,FILE_ATTRIBUTE_ARCHIVE);
-			Opt.ElevationMode = oldElevation;
 		}
 		else
 		{

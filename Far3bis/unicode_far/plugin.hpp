@@ -60,6 +60,14 @@ other possible license with no implications from the above license on them.
 
 #define FARMACRO_KEY_EVENT  (KEY_EVENT|0x8000)
 
+#ifdef FAR_USE_INTERNALS
+struct FAR_INPUT_RECORD
+{
+	DWORD IntKey;
+	INPUT_RECORD Rec;
+};
+#endif // END FAR_USE_INTERNALS
+
 #define CP_UNICODE 1200
 #define CP_REVERSEBOM 1201
 #define CP_AUTODETECT ((UINT)-1)
@@ -138,23 +146,23 @@ typedef int (WINAPI *FARAPIMESSAGE)(
 
 enum FARDIALOGITEMTYPES
 {
-	DI_TEXT,
-	DI_VTEXT,
-	DI_SINGLEBOX,
-	DI_DOUBLEBOX,
-	DI_EDIT,
-	DI_PSWEDIT,
-	DI_FIXEDIT,
-	DI_BUTTON,
-	DI_CHECKBOX,
-	DI_RADIOBUTTON,
-	DI_COMBOBOX,
-	DI_LISTBOX,
+	DI_TEXT                         =  0,
+	DI_VTEXT                        =  1,
+	DI_SINGLEBOX                    =  2,
+	DI_DOUBLEBOX                    =  3,
+	DI_EDIT                         =  4,
+	DI_PSWEDIT                      =  5,
+	DI_FIXEDIT                      =  6,
+	DI_BUTTON                       =  7,
+	DI_CHECKBOX                     =  8,
+	DI_RADIOBUTTON                  =  9,
+	DI_COMBOBOX                     = 10,
+	DI_LISTBOX                      = 11,
 #ifdef FAR_USE_INTERNALS
 	DI_MEMOEDIT,
 #endif // END FAR_USE_INTERNALS
 
-	DI_USERCONTROL=255,
+	DI_USERCONTROL                  =255,
 };
 
 /*
@@ -454,9 +462,9 @@ struct FarList
 
 struct FarListTitles
 {
-	int   TitleLen;
+	size_t   TitleLen;
 	const wchar_t *Title;
-	int   BottomLen;
+	size_t   BottomLen;
 	const wchar_t *Bottom;
 };
 
@@ -494,7 +502,7 @@ struct FarDialogItem
 	FARDIALOGITEMFLAGS Flags;
 	const wchar_t *Data;
 	size_t MaxLength; // terminate 0 not included (if == 0 string size is unlimited)
-	void* UserData;
+	DWORD_PTR UserData;
 };
 
 struct FarDialogItemData
@@ -683,7 +691,6 @@ static const PLUGINPANELITEMFLAGS
 
 struct PluginPanelItem
 {
-	DWORD    FileAttributes;
 	FILETIME CreationTime;
 	FILETIME LastAccessTime;
 	FILETIME LastWriteTime;
@@ -697,15 +704,16 @@ struct PluginPanelItem
 	const wchar_t *FileName;
 	const wchar_t *AlternateFileName;
 #endif // END FAR_USE_INTERNALS
-	PLUGINPANELITEMFLAGS Flags;
-	DWORD         NumberOfLinks;
 	const wchar_t *Description;
 	const wchar_t *Owner;
 	const wchar_t * const *CustomColumnData;
-	size_t           CustomColumnNumber;
-	DWORD_PTR     UserData;
-	DWORD         CRC32;
-	DWORD_PTR     Reserved[2];
+	size_t CustomColumnNumber;
+	PLUGINPANELITEMFLAGS Flags;
+	DWORD_PTR UserData;
+	DWORD FileAttributes;
+	DWORD NumberOfLinks;
+	DWORD CRC32;
+	DWORD_PTR Reserved[2];
 };
 
 struct FarGetPluginPanelItem
@@ -764,17 +772,17 @@ enum OPENPANELINFO_SORTMODES
 struct PanelInfo
 {
 	size_t StructSize;
-	GUID OwnerGuid;
 	HANDLE PluginHandle;
-	enum PANELINFOTYPE PanelType;
-	RECT PanelRect;
+	GUID OwnerGuid;
+	PANELINFOFLAGS Flags;
 	size_t ItemsNumber;
 	size_t SelectedItemsNumber;
+	RECT PanelRect;
 	int CurrentItem;
 	int TopPanelItem;
 	int ViewMode;
+	enum PANELINFOTYPE PanelType;
 	enum OPENPANELINFO_SORTMODES SortMode;
-	PANELINFOFLAGS Flags;
 	DWORD_PTR Reserved;
 };
 
@@ -1236,11 +1244,11 @@ typedef int (WINAPI *FARMACROCALLBACK)(void* Id,FARADDKEYMACROFLAGS Flags);
 struct MacroAddMacro
 {
 	size_t StructSize;
+	void* Id;
 	FARKEYMACROFLAGS Flags;
 	INPUT_RECORD AKey;
 	const wchar_t *SequenceText;
 	const wchar_t *Description;
-	void* Id;
 	FARMACROCALLBACK Callback;
 };
 
@@ -1356,13 +1364,13 @@ struct WindowInfo
 {
 	size_t StructSize;
 	INT_PTR Id;
-	int  Pos;
+	wchar_t *TypeName;
+	wchar_t *Name;
+	int TypeNameSize;
+	int NameSize;
+	int Pos;
 	enum WINDOWINFO_TYPE Type;
 	WINDOWINFO_FLAGS Flags;
-	wchar_t *TypeName;
-	int TypeNameSize;
-	wchar_t *Name;
-	int NameSize;
 };
 
 struct WindowType
@@ -1462,16 +1470,16 @@ struct ViewerMode
 struct ViewerInfo
 {
 	size_t StructSize;
-	int    ViewerID;
+	int ViewerID;
+	int TabSize;
 	const wchar_t *FileName;
+	struct ViewerMode CurMode;
 	__int64 FileSize;
 	__int64 FilePos;
-	int    WindowSizeX;
-	int    WindowSizeY;
-	VIEWER_OPTIONS  Options;
-	int    TabSize;
-	struct ViewerMode CurMode;
 	__int64 LeftPos;
+	VIEWER_OPTIONS Options;
+	int WindowSizeX;
+	int WindowSizeY;
 };
 
 enum VIEWER_EVENTS
@@ -1534,7 +1542,7 @@ enum EDITOR_CONTROL_COMMANDS
 	ECTL_SAVEFILE                   = 18,
 	ECTL_QUIT                       = 19,
 	ECTL_SETKEYBAR                  = 20,
-	ECTL_PROCESSKEY                 = 21,
+
 	ECTL_SETPARAM                   = 22,
 	ECTL_GETBOOKMARKS               = 23,
 	ECTL_TURNOFFMARKINGBLOCK        = 24,
@@ -1614,6 +1622,7 @@ struct EditorUndoRedo
 struct EditorGetString
 {
 	int StringNumber;
+	int StringLength;
 #ifdef FAR_USE_INTERNALS
 	wchar_t *StringText;
 	wchar_t *StringEOL;
@@ -1621,7 +1630,6 @@ struct EditorGetString
 	const wchar_t *StringText;
 	const wchar_t *StringEOL;
 #endif // END FAR_USE_INTERNALS
-	int StringLength;
 	int SelStart;
 	int SelEnd;
 };
@@ -1630,9 +1638,9 @@ struct EditorGetString
 struct EditorSetString
 {
 	int StringNumber;
+	int StringLength;
 	const wchar_t *StringText;
 	const wchar_t *StringEOL;
-	int StringLength;
 };
 
 enum EXPAND_TABS
@@ -1744,10 +1752,10 @@ struct EditorColor
 	int ColorItem;
 	int StartPos;
 	int EndPos;
+	unsigned Priority;
 	EDITORCOLORFLAGS Flags;
 	struct FarColor Color;
 	GUID Owner;
-	unsigned Priority;
 };
 
 struct EditorDeleteColor
@@ -2431,8 +2439,8 @@ struct SetDirectoryInfo
 	size_t StructSize;
 	HANDLE hPanel;
 	const wchar_t *Dir;
+	DWORD_PTR UserData;
 	OPERATION_MODES OpMode;
-	INT_PTR UserData;
 };
 
 struct SetFindListInfo

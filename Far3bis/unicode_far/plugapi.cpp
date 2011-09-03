@@ -2448,7 +2448,7 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 						MacroCheckMacroText *CheckText=(MacroCheckMacroText*)Param2;
 						if (CheckText->Text.SequenceText && *CheckText->Text.SequenceText)
 						{
-							MacroRecord CurMacro={0};
+							MacroRecord CurMacro={};
 							int Ret=Macro.ParseMacroString(&CurMacro,CheckText->Text.SequenceText,(CheckText->Text.Flags&KMFLAGS_SILENTCHECK)?TRUE:FALSE);
 
 							if (Ret)
@@ -2456,7 +2456,7 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 								if (CurMacro.BufferSize > 1)
 									xf_free(CurMacro.Buffer);
 
-								memset(&CheckText->Result,0,sizeof(struct MacroParseResult));
+								ClearStruct(CheckText->Result);
 								CheckText->Result.StructSize=sizeof(MacroParseResult);
 							}
 							else
