@@ -167,7 +167,7 @@ class Panel:public ScreenObject
 
 	public:
 		virtual int SendKeyToPlugin(DWORD Key,bool Pred=false) {return FALSE;}
-		virtual BOOL SetCurDir(const wchar_t *NewDir,int ClosePanel);
+		virtual BOOL SetCurDir(const wchar_t *NewDir,int ClosePanel,BOOL IsUpdated=TRUE);
 		virtual void ChangeDirToCurrent();
 
 		virtual int GetCurDir(string &strCurDir);
@@ -201,6 +201,8 @@ class Panel:public ScreenObject
 
 		virtual void CloseChangeNotification() {}
 		virtual int FindPartName(const wchar_t *Name,int Next,int Direct=1,int ExcludeSets=0) {return FALSE;}
+		virtual bool GetPlainString(string& Dest,int ListPos){return false;}
+
 
 		virtual int GoToFile(long idxItem) {return TRUE;}
 		virtual int GoToFile(const wchar_t *Name,BOOL OnlyPartName=FALSE) {return TRUE;}

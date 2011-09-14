@@ -341,7 +341,7 @@ class FileList:public Panel
 		virtual void ChangeNumericSort(int Mode);
 		virtual void ChangeCaseSensitiveSort(int Mode);
 		virtual void ChangeDirectoriesFirst(int Mode);
-		virtual BOOL SetCurDir(const wchar_t *NewDir,int ClosePanel);
+		virtual BOOL SetCurDir(const wchar_t *NewDir,int ClosePanel,BOOL IsUpdated=TRUE);
 		virtual int GetPrevSortMode();
 		virtual int GetPrevSortOrder();
 		virtual int GetPrevViewMode();
@@ -353,6 +353,7 @@ class FileList:public Panel
 		virtual int GetFileName(string &strName,int Pos,DWORD &FileAttr);
 		virtual int GetCurrentPos();
 		virtual int FindPartName(const wchar_t *Name,int Next,int Direct=1,int ExcludeSets=0);
+		virtual bool GetPlainString(string& Dest,int ListPos);
 		long FindFile(const char *Name,BOOL OnlyPartName=FALSE);
 
 		virtual int GoToFile(long idxItem);

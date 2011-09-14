@@ -88,6 +88,15 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 		else if (FKey && FKey < WCHAR_MAX)
 		{
 			short Vk = VkKeyScan(static_cast<WCHAR>(FKey));
+#ifdef _DEBUG
+			// На некоторых системах, почему-то обламывается VkKeyScan на '[', после этого
+			// начинает глючить CalcKeyCode
+			if (static_cast<WCHAR>(FKey) == L'[')
+			{
+				_ASSERTE(static_cast<WCHAR>(FKey) == L'[');
+				Vk = -1;
+			}
+#endif
 			if (Vk == -1)
 			{
 				// Заполнить хотя бы .UnicodeChar = FKey
@@ -101,7 +110,7 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 					FShift|=
 							(HIBYTE(Vk)&1?KEY_SHIFT:0)|
 							(HIBYTE(Vk)&2?KEY_CTRL:0)|
-							(HIBYTE(Vk)&4?KEY_ALT:0);
+							(HIBYTE(Vk)&4?KEY_ALT:0); //-V112
 			  		ControlState=(FShift&KEY_SHIFT?PKF_SHIFT:0)|
   	        				 (FShift&KEY_ALT?PKF_ALT:0)|
 		 					 (FShift&KEY_RALT?PKF_RALT:0)|
@@ -169,7 +178,7 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 					}
 					else
 					{
-						Rec->Event.KeyEvent.wVirtualKeyCode = 0;
+						Rec->Event.KeyEvent.wVirtualKeyCode = VirtKey = 0;
 						Rec->Event.KeyEvent.wVirtualScanCode = 0;
 					}
 					Rec->Event.KeyEvent.uChar.UnicodeChar=(WORD)(FKey > WCHAR_MAX?0:FKey);

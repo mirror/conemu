@@ -2930,8 +2930,8 @@ static bool panelselectFunc(const TMacroFunction*)
 		if (Mode == 2 || Mode == 3)
 		{
 			string strStr=ValItems.s();
-			ReplaceStrings(strStr,L"\r\n",L";");
-			ReplaceStrings(strStr,L"\n",L";");
+			ReplaceStrings(strStr,L"\r",L"\n");
+			ReplaceStrings(strStr,L"\n\n",L"\n");
 			ValItems=strStr.CPtr();
 		}
 
@@ -3818,7 +3818,7 @@ static bool panelsetpathFunc(const TMacroFunction*)
 
 		if (SelPanel)
 		{
-			if (SelPanel->SetCurDir(pathName,SelPanel->GetMode()==PLUGIN_PANEL && IsAbsolutePath(pathName)))
+			if (SelPanel->SetCurDir(pathName,SelPanel->GetMode()==PLUGIN_PANEL && IsAbsolutePath(pathName),FrameManager->GetCurrentFrame()->GetType() == MODALTYPE_PANELS))
 			{
 				ActivePanel=CtrlObject->Cp()->ActivePanel;
 				PassivePanel=ActivePanel?CtrlObject->Cp()->GetAnotherPanel(ActivePanel):nullptr;

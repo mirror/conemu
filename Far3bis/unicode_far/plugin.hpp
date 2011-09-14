@@ -648,7 +648,7 @@ struct FarMenuItem
 {
 	MENUITEMFLAGS Flags;
 	const wchar_t *Text;
-	DWORD AccelKey;
+	struct FarKey AccelKey;
 	DWORD_PTR Reserved;
 	DWORD_PTR UserData;
 };
@@ -1743,7 +1743,8 @@ struct EditorConvertPos
 
 typedef unsigned __int64 EDITORCOLORFLAGS;
 static const EDITORCOLORFLAGS
-	ECF_TAB1 = 0x0000000000000001ULL;
+	ECF_TABMARKFIRST   = 0x0000000000000001ULL,
+	ECF_TABMARKCURRENT = 0x0000000000000002ULL;
 
 struct EditorColor
 {

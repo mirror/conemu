@@ -516,6 +516,23 @@ void ProcessKeyToInputRecord(int Key, unsigned int dwControlState, INPUT_RECORD 
 	}
 }
 
+void FarKeyToInputRecord(const FarKey& Key,INPUT_RECORD* Rec)
+{
+	if (Rec)
+	{
+		Rec->EventType=KEY_EVENT;
+		Rec->Event.KeyEvent.bKeyDown=1;
+		Rec->Event.KeyEvent.wRepeatCount=1;
+		Rec->Event.KeyEvent.wVirtualKeyCode=Key.VirtualKeyCode;
+		Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
+
+		//BUGBUG
+		Rec->Event.KeyEvent.uChar.UnicodeChar=MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_CHAR);
+
+ 		Rec->Event.KeyEvent.dwControlKeyState=Key.ControlKeyState;
+	}
+}
+
 DWORD IsMouseButtonPressed()
 {
 	INPUT_RECORD rec;
@@ -2015,6 +2032,15 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 		else if (FKey && FKey < WCHAR_MAX)
 		{
 			short Vk = VkKeyScan(static_cast<WCHAR>(FKey));
+#ifdef _DEBUG
+			// На некоторых системах, почему-то обламывается VkKeyScan на '[', после этого
+			// начинает глючить CalcKeyCode
+			if (static_cast<WCHAR>(FKey) == L'[')
+			{
+				_ASSERTE(static_cast<WCHAR>(FKey) == L'[');
+				Vk = -1;
+			}
+#endif
 			if (Vk == -1)
 			{
 				// Заполнить хотя бы .UnicodeChar = FKey
@@ -2096,7 +2122,7 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 					}
 					else
 					{
-						Rec->Event.KeyEvent.wVirtualKeyCode = 0;
+						Rec->Event.KeyEvent.wVirtualKeyCode = VirtKey = 0;
 						Rec->Event.KeyEvent.wVirtualScanCode = 0;
 					}
 					Rec->Event.KeyEvent.uChar.UnicodeChar=FKey > WCHAR_MAX?0:FKey;
@@ -2935,7 +2961,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		_SVS(if (KeyCode!=VK_CONTROL && KeyCode!=VK_MENU) SysLog(L"CtrlAlt -> |%s|%s|",_VK_KEY_ToName(KeyCode),_INPUT_RECORD_Dump(rec)));
 
 		if (KeyCode>='A' && KeyCode<='Z')
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 
 		if (Opt.ShiftsKeyRules) //???
 			switch (KeyCode)
@@ -2993,7 +3019,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			return(KEY_NONE);
 
 		if (KeyCode)
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -3017,7 +3043,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		}
 
 		if (!WaitInMainLoop && KeyCode>='A' && KeyCode<='Z')
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 
 		if (Opt.ShiftsKeyRules) //???
 			switch (KeyCode)
@@ -3080,7 +3106,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			return(KEY_NONE);
 
 		if (KeyCode)
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -3143,7 +3169,7 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			return(KEY_NONE);
 
 		if (KeyCode)
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -3186,10 +3212,10 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		_SVS(if (KeyCode!=VK_CONTROL) SysLog(L"Ctrl -> |%s|%s|",_VK_KEY_ToName(KeyCode),_INPUT_RECORD_Dump(rec)));
 
 		if (KeyCode>='0' && KeyCode<='9')
-			return(ModifCtrl+KeyCode);
+			return ModifCtrl|KeyCode;
 
 		if (KeyCode>='A' && KeyCode<='Z')
-			return(ModifCtrl+KeyCode);
+			return ModifCtrl|KeyCode;
 
 		switch (KeyCode)
 		{
@@ -3250,8 +3276,11 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 			if (!RealKey && KeyCode==VK_CONTROL)
 				return KEY_NONE;
 
-			return(ModifCtrl+KeyCode);
+			return ModifCtrl|KeyCode;
 		}
+
+		if (Char)
+			return ModifCtrl|Char;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -3331,7 +3360,8 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		if (!RealKey && KeyCode==VK_MENU)
 			return KEY_NONE;
 
-		return(ModifAlt+KeyCode);
+		if (KeyCode)
+			return ModifAlt|KeyCode;
 	}
 
 	if (IntKeyState.ShiftPressed)
@@ -3368,5 +3398,9 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 
 	}
 
+	_ASSERTE((!IntKeyState.CtrlPressed && !IntKeyState.AltPressed) || Char);
+
+	if (Char && (ModifAlt || ModifCtrl))
+		return Modif|Char;
 	return Char?Char:KEY_NONE;
 }

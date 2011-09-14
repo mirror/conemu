@@ -9,7 +9,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 		int   UseVk_oem_x; 
 		DWORD CASRule;
 		int   ShiftsKeyRules;
-	} Opt = {1, 0xFFFFFFFFU, 1}; //TODO: Options?
+	} Opt = {1, (DWORD)-1, 1}; //TODO: Options?
 	struct FarKeyboardState {
 		int AltPressed;
 		int CtrlPressed;
@@ -45,7 +45,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 	//// // _SVS(if(KeyCode == VK_DECIMAL || KeyCode == VK_DELETE) SysLog(L"CalcKeyCode -> CtrlState=%04X KeyCode=%s ScanCode=%08X AsciiChar=%02X IntKeyState.ShiftPressed=%d ShiftPressedLast=%d",CtrlState,_VK_KEY_ToName(KeyCode), ScanCode, Char.AsciiChar,IntKeyState.ShiftPressed,ShiftPressedLast));
 
 	if (NotMacros)
-		*NotMacros=CtrlState&0x80000000?TRUE:FALSE;
+		*NotMacros=CtrlState&0x80000000?TRUE:FALSE; //-V112
 
 //  CtrlState&=~0x80000000;
 
@@ -1017,6 +1017,9 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 
 			return(ModifCtrl+KeyCode);
 		}
+		
+		if (Char)
+			return (ModifCtrl|Char);
 	}
 
 	/* ------------------------------------------------------------- */
@@ -1134,6 +1137,8 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 		}
 
 	}
+
+	_ASSERTE(!IntKeyState.CtrlPressed && !IntKeyState.AltPressed);
 
 	return Char?Char:KEY_NONE;
 }

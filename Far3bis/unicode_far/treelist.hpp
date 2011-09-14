@@ -148,7 +148,7 @@ class TreeList: public Panel
 		virtual void Update(int Mode);
 		int  ReadTree();
 
-		virtual BOOL SetCurDir(const wchar_t *NewDir,int ClosePanel);
+		virtual BOOL SetCurDir(const wchar_t *NewDir,int ClosePanel,BOOL IsUpdated=TRUE);
 
 		void SetRootDir(const wchar_t *NewRootDir);
 
@@ -159,6 +159,7 @@ class TreeList: public Panel
 		virtual void UpdateViewPanel();
 		virtual void MoveToMouse(MOUSE_EVENT_RECORD *MouseEvent);
 		virtual int FindPartName(const wchar_t *Name,int Next,int Direct=1,int ExcludeSets=0);
+		virtual bool GetPlainString(string& Dest,int ListPos);
 
 		virtual int GoToFile(long idxItem);
 		virtual int GoToFile(const wchar_t *Name,BOOL OnlyPartName=FALSE);

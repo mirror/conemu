@@ -103,6 +103,8 @@ namespace Far2
 #elif MVV_3<=2183
 	#include "pluginW3#2180.hpp"
 	#define MCTLARG(g) &g
+#elif MVV_3<=2188
+	#include "pluginW3#2184.hpp"
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -1878,7 +1880,15 @@ int WrapPluginInfo::FarKeyEx_3_2(const INPUT_RECORD *Rec, bool LeftOnly /*= fals
 							|| (r.Event.KeyEvent.uChar.UnicodeChar=='.') || (r.Event.KeyEvent.uChar.UnicodeChar==','))))
 				{
 					if (r.Event.KeyEvent.wVirtualKeyCode != rDbg.Event.KeyEvent.wVirtualKeyCode)
-						nCmp = 1;
+					{
+						// ≈сли совпадают - то и ладно
+						if (r.Event.KeyEvent.uChar.UnicodeChar && r.Event.KeyEvent.uChar.UnicodeChar == rDbg.Event.KeyEvent.uChar.UnicodeChar)
+							;
+						else if (rDbg.Event.KeyEvent.wVirtualKeyCode >= VK_NUMPAD0 && rDbg.Event.KeyEvent.wVirtualKeyCode <= VK_NUMPAD9)
+							;
+						else
+							nCmp = 1;
+					}
 					else
 					{
 						if ((r.Event.KeyEvent.wVirtualKeyCode != VK_SHIFT // ѕравый/Ћевый Shift имеют разные Scan-коды
@@ -1892,7 +1902,8 @@ int WrapPluginInfo::FarKeyEx_3_2(const INPUT_RECORD *Rec, bool LeftOnly /*= fals
 			if (r.Event.KeyEvent.uChar.UnicodeChar != rDbg.Event.KeyEvent.uChar.UnicodeChar
 					&& !(r.Event.KeyEvent.dwControlKeyState & RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED))
 				nCmp = 1;
-			if ((r.Event.KeyEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)
+			if (rDbg.Event.KeyEvent.wVirtualKeyCode &&
+				(r.Event.KeyEvent.dwControlKeyState&CTRLMASK) != (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)
 					&& !((r.Event.KeyEvent.dwControlKeyState&CTRLMASK)==SHIFT_PRESSED
 							&& (rDbg.Event.KeyEvent.dwControlKeyState&CTRLMASK)==0
 							&& (r.Event.KeyEvent.wVirtualKeyCode>='A' && r.Event.KeyEvent.wVirtualKeyCode<='Z'
@@ -4503,7 +4514,22 @@ int WrapPluginInfo::FarApiMenu(INT_PTR PluginNumber, int X, int Y, int MaxHeight
 					| ((p2->Flags & Far2::MIF_DISABLE) ? MIF_DISABLE : 0)
 					| ((p2->Flags & Far2::MIF_GRAYED) ? MIF_GRAYED : 0)
 					| ((p2->Flags & Far2::MIF_HIDDEN) ? MIF_HIDDEN : 0);
+				#if MVV_3>=2189
+				INPUT_RECORD r = {};
+				WrapPluginInfo::FarKey_2_3(p2->AccelKey, &r);
+				if (r.EventType == KEY_EVENT)
+				{
+					p3->AccelKey.VirtualKeyCode = r.Event.KeyEvent.wVirtualKeyCode;
+					p3->AccelKey.ControlKeyState = r.Event.KeyEvent.dwControlKeyState;
+				}
+				else
+				{
+					_ASSERTE(r.EventType == KEY_EVENT);
+					p3->AccelKey.VirtualKeyCode = p3->AccelKey.ControlKeyState = 0;
+				}
+				#else
 				p3->AccelKey = p2->AccelKey;
+				#endif
 				p3->Reserved = p2->Reserved;
 				p3->UserData = p2->UserData;
 			}
@@ -6014,6 +6040,9 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 			{L"AltShiftBS"},
 			{L"CtrlAltBS"},
 			{L"CtrlBreak"},
+			{L"CtrlAlt["},
+			{L"Ctrl["},
+			{L"["},
 		};
 		int lFail = -1;
 		BOOL b1; size_t nDbgSize;
@@ -6023,7 +6052,11 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 			nDbgSize = FarInputRecordToName(&Keys[i].r, Keys[i].szDbg, ARRAYSIZE(Keys[i].szDbg));
 			Keys[i].Cmp = lstrcmpi(Keys[i].pszKey, Keys[i].szDbg)==0;
 			if (lFail==-1 && !Keys[i].Cmp)
+			{
 				lFail = i;
+				_ASSERTE(lFail==-1);
+				FarNameToInputRecord(Keys[i].pszKey, &Keys[i].r);
+			}
 		}
 		_ASSERTE(lFail==-1);
 	}
@@ -6846,25 +6879,34 @@ int    WrapPluginInfo::ProcessPanelInputW3(const struct ProcessPanelInputInfo *I
 	if (ProcessKeyW)
 	{
 		int Key3 = FarKey_3_2(&Info->Rec);
-		DWORD FShift = Key3 & 0x7F000000; // старший бит используетс€ в других цел€х!
-		DWORD ControlState =
-		#if MVV_3>=2103
-			(FShift & Far2::KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
-			(FShift & Far2::KEY_ALT ? Far2::PKF_ALT : 0)|
-			(FShift & Far2::KEY_CTRL ? Far2::PKF_CONTROL : 0)
-		#else
-			(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
-			(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
-			(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0)
-		#endif
-			;
-		//DWORD PreProcess = (Info->Flags & PKIF_PREPROCESS) ? Far2::PKF_PREPROCESS : 0;
-		int Key2;
-		if ((Key3 & 0x00030000) == 0x00010000)
-			Key2 = Key3 & 0x0000FFFF; // KEY_BREAK .. KEY_F24, KEY_BROWSER_BACK, KEY_MEDIA_NEXT_TRACK и т.п. 
-		else
-			Key2 = Key3 & 0x0003FFFF;
-		iRc = ProcessKeyW(Info->hPanel, Key2 /*| PreProcess*/, ControlState);
+		int VirtKey = 0, ControlState = 0;
+		// ProcessKeyW ожидает VK а не FarKey
+		TranslateKeyToVK(Key3, VirtKey, ControlState, NULL);
+		
+		//DWORD FShift = Key3 & 0x7F000000; // старший бит используетс€ в других цел€х!
+		//DWORD ControlState =
+		//#if MVV_3>=2103
+		//	(FShift & Far2::KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
+		//	(FShift & Far2::KEY_ALT ? Far2::PKF_ALT : 0)|
+		//	(FShift & Far2::KEY_CTRL ? Far2::PKF_CONTROL : 0)
+		//#else
+		//	(FShift & KEY_SHIFT ? Far2::PKF_SHIFT : 0)|
+		//	(FShift & KEY_ALT ? Far2::PKF_ALT : 0)|
+		//	(FShift & KEY_CTRL ? Far2::PKF_CONTROL : 0)
+		//#endif
+		//	;
+		////DWORD PreProcess = (Info->Flags & PKIF_PREPROCESS) ? Far2::PKF_PREPROCESS : 0;
+		//int Key2;
+		//if ((Key3 & 0x00030000) == 0x00010000)
+		//	Key2 = Key3 & 0x0000FFFF; // KEY_BREAK .. KEY_F24, KEY_BROWSER_BACK, KEY_MEDIA_NEXT_TRACK и т.п. 
+		//else
+		//	Key2 = Key3 & 0x0003FFFF;
+		
+		// ProcessKeyW ожидает VK а не FarKey
+		//iRc = ProcessKeyW(Info->hPanel, Key2 /*| PreProcess*/, ControlState);
+		
+		//TODO: “еоретически, некоторые плагины могут хотеть Far2::PKF_PREPROCESS, но пока все ок
+		iRc = ProcessKeyW(Info->hPanel, VirtKey, ControlState);
 	}
 	return iRc;
 }

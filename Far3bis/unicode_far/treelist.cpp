@@ -1270,7 +1270,7 @@ void TreeList::CorrectPosition()
 		CurTopFile=CurFile-(Height-1);
 }
 
-BOOL TreeList::SetCurDir(const wchar_t *NewDir,int ClosePanel)
+BOOL TreeList::SetCurDir(const wchar_t *NewDir,int ClosePanel,BOOL /*IsUpdated*/)
 {
 	if (!TreeCount)
 		Update(0);
@@ -1565,6 +1565,19 @@ int TreeList::ReadTreeFile()
 	return FillLastData();
 }
 
+
+bool TreeList::GetPlainString(string& Dest,int ListPos)
+{
+	Dest=L"";
+#if defined(Mantis_698)
+	if (ListPos<TreeCount)
+	{
+		Dest=ListData[ListPos]->strName;
+		return true;
+	}
+#endif
+	return false;
+}
 
 int TreeList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSets)
 {

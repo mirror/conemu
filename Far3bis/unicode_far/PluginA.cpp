@@ -1413,7 +1413,10 @@ int WINAPI FarMenuFnA(INT_PTR PluginNumber,int X,int Y,int MaxHeight,DWORD Flags
 			if (p[i].Flags&oldfar::MIF_HIDDEN)
 				mi[i].Flags|=MIF_HIDDEN;
 			mi[i].Text = AnsiToUnicode(p[i].Flags&oldfar::MIF_USETEXTPTR?p[i].TextPtr:p[i].Text);
-			mi[i].AccelKey = OldKeyToKey(p[i].AccelKey);
+			INPUT_RECORD input={0};
+			KeyToInputRecord(OldKeyToKey(p[i].AccelKey),&input);
+			mi[i].AccelKey.VirtualKeyCode = input.Event.KeyEvent.dwControlKeyState;
+			mi[i].AccelKey.ControlKeyState = input.Event.KeyEvent.dwControlKeyState;
 			mi[i].Reserved = p[i].Reserved;
 			mi[i].UserData = p[i].UserData;
 		}
@@ -1445,7 +1448,8 @@ int WINAPI FarMenuFnA(INT_PTR PluginNumber,int X,int Y,int MaxHeight,DWORD Flags
 				mi[i].Text = AnsiToUnicode(Item[i].Text);
 			}
 
-			mi[i].AccelKey = 0;
+			mi[i].AccelKey.VirtualKeyCode = 0;
+			mi[i].AccelKey.ControlKeyState = 0;
 			mi[i].Reserved = 0;
 			mi[i].UserData = 0;
 		}
@@ -3551,7 +3555,12 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			return Length;
 		}
 		case oldfar::ACTL_WAITKEY:
-			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_WAITKEY, 0, Param);
+			{
+				INPUT_RECORD input={0};
+				KeyToInputRecord(OldKeyToKey(static_cast<int>(reinterpret_cast<INT_PTR>(Param))),&input);
+				return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_WAITKEY, 0, &input);
+			}
+			break;
 
 		case oldfar::ACTL_GETCOLOR:
 			{
@@ -4078,7 +4087,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 				ec.StartPos = ecA->StartPos;
 				ec.EndPos = ecA->EndPos;
 				Colors::ConsoleColorToFarColor(ecA->Color,ec.Color);
-				if(ecA->Color&oldfar::ECF_TAB1) ec.Color.Flags|=ECF_TAB1;
+				if(ecA->Color&oldfar::ECF_TAB1) ec.Color.Flags|=ECF_TABMARKFIRST;
 				ec.Priority=EDITOR_COLOR_NORMAL_PRIORITY;
 				ec.Owner=FarGuid;
 				EditorDeleteColor edc={};
@@ -4102,7 +4111,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 					ecA->StartPos = ec.StartPos;
 					ecA->EndPos = ec.EndPos;
 					ecA->Color = Colors::FarColorToConsoleColor(ec.Color);
-					if(ec.Color.Flags&ECF_TAB1) ecA->Color|=oldfar::ECF_TAB1;
+					if(ec.Color.Flags&ECF_TABMARKFIRST) ecA->Color|=oldfar::ECF_TAB1;
 				}
 				return Result;
 			}
