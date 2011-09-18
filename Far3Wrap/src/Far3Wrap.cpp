@@ -162,6 +162,8 @@ struct WRAP_FAR_CHAR_INFO
 
 struct Far2Dialog
 {
+	// TAG
+	DWORD_PTR WrapMagic; // F2WR
 	// Far3
 	HANDLE hDlg3;
 	WrapPluginInfo* wpi;
@@ -191,6 +193,7 @@ struct Far2Dialog
     void FreeDlg();
 	static INT_PTR WINAPI Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2);
     int RunDlg();
+	HANDLE InitDlg();
     
 	Far2Dialog(WrapPluginInfo* pwpi,
 		int X1, int Y1, int X2, int Y2,
@@ -2721,12 +2724,15 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 			pList3->ItemsNumber = nItems;
 			if (p2->Param.ListItems > 0)
 			{
-				pList3->Items = (FarListItem*)calloc(nItems,sizeof(FarListItem));
 				const Far2::FarListItem* pi2 = p2->Param.ListItems->Items;
-				FarListItem* pi3 = pList3->Items;
-				for (int j = 0; j < nItems; j++, pi2++, pi3++)
+				if (pi2 != NULL)
 				{
-					FarListItem_2_3(pi2, pi3);
+					pList3->Items = (FarListItem*)calloc(nItems,sizeof(FarListItem));
+					FarListItem* pi3 = pList3->Items;
+					for (int j = 0; j < nItems; j++, pi2++, pi3++)
+					{
+						FarListItem_2_3(pi2, pi3);
+					}
 				}
 			}
 			p3->ListItems = pList3;
@@ -2814,12 +2820,15 @@ void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAlloca
 			pList2->ItemsNumber = nItems;
 			if (p3->ListItems > 0)
 			{
-				pList2->Items = (Far2::FarListItem*)calloc(nItems,sizeof(FarListItem));
 				const FarListItem* pi3 = p3->ListItems->Items;
-				Far2::FarListItem* pi2 = pList2->Items;
-				for (int j = 0; j < nItems; j++, pi2++, pi3++)
+				if (pi3 != NULL)
 				{
-					FarListItem_3_2(pi3, pi2);
+					pList2->Items = (Far2::FarListItem*)calloc(nItems,sizeof(FarListItem));
+					Far2::FarListItem* pi2 = pList2->Items;
+					for (int j = 0; j < nItems; j++, pi2++, pi3++)
+					{
+						FarListItem_3_2(pi3, pi2);
+					}
 				}
 			}
 			p2->Param.ListItems = pList2;
@@ -2886,8 +2895,25 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	HANDLE hDlg3 = (*gpMapDlg_2_3)[pDlg];
 	if (!hDlg3) // Может быть NULL, если это диалог НЕ из этого плагина
 	{
-		hDlg3 = hDlg2;
-		pDlg = NULL;
+		bool lbSkip = false;
+		if (!IsBadReadPtr(pDlg, sizeof(pDlg->WrapMagic)))
+		{
+			if (pDlg->WrapMagic == 'F2WR')
+			{
+				hDlg3 = pDlg->hDlg3;
+				lbSkip = true;
+				if (!hDlg3)
+				{
+					_ASSERTE(pDlg->hDlg3 != NULL);
+					hDlg3 = pDlg->InitDlg();
+				}
+			}
+		}
+		if (!hDlg3 && !lbSkip)
+		{
+			hDlg3 = hDlg2;
+			pDlg = NULL;
+		}
 	}
 
 	FARMESSAGE Msg3 = DM_FIRST;
@@ -3657,6 +3683,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			}
 			else
 			{
+				//#error колесо мышки тоже не работает
 				const INPUT_RECORD* p = (const INPUT_RECORD*)Param2;
 				if (p->EventType == MOUSE_EVENT)
 				{
@@ -3664,8 +3691,25 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 					ZeroStruct(mer);
 					mer = p->Event.MouseEvent;
 					Param2 = &mer;
-					if (!mer.dwEventFlags)
-						Msg2 = Far2::DN_MOUSECLICK;
+					if (Msg3 == DN_CONTROLINPUT)
+					{
+						if (p->Event.MouseEvent.dwEventFlags == 0 || p->Event.MouseEvent.dwEventFlags == DOUBLE_CLICK)
+							Msg2 = Far2::DN_MOUSECLICK;
+						else if (p->Event.MouseEvent.dwEventFlags == MOUSE_MOVED)
+							Msg2 = Far2::DN_MOUSEEVENT;
+						else if (p->Event.MouseEvent.dwEventFlags == MOUSE_WHEELED)
+						{
+							Msg2 = Far2::DN_KEY;
+							int Key2 = (((short)HIWORD(p->Event.MouseEvent.dwButtonState)) > 0) ? Far2::KEY_MSWHEEL_UP : Far2::KEY_MSWHEEL_DOWN;
+							Param2 = (void*)Key2;
+						}
+						else if (p->Event.MouseEvent.dwEventFlags == MOUSE_HWHEELED)
+						{
+							Msg2 = Far2::DN_KEY;
+							int Key2 = (((short)HIWORD(p->Event.MouseEvent.dwButtonState)) > 0) ? Far2::KEY_MSWHEEL_RIGHT : Far2::KEY_MSWHEEL_LEFT;
+							Param2 = (void*)Key2;
+						}
+					}
 					else
 						Msg2 = Far2::DN_MOUSEEVENT;
 					_ASSERTE(Msg3!=DM_KEY);
@@ -7323,6 +7367,8 @@ Far2Dialog::Far2Dialog(WrapPluginInfo* pwpi,
     DWORD Flags, Far2::FARWINDOWPROC DlgProc, LONG_PTR Param,
     GUID PluginGuid, GUID DefGuid)
 {
+	WrapMagic = 'F2WR';
+
 	wpi = pwpi;
 	hDlg3 = NULL; m_Items3 = NULL; mp_ListInit3 = NULL;
 	m_PluginGuid = PluginGuid;
@@ -7557,10 +7603,8 @@ INT_PTR Far2Dialog::Far3DlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 	return lRc;
 }
 
-int Far2Dialog::RunDlg()
-{
-	int iRc = -1;
-	
+HANDLE Far2Dialog::InitDlg()
+{	
 	if (!m_GuidChecked)
 	{
 		/*
@@ -7613,7 +7657,19 @@ int Far2Dialog::RunDlg()
 			(*gpMapDlg_3_2)[hDlg3] = this;
 		}
 	}
-	
+
+	return hDlg3;
+}
+
+int Far2Dialog::RunDlg()
+{
+	int iRc = -1;
+
+	if (hDlg3 == NULL)
+	{
+		InitDlg();
+	}
+
 	if (hDlg3 != NULL)
 	{
 		wpi->m_LastFar2Dlg = this;

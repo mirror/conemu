@@ -42,7 +42,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 	UINT ScanCode=rec->Event.KeyEvent.wVirtualScanCode;
 	UINT KeyCode=rec->Event.KeyEvent.wVirtualKeyCode;
 	WCHAR Char=rec->Event.KeyEvent.uChar.UnicodeChar;
-	//// // _SVS(if(KeyCode == VK_DECIMAL || KeyCode == VK_DELETE) SysLog(L"CalcKeyCode -> CtrlState=%04X KeyCode=%s ScanCode=%08X AsciiChar=%02X IntKeyState.ShiftPressed=%d ShiftPressedLast=%d",CtrlState,_VK_KEY_ToName(KeyCode), ScanCode, Char.AsciiChar,IntKeyState.ShiftPressed,ShiftPressedLast));
+	// _SVS(if(KeyCode == VK_DECIMAL || KeyCode == VK_DELETE) SysLog(L"CalcKeyCode -> CtrlState=%04X KeyCode=%s ScanCode=%08X AsciiChar=%02X IntKeyState.ShiftPressed=%d ShiftPressedLast=%d",CtrlState,_VK_KEY_ToName(KeyCode), ScanCode, Char.AsciiChar,IntKeyState.ShiftPressed,ShiftPressedLast));
 
 	if (NotMacros)
 		*NotMacros=CtrlState&0x80000000?TRUE:FALSE; //-V112
@@ -197,7 +197,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 				rec->Event.KeyEvent.uChar.UnicodeChar=static_cast<WCHAR>(AltValue);
 			}
 
-			//// // _SVS(SysLog(L"KeyCode==VK_MENU -> AltValue=%X (%c)",AltValue,AltValue));
+			// _SVS(SysLog(L"KeyCode==VK_MENU -> AltValue=%X (%c)",AltValue,AltValue));
 			return(AltValue);
 		}
 		else
@@ -205,8 +205,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 	}
 #endif
 
-	//BUGBUG: Что тут имелось в виду? Почему CtrlPressed вдруг сбрасывается?
-/*
+/*	-- Уберем пока это шаманство
 	if ((CtrlState & 9)==9)
 	{
 		if (Char)
@@ -322,8 +321,10 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			{
 				if (CtrlObject && CtrlObject->Macro.IsRecording())
 				{
-					_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessKey(KEY_INS|KEY_ALT)",__LINE__));
-					CtrlObject->Macro.ProcessKey(KEY_INS|KEY_ALT);
+					_KEYMACRO(SysLog(L"[%d] CALL CtrlObject->Macro.ProcessEvent(KEY_INS|KEY_ALT)",__LINE__));
+					struct FAR_INPUT_RECORD irec={0,*rec};
+					irec.IntKey=KEY_INS|KEY_ALT;
+					CtrlObject->Macro.ProcessEvent(&irec);
 				}
 
 				// макрос проигрывается и мы "сейчас" в состоянии выполнения функции waitkey? (Mantis#0000968: waitkey() пропускает AltIns)
@@ -335,13 +336,13 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			}
 		}
 
-		//// // _SVS(SysLog(L"1 AltNumPad -> CalcKeyCode -> KeyCode=%s  ScanCode=0x%0X AltValue=0x%0X CtrlState=%X GetAsyncKeyState(VK_SHIFT)=%X",_VK_KEY_ToName(KeyCode),ScanCode,AltValue,CtrlState,GetAsyncKeyState(VK_SHIFT)));
+		// _SVS(SysLog(L"1 AltNumPad -> CalcKeyCode -> KeyCode=%s  ScanCode=0x%0X AltValue=0x%0X CtrlState=%X GetAsyncKeyState(VK_SHIFT)=%X",_VK_KEY_ToName(KeyCode),ScanCode,AltValue,CtrlState,GetAsyncKeyState(VK_SHIFT)));
 		if (!(CtrlState & ENHANCED_KEY)
 		        //(CtrlState&NUMLOCK_ON) && KeyCode >= VK_NUMPAD0 && KeyCode <= VK_NUMPAD9 ||
 		        // !(CtrlState&NUMLOCK_ON) && KeyCode < VK_NUMPAD0
 		   )
 		{
-			//// // _SVS(SysLog(L"2 AltNumPad -> CalcKeyCode -> KeyCode=%s  ScanCode=0x%0X AltValue=0x%0X CtrlState=%X GetAsyncKeyState(VK_SHIFT)=%X",_VK_KEY_ToName(KeyCode),ScanCode,AltValue,CtrlState,GetAsyncKeyState(VK_SHIFT)));
+			// _SVS(SysLog(L"2 AltNumPad -> CalcKeyCode -> KeyCode=%s  ScanCode=0x%0X AltValue=0x%0X CtrlState=%X GetAsyncKeyState(VK_SHIFT)=%X",_VK_KEY_ToName(KeyCode),ScanCode,AltValue,CtrlState,GetAsyncKeyState(VK_SHIFT)));
 			static unsigned int ScanCodes[]={82,79,80,81,75,76,77,71,72,73};
 
 			for (int I=0; I<int(ARRAYSIZE(ScanCodes)); I++)
@@ -626,7 +627,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 		_SVS(if (KeyCode!=VK_CONTROL && KeyCode!=VK_MENU) SysLog(L"CtrlAltShift -> |%s|%s|",_VK_KEY_ToName(KeyCode),_INPUT_RECORD_Dump(rec)));
 
 		if (KeyCode>='A' && KeyCode<='Z')
-			return((Modif)+KeyCode);
+			return Modif|KeyCode;
 
 		if (Opt.ShiftsKeyRules) //???
 			switch (KeyCode)
@@ -688,7 +689,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 		_SVS(if (KeyCode!=VK_CONTROL && KeyCode!=VK_MENU) SysLog(L"CtrlAlt -> |%s|%s|",_VK_KEY_ToName(KeyCode),_INPUT_RECORD_Dump(rec)));
 
 		if (KeyCode>='A' && KeyCode<='Z')
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 
 		if (Opt.ShiftsKeyRules) //???
 			switch (KeyCode)
@@ -746,7 +747,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			return(KEY_NONE);
 
 		if (KeyCode)
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -763,20 +764,17 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			        CtrlObject->Macro.GetCurRecord(nullptr,nullptr) < MACROMODE_RECORDING &&
 			        CtrlObject->Macro.GetIndex(KEY_ALTSHIFT0+KeyCode-'0',-1) == -1)
 			{
-				return KEY_ALT|KEY_SHIFT|Char; //BUGBUG: А тут можно Modif| использовать?
+				return Modif|Char;
 			}
 			else
 #endif
 			{
-				/*
-				return(KEY_ALTSHIFT0+KeyCode-'0');
-				*/
-				return(Modif+KeyCode); //BUGBUG: А тут можно Modif| использовать?
+				return Modif|KeyCode;
 			}
 		}
 
 		if (!WaitInMainLoop && KeyCode>='A' && KeyCode<='Z')
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 
 		if (Opt.ShiftsKeyRules) //???
 			switch (KeyCode)
@@ -839,7 +837,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			return(KEY_NONE);
 
 		if (KeyCode)
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -902,7 +900,7 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			return(KEY_NONE);
 
 		if (KeyCode)
-			return(Modif+KeyCode);
+			return Modif|KeyCode;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -949,23 +947,25 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 		_SVS(if (KeyCode!=VK_CONTROL) SysLog(L"Ctrl -> |%s|%s|",_VK_KEY_ToName(KeyCode),_INPUT_RECORD_Dump(rec)));
 
 		if (KeyCode>='0' && KeyCode<='9')
-			return(ModifCtrl+KeyCode);
+			return ModifCtrl|KeyCode;
 
 		if (KeyCode>='A' && KeyCode<='Z')
-			return(ModifCtrl+KeyCode);
+			return ModifCtrl|KeyCode;
 
 		switch (KeyCode)
 		{
 			case VK_OEM_COMMA:
 				return(ModifCtrl|KEY_COMMA);
 			case VK_OEM_PERIOD:
-				return(KEY_CTRLDOT); //BUGBUG: Не стал ModifCtrl ставить, чтобы не слетела вдруг обработка Ctrl.
+				//!!! Оставлено для совместимости с Far2: return(KEY_CTRLDOT);
+				return(KEY_CTRLDOT);
 			case VK_OEM_2:
 				return(ModifCtrl|KEY_SLASH);
 			case VK_OEM_4:
 				return(ModifCtrl|KEY_BRACKET);
 			case VK_OEM_5:
-				return(KEY_CTRLBACKSLASH); //BUGBUG: Не стал ModifCtrl ставить, чтобы не слетела вдруг обработка Ctrl\ ...
+				//!!! Оставлено для совместимости с Far2: return(KEY_CTRLBACKSLASH);
+				return(KEY_CTRLBACKSLASH);
 			case VK_OEM_6:
 				return(ModifCtrl|KEY_BACKBRACKET);
 			case VK_OEM_7:
@@ -1015,11 +1015,11 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			if (!RealKey && KeyCode==VK_CONTROL)
 				return KEY_NONE;
 
-			return(ModifCtrl+KeyCode);
+			return ModifCtrl|KeyCode;
 		}
-		
+
 		if (Char)
-			return (ModifCtrl|Char);
+			return ModifCtrl|Char;
 	}
 
 	/* ------------------------------------------------------------- */
@@ -1099,14 +1099,13 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 		if (!RealKey && KeyCode==VK_MENU)
 			return KEY_NONE;
 
-		return(ModifAlt+KeyCode);
+		if (KeyCode)
+			return ModifAlt|KeyCode;
 	}
 
 	if (IntKeyState.ShiftPressed)
 	{
-
 		_SVS(if (KeyCode!=VK_SHIFT) SysLog(L"Shift -> |%s|%s|",_VK_KEY_ToName(KeyCode),_INPUT_RECORD_Dump(rec)));
-
 		switch (KeyCode)
 		{
 
@@ -1138,7 +1137,9 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 
 	}
 
-	_ASSERTE(!IntKeyState.CtrlPressed && !IntKeyState.AltPressed);
+	_ASSERTE((!IntKeyState.CtrlPressed && !IntKeyState.AltPressed) || Char);
 
+	if (Char && (ModifAlt || ModifCtrl))
+		return Modif|Char;
 	return Char?Char:KEY_NONE;
 }
