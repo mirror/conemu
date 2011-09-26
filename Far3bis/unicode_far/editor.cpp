@@ -1664,6 +1664,7 @@ int Editor::ProcessKey(int Key)
 							CurLine->GetSelection(SelStart,SelEnd);
 							CurLine->m_next->GetSelection(NextSelStart,NextSelEnd);
 							const wchar_t *Str;
+							const wchar_t *NextEOL = CurLine->m_next->GetEOL();
 							int NextLength;
 							CurLine->m_next->GetBinaryString(&Str,nullptr,NextLength);
 							CurLine->InsertBinaryString(Str,NextLength);
@@ -1671,8 +1672,12 @@ int Editor::ProcessKey(int Key)
 							CurLine->SetCurPos(CurPos);
 							DeleteString(CurLine->m_next,NumLine+1,TRUE,NumLine+1);
 
-							if (!NextLength)
+							/*
+							if (!CurLine->m_next->m_next)
 								CurLine->SetEOL(L"");
+							*/
+							CurLine->SetEOL(NextEOL);
+
 
 							if (NextSelStart!=-1)
 							{
@@ -2692,8 +2697,7 @@ int Editor::ProcessKey(int Key)
 				}
 
 				if (!Pasting && !EdOpt.PersistentBlocks && BlockStart)
-					if ((Key>=32 && Key<0x10000) || Key==KEY_ADD || Key==KEY_SUBTRACT || // ??? 256 ???
-					        Key==KEY_MULTIPLY || Key==KEY_DIVIDE || Key==KEY_TAB)
+					if (IsCharKey(Key))
 					{
 						DeleteBlock();
 						/* $ 19.09.2002 SKV
@@ -2772,7 +2776,7 @@ int Editor::ProcessKey(int Key)
 
 				CurPos=CurLine->GetCurPos();
 
-				if (Key<0x10000 && CurPos>0 && !Length)
+				if (IsCharKey(Key) && CurPos>0 && !Length)
 				{
 					Edit *PrevLine=CurLine->m_prev;
 
@@ -3274,8 +3278,10 @@ void Editor::InsertString()
 	   Если не был определен тип конца строки, то считаем что конец строки
 	   у нас равен DOS_EOL_fmt и установим его явно.
 	*/
+	/*
 	if (!*EndSeq)
 		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
+	*/
 
 	CurPos=CurLine->GetCurPos();
 	CurLine->GetSelection(SelStart,SelEnd);
@@ -3356,7 +3362,7 @@ void Editor::InsertString()
 		AddUndoData(UNDO_BEGIN);
 		AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,
 		            CurLine->GetCurPos(),CurLine->GetLength());
-		AddUndoData(UNDO_INSSTR,nullptr,EndList==CurLine?L"":GlobalEOL,NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL()/*EndList==CurLine?L"":GlobalEOL*/,NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
 		AddUndoData(UNDO_END);
 		wchar_t *NewCurLineStr = (wchar_t *) xf_malloc((CurPos+1)*sizeof(wchar_t));
 
@@ -3374,13 +3380,22 @@ void Editor::InsertString()
 		}
 
 		CurLine->SetBinaryString(NewCurLineStr,StrSize);
-		CurLine->SetEOL(EndSeq);
 		xf_free(NewCurLineStr);
 	}
 	else
 	{
 		NewString->SetString(L"");
-		AddUndoData(UNDO_INSSTR,nullptr,L"",NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL()/*L""*/,NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
+	}
+
+	if (EndSeq && *EndSeq)
+	{
+		CurLine->SetEOL(EndSeq);
+	}
+	else
+	{
+		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
+		NewString->SetEOL(EndSeq);
 	}
 
 	if (VBlockStart && NumLine<VBlockY+VBlockSizeY)

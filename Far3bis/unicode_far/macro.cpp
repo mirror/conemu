@@ -186,6 +186,8 @@ TMacroKeywords MKeywords[] =
 	{2,  L"PPanel.HostFile",    MCODE_V_PPANEL_HOSTFILE,0},
 	{2,  L"APanel.Prefix",      MCODE_V_APANEL_PREFIX,0},
 	{2,  L"PPanel.Prefix",      MCODE_V_PPANEL_PREFIX,0},
+	{2,  L"APanel.Format",      MCODE_V_APANEL_FORMAT,0},
+	{2,  L"PPanel.Format",      MCODE_V_PPANEL_FORMAT,0},
 
 	{2,  L"CmdLine.Bof",        MCODE_C_CMDLINE_BOF,0}, // курсор в начале cmd-строки редактирования?
 	{2,  L"CmdLine.Eof",        MCODE_C_CMDLINE_EOF,0}, // курсор в конеце cmd-строки редактирования?
@@ -1453,10 +1455,16 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 				case MCODE_V_PPANEL_OPIFLAGS:  // PPanel.OPIFlags
 				case MCODE_V_APANEL_HOSTFILE: // APanel.HostFile
 				case MCODE_V_PPANEL_HOSTFILE: // PPanel.HostFile
+				case MCODE_V_APANEL_FORMAT:           // APanel.Format
+				case MCODE_V_PPANEL_FORMAT:           // PPanel.Format
 				{
-					Panel *SelPanel = CheckCode == MCODE_V_APANEL_OPIFLAGS || CheckCode == MCODE_V_APANEL_HOSTFILE? ActivePanel : PassivePanel;
+					Panel *SelPanel =
+							CheckCode == MCODE_V_APANEL_OPIFLAGS ||
+							CheckCode == MCODE_V_APANEL_HOSTFILE ||
+							CheckCode == MCODE_V_APANEL_FORMAT? ActivePanel : PassivePanel;
 
-					if (CheckCode == MCODE_V_APANEL_HOSTFILE || CheckCode == MCODE_V_PPANEL_HOSTFILE)
+					if (CheckCode == MCODE_V_APANEL_HOSTFILE || CheckCode == MCODE_V_PPANEL_HOSTFILE ||
+						CheckCode == MCODE_V_APANEL_FORMAT || CheckCode == MCODE_V_PPANEL_FORMAT)
 						Cond = L"";
 
 					if (SelPanel )
@@ -1466,10 +1474,21 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 							OpenPanelInfo Info={};
 							Info.StructSize=sizeof(OpenPanelInfo);
 							SelPanel->GetOpenPanelInfo(&Info);
-							if (CheckCode == MCODE_V_APANEL_OPIFLAGS || CheckCode == MCODE_V_PPANEL_OPIFLAGS)
-								Cond = (__int64)Info.Flags;
-							else
-								Cond = Info.HostFile;
+							switch (CheckCode)
+							{
+								case MCODE_V_APANEL_OPIFLAGS:
+								case MCODE_V_PPANEL_OPIFLAGS:
+									Cond = (__int64)Info.Flags;
+									break;
+								case MCODE_V_APANEL_HOSTFILE:
+								case MCODE_V_PPANEL_HOSTFILE:
+									Cond = Info.HostFile;
+									break;
+								case MCODE_V_APANEL_FORMAT:
+								case MCODE_V_PPANEL_FORMAT:
+									Cond = Info.Format;
+									break;
+							}
 						}
 					}
 
@@ -3182,7 +3201,54 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 
 					break;
 				}
+				case 11:
+				{
+					if (ItemType == DI_COMBOBOX || ItemType == DI_LISTBOX)
+					{
+						Ret=(__int64)(Item->ListPtr->GetItemCount());
+					}
+					break;
+				}
 			}
+
+			//if (ItemType == DI_USERCONTROL)
+			{
+				TFarGetValue fgv={TypeInf,{(FARMACROVARTYPE)Ret.type()}};
+				switch (Ret.type())
+				{
+					case vtUnknown:
+					case vtInteger:
+						fgv.Val.i=Ret.i();
+						break;
+					case vtString:
+						fgv.Val.s=Ret.s();
+						break;
+					case vtDouble:
+						fgv.Val.d=Ret.d();
+						break;
+				}
+
+				if (SendDlgMessage((HANDLE)CurFrame,DN_GETVALUE,Index,&fgv))
+				{
+					switch (fgv.Val.type)
+					{
+						case FMVT_UNKNOWN:
+						case FMVT_INTEGER:
+							Ret=fgv.Val.i;
+							break;
+						case FMVT_DOUBLE:
+							Ret=fgv.Val.d;
+							break;
+						case FMVT_STRING:
+							Ret=fgv.Val.s;
+							break;
+						default:
+							Ret=-1;
+							break;
+					}
+				}
+			}
+
 		}
 	}
 

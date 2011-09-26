@@ -347,12 +347,12 @@ void Edit::FastShow()
 	if (Mask && *Mask)
 		RefreshStrByMask();
 
-	wchar_t *OutStrTmp=(wchar_t *)xf_malloc((EditLength+1)*sizeof(wchar_t));
+	wchar_t *OutStrTmp=(wchar_t *)xf_malloc((EditLength+2)*sizeof(wchar_t));
 
 	if (!OutStrTmp)
 		return;
 
-	wchar_t *OutStr=(wchar_t *)xf_malloc((EditLength+1)*sizeof(wchar_t));
+	wchar_t *OutStr=(wchar_t *)xf_malloc((EditLength+2)*sizeof(wchar_t));
 
 	if (!OutStr)
 	{
@@ -410,6 +410,13 @@ void Edit::FastShow()
 
 		if (Flags.Check(FEDITLINE_PASSWORDMODE))
 			wmemset(OutStr,L'*',OutStrLength);
+	}
+	
+	if (Flags.Check(FEDITLINE_SHOWWHITESPACE) && Flags.Check(FEDITLINE_EDITORMODE) && (OutStrLength < EditLength))
+	{
+		const wchar_t* EndSeq = GetEOL();
+		if (EndSeq && *EndSeq)
+			OutStr[OutStrLength++]=L'\xB6'; //L'\x266A';
 	}
 
 	OutStr[OutStrLength]=0;
