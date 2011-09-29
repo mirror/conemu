@@ -3969,7 +3969,7 @@ int Viewer::ViewerControl(int Command,void *Param)
 			if (Param)
 			{
 				ViewerInfo *Info=(ViewerInfo *)Param;
-				memset(((LPBYTE)Info)+sizeof(Info->StructSize), 0, Info->StructSize-sizeof(Info->StructSize));
+				memset(&Info->ViewerID,0,Info->StructSize-sizeof(Info->StructSize));
 				Info->ViewerID=Viewer::ViewerID;
 				Info->FileName=strFullFileName;
 				Info->WindowSizeX=ObjWidth;
