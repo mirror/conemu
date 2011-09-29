@@ -1966,7 +1966,7 @@ int FileEditor::SaveFile(const wchar_t *Name,int Ask, bool bSaveAs, int TextForm
 
 			CurPtr->GetBinaryString(&SaveStr,&EndSeq,Length);
 
-			//Maximus5: Если плагин сказал - EOL не нужен - нафига фар его пишет?
+			//Maximus5: Если плагин сказал - EOL не нужен - зачем фар его пишет?
 			if (!*EndSeq && CurPtr->m_next && (*CurPtr->GetEOL()))
 				EndSeq=*m_editor->GlobalEOL ? m_editor->GlobalEOL:DOS_EOL_fmt;
 

@@ -1432,11 +1432,13 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			           (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
 			           (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
 			           (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
+			/*
 			ClearStruct(*rec);
 			rec->Event.KeyEvent.wVirtualKeyCode=VK_F24+(CalcKey==KEY_MSWHEEL_UP?2:1);
 			rec->Event.KeyEvent.dwControlKeyState=CtrlState;
 			rec->Event.KeyEvent.bKeyDown=TRUE;
 			rec->EventType = KEY_EVENT;
+			*/
 		}
 
 		// Обработка горизонтального колесика (NT>=6)
@@ -1449,11 +1451,18 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			           (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
 			           (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
 			           (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
+			/*
 			ClearStruct(*rec);
 			rec->Event.KeyEvent.wVirtualKeyCode=VK_F24+(CalcKey==KEY_MSWHEEL_RIGHT?4:3);
 			rec->Event.KeyEvent.dwControlKeyState=CtrlState;
 			rec->Event.KeyEvent.bKeyDown=TRUE;
 			rec->EventType = KEY_EVENT;
+			// Ахтунг! Для мышиной клавиши вернем значение MOUSE_EVENT, соответствующее _последнему_ событию мыши.
+			rec->EventType=MOUSE_EVENT;
+			rec->Event.MouseEvent=lastMOUSE_EVENT_RECORD;
+			rec->Event.MouseEvent.dwButtonState=MAKELONG(0,120);
+			rec->Event.MouseEvent.dwEventFlags=MOUSE_WHEELED;
+			*/
 		}
 
 		if (rec->EventType==MOUSE_EVENT && (!ExcludeMacro||ProcessMouse) && CtrlObject && (ProcessMouse || !(CtrlObject->Macro.IsRecording() || CtrlObject->Macro.IsExecuting())))
@@ -2671,14 +2680,20 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 	/* ------------------------------------------------------------- */
 	switch (KeyCode)
 	{
+		// begin: Этого блока быть НЕ ДОЛЖНО
 		case VK_F24+1:
+			_ASSERTE(KeyCode!=(VK_F24+1));
 			return Modif|KEY_MSWHEEL_DOWN;
 		case VK_F24+2:
+			_ASSERTE(KeyCode!=(VK_F24+2));
 			return Modif|KEY_MSWHEEL_UP;
 		case VK_F24+3:
+			_ASSERTE(KeyCode!=(VK_F24+3));
 			return Modif|KEY_MSWHEEL_LEFT;
 		case VK_F24+4:
+			_ASSERTE(KeyCode!=(VK_F24+4));
 			return Modif|KEY_MSWHEEL_RIGHT;
+		// end: Этого блока быть НЕ ДОЛЖНО
 
 		case VK_INSERT:
 		case VK_NUMPAD0:

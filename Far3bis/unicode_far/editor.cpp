@@ -1673,7 +1673,7 @@ int Editor::ProcessKey(int Key)
 							DeleteString(CurLine->m_next,NumLine+1,TRUE,NumLine+1);
 
 							/*
-							if (!CurLine->m_next->m_next)
+							if (!NextLength)
 								CurLine->SetEOL(L"");
 							*/
 							CurLine->SetEOL(NextEOL);

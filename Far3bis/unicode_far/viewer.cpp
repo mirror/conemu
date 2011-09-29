@@ -332,8 +332,6 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 			CachedCodePage = 0;
 		LastSelectPos=FilePos=NewFilePos;
 		LeftPos=NewLeftPos;
-
-		AdjustFilePos();
 	}
 	else
 	{
@@ -364,6 +362,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 			if (Detect)
 			{
 				VM.CodePage=CodePage;
+				//??? CodePageChangedByUser=TRUE;
 			}
 
 			if (CachedCodePage)
@@ -386,6 +385,8 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 
 	if (FilePos > FileSize)
 		FilePos=0;
+	if ( FilePos )
+		AdjustFilePos();
 
 	ChangeViewKeyBar();
 	AdjustWidth();

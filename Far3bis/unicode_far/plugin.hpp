@@ -781,8 +781,8 @@ struct PanelInfo
 	size_t ItemsNumber;
 	size_t SelectedItemsNumber;
 	RECT PanelRect;
-	int CurrentItem;
-	int TopPanelItem;
+	size_t CurrentItem;
+	size_t TopPanelItem;
 	int ViewMode;
 	enum PANELINFOTYPE PanelType;
 	enum OPENPANELINFO_SORTMODES SortMode;
@@ -792,8 +792,8 @@ struct PanelInfo
 
 struct PanelRedrawInfo
 {
-	int CurrentItem;
-	int TopPanelItem;
+	size_t CurrentItem;
+	size_t TopPanelItem;
 };
 
 struct CmdLineSelect
@@ -1279,8 +1279,6 @@ struct FarMacroValue
 	;
 };
 
-#ifdef FAR_USE_INTERNALS
-#if defined(MANTIS_0000466)
 struct FarMacroFunction
 {
 	unsigned __int64 Flags;
@@ -1295,7 +1293,7 @@ struct ProcessMacroFuncInfo
 {
 	size_t StructSize;
 	const wchar_t *Name;
-	const FarMacroValue *Params;
+	const struct FarMacroValue *Params;
 	int nParams;
 	struct FarMacroValue *Results;
 	int nResults;
@@ -1319,9 +1317,6 @@ struct ProcessMacroInfo
 #endif
 	;
 };
-
-#endif
-#endif // END FAR_USE_INTERNALS
 
 struct TFarGetValue
 {
@@ -2276,12 +2271,8 @@ struct PluginInfo
 	struct PluginMenuItem PluginMenu;
 	struct PluginMenuItem PluginConfig;
 	const wchar_t *CommandPrefix;
-#ifdef FAR_USE_INTERNALS
-#if defined(MANTIS_0000466)
 	int MacroFunctionNumber;
-	const FarMacroFunction *MacroFunctions;
-#endif
-#endif // END FAR_USE_INTERNALS
+	const struct FarMacroFunction *MacroFunctions;
 };
 
 
@@ -2557,8 +2548,6 @@ struct ProcessEditorInputInfo
 	INPUT_RECORD Rec;
 };
 
-#ifdef FAR_USE_INTERNALS
-#if defined(MANTIS_0001687)
 typedef unsigned __int64 PROCESSCONSOLEINPUT_FLAGS;
 static const PROCESSCONSOLEINPUT_FLAGS
 	PCIF_NONE            =0,
@@ -2571,8 +2560,6 @@ struct ProcessConsoleInputInfo
 	const INPUT_RECORD *Rec;
 	HANDLE hPanel;
 };
-#endif
-#endif // END FAR_USE_INTERNALS
 
 struct ExitInfo
 {
@@ -2655,16 +2642,8 @@ extern "C"
 	int    WINAPI ProcessPanelEventW(const struct ProcessPanelEventInfo *Info);
 	int    WINAPI ProcessHostFileW(const struct ProcessHostFileInfo *Info);
 	int    WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *Info);
-#ifdef FAR_USE_INTERNALS
-#if defined(MANTIS_0000466)
 	int    WINAPI ProcessMacroW(const struct ProcessMacroInfo *Info);
-#endif
-#endif // END FAR_USE_INTERNALS
-#ifdef FAR_USE_INTERNALS
-#if defined(MANTIS_0001687)
 	int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info);
-#endif
-#endif // END FAR_USE_INTERNALS
 	int    WINAPI ProcessSynchroEventW(const struct ProcessSynchroEventInfo *Info);
 	int    WINAPI ProcessViewerEventW(const struct ProcessViewerEventInfo *Info);
 	int    WINAPI PutFilesW(const struct PutFilesInfo *Info);
