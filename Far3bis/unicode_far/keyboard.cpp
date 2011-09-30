@@ -2683,16 +2683,16 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		// begin: Этого блока быть НЕ ДОЛЖНО
 		case VK_F24+1:
 			_ASSERTE(KeyCode!=(VK_F24+1));
-			return Modif|KEY_MSWHEEL_DOWN;
+			return KEY_NONE; // Modif|KEY_MSWHEEL_DOWN;
 		case VK_F24+2:
 			_ASSERTE(KeyCode!=(VK_F24+2));
-			return Modif|KEY_MSWHEEL_UP;
+			return KEY_NONE; // Modif|KEY_MSWHEEL_UP;
 		case VK_F24+3:
 			_ASSERTE(KeyCode!=(VK_F24+3));
-			return Modif|KEY_MSWHEEL_LEFT;
+			return KEY_NONE; // Modif|KEY_MSWHEEL_LEFT;
 		case VK_F24+4:
 			_ASSERTE(KeyCode!=(VK_F24+4));
-			return Modif|KEY_MSWHEEL_RIGHT;
+			return KEY_NONE; // Modif|KEY_MSWHEEL_RIGHT;
 		// end: Этого блока быть НЕ ДОЛЖНО
 
 		case VK_INSERT:
