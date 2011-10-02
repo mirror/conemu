@@ -2180,8 +2180,21 @@ bool PluginManager::SetHotKeyDialog(Plugin *pPlugin, const GUID& Guid, PluginsHo
 	*/
 	string strPluginGuid = GuidToStr(pPlugin->GetGUID());
 	string strItemGuid = GuidToStr(Guid);
-	unsigned __int64 id = PlCacheCfg->GetCacheID(pPlugin->GetCacheName());
-	string strPluginPrefix = id?PlCacheCfg->GetCommandPrefix(id):L"";
+	string strPluginPrefix;
+	if (pPlugin->CheckWorkFlags(PIWF_CACHED))
+	{
+		unsigned __int64 id = PlCacheCfg->GetCacheID(pPlugin->GetCacheName());
+		strPluginPrefix = PlCacheCfg->GetCommandPrefix(id);
+	}
+	else
+	{
+		PluginInfo Info = {sizeof(Info)};
+		if (pPlugin->GetPluginInfo(&Info))
+		{
+			strPluginPrefix = Info.CommandPrefix;
+		}
+	}
+
 	FarDialogItem PluginDlgData[]=
 	{
 		{DI_DOUBLEBOX,3,1,60,19,0,nullptr,nullptr,0,MSG(MPluginHotKeyTitle)},
