@@ -3806,6 +3806,8 @@ static bool panelsetposidxFunc(const TMacroFunction*)
 							if (idxFoundItem == idxItem)
 							{
 								idxItem=I;
+								if (SelPanel->FilterIsEnabled())
+									idxItem--;
 								found=true;
 								break;
 							}

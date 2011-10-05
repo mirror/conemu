@@ -1434,6 +1434,7 @@ int Viewer::ProcessKey(int Key)
 		{
 			VM.CodePage = VM.CodePage==GetOEMCP() ? GetACP() : GetOEMCP();
 			lcache_ready = false;
+			AdjustFilePos();
 			ChangeViewKeyBar();
 			Show();
 			CodePageChangedByUser=TRUE;
@@ -1442,8 +1443,6 @@ int Viewer::ProcessKey(int Key)
 		case KEY_SHIFTF8:
 		{
 			UINT nCodePage = SelectCodePage(VM.CodePage, true, true, false, true);
-			lcache_ready = false;
-
 			if (nCodePage != static_cast<UINT>(-1))
 			{
 				if (nCodePage == (CP_AUTODETECT & 0xffff))
@@ -1456,7 +1455,8 @@ int Viewer::ProcessKey(int Key)
 				}
 				CodePageChangedByUser=TRUE;
 				VM.CodePage=nCodePage;
-				SetFileSize();
+				lcache_ready = false;
+				AdjustFilePos();
 				ChangeViewKeyBar();
 				Show();
 			}
@@ -3384,6 +3384,7 @@ void Viewer::SetTitle(const wchar_t *Title)
 void Viewer::SetFilePos(__int64 Pos)
 {
 	FilePos=Pos;
+	AdjustFilePos();
 };
 
 void Viewer::SetPluginData(const wchar_t *PluginData)
