@@ -964,29 +964,40 @@ void Viewer::ReadString( ViewerString *pString, int MaxSize, bool update_cache )
 		}
 
 		pString->lpData[OutPtr++] = ch ? ch : L' ';
-		if (!VM.Wrap)
+		if ( !VM.Wrap )
 			continue;
 
-		if (OutPtr >= Width)
-		{
-			if (VM.WordWrap && wrap_out > 0)
-			{
-				OutPtr = wrap_out;
-				vseek(wrap_pos, SEEK_SET);
-				while (OutPtr > 0 && is_space_or_nul(pString->lpData[OutPtr-1]))
-					--OutPtr;
-				skip_space = true;
-			}
-			break;
-		}
-
-		if (!VM.WordWrap)
-			continue;
-
-		if (wrapped_char(ch) >= 0)
+		if ( VM.WordWrap && OutPtr <= Width && wrapped_char(ch) >= 0 )
 		{
 			wrap_out = OutPtr;
-			wrap_pos = vtell();
+			wrap_pos = fpos1;
+		}
+
+		if ( OutPtr < Width )
+			continue;
+		if ( !VM.WordWrap )
+			break;
+
+		if ( OutPtr > Width )
+		{
+			if ( wrap_out <= 0 || is_space_or_nul(ch) )
+			{
+				wrap_out = OutPtr - 1;
+				wrap_pos = fpos;
+			}
+
+			OutPtr = wrap_out;
+			vseek(wrap_pos, SEEK_SET);
+			while (OutPtr > 0 && is_space_or_nul(pString->lpData[OutPtr-1]))
+				--OutPtr;
+
+			if ( bSelEndFound && pString->nSelEnd > OutPtr )
+				pString->nSelEnd = OutPtr;
+			if ( bSelStartFound && pString->nSelStart >= OutPtr )
+				bSelStartFound = bSelEndFound = false;
+
+			skip_space = true;
+			break;
 		}
 	}
 
@@ -2250,9 +2261,9 @@ enum
 
 struct MyDialogData
 {
-   Viewer      *viewer;
+	Viewer      *viewer;
 	bool edit_autofocus;
-   bool       hex_mode;
+	bool       hex_mode;
 	bool      recursive;
 };
 
@@ -2281,7 +2292,7 @@ INT_PTR WINAPI ViewerSearchDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		}
 		case DM_SDREXVISIBILITY:
 		{
-		   int show = 1;
+			int show = 1;
 			if ( Param1 )
 			{
 				int tlen = (int)SendDlgMessage(hDlg, DM_GETTEXTPTR, SD_EDIT_TEXT, 0);
