@@ -362,6 +362,8 @@ static bool windowscrollFunc(const TMacroFunction*);
 static bool xlatFunc(const TMacroFunction*);
 static bool pluginloadFunc(const TMacroFunction*);
 static bool pluginunloadFunc(const TMacroFunction*);
+static bool plugincallFunc(const TMacroFunction*);
+static bool pluginconfigFunc(const TMacroFunction*);
 
 static bool __CheckCondForSkip(DWORD Op);
 
@@ -437,6 +439,8 @@ static TMacroFunction intMacroFunction[]=
 	{L"PANELITEM",        nullptr, L"V=PanelItem(Panel,Index,TypeInfo)",                         panelitemFunc,      nullptr, 0, 0,                                      MCODE_F_PANELITEM,        3, 0},
 	{L"PLUGIN.LOAD",      nullptr, L"N=Plugin.Load(DllPath[,ForceLoad])",                        pluginloadFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_LOAD,      2, 1},
 	{L"PLUGIN.UNLOAD",    nullptr, L"N=Plugin.UnLoad(DllPath)",                                  pluginunloadFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_UNLOAD,    1, 0},
+	{L"PLUGIN.CALL",      nullptr, L"N=Plugin.Call(Guid,MenuGuid)",                              plugincallFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,      2, 0},
+	{L"PLUGIN.CONFIG",    nullptr, L"N=Plugin.Config(Guid[,MenuGuid])",                          pluginconfigFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_CONFIG,    2, 1},
 	{L"PRINT",            nullptr, L"N=Print(Str)",                                              usersFunc,          nullptr, 0, 0,                                      MCODE_F_PRINT,            1, 0},
 	{L"PROMPT",           nullptr, L"S=Prompt([Title[,Prompt[,flags[,Src[,History]]]]])",        promptFunc,         nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PROMPT,           5, 5},
 	{L"REPLACE",          nullptr, L"S=Replace(Str,Find,Replace[,Cnt[,Mode]])",                  replaceFunc,        nullptr, 0, 0,                                      MCODE_F_REPLACE,          5, 2},
@@ -549,6 +553,7 @@ int WINAPI KeyNameMacroToKey(const wchar_t *Name)
 KeyMacro::KeyMacro():
 	MacroVersion(GetRegKey(L"KeyMacros",L"MacroVersion",0)),
 	Recording(MACROMODE_NOMACRO),
+	IsRedrawEditor(TRUE),
 	Mode(MACRO_SHELL),
 	CurPCStack(-1),
 	StopMacro(false),
@@ -556,8 +561,7 @@ KeyMacro::KeyMacro():
 	RecBufferSize(0),
 	RecBuffer(nullptr),
 	RecSrc(nullptr),
-	LockScr(nullptr),
-	IsRedrawEditor(TRUE)
+	LockScr(nullptr)
 {
 	Work.Init(nullptr);
 	ClearArray(IndexMode);
@@ -3089,7 +3093,7 @@ static bool flockFunc(const TMacroFunction*)
 	return Ret.i()!=-1;
 }
 
-// V=Dlg.GetValue(ID,N)
+// V=Dlg.GetValue(Index,TypeInf)
 static bool dlggetvalueFunc(const TMacroFunction*)
 {
 	TVar Ret(-1);
@@ -3099,8 +3103,10 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 
 	if (CtrlObject->Macro.GetMode()==MACRO_DIALOG && CurFrame && CurFrame->GetType()==MODALTYPE_DIALOG)
 	{
+		TFarGetValue fgv={TypeInf,FMVT_UNKNOWN};
 		unsigned DlgItemCount=((Dialog*)CurFrame)->GetAllItemCount();
 		const DialogItemEx **DlgItem=((Dialog*)CurFrame)->GetAllItem();
+		bool CallDialog=true;
 
 		if (Index == (unsigned)-1)
 		{
@@ -3116,6 +3122,7 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 					case 4: Ret=(__int64)Rect.Right; break;
 					case 5: Ret=(__int64)Rect.Bottom; break;
 					case 6: Ret=(__int64)(((Dialog*)CurFrame)->GetDlgFocusPos()+1); break;
+					default: Ret=0; Ret.SetType(vtUnknown); break;
 				}
 			}
 		}
@@ -3211,45 +3218,50 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 					break;
 				}
 			}
+		}
+		else if (Index >= DlgItemCount)
+		{
+			Ret=(__int64)TypeInf;
+		}
+		else
+			CallDialog=false;
 
-			//if (ItemType == DI_USERCONTROL)
+		if (CallDialog)
+		{
+			fgv.Val.type=(FARMACROVARTYPE)Ret.type();
+			switch (Ret.type())
 			{
-				TFarGetValue fgv={TypeInf,{(FARMACROVARTYPE)Ret.type()}};
-				switch (Ret.type())
-				{
-					case vtUnknown:
-					case vtInteger:
-						fgv.Val.i=Ret.i();
-						break;
-					case vtString:
-						fgv.Val.s=Ret.s();
-						break;
-					case vtDouble:
-						fgv.Val.d=Ret.d();
-						break;
-				}
-
-				if (SendDlgMessage((HANDLE)CurFrame,DN_GETVALUE,Index,&fgv))
-				{
-					switch (fgv.Val.type)
-					{
-						case FMVT_UNKNOWN:
-						case FMVT_INTEGER:
-							Ret=fgv.Val.i;
-							break;
-						case FMVT_DOUBLE:
-							Ret=fgv.Val.d;
-							break;
-						case FMVT_STRING:
-							Ret=fgv.Val.s;
-							break;
-						default:
-							Ret=-1;
-							break;
-					}
-				}
+				case vtUnknown:
+				case vtInteger:
+					fgv.Val.i=Ret.i();
+					break;
+				case vtString:
+					fgv.Val.s=Ret.s();
+					break;
+				case vtDouble:
+					fgv.Val.d=Ret.d();
+					break;
 			}
 
+			if (SendDlgMessage((HANDLE)CurFrame,DN_GETVALUE,Index,&fgv))
+			{
+				switch (fgv.Val.type)
+				{
+					case FMVT_UNKNOWN:
+					case FMVT_INTEGER:
+						Ret=fgv.Val.i;
+						break;
+					case FMVT_DOUBLE:
+						Ret=fgv.Val.d;
+						break;
+					case FMVT_STRING:
+						Ret=fgv.Val.s;
+						break;
+					default:
+						Ret=-1;
+						break;
+				}
+			}
 		}
 	}
 
@@ -4395,6 +4407,67 @@ static bool pluginunloadFunc(const TMacroFunction*)
 	return Ret.i()!=0;
 }
 
+// N=Plugin.Call(Guid,MenuGuid)
+static bool plugincallFunc(const TMacroFunction*)
+{
+	__int64 Ret=0;
+	TVar MenuGuid; VMStack.Pop(MenuGuid);
+	TVar Guid; VMStack.Pop(Guid);
+	GUID guid, menuGuid;
+
+	if (StrToGuid(Guid.s(),guid) && StrToGuid(MenuGuid.s(),menuGuid) && CtrlObject->Plugins.FindPlugin(guid))
+	{
+		Ret=(__int64)CtrlObject->Plugins.CallPluginItem(guid,menuGuid);
+	}
+
+	VMStack.Push(Ret);
+	return true; //Ret?true:false;
+}
+
+// N=Plugin.Config(Guid[,MenuGuid])
+static bool pluginconfigFunc(const TMacroFunction*)
+{
+	__int64 Ret=0;
+	TVar MenuGuid; VMStack.Pop(MenuGuid);
+	TVar Guid; VMStack.Pop(Guid);
+	GUID guid, menuGuid;
+	int curType = FrameManager->GetCurrentFrame()->GetType();
+
+	if (curType==MODALTYPE_PANELS && StrToGuid(Guid.s(),guid))
+	{
+		Plugin* pPlugin = CtrlObject->Plugins.FindPlugin(guid);
+		if (pPlugin && pPlugin->HasConfigure())
+		{
+			if (MenuGuid.isUnknown() || !StrToGuid(MenuGuid.s(),menuGuid))
+			{
+				menuGuid = FarGuid;
+				Ret=1;
+			}
+			else
+			{
+				PluginInfo Info = {sizeof(Info)};
+				if (pPlugin->GetPluginInfo(&Info))
+				{
+					for (int i = 0; i < Info.PluginConfig.Count; i++)
+					{
+						if (memcmp(&menuGuid,&(Info.PluginConfig.Guids[i]),sizeof(GUID)) == 0)
+						{
+							Ret=1;
+							break;
+						}
+					}
+				}
+			}
+		
+			if (Ret)
+				CtrlObject->Plugins.ConfigureCurrent(pPlugin,menuGuid);
+		}
+	}
+
+	VMStack.Push(Ret);
+	return true;
+}
+
 
 // V=callplugin(SysID[,param])
 #if 0
@@ -4829,8 +4902,8 @@ done:
 		if (Mode==MACRO_EDITOR &&
 		        IsRedrawEditor &&
 		        CtrlObject->Plugins.CurEditor &&
-		        CtrlObject->Plugins.CurEditor->IsVisible() &&
-		        LockScr)
+		        CtrlObject->Plugins.CurEditor->IsVisible()
+		        /* && LockScr*/) // Mantis#0001595
 		{
 			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
 			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);

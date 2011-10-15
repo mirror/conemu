@@ -238,6 +238,7 @@ class PluginManager
 
 		// $ .09.2000 SVS - Функция CallPlugin - найти плагин по ID и запустить OpenFrom = OPEN_*
 		int CallPlugin(const GUID& SysID,int OpenFrom, void *Data, int *Ret=nullptr);
+		int CallPluginItem(const GUID& Guid, const GUID& ItemGuid);
 		Plugin *FindPlugin(const GUID& SysID);
 		INT_PTR PluginGuidToPluginNumber(const GUID& PluginId);
 

@@ -72,7 +72,8 @@ enum SHOW_MODES
 	SHOW_RELOAD,
 	SHOW_HEX,
 	SHOW_UP,
-	SHOW_DOWN
+	SHOW_DOWN,
+	SHOW_DUMP
 };
 
 class Viewer:public ScreenObject
@@ -184,6 +185,7 @@ class Viewer:public ScreenObject
 		int CacheFindUp(__int64 start);
 
 		void ShowHex();
+		void ShowDump();
 		void ShowStatus();
 		/* $ 27.04.2001 DJ
 		   функции для рисования скроллбара, для корректировки ширины в
@@ -280,6 +282,12 @@ class Viewer:public ScreenObject
 		/* IS $ */
 		int GetPersistentBlocks() const { return ViOpt.PersistentBlocks; }
 		void SetPersistentBlocks(int newValue) { ViOpt.PersistentBlocks=newValue; }
+
+		int GetEnableDumpMode() const { return ViOpt.EnableDumpMode; }
+		void SetEnableDumpMode(int newValue) { ViOpt.EnableDumpMode = newValue; }
+
+		int GetSearchEditFocus() const { return ViOpt.SearchEditFocus; }
+		void SetSearchEditFocus(int newValue) { ViOpt.SearchEditFocus = newValue; }
 
 		int GetHexMode() const { return VM.Hex; }
 

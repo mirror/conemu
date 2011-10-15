@@ -320,11 +320,11 @@ struct ViewerOptions
 	int UseExternalViewer;
 	int ShowKeyBar; // $ 15.07.2000 tran + ShowKeyBar
 	int AnsiCodePageAsDefault;
-	int RefreshOnRemovable;
 	int ShowTitleBar;
 	int SearchRegexp;
 	int MaxLineSize; // 100..100000, default=10000
 	int SearchEditFocus; // auto-focus on edit text/hex window
+	int EnableDumpMode;
 };
 
 // "Полиция"
@@ -462,8 +462,6 @@ struct Options
 	int ScreenSaver;
 	int ScreenSaverTime;
 	int UseVk_oem_x;
-	int InactivityExit;
-	int InactivityExitTime;
 	int ShowHidden;
 	int Highlight;
 

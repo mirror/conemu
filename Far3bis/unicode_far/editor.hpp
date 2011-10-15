@@ -213,6 +213,9 @@ class Editor:public ScreenObject
 
 		FileEditor *HostFileEditor;
 
+		char *buffer_line;
+		int   buffer_size;
+
 	private:
 		virtual void DisplayObject();
 		void ShowEditor(int CurLineOnly);
@@ -286,7 +289,7 @@ class Editor:public ScreenObject
 		void SetCacheParams(EditorPosCache &pc, bool count_bom=false);
 		void GetCacheParams(EditorPosCache &pc);
 
-		bool SetCodePage(UINT codepage);  //BUGBUG
+		bool SetCodePage(UINT codepage, bool check_only);  //BUGBUG
 		UINT GetCodePage();  //BUGBUG
 
 		int SetRawData(const wchar_t *SrcBuf,int SizeSrcBuf,int TextFormat); // преобразование из буфера в список

@@ -369,12 +369,16 @@ int FileViewer::ProcessKey(int Key)
 			ViOpt.ShowScrollbar=View.GetShowScrollbar();
 			ViOpt.ShowArrows=View.GetShowArrows();
 			ViOpt.PersistentBlocks=View.GetPersistentBlocks();
+			ViOpt.EnableDumpMode=View.GetEnableDumpMode();
+			ViOpt.SearchEditFocus=View.GetSearchEditFocus();
 			ViewerConfig(ViOpt,true);
 			View.SetTabSize(ViOpt.TabSize);
 			View.SetAutoDetectCodePage(ViOpt.AutoDetectCodePage);
 			View.SetShowScrollbar(ViOpt.ShowScrollbar);
 			View.SetShowArrows(ViOpt.ShowArrows);
 			View.SetPersistentBlocks(ViOpt.PersistentBlocks);
+			View.SetEnableDumpMode(ViOpt.EnableDumpMode);
+			View.SetSearchEditFocus(ViOpt.SearchEditFocus);
 
 			if (Opt.ViOpt.ShowKeyBar)
 				ViewKeyBar.Show();

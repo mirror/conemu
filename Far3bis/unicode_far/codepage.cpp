@@ -722,7 +722,7 @@ UINT SelectCodePage(UINT nCurrent, bool bShowUnicode, bool bShowUTF, bool bShowU
 			case KEY_RCTRLH:
 				Opt.CPMenuMode = !Opt.CPMenuMode;
 				CodePages->SetBottomTitle(MSG(!Opt.CPMenuMode?MGetCodePageBottomTitle:MGetCodePageBottomShortTitle));
-				FillCodePagesVMenu(bShowUnicode, bShowUTF, bShowUTF7);
+				FillCodePagesVMenu(bShowUnicode, bShowUTF, bShowUTF7, bShowAutoDetect);
 				break;
 			// Обработка удаления таблицы символов из списка выбранных
 			case KEY_DEL:

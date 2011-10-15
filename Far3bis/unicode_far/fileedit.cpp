@@ -466,7 +466,7 @@ void FileEditor::Init(
 
 	m_codepage = codepage;
 	m_editor->SetOwner(this);
-	m_editor->SetCodePage(m_codepage);
+	m_editor->SetCodePage(m_codepage, false);
 	*AttrStr=0;
 	CurrentEditor=this;
 	FileAttributes=INVALID_FILE_ATTRIBUTES;
@@ -668,7 +668,7 @@ void FileEditor::Init(
 		if (m_codepage==CP_AUTODETECT || m_codepage == CP_REDETECT)
 			m_codepage=Opt.EdOpt.AnsiCodePageForNewFile?GetACP():GetOEMCP();
 
-		m_editor->SetCodePage(m_codepage);
+		m_editor->SetCodePage(m_codepage, false);
 	}
 
 	CtrlObject->Plugins.CurEditor=this;//&FEdit;
@@ -1135,14 +1135,14 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 							{
 								m_editor->FreeAllocatedData();
 								m_editor->InsertString(nullptr, 0);
+								m_codepage = codepage; // SetCodePage(codepage);  //
 							}
 
 							SetFileName(strFullSaveAsName);
-							SetCodePage(codepage);  //
 
 							if (!bInPlace)
 							{
-								Message(MSG_WARNING, 1, L"WARNING!", L"Editor will be reopened with new file!", MSG(MOk));
+								//Message(MSG_WARNING, 1, L"WARNING!", L"Editor will be reopened with new file!", MSG(MOk));
 								int UserBreak;
 								LoadFile(strFullSaveAsName, UserBreak);
 								// TODO: возможно подобный ниже код здесь нужен (copy/paste из FileEditor::Init()). оформить его нужно по иному
@@ -1168,6 +1168,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 					}
 				}
 
+				FarChDir(strOldCurDir); // возможно правильнее выкинуть: FarChDir(strStartDir); - 2 вызова //???
 				return TRUE;
 			}
 			// $ 30.05.2003 SVS - Shift-F4 в редакторе/вьювере позвол€ет открывать другой редактор/вьювер (пока только редактор)
@@ -1308,6 +1309,10 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 					Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 					ChangeEditKeyBar();
 				}
+				else
+				{
+					Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorSwitchUnicodeCPDisabled),MSG(MEditorTryReloadFile),MSG(MOk));
+				}
 
 				return TRUE;
 			}
@@ -1320,15 +1325,31 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 					{
 						File edit_file;
 						bool detect = false, sig_found = false;
+						wchar_t ss[256];
 
 						if (edit_file.Open(strFileName, FILE_READ_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, nullptr, OPEN_EXISTING))
 						{
-							detect = GetFileFormat(edit_file,codepage,&sig_found,true) && IsCodePageSupported(codepage);
+							detect = GetFileFormat(edit_file,codepage,&sig_found,true);
 							edit_file.Close();
 						}
-
-						if (!detect)
-							codepage = Opt.EdOpt.AnsiCodePageAsDefault ? GetACP() : GetOEMCP();
+						if ( !detect )
+						{
+							Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorCPNotDetected),MSG(MOk));
+						}
+						else if ( IsUnicodeCodePage(codepage) )
+						{
+							detect = false;
+							_snwprintf(ss, ARRAYSIZE(ss), MSG(MEditorSwitchToUnicodeCPDisabled), static_cast<int>(codepage));
+							Message(MSG_WARNING,1,MSG(MEditTitle),ss,MSG(MEditorTryReloadFile),MSG(MOk));
+						}
+						else if ( !IsCodePageSupported(codepage) )
+						{
+							detect = false;
+							_snwprintf(ss, ARRAYSIZE(ss), MSG(MEditorCPNotSupported), static_cast<int>(codepage));
+							Message(MSG_WARNING,1,MSG(MEditTitle),ss,MSG(MOk));
+						}
+						if ( !detect )
+							codepage = static_cast<UINT>(-1);
 					}
 
 					if (codepage != static_cast<UINT>(-1))
@@ -1336,6 +1357,10 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						SetCodePage(codepage);
 						Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 					}
+				}
+				else
+				{
+					Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorSwitchUnicodeCPDisabled),MSG(MEditorTryReloadFile),MSG(MOk));
 				}
 
 				return TRUE;
@@ -1523,13 +1548,13 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 	UINT dwCP=0;
 	bool Detect=false;
 
-	bool ignore_cached_cp = (m_codepage == CP_REDETECT);
-	if (ignore_cached_cp)
+	bool redetect = (m_codepage == CP_REDETECT);
+	if (redetect)
 		m_codepage = CP_AUTODETECT;
 
 	if (m_codepage == CP_AUTODETECT || IsUnicodeOrUtfCodePage(m_codepage))
 	{
-		Detect=GetFileFormat(EditFile,dwCP,&m_bAddSignature,Opt.EdOpt.AutoDetectCodePage!=0);
+		Detect=GetFileFormat(EditFile,dwCP,&m_bAddSignature,redetect || Opt.EdOpt.AutoDetectCodePage!=0);
 
 		// ѕровер€ем поддерживаетс€ или нет задетектированн€ кодова€ страница
 		if (Detect)
@@ -1543,7 +1568,7 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 			m_codepage=dwCP;
 		}
 
-		if (!ignore_cached_cp && bCached)
+		if (!redetect && bCached)
 		{
 			if (pc.CodePage)
 			{
@@ -1560,7 +1585,7 @@ int FileEditor::LoadFile(const wchar_t *Name,int &UserBreak)
 		Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 	}
 
-	m_editor->SetCodePage(m_codepage);  //BUGBUG
+	m_editor->SetCodePage(m_codepage, false);  //BUGBUG
 
 	if (!IsUnicodeOrUtfCodePage(m_codepage))
 	{
@@ -2806,16 +2831,22 @@ void FileEditor::SetCodePage(UINT codepage)
 {
 	if (codepage != m_codepage)
 	{
-		m_codepage = codepage;
+		if ( m_editor )
+		{
+			if ( !m_editor->SetCodePage(codepage, true) )
+			{
+				if (Message(MSG_WARNING,2, MSG(MEditTitle),
+					MSG(MEditorSwitchCPWarn1), MSG(MEditorSwitchCPWarn2),
+					MSG(MDoYouWantToStopWork2), MSG(MHYes), MSG(MHNo)
+				))
+					return;
+			}
+		}
 
+		m_codepage = codepage;
 		if (m_editor)
 		{
-			if (!m_editor->SetCodePage(m_codepage))
-			{
-				Message(MSG_WARNING,1,MSG(MWarning),MSG(MEditorSwitchCPWarn1),MSG(MEditorSwitchCPWarn2),MSG(MEditorSaveNotRecommended),MSG(MOk));
-				BadConversion = true;
-			}
-
+			BadConversion = !m_editor->SetCodePage(m_codepage, false);
 			ChangeEditKeyBar(); //???
 		}
 	}

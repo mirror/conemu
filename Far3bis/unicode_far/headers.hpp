@@ -144,7 +144,7 @@ typedef struct _ADAPTER_OBJECT ADAPTER_OBJECT,*PADAPTER_OBJECT;
 	#endif
 	#define MY_ASSERT_EXPR(expr, msg) \
 		if (!(expr)) { \
-			if (MessageBox(NULL,msg,L"Assertion",MB_RETRYCANCEL)==IDRETRY) \
+			if (MessageBox(NULL,msg,L"Assertion",MB_RETRYCANCEL|MB_SYSTEMMODAL)==IDRETRY) \
 				DebugBreak(); \
 		}
 	#define _ASSERTE(x)  MY_ASSERT_EXPR((x), _CRT_WIDE(#x))

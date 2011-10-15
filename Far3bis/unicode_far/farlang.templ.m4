@@ -1337,24 +1337,6 @@ MConfigCreateUppercaseFolders
 "Nazwy katalogów &WIELKIMI LITERAMI"
 "Crear directorios en ma&yúsculas"
 
-MConfigInactivity
-"&Время бездействия"
-"&Inactivity time"
-"&Doba nečinnosti"
-"Inaktivitäts&zeit"
-"A FAR kilé&p"
-"Czas &bezczynności"
-"Desact&ivar FAR en..."
-
-MConfigInactivityMinutes
-"минут"
-"minutes"
-"minut"
-"Minuten"
-"perc tétlenség után"
-"&minut"
-"minutos"
-
 MConfigSaveHistory
 "Сохранять &историю команд"
 "Save commands &history"
@@ -2266,14 +2248,32 @@ upd:"Dateien standardmäßig mit Windows-Kod&ierung öffnen"
 "&Otwieraj pliki w kodowaniu Windows"
 "Usar código ANS&I por defecto"
 
-MViewConfigRefreshOnRemovable
-"Авто&обновление на сменных носителях"
-"Auto&refresh on removable drives"
-upd:"Autorefresh on removable drives"
-upd:"Autorefresh on removable drives"
-upd:"Autorefresh on removable drives"
-upd:"Autorefresh on removable drives"
-upd:"Autorefresh on removable drives"
+MViewConfigMaxLineSize
+"&Максимальный размер строки"
+"&Maximum line size"
+upd:"Maximum line size"
+upd:"Maximum line size"
+upd:"Maximum line size"
+upd:"Maximum line size"
+upd:"Maximum line size"
+
+MViewConfigEnableDumpMode
+"Разрешить ре&жим дампа"
+"Enable &dump mode"
+upd:"&Enable dump mode"
+upd:"&Enable dump mode"
+upd:"&Enable dump mode"
+upd:"&Enable dump mode"
+upd:"&Enable dump mode"
+
+MViewConfigEditAutofocus
+"Авто-&фокус в диалоге поиска"
+"Search dialog auto-&focus"
+upd:"Search dialog auto-focus"
+upd:"Search dialog auto-focus"
+upd:"Search dialog auto-focus"
+upd:"Search dialog auto-focus"
+upd:"Search dialog auto-focus"
 
 MEditConfigTitle
 l:
@@ -2459,12 +2459,12 @@ MEditConfigScrollbar
 "Mostrar barra de desp&lazamiento"
 
 MEditShowWhiteSpace
-"Пробельные символы"
-"Show white space"
-upd:"Show white space"
-upd:"Show white space"
-upd:"Show white space"
-upd:"Show white space"
+"Про&бельные символы"
+"Show &white space"
+upd:"Show &white space"
+upd:"Show &white space"
+upd:"Show &white space"
+upd:"Show &white space"
 "Mostrar espacios en blanco"
 
 MEditConfigPickUpWord
@@ -6515,6 +6515,51 @@ upd:"Show"
 upd:"Show"
 "Mostrar"
 
+MEditorSwitchUnicodeCPDisabled
+"Нельзя изменить юникодную кодовую страницу"
+"Unicode codepage switch is not supported"
+upd:"Unicode codepage switch is not supported"
+upd:"Unicode codepage switch is not supported"
+upd:"Unicode codepage switch is not supported"
+upd:"Unicode codepage switch is not supported"
+upd:"Unicode codepage switch is not supported"
+
+MEditorTryReloadFile
+"Можно перечитать файл, указав нужную кодовую страницу (ShiftF4)"
+"You can reload file using custom codepage (ShiftF4)"
+upd:"You can reload file using custom codepage (ShiftF4)"
+upd:"You can reload file using custom codepage (ShiftF4)"
+upd:"You can reload file using custom codepage (ShiftF4)"
+upd:"You can reload file using custom codepage (ShiftF4)"
+upd:"You can reload file using custom codepage (ShiftF4)"
+
+MEditorSwitchToUnicodeCPDisabled
+"Переключение на юникодную кодовую страницу %d не поддерживается"
+"Switch to unicode codepage %d is not supported"
+upd:"Switch to unicode codepage %d is not supported"
+upd:"Switch to unicode codepage %d is not supported"
+upd:"Switch to unicode codepage %d is not supported"
+upd:"Switch to unicode codepage %d is not supported"
+upd:"Switch to unicode codepage %d is not supported"
+
+MEditorCPNotSupported
+"Кодовая страница %d не поддерживается вашей системой"
+"Codepage %d is not supported in your system"
+upd:"Codepage %d is not supported in your system"
+upd:"Codepage %d is not supported in your system"
+upd:"Codepage %d is not supported in your system"
+upd:"Codepage %d is not supported in your system"
+upd:"Codepage %d is not supported in your system"
+
+MEditorCPNotDetected
+"Не удалось определить кодовую страницу"
+"Codepage wasn't detected"
+upd:"Codepage wasn't detected"
+upd:"Codepage wasn't detected"
+upd:"Codepage wasn't detected"
+upd:"Codepage wasn't detected"
+upd:"Codepage wasn't detected"
+
 MColumnName
 l:
 "Имя"
@@ -7138,6 +7183,15 @@ l:// this is another text for F4
 "Szöveg"
 "Tekst"
 "Text"
+
+MViewF4Dump
+"Дамп"
+"Dump"
+upd:"Dump"
+upd:"Dump"
+upd:"Dump"
+upd:"Dump"
+upd:"Dump"
 
 MViewF8DOS
 "OEM"

@@ -131,12 +131,6 @@ void SystemSettings()
 	Builder.AddCheckbox(MConfigScanJunction, &Opt.ScanJunction);
 	Builder.AddCheckbox(MConfigCreateUppercaseFolders, &Opt.CreateUppercaseFolders);
 
-	DialogItemEx *InactivityExit = Builder.AddCheckbox(MConfigInactivity, &Opt.InactivityExit);
-	DialogItemEx *InactivityExitTime = Builder.AddIntEditField(&Opt.InactivityExitTime, 2);
-	InactivityExitTime->Indent(4);
-	Builder.AddTextAfter(InactivityExitTime, MConfigInactivityMinutes);
-	Builder.LinkFlags(InactivityExit, InactivityExitTime, DIF_DISABLE);
-
 	Builder.AddCheckbox(MConfigSaveHistory, &Opt.SaveHistory);
 	Builder.AddCheckbox(MConfigSaveFoldersHistory, &Opt.SaveFoldersHistory);
 	Builder.AddCheckbox(MConfigSaveViewHistory, &Opt.SaveViewHistory);
@@ -289,7 +283,26 @@ void InfoPanelSettings()
 	Builder.AddText(MConfigInfoPanelUNTitle);
 	Builder.AddComboBox((int *) &Opt.InfoPanel.UserNameFormat, 50, UNListItems, ARRAYSIZE(UNListItems), DIF_DROPDOWNLIST|DIF_LISTAUTOHIGHLIGHT|DIF_LISTWRAPMODE);
 	Builder.AddOKCancel();
-	Builder.ShowDialog();
+
+	if (Builder.ShowDialog())
+	{
+		bool needRedraw=false;
+		if (CtrlObject->Cp()->LeftPanel->GetType() == INFO_PANEL)
+		{
+			CtrlObject->Cp()->LeftPanel->Update(UPDATE_KEEP_SELECTION);
+			needRedraw=true;
+		}
+		if (CtrlObject->Cp()->RightPanel->GetType() == INFO_PANEL)
+		{
+			CtrlObject->Cp()->RightPanel->Update(UPDATE_KEEP_SELECTION);
+			needRedraw=true;
+		}
+		if (needRedraw)
+		{
+			//CtrlObject->Cp()->SetScreenPosition();
+			CtrlObject->Cp()->Redraw();
+		}
+	}
 }
 
 void DialogSettings()
@@ -435,28 +448,37 @@ void ViewerConfig(ViewerOptions &ViOpt,bool Local)
 
 	Builder.StartColumns();
 	Builder.AddCheckbox(MViewConfigPersistentSelection, &ViOpt.PersistentBlocks);
-	DialogItemEx *SavePos = Builder.AddCheckbox(MViewConfigSavePos, &Opt.ViOpt.SavePos);
+	DialogItemEx *SavePos = Builder.AddCheckbox(MViewConfigSavePos, &ViOpt.SavePos);
+	Builder.AddCheckbox(MViewConfigEnableDumpMode, &ViOpt.EnableDumpMode);
 	DialogItemEx *TabSize = Builder.AddIntEditField(&ViOpt.TabSize, 3);
 	Builder.AddTextAfter(TabSize, MViewConfigTabSize);
 	Builder.ColumnBreak();
 	Builder.AddCheckbox(MViewConfigArrows, &ViOpt.ShowArrows);
-	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MViewConfigSaveShortPos, &Opt.ViOpt.SaveShortPos);
+	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MViewConfigSaveShortPos, &ViOpt.SaveShortPos);
 	Builder.LinkFlags(SavePos, SaveShortPos, DIF_DISABLE);
+	Builder.AddCheckbox(MViewConfigEditAutofocus, &ViOpt.SearchEditFocus);
 	Builder.AddCheckbox(MViewConfigScrollbar, &ViOpt.ShowScrollbar);
 	Builder.EndColumns();
 
 	if (!Local)
 	{
 		Builder.AddEmptyLine();
+		DialogItemEx *MaxLineSize = Builder.AddIntEditField(&ViOpt.MaxLineSize, 6);
+		Builder.AddTextAfter(MaxLineSize, MViewConfigMaxLineSize);
 		Builder.AddCheckbox(MViewAutoDetectCodePage, &ViOpt.AutoDetectCodePage);
 		Builder.AddCheckbox(MViewConfigAnsiCodePageAsDefault, &ViOpt.AnsiCodePageAsDefault);
-		Builder.AddCheckbox(MViewConfigRefreshOnRemovable, &ViOpt.RefreshOnRemovable);
 	}
 	Builder.AddOKCancel();
 	if (Builder.ShowDialog())
 	{
 		if (ViOpt.TabSize<1 || ViOpt.TabSize>512)
 			ViOpt.TabSize=8;
+		if (!Opt.ViOpt.MaxLineSize)
+			Opt.ViOpt.MaxLineSize = ViewerOptions::eDefLineSize;
+		else if (Opt.ViOpt.MaxLineSize < ViewerOptions::eMinLineSize)
+			Opt.ViOpt.MaxLineSize = ViewerOptions::eMinLineSize;
+		else if (Opt.ViOpt.MaxLineSize > ViewerOptions::eMaxLineSize)
+			Opt.ViOpt.MaxLineSize = ViewerOptions::eMaxLineSize;
 	}
 }
 
@@ -485,7 +507,8 @@ void EditorConfig(EditorOptions &EdOpt,bool Local)
 	Builder.AddCheckbox(MEditConfigAutoIndent, &EdOpt.AutoIndent);
 	DialogItemEx *TabSize = Builder.AddIntEditField(&EdOpt.TabSize, 3);
 	Builder.AddTextAfter(TabSize, MEditConfigTabSize);
-	Builder.AddCheckbox(MEditShowWhiteSpace, &EdOpt.ShowWhiteSpace);
+	DialogItemEx *WhiteSpace = Builder.AddCheckbox(MEditShowWhiteSpace, &EdOpt.ShowWhiteSpace);
+	WhiteSpace->Flags|=DIF_3STATE;
 	Builder.ColumnBreak();
 	Builder.AddCheckbox(MEditConfigDelRemovesBlocks, &EdOpt.DelRemovesBlocks);
 	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MEditConfigSaveShortPos, &EdOpt.SaveShortPos);
@@ -599,10 +622,10 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"Wrap",&Opt.ViOpt.ViewerWrap,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"PersistentBlocks",&Opt.ViOpt.PersistentBlocks,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"AnsiCodePageAsDefault",&Opt.ViOpt.AnsiCodePageAsDefault,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"RefreshOnRemovable",&Opt.ViOpt.RefreshOnRemovable,0, 0},
 
-	{0, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"MaxLineSize",&Opt.ViOpt.MaxLineSize,ViewerOptions::eDefLineSize, 0},
-	{0, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"SearchEditFocus",&Opt.ViOpt.SearchEditFocus,0, 0},
+	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"MaxLineSize",&Opt.ViOpt.MaxLineSize,ViewerOptions::eDefLineSize, 0},
+	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"SearchEditFocus",&Opt.ViOpt.SearchEditFocus,0, 0},
+	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"EnableDumpMode",&Opt.ViOpt.EnableDumpMode,0, 0},
 
 	{1, GeneralConfig::TYPE_INTEGER, NKeyDialog, L"EditHistory",&Opt.Dialogs.EditHistory,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyDialog, L"EditBlock",&Opt.Dialogs.EditBlock,0, 0},
@@ -677,8 +700,6 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"CopyTimeRule",  &Opt.CMOpt.CopyTimeRule, 3, 0},
 
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"CreateUppercaseFolders",&Opt.CreateUppercaseFolders,0, 0},
-	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"InactivityExit",&Opt.InactivityExit,0, 0},
-	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"InactivityExitTime",&Opt.InactivityExitTime,15, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"DriveMenuMode",&Opt.ChangeDriveMode,DRIVE_SHOW_TYPE|DRIVE_SHOW_PLUGINS|DRIVE_SHOW_SIZE_FLOAT|DRIVE_SHOW_CDROM, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"DriveDisconnetMode",&Opt.ChangeDriveDisconnetMode,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"AutoUpdateRemoteDrive",&Opt.AutoUpdateRemoteDrive,1, 0},
@@ -921,6 +942,7 @@ void ReadConfig()
 	else if (Opt.ViOpt.MaxLineSize > ViewerOptions::eMaxLineSize)
 		Opt.ViOpt.MaxLineSize = ViewerOptions::eMaxLineSize;
 	Opt.ViOpt.SearchEditFocus &= 1;
+	Opt.ViOpt.EnableDumpMode &= 1;
 
 	// Исключаем случайное стирание разделителей ;-)
 	if (Opt.strWordDiv.IsEmpty())

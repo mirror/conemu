@@ -2602,6 +2602,95 @@ int PluginManager::CallPlugin(const GUID& SysID,int OpenFrom, void *Data,int *Re
 	return FALSE;
 }
 
+int PluginManager::CallPluginItem(const GUID& Guid, const GUID& ItemGuid)
+{
+	if (!ProcessException)
+	{
+		Plugin *pPlugin = FindPlugin(Guid);
+		if (pPlugin && pPlugin->HasOpenPanel())
+		{
+			int curType = FrameManager->GetCurrentFrame()->GetType();
+			bool Editor = curType==MODALTYPE_EDITOR;
+			bool Viewer = curType==MODALTYPE_VIEWER;
+			bool Dialog = curType==MODALTYPE_DIALOG;
+
+			UINT64 IFlags;
+			PluginInfo Info = {sizeof(Info)};
+			if (!pPlugin->GetPluginInfo(&Info))
+				return FALSE;
+			else
+				IFlags = Info.Flags;
+
+			if ((Editor && !(IFlags & PF_EDITOR)) ||
+					(Viewer && !(IFlags & PF_VIEWER)) ||
+					(Dialog && !(IFlags & PF_DIALOG)) ||
+					(!Editor && !Viewer && !Dialog && (IFlags & PF_DISABLEPANELS)))
+				return FALSE;
+
+			bool ItemFound = false;
+			for (int i = 0; i < Info.PluginMenu.Count; i++)
+			{
+				if (memcmp(&ItemGuid,&(Info.PluginMenu.Guids[i]),sizeof(GUID)) == 0)
+				{
+					ItemFound = true;
+					break;
+				}
+			}
+			if (!ItemFound)
+				return FALSE;
+				
+			Panel *ActivePanel=CtrlObject->Cp()->ActivePanel;
+			int OpenCode=OPEN_PLUGINSMENU;
+			INT_PTR Item=0;
+			OpenDlgPluginData pd;
+
+			if (Editor)
+			{
+				OpenCode=OPEN_EDITOR;
+			}
+			else if (Viewer)
+			{
+				OpenCode=OPEN_VIEWER;
+			}
+			else if (Dialog)
+			{
+				OpenCode=OPEN_DIALOG;
+				pd.hDlg=(HANDLE)FrameManager->GetCurrentFrame();
+				Item=(INT_PTR)&pd;
+			}
+
+			HANDLE hPlugin=Open(pPlugin,OpenCode,ItemGuid,Item);
+
+			if (hPlugin!=INVALID_HANDLE_VALUE && !Editor && !Viewer && !Dialog)
+			{
+				if (ActivePanel->ProcessPluginEvent(FE_CLOSE,nullptr))
+				{
+					ClosePanel(hPlugin);
+					return FALSE;
+				}
+
+				Panel *NewPanel=CtrlObject->Cp()->ChangePanel(ActivePanel,FILE_PANEL,TRUE,TRUE);
+				NewPanel->SetPluginMode(hPlugin,L"",true);
+				NewPanel->Update(0);
+				NewPanel->Show();
+			}
+
+			// restore title for old plugins only.
+			#ifndef NO_WRAPPER
+			if (pPlugin->IsOemPlugin() && Editor && CurEditor)
+			{
+				CurEditor->SetPluginTitle(nullptr);
+			}
+			#endif // NO_WRAPPER
+
+			// CtrlObject->Macro.SetMode(PrevMacroMode); -- надо запоминать/восстанавливать макрообласть?
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 Plugin *PluginManager::FindPlugin(const GUID& SysID)
 {
 	Plugin **result=nullptr;

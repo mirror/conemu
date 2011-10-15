@@ -62,6 +62,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarDlgBuilder.hpp"
 #include "wakeful.hpp"
 #include "colormix.hpp"
+#include "codepage.hpp"
 
 static int ReplaceMode,ReplaceAll;
 
@@ -94,7 +95,9 @@ Editor::Editor(ScreenObject *pOwner,bool DialogUsed):
 	StackPos(0),
 	NewStackPos(FALSE),
 	EditorID(::EditorID++),
-	HostFileEditor(nullptr)
+	HostFileEditor(nullptr),
+	buffer_line(nullptr),
+	buffer_size(0)
 {
 	_KEYMACRO(SysLog(L"Editor::Editor()"));
 	_KEYMACRO(SysLog(1));
@@ -1672,10 +1675,6 @@ int Editor::ProcessKey(int Key)
 							CurLine->SetCurPos(CurPos);
 							DeleteString(CurLine->m_next,NumLine+1,TRUE,NumLine+1);
 
-							/*
-							if (!NextLength)
-								CurLine->SetEOL(L"");
-							*/
 							CurLine->SetEOL(NextEOL);
 
 
@@ -3278,10 +3277,6 @@ void Editor::InsertString()
 	   Если не был определен тип конца строки, то считаем что конец строки
 	   у нас равен DOS_EOL_fmt и установим его явно.
 	*/
-	/*
-	if (!*EndSeq)
-		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
-	*/
 
 	CurPos=CurLine->GetCurPos();
 	CurLine->GetSelection(SelStart,SelEnd);
@@ -3362,7 +3357,7 @@ void Editor::InsertString()
 		AddUndoData(UNDO_BEGIN);
 		AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,
 		            CurLine->GetCurPos(),CurLine->GetLength());
-		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL()/*EndList==CurLine?L"":GlobalEOL*/,NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
 		AddUndoData(UNDO_END);
 		wchar_t *NewCurLineStr = (wchar_t *) xf_malloc((CurPos+1)*sizeof(wchar_t));
 
@@ -3385,7 +3380,7 @@ void Editor::InsertString()
 	else
 	{
 		NewString->SetString(L"");
-		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL()/*L""*/,NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
 	}
 
 	if (EndSeq && *EndSeq)
@@ -5612,7 +5607,11 @@ int Editor::EditorControl(int Command,void *Param)
 					Info->Options|=EOPT_CURSORBEYONDEOL;
 
 				if (EdOpt.ShowWhiteSpace)
+				{
 					Info->Options|=EOPT_SHOWWHITESPACE;
+					if (EdOpt.ShowWhiteSpace==2)
+						Info->Options|=EOPT_SHOWLINEBREAK;
+				}
 
 				Info->TabSize=EdOpt.TabSize;
 				Info->BookMarkCount=BOOKMARK_COUNT;
@@ -6014,7 +6013,7 @@ int Editor::EditorControl(int Command,void *Param)
 							}
 							else
 							{
-								SetCodePage(espar->iParam);
+								SetCodePage(espar->iParam, false);
 							}
 
 							Show();
@@ -6853,7 +6852,7 @@ Edit *Editor::CreateString(const wchar_t *lpwszStr, int nLength)
 		pEdit->SetTabSize(EdOpt.TabSize);
 		pEdit->SetPersistentBlocks(EdOpt.PersistentBlocks);
 		pEdit->SetConvertTabs(EdOpt.ExpandTabs);
-		pEdit->SetCodePage(m_codepage);
+		pEdit->SetCodePage(m_codepage, false, buffer_line, buffer_size);
 
 		if (lpwszStr)
 			pEdit->SetBinaryString(lpwszStr, nLength);
@@ -7037,25 +7036,37 @@ void Editor::GetCacheParams(EditorPosCache &pc)
 }
 
 
-bool Editor::SetCodePage(UINT codepage)
+bool Editor::SetCodePage( UINT codepage, bool check_onky )
 {
-	if (m_codepage != codepage)
+	if ( m_codepage == codepage )
+		return true;
+
+	DWORD Result = 0;
+	Edit *current = TopList;
+
+	if ( check_onky )
+	{
+		while ( current && !Result )
+		{
+			Result |= current->SetCodePage(m_codepage, true, buffer_line, buffer_size);
+			current = current->m_next;
+		}
+
+	}
+	else
 	{
 		m_codepage = codepage;
-		Edit *current = TopList;
-		DWORD Result=0;
 
 		while (current)
 		{
-			Result|=current->SetCodePage(m_codepage);
+			Result |= current->SetCodePage(m_codepage, false, buffer_line, buffer_size);
 			current = current->m_next;
 		}
 
 		Show();
-		return !Result; // BUGBUG, more details
 	}
 
-	return true;
+	return (Result == 0); // BUGBUG, more details
 }
 
 UINT Editor::GetCodePage()
