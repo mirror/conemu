@@ -1066,9 +1066,6 @@ void FilePanels::OnChangeFocus(int f)
 	   не учитывался LockRefreshCount */
 	if (f)
 	{
-		// Иначе при возврате из редактора в панели по CtrlTab директория будет невалидной!
-		if (ActivePanel)
-			ActivePanel->SetCurPath();
 		/*$ 22.06.2001 SKV
 		  + update панелей при получении фокуса
 		*/
@@ -1079,6 +1076,8 @@ void FilePanels::OnChangeFocus(int f)
 		    Redraw вызывается следом во Frame::OnChangeFocus.
 		*/
 //    Redraw();
+		// Иначе при возврате из редактора в панели по CtrlTab директория будет невалидной!
+		ActivePanel->SetCurPath();
 		Frame::OnChangeFocus(1);
 	}
 }

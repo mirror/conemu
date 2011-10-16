@@ -277,7 +277,8 @@ void CreatePath(string &strPath, bool Simple)
 				CharUpper(DirPart);
 
 			//Maximus: пытается (безуспешно) последовательно создать "A:", "A:\4", "A:\4\" (последний-то нафига?)
-			if(!Exist && apiCreateDirectory(strPath, nullptr) && !Simple) //Maximus: BUGBUG: игнорируется ошибка создания каталога!
+			//Maximus: BUGBUG: игнорируется ошибка создания каталога!
+			if(!Exist && apiCreateDirectory(strPath, nullptr) && !Simple)
 				TreeList::AddTreeName(strPath);
 
 			if (bEnd)

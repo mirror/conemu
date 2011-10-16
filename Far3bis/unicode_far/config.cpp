@@ -448,13 +448,13 @@ void ViewerConfig(ViewerOptions &ViOpt,bool Local)
 
 	Builder.StartColumns();
 	Builder.AddCheckbox(MViewConfigPersistentSelection, &ViOpt.PersistentBlocks);
-	DialogItemEx *SavePos = Builder.AddCheckbox(MViewConfigSavePos, &ViOpt.SavePos);
+	DialogItemEx *SavePos = Builder.AddCheckbox(MViewConfigSavePos, &Opt.ViOpt.SavePos); //у 2useven10 выкинут "Opt.", хорошо бы, т.к. по AltShiftF9 должно действовать только на активный вьювер, но код фара на это не рассчитан
 	Builder.AddCheckbox(MViewConfigEnableDumpMode, &ViOpt.EnableDumpMode);
 	DialogItemEx *TabSize = Builder.AddIntEditField(&ViOpt.TabSize, 3);
 	Builder.AddTextAfter(TabSize, MViewConfigTabSize);
 	Builder.ColumnBreak();
 	Builder.AddCheckbox(MViewConfigArrows, &ViOpt.ShowArrows);
-	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MViewConfigSaveShortPos, &ViOpt.SaveShortPos);
+	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MViewConfigSaveShortPos, &Opt.ViOpt.SaveShortPos); //у 2useven10 выкинут "Opt.", хорошо бы, т.к. по AltShiftF9 должно действовать только на активный вьювер, но код фара на это не рассчитан
 	Builder.LinkFlags(SavePos, SaveShortPos, DIF_DISABLE);
 	Builder.AddCheckbox(MViewConfigEditAutofocus, &ViOpt.SearchEditFocus);
 	Builder.AddCheckbox(MViewConfigScrollbar, &ViOpt.ShowScrollbar);
@@ -473,6 +473,7 @@ void ViewerConfig(ViewerOptions &ViOpt,bool Local)
 	{
 		if (ViOpt.TabSize<1 || ViOpt.TabSize>512)
 			ViOpt.TabSize=8;
+		// Maximus5: BUGBUG: Код фара не рассчитан на локальные настройки окна Viewer.
 		if (!Opt.ViOpt.MaxLineSize)
 			Opt.ViOpt.MaxLineSize = ViewerOptions::eDefLineSize;
 		else if (Opt.ViOpt.MaxLineSize < ViewerOptions::eMinLineSize)

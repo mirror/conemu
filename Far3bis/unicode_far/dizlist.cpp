@@ -102,7 +102,7 @@ void DizList::Reset()
 
 void DizList::PR_ReadingMsg()
 {
-	//BUGBUG: Warning: Похоже, что эта гадость с экрана не убирается?
+	//BUGBUG: Проверить, это экрана убирается?
 	Message(0,0,L"",MSG(MReadingDiz));
 }
 
