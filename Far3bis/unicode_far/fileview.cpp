@@ -363,22 +363,7 @@ int FileViewer::ProcessKey(int Key)
 		case KEY_ALTSHIFTF9:
 		case KEY_RALTSHIFTF9:
 			// Работа с локальной копией ViewerOptions
-			ViewerOptions ViOpt;
-			ViOpt.TabSize=View.GetTabSize();
-			ViOpt.AutoDetectCodePage=View.GetAutoDetectCodePage();
-			ViOpt.ShowScrollbar=View.GetShowScrollbar();
-			ViOpt.ShowArrows=View.GetShowArrows();
-			ViOpt.PersistentBlocks=View.GetPersistentBlocks();
-			ViOpt.EnableDumpMode=View.GetEnableDumpMode();
-			ViOpt.SearchEditFocus=View.GetSearchEditFocus();
-			ViewerConfig(ViOpt,true);
-			View.SetTabSize(ViOpt.TabSize);
-			View.SetAutoDetectCodePage(ViOpt.AutoDetectCodePage);
-			View.SetShowScrollbar(ViOpt.ShowScrollbar);
-			View.SetShowArrows(ViOpt.ShowArrows);
-			View.SetPersistentBlocks(ViOpt.PersistentBlocks);
-			View.SetEnableDumpMode(ViOpt.EnableDumpMode);
-			View.SetSearchEditFocus(ViOpt.SearchEditFocus);
+			ViewerConfig(View.ViOpt, true);
 
 			if (Opt.ViOpt.ShowKeyBar)
 				ViewKeyBar.Show();

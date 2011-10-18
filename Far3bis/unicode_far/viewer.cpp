@@ -81,6 +81,7 @@ static int utf8_to_WideChar(const char *s, int nc, wchar_t *w1,wchar_t *w2, int 
 #define REPLACE_CHAR  0xFFFD // Replacement
 #define CONTINUE_CHAR 0x203A // Single Right-Pointing Angle Quotation Mark
 #define BOM_CHAR      0xFEFF // Zero Length Space
+#define ZERO_CHAR     (ViOpt.Visible0x00 ? 0x25CB : L' ') // White Circle : Space
 
 Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	ViOpt(Opt.ViOpt),
@@ -107,7 +108,7 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	// Вспомним тип врапа
 	VM.Wrap=Opt.ViOpt.ViewerIsWrap;
 	VM.WordWrap=Opt.ViOpt.ViewerWrap;
-	VM.Hex = FALSE; //InitHex;
+	VM.Hex = 0; //InitHex;
 	ViewKeyBar=nullptr;
 	FilePos=0;
 	LeftPos=0;
@@ -158,6 +159,8 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 
 	ClearStruct(vString);
 	vString.lpData = new wchar_t[MAX_VIEWLINEB];
+
+	dump_mode = false;
 }
 
 
@@ -315,17 +318,22 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	apiGetFindDataEx(strFileName, ViewFindData);
 	UINT CachedCodePage=0;
 
+	bool check_dump_mode = true;
+
 	if (Opt.ViOpt.SavePos && !ReadStdin)
 	{
 		__int64 NewLeftPos,NewFilePos;
 		string strCacheName=strPluginData.IsEmpty()?strFileName:strPluginData+PointToName(strFileName);
 		ViewerPosCache poscache;
 
-		FilePositionCache::GetPosition(strCacheName,poscache);
+		bool found = FilePositionCache::GetPosition(strCacheName,poscache);
 		NewFilePos=poscache.FilePos;
 		NewLeftPos=poscache.LeftPos;
-		VM.Hex=poscache.Hex;
-		if ( VM.Hex > 1 && !ViOpt.EnableDumpMode ) VM.Hex = 1;
+		if ( found && 1 != (VM.Hex=poscache.Hex) )
+		{
+			check_dump_mode = false;
+			dump_mode = (VM.Hex == 2);
+		}
 		CachedCodePage=poscache.CodePage;
 		BMSavePos=poscache.bm;
 
@@ -385,6 +393,13 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	}
 	SetFileSize();
 
+	if ( check_dump_mode )
+	{
+		dump_mode = isBinaryFile();
+		if ( VM.Hex == 0 && dump_mode )
+			VM.Hex = 2;
+	}
+
 	if (FilePos > FileSize)
 		FilePos=0;
 	if ( FilePos )
@@ -414,6 +429,29 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	}
 
 	return TRUE;
+}
+
+bool Viewer::isBinaryFile() // very approximate: looks for 0x00,0x00 in first 2048 bytes
+{
+	unsigned char bf[2048+1]; // not fit to any device sector size
+	DWORD nb = static_cast<DWORD>(sizeof(bf)), nr = 0;
+
+	__int64 fpos = vtell();
+	vseek(0, FILE_BEGIN);
+	bool ok_read = ViewFile.Read(bf, nb, nr, nullptr);
+	vseek(fpos, FILE_BEGIN);
+
+	if ( !ok_read )
+		return true; // special files like '\\?\C:' are binary
+
+	if ( nr < 2 )
+		return (nr > 0 && !bf[0]);
+
+	for (nb = 0; nb+1 < nr; ++nb)
+		if ( !bf[nb] && !bf[nb+1] )
+			return true;
+
+	return false;
 }
 
 /* $ 27.04.2001 DJ
@@ -606,7 +644,8 @@ static inline int getChSize( UINT cp )
 
 static const int mline = 512;
 
-static void txt_dump( UINT cp, const unsigned char *line, DWORD nr, int width, wchar_t *outstr )
+static void txt_dump(
+	UINT cp, const unsigned char *line, DWORD nr, int width, wchar_t *outstr, wchar_t zch )
 {
 	int tail, nw, ib, iw;
 	wchar_t w1[mline], w2[mline];
@@ -656,8 +695,10 @@ static void txt_dump( UINT cp, const unsigned char *line, DWORD nr, int width, w
 	}
 
 	for ( iw = 0; iw < width; ++iw ) {
-		if ( iw >= ib || !outstr[iw] )
+		if ( iw >= ib )
 			outstr[iw] = L' ';
+		else if ( !outstr[iw] )
+			outstr[iw] = zch;
 	}
 	outstr[width] = L'\0';
 }
@@ -698,7 +739,7 @@ void Viewer::ShowDump()
 		else
 			LastPage = EndFile = veof() ? 1 : 0;
 
-		txt_dump(VM.CodePage, line, nr, Width, OutStr);
+		txt_dump(VM.CodePage, line, nr, Width, OutStr, ZERO_CHAR);
 
 		FS<<fmt::Width(ObjWidth)<<OutStr;
 		if ( SelectSize > 0 && bpos < SelectPos+SelectSize && bpos+mb > SelectPos ) {
@@ -724,7 +765,7 @@ void Viewer::ShowHex()
 	const wchar_t BorderLine[] = {BoxSymbols[BS_V1],L' ',0};
 	int border_len = (int)wcslen(BorderLine);
 
-	for (EndFile=0,Y=Y1; Y<=Y2; Y++)
+	for (LastPage=EndFile=0,Y=Y1; Y<=Y2; Y++)
 	{
 		bSelStartFound = false;
 		bSelEndFound = false;
@@ -802,7 +843,7 @@ void Viewer::ShowHex()
 					{
 						unsigned ch = line[X+be] + (line[X+1-be] << 8);
 						_snwprintf(OutStr+out_len, ARRAYSIZE(OutStr)-out_len, L"%04X ", ch);
-						TextStr[TextPos++] = ch ? (wchar_t)ch : L' ';
+						TextStr[TextPos++] = ch ? (wchar_t)ch : ZERO_CHAR;
 					}
 					else if ((DWORD)X == nr-1) // half character only
 					{
@@ -866,7 +907,7 @@ void Viewer::ShowHex()
 				}
 				out_len += 3*16 + border_len;
 
-				txt_dump(VM.CodePage, line, nr, 16, TextStr);
+				txt_dump(VM.CodePage, line, nr, 16, TextStr, ZERO_CHAR);
 				TextPos = 16;
 			}
 		}
@@ -1060,30 +1101,41 @@ void Viewer::ReadString( ViewerString *pString, int MaxSize, bool update_cache )
 			break;
 		}
 
-		pString->lpData[OutPtr++] = ch ? ch : L' ';
+		pString->lpData[OutPtr++] = ch ? ch : ZERO_CHAR;
 		if ( !VM.Wrap )
 			continue;
 
-		if (OutPtr >= Width)
+		if ( VM.WordWrap && OutPtr <= Width && wrapped_char(ch) >= 0 )
 		{
-			if (VM.WordWrap && wrap_out > 0)
+			wrap_out = OutPtr;
+			wrap_pos = fpos1;
+		}
+
+		if ( OutPtr < Width )
+			continue;
+		if ( !VM.WordWrap )
+			break;
+
+		if ( OutPtr > Width )
 		{
+			if ( wrap_out <= 0 || is_space_or_nul(ch) )
+			{
+				wrap_out = OutPtr - 1;
+				wrap_pos = fpos;
+			}
+
 			OutPtr = wrap_out;
 			vseek(wrap_pos, SEEK_SET);
 			while (OutPtr > 0 && is_space_or_nul(pString->lpData[OutPtr-1]))
 				--OutPtr;
-				skip_space = true;
-			}
+
+			if ( bSelEndFound && pString->nSelEnd > OutPtr )
+				pString->nSelEnd = OutPtr;
+			if ( bSelStartFound && pString->nSelStart >= OutPtr )
+				bSelStartFound = bSelEndFound = false;
+
+			skip_space = true;
 			break;
-		}
-
-		if (!VM.WordWrap)
-			continue;
-
-		if (wrapped_char(ch) >= 0)
-		{
-			wrap_out = OutPtr;
-			wrap_pos = vtell();
 		}
 	}
 
@@ -1107,8 +1159,9 @@ void Viewer::ReadString( ViewerString *pString, int MaxSize, bool update_cache )
 
 			if (ch != L'\n')
 				vgetc_ib = ib; // ungetc()
+			else
+				eol_char = ch;
 
-			eol_char = ch;
 			break;
 		}
 	}
@@ -1235,12 +1288,15 @@ __int64 Viewer::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		case MCODE_V_VIEWERSTATE:
 		{
 			DWORD MacroViewerState=0;
-			MacroViewerState|=VM.Wrap?0x00000008:0;
-			MacroViewerState|=VM.WordWrap?0x00000010:0;
-			MacroViewerState|=VM.Hex?0x00000020:0;
-			//MacroViewerState|=VM.Hex > 1 ? 0x00xxxxx0:0;
-			MacroViewerState|=Opt.OnlyEditorViewerUsed?0x08000000|0x00000800:0;
-			MacroViewerState|=HostFileViewer && !HostFileViewer->GetCanLoseFocus()?0x00000800:0;
+			MacroViewerState |= ViOpt.AutoDetectCodePage     ? 0x00000001 : 0; //autodetect
+			MacroViewerState |= !ViOpt.AnsiCodePageAsDefault ? 0x00000002 : 0; //not use ANSI as default
+			MacroViewerState |=                                0x00000004;     //? always UNICODE
+			MacroViewerState |= VM.Wrap                      ? 0x00000008 : 0; //wrap mode
+			MacroViewerState |= VM.WordWrap                  ? 0x00000010 : 0; //word wrap
+			MacroViewerState |= VM.Hex == 1                  ? 0x00000020 : 0; //hex mode
+			MacroViewerState |= VM.Hex  > 1                  ? 0x00000040 : 0; //dump mode -- !!!update help
+			MacroViewerState |= Opt.OnlyEditorViewerUsed?0x08000000|0x00000800:0;
+			MacroViewerState |= HostFileViewer && !HostFileViewer->GetCanLoseFocus()?0x00000800:0;
 			return (__int64)MacroViewerState;
 		}
 		case MCODE_V_ITEMCOUNT: // ItemCount - число элементов в текущем объекте
@@ -1508,7 +1564,32 @@ int Viewer::ProcessKey(int Key)
 		}
 		case KEY_F4:
 		{
-			ProcessHexMode((VM.Hex + 1) % (2 + ViOpt.EnableDumpMode));
+			VM.Hex = VM.Hex != 1 ? 1 : (dump_mode ? 2 : 0);
+			ProcessHexMode(VM.Hex);
+			return TRUE;
+		}
+		case KEY_SHIFTF4:
+		{
+			MenuDataEx ModeListMenu[] = {
+				MSG(MViewF4Text),0,0, // Text
+				MSG(MViewF4),0,0,     // Hex
+				MSG(MViewF4Dump),0,0  // Dump
+			};
+			int mode;
+			{
+				VMenu vModes(MSG(MViewMode),ModeListMenu,ARRAYSIZE(ModeListMenu),ScrY-4);
+				vModes.SetFlags(VMENU_WRAPMODE | VMENU_AUTOHIGHLIGHT);
+				vModes.SetPosition(-1,-1,0,0);
+				vModes.SetSelectPos(VM.Hex, +1);
+				vModes.Process();
+				mode = vModes.Modal::GetExitCode();
+			}
+			if ( mode >= 0 && mode != VM.Hex )
+			{
+				if ( mode != 1 )
+					dump_mode = (mode == 2);
+				ProcessHexMode(VM.Hex = mode);
+			}
 			return TRUE;
 		}
 		case KEY_F7:
@@ -2081,18 +2162,30 @@ void Viewer::CacheLine( __int64 start, int length, bool have_eol )
 	}
 	else
 	{
+		int i, j;
+		bool reset = (start < lcache_first || start+length > lcache_last);
+		if ( reset )
+		{
+			i = CacheFindUp(start+length);
+			reset = (i < 0 || _abs64(lcache_lines[i]) != start);
+         if ( !reset )
+			{
+				j = (i + 1) % lcache_size;
+				reset = (_abs64(lcache_lines[j]) != start+length);
+			}
+		}
 #if defined(_DEBUG) && 1 // it is legal case if file changed...
-		_ASSERTE(start >= lcache_first && start+length <= lcache_last);
-		int i = CacheFindUp(start+length);
-		_ASSERTE(i >= 0 && _abs64(lcache_lines[i]) == start);
+		_ASSERTE( !reset );
 #endif
-		lcache_first = start;
-		lcache_last = start + length;
-
-		lcache_count = 2;
-		lcache_base = 0;
-		lcache_lines[0] = (have_eol ? -start : +start);
-		lcache_lines[1] = start + length;
+		if ( reset )
+		{
+			lcache_first = start;
+			lcache_last = start + length;
+			lcache_count = 2;
+			lcache_base = 0;
+			lcache_lines[0] = (have_eol ? -start : +start);
+			lcache_lines[1] = start + length;
+		}
 	}
 }
 
@@ -2183,6 +2276,8 @@ void Viewer::Up( int nlines )
 		for ( j = 0; j < max_backward_size/portion_size; ++j )
 		{
 			buff_size = (fpos > (__int64)portion_size ? portion_size : (int)fpos);
+			if ( buff_size <= 0 )
+				break;
 			fpos -= buff_size;
 			vseek(fpos, SEEK_SET);
 
@@ -2313,12 +2408,7 @@ void Viewer::ChangeViewKeyBar()
 				        :MViewF2Unwrap),1);
 		ViewKeyBar->Change(KBL_SHIFT,MSG((VM.WordWrap)?MViewF2:MViewShiftF2),1);
 
-		if ( !VM.Hex )
-			ViewKeyBar->Change(MSG(MViewF4),3);
-		else if ( VM.Hex > 1 || !ViOpt.EnableDumpMode )
-			ViewKeyBar->Change(MSG(MViewF4Text),3);
-		else
-			ViewKeyBar->Change(MSG(MViewF4Dump),3);
+		ViewKeyBar->Change(MSG(VM.Hex != 1 ? MViewF4 : (dump_mode ? MViewF4Dump : MViewF4Text)), 3);
 
 		if (VM.CodePage != GetOEMCP())
 			ViewKeyBar->Change(MSG(MViewF8DOS),7);
@@ -4255,8 +4345,7 @@ BOOL Viewer::isTemporary()
 int Viewer::ProcessHexMode(int newMode, bool isRedraw)
 {
 	int oldHex=VM.Hex;
-	newMode = newMode > 1+ViOpt.EnableDumpMode ? 1+ViOpt.EnableDumpMode : newMode;
-	VM.Hex = newMode < 1 ? 0 : newMode;
+	VM.Hex=newMode % 3;
 
 	if (!VM.Hex)
 		AdjustFilePos();

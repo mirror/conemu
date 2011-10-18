@@ -175,6 +175,8 @@ class Viewer:public ScreenObject
 		int  vgetc_ib;
 		wchar_t vgetc_composite;
 
+		bool dump_mode;
+
 	private:
 		virtual void DisplayObject();
 
@@ -224,6 +226,7 @@ class Viewer:public ScreenObject
 
 		void SetFileSize();
 		int GetStrBytesNum(const wchar_t *Str, int Length);
+		bool isBinaryFile();
 
 	public:
 		Viewer(bool bQuickView = false, UINT aCodePage = CP_AUTODETECT);
@@ -268,26 +271,8 @@ class Viewer:public ScreenObject
 		// Функция выделения - как самостоятельная функция
 		void SelectText(const __int64 &MatchPos,const __int64 &SearchLength, const DWORD Flags=0x1);
 
-		int GetTabSize() const { return ViOpt.TabSize; }
-		void SetTabSize(int newValue) { ViOpt.TabSize=newValue; }
-
-		int GetAutoDetectCodePage() const { return ViOpt.AutoDetectCodePage; }
-		void SetAutoDetectCodePage(int newValue) { ViOpt.AutoDetectCodePage=newValue; }
-
 		int GetShowScrollbar() const { return ViOpt.ShowScrollbar; }
 		void SetShowScrollbar(int newValue) { ViOpt.ShowScrollbar=newValue; }
-
-		int GetShowArrows() const { return ViOpt.ShowArrows; }
-		void SetShowArrows(int newValue) { ViOpt.ShowArrows=newValue; }
-		/* IS $ */
-		int GetPersistentBlocks() const { return ViOpt.PersistentBlocks; }
-		void SetPersistentBlocks(int newValue) { ViOpt.PersistentBlocks=newValue; }
-
-		int GetEnableDumpMode() const { return ViOpt.EnableDumpMode; }
-		void SetEnableDumpMode(int newValue) { ViOpt.EnableDumpMode = newValue; }
-
-		int GetSearchEditFocus() const { return ViOpt.SearchEditFocus; }
-		void SetSearchEditFocus(int newValue) { ViOpt.SearchEditFocus = newValue; }
 
 		int GetHexMode() const { return VM.Hex; }
 

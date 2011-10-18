@@ -324,7 +324,7 @@ struct ViewerOptions
 	int SearchRegexp;
 	int MaxLineSize; // 100..100000, default=10000
 	int SearchEditFocus; // auto-focus on edit text/hex window
-	int EnableDumpMode;
+	int Visible0x00;
 };
 
 // "Полиция"

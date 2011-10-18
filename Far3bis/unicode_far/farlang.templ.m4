@@ -2204,8 +2204,8 @@ upd:"Zeichentabelle &automatisch erkennen"
 "&Autodetectar tabla de caracteres"
 
 MViewConfigTabSize
-"Раз&мер табуляции"
-"Tab si&ze"
+"Размер &табуляции"
+"&Tab size"
 "Velikost &Tabulátoru"
 "Ta&bulatorgröße"
 "Ta&bulátor mérete"
@@ -2257,14 +2257,14 @@ upd:"Maximum line size"
 upd:"Maximum line size"
 upd:"Maximum line size"
 
-MViewConfigEnableDumpMode
-"Разрешить ре&жим дампа"
-"Enable &dump mode"
-upd:"&Enable dump mode"
-upd:"&Enable dump mode"
-upd:"&Enable dump mode"
-upd:"&Enable dump mode"
-upd:"&Enable dump mode"
+MViewConfigVisible0x00
+"Показывать '\\0'"
+"Visible '\\0'"
+upd:"Visible '\\0'"
+upd:"Visible '\\0'"
+upd:"Visible '\\0'"
+upd:"Visible '\\0'"
+upd:"Visible '\\0'"
 
 MViewConfigEditAutofocus
 "Авто-&фокус в диалоге поиска"
@@ -7193,6 +7193,15 @@ upd:"Dump"
 upd:"Dump"
 upd:"Dump"
 
+MViewMode
+"Режим просмотра"
+"View mode"
+upd:"View mode"
+upd:"View mode"
+upd:"View mode"
+upd:"View mode"
+upd:"View mode"
+
 MViewF8DOS
 "OEM"
 "OEM"
@@ -7232,13 +7241,13 @@ MViewShiftF3
 ""
 
 MViewShiftF4
-""
-""
-""
-""
-""
-""
-""
+"Режим"
+"Mode"
+upd:"Mode"
+upd:"Mode"
+upd:"Mode"
+upd:"Mode"
+upd:"Mode"
 
 MViewShiftF5
 ""
