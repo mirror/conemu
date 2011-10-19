@@ -50,6 +50,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "console.hpp"
 #include "configdb.hpp"
 #include "colormix.hpp"
+#include "imports.hpp"
+#include "event.hpp"
 
 BOOL __stdcall CtrlHandler(DWORD CtrlType);
 
@@ -360,18 +362,28 @@ void GetVideoMode(COORD& Size)
 	_OT(ViewConsoleInfo());
 }
 
-BOOL __stdcall CtrlHandler(DWORD CtrlType)
+Event CancelIoInProgress(true);
+
+DWORD WINAPI CancelSynchronousIoWrapper(LPVOID Thread)
 {
-	/*
-	    TODO: need handle
-	       CTRL_CLOSE_EVENT
-	       CTRL_LOGOFF_EVENT
-	       CTRL_SHUTDOWN_EVENT
-	*/
+	DWORD Result = ifn.CancelSynchronousIo(Thread);
+	CancelIoInProgress.Reset();
+	return Result;
+}
+
+BOOL WINAPI CtrlHandler(DWORD CtrlType)
+{
 	if (CtrlType==CTRL_C_EVENT || CtrlType==CTRL_BREAK_EVENT)
 	{
 		if (CtrlType==CTRL_BREAK_EVENT)
+		{
+			if(!CancelIoInProgress.Signaled())
+			{
+				CancelIoInProgress.Set();
+				CreateThread(nullptr, 0, CancelSynchronousIoWrapper, MainThreadHandle, 0, nullptr);
+			}
 			WriteInput(KEY_BREAK);
+		}
 
 		if (CtrlObject && CtrlObject->Cp())
 		{
