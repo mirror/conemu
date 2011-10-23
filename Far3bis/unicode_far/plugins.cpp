@@ -2607,7 +2607,7 @@ int PluginManager::CallPluginItem(const GUID& Guid, const GUID& ItemGuid)
 	if (!ProcessException)
 	{
 		Plugin *pPlugin = FindPlugin(Guid);
-		if (pPlugin && pPlugin->HasOpenPanel())
+		if (pPlugin && pPlugin->Load() && pPlugin->HasOpenPanel())
 		{
 			int curType = FrameManager->GetCurrentFrame()->GetType();
 			bool Editor = curType==MODALTYPE_EDITOR;
@@ -2771,4 +2771,10 @@ void PluginManager::GetCustomData(FileListItem *ListItem)
 	}
 
 	ListItem->CustomDataLoaded = true;
+}
+
+const GUID& PluginManager::GetGUID(HANDLE hPlugin)
+{
+	PluginHandle *ph = (PluginHandle*)hPlugin;
+	return ph->pPlugin->GetGUID();
 }

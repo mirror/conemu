@@ -4115,7 +4115,7 @@ int Dialog::AddToEditHistory(DialogItemEx* CurItem, const wchar_t *AddStr)
 {
 	CriticalSectionLock Lock(CS);
 
-	if (!*AddStr)
+	if (!*AddStr||!CurItem->ObjPtr)
 	{
 		return FALSE;
 	}
@@ -5199,7 +5199,7 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						}
 						case DM_LISTGETTITLES: // Param1=ID Param2=FarListTitles
 						{
-							
+
 							FarListTitles *ListTitle=(FarListTitles *)Param2;
 							string strTitle,strBottomTitle;
 							ListBox->GetTitle(strTitle);

@@ -241,6 +241,7 @@ class PluginManager
 		int CallPluginItem(const GUID& Guid, const GUID& ItemGuid);
 		Plugin *FindPlugin(const GUID& SysID);
 		INT_PTR PluginGuidToPluginNumber(const GUID& PluginId);
+		static const GUID& GetGUID(HANDLE hPlugin);
 
 //api functions
 

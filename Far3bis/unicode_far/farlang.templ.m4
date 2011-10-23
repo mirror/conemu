@@ -2249,17 +2249,17 @@ upd:"Dateien standardmäßig mit Windows-Kod&ierung öffnen"
 "Usar código ANS&I por defecto"
 
 MViewConfigMaxLineSize
-"&Максимальный размер строки"
-"&Maximum line size"
-upd:"Maximum line size"
-upd:"Maximum line size"
-upd:"Maximum line size"
-upd:"Maximum line size"
-upd:"Maximum line size"
+"&Максимальная ширина строки"
+"&Maximum line width"
+upd:"Maximum line width"
+upd:"Maximum line width"
+upd:"Maximum line width"
+upd:"Maximum line width"
+upd:"Maximum line width"
 
 MViewConfigVisible0x00
-"Показывать '\\0'"
-"Visible '\\0'"
+"Показывать '\\&0'"
+"Visible '\\&0'"
 upd:"Visible '\\0'"
 upd:"Visible '\\0'"
 upd:"Visible '\\0'"
@@ -6487,6 +6487,15 @@ upd:"correctly translated using selected codepage."
 upd:"correctly translated using selected codepage."
 upd:"correctly translated using selected codepage."
 "correctamente traducidos con la tabla (codepage) seleccionada."
+
+MEditorSwitchCPConfirm
+"Продолжить?"
+"Continue?"
+upd:"Continue?"
+upd:"Continue?"
+upd:"Continue?"
+upd:"Continue?"
+upd:"Continue?"
 
 MEditDataLostWarn
 "Во время редактирования файла некоторые данные были утеряны."

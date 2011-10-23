@@ -448,13 +448,13 @@ void ViewerConfig(ViewerOptions &ViOpt,bool Local)
 
 	Builder.StartColumns();
 	Builder.AddCheckbox(MViewConfigPersistentSelection, &ViOpt.PersistentBlocks);
-	DialogItemEx *SavePos = Builder.AddCheckbox(MViewConfigSavePos, &Opt.ViOpt.SavePos); //у 2useven10 выкинут "Opt.", хорошо бы, т.к. по AltShiftF9 должно действовать только на активный вьювер, но код фара на это не рассчитан
+	DialogItemEx *SavePos = Builder.AddCheckbox(MViewConfigSavePos, &Opt.ViOpt.SavePos); // can't be local
 	Builder.AddCheckbox(MViewConfigEditAutofocus, &ViOpt.SearchEditFocus);
 	DialogItemEx *TabSize = Builder.AddIntEditField(&ViOpt.TabSize, 3);
 	Builder.AddTextAfter(TabSize, MViewConfigTabSize);
 	Builder.ColumnBreak();
 	Builder.AddCheckbox(MViewConfigArrows, &ViOpt.ShowArrows);
-	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MViewConfigSaveShortPos, &Opt.ViOpt.SaveShortPos); //у 2useven10 выкинут "Opt.", хорошо бы, т.к. по AltShiftF9 должно действовать только на активный вьювер, но код фара на это не рассчитан
+	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MViewConfigSaveShortPos, &Opt.ViOpt.SaveShortPos); // can't be local
 	Builder.LinkFlags(SavePos, SaveShortPos, DIF_DISABLE);
 	Builder.AddCheckbox(MViewConfigVisible0x00, &ViOpt.Visible0x00);
 	Builder.AddCheckbox(MViewConfigScrollbar, &ViOpt.ShowScrollbar);
@@ -627,6 +627,7 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"MaxLineSize",&Opt.ViOpt.MaxLineSize,ViewerOptions::eDefLineSize, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"SearchEditFocus",&Opt.ViOpt.SearchEditFocus,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"Visible0x00",&Opt.ViOpt.Visible0x00,0, 0},
+	{0, GeneralConfig::TYPE_INTEGER, NKeyViewer,L"ZeroChar",&Opt.ViOpt.ZeroChar,0x00B7, 0}, // middle dot
 
 	{1, GeneralConfig::TYPE_INTEGER, NKeyDialog, L"EditHistory",&Opt.Dialogs.EditHistory,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeyDialog, L"EditBlock",&Opt.Dialogs.EditBlock,0, 0},
@@ -685,7 +686,6 @@ static struct FARConfig
 
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SaveHistory",&Opt.SaveHistory,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SaveFoldersHistory",&Opt.SaveFoldersHistory,1, 0},
-	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SavePluginFoldersHistory",&Opt.SavePluginFoldersHistory,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SaveViewHistory",&Opt.SaveViewHistory,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"UseRegisteredTypes",&Opt.UseRegisteredTypes,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"AutoSaveSetup",&Opt.AutoSaveSetup,0, 0},

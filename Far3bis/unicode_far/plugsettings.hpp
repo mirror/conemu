@@ -36,6 +36,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "plugin.hpp"
 #include "configdb.hpp"
 
+template <class Object> void DeleteItems(Object* Items,size_t Size)
+{
+	for(size_t ii=0;ii<Size;++ii)
+	{
+		delete [] Items[ii].Name;
+	}
+}
+
 template <class Object> class Vector
 {
 	private:
@@ -44,7 +52,12 @@ template <class Object> class Vector
 
 	public:
 		Vector():InternalCount(0), Count(0), Delta(8), Items(nullptr) {}
-		~Vector() { delete [] Items; Items=nullptr; }
+		~Vector()
+		{
+			DeleteItems(Items,Count);
+			delete [] Items;
+			Items=nullptr;
+		}
 		size_t GetSize(void) const { return Count; }
 		Object& AddItem(const Object &anItem)
 		{
@@ -65,18 +78,46 @@ template <class Object> class Vector
 		Object* GetItems(void) { return Items; }
 };
 
-class PluginSettings
+class AbstractSettings
+{
+	public:
+		virtual ~AbstractSettings();
+		virtual bool IsValid(void);
+		virtual int Set(const FarSettingsItem& Item)=0;
+		virtual int Get(FarSettingsItem& Item)=0;
+		virtual int Enum(FarSettingsEnum& Enum)=0;
+		virtual int Delete(const FarSettingsValue& Value)=0;
+		virtual int SubKey(const FarSettingsValue& Value, bool bCreate)=0;
+};
+
+class PluginSettings: public AbstractSettings
 {
 	private:
+		TPointerArray<Vector<FarSettingsName> > m_Enum;
 		TPointerArray<unsigned __int64> m_Keys;
 		TPointerArray<char*> m_Data;
-		TPointerArray<Vector<FarSettingsName> > m_Enum;
 		HierarchicalConfig *PluginsCfg;
 		PluginSettings();
 	public:
 		PluginSettings(const GUID& Guid);
 		~PluginSettings();
-		bool IsValid(void) {return m_Keys.getCount()!=0;}
+		bool IsValid(void);
+		int Set(const FarSettingsItem& Item);
+		int Get(FarSettingsItem& Item);
+		int Enum(FarSettingsEnum& Enum);
+		int Delete(const FarSettingsValue& Value);
+		int SubKey(const FarSettingsValue& Value, bool bCreate);
+};
+
+class FarSettings: public AbstractSettings
+{
+	private:
+		TPointerArray<Vector<FarSettingsHistory> > m_Enum;
+		typedef bool (*HistoryFilter)(int Type);
+		int FillHistory(int Type,FarSettingsEnum& Enum,HistoryFilter Filter);
+	public:
+		FarSettings();
+		~FarSettings();
 		int Set(const FarSettingsItem& Item);
 		int Get(FarSettingsItem& Item);
 		int Enum(FarSettingsEnum& Enum);

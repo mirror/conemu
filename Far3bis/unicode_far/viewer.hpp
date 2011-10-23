@@ -175,7 +175,7 @@ class Viewer:public ScreenObject
 		int  vgetc_ib;
 		wchar_t vgetc_composite;
 
-		bool dump_mode;
+		int dump_text_mode;
 
 	private:
 		virtual void DisplayObject();

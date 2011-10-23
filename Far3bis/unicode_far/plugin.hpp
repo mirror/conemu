@@ -1885,6 +1885,16 @@ enum FARSETTINGSTYPES
 	FST_DATA                        = 4,
 };
 
+enum FARSETTINGS_SUBFOLDERS
+{
+	FSSF_ROOT                       = 0,
+	FSSF_HISTORY_CMD                = 1,
+	FSSF_HISTORY_FOLDER             = 2,
+	FSSF_HISTORY_VIEW               = 3,
+	FSSF_HISTORY_EDIT               = 4,
+	FSSF_HISTORY_EXTERNAL           = 5,
+};
+
 struct FarSettingsCreate
 {
 	size_t StructSize;
@@ -1919,11 +1929,26 @@ struct FarSettingsName
 	enum FARSETTINGSTYPES Type;
 };
 
+struct FarSettingsHistory
+{
+	const wchar_t* Name;
+	FILETIME Time;
+	BOOL Lock;
+};
+
 struct FarSettingsEnum
 {
 	size_t Root;
 	size_t Count;
-	const struct FarSettingsName* Items;
+	union
+	{
+		const struct FarSettingsName* Items;
+		const struct FarSettingsHistory* Histories;
+	}
+#ifndef __cplusplus
+	Value
+#endif
+	;
 };
 
 struct FarSettingsValue

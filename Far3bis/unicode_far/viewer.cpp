@@ -72,8 +72,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static void PR_ViewerSearchMsg();
 static void ViewerSearchMsg(const wchar_t *name, int percent, int search_hex);
 
-//static int InitHex=FALSE,SearchHex=FALSE;
-
 static int ViewerID=0;
 
 static int utf8_to_WideChar(const char *s, int nc, wchar_t *w1,wchar_t *w2, int wlen, int &tail);
@@ -81,7 +79,7 @@ static int utf8_to_WideChar(const char *s, int nc, wchar_t *w1,wchar_t *w2, int 
 #define REPLACE_CHAR  0xFFFD // Replacement
 #define CONTINUE_CHAR 0x203A // Single Right-Pointing Angle Quotation Mark
 #define BOM_CHAR      0xFEFF // Zero Length Space
-#define ZERO_CHAR     (ViOpt.Visible0x00 ? 0x25CB : L' ') // White Circle : Space
+#define ZERO_CHAR     (ViOpt.Visible0x00 && ViOpt.ZeroChar > 0 ? (wchar_t)(ViOpt.ZeroChar) : L' ')
 
 Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	ViOpt(Opt.ViOpt),
@@ -108,7 +106,7 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	// Вспомним тип врапа
 	VM.Wrap=Opt.ViOpt.ViewerIsWrap;
 	VM.WordWrap=Opt.ViOpt.ViewerWrap;
-	VM.Hex = 0; //InitHex;
+	VM.Hex = dump_text_mode = -1;
 	ViewKeyBar=nullptr;
 	FilePos=0;
 	LeftPos=0;
@@ -159,8 +157,6 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 
 	ClearStruct(vString);
 	vString.lpData = new wchar_t[MAX_VIEWLINEB];
-
-	dump_mode = false;
 }
 
 
@@ -318,8 +314,6 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	apiGetFindDataEx(strFileName, ViewFindData);
 	UINT CachedCodePage=0;
 
-	bool check_dump_mode = true;
-
 	if (Opt.ViOpt.SavePos && !ReadStdin)
 	{
 		__int64 NewLeftPos,NewFilePos;
@@ -329,10 +323,10 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 		bool found = FilePositionCache::GetPosition(strCacheName,poscache);
 		NewFilePos=poscache.FilePos;
 		NewLeftPos=poscache.LeftPos;
-		if ( found && 1 != (VM.Hex=poscache.Hex) )
+		if ( found && VM.Hex == -1 ) // keep VM.Hex if file listed (Grey+ / Gray-)
 		{
-			check_dump_mode = false;
-			dump_mode = (VM.Hex == 2);
+			if ( 1 != (VM.Hex = poscache.Hex) )
+				dump_text_mode = VM.Hex;
 		}
 		CachedCodePage=poscache.CodePage;
 		BMSavePos=poscache.bm;
@@ -393,12 +387,10 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	}
 	SetFileSize();
 
-	if ( check_dump_mode )
-	{
-		dump_mode = isBinaryFile();
-		if ( VM.Hex == 0 && dump_mode )
-			VM.Hex = 2;
-	}
+	if ( -1 == dump_text_mode )
+		dump_text_mode = isBinaryFile() ? 2 : 0;
+	if ( -1 == VM.Hex )
+		VM.Hex = dump_text_mode;
 
 	if (FilePos > FileSize)
 		FilePos=0;
@@ -943,7 +935,6 @@ void Viewer::ShowHex()
 /* $ 27.04.2001 DJ
    отрисовка скроллбара - в отдельную функцию
 */
-
 void Viewer::DrawScrollbar()
 {
 	if (ViOpt.ShowScrollbar)
@@ -1316,9 +1307,9 @@ int Viewer::ProcessKey(int Key)
 	/* $ 22.01.2001 IS
 	     Происходят какие-то манипуляции -> снимем выделение
 	*/
-	if (!ViOpt.PersistentBlocks &&
-	        Key!=KEY_IDLE && Key!=KEY_NONE && !(Key==KEY_CTRLINS||Key==KEY_RCTRLINS||Key==KEY_CTRLNUMPAD0||Key==KEY_RCTRLNUMPAD0) &&
-	        Key!=KEY_CTRLC && Key!=KEY_RCTRLC)
+	if ( !ViOpt.PersistentBlocks &&
+			Key!=KEY_IDLE && Key!=KEY_NONE && !(Key==KEY_CTRLINS||Key==KEY_RCTRLINS||Key==KEY_CTRLNUMPAD0||Key==KEY_RCTRLNUMPAD0) &&
+			Key!=KEY_CTRLC && Key!=KEY_RCTRLC )
 		SelectSize = -1;
 
 	if (!InternalKey && !LastKeyUndo && (FilePos!=UndoData[0].UndoAddr || LeftPos!=UndoData[0].UndoLeft))
@@ -1564,7 +1555,7 @@ int Viewer::ProcessKey(int Key)
 		}
 		case KEY_F4:
 		{
-			VM.Hex = VM.Hex != 1 ? 1 : (dump_mode ? 2 : 0);
+			VM.Hex = VM.Hex != 1 ? 1 : (dump_text_mode ? 2 : 0);
 			ProcessHexMode(VM.Hex);
 			return TRUE;
 		}
@@ -1587,7 +1578,7 @@ int Viewer::ProcessKey(int Key)
 			if ( mode >= 0 && mode != VM.Hex )
 			{
 				if ( mode != 1 )
-					dump_mode = (mode == 2);
+					dump_text_mode = (mode == 2);
 				ProcessHexMode(VM.Hex = mode);
 			}
 			return TRUE;
@@ -2408,7 +2399,7 @@ void Viewer::ChangeViewKeyBar()
 				        :MViewF2Unwrap),1);
 		ViewKeyBar->Change(KBL_SHIFT,MSG((VM.WordWrap)?MViewF2:MViewShiftF2),1);
 
-		ViewKeyBar->Change(MSG(VM.Hex != 1 ? MViewF4 : (dump_mode ? MViewF4Dump : MViewF4Text)), 3);
+		ViewKeyBar->Change(MSG(VM.Hex != 1 ? MViewF4 : (dump_text_mode ? MViewF4Dump : MViewF4Text)), 3);
 
 		if (VM.CodePage != GetOEMCP())
 			ViewKeyBar->Change(MSG(MViewF8DOS),7);
@@ -3969,9 +3960,9 @@ void Viewer::GoTo(int ShowDlg,__int64 Offset, UINT64 Flags)
 				GoToDlg[RB_PRC].Selected=1;
 			}
 			else if (!StrCmpNI(GoToDlg[1].strData,L"0x",2)
-			         || GoToDlg[1].strData.At(0)==L'$'
-			         || GoToDlg[1].strData.Contains(L'h')
-			         || GoToDlg[1].strData.Contains(L'H'))  // он умный - hex код ввел!
+					 || GoToDlg[1].strData.At(0)==L'$'
+					 || GoToDlg[1].strData.Contains(L'h')
+					 || GoToDlg[1].strData.Contains(L'H'))  // он умный - hex код ввел!
 			{
 				GoToDlg[RB_PRC].Selected=GoToDlg[RB_DEC].Selected=0;
 				GoToDlg[RB_HEX].Selected=1;

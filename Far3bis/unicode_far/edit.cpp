@@ -121,12 +121,9 @@ Edit::~Edit()
 		xf_free(Str);
 }
 
-DWORD Edit::SetCodePage( UINT codepage, bool check_only, char * &decoded, int &bsize )
+DWORD Edit::SetCodePage(UINT codepage, bool Set)
 {
-	DWORD Ret = SETCP_NOERROR;
-	if (codepage == m_codepage)
-		return Ret;
-
+	DWORD Ret=SETCP_NOERROR;
 	DWORD wc2mbFlags=WC_NO_BEST_FIT_CHARS;
 	BOOL UsedDefaultChar=FALSE;
 	LPBOOL lpUsedDefaultChar=&UsedDefaultChar;
@@ -136,59 +133,53 @@ DWORD Edit::SetCodePage( UINT codepage, bool check_only, char * &decoded, int &b
 		wc2mbFlags=0;
 		lpUsedDefaultChar=nullptr;
 	}
-	DWORD mb2wcFlags = (codepage == CP_UTF7  ? 0 : MB_ERR_INVALID_CHARS); // BUGBUG: CP_SYMBOL, 50xxx, 57xxx too
 
-	if ( Str && StrSize )
+	DWORD mb2wcFlags=MB_ERR_INVALID_CHARS;
+
+	if (codepage==CP_UTF7) // BUGBUG: CP_SYMBOL, 50xxx, 57xxx too
 	{
-		if ( 3*StrSize + 1 > bsize )
+		mb2wcFlags=0;
+	}
+
+	if (codepage != m_codepage)
+	{
+		if (Str && *Str)
 		{
-			delete[] decoded;
-			decoded = new char[bsize = 256 + 4*StrSize];
-			if ( !decoded )
+			//m_codepage = codepage;
+			int length = WideCharToMultiByte(m_codepage, wc2mbFlags, Str, StrSize, nullptr, 0, nullptr, lpUsedDefaultChar);
+			if (UsedDefaultChar)
 			{
-				bsize = 0;
-				return Ret | SETCP_OTHERERROR;
+				Ret|=SETCP_WC2MBERROR;
+			}
+			if ((Ret == SETCP_NOERROR) || (Ret!=SETCP_NOERROR && Set))
+			{
+				char *decoded = (char*)xf_malloc(length);
+				WideCharToMultiByte(m_codepage, 0, Str, StrSize, decoded, length, nullptr, nullptr);
+				int length2 = MultiByteToWideChar(codepage, mb2wcFlags, decoded, length, nullptr, 0);
+				if (!length2 && GetLastError()==ERROR_NO_UNICODE_TRANSLATION)
+				{
+					Ret|=SETCP_MB2WCERROR;
+					length2 = MultiByteToWideChar(codepage, 0, decoded, length, nullptr, 0);
+				}
+				if (Set)
+				{
+					wchar_t *encoded = (wchar_t*)xf_malloc((length2+1)*sizeof(wchar_t));
+					length2 = MultiByteToWideChar(codepage, 0, decoded, length, encoded, length2);
+					encoded[length2] = L'\0';
+					xf_free(Str);
+					Str = encoded;
+					StrSize = length2;
+					m_codepage = codepage;
+					Changed();
+				}
+				xf_free(decoded);
 			}
 		}
-
-		int length = WideCharToMultiByte(m_codepage, 0, Str, StrSize, decoded, bsize, nullptr, lpUsedDefaultChar);
-		if (UsedDefaultChar)
+		else
 		{
-			Ret |= SETCP_WC2MBERROR;
-			if ( check_only )
-				return Ret;
+			m_codepage = codepage;
 		}
-
-		int length2 = MultiByteToWideChar(codepage, mb2wcFlags, decoded, length, nullptr, 0);
-		if (!length2 && GetLastError() == ERROR_NO_UNICODE_TRANSLATION)
-		{
-			Ret |= SETCP_MB2WCERROR;
-			if ( !check_only )
-				length2 = MultiByteToWideChar(codepage, 0, decoded, length, nullptr, 0);
-		}
-		if ( check_only )
-			return Ret;
-
-		if ( StrSize < length2 )
-		{
-			wchar_t *encoded = (wchar_t*)xf_malloc((length2+1)*sizeof(wchar_t));
-
-			if (!encoded)
-				return Ret | SETCP_OTHERERROR;
-			xf_free(Str);
-			Str = encoded;
-		}
-
-		length2 = MultiByteToWideChar(codepage, 0, decoded, length, Str, length2);
-		Str[StrSize = length2] = L'\0';
 	}
-
-   if ( !check_only )
-	{
-		m_codepage = codepage;
-		Changed();
-	}
-
 	return Ret;
 }
 
@@ -526,9 +517,7 @@ int Edit::ProcessInsPath(int Key,int PrevSelStart,int PrevSelEnd)
 
 	if (Key>=KEY_RCTRL0 && Key<=KEY_RCTRL9) // шорткаты?
 	{
-		string strPluginModule, strPluginFile, strPluginData;
-
-		if (CtrlObject->FolderShortcuts->Get(Key-KEY_RCTRL0,&strPathName,&strPluginModule,&strPluginFile,&strPluginData))
+		if (CtrlObject->FolderShortcuts->Get(Key-KEY_RCTRL0,&strPathName,nullptr,nullptr,nullptr))
 			RetCode=TRUE;
 	}
 	else // Пути/имена?
@@ -3271,7 +3260,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey)
 						int MenuKey=InputRecordToKey(&ir);
 
 						// ввод
-						if((MenuKey>=static_cast<int>(L' ') && MenuKey<=static_cast<int>(WCHAR_MAX)) || MenuKey==KEY_BS || MenuKey==KEY_DEL || MenuKey==KEY_NUMDEL)
+						if((MenuKey>=L' ' && MenuKey<=WCHAR_MAX) || MenuKey==KEY_BS || MenuKey==KEY_DEL || MenuKey==KEY_NUMDEL)
 						{
 							string strPrev;
 							DeleteBlock();

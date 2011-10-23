@@ -325,6 +325,7 @@ struct ViewerOptions
 	int MaxLineSize; // 100..100000, default=10000
 	int SearchEditFocus; // auto-focus on edit text/hex window
 	int Visible0x00;
+	int ZeroChar;
 };
 
 // "Полиция"
@@ -513,7 +514,6 @@ struct Options
 	int SaveHistory;
 	int HistoryCount;
 	int SaveFoldersHistory;
-	int SavePluginFoldersHistory;
 	int FoldersHistoryCount;
 	int DialogsHistoryCount;
 
