@@ -1258,20 +1258,20 @@ struct MacroAddMacro
 
 enum FARMACROVARTYPE
 {
-	FMVT_UNKNOWN                = -1,
-	FMVT_INTEGER                = 0,
-	FMVT_STRING                 = 1,
-	FMVT_DOUBLE                 = 2,
+	FMVT_UNKNOWN                = 0,
+	FMVT_INTEGER                = 1,
+	FMVT_STRING                 = 2,
+	FMVT_DOUBLE                 = 3,
 };
 
 struct FarMacroValue
 {
-	enum FARMACROVARTYPE type;
+	enum FARMACROVARTYPE Type;
 	union
 	{
-		__int64  i;
-		double   d;
-		const wchar_t *s;
+		__int64  Integer;
+		double   Double;
+		const wchar_t *String;
 	}
 #ifndef __cplusplus
 	Value
@@ -1318,10 +1318,10 @@ struct ProcessMacroInfo
 	;
 };
 
-struct TFarGetValue
+struct FarGetValue
 {
-	int GetType;
-	struct FarMacroValue Val;
+	int Type;
+	struct FarMacroValue Value;
 };
 
 typedef unsigned __int64 FARSETCOLORFLAGS;
@@ -1887,12 +1887,22 @@ enum FARSETTINGSTYPES
 
 enum FARSETTINGS_SUBFOLDERS
 {
-	FSSF_ROOT                       = 0,
-	FSSF_HISTORY_CMD                = 1,
-	FSSF_HISTORY_FOLDER             = 2,
-	FSSF_HISTORY_VIEW               = 3,
-	FSSF_HISTORY_EDIT               = 4,
-	FSSF_HISTORY_EXTERNAL           = 5,
+	FSSF_ROOT                       =  0,
+	FSSF_HISTORY_CMD                =  1,
+	FSSF_HISTORY_FOLDER             =  2,
+	FSSF_HISTORY_VIEW               =  3,
+	FSSF_HISTORY_EDIT               =  4,
+	FSSF_HISTORY_EXTERNAL           =  5,
+	FSSF_FOLDERSHORTCUT_0           =  6,
+	FSSF_FOLDERSHORTCUT_1           =  7,
+	FSSF_FOLDERSHORTCUT_2           =  8,
+	FSSF_FOLDERSHORTCUT_3           =  9,
+	FSSF_FOLDERSHORTCUT_4           = 10,
+	FSSF_FOLDERSHORTCUT_5           = 11,
+	FSSF_FOLDERSHORTCUT_6           = 12,
+	FSSF_FOLDERSHORTCUT_7           = 13,
+	FSSF_FOLDERSHORTCUT_8           = 14,
+	FSSF_FOLDERSHORTCUT_9           = 15,
 };
 
 struct FarSettingsCreate
@@ -1932,6 +1942,9 @@ struct FarSettingsName
 struct FarSettingsHistory
 {
 	const wchar_t* Name;
+	const wchar_t* Param;
+	GUID PluginId;
+	const wchar_t* File;
 	FILETIME Time;
 	BOOL Lock;
 };

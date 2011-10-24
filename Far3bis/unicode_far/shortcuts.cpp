@@ -173,6 +173,27 @@ Shortcuts::~Shortcuts()
 	delete cfg;
 }
 
+static void Fill(ShortcutItem* RetItem, string* Folder, GUID* PluginGuid, string* PluginFile, string* PluginData)
+{
+	if(Folder)
+	{
+		*Folder = RetItem->strFolder;
+		apiExpandEnvironmentStrings(*Folder, *Folder);
+	}
+	if(PluginGuid)
+	{
+		*PluginGuid = RetItem->PluginGuid;
+	}
+	if(PluginFile)
+	{
+		*PluginFile = RetItem->strPluginFile;
+	}
+	if(PluginData)
+	{
+		*PluginData = RetItem->strPluginData;
+	}
+}
+
 bool Shortcuts::Get(size_t Pos, string* Folder, GUID* PluginGuid, string* PluginFile, string* PluginData)
 {
 	bool Result = false;
@@ -232,6 +253,12 @@ bool Shortcuts::Get(size_t Pos, string* Folder, GUID* PluginGuid, string* Plugin
 								NewItem->strPluginFile = Info.HostFile;
 								NewItem->strPluginData = Info.ShortcutData;
 							}
+							else
+							{
+								Item->PluginGuid = FarGuid;
+								Item->strPluginFile = L"";
+								Item->strPluginData = L"";
+							}
 							MenuItemEx NewMenuItem = {};
 							NewMenuItem.strName = NewItem->strFolder;
 							NewMenuItem.UserData = &NewItem;
@@ -278,27 +305,20 @@ bool Shortcuts::Get(size_t Pos, string* Folder, GUID* PluginGuid, string* Plugin
 
 		if(RetItem)
 		{
-			if(Folder)
-			{
-				*Folder = RetItem->strFolder;
-				apiExpandEnvironmentStrings(*Folder, *Folder);
-			}
-			if(PluginGuid)
-			{
-				*PluginGuid = RetItem->PluginGuid;
-			}
-			if(PluginFile)
-			{
-				*PluginFile = RetItem->strPluginFile;
-			}
-			if(PluginData)
-			{
-				*PluginData = RetItem->strPluginData;
-			}
+			Fill(RetItem,Folder,PluginGuid,PluginFile,PluginData);
 			Result = true;
 		}
 	}
 	return Result;
+}
+
+bool Shortcuts::Get(size_t Pos, size_t Index, string* Folder, GUID* PluginGuid, string* PluginFile, string* PluginData)
+{
+	if(Items[Pos].Count()<=Index) return FALSE;
+	ShortcutItem* RetItem = Items[Pos].First();
+	while(Index--) RetItem = Items[Pos].Next(RetItem);
+	Fill(RetItem,Folder,PluginGuid,PluginFile,PluginData);
+	return TRUE;
 }
 
 void Shortcuts::Set(size_t Pos, const wchar_t* Folder, const GUID& PluginGuid, const wchar_t* PluginFile, const wchar_t* PluginData)
@@ -442,6 +462,12 @@ void Shortcuts::Configure()
 						Item->PluginGuid = ph->pPlugin->GetGUID();
 						Item->strPluginFile = Info.HostFile;
 						Item->strPluginData = Info.ShortcutData;
+					}
+					else
+					{
+						Item->PluginGuid = FarGuid;
+						Item->strPluginFile = L"";
+						Item->strPluginData = L"";
 					}
 					MakeItemName(Pos, MenuItem);
 				}

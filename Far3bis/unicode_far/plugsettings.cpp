@@ -38,6 +38,18 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "history.hpp"
 #include "datetime.hpp"
+#include "FarGuid.hpp"
+#include "shortcuts.hpp"
+
+template<> void DeleteItems<FarSettingsHistory>(FarSettingsHistory* Items,size_t Size)
+{
+	for(size_t ii=0;ii<Size;++ii)
+	{
+		delete [] Items[ii].Name;
+		delete [] Items[ii].Param;
+		delete [] Items[ii].File;
+	}
+}
 
 AbstractSettings::~AbstractSettings()
 {
@@ -162,11 +174,26 @@ int PluginSettings::Get(FarSettingsItem& Item)
 	return result;
 }
 
-template <class Object> void AddString(Vector<Object>& Array, Object& Item, string& String)
+static wchar_t* AddString(const string& String)
 {
 	size_t size=String.GetLength()+1;
-	Item.Name=new wchar_t[size];
-	wmemcpy((wchar_t*)Item.Name,String.CPtr(),size);
+	wchar_t* result=new wchar_t[size];
+	wmemcpy(result,String.CPtr(),size);
+	return result;
+}
+
+static void AddItem(Vector<FarSettingsName>& Array, FarSettingsName& Item, const string& String)
+{
+	Item.Name=AddString(String);
+	Array.AddItem(Item);
+}
+
+static void AddItem(Vector<FarSettingsHistory>& Array, FarSettingsHistory& Item, const string& Name, const string& Param, const GUID& Guid, const string& File)
+{
+	Item.Name=AddString(Name);
+	Item.Param=AddString(Param);
+	Item.PluginId=Guid;
+	Item.File=AddString(File);
 	Array.AddItem(Item);
 }
 
@@ -184,7 +211,7 @@ int PluginSettings::Enum(FarSettingsEnum& Enum)
 		item.Type=FST_SUBKEY;
 		while (PluginsCfg->EnumKeys(root,Index++,strName))
 		{
-			AddString(array,item,strName);
+			AddItem(array,item,strName);
 		}
 		Index=0;
 		while (PluginsCfg->EnumValues(root,Index++,strName,&Type))
@@ -204,7 +231,7 @@ int PluginSettings::Enum(FarSettingsEnum& Enum)
 			}
 			if(item.Type!=FST_UNKNOWN)
 			{
-				AddString(array,item,strName);
+				AddItem(array,item,strName);
 			}
 		}
 		Enum.Count=array.GetSize();
@@ -304,6 +331,30 @@ int FarSettings::Enum(FarSettingsEnum& Enum)
 			return FillHistory(HISTORYTYPE_VIEW,Enum,FilterEdit);
 		case FSSF_HISTORY_EXTERNAL:
 			return FillHistory(HISTORYTYPE_VIEW,Enum,FilterExt);
+		case FSSF_FOLDERSHORTCUT_0:
+		case FSSF_FOLDERSHORTCUT_1:
+		case FSSF_FOLDERSHORTCUT_2:
+		case FSSF_FOLDERSHORTCUT_3:
+		case FSSF_FOLDERSHORTCUT_4:
+		case FSSF_FOLDERSHORTCUT_5:
+		case FSSF_FOLDERSHORTCUT_6:
+		case FSSF_FOLDERSHORTCUT_7:
+		case FSSF_FOLDERSHORTCUT_8:
+		case FSSF_FOLDERSHORTCUT_9:
+			{
+				Vector<FarSettingsHistory>& array=*m_Enum.addItem();
+				FarSettingsHistory item={0};
+				string strName,strFile,strData;
+				GUID plugin; size_t index=0;
+				while(CtrlObject->FolderShortcuts->Get(Enum.Root-FSSF_FOLDERSHORTCUT_0,index++,&strName,&plugin,&strFile,&strData))
+				{
+					AddItem(array,item,strName,strData,plugin,strFile);
+				}
+				Enum.Count=array.GetSize();
+				Enum.Histories=array.GetItems();
+				return TRUE;
+			}
+			break;
 	}
 	return FALSE;
 }
@@ -321,7 +372,7 @@ int FarSettings::SubKey(const FarSettingsValue& Value, bool bCreate)
 int FarSettings::FillHistory(int Type,FarSettingsEnum& Enum,HistoryFilter Filter)
 {
 	Vector<FarSettingsHistory>& array=*m_Enum.addItem();
-	FarSettingsHistory item;
+	FarSettingsHistory item={0};
 	DWORD Index=0;
 	string strName,strHistoryName,strGuid,strFile,strData;
 
@@ -335,7 +386,9 @@ int FarSettings::FillHistory(int Type,FarSettingsEnum& Enum,HistoryFilter Filter
 		{
 			UI64ToFileTime(Time,&item.Time);
 			item.Lock=HLock;
-			AddString(array,item,strName);
+			GUID Guid;
+			if(strGuid.IsEmpty()||!StrToGuid(strGuid,Guid)) Guid=FarGuid;
+			AddItem(array,item,strName,strData,Guid,strFile);
 		}
 	}
 	Enum.Count=array.GetSize();

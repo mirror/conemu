@@ -3103,7 +3103,7 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 
 	if (CtrlObject->Macro.GetMode()==MACRO_DIALOG && CurFrame && CurFrame->GetType()==MODALTYPE_DIALOG)
 	{
-		TFarGetValue fgv={TypeInf,FMVT_UNKNOWN};
+		FarGetValue fgv={TypeInf,FMVT_UNKNOWN};
 		unsigned DlgItemCount=((Dialog*)CurFrame)->GetAllItemCount();
 		const DialogItemEx **DlgItem=((Dialog*)CurFrame)->GetAllItem();
 		bool CallDialog=true;
@@ -3228,34 +3228,36 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 
 		if (CallDialog)
 		{
-			fgv.Val.type=(FARMACROVARTYPE)Ret.type();
+			fgv.Value.Type=(FARMACROVARTYPE)Ret.type();
 			switch (Ret.type())
 			{
 				case vtUnknown:
 				case vtInteger:
-					fgv.Val.i=Ret.i();
+					fgv.Value.Integer=Ret.i();
 					break;
 				case vtString:
-					fgv.Val.s=Ret.s();
+					fgv.Value.String=Ret.s();
 					break;
 				case vtDouble:
-					fgv.Val.d=Ret.d();
+					fgv.Value.Double=Ret.d();
 					break;
 			}
 
 			if (SendDlgMessage((HANDLE)CurFrame,DN_GETVALUE,Index,&fgv))
 			{
-				switch (fgv.Val.type)
+				switch (fgv.Value.Type)
 				{
 					case FMVT_UNKNOWN:
+						Ret=0;
+						break;
 					case FMVT_INTEGER:
-						Ret=fgv.Val.i;
+						Ret=fgv.Value.Integer;
 						break;
 					case FMVT_DOUBLE:
-						Ret=fgv.Val.d;
+						Ret=fgv.Value.Double;
 						break;
 					case FMVT_STRING:
-						Ret=fgv.Val.s;
+						Ret=fgv.Value.String;
 						break;
 					default:
 						Ret=-1;
@@ -4674,18 +4676,18 @@ struct FarMacroValue
 			for (I=nParam-1; I >= 0; --I)
 			{
 				VMStack.Pop(V);
-				(vParams+I)->type=(FARMACROVARTYPE)V.type();
+				(vParams+I)->Type=(FARMACROVARTYPE)V.type();
 				switch(V.type())
 				{
 					case vtUnknown:
 					case vtInteger:
-						(vParams+I)->i=V.i();
+						(vParams+I)->Integer=V.i();
 						break;
 					case vtString:
-						(vParams+I)->s=xf_wcsdup(V.s());
+						(vParams+I)->String=xf_wcsdup(V.s());
 						break;
 					case vtDouble:
-						(vParams+I)->d=V.d();
+						(vParams+I)->Double=V.d();
 						break;
 					//case vtUnknown:
 					//	break;
@@ -4706,16 +4708,16 @@ struct FarMacroValue
 					//for (I=nResults-1; I >= 0; --I)
 					{
 						//V.type()=(TVarType)(Results+I)->type;
-						switch((Info.Func.Results+I)->type)
+						switch((Info.Func.Results+I)->Type)
 						{
 							case FMVT_INTEGER:
-								V=(Info.Func.Results+I)->i;
+								V=(Info.Func.Results+I)->Integer;
 								break;
 							case FMVT_STRING:
-								V=(Info.Func.Results+I)->s;
+								V=(Info.Func.Results+I)->String;
 								break;
 							case FMVT_DOUBLE:
-								V=(Info.Func.Results+I)->d;
+								V=(Info.Func.Results+I)->Double;
 								break;
 							case FMVT_UNKNOWN:
 								V=0;
@@ -4727,8 +4729,8 @@ struct FarMacroValue
 			}
 
 			for (I=0; I < nParam; ++I)
-				if((vParams+I)->type == vtString && (vParams+I)->s)
-					xf_free((void*)(vParams+I)->s);
+				if((vParams+I)->Type == vtString && (vParams+I)->String)
+					xf_free((void*)(vParams+I)->String);
 
 			delete[] vParams;
 		}

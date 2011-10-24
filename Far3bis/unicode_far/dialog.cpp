@@ -2326,6 +2326,7 @@ __int64 Dialog::VMProcess(int OpCode,void *vParam,__int64 iParam)
 
 				case DI_LISTBOX:
 					Ret=Item[FocusPos]->ListPtr->VMProcess(OpCode,vParam,iParam);
+					break;
 
 				case DI_USERCONTROL:
 				{
@@ -2341,15 +2342,15 @@ __int64 Dialog::VMProcess(int OpCode,void *vParam,__int64 iParam)
 					return 0;
 			}
 
-			TFarGetValue fgv={OpCode==MCODE_V_ITEMCOUNT?11:7,{FMVT_INTEGER}};
-			fgv.Val.i=Ret;
+			FarGetValue fgv={OpCode==MCODE_V_ITEMCOUNT?11:7,{FMVT_INTEGER}};
+			fgv.Value.Integer=Ret;
 
 			if (SendDlgMessage((HANDLE)this,DN_GETVALUE,FocusPos,&fgv))
 			{
-				switch (fgv.Val.type)
+				switch (fgv.Value.Type)
 				{
 					case FMVT_INTEGER:
-						Ret=fgv.Val.i;
+						Ret=fgv.Value.Integer;
 						break;
 					default:
 						Ret=0;
