@@ -884,7 +884,11 @@ HANDLE PluginManager::OpenFilePlugin(
 			if (menu.GetExitCode() == -1)
 				hResult = (HANDLE)-2;
 			else
-				pResult = *static_cast<PluginHandle**>(menu.GetUserData(nullptr, 0));
+			{
+				void* pItem = menu.GetUserData(nullptr, 0);
+				if (pItem)
+					pResult = *static_cast<PluginHandle**>(pItem);
+			}
 		}
 		else
 		{

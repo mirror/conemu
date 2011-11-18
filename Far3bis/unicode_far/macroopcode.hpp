@@ -228,6 +228,7 @@ enum MACRO_OP_CODE
 	MCODE_F_PLUGIN_CONFIG,            // N=Plugin.Config(Guid[,MenuGuid])
 	MCODE_F_MENU_FILTER,              // N=Menu.Filter(Action[,Mode])
 	MCODE_F_MENU_FILTERSTR,           // S=Menu.FilterStr([Action[,S]])
+	MCODE_F_DLG_SETFOCUS,             // N=Dlg.SetFocus([ID])
 
 	/* ************************************************************************* */
 	// булевые переменные - различные состояния
@@ -348,6 +349,7 @@ enum MACRO_OP_CODE
 	MCODE_V_DLGITEMTYPE,              // Dlg.ItemType
 	MCODE_V_DLGITEMCOUNT,             // Dlg.ItemCount
 	MCODE_V_DLGCURPOS,                // Dlg.CurPos
+	MCODE_V_DLGPREVPOS,               // Dlg.PrevPos
 	MCODE_V_DLGINFOID,                // Dlg.Info.Id
 	MCODE_V_DLGINFOOWNER,             // Dlg.Info.Owner
 

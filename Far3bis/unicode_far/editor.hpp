@@ -213,6 +213,9 @@ class Editor:public ScreenObject
 
 		FileEditor *HostFileEditor;
 
+		int SortColorLockCount;
+		bool SortColorUpdate;
+
 	private:
 		virtual void DisplayObject();
 		void ShowEditor(int CurLineOnly);
@@ -345,6 +348,18 @@ class Editor:public ScreenObject
 		void SetWordDiv(const wchar_t *WordDiv) { EdOpt.strWordDiv = WordDiv; }
 		const wchar_t *GetWordDiv() { return EdOpt.strWordDiv; }
 
+		void SetF7Rules(int NewMode) { EdOpt.F7Rules = NewMode; }
+		int GetF7Rules() { return EdOpt.F7Rules; }
+
+		void SetAllowEmptySpaceAfterEof(int NewMode) { EdOpt.AllowEmptySpaceAfterEof = NewMode; }
+		int GetAllowEmptySpaceAfterEof() { return EdOpt.AllowEmptySpaceAfterEof; }
+
+		void SetSearchSelFound(int NewMode) { EdOpt.SearchSelFound = NewMode; }
+		int GetSearchSelFound() { return EdOpt.SearchSelFound; }
+
+		void SetSearchRegexp(int NewMode) { EdOpt.SearchRegexp = NewMode; }
+		int GetSearchRegexp() { return EdOpt.SearchRegexp; }
+
 		void SetShowWhiteSpace(int NewMode);
 
 		void GetSavePosMode(int &SavePos, int &SaveShortPos);
@@ -383,4 +398,7 @@ class Editor:public ScreenObject
 		void GetCursorType(bool& Visible, DWORD& Size);
 		void SetObjectColor(PaletteColors Color,PaletteColors SelColor);
 		void DrawScrollbar();
+		void SortColorLock();
+		void SortColorUnlock();
+		bool SortColorLocked();
 };
