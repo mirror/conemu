@@ -307,11 +307,40 @@ public:
 	virtual void DeleteOldPositions(int DaysToKeep, int MinimunEntries) = 0;
 };
 
+class MacroConfig: public XmlConfig, public SQLiteDb {
+
+public:
+
+	virtual ~MacroConfig() {}
+
+	virtual bool EnumConsts(string &strName, string &Value, string &Type) = 0;
+	virtual bool GetConstValue(const wchar_t *Name, string &Value, string &Type) = 0;
+	virtual unsigned __int64 SetConstValue(const wchar_t *Name, const wchar_t *Value, const wchar_t *type) = 0;
+	virtual bool DeleteConst(const wchar_t *Name) = 0;
+
+	virtual bool EnumVars(string &strName, string &Value, string &Type) = 0;
+	virtual bool GetVarValue(const wchar_t *Name, string &Value, string &Type) = 0;
+	virtual unsigned __int64 SetVarValue(const wchar_t *Name, const wchar_t *Value, const wchar_t *Type) = 0;
+	virtual bool DeleteVar(const wchar_t *Name) = 0;
+
+	virtual bool EnumFunctions(string &strGuid, string &strFunctionName, int *nParam, int *oParam, string &Flags, string &strSequence, string &strSyntax, string &strDescription) = 0;
+	virtual unsigned __int64 SetFunction(const wchar_t *Guid, const wchar_t *FunctionName, unsigned __int64 nParam, unsigned __int64 oParam, const wchar_t *Flags, const wchar_t *Sequence, const wchar_t *Syntax, const wchar_t *Description) = 0;
+	virtual bool DeleteFunction(const wchar_t *Guid, const wchar_t *Name) = 0;
+
+	virtual bool EnumKeyMacros(string &strArea, string &strKey, string &strFlags, string &strSequence, string &strDescription) = 0;
+	virtual unsigned __int64 SetKeyMacro(const wchar_t *Area, const wchar_t *Key, const wchar_t *Flags, const wchar_t *Sequence, const wchar_t *Description) = 0;
+	virtual bool DeleteKeyMacro(const wchar_t *Area, const wchar_t *Key) = 0;
+};
+
 extern GeneralConfig *GeneralCfg;
 extern AssociationsConfig *AssocConfig;
 extern PluginsCacheConfig *PlCacheCfg;
+#ifdef _DEBUG
+extern int PlCacheCfgEnum;
+#endif
 extern PluginsHotkeysConfig *PlHotkeyCfg;
 extern HistoryConfig *HistoryCfg;
+extern MacroConfig *MacroCfg;
 
 void InitDb();
 void ReleaseDb();

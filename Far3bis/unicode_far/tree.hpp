@@ -121,7 +121,23 @@ template <class D> void Tree<D>::clear(void)
 template <class D> D *Tree<D>::insert(D *data)
 {
 	D *result=nullptr;
+
+#if defined(_DEBUG)
+	void* tmp=nullptr;
+	if (sizeof(D)==sizeof(void*))
+		tmp = *(void**)data;
+#endif
+
 	internal_insert(&root,data,&result);
+
+#if defined(_DEBUG)
+	if (sizeof(D)==sizeof(void*))
+	{
+		_ASSERTE(*(void**)data != (void*)0xfeeefeee);
+		_ASSERTE(memcmp(tmp, *(void**)result, sizeof(void*))==0);
+	}
+#endif
+
 	return result;
 }
 

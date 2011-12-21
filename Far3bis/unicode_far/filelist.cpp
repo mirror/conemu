@@ -308,7 +308,7 @@ void FileList::SortFileList(int KeepPosition)
 			strCurName = ListData[CurFile]->strName;
 		}
 
-		hSortPlugin=(PanelMode==PLUGIN_PANEL && hPlugin && static_cast<PluginHandle*>(hPlugin)->pPlugin->HasCompare()) ? hPlugin:nullptr;
+		hSortPlugin=(PanelMode==PLUGIN_PANEL && hPlugin!=INVALID_HANDLE_VALUE && static_cast<PluginHandle*>(hPlugin)->pPlugin->HasCompare()) ? hPlugin:nullptr;
 
 		if (PanelMode!=PLUGIN_PANEL && ListSortMode==BY_CUSTOMDATA)
 		{
@@ -1653,7 +1653,7 @@ int FileList::ProcessKey(int Key)
 							else if (PluginMode)
 							{
 								RefreshedPanel=FrameManager->GetCurrentFrame()->GetType()==MODALTYPE_EDITOR?FALSE:TRUE;
-								FileEditor ShellEditor(strFileName,codepage,(Key==KEY_SHIFTF4?FFILEEDIT_CANNEWFILE:0)|FFILEEDIT_DISABLEHISTORY,-1,-1,strPluginData);
+								FileEditor ShellEditor(strFileName,codepage,(Key==KEY_SHIFTF4?FFILEEDIT_CANNEWFILE:0)|FFILEEDIT_DISABLEHISTORY,-1,-1,&strPluginData);
 								editorExitCode=ShellEditor.GetExitCode();
 								ShellEditor.SetDynamicallyBorn(false);
 								FrameManager->EnterModalEV();
@@ -2455,12 +2455,12 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 			return;
 		}
 
-		ExtPtr=wcsrchr(strFileName,L'.');
+		ExtPtr = wcsrchr(strFileName,L'.');
 		int ExeType=FALSE,BatType=FALSE;
 
 		if (ExtPtr)
 		{
-			ExeType=!StrCmpI(ExtPtr,L".exe") || !StrCmpI(ExtPtr,L".com");
+			ExeType=!StrCmpI(ExtPtr, L".exe") || !StrCmpI(ExtPtr, L".com");
 			BatType=IsBatchExtType(ExtPtr);
 		}
 
@@ -2495,7 +2495,7 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 				return;
 			}
 
-			if (SeparateWindow || (hOpen=OpenFilePlugin(strFileName,TRUE, Type))==INVALID_HANDLE_VALUE ||
+			if (SeparateWindow || (hOpen=OpenFilePlugin(&strFileName,TRUE, Type))==INVALID_HANDLE_VALUE ||
 			        hOpen==(HANDLE)-2)
 			{
 				if (EnableExec && hOpen!=(HANDLE)-2)
@@ -2514,7 +2514,7 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 }
 
 
-BOOL FileList::SetCurDir(const wchar_t *NewDir,int ClosePanel,BOOL IsUpdated)
+BOOL FileList::SetCurDir(const string& NewDir,int ClosePanel,BOOL IsUpdated)
 {
 	bool CheckFullScreen=false;
 
@@ -3094,7 +3094,7 @@ void FileList::SetViewMode(int ViewMode)
 	int NewAccessTime=IsColumnDisplayed(ADATE_COLUMN);
 	int ResortRequired=FALSE;
 	string strDriveRoot;
-	DWORD FileSystemFlags;
+	DWORD FileSystemFlags = 0;
 	GetPathRoot(strCurDir,strDriveRoot);
 
 	if (NewPacked && apiGetVolumeInformation(strDriveRoot,nullptr,nullptr,nullptr,&FileSystemFlags,nullptr))
@@ -3589,7 +3589,7 @@ int FileList::GetRealSelCount()
 }
 
 
-int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FAR_FIND_DATA_EX *fde)
+int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FAR_FIND_DATA_EX *fde,string *strOwner)
 {
 	if (!strName)
 	{
@@ -3604,6 +3604,8 @@ int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FA
 		{
 			GetSelPosition=1;
 			*strName = ListData[CurFile]->strName;
+			if (strOwner)
+				*strOwner = ListData[CurFile]->strOwner;
 
 			if (strShortName)
 			{
@@ -3639,6 +3641,8 @@ int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FA
 		if (ListData[GetSelPosition++]->Selected)
 		{
 			*strName = ListData[GetSelPosition-1]->strName;
+			if (strOwner)
+				*strOwner = ListData[GetSelPosition-1]->strOwner;
 
 			if (strShortName)
 			{
@@ -4709,7 +4713,7 @@ void FileList::SelectSortMode()
 }
 
 
-void FileList::DeleteDiz(const wchar_t *Name, const wchar_t *ShortName)
+void FileList::DeleteDiz(const string& Name, const string& ShortName)
 {
 	if (PanelMode==NORMAL_PANEL)
 		Diz.DeleteDiz(Name,ShortName);
@@ -4730,10 +4734,10 @@ void FileList::GetDizName(string &strDizName)
 }
 
 
-void FileList::CopyDiz(const wchar_t *Name, const wchar_t *ShortName,const wchar_t *DestName,
-                       const wchar_t *DestShortName,DizList *DestDiz)
+void FileList::CopyDiz(const string& Name, const string& ShortName,const string& DestName,
+                       const string& DestShortName,DizList *DestDiz)
 {
-	Diz.CopyDiz(Name,ShortName,DestName,DestShortName,DestDiz);
+	Diz.CopyDiz(Name, ShortName, DestName, DestShortName, DestDiz);
 }
 
 
@@ -4837,7 +4841,7 @@ bool FileList::ApplyCommand()
 		string strListName, strAnotherListName;
 		string strShortListName, strAnotherShortListName;
 		string strConvertedCommand = strCommand;
-		int PreserveLFN=SubstFileName(strConvertedCommand,strSelName,strSelShortName,&strListName,&strAnotherListName,&strShortListName, &strAnotherShortListName);
+		int PreserveLFN=SubstFileName(strConvertedCommand,strSelName, strSelShortName, &strListName, &strAnotherListName, &strShortListName, &strAnotherShortListName);
 		bool ListFileUsed=!strListName.IsEmpty()||!strAnotherListName.IsEmpty()||!strShortListName.IsEmpty()||!strAnotherShortListName.IsEmpty();
 
 		if (ExtractIfExistCommand(strConvertedCommand))
@@ -5035,7 +5039,7 @@ int FileList::GetPrevDirectoriesFirst()
 	return (PanelMode==PLUGIN_PANEL && !PluginsList.Empty())?(*PluginsList.First())->PrevDirectoriesFirst:DirectoriesFirst;
 }
 
-HANDLE FileList::OpenFilePlugin(const wchar_t *FileName, int PushPrev, OPENFILEPLUGINTYPE Type)
+HANDLE FileList::OpenFilePlugin(const string* FileName, int PushPrev, OPENFILEPLUGINTYPE Type)
 {
 	if (!PushPrev && PanelMode==PLUGIN_PANEL)
 	{
@@ -5059,14 +5063,14 @@ HANDLE FileList::OpenFilePlugin(const wchar_t *FileName, int PushPrev, OPENFILEP
 			Item->PrevListData=ListData;
 			Item->PrevFileCount=FileCount;
 			Item->PrevTopFile = CurTopFile;
-			Item->strPrevName = FileName;
+			Item->strPrevName = FileName? *FileName : L"";
 			PrevDataList.Push(&Item);
 			ListData=nullptr;
 			FileCount=0;
 		}
 
 		bool WasFullscreen = IsFullScreen();
-		SetPluginMode(hNewPlugin,FileName);  // SendOnFocus??? true???
+		SetPluginMode(hNewPlugin, *FileName);  // SendOnFocus??? true???
 		PanelMode=PLUGIN_PANEL;
 		UpperFolderTopFile=CurTopFile;
 		CurFile=0;

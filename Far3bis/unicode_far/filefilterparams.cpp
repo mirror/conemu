@@ -51,11 +51,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "mix.hpp"
 #include "console.hpp"
+#include "flink.hpp"
 
 FileFilterParams::FileFilterParams()
 {
 	SetMask(1,L"*");
 	SetSize(0,L"",L"");
+	SetHardLinks(0,0,0);
 	ClearStruct(FDate);
 	ClearStruct(FAttr);
 	ClearStruct(FHighlight.Colors);
@@ -108,7 +110,7 @@ string &Add_PATHEXT(string &strDest)
 	size_t curpos=strDest.GetLength()-1;
 	UserDefinedList MaskList(0,0,ULF_UNIQUE);
 
-	if (apiGetEnvironmentVariable(L"PATHEXT",strBuf) && MaskList.Set(strBuf))
+	if (apiGetEnvironmentVariable(L"PATHEXT" ,strBuf) && MaskList.Set(strBuf))
 	{
 		/* $ 13.10.2002 IS проверка на '|' (маски исключения) */
 		if (!strDest.IsEmpty() && (strDest.At(curpos)!=L',' && strDest.At(curpos)!=L';') && strDest.At(curpos)!=L'|')
@@ -207,6 +209,13 @@ void FileFilterParams::SetSize(bool Used, const wchar_t *SizeAbove, const wchar_
 	FSize.SizeBelowReal=ConvertFileSizeString(FSize.SizeBelow);
 }
 
+void FileFilterParams::SetHardLinks(bool Used, DWORD HardLinksAbove, DWORD HardLinksBelow)
+{
+	FHardLinks.Used=Used;
+	FHardLinks.CountAbove=HardLinksAbove;
+	FHardLinks.CountBelow=HardLinksBelow;
+}
+
 void FileFilterParams::SetAttr(bool Used, DWORD AttrSet, DWORD AttrClear)
 {
 	FAttr.Used=Used;
@@ -266,6 +275,16 @@ bool FileFilterParams::GetSize(const wchar_t **SizeAbove, const wchar_t **SizeBe
 	return FSize.Used;
 }
 
+bool FileFilterParams::GetHardLinks(DWORD *HardLinksAbove, DWORD *HardLinksBelow) const
+{
+	if (HardLinksAbove)
+		*HardLinksAbove = FHardLinks.CountAbove;
+	if (HardLinksBelow)
+		*HardLinksBelow = FHardLinks.CountBelow;
+	return FHardLinks.Used;
+}
+
+
 bool FileFilterParams::GetAttr(DWORD *AttrSet, DWORD *AttrClear) const
 {
 	if (AttrSet)
@@ -299,10 +318,10 @@ bool FileFilterParams::FileInFilter(const FileListItem& fli, unsigned __int64 Cu
 	fde.nPackSize=fli.PackSize;
 	fde.strFileName=fli.strName;
 	fde.strAlternateFileName=fli.strShortName;
-	return FileInFilter(fde, CurrentTime);
+	return FileInFilter(fde, CurrentTime, &fli.strName);
 }
 
-bool FileFilterParams::FileInFilter(const FAR_FIND_DATA_EX& fde, unsigned __int64 CurrentTime)
+bool FileFilterParams::FileInFilter(const FAR_FIND_DATA_EX& fde, unsigned __int64 CurrentTime,const string* FullName)
 {
 	// Режим проверки атрибутов файла включен?
 	if (FAttr.Used)
@@ -329,6 +348,21 @@ bool FileFilterParams::FileInFilter(const FAR_FIND_DATA_EX& fde, unsigned __int6
 		{
 			if (fde.nFileSize > FSize.SizeBelowReal) // Размер файла больше максимального разрешённого по фильтру?
 				return false;                          // Не пропускаем этот файл
+		}
+	}
+
+	// Режим проверки количества жестких ссылок на файл включен?
+	// Пока что, при включенном условии, срабатывание происходит при случае "ссылок больше чем одна"
+	if (FHardLinks.Used)
+	{
+		if (fde.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			return false;
+		}
+
+		if (!FullName || GetNumberOfLinks(*FullName) < 2)
+		{
+			return false;
 		}
 	}
 
@@ -405,8 +439,8 @@ bool FileFilterParams::FileInFilter(const FAR_FIND_DATA_EX& fde, unsigned __int6
 bool FileFilterParams::FileInFilter(const PluginPanelItem& fd, unsigned __int64 CurrentTime)
 {
 	FAR_FIND_DATA_EX fde;
-	PluginPanelItemToFindDataEx(&fd,&fde);
-	return FileInFilter(fde, CurrentTime);
+	PluginPanelItemToFindDataEx(&fd, &fde);
+	return FileInFilter(fde, CurrentTime, &fde.strFileName);
 }
 
 //Централизованная функция для создания строк меню различных фильтров.
@@ -429,16 +463,16 @@ void MenuString(string &strDest, FileFilterParams *FF, bool bHighlightType, int 
 		FILE_ATTRIBUTE_OFFLINE,
 		FILE_ATTRIBUTE_VIRTUAL,
 	};
-	const wchar_t Format1a[] = L"%-21.21s %c %-26.26s %-2.2s %c %s";
-	const wchar_t Format1b[] = L"%-22.22s %c %-26.26s %-2.2s %c %s";
-	const wchar_t Format1c[] = L"&%c. %-18.18s %c %-26.26s %-2.2s %c %s";
-	const wchar_t Format1d[] = L"   %-18.18s %c %-26.26s %-2.2s %c %s";
-	const wchar_t Format2[]  = L"%-3.3s %c %-26.26s %-3.3s %c %s";
+	const wchar_t Format1a[] = L"%-21.21s %c %-26.26s %-3.3s %c %s";
+	const wchar_t Format1b[] = L"%-22.22s %c %-26.26s %-3.3s %c %s";
+	const wchar_t Format1c[] = L"&%c. %-18.18s %c %-26.26s %-3.3s %c %s";
+	const wchar_t Format1d[] = L"   %-18.18s %c %-26.26s %-3.3s %c %s";
+	const wchar_t Format2[]  = L"%-3.3s %c %-26.26s %-4.4s %c %s";
 	const wchar_t DownArrow=0x2193;
 	const wchar_t *Name, *Mask;
 	wchar_t MarkChar[]=L"\" \"";
 	DWORD IncludeAttr, ExcludeAttr;
-	bool UseMask, UseSize, UseDate, RelativeDate;
+	bool UseMask, UseSize, UseHardLinks, UseDate, RelativeDate;
 
 	if (bPanelType)
 	{
@@ -447,7 +481,7 @@ void MenuString(string &strDest, FileFilterParams *FF, bool bHighlightType, int 
 		Mask=FMask;
 		IncludeAttr=0;
 		ExcludeAttr=FILE_ATTRIBUTE_DIRECTORY;
-		RelativeDate=UseDate=UseSize=false;
+		RelativeDate=UseDate=UseSize=UseHardLinks=false;
 	}
 	else
 	{
@@ -464,6 +498,7 @@ void MenuString(string &strDest, FileFilterParams *FF, bool bHighlightType, int 
 
 		UseSize=FF->GetSize(nullptr,nullptr);
 		UseDate=FF->GetDate(nullptr,nullptr,nullptr,&RelativeDate);
+		UseHardLinks=FF->GetHardLinks(nullptr,nullptr);
 	}
 
 	wchar_t Attr[ARRAYSIZE(AttrC)*2] = {};
@@ -481,7 +516,7 @@ void MenuString(string &strDest, FileFilterParams *FF, bool bHighlightType, int 
 			*Ptr=*(Ptr+1)=L'.';
 	}
 
-	wchar_t SizeDate[4] = L"...";
+	wchar_t SizeDate[5] = L"....";
 
 	if (UseSize)
 	{
@@ -496,16 +531,21 @@ void MenuString(string &strDest, FileFilterParams *FF, bool bHighlightType, int 
 			SizeDate[1]=L'D';
 	}
 
+	if (UseHardLinks)
+	{
+		SizeDate[2]=L'H';
+	}
+
 	if (bHighlightType)
 	{
 		if (FF->GetContinueProcessing())
-			SizeDate[2]=DownArrow;
+			SizeDate[3]=DownArrow;
 
 		strDest.Format(Format2, MarkChar, BoxSymbols[BS_V1], Attr, SizeDate, BoxSymbols[BS_V1], UseMask ? Mask : L"");
 	}
 	else
 	{
-		SizeDate[2]=0;
+		SizeDate[3]=0;
 
 		if (!Hotkey && !bPanelType)
 		{
@@ -593,6 +633,10 @@ enum enumFileFilterConfig
 	ID_HER_CONTINUEPROCESSING,
 
 	ID_FF_SEPARATOR5,
+
+	ID_FF_HARDLINKS,
+
+	ID_FF_SEPARATOR6,
 
 	ID_FF_OK,
 	ID_FF_RESET,
@@ -747,6 +791,7 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 				SendDlgMessage(hDlg,DM_LISTSETCURPOS,ID_FF_DATETYPE,&LPos);
 				SendDlgMessage(hDlg,DM_SETCHECK,ID_FF_MATCHMASK,ToPtr(BSTATE_CHECKED));
 				SendDlgMessage(hDlg,DM_SETCHECK,ID_FF_MATCHSIZE,ToPtr(BSTATE_UNCHECKED));
+				SendDlgMessage(hDlg,DM_SETCHECK,ID_FF_HARDLINKS,ToPtr(BSTATE_UNCHECKED));
 				SendDlgMessage(hDlg,DM_SETCHECK,ID_FF_MATCHDATE,ToPtr(BSTATE_UNCHECKED));
 				SendDlgMessage(hDlg,DM_SETCHECK,ID_FF_DATERELATIVE,ToPtr(BSTATE_UNCHECKED));
 				FilterDlgRelativeDateItemsUpdate(hDlg, true);
@@ -895,7 +940,7 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 	strTimeMask.Format(L"99%c99%c99%c999",TimeSeparator,TimeSeparator,DecimalSeparator);
 	FarDialogItem FilterDlgData[]=
 	{
-		{DI_DOUBLEBOX,3,1,76,18,0,nullptr,nullptr,DIF_SHOWAMPERSAND,MSG(MFileFilterTitle)},
+		{DI_DOUBLEBOX,3,1,76,20,0,nullptr,nullptr,DIF_SHOWAMPERSAND,MSG(MFileFilterTitle)},
 
 		{DI_TEXT,5,2,0,2,0,nullptr,nullptr,DIF_FOCUS,MSG(MFileFilterName)},
 		{DI_EDIT,5,2,74,2,0,FilterNameHistoryName,nullptr,DIF_HISTORY,L""},
@@ -966,10 +1011,13 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 
 		{DI_TEXT,0,16,0,16,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 
-		{DI_BUTTON,0,17,0,17,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MOk)},
-		{DI_BUTTON,0,17,0,17,0,nullptr,nullptr,DIF_CENTERGROUP|DIF_BTNNOCLOSE,MSG(MFileFilterReset)},
-		{DI_BUTTON,0,17,0,17,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MFileFilterCancel)},
-		{DI_BUTTON,0,17,0,17,0,nullptr,nullptr,DIF_CENTERGROUP|DIF_BTNNOCLOSE,MSG(MFileFilterMakeTransparent)},
+		{DI_CHECKBOX,5,17,0,17,0,nullptr,nullptr,0,MSG(MFileHardLinksCount)},//добавляем новый чекбокс в панель
+		{DI_TEXT,0,18,0,18,0,nullptr,nullptr,DIF_SEPARATOR,L""},// и разделитель
+
+		{DI_BUTTON,0,19,0,19,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MOk)},
+		{DI_BUTTON,0,19,0,19,0,nullptr,nullptr,DIF_CENTERGROUP|DIF_BTNNOCLOSE,MSG(MFileFilterReset)},
+		{DI_BUTTON,0,19,0,19,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MFileFilterCancel)},
+		{DI_BUTTON,0,19,0,19,0,nullptr,nullptr,DIF_CENTERGROUP|DIF_BTNNOCLOSE,MSG(MFileFilterMakeTransparent)},
 	};
 	FilterDlgData[0].Data=MSG(ColorConfig?MFileHilightTitle:MFileFilterTitle);
 	MakeDialogItemsEx(FilterDlgData,FilterDlg);
@@ -1032,6 +1080,7 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 	FilterDlg[ID_FF_MATCHSIZE].Selected=FF->GetSize(&SizeAbove,&SizeBelow)?1:0;
 	FilterDlg[ID_FF_SIZEFROMEDIT].strData=SizeAbove;
 	FilterDlg[ID_FF_SIZETOEDIT].strData=SizeBelow;
+	FilterDlg[ID_FF_HARDLINKS].Selected=FF->GetHardLinks(nullptr,nullptr)?1:0; //пока что мы проверям только флаг использования данного условия
 
 	if (!FilterDlg[ID_FF_MATCHSIZE].Selected)
 		for (int i=ID_FF_SIZEFROMSIGN; i <= ID_FF_SIZETOEDIT; i++)
@@ -1151,6 +1200,7 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 			FF->SetSize(FilterDlg[ID_FF_MATCHSIZE].Selected!=0,
 			            FilterDlg[ID_FF_SIZEFROMEDIT].strData,
 			            FilterDlg[ID_FF_SIZETOEDIT].strData);
+			FF->SetHardLinks(FilterDlg[ID_FF_HARDLINKS].Selected!=0,0,0); //пока устанавливаем только флаг использования признака
 			bRelative = FilterDlg[ID_FF_DATERELATIVE].Selected!=0;
 
 			LPWSTR TimeBefore = FilterDlg[ID_FF_TIMEBEFOREEDIT].strData.GetBuffer();

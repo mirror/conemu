@@ -423,7 +423,7 @@ FarStandardFunctions NativeFSF =
 	KeyNameToInputRecord,
 	Xlat,
 	farGetFileOwner,
-	GetNumberOfLinks,
+	farGetNumberOfLinks,
 	FarRecursiveSearch,
 	FarMkTemp,
 	DeleteBuffer,
@@ -496,6 +496,19 @@ static void ShowMessageAboutIllegalPluginVersion(const wchar_t* plg,const Versio
 
 bool Plugin::SaveToCache()
 {
+	// Max: Ќа кой сохран€ть в кеш, если груз€тс€ плагины только из кеша "/co"?
+	// Max: Ѕолее того, если это вызвать из LoadPluginsFromCache - возникают коллизии с PlCacheCfg->EnumPlugins
+	if (Opt.LoadPlug.PluginsCacheOnly)
+	{
+		return false;
+	}
+#ifdef _DEBUG
+	else
+	{
+		_ASSERTE(PlCacheCfgEnum==0);
+	}
+#endif
+
 	if (Exports[iGetGlobalInfo] ||
 		Exports[iGetPluginInfo] ||
 		Exports[iOpen] ||
@@ -717,7 +730,7 @@ bool Plugin::LoadData()
 		{
 			Drive[0] = L'=';
 			Drive[1] = m_strModuleName.At(0);
-			apiGetEnvironmentVariable(Drive,strCurPlugDiskPath);
+			apiGetEnvironmentVariable(Drive, strCurPlugDiskPath);
 		}
 
 		PrepareModulePath(m_strModuleName);
@@ -890,14 +903,34 @@ int Plugin::Unload(bool bExitFAR)
 {
 	int nResult = TRUE;
 
+	/*
+	#ifdef _DEBUG
+	PluginInfo Info = {sizeof(Info)};
+	if (!WorkFlags.Check(PIWF_CACHED))
+	{
+		// -- GetMsg обламываетс€
+		GetPluginInfo(&Info);
+	}
+	#endif
+	*/
+
 	if (bExitFAR)
 	{
 		const ExitInfo Info={sizeof(Info)};
 		ExitFAR(&Info);
 	}
 
+
 	if (!WorkFlags.Check(PIWF_CACHED))
 	{
+		/*
+		#ifdef _DEBUG
+		bool bPreload = (Info.Flags & PF_PRELOAD);
+		extern PluginManager *PluginManagerForExitFar;
+		_ASSERTE(bPreload==false || PluginManagerForExitFar!=nullptr);
+		#endif
+		*/
+
 		nResult = FreeLibrary(m_hModule);
 		ClearExports();
 	}

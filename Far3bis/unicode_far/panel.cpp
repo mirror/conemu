@@ -466,7 +466,8 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 			{
 				strDiskType.Format(L"%*s",StrLength(MSG(MChangeDriveFixed)),L"");
 
-				const wchar_t LocalName[]={strRootDir.At(0),L':',L'\0'};
+				string LocalName("?:");
+				LocalName.Replace(0, strRootDir.At(0));
 
 				if (GetSubstName(DriveType, LocalName, strAssocPath))
 				{
@@ -530,7 +531,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 			if (Opt.ChangeDriveMode & (DRIVE_SHOW_SIZE|DRIVE_SHOW_SIZE_FLOAT))
 			{
 				string strTotalText, strFreeText;
-				unsigned __int64 TotalSize,TotalFree,UserFree;
+				unsigned __int64 TotalSize = 0, TotalFree = 0, UserFree = 0;
 
 				if (ShowDisk && apiGetDiskSize(strRootDir,&TotalSize,&TotalFree,&UserFree))
 				{
@@ -661,8 +662,9 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 				{
 					if (item && !item->bIsPlugin)
 					{
-						wchar_t DosDeviceName[]={item->cDrive,L':',L'\\',L'\0'};
-						Execute(DosDeviceName,FALSE,TRUE,TRUE);
+						string DosDeviceName(L"?:\\");
+						DosDeviceName.Replace(0, item->cDrive);
+						Execute(DosDeviceName, false, false, true, true, false, true, false);
 					}
 				}
 				break;
@@ -716,8 +718,9 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 					{
 						if (!item->bIsPlugin)
 						{
-							wchar_t DeviceName[]={item->cDrive,L':',L'\\',L'\0'};
-							ShellSetFileAttributes(nullptr,DeviceName);
+							string DeviceName("?:\\");
+							DeviceName.Replace(0, item->cDrive);
+							ShellSetFileAttributes(nullptr, &DeviceName);
 							ChDisk.Redraw();
 						}
 						else
@@ -861,7 +864,8 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 
 	if (Opt.CloseCDGate && mitem && !mitem->bIsPlugin && IsDriveTypeCDROM(mitem->nDriveType))
 	{
-		const wchar_t RootDir[]={mitem->cDrive,L':',L'\0'};
+		string RootDir(L"?:");
+		RootDir.Replace(0, mitem->cDrive);
 
 		if (!apiIsDiskInDrive(RootDir))
 		{
@@ -1139,7 +1143,8 @@ void Panel::RemoveHotplugDevice(PanelMenuItem *item, VMenu &ChDisk)
 int Panel::ProcessDelDisk(wchar_t Drive, int DriveType,VMenu *ChDiskMenu)
 {
 	string strMsgText;
-	wchar_t DiskLetter[]={Drive,L':',0};
+	string DiskLetter(L"?:");
+	DiskLetter.Replace(0, Drive);
 
 	switch(DriveType)
 	{
@@ -1160,7 +1165,7 @@ int Panel::ProcessDelDisk(wchar_t Drive, int DriveType,VMenu *ChDiskMenu)
 			else
 			{
 				int LastError=GetLastError();
-				strMsgText.Format(MSG(MChangeDriveCannotDelSubst),DiskLetter);
+				strMsgText.Format(MSG(MChangeDriveCannotDelSubst), DiskLetter.CPtr());
 				if (LastError==ERROR_OPEN_FILES || LastError==ERROR_DEVICE_IN_USE)
 				{
 					if (!Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MError),strMsgText,
@@ -1205,7 +1210,7 @@ int Panel::ProcessDelDisk(wchar_t Drive, int DriveType,VMenu *ChDiskMenu)
 				else
 				{
 					int LastError=GetLastError();
-					strMsgText.Format(MSG(MChangeDriveCannotDisconnect),DiskLetter);
+					strMsgText.Format(MSG(MChangeDriveCannotDisconnect),DiskLetter.CPtr());
 					if (LastError==ERROR_OPEN_FILES || LastError==ERROR_DEVICE_IN_USE)
 					{
 						if (!Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MError),strMsgText,
@@ -1751,7 +1756,7 @@ int Panel::GetCurDir(string &strCurDir)
 
 
 
-BOOL Panel::SetCurDir(const wchar_t *CurDir,int ClosePanel,BOOL /*IsUpdated*/)
+BOOL Panel::SetCurDir(const string& CurDir,int ClosePanel,BOOL /*IsUpdated*/)
 {
 	if (StrCmpI(strCurDir,CurDir) || !TestCurrentDirectory(CurDir))
 	{
@@ -2656,7 +2661,7 @@ bool Panel::ExecShortcutFolder(string& strShortcutFolder,const GUID& PluginGuid,
 			}
 
 			if (SrcPanel->GetType() == FILE_PANEL)
-				((FileList*)SrcPanel)->OpenFilePlugin(strPluginFile,FALSE, OFP_SHORTCUT); //???
+				((FileList*)SrcPanel)->OpenFilePlugin(&strPluginFile,FALSE, OFP_SHORTCUT); //???
 
 			if (!strShortcutFolder.IsEmpty())
 					SrcPanel->SetCurDir(strShortcutFolder,FALSE);

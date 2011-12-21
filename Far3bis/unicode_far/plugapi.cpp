@@ -1166,7 +1166,6 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 		return -1;
 
 	wchar_t *SingleItems=nullptr;
-	wchar_t *Msg;
 
 	// анализ количества строк для FMSG_ALLINONE
 	if (Flags&FMSG_ALLINONE)
@@ -1176,11 +1175,10 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 		if (!(SingleItems=(wchar_t *)xf_malloc((StrLength((const wchar_t *)Items)+2)*sizeof(wchar_t))))
 			return -1;
 
-		Msg=wcscpy(SingleItems,(const wchar_t *)Items);
+		wchar_t *Msg=wcscpy(SingleItems,(const wchar_t *)Items);
 
 		while ((Msg = wcschr(Msg, L'\n')) )
 		{
-//      *Msg='\0';
 			if (*++Msg == L'\0')
 				break;
 
@@ -1203,7 +1201,7 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 	if (Flags&FMSG_ALLINONE)
 	{
 		int I=0;
-		Msg=SingleItems;
+		wchar_t *Msg=SingleItems;
 		// анализ количества строк и разбивка на пункты
 		wchar_t *MsgTemp;
 
@@ -1211,7 +1209,7 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 		{
 			*MsgTemp=L'\0';
 			MsgItems[I]=Msg;
-			Msg+=StrLength(Msg)+1;
+			Msg=MsgTemp+1;
 
 			if (*Msg == L'\0')
 				break;
@@ -1228,12 +1226,6 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 	{
 		for (size_t i=0; i < ItemsNumber; i++)
 			MsgItems[i]=Items[i];
-	}
-
-	// ограничение на строки
-	if (ItemsNumber > static_cast<SIZE_T>(ScrY-2))
-	{
-		ItemsNumber=ScrY-2-(Flags&0x000F0000?1:0);
 	}
 
 	/* $ 22.03.2001 tran
@@ -1274,6 +1266,16 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 			break;
 	}
 
+	// ограничение на строки
+	size_t MaxLinesNumber = static_cast<size_t>(ScrY-3-(ButtonsNumber?1:0));
+	size_t LinesNumber = ItemsNumber-ButtonsNumber-1;
+	if (LinesNumber > MaxLinesNumber)
+	{
+		ItemsNumber -= (LinesNumber-MaxLinesNumber);
+		for (int i=1; i <= ButtonsNumber; i++)
+			MsgItems[MaxLinesNumber+i]=MsgItems[LinesNumber+i];
+	}
+
 	// запоминаем топик
 	if (PluginNumber != -1)
 	{
@@ -1286,7 +1288,7 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 	// непосредственно... вывод
 	Frame *frame;
 
-	if ((frame=FrameManager->GetBottomFrame()) )
+	if ((frame=FrameManager->GetBottomFrame()))
 		frame->Lock(); // отменим прорисовку фрейма
 
 	int MsgCode=Message(Flags&(FMSG_WARNING|FMSG_ERRORTYPE|FMSG_KEEPBACKGROUND|FMSG_LEFTALIGN),ButtonsNumber,MsgItems[0],MsgItems+1,ItemsNumber-1,PluginNumber,Id);
@@ -1294,7 +1296,7 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 	/* $ 15.05.2002 SKV
 	  Однако разлочивать надо ровно то, что залочили.
 	*/
-	if (frame )
+	if (frame)
 		frame->Unlock(); // теперь можно :-)
 
 	//CheckScreenLock();
@@ -1303,7 +1305,8 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 		xf_free(SingleItems);
 
 	xf_free(MsgItems);
-	return(MsgCode);
+
+	return MsgCode;
 }
 
 INT_PTR WINAPI FarPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int Param1,void* Param2)
@@ -1993,10 +1996,9 @@ int WINAPI FarViewer(const wchar_t *FileName,const wchar_t *Title,
 	return TRUE;
 }
 
-
-int WINAPI FarEditor(
-    const wchar_t *FileName,
-    const wchar_t *Title,
+int WINAPI FarEditorInternal(
+    const string& FileName,
+    const string* Title,
     int X1,
     int Y1,
     int X2,
@@ -2145,6 +2147,17 @@ int WINAPI FarEditor(
 	}
 
 	return ExitCode;
+}
+
+int WINAPI FarEditor(const wchar_t* FileName, const wchar_t* Title, int X1, int Y1, int X2, int Y2, unsigned __int64 Flags, int StartLine, int StartChar, UINT CodePage)
+{
+	string strTitle, *pstrTitle = nullptr;
+	if(Title)
+	{
+		strTitle = Title;
+		pstrTitle = &strTitle;
+	}
+	return FarEditorInternal(FileName, pstrTitle, X1, Y1, X2, Y2, Flags, StartLine, StartChar, CodePage);
 }
 
 void WINAPI FarText(int X,int Y,const FarColor* Color,const wchar_t *Str)
@@ -2378,6 +2391,12 @@ size_t WINAPI farGetReparsePointInfo(const wchar_t *Src, wchar_t *Dest, size_t D
 			*Dest = 0;
 		return 1;
 	}
+}
+
+size_t WINAPI farGetNumberOfLinks(const wchar_t* Name)
+{
+	string strName(Name);
+	return GetNumberOfLinks(strName);
 }
 
 size_t WINAPI farGetPathRoot(const wchar_t *Path, wchar_t *Root, size_t DestSize)
@@ -2616,8 +2635,7 @@ INT_PTR WINAPI farFileFilterControl(HANDLE hHandle, FAR_FILE_FILTER_CONTROL_COMM
 		{
 			if (!Param2)
 				break;
-
-			return Filter->FileInFilter(*(const PluginPanelItem *)Param2) ? TRUE : FALSE;
+			return Filter->FileInFilter(*reinterpret_cast<const PluginPanelItem*>(Param2)) ? TRUE : FALSE;
 		}
 	}
 

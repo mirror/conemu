@@ -214,14 +214,14 @@ void Edit::DisplayObject()
 	{
 		if (Flags.Check(FEDITLINE_OVERTYPE))
 		{
-			int NewCursorSize=IsFullscreen()?
+			int NewCursorSize=IsConsoleFullscreen()?
 			                  (Opt.CursorSize[3]?Opt.CursorSize[3]:99):
 					                  (Opt.CursorSize[2]?Opt.CursorSize[2]:99);
 			::SetCursorType(1,CursorSize==-1?NewCursorSize:CursorSize);
 		}
 		else
 {
-			int NewCursorSize=IsFullscreen()?
+			int NewCursorSize=IsConsoleFullscreen()?
 			                  (Opt.CursorSize[1]?Opt.CursorSize[1]:10):
 					                  (Opt.CursorSize[0]?Opt.CursorSize[0]:10);
 			::SetCursorType(1,CursorSize==-1?NewCursorSize:CursorSize);
@@ -1717,7 +1717,7 @@ void  Edit::SetHiString(const wchar_t *Str)
 	string NewStr;
 	HiText2Str(NewStr, Str);
 	Select(-1,0);
-	SetBinaryString(NewStr,StrLength(NewStr));
+	SetBinaryString(NewStr, static_cast<int>(NewStr.GetLength()));
 }
 
 void Edit::SetString(const wchar_t *Str, int Length)

@@ -45,7 +45,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ctrlobj.hpp"
 #include "macroopcode.hpp"
 #include "syslog.hpp"
-#include "registry.hpp"
 #include "interf.hpp"
 #include "message.hpp"
 #include "config.hpp"
@@ -112,7 +111,7 @@ static const wchar_t *PluginContents=L"__PluginContents__";
 static const wchar_t *HelpOnHelpTopic=L":Help";
 static const wchar_t *HelpContents=L"Contents";
 
-static int RunURL(const wchar_t *Protocol, wchar_t *URLPath);
+static int RunURL(const string& Protocol, wchar_t *URLPath);
 
 Help::Help(const wchar_t *Topic, const wchar_t *Mask,UINT64 Flags):
 	ErrorHelp(TRUE),
@@ -346,7 +345,7 @@ int Help::ReadHelp(const wchar_t *Mask)
 			string strKeyName;
 			string strOutTemp;
 
-			if (CtrlObject->Macro.GetMacroKeyInfo(false,CtrlObject->Macro.GetSubKey(strMacroArea),MI,strKeyName,strDescription) == -1)
+			if (CtrlObject->Macro.GetMacroKeyInfo(false,CtrlObject->Macro.GetAreaCode(strMacroArea),MI,strKeyName,strDescription) == -1)
 			{
 				MacroProcess=false;
 				MI=0;
@@ -374,7 +373,7 @@ int Help::ReadHelp(const wchar_t *Mask)
 				ReplaceStrings(strDescription,L"~",L"~~",-1);
 				ReplaceStrings(strDescription,L"@",L"@@",-1);
 				strOutTemp+=strCtrlStartPosChar;
-				strOutTemp+=TruncStrFromEnd(strDescription,300);
+				strOutTemp+=strDescription;
 			}
 
 			strReadStr=strOutTemp;
@@ -464,7 +463,7 @@ m1:
 					MacroProcess=true;
 					MI=0;
 					string strDescription,strKeyName;
-					while (CtrlObject->Macro.GetMacroKeyInfo(false,CtrlObject->Macro.GetSubKey(strMacroArea),MI,strKeyName,strDescription) != -1)
+					while (CtrlObject->Macro.GetMacroKeyInfo(false,CtrlObject->Macro.GetAreaCode(strMacroArea),MI,strKeyName,strDescription) != -1)
 					{
 						SizeKeyName=Max(SizeKeyName,strKeyName.GetLength());
 						MI++;
@@ -1396,11 +1395,10 @@ int Help::JumpTopic(const wchar_t *JumpTopic)
 
 		if (strNewTopic.Pos(pos,L':') && strNewTopic.At(0) != L':') // наверное подразумевается URL
 		{
-			wchar_t *lpwszNewTopic = strNewTopic.GetBuffer();
-			lpwszNewTopic[pos] = 0;
+			string Protocol(strNewTopic, pos);
 			wchar_t *lpwszTopic = StackData.strSelTopic.GetBuffer();
 
-			if (RunURL(lpwszNewTopic, lpwszTopic))
+			if (RunURL(Protocol, lpwszTopic))
 			{
 				StackData.strSelTopic.ReleaseBuffer();
 				return FALSE;
@@ -1409,9 +1407,6 @@ int Help::JumpTopic(const wchar_t *JumpTopic)
 			{
 				StackData.strSelTopic.ReleaseBuffer();
 			}
-
-			lpwszNewTopic[pos] = L':';
-			//strNewTopic.ReleaseBuffer (); не надо, так как строка не поменялась
 		}
 	}
 	// а вот теперь попробуем...
@@ -1971,11 +1966,11 @@ void Help::InitKeyBar()
      Protocol="mailto"
      URLPath ="mailto:vskirdin@mail.ru?Subject=Reversi"
 */
-static int RunURL(const wchar_t *Protocol, wchar_t *URLPath)
+static int RunURL(const string& Protocol, wchar_t *URLPath)
 {
 	int EditCode=0;
 
-	if (Protocol && *Protocol && URLPath && *URLPath && (Opt.HelpURLRules&0xFF))
+	if (URLPath && *URLPath && (Opt.HelpURLRules&0xFF))
 	{
 		string strType;
 
@@ -1987,7 +1982,7 @@ static int RunURL(const wchar_t *Protocol, wchar_t *URLPath)
 			if (RegOpenKeyEx(HKEY_CLASSES_ROOT,strType,0,KEY_READ,&hKey) == ERROR_SUCCESS)
 			{
 				string strAction;
-				int Disposition=RegQueryStringValueEx(hKey,L"",strAction,L"");
+				int Disposition=RegQueryStringValue(hKey, L"", strAction, L"");
 				RegCloseKey(hKey);
 				apiExpandEnvironmentStrings(strAction, strAction);
 

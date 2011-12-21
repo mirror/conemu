@@ -48,7 +48,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "rdrwdsk.hpp"
 #include "udlist.hpp"
 #include "imports.hpp"
-#include "registry.hpp"
 #include "localOEM.hpp"
 #include "manager.hpp"
 #include "interf.hpp"
@@ -86,7 +85,7 @@ struct IMAGE_HEADERS
 	};
 };
 
-static bool GetImageSubsystem(const wchar_t *FileName,DWORD& ImageSubsystem)
+static bool GetImageSubsystem(const string& FileName,DWORD& ImageSubsystem)
 {
 	bool Result=false;
 	ImageSubsystem=IMAGE_SUBSYSTEM_UNKNOWN;
@@ -242,7 +241,7 @@ bool SearchExtHandlerFromList(HKEY hExtKey, string &strType)
 	return false;
 }
 
-bool GetShellType(const wchar_t *Ext, string &strType,ASSOCIATIONTYPE aType)
+bool GetShellType(const string& Ext, string &strType,ASSOCIATIONTYPE aType)
 {
 	bool bVistaType = false;
 	strType.Clear();
@@ -321,7 +320,7 @@ bool GetShellType(const wchar_t *Ext, string &strType,ASSOCIATIONTYPE aType)
 // по имени файла (по его расширению) получить команду активации
 // Дополнительно смотрится гуевость команды-активатора
 // (чтобы не ждать завершения)
-const wchar_t *GetShellAction(const wchar_t *FileName,DWORD& ImageSubsystem,DWORD& Error)
+const wchar_t *GetShellAction(const string& FileName,DWORD& ImageSubsystem,DWORD& Error)
 {
 	string strValue;
 	string strNewValue;
@@ -354,7 +353,7 @@ const wchar_t *GetShellAction(const wchar_t *FileName,DWORD& ImageSubsystem,DWOR
 		return nullptr;
 
 	static string strAction;
-	int RetQuery = RegQueryStringValueEx(hKey,L"",strAction,L"");
+	int RetQuery = RegQueryStringValue(hKey, L"", strAction, L"");
 	strValue += L"\\";
 
 	if (RetQuery == ERROR_SUCCESS)
@@ -453,7 +452,7 @@ const wchar_t *GetShellAction(const wchar_t *FileName,DWORD& ImageSubsystem,DWOR
 		// а теперь проверим ГУЕвость запускаемой проги
 		if (RegOpenKey(HKEY_CLASSES_ROOT,strValue,&hKey)==ERROR_SUCCESS)
 		{
-			RetQuery=RegQueryStringValueEx(hKey,L"",strNewValue,L"");
+			RetQuery=RegQueryStringValue(hKey, L"", strNewValue, L"");
 			RegCloseKey(hKey);
 
 			if (RetQuery == ERROR_SUCCESS && !strNewValue.IsEmpty())
@@ -568,7 +567,7 @@ bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 			{
 				string strPathEnv;
 
-				if (apiGetEnvironmentVariable(L"PATH",strPathEnv))
+				if (apiGetEnvironmentVariable(L"PATH", strPathEnv))
 				{
 					UserDefinedList PathList;
 					PathList.Set(strPathEnv);
@@ -663,7 +662,7 @@ bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 						HKEY hKey;
 						if (RegOpenKeyEx(RootFindKey[i],strFullName, 0, samDesired, &hKey)==ERROR_SUCCESS)
 						{
-							int RegResult=RegQueryStringValueEx(hKey,L"",strFullName,L"");
+							int RegResult=RegQueryStringValue(hKey, L"", strFullName, L"");
 							RegCloseKey(hKey);
 
 							if (RegResult==ERROR_SUCCESS)
@@ -693,7 +692,7 @@ bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 
 								if (RegOpenKeyEx(RootFindKey[i],strFullName,0,KEY_QUERY_VALUE,&hKey)==ERROR_SUCCESS)
 								{
-									int RegResult=RegQueryStringValueEx(hKey,L"",strFullName,L"");
+									int RegResult=RegQueryStringValue(hKey, L"", strFullName, L"");
 									RegCloseKey(hKey);
 
 									if (RegResult==ERROR_SUCCESS)
@@ -724,7 +723,7 @@ bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 /*
  возвращает PipeFound
 */
-int PartCmdLine(const wchar_t *CmdStr, string &strNewCmdStr, string &strNewCmdPar)
+int PartCmdLine(const string& CmdStr, string &strNewCmdStr, string &strNewCmdPar)
 {
 	int PipeFound = FALSE;
 	int QuoteFound = FALSE;
@@ -788,7 +787,7 @@ int PartCmdLine(const wchar_t *CmdStr, string &strNewCmdStr, string &strNewCmdPa
 bool RunAsSupported(LPCWSTR Name)
 {
 	bool Result = false;
-	LPCWSTR Extension = PointToExt(Name);
+	string Extension(PointToExt(Name));
 	if(Extension)
 	{
 		string strType;
@@ -810,7 +809,7 @@ bool RunAsSupported(LPCWSTR Name)
 /* Функция-пускатель внешних процессов
    Возвращает -1 в случае ошибки или...
 */
-int Execute(const wchar_t *CmdStr, // Ком.строка для исполнения
+int Execute(const string& CmdStr, // Ком.строка для исполнения
             bool AlwaysWaitFinish, // Ждать завершение процесса?
             bool SeparateWindow,   // Выполнить в отдельном окне?
             bool DirectRun,        // Выполнять директом? (без CMD)
@@ -1248,7 +1247,7 @@ int Execute(const wchar_t *CmdStr, // Ком.строка для исполнения
 }
 
 
-int CommandLine::CmdExecute(const wchar_t *CmdLine,bool AlwaysWaitFinish,bool SeparateWindow,bool DirectRun, bool WaitForIdle, bool Silent, bool RunAs)
+int CommandLine::CmdExecute(const string& CmdLine,bool AlwaysWaitFinish,bool SeparateWindow,bool DirectRun, bool WaitForIdle, bool Silent, bool RunAs)
 {
 	LastCmdPartLength=-1;
 
@@ -1346,9 +1345,9 @@ int CommandLine::CmdExecute(const wchar_t *CmdLine,bool AlwaysWaitFinish,bool Se
    Исходная строка (CmdLine) не модифицируется!!! - на что явно указывает const
                                                     IS 20.03.2002 :-)
 */
-const wchar_t *PrepareOSIfExist(const wchar_t *CmdLine)
+const wchar_t *PrepareOSIfExist(const string& CmdLine)
 {
-	if (!CmdLine || !*CmdLine)
+	if (CmdLine.IsEmpty())
 		return nullptr;
 
 	string strCmd;
@@ -1522,7 +1521,7 @@ const wchar_t *PrepareOSIfExist(const wchar_t *CmdLine)
 	return Exist?PtrCmd:nullptr;
 }
 
-int CommandLine::ProcessOSCommands(const wchar_t *CmdLine, bool SeparateWindow, bool &PrintCommand)
+int CommandLine::ProcessOSCommands(const string& CmdLine, bool SeparateWindow, bool &PrintCommand)
 {
 	int Length;
 	string strCmdLine = CmdLine;
@@ -1607,7 +1606,7 @@ int CommandLine::ProcessOSCommands(const wchar_t *CmdLine, bool SeparateWindow, 
 		{
 			string strExpandedStr;
 
-			if (apiExpandEnvironmentStrings(strCmdLine.CPtr()+pos+1,strExpandedStr) )
+			if (apiExpandEnvironmentStrings(strCmdLine.CPtr()+pos+1,strExpandedStr))
 			{
 				strCmdLine.SetLength(pos);
 				SetEnvironmentVariable(strCmdLine,strExpandedStr);
@@ -1812,7 +1811,7 @@ bool CommandLine::CheckCmdLineForSet(const string& CmdLine)
 	return false;
 }
 
-BOOL CommandLine::IntChDir(const wchar_t *CmdLine,int ClosePanel,bool Selent)
+BOOL CommandLine::IntChDir(const string& CmdLine,int ClosePanel,bool Selent)
 {
 	Panel *SetPanel;
 	SetPanel=CtrlObject->Cp()->ActivePanel;
@@ -1913,7 +1912,7 @@ BOOL CommandLine::IntChDir(const wchar_t *CmdLine,int ClosePanel,bool Selent)
 }
 
 // Проверить "Это батник?"
-bool IsBatchExtType(const wchar_t *ExtPtr)
+bool IsBatchExtType(const string& ExtPtr)
 {
 	UserDefinedList BatchExtList;
 	BatchExtList.Set(Opt.strExecuteBatchType);

@@ -631,10 +631,10 @@ bool FileFilter::FileInFilter(const FileListItem& fli,enumFileInFilterType *foun
 	fde.nPackSize=fli.PackSize;
 	fde.strFileName=fli.strName;
 	fde.strAlternateFileName=fli.strShortName;
-	return FileInFilter(fde,foundType);
+	return FileInFilter(fde, foundType, &fli.strName);
 }
 
-bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *foundType)
+bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *foundType, const string* FullName)
 {
 	enumFileFilterFlagsType FFFT = GetFFFT();
 	bool bFound=false;
@@ -664,7 +664,7 @@ bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *
 					bAnyFolderIncludeFound = bAnyFolderIncludeFound || !(AttrClear&FILE_ATTRIBUTE_DIRECTORY);
 			}
 
-			if (CurFilterData->FileInFilter(fde, CurrentTime))
+			if (CurFilterData->FileInFilter(fde, CurrentTime, FullName))
 			{
 				bFound = true;
 
@@ -692,7 +692,7 @@ bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *
 				bAnyFolderIncludeFound = true;
 			}
 
-			if (bFolder && FoldersFilter.FileInFilter(fde, CurrentTime))
+			if (bFolder && FoldersFilter.FileInFilter(fde, CurrentTime, FullName)) 
 			{
 				bFound = true;
 
@@ -720,7 +720,7 @@ bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *
 			if (bFolder) //авто-фильтры никогда не могут быть для папок
 				continue;
 
-			if (CurFilterData->FileInFilter(fde, CurrentTime))
+			if (CurFilterData->FileInFilter(fde, CurrentTime, FullName)) 
 			{
 				bFound = true;
 
@@ -762,7 +762,7 @@ bool FileFilter::FileInFilter(const PluginPanelItem& fd,enumFileInFilterType *fo
 {
 	FAR_FIND_DATA_EX fde;
 	PluginPanelItemToFindDataEx(&fd,&fde);
-	return FileInFilter(fde,foundType);
+	return FileInFilter(fde, foundType, &fde.strFileName);
 }
 
 bool FileFilter::IsEnabledOnPanel()
@@ -861,6 +861,14 @@ void FileFilter::InitFilter()
 			cfg->GetValue(key,L"UseSize",&UseSize);
 			NewFilter->SetSize(UseSize!=0, strSizeAbove, strSizeBelow);
 
+			unsigned __int64 UseHardLinks = 0;
+			cfg->GetValue(key,L"UseHardLinks",&UseHardLinks);
+			unsigned __int64 HardLinksAbove;
+			cfg->GetValue(key,L"HardLinksAbove",&HardLinksAbove);
+			unsigned __int64 HardLinksBelow;
+			cfg->GetValue(key,L"HardLinksAbove",&HardLinksBelow);
+			NewFilter->SetHardLinks(UseHardLinks!=0,HardLinksAbove,HardLinksBelow);
+
 			unsigned __int64 UseAttr = 1;
 			cfg->GetValue(key,L"UseAttr",&UseAttr);
 			unsigned __int64 AttrSet = 0;
@@ -957,6 +965,10 @@ void FileFilter::SaveFilters()
 		cfg->SetValue(key,L"UseSize",CurFilterData->GetSize(&SizeAbove, &SizeBelow)?1:0);
 		cfg->SetValue(key,L"SizeAboveS",SizeAbove);
 		cfg->SetValue(key,L"SizeBelowS",SizeBelow);
+		DWORD HardLinksAbove,HardLinksBelow;
+		cfg->SetValue(key,L"UseHardLinks",CurFilterData->GetHardLinks(&HardLinksAbove,&HardLinksBelow)?1:0);
+		cfg->SetValue(key,L"HardLinksAboveS",SizeAbove);
+		cfg->SetValue(key,L"HardLinksBelowS",SizeBelow);
 		DWORD AttrSet, AttrClear;
 		cfg->SetValue(key,L"UseAttr",CurFilterData->GetAttr(&AttrSet, &AttrClear)?1:0);
 		cfg->SetValue(key,L"AttrSet",AttrSet);

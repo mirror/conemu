@@ -51,7 +51,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "TPreRedrawFunc.hpp"
 #include "syslog.hpp"
 #include "interf.hpp"
-#include "registry.hpp"
 #include "message.hpp"
 #include "config.hpp"
 #include "scrsaver.hpp"
@@ -585,7 +584,7 @@ void ReloadEnvironment()
 	struct addr
 	{
 		HKEY Key;
-		LPCWSTR SubKey;
+		string SubKey;
 	}
 	Addr[]=
 	{
@@ -593,18 +592,15 @@ void ReloadEnvironment()
 		{HKEY_CURRENT_USER, L"Environment"},
 		{HKEY_CURRENT_USER, L"Volatile Environment"}
 	};
-	string strName, strData;
-	string strOptRegRoot(Opt.strRegRoot);
-	Opt.strRegRoot.Clear();
 
+	string strName, strData;
 	for(size_t i=0; i<ARRAYSIZE(Addr); i++)
 	{
-		SetRegRootKey(Addr[i].Key);
 		DWORD Types[]={REG_SZ,REG_EXPAND_SZ}; // REG_SZ first
 		for(size_t t=0; t<ARRAYSIZE(Types); t++) // two passes
 		{
 			DWORD Type;
-			for(int j=0; EnumRegValueEx(Addr[i].SubKey, j, strName, strData, nullptr, nullptr, &Type); j++)
+			for(int j=0; EnumRegValueEx(Addr[i].Key, Addr[i].SubKey, j, strName, strData, nullptr, nullptr, &Type); j++)
 			{
 				if(Type==Types[t])
 				{
@@ -631,8 +627,6 @@ void ReloadEnvironment()
 			}
 		}
 	}
-
-	Opt.strRegRoot=strOptRegRoot;
 }
 
 #if defined(MANTIS_0001687)
@@ -650,8 +644,11 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			//Info.hPanel
 			if (WaitInMainLoop)
 				Info.Flags|=PCIF_FROMMAIN;
-			if (CtrlObject->Plugins.ProcessConsoleInput(&Info))
-				Key=KEY_NONE;
+			if (Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS)
+			{
+				if (CtrlObject->Plugins.ProcessConsoleInput(&Info))
+					Key=KEY_NONE;
+			}
 		}
 	}
 	return Key;
@@ -774,7 +771,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 	BOOL ZoomedState=IsZoomed(Console.GetWindow());
 	BOOL IconicState=IsIconic(Console.GetWindow());
 
-	bool FullscreenState=IsFullscreen();
+	bool FullscreenState=IsConsoleFullscreen();
 
 	for (;;)
 	{
@@ -785,7 +782,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			ChangeVideoMode(ZoomedState);
 		}
 
-		bool CurrentFullscreenState=IsFullscreen();
+		bool CurrentFullscreenState=IsConsoleFullscreen();
 		if(CurrentFullscreenState && !FullscreenState)
 		{
 			ChangeVideoMode(25,80);

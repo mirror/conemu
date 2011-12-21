@@ -1148,7 +1148,7 @@ int WINAPI FarMkLinkA(const char *Src,const char *Dest, DWORD OldFlags)
 int WINAPI GetNumberOfLinksA(const char *Name)
 {
 	string n(Name);
-	return NativeFSF.GetNumberOfLinks(n);
+	return static_cast<int>(NativeFSF.GetNumberOfLinks(n));
 }
 
 int WINAPI ConvertNameToRealA(const char *Src,char *Dest,int DestSize)
@@ -1323,7 +1323,7 @@ int WINAPI FarMessageFnA(INT_PTR PluginNumber,DWORD Flags,const char *HelpTopic,
 			p[i] = AnsiToUnicode(Items[i]);
 	}
 
-	DWORD NewFlags=0;
+	FARMESSAGEFLAGS NewFlags = FMSG_NONE;
 	if (Flags&oldfar::FMSG_WARNING)
 		NewFlags|=FMSG_WARNING;
 	if (Flags&oldfar::FMSG_ERRORTYPE)
@@ -1334,18 +1334,28 @@ int WINAPI FarMessageFnA(INT_PTR PluginNumber,DWORD Flags,const char *HelpTopic,
 		NewFlags|=FMSG_LEFTALIGN;
 	if (Flags&oldfar::FMSG_ALLINONE)
 		NewFlags|=FMSG_ALLINONE;
-	if (Flags&oldfar::FMSG_MB_OK)
+
+	switch(Flags&0x000f0000)
+	{
+	case oldfar::FMSG_MB_OK:
 		NewFlags|=FMSG_MB_OK;
-	if (Flags&oldfar::FMSG_MB_OKCANCEL)
+		break;
+	case oldfar::FMSG_MB_OKCANCEL:
 		NewFlags|=FMSG_MB_OKCANCEL;
-	if (Flags&oldfar::FMSG_MB_ABORTRETRYIGNORE)
+		break;
+	case oldfar::FMSG_MB_ABORTRETRYIGNORE:
 		NewFlags|=FMSG_MB_ABORTRETRYIGNORE;
-	if (Flags&oldfar::FMSG_MB_YESNO)
+		break;
+	case oldfar::FMSG_MB_YESNO:
 		NewFlags|=FMSG_MB_YESNO;
-	if (Flags&oldfar::FMSG_MB_YESNOCANCEL)
+		break;
+	case oldfar::FMSG_MB_YESNOCANCEL:
 		NewFlags|=FMSG_MB_YESNOCANCEL;
-	if (Flags&oldfar::FMSG_MB_RETRYCANCEL)
+		break;
+	case oldfar::FMSG_MB_RETRYCANCEL:
 		NewFlags|=FMSG_MB_RETRYCANCEL;
+		break;
+	}
 
 	int ret = NativeInfo.Message(GetPluginGuid(PluginNumber),&FarGuid,NewFlags,(HelpTopic?strHT.CPtr():nullptr),p,ItemsNumber,ButtonsNumber);
 
@@ -3552,7 +3562,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			return FarVer;
 		}
 		case oldfar::ACTL_CONSOLEMODE:
-			return IsFullscreen()?TRUE:FALSE;
+			return IsConsoleFullscreen()?TRUE:FALSE;
 
 		case oldfar::ACTL_GETSYSWORDDIV:
 		{

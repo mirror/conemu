@@ -877,9 +877,9 @@ INT_PTR WINAPI MainDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 			{
 				case FAD_BUTTON_FIND:
 				{
-					LPCWSTR Mask=(LPCWSTR)SendDlgMessage(hDlg,DM_GETCONSTTEXTPTR,FAD_EDIT_MASK,0);
+					string Mask((LPCWSTR)SendDlgMessage(hDlg,DM_GETCONSTTEXTPTR,FAD_EDIT_MASK,0));
 
-					if (!Mask||!*Mask)
+					if (Mask.IsEmpty())
 						Mask=L"*";
 
 					return FileMaskForFindFile.Set(Mask,0);
@@ -1203,7 +1203,7 @@ const int FindStringBMH(const unsigned char* searchBuffer, size_t searchBufferCo
 }
 
 
-int LookForString(const wchar_t *Name)
+int LookForString(const string& Name)
 {
 #define RETURN(r) { result = (r); goto exit; }
 #define CONTINUE(r) { if ((r) || cpIndex==codePagesCount-1) RETURN(r) else continue; }
@@ -1809,7 +1809,7 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 								DisablePluginsOutput=TRUE;
 								{
 									CriticalSectionLock Lock(PluginCS);
-									ArcItem.hPlugin = CtrlObject->Plugins.OpenFilePlugin(strFindArcName, 0, OFP_SEARCH);
+									ArcItem.hPlugin = CtrlObject->Plugins.OpenFilePlugin(&strFindArcName, 0, OFP_SEARCH);
 								}
 								itd.SetArcListItem(FindItem.ArcIndex, ArcItem);
 								DisablePluginsOutput=SavePluginsOutput;
@@ -2441,7 +2441,7 @@ void ArchiveSearch(HANDLE hDlg, const wchar_t *ArcName)
 	HANDLE hArc;
 	{
 		CriticalSectionLock Lock(PluginCS);
-		hArc = CtrlObject->Plugins.OpenFilePlugin(strArcName, OPM_FIND, OFP_SEARCH);
+		hArc = CtrlObject->Plugins.OpenFilePlugin(&strArcName, OPM_FIND, OFP_SEARCH);
 	}
 	DisablePluginsOutput=SavePluginsOutput;
 
@@ -2598,7 +2598,7 @@ void DoScanTree(HANDLE hDlg, string& strRoot)
 				{
 					enumFileInFilterType foundType;
 
-					if (!Filter->FileInFilter(FindData,&foundType))
+					if (!Filter->FileInFilter(FindData, &foundType, &strFullName))
 					{
 						// сюда заходим, если не попали в фильтр или попали в Exclude-фильтр
 						if ((FindData.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) && foundType==FIFT_EXCLUDE)
@@ -2718,22 +2718,21 @@ void ScanPluginTree(HANDLE hDlg, HANDLE hPlugin, UINT64 Flags, int& RecurseLevel
 		for (size_t I=0; I<ItemCount && !StopEvent.Signaled(); I++)
 		{
 			PluginPanelItem *CurPanelItem=PanelData+I;
-			string strCurName=CurPanelItem->FileName;
 
 			if ((CurPanelItem->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
-			        StrCmp(strCurName,L".") && !TestParentFolderName(strCurName) &&
+			        StrCmp(CurPanelItem->FileName, L".") && !TestParentFolderName(CurPanelItem->FileName) &&
 			        (!UseFilter || Filter->FileInFilter(*CurPanelItem)) &&
 			        (SearchMode!=FINDAREA_SELECTED || RecurseLevel!=1 ||
-			         CtrlObject->Cp()->ActivePanel->IsSelected(strCurName)))
+			         CtrlObject->Cp()->ActivePanel->IsSelected(CurPanelItem->FileName)))
 			{
 				bool SetDirectoryResult=false;
 				{
 					CriticalSectionLock Lock(PluginCS);
-					SetDirectoryResult=CtrlObject->Plugins.SetDirectory(hPlugin,strCurName,OPM_FIND)!=FALSE;
+					SetDirectoryResult=CtrlObject->Plugins.SetDirectory(hPlugin, CurPanelItem->FileName, OPM_FIND)!=FALSE;
 				}
 				if (SetDirectoryResult)
 				{
-					strPluginSearchPath += strCurName;
+					strPluginSearchPath += CurPanelItem->FileName;
 					strPluginSearchPath += L"\\";
 					ScanPluginTree(hDlg, hPlugin, Flags, RecurseLevel);
 
@@ -2791,7 +2790,8 @@ void DoPrepareFileList(HANDLE hDlg)
 			if (!(DiskMask & 1))
 				continue;
 
-			const wchar_t Root[]={static_cast<wchar_t>(L'A'+CurrentDisk),L':',L'\\',L'\0'};
+			string Root(L"?:\\");
+			Root.Replace(0, static_cast<wchar_t>(L'A'+CurrentDisk));
 			int DriveType=FAR_GetDriveType(Root);
 
 			if (DriveType==DRIVE_REMOVABLE || IsDriveTypeCDROM(DriveType) || (DriveType==DRIVE_REMOTE && SearchMode==FINDAREA_ALL_BUTNETWORK))
@@ -3141,7 +3141,7 @@ bool FindFilesProcess(Vars& v)
 						string strArcPath=strArcName;
 						CutToSlash(strArcPath);
 						FindPanel->SetCurDir(strArcPath,TRUE);
-						ArcItem.hPlugin=((FileList *)FindPanel)->OpenFilePlugin(strArcName,FALSE, OFP_SEARCH);
+						ArcItem.hPlugin=((FileList *)FindPanel)->OpenFilePlugin(&strArcName, FALSE, OFP_SEARCH);
 						if (ArcItem.hPlugin==(HANDLE)-2)
 							ArcItem.hPlugin = INVALID_HANDLE_VALUE;
 						itd.SetArcListItem(FindItem.ArcIndex, ArcItem);

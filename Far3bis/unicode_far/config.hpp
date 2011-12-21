@@ -414,6 +414,8 @@ struct InfoPanelOptions
 {
 	COMPUTER_NAME_FORMAT ComputerNameFormat;
 	EXTENDED_NAME_FORMAT UserNameFormat;
+	int ShowPowerStatus;
+	string strShowStatusInfo;
 	string strFolderInfoFiles;
 };
 
@@ -555,7 +557,9 @@ struct Options
 
 	string strLanguage;
 	int SmallIcon;
+#ifndef NO_WRAPPER
 	string strRegRoot;
+#endif // NO_WRAPPER
 	int PanelRightClickRule; // задает поведение правой клавиши мыши
 	int PanelCtrlAltShiftRule; // задает поведение Ctrl-Alt-Shift дл€ панелей.
 	// Panel/CtrlFRule в реестре - задает поведение Ctrl-F. ≈сли = 0, то штампуетс€ файл как есть, иначе - с учетом отображени€ на панели

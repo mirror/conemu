@@ -36,7 +36,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "network.hpp"
 #include "language.hpp"
 #include "lang.hpp"
-#include "registry.hpp"
 #include "message.hpp"
 #include "stddlg.hpp"
 #include "drivemix.hpp"
@@ -53,7 +52,7 @@ void GetStoredUserName(wchar_t cDrive, string &strUserName)
 
 	if (RegOpenKeyEx(HKEY_CURRENT_USER,KeyName,0,KEY_QUERY_VALUE,&hKey)==ERROR_SUCCESS && hKey)
 	{
-		RegQueryStringValueEx(hKey, L"UserName", strUserName);
+		RegQueryStringValue(hKey, L"UserName", strUserName);
 		RegCloseKey(hKey);
 	}
 }
@@ -154,7 +153,7 @@ string &CurPath2ComputerName(const wchar_t *CurDir, string &strComputerName)
 	}
 	else
 	{
-		wchar_t LocalName[]={CurDir[0],CurDir[1],0};
+		string LocalName(CurDir, 2);
 		apiWNetGetConnection(LocalName, strNetDir);
 	}
 
@@ -199,7 +198,7 @@ string &DriveLocalToRemoteName(int DriveType, wchar_t Letter, string &strDest)
 		}
 	}
 
-	if (!NetPathShown && GetSubstName(DriveType,LocalName,strRemoteName))
+	if (!NetPathShown && GetSubstName(DriveType, LocalName, strRemoteName))
 		IsOK=true;
 
 	if (IsOK)

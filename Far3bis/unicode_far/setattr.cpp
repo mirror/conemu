@@ -549,7 +549,7 @@ void ShellSetFileAttributesMsg(const wchar_t *Name)
 	PreRedraw.SetParam(preRedrawItem.Param);
 }
 
-bool ReadFileTime(int Type,const wchar_t *Name,FILETIME& FileTime,const wchar_t *OSrcDate,const wchar_t *OSrcTime)
+bool ReadFileTime(int Type,const string& Name,FILETIME& FileTime,const wchar_t *OSrcDate,const wchar_t *OSrcTime)
 {
 	bool Result=false;
 	FAR_FIND_DATA_EX ffd={};
@@ -619,7 +619,7 @@ void PR_ShellSetFileAttributesMsg()
 	ShellSetFileAttributesMsg(static_cast<const wchar_t*>(preRedrawItem.Param.Param1));
 }
 
-bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
+bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 {
 	ChangePriority ChPriority(THREAD_PRIORITY_NORMAL);
 	short DlgX=70,DlgY=24;
@@ -702,6 +702,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 		{
 			AttrDlg[SA_BUTTON_SET].Flags|=DIF_DISABLE;
 			AttrDlg[SA_BUTTON_SYSTEMDLG].Flags|=DIF_DISABLE;
+			AttrDlg[SA_EDIT_OWNER].Flags|=DIF_READONLY;
 			DlgParam.Plugin=true;
 		}
 	}
@@ -736,17 +737,17 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 
 	{
 		DWORD FileAttr=INVALID_FILE_ATTRIBUTES;
-		string strSelName;
+		string strSelName, strSelOwner;
 		FAR_FIND_DATA_EX FindData;
 		if(SrcPanel)
 		{
 			SrcPanel->GetSelName(nullptr,FileAttr);
-			SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData);
+			SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData,&strSelOwner);
 		}
 		else
 		{
-			strSelName=Object;
-			apiGetFindDataEx(Object, FindData);
+			strSelName=*Object;
+			apiGetFindDataEx(strSelName, FindData);
 			FileAttr=FindData.dwFileAttributes;
 		}
 
@@ -986,7 +987,14 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 				SrcPanel->GetCurDir(strCurDir);
 				CurPath2ComputerName(strCurDir, strComputerName);
 			}
-			GetFileOwner(strComputerName,strSelName,AttrDlg[SA_EDIT_OWNER].strData);
+			if (DlgParam.Plugin)
+			{
+				AttrDlg[SA_EDIT_OWNER].strData=strSelOwner;
+			}
+			else
+			{
+				GetFileOwner(strComputerName,strSelName,AttrDlg[SA_EDIT_OWNER].strData);
+			}
 		}
 		else
 		{
@@ -1027,7 +1035,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 				CurPath2ComputerName(strCurDir, strComputerName);
 
 				bool CheckOwner=true;
-				while (SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData))
+				while (SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData,&strSelOwner))
 				{
 					if (!FolderPresent&&(FileAttr&FILE_ATTRIBUTE_DIRECTORY))
 					{
@@ -1053,7 +1061,10 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 					if(CheckOwner)
 					{
 						string strCurOwner;
-						GetFileOwner(strComputerName,strSelName,strCurOwner);
+						if (DlgParam.Plugin)
+							strCurOwner=strSelOwner;
+						else
+							GetFileOwner(strComputerName,strSelName,strCurOwner);
 						if(AttrDlg[SA_EDIT_OWNER].strData.IsEmpty())
 						{
 							AttrDlg[SA_EDIT_OWNER].strData=strCurOwner;
@@ -1402,7 +1413,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 								{
 									if (AttrDlg[SA_CHECKBOX_COMPRESSED].Selected != BSTATE_CHECKED)
 									{
-										RetCode=ESetFileEncryption(strSelName,AttrDlg[SA_CHECKBOX_ENCRYPTED].Selected,FileAttr,SkipMode);
+										RetCode=ESetFileEncryption(strSelName, AttrDlg[SA_CHECKBOX_ENCRYPTED].Selected != 0, FileAttr, SkipMode);
 
 										if (RetCode == SETATTR_RET_ERROR)
 											break;
@@ -1532,7 +1543,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel,LPCWSTR Object)
 										{
 											if (AttrDlg[SA_CHECKBOX_COMPRESSED].Selected != 1)
 											{
-												RetCode=ESetFileEncryption(strFullName,AttrDlg[SA_CHECKBOX_ENCRYPTED].Selected,FindData.dwFileAttributes,SkipMode);
+												RetCode=ESetFileEncryption(strFullName, AttrDlg[SA_CHECKBOX_ENCRYPTED].Selected!=0, FindData.dwFileAttributes, SkipMode);
 
 												if (RetCode == SETATTR_RET_ERROR)
 												{
