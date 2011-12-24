@@ -5,9 +5,11 @@ Usage
    containing Far2 plugin binary (i.e. where colorer.dll located).
 3. (optionally) Rename Far2 plugin binary (i.e. colorer.dll -> colorer.dl_).
 4. (optionally) Rename Loader.dll to more obvious name (i.e. colorer3.dll).
-5. (optionally) Create wrapper ini file. It must match exactly with wrapper
-   file name, renamed on step 3 (i.e. colorer3.ini).
-   !!!WARNING!!! You must create unique GUIDs in each ini wrapper file.
+5. (optionally) Create wrapper ini-file. It must match exactly with wrapper
+   file name, renamed on step 3 (i.e. colorer3.ini). If you don't create
+   ini-file, wrapper will create it for you with unique GUIDs.
+   !!!WARNING!!! When you create ini-files manually, you must create
+   unique GUIDs in each ini wrapper file.
 
 Sample wrapper ini files are included in distribution.
 

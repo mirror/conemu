@@ -178,7 +178,9 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 					}
 					else
 					{
-						Rec->Event.KeyEvent.wVirtualKeyCode = VirtKey = 0;
+						//111009 - не помню, зачем VirtKey обнулять, но из-за этого русские буквы в диалоги не доходят?
+						//Rec->Event.KeyEvent.wVirtualKeyCode = VirtKey = 0;
+						Rec->Event.KeyEvent.wVirtualKeyCode = 0;
 						Rec->Event.KeyEvent.wVirtualScanCode = 0;
 					}
 					Rec->Event.KeyEvent.uChar.UnicodeChar=(WORD)(FKey > WCHAR_MAX?0:FKey);

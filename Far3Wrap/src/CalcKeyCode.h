@@ -964,8 +964,8 @@ DWORD CalcKeyCode(bool LeftOnly, INPUT_RECORD *rec,int RealKey,int *NotMacros,bo
 			case VK_OEM_4:
 				return(ModifCtrl|KEY_BRACKET);
 			case VK_OEM_5:
-				//!!! Оставлено для совместимости с Far2: return(KEY_CTRLBACKSLASH);
-				return(KEY_CTRLBACKSLASH);
+				//111004 - убрал, посмотрим... !!! Оставлено для совместимости с Far2: return(KEY_CTRLBACKSLASH);
+				return(ModifCtrl|KEY_BACKSLASH);
 			case VK_OEM_6:
 				return(ModifCtrl|KEY_BACKBRACKET);
 			case VK_OEM_7:

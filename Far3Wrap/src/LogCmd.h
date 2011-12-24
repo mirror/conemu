@@ -42,8 +42,8 @@
 	#define LOG_CMD_(f,a1,a2,a3) \
 		wchar_t szInfo[512]; wsprintf(szInfo, f, a1,a2,a3); \
 		LogCmd llLogCmd(szInfo, this ? this->ms_File : L"<wpi==NULL>");
-	#define LOG_CMD(f,a1,a2,a3)  //LOG_CMD_(f,a1,a2,a3)
-	#define LOG_CMD0(f,a1,a2,a3) //LOG_CMD_(f,a1,a2,a3)
+	#define LOG_CMD(f,a1,a2,a3)  LOG_CMD_(f,a1,a2,a3)
+	#define LOG_CMD0(f,a1,a2,a3) LOG_CMD_(f,a1,a2,a3)
 #else
 	#define LOG_CMD(f,a1,a2,a3)
 	#define LOG_CMD0(f,a1,a2,a3)

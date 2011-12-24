@@ -67,6 +67,7 @@ typedef int (WINAPI* _FarApiRegExpControlWrap)(WrapPluginInfo* wpi, HANDLE hHand
 typedef int (WINAPI* _FarStdGetFileOwnerWrap)(WrapPluginInfo* wpi, const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size);
 typedef int (WINAPI* _FarStdGetPathRootWrap)(WrapPluginInfo* wpi, const wchar_t *Path,wchar_t *Root, int DestSize);
 typedef wchar_t* (WINAPI* _FarStdXlat)(WrapPluginInfo* wpi, wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
+typedef int (WINAPI* _GetNumberOfLinksWrap)(WrapPluginInfo* wpi, const wchar_t *Name);
 typedef void (WINAPI* _FarStdRecursiveSearchWrap)(WrapPluginInfo* wpi, const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
 typedef int (WINAPI* _FarStdMkTempWrap)(WrapPluginInfo* wpi, wchar_t *Dest, DWORD size, const wchar_t *Prefix);
 typedef int (WINAPI* _FarStdProcessNameWrap)(WrapPluginInfo* wpi, const wchar_t *param1, wchar_t *param2, DWORD size, DWORD flags);
@@ -130,6 +131,7 @@ struct Far3WrapFunctions
 	Far2::FARSTDMKLINK FarStdMkLink;
 	Far2::FARSTDMKTEMP FarStdMkTemp;
 	Far2::FARSTDPROCESSNAME FarStdProcessName;
+	Far2::FARSTDGETNUMBEROFLINKS GetNumberOfLinks;
 	Far2::FARSTDRECURSIVESEARCH FarStdRecursiveSearch;
 	Far2::FARSTDXLAT FarStdXlat;
 
@@ -198,6 +200,7 @@ struct Far3WrapFunctions
 	_FarStdGetFileOwnerWrap FarStdGetFileOwnerWrap;
 	_FarStdGetPathRootWrap FarStdGetPathRootWrap;
 	_FarStdXlat FarStdXlatWrap;
+	_GetNumberOfLinksWrap GetNumberOfLinksWrap;
 	_FarStdRecursiveSearchWrap FarStdRecursiveSearchWrap;
 	_FarStdMkTempWrap FarStdMkTempWrap;
 	_FarStdProcessNameWrap FarStdProcessNameWrap;

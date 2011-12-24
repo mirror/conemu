@@ -55,6 +55,8 @@ namespace Far2
 	#include "pluginW3#2163.hpp"
 #elif MVV_3<=2188
 	#include "pluginW3#2184.hpp"
+#elif MVV_3<=2203
+	#include "pluginW3#2194.hpp"
 #else
 	#include "pluginW3.hpp"
 #endif
@@ -84,9 +86,15 @@ wchar_t* gsModuleFail = NULL;
 	#define WrapGuids(g) &g
 #endif
 
+BOOL gbLoadWrapperCalled = FALSE;
+wchar_t gszWrapper[MAX_PATH];
 BOOL LoadWrapper(LPCWSTR asModule);
 
 #define DO_NOT_UNLOAD_WRAP
+
+#ifndef _ASSERTE
+#define _ASSERTE(x)
+#endif
 
 BOOL APIENTRY DllMain( HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved )
 {
@@ -97,83 +105,94 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		memset(&fwf, 0, sizeof(fwf));
 		gbFailReported = false;
 		
-		wchar_t szWrapper[MAX_PATH];
+		//wchar_t szWrapper[MAX_PATH];
 		int nTry = 0;
 		DWORD i;
 		gsErrInfo = (wchar_t*)calloc(ERRINFO_SIZE,sizeof(wchar_t));
 		gsModuleFail = (wchar_t*)calloc(ERRORTITLE_SIZE,sizeof(wchar_t));
 
+		_ASSERTE(ghWrapper==NULL);
+		ghWrapper = NULL;
+		_ASSERTE(gbLoadWrapperCalled==FALSE);
+		gbLoadWrapperCalled = FALSE;
+
 		while (ghWrapper == NULL)
 		{
-			szWrapper[0] = 0;
+			gszWrapper[0] = 0;
 			wchar_t* pszSlash;
 			switch (nTry++)
 			{
 				case 0: // Сначала в папке вместе с "Loader.dll"
-					i = GetModuleFileName(ghInstance, szWrapper, ARRAYSIZE(szWrapper)-28);
-					if (i < 10 || i >= (ARRAYSIZE(szWrapper)-28))
+					i = GetModuleFileName(ghInstance, gszWrapper, ARRAYSIZE(gszWrapper)-28);
+					if (i < 10 || i >= (ARRAYSIZE(gszWrapper)-28))
 						continue;
-					if (!(pszSlash = wcsrchr(szWrapper, L'\\'))) continue;
+					if (!(pszSlash = wcsrchr(gszWrapper, L'\\'))) continue;
 					pszSlash[1] = 0;
 					break;
 				case 1: // Папка, указанная в %Far3WrapperPath%
-					i = GetEnvironmentVariable(L"Far3WrapperPath", szWrapper, ARRAYSIZE(szWrapper));
-					if (i < 10 || i >= ARRAYSIZE(szWrapper))
+					i = GetEnvironmentVariable(L"Far3WrapperPath", gszWrapper, ARRAYSIZE(gszWrapper));
+					if (i < 10 || i >= ARRAYSIZE(gszWrapper))
 						continue;
 					break;
 				case 2: // %FARHOME%\Plugins
-					i = GetEnvironmentVariable(L"FARHOME", szWrapper, ARRAYSIZE(szWrapper)-28);
-					if (i < 10 || i >= (ARRAYSIZE(szWrapper)-28))
+					i = GetEnvironmentVariable(L"FARHOME", gszWrapper, ARRAYSIZE(gszWrapper)-28);
+					if (i < 10 || i >= (ARRAYSIZE(gszWrapper)-28))
 						continue;
-					if (szWrapper[i-1] != L'\\')
+					if (gszWrapper[i-1] != L'\\')
 					{
-						szWrapper[i++] = L'\\'; szWrapper[i] = 0;
+						gszWrapper[i++] = L'\\'; gszWrapper[i] = 0;
 					}
-					lstrcat(szWrapper, L"Plugins");
+					lstrcat(gszWrapper, L"Plugins");
 					break;
 				case 3: // %FARHOME%
-					i = GetEnvironmentVariable(L"FARHOME", szWrapper, ARRAYSIZE(szWrapper)-28);
-					if (i < 10 || i >= (ARRAYSIZE(szWrapper)-28))
+					i = GetEnvironmentVariable(L"FARHOME", gszWrapper, ARRAYSIZE(gszWrapper)-28);
+					if (i < 10 || i >= (ARRAYSIZE(gszWrapper)-28))
 						continue;
 					break;
 				case 4: // аналогично %FARHOME%\Plugins, но вдруг переменную окружения порушили?
-					i = GetModuleFileName(NULL, szWrapper, ARRAYSIZE(szWrapper)-28);
-					if (i < 10 || i >= (ARRAYSIZE(szWrapper)-28))
+					i = GetModuleFileName(NULL, gszWrapper, ARRAYSIZE(gszWrapper)-28);
+					if (i < 10 || i >= (ARRAYSIZE(gszWrapper)-28))
 						continue;
-					if (szWrapper[i-1] != L'\\')
+					if (gszWrapper[i-1] != L'\\')
 					{
-						szWrapper[i++] = L'\\'; szWrapper[i] = 0;
+						gszWrapper[i++] = L'\\'; gszWrapper[i] = 0;
 					}
-					lstrcat(szWrapper, L"Plugins");
+					lstrcat(gszWrapper, L"Plugins");
 					break;
 				case 5: // аналогично %FARHOME%, но вдруг переменную окружения порушили?
-					i = GetModuleFileName(NULL, szWrapper, ARRAYSIZE(szWrapper)-28);
-					if (i < 10 || i >= (ARRAYSIZE(szWrapper)-28))
+					i = GetModuleFileName(NULL, gszWrapper, ARRAYSIZE(gszWrapper)-28);
+					if (i < 10 || i >= (ARRAYSIZE(gszWrapper)-28))
 						continue;
-					if (!(pszSlash = wcsrchr(szWrapper, L'\\'))) continue;
+					if (!(pszSlash = wcsrchr(gszWrapper, L'\\'))) continue;
 					pszSlash[1] = 0;
 					break;
 				default:
-					GetModuleFileName(ghInstance, szWrapper, ARRAYSIZE(szWrapper));
-					wsprintf(gsErrInfo, L"Far3Wrap\nWrapper module NOT found (Far3Wrap.dll):\n%s", szWrapper);
+					GetModuleFileName(ghInstance, gszWrapper, ARRAYSIZE(gszWrapper));
+					wsprintf(gsErrInfo, L"Far3Wrap\nWrapper module NOT found (Far3Wrap.dll):\n%s", gszWrapper);
 					return TRUE; // -- возвращаем всегда TRUE, а то ошибка глупая отображается
 			}
 			
-			if (*szWrapper)
+			if (*gszWrapper)
 			{
-				i = lstrlen(szWrapper);
-				if (szWrapper[i-1] != L'\\')
+				i = lstrlen(gszWrapper);
+				if (gszWrapper[i-1] != L'\\')
 				{
-					szWrapper[i++] = L'\\'; szWrapper[i] = 0;
+					gszWrapper[i++] = L'\\'; gszWrapper[i] = 0;
 				}
 				#ifdef _WIN64
-				lstrcat(szWrapper, L"Far3Wrap64.dll");
+				lstrcat(gszWrapper, L"Far3Wrap64.dll");
 				#else
-				lstrcat(szWrapper, L"Far3Wrap.dll");
+				lstrcat(gszWrapper, L"Far3Wrap.dll");
 				#endif
-				
-				if (LoadWrapper(szWrapper))
-					break; // OK
+
+				HANDLE h = CreateFile(gszWrapper, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, NULL);
+				if (h && h != INVALID_HANDLE_VALUE)
+				{
+					CloseHandle(h);
+					break; // Нашли
+				}
+				//if (LoadWrapper(szWrapper))
+				//	break; // OK
 			}
 		}
 		//if (!ghWrapper) -- возвращаем всегда TRUE, а то ошибка глупая отображается
@@ -236,6 +255,8 @@ void ReportWrapperFail(bool bForce = false)
 
 FARPROC WINAPI FarWrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.GetProcAddressWrap)
 		return fwf.GetProcAddressWrap(fwf.wpi, hModule, lpProcName);
 	//_ASSERTE(fwf.GetProcAddressWrap!=NULL);
@@ -244,12 +265,16 @@ FARPROC WINAPI FarWrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 
 int WINAPI GetMinFarVersionW(void)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	#define MAKEFARVERSION2(major,minor,build) ( ((major)<<8) | (minor) | ((build)<<16))
 	return MAKEFARVERSION2(3,0,MVV_3);
 }
 
 void WINAPI SetStartupInfoW(PluginStartupInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	psi = *Info;
 	// Ругаться сразу в SetStartupInfoW наверное некошерно?
 	if (fwf.SetStartupInfoWrap)
@@ -279,6 +304,8 @@ LPCWSTR GetModuleTitle(LPCWSTR asInfo = NULL, DWORD anError = 0, BOOL abForce = 
 
 void WINAPI GetGlobalInfoW(GlobalInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.GetGlobalInfoWrap)
 	{
 		fwf.GetGlobalInfoWrap(fwf.wpi, Info);
@@ -305,6 +332,8 @@ void WINAPI GetGlobalInfoW(GlobalInfo *Info)
 
 void WINAPI GetPluginInfoW(PluginInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.GetPluginInfoWrap)
 	{
 		fwf.GetPluginInfoWrap(fwf.wpi, Info);
@@ -328,12 +357,16 @@ void WINAPI GetPluginInfoW(PluginInfo *Info)
 
 HANDLE WINAPI OpenW(const OpenInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	CHECKFNRETF(OpenWrap,INVALID_HANDLE_VALUE);
 	return fwf.OpenWrap(fwf.wpi, Info);
 }
 
 int    WINAPI AnalyseW(const AnalyseInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	CHECKFNRET(AnalyseWrap,0);
 	return fwf.AnalyseWrap(fwf.wpi, Info);
 }
@@ -353,6 +386,8 @@ int    WINAPI CompareW(const CompareInfo *Info)
 
 int    WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	CHECKFNRET(ConfigureWrap,0);
 	return fwf.ConfigureWrap(fwf.wpi, Info);
 }
@@ -426,6 +461,8 @@ int    WINAPI MakeDirectoryW(MakeDirectoryInfo *Info)
 
 int    WINAPI ProcessDialogEventW(const struct ProcessDialogEventInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.ProcessDialogEventWrap)
 		return fwf.ProcessDialogEventWrap(fwf.wpi, Info);
 	return 0;
@@ -433,6 +470,8 @@ int    WINAPI ProcessDialogEventW(const struct ProcessDialogEventInfo *Info)
 
 int    WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.ProcessEditorEventWrap)
 		return fwf.ProcessEditorEventWrap(fwf.wpi, Info);
 	return 0;
@@ -440,6 +479,8 @@ int    WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *Info)
 
 int    WINAPI ProcessEditorInputW(const ProcessEditorInputInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.ProcessEditorInputWrap)
 		return fwf.ProcessEditorInputWrap(fwf.wpi, Info);
 	return 0;
@@ -468,6 +509,8 @@ int    WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *Info)
 
 int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.ProcessConsoleInputWrap)
 		return fwf.ProcessConsoleInputWrap(fwf.wpi, Info);
 	return 0;
@@ -475,6 +518,8 @@ int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info)
 
 int    WINAPI ProcessSynchroEventW(const struct ProcessSynchroEventInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.ProcessSynchroEventWrap)
 		return fwf.ProcessSynchroEventWrap(fwf.wpi, Info);
 	return 0;
@@ -482,6 +527,8 @@ int    WINAPI ProcessSynchroEventW(const struct ProcessSynchroEventInfo *Info)
 
 int    WINAPI ProcessViewerEventW(const struct ProcessViewerEventInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.ProcessViewerEventWrap)
 		return fwf.ProcessViewerEventWrap(fwf.wpi, Info);
 	return 0;
@@ -503,6 +550,8 @@ int    WINAPI SetDirectoryW(const SetDirectoryInfo *Info)
 
 int    WINAPI SetFindListW(const SetFindListInfo *Info)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.SetFindListWrap)
 		return fwf.SetFindListWrap(fwf.wpi, Info);
 	return 0;
@@ -510,6 +559,8 @@ int    WINAPI SetFindListW(const SetFindListInfo *Info)
 
 int WINAPI GetCustomDataW(const wchar_t *FilePath, wchar_t **CustomData)
 {
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
 	if (fwf.GetCustomDataWrap)
 		return fwf.GetCustomDataWrap(fwf.wpi, FilePath, CustomData);
 	return 0;
@@ -699,6 +750,12 @@ wchar_t* WINAPI FarStdXlat(wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
 		return fwf.FarStdXlatWrap(fwf.wpi, Line,StartPos,EndPos,Flags);
 	return 0;
 }
+int WINAPI GetNumberOfLinks(const wchar_t *Name)
+{
+	if (fwf.GetNumberOfLinksWrap)
+		return fwf.GetNumberOfLinksWrap(fwf.wpi, Name);
+	return 0;
+}
 void WINAPI FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
 {
 	if (fwf.FarStdRecursiveSearchWrap)
@@ -747,6 +804,8 @@ DWORD WINAPI FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer)
 
 BOOL LoadWrapper(LPCWSTR asModule)
 {
+	gbLoadWrapperCalled = TRUE;
+	
 	BOOL lbRc = FALSE;
 	int iWrap = 0;
 	wchar_t szDbg[MAX_PATH+128];
@@ -792,6 +851,7 @@ BOOL LoadWrapper(LPCWSTR asModule)
 	fwf.FarStdGetFileOwner = FarStdGetFileOwner;
 	fwf.FarStdGetPathRoot = FarStdGetPathRoot;
 	fwf.FarStdXlat = FarStdXlat;
+	fwf.GetNumberOfLinks = GetNumberOfLinks;
 	fwf.FarStdRecursiveSearch = FarStdRecursiveSearch;
 	fwf.FarStdMkTemp = FarStdMkTemp;
 	fwf.FarStdProcessName = FarStdProcessName;

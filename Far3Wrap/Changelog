@@ -1,4 +1,11 @@
-ver 1.20.2194
+ver 1.21.2311
+[!] Far3 build 2311.
+[+] В ini-шнике добавлен опциональный ключ "DoNotFreeLibrary=1" (для Anamorphosis).
+[+] В ini-шнике добавлен опциональный ключ "LoadOnStartup=1" (для FaST: Far as Scheduled Task).
+[%] В режиме "Far /co" не работали макросы "callplugin" до первого открытия меню плагинов F11.
+[%] Потерялся AKey в макросах (появилось в Far2 build 1800).
+
+ver 1.20.2204
 [%] Не работала мышь в UserControl.
 
 ver 1.19.2194

@@ -105,6 +105,10 @@ namespace Far2
 	#define MCTLARG(g) &g
 #elif MVV_3<=2188
 	#include "pluginW3#2184.hpp"
+	#define MCTLARG(g) &g
+#elif MVV_3<=2203
+	#include "pluginW3#2194.hpp"
+	#define MCTLARG(g) &g
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -252,6 +256,9 @@ struct WrapPluginInfo
 	wchar_t ms_ForcePrefix[64];
 	VersionInfo m_Version;
 	DWORD mn_FakeFarVersion;
+	int mn_DoNotFreeLibrary;
+	int mn_LoadOnStartup;
+
 	GUID mguid_Plugin, mguid_Dialogs;
 	#if MVV_3>=2103
 	GUID mguid_ApiMessage, mguid_ApiMenu, mguid_ApiInput;
@@ -341,6 +348,7 @@ struct WrapPluginInfo
 	Far2::FARSTDMKLINK FarStdMkLinkExp;
 	Far2::FARSTDMKTEMP FarStdMkTempExp;
 	Far2::FARSTDPROCESSNAME FarStdProcessNameExp;
+	Far2::FARSTDGETNUMBEROFLINKS GetNumberOfLinksExp;
 	Far2::FARSTDRECURSIVESEARCH FarStdRecursiveSearchExp;
 	Far2::FARSTDXLAT FarStdXlatExp;
 
@@ -353,6 +361,7 @@ struct WrapPluginInfo
 
 	BOOL LoadPlugin(BOOL abSilent);
 	void LoadPluginInfo();
+	void GetPluginInfoInternal();
 	void CheckPluginExports(LoaderFunctions3 eFunc);
 
 	void UnloadPlugin();
@@ -545,6 +554,8 @@ struct WrapPluginInfo
 	       int        FarStdGetPathRoot(const wchar_t *Path,wchar_t *Root, int DestSize);
 	static wchar_t* WINAPI FarStdXlatWrap(WrapPluginInfo* wpi, wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
 	       wchar_t*        FarStdXlatW3(wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
+	static int WINAPI GetNumberOfLinksWrap(WrapPluginInfo* wpi, const wchar_t *Name);
+	       int        GetNumberOfLinks(const wchar_t *Name);
 	static void WINAPI FarStdRecursiveSearchWrap(WrapPluginInfo* wpi, const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
 	       void        FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
 	static int WINAPI FarStdMkTempWrap(WrapPluginInfo* wpi, wchar_t *Dest, DWORD size, const wchar_t *Prefix);
@@ -576,6 +587,7 @@ struct WrapPluginInfo
 	typedef int    (WINAPI* _DeleteFilesW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber,int OpMode);
 	_DeleteFilesW DeleteFilesW;
 	typedef void   (WINAPI* _ExitFARW)(void);
+	typedef void   (WINAPI* _ExitFARW3)(void*);
 	_ExitFARW ExitFARW;
 	typedef void   (WINAPI* _FreeFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem *PanelItem,int ItemsNumber);
 	_FreeFindDataW FreeFindDataW;
@@ -585,6 +597,8 @@ struct WrapPluginInfo
 	_GetFilesW GetFilesW;
 	typedef int    (WINAPI* _GetFindDataW)(HANDLE hPlugin,Far2::PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
 	_GetFindDataW GetFindDataW;
+	typedef void   (WINAPI* _GetGlobalInfoW)(struct GlobalInfo *Info);
+	_GetGlobalInfoW GetGlobalInfoWPlugin;
 	typedef int    (WINAPI* _GetMinFarVersionW)(void);
 	_GetMinFarVersionW GetMinFarVersionW;
 	typedef void   (WINAPI* _GetOpenPluginInfoW)(HANDLE hPlugin,Far2::OpenPluginInfo *Info);
@@ -631,6 +645,52 @@ struct WrapPluginInfo
 	// End of Exported Far2(!) Function
 };
 //WrapPluginInfo* wpi = NULL;
+
+void dbgLoadLibrary(LPCWSTR asFormat, LPCWSTR asModule)
+{
+	if (!asFormat)
+	{
+		_ASSERTE(asFormat!=NULL);
+		return;
+	}
+	int nLen = lstrlen(asFormat) + (asModule ? lstrlen(asModule) : 16) + 4;
+	wchar_t* pszOut = (wchar_t*)malloc(nLen*sizeof(wchar_t));
+	if (pszOut)
+	{
+		wsprintf(pszOut, asFormat, asModule ? asModule : L"");
+		nLen = lstrlen(pszOut);
+		if (nLen > 1 && pszOut[nLen-1] != L'\n')
+		{
+			pszOut[nLen++] = L'\n'; pszOut[nLen] = 0;
+		}
+		OutputDebugString(pszOut);
+		free(pszOut);
+	}
+}
+
+void dbgFreeLibrary(LPCWSTR asFrom, HMODULE hLib, LPCWSTR asModule)
+{
+	LPCWSTR pszFormat = 
+		#ifdef _WIN64
+			L"Far3Wrap.FreeLibrary.%s(x%08X%08X, %s)\n"
+		#else
+			L"Far3Wrap.FreeLibrary.%s(x%08X, %s)\n"
+		#endif
+			;
+
+	int nLen = lstrlen(pszFormat) + (asFrom ? lstrlen(asFrom) : 4) + (asModule ? lstrlen(asModule) : 16) + 32;
+	wchar_t* pszOut = (wchar_t*)malloc(nLen*sizeof(wchar_t));
+	if (pszOut)
+	{
+		#ifdef _WIN64
+			wsprintf(pszOut, pszFormat, asFrom ? asFrom : L"???", (DWORD)(((DWORD_PTR)hLib) >> 32), (DWORD)(DWORD_PTR)hLib, asModule ? asModule : L"<NULL>");
+		#else
+			wsprintf(pszOut, pszFormat, asFrom ? asFrom : L"???", (DWORD)hLib, asModule ? asModule : L"<NULL>");
+		#endif
+		OutputDebugString(pszOut);
+		free(pszOut);
+	}
+}
 
 std::map<DWORD,WrapPluginInfo*> *gpMapSysID = NULL;
 
@@ -736,6 +796,7 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 	SET_FN(FarStdMkLink);
 	SET_FN(FarStdMkTemp);
 	SET_FN(FarStdProcessName);
+	SET_FN(GetNumberOfLinks);
 	SET_FN(FarStdRecursiveSearch);
 	SET_FN(FarStdXlat);
 	#undef SET_FN
@@ -859,6 +920,8 @@ void WrapPluginInfo::LoadPluginInfo()
 		if (lbNewIniFile)
 		{
 			_ASSERTE(mh_Dll == NULL);
+			//*pszFilePtr = 0;
+			//SetDllDirectory(ms_PluginDll); // надо/не надо?
 			for (int i = 0; !hTestDll && i <= 1; i++)
 			{
 				lstrcpy(pszFilePtr, i ? L"*.dl_" : L"*.dll");
@@ -873,6 +936,7 @@ void WrapPluginInfo::LoadPluginInfo()
 						if (lstrcmpi(pszSelfName, fnd.cFileName) == 0)
 							continue; // это мы
 						lstrcpy(pszFilePtr, fnd.cFileName);
+						dbgLoadLibrary(L"Far3Wrap.LoadLibraryEx.Find(%s)", ms_PluginDll);
 						hTestDll = LoadLibraryEx(ms_PluginDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 						if (hTestDll)
 						{
@@ -883,7 +947,15 @@ void WrapPluginInfo::LoadPluginInfo()
 								mh_Dll = hTestDll; // хэндл модуля уже получен, повторно загружать не будем
 								break; // Да, это Far2 плагин!
 							}
-							FreeLibrary(hTestDll);
+							if (GetPrivateProfileInt(L"Plugin", L"DoNotFreeLibrary", 0, szIni) == 0)
+							{
+								dbgFreeLibrary(L"LoadPluginInfo", hTestDll, ms_PluginDll);
+								FreeLibrary(hTestDll);
+							}
+							else
+							{
+								dbgFreeLibrary(L"Skip.LoadPluginInfo", hTestDll, ms_PluginDll);
+							}
 							hTestDll = NULL; // продолжаем поиск
 						}
 						else
@@ -917,6 +989,8 @@ void WrapPluginInfo::LoadPluginInfo()
 				lb = WritePrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"ForcePrefix", L"", szIni);
 				lb = WritePrivateProfileString(L"Plugin", L"FakeFarVersion", L"", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"DoNotFreeLibrary", L"0", szIni);
+				lb = WritePrivateProfileString(L"Plugin", L"LoadOnStartup", L"0", szIni);
 				// Начальные GUID-ы
 				UuidCreate(&tmpGuid);
 				lb = WritePrivateProfileString(L"Plugin", L"GUID", FormatGuid(&tmpGuid, szTmp), szIni);
@@ -993,6 +1067,8 @@ void WrapPluginInfo::LoadPluginInfo()
 				if ((nMajor == 1 || nMajor == 2) && (nMinor >= 0) && (nBuild >= 0))
 					mn_FakeFarVersion = MAKEFARVERSION2(nMajor, nMinor, nBuild);
 			}
+			mn_DoNotFreeLibrary = GetPrivateProfileInt(L"Plugin", L"DoNotFreeLibrary", 0, szIni);
+			mn_LoadOnStartup = GetPrivateProfileInt(L"Plugin", L"LoadOnStartup", 0, szIni);
 			if (GetPrivateProfileString(L"Plugin", L"Version", L"1.0.0.0", szTemp, ARRAYSIZE(szTemp), szIni))
 			{
 				ZeroStruct(m_Version);
@@ -1188,10 +1264,17 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 		}
 		else
 		{
+			//SetDllDirectory(...); // надо/не надо?
 			if (wcschr(ms_PluginDll, L'\\'))
+			{
+				dbgLoadLibrary(L"Far3Wrap.LoadLibraryEx(%s)", ms_PluginDll);
 				mh_Dll = LoadLibraryEx(ms_PluginDll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+			}
 			else
+			{
+				dbgLoadLibrary(L"Far3Wrap.LoadLibrary(%s)", ms_PluginDll);
 				mh_Dll = LoadLibrary(ms_PluginDll);
+			}
 			dwErr = GetLastError();
 		}
 		//if (pszSlash)
@@ -1240,6 +1323,7 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 		FreeVirtualFindDataW = (WrapPluginInfo::_FreeVirtualFindDataW)GetProcAddress(mh_Dll, "FreeVirtualFindDataW");
 		GetFilesW = (WrapPluginInfo::_GetFilesW)GetProcAddress(mh_Dll, "GetFilesW");
 		GetFindDataW = (WrapPluginInfo::_GetFindDataW)GetProcAddress(mh_Dll, "GetFindDataW");
+		GetGlobalInfoWPlugin = (WrapPluginInfo::_GetGlobalInfoW)GetProcAddress(mh_Dll, "GetGlobalInfoW");
 		GetMinFarVersionW = (WrapPluginInfo::_GetMinFarVersionW)GetProcAddress(mh_Dll, "GetMinFarVersionW");
 		GetOpenPluginInfoW = (WrapPluginInfo::_GetOpenPluginInfoW)GetProcAddress(mh_Dll, "GetOpenPluginInfoW");
 		GetPluginInfoW = (WrapPluginInfo::_GetPluginInfoW)GetProcAddress(mh_Dll, "GetPluginInfoW");
@@ -1287,7 +1371,6 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 		CheckPluginExports(LF3_PutFiles);
 		CheckPluginExports(LF3_DeleteFiles);
 
-		
 		#if 0	
 		CheckPluginExports(ALF3_Analyse);
 		CheckPluginExports(ALF3_Open);
@@ -1463,7 +1546,15 @@ void WrapPluginInfo::UnloadPlugin()
 {
 	if (mh_Dll)
 	{
-		FreeLibrary(mh_Dll);
+		if (mn_DoNotFreeLibrary == 0)
+		{
+			dbgFreeLibrary(L"UnloadPlugin", mh_Dll, ms_PluginDll);
+			FreeLibrary(mh_Dll);
+		}
+		else
+		{
+			dbgFreeLibrary(L"Skip.UnloadPlugin", mh_Dll, ms_PluginDll);
+		}
 		mh_Dll = NULL;
 	}
 	ClearProcAddr();
@@ -3234,9 +3325,9 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				const Far2::FarListTitles* p2 = (const Far2::FarListTitles*)Param2;
 				//static FarListTitles flTitles3;
 				ZeroStruct(flTitles3);
-				flTitles3.TitleLen = p2->TitleLen;
+				flTitles3.TitleSize = p2->TitleLen;
 				flTitles3.Title = p2->Title;
-				flTitles3.BottomLen = p2->BottomLen;
+				flTitles3.BottomSize = p2->BottomLen;
 				flTitles3.Bottom = p2->Bottom;
 				Param2 = (LONG_PTR)&flTitles3;
 				switch (Msg2)
@@ -3641,9 +3732,9 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				{
 					const FarListTitles* p3 = (const FarListTitles*)Param2;
 					Far2::FarListTitles* p2 = (Far2::FarListTitles*)OrgParam2;
-					p2->TitleLen = p3->TitleLen;
+					p2->TitleLen = p3->TitleSize;
 					p2->Title = p3->Title;
-					p2->BottomLen = p3->BottomLen;
+					p2->BottomLen = p3->BottomSize;
 					p2->Bottom = p3->Bottom;
 				}
 				break;
@@ -3977,9 +4068,9 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			{
 				const FarListTitles* p3 = (const FarListTitles*)Param2;
 				static Far2::FarListTitles p2;
-				p2.TitleLen = p3->TitleLen;
+				p2.TitleLen = p3->TitleSize;
 				p2.Title = p3->Title;
-				p2.BottomLen = p3->BottomLen;
+				p2.BottomLen = p3->BottomSize;
 				p2.Bottom = p3->Bottom;
 				Param2 = &p2;
 				switch (Msg2)
@@ -4181,7 +4272,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			Msg2 = Far2::DN_CLOSE; break;
 		default:
 			// Некоторые внутренние события Фар не описаны в Plugin.hpp
-			_ASSERTE(Msg3==(DN_FIRST-1) || Msg3==(DN_FIRST-2) || Msg3==(DM_USER-1));
+			_ASSERTE(Msg3==(DN_FIRST-1) || Msg3==(DN_FIRST-2) || Msg3==(DM_USER-1) || Msg3==4118/*DN_GETVALUE*/);
 			Msg2 = (Far2::FarMessagesProc)Msg3;
 	}
 
@@ -4252,9 +4343,9 @@ void WrapPluginInfo::FarMessageParam_2_3(const int Msg2, const int Param1, const
 		{
 			const Far2::FarListTitles* p2 = (const Far2::FarListTitles*)Param2;
 			FarListTitles* p3 = (FarListTitles*)OrgParam2;
-			p3->TitleLen = p2->TitleLen;
+			p3->TitleSize = p2->TitleLen;
 			p3->Title = p2->Title;
-			p3->BottomLen = p2->BottomLen;
+			p3->BottomSize = p2->BottomLen;
 			p3->Bottom = p2->Bottom;
 		}
 		break;
@@ -5108,6 +5199,11 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 							if ((pszDeMultiSz = MacroFromMultiSZ(p2->Param.PlainText.SequenceText)) != NULL)
 								mcr.SequenceText = pszDeMultiSz;
 						}
+						// Если плагин поддерживает AKey - сконвертим
+						if (HIWORD(m_MinFarVersion) >= 1800)
+						{
+							FarKey_2_3(p2->Param.PlainText.AKey, &mcr.AKey);
+						}
 						// Плагин может звать сам себя через CallPlugin, 
 						// в этом случае нужно заменить старый PluginID (DWORD) на GUID
 						if (mcr.SequenceText && *mcr.SequenceText /*&& m_Info.Reserved*/)
@@ -5320,8 +5416,10 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					_ASSERTE(Far2::MACROAREA_TREEPANEL==MACROAREA_TREEPANEL);
 					_ASSERTE(Far2::MACROAREA_FINDFOLDER==MACROAREA_FINDFOLDER);
 					_ASSERTE(Far2::MACROAREA_USERMENU==MACROAREA_USERMENU);
-					_ASSERTE(Far2::MACROAREA_AUTOCOMPLETION==MACROAREA_AUTOCOMPLETION);
+					_ASSERTE(Far2::MACROAREA_AUTOCOMPLETION==MACROAREA_SHELLAUTOCOMPLETION);
 					iRc = psi3.MacroControl(MCTLARG(guid), MCTL_GETAREA, 0, 0);
+					if (iRc == MACROAREA_DIALOGAUTOCOMPLETION)
+						iRc = Far2::MACROAREA_AUTOCOMPLETION;
 					break;
 				}
 			}
@@ -5466,7 +5564,8 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 						case MACROAREA_SEARCH:
 						case MACROAREA_DISKS:
 						case MACROAREA_FINDFOLDER:
-						case MACROAREA_AUTOCOMPLETION:
+						case MACROAREA_SHELLAUTOCOMPLETION:
+						case MACROAREA_DIALOGAUTOCOMPLETION:
 							p2->Type = WTYPE_DIALOG; break;
 						case MACROAREA_HELP:
 							p2->Type = WTYPE_HELP; break;
@@ -5967,6 +6066,11 @@ int WrapPluginInfo::RecSearchUserFn(const struct PluginPanelItem *FData, const w
 	PluginPanelItem_3_2(FData, &ffd);
 	return p->UserFn2(&ffd, FullName, p->Param2);
 }
+int WrapPluginInfo::GetNumberOfLinks(const wchar_t *Name)
+{
+	size_t nRc = FSF3.GetNumberOfLinks(Name);
+	return nRc;
+}
 void WrapPluginInfo::FarStdRecursiveSearch(const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
 {
 	LOG_CMD(L"fsf2.RecursiveSearch",0,0,0);
@@ -6166,7 +6270,7 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 #endif
 	FSF2.XLat = WrapPluginInfo::FarStdXlatExp;
 	FSF2.GetFileOwner = WrapPluginInfo::FarStdGetFileOwnerExp;
-	FSF2.GetNumberOfLinks = FSF3.GetNumberOfLinks;
+	FSF2.GetNumberOfLinks = WrapPluginInfo::GetNumberOfLinksExp;
 	FSF2.FarRecursiveSearch = WrapPluginInfo::FarStdRecursiveSearchExp;
 	FSF2.MkTemp = WrapPluginInfo::FarStdMkTempExp;
 	FSF2.DeleteBuffer = FSF3.DeleteBuffer;
@@ -6220,6 +6324,10 @@ void WrapPluginInfo::SetStartupInfoW3(PluginStartupInfo *Info)
 	{
 		SetStartupInfoW(&psi2);
 	}
+
+	// даже если GetPluginInfoW==NULL - все равно зовем GetPluginInfoInternal (она сама разберется)
+	_ASSERTE(m_Info.StructSize == 0); // По идее, еще не должен был быть вызван, так что m_Info еще не инициализирована!
+	GetPluginInfoInternal();
 }
 
 void WrapPluginInfo::GetGlobalInfoW3(GlobalInfo *Info)
@@ -6244,7 +6352,26 @@ void WrapPluginInfo::GetGlobalInfoW3(GlobalInfo *Info)
 #endif
 }
 
+void WrapPluginInfo::GetPluginInfoInternal()
+{
+	LOG_CMD(L"GetPluginInfoW",0,0,0);
+	DWORD nOldSysID = m_Info.Reserved;
+	ZeroStruct(m_Info);
+	m_Info.StructSize = sizeof(m_Info);
 
+	if (GetPluginInfoW)
+	{
+		GetPluginInfoW(&m_Info);
+	}
+
+	if (nOldSysID && nOldSysID != m_Info.Reserved)
+		(*gpMapSysID).erase(nOldSysID);
+	if (m_Info.Reserved)
+		(*gpMapSysID)[m_Info.Reserved] = this;
+
+	if (mn_LoadOnStartup)
+		m_Info.Flags |= PF_PRELOAD;
+}
 
 void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 {
@@ -6276,18 +6403,9 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 		Info->PluginMenu.Strings = pszFailMenu;
 		Info->PluginMenu.Guids = &mguid_Plugin;
 	}
-	else if (GetPluginInfoW)
+	else if (GetPluginInfoW || mn_LoadOnStartup)
     {
-    	LOG_CMD(L"GetPluginInfoW",0,0,0);
-		DWORD nOldSysID = m_Info.Reserved;
-		ZeroStruct(m_Info);
-		m_Info.StructSize = sizeof(m_Info);
-    	GetPluginInfoW(&m_Info);
-
-		if (nOldSysID && nOldSysID != m_Info.Reserved)
-			(*gpMapSysID).erase(nOldSysID);
-		if (m_Info.Reserved)
-			(*gpMapSysID)[m_Info.Reserved] = this;
+    	GetPluginInfoInternal();
     	
     	if (m_Info.Flags & Far2::PF_PRELOAD)
     		Info->Flags |= PF_PRELOAD;
@@ -6398,6 +6516,7 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 
 	if ((Info->OpenFrom & OPEN_FROMMACRO_MASK))
 	{
+		_ASSERTE(m_Info.StructSize!=0);
 		if (m_Info.Reserved 
 			&& (((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACRO)
 				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING)
@@ -6703,7 +6822,18 @@ void   WrapPluginInfo::ExitFARW3(const struct ExitInfo *Info)
 {
 	LOG_CMD(L"ExitFARW",0,0,0);
 	if (ExitFARW)
-		ExitFARW();
+	{
+		if (GetGlobalInfoWPlugin != NULL)
+		{
+			// Можно ли звать ExitFarW в таком случае...
+			_ASSERTE(GetGlobalInfoWPlugin == NULL);
+			//((_ExitFARW3)ExitFARW)(NULL); -- Far3 скорее всего сам загрузит плагин, и говорить ему через Враппер "закройся" - не хорошо
+		}
+		else
+		{
+			ExitFARW();
+		}
+	}
 	UnloadPlugin();
 	//// Если нужно в загрузчике снести (или восстановить) какие-то экспорты - самое время поставить его в очередь
 	//if (mn_OldAbsentFunctions != mn_NewAbsentFunctions && *ms_PluginDll)
@@ -7326,6 +7456,10 @@ int WrapPluginInfo::FarStdGetPathRootWrap(WrapPluginInfo* wpi, const wchar_t *Pa
 wchar_t* WrapPluginInfo::FarStdXlatWrap(WrapPluginInfo* wpi, wchar_t *Line,int StartPos,int EndPos,DWORD Flags)
 {
 	return wpi->FarStdXlatW3(Line, StartPos, EndPos, Flags);
+}
+int WrapPluginInfo::GetNumberOfLinksWrap(WrapPluginInfo* wpi, const wchar_t *Name)
+{
+	return wpi->GetNumberOfLinks(Name);
 }
 void WrapPluginInfo::FarStdRecursiveSearchWrap(WrapPluginInfo* wpi, const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param)
 {
@@ -8305,6 +8439,7 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	SET_FN(FarStdGetFileOwnerWrap);
 	SET_FN(FarStdGetPathRootWrap);
 	SET_FN(FarStdXlatWrap);
+	SET_FN(GetNumberOfLinksWrap);
 	SET_FN(FarStdRecursiveSearchWrap);
 	SET_FN(FarStdMkTempWrap);
 	SET_FN(FarStdProcessNameWrap);
