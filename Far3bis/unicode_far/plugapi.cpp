@@ -943,10 +943,7 @@ int WINAPI FarMenuFn(
 
 						if (ReadRec.Event.KeyEvent.wVirtualKeyCode==BreakKeys[I].VirtualKeyCode)
 						{
-							DWORD Flags=NormalizeControlKeys(BreakKeys[I].ControlKeyState);
-							DWORD RealFlags=NormalizeControlKeys(ReadRec.Event.KeyEvent.dwControlKeyState);
-
-							if (RealFlags == Flags)
+							if (NormalizeControlKeys(ReadRec.Event.KeyEvent.dwControlKeyState) == NormalizeControlKeys(BreakKeys[I].ControlKeyState))
 							{
 								if (BreakCode)
 									*BreakCode=I;
@@ -2556,9 +2553,9 @@ INT_PTR WINAPI farPluginsControl(HANDLE hHandle, FAR_PLUGINS_CONTROL_COMMANDS Co
 					ConvertNameToFull((const wchar_t *)Param2, strPath);
 
 					if (Command == PCTL_LOADPLUGIN)
-						return CtrlObject->Plugins.LoadPluginExternal(strPath, false);
+						return CtrlObject->Plugins.LoadPluginExternal(strPath, false, true);
 					else if (Command == PCTL_FORCEDLOADPLUGIN)
-						return CtrlObject->Plugins.LoadPluginExternal(strPath, true);
+						return CtrlObject->Plugins.LoadPluginExternal(strPath, true, true);
 					else
 						return CtrlObject->Plugins.UnloadPluginExternal(strPath);
 				}

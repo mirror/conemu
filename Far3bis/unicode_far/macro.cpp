@@ -89,6 +89,8 @@ struct DlgParam
 {
 	KeyMacro *Handle;
 	DWORD Key;
+	UINT64 Flags;
+	bool Changed;
 	int Mode;
 	int Recurse;
 };
@@ -110,7 +112,8 @@ TMacroKeywords MKeywords[] =
 	{0,  L"Tree",               MCODE_C_AREA_TREEPANEL,0},
 	{0,  L"FindFolder",         MCODE_C_AREA_FINDFOLDER,0},
 	{0,  L"UserMenu",           MCODE_C_AREA_USERMENU,0},
-	{0,  L"AutoCompletion",     MCODE_C_AREA_AUTOCOMPLETION,0},
+	{0,  L"Shell.AutoCompletion",MCODE_C_AREA_SHELL_AUTOCOMPLETION,0},
+	{0,  L"Dialog.AutoCompletion",MCODE_C_AREA_DIALOG_AUTOCOMPLETION,0},
 
 	// ПРОЧЕЕ
 	{2,  L"Bof",                MCODE_C_BOF,0},
@@ -234,26 +237,27 @@ TMacroKeywords MKeywords[] =
 
 TMacroKeywords MKeywordsArea[] =
 {
-	{0,  L"Funcs",              MACRO_FUNCS,0},
-	{0,  L"Consts",             MACRO_CONSTS,0},
-	{0,  L"Vars",               MACRO_VARS,0},
-	{0,  L"Other",              MACRO_OTHER,0},
-	{0,  L"Shell",              MACRO_SHELL,0},
-	{0,  L"Viewer",             MACRO_VIEWER,0},
-	{0,  L"Editor",             MACRO_EDITOR,0},
-	{0,  L"Dialog",             MACRO_DIALOG,0},
-	{0,  L"Search",             MACRO_SEARCH,0},
-	{0,  L"Disks",              MACRO_DISKS,0},
-	{0,  L"MainMenu",           MACRO_MAINMENU,0},
-	{0,  L"Menu",               MACRO_MENU,0},
-	{0,  L"Help",               MACRO_HELP,0},
-	{0,  L"Info",               MACRO_INFOPANEL,0},
-	{0,  L"QView",              MACRO_QVIEWPANEL,0},
-	{0,  L"Tree",               MACRO_TREEPANEL,0},
-	{0,  L"FindFolder",         MACRO_FINDFOLDER,0},
-	{0,  L"UserMenu",           MACRO_USERMENU,0},
-	{0,  L"AutoCompletion",     MACRO_AUTOCOMPLETION,0},
-	{0,  L"Common",             MACRO_COMMON,0},
+	{0,  L"Funcs",                    MACRO_FUNCS,0},
+	{0,  L"Consts",                   MACRO_CONSTS,0},
+	{0,  L"Vars",                     MACRO_VARS,0},
+	{0,  L"Other",                    MACRO_OTHER,0},
+	{0,  L"Shell",                    MACRO_SHELL,0},
+	{0,  L"Viewer",                   MACRO_VIEWER,0},
+	{0,  L"Editor",                   MACRO_EDITOR,0},
+	{0,  L"Dialog",                   MACRO_DIALOG,0},
+	{0,  L"Search",                   MACRO_SEARCH,0},
+	{0,  L"Disks",                    MACRO_DISKS,0},
+	{0,  L"MainMenu",                 MACRO_MAINMENU,0},
+	{0,  L"Menu",                     MACRO_MENU,0},
+	{0,  L"Help",                     MACRO_HELP,0},
+	{0,  L"Info",                     MACRO_INFOPANEL,0},
+	{0,  L"QView",                    MACRO_QVIEWPANEL,0},
+	{0,  L"Tree",                     MACRO_TREEPANEL,0},
+	{0,  L"FindFolder",               MACRO_FINDFOLDER,0},
+	{0,  L"UserMenu",                 MACRO_USERMENU,0},
+	{0,  L"Shell.AutoCompletion",     MACRO_SHELLAUTOCOMPLETION,0},
+	{0,  L"Dialog.AutoCompletion",    MACRO_DIALOGAUTOCOMPLETION,0},
+	{0,  L"Common",                   MACRO_COMMON,0},
 };
 
 TMacroKeywords MKeywordsVarType[] =
@@ -861,31 +865,31 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 			|| (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot)
 		{
 			_KEYMACRO(CleverSysLog Clev(L"MACRO End record..."));
-			DWORD MacroKey;
 			int WaitInMainLoop0=WaitInMainLoop;
 			InternalInput=TRUE;
 			WaitInMainLoop=FALSE;
 			// Залочить _текущий_ фрейм, а не _последний немодальный_
 			FrameManager->GetCurrentFrame()->Lock(); // отменим прорисовку фрейма
-			MacroKey=AssignMacroKey();
-			FrameManager->ResetLastInputRecord();
-			FrameManager->GetCurrentFrame()->Unlock(); // теперь можно :-)
+			DWORD MacroKey;
 			// выставляем флаги по умолчанию.
 			UINT64 Flags=MFLAGS_DISABLEOUTPUT; // ???
+			int AssignRet=AssignMacroKey(MacroKey,Flags);
+			FrameManager->ResetLastInputRecord();
+			FrameManager->GetCurrentFrame()->Unlock(); // теперь можно :-)
 			// добавим проверку на удаление
-			// если удаляем, то не нужно выдавать диалог настройки.
+			// если удаляем или был вызван диалог изменения, то не нужно выдавать диалог настройки.
 			//if (MacroKey != (DWORD)-1 && (Key==KEY_CTRLSHIFTDOT || Recording==2) && RecBufferSize)
-			if (MacroKey != (DWORD)-1 && RecBufferSize
+			if (AssignRet && AssignRet!=2 && RecBufferSize
 				&& ((unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot))
 			{
 				if (!GetMacroSettings(MacroKey,Flags))
-					MacroKey=(DWORD)-1;
+					AssignRet=0;
 			}
 
 			WaitInMainLoop=WaitInMainLoop0;
 			InternalInput=FALSE;
 
-			if (MacroKey==(DWORD)-1)
+			if (!AssignRet)
 			{
 				if (RecBuffer)
 				{
@@ -2572,26 +2576,26 @@ static bool promptFunc(const TMacroFunction*)
 	TVar Result(L"");
 	bool Ret=false;
 
-		const wchar_t *history=nullptr;
+	const wchar_t *history=nullptr;
 	const wchar_t *title=nullptr;
 
 	if (!(ValTitle.isInteger() && !ValTitle.i()))
 		title=ValTitle.s();
 
-		if (!(ValHistory.isInteger() && !ValHistory.i()))
-			history=ValHistory.s();
+	if (!(ValHistory.isInteger() && !ValHistory.i()))
+		history=ValHistory.s();
 
-		const wchar_t *src=L"";
+	const wchar_t *src=L"";
 
-		if (!(ValSrc.isInteger() && !ValSrc.i()))
-			src=ValSrc.s();
+	if (!(ValSrc.isInteger() && !ValSrc.i()))
+		src=ValSrc.s();
 
-		const wchar_t *prompt=L"";
+	const wchar_t *prompt=L"";
 
-		if (!(ValPrompt.isInteger() && !ValPrompt.i()))
-			prompt=ValPrompt.s();
+	if (!(ValPrompt.isInteger() && !ValPrompt.i()))
+		prompt=ValPrompt.s();
 
-		string strDest;
+	string strDest;
 
 	DWORD oldHistroyEnable=CtrlObject->Macro.GetHistroyEnableMask();
 
@@ -2599,11 +2603,11 @@ static bool promptFunc(const TMacroFunction*)
 		CtrlObject->Macro.SetHistroyEnableMask(8); // если указан history, то принудительно выставляем историю для ЭТОГО prompt()
 
 	if (GetString(title,prompt,history,src,strDest,nullptr,(Flags&~FIB_CHECKBOX)|FIB_ENABLEEMPTY,nullptr,nullptr))
-		{
-			Result=strDest.CPtr();
-			Result.toString();
-			Ret=true;
-		}
+	{
+		Result=strDest.CPtr();
+		Result.toString();
+		Ret=true;
+	}
 	else
 		Result=0;
 
@@ -2658,8 +2662,8 @@ static int __cdecl CompareItems(const MenuItemEx **el1, const MenuItemEx **el2, 
 
 	string strName1((*el1)->strName);
 	string strName2((*el2)->strName);
-	RemoveChar(strName1,L'&',TRUE);
-	RemoveChar(strName2,L'&',TRUE);
+	RemoveChar(strName1,L'&',true);
+	RemoveChar(strName2,L'&',true);
 	int Res = NumStrCmpI(strName1.CPtr()+Param->Offset,strName2.CPtr()+Param->Offset);
 	return (Param->Direction?(Res<0?1:(Res>0?-1:0)):Res);
 }
@@ -3952,13 +3956,17 @@ static bool panelsetpathFunc(const TMacroFunction*)
 				SelPanel = typePanel? (typePanel == 1?PassivePanel:nullptr):ActivePanel;
 
 				//восстановим текущую папку из активной панели.
-				ActivePanel->SetCurPath();
+				if (ActivePanel)
+					ActivePanel->SetCurPath();
 				// Need PointToName()?
-				SelPanel->GoToFile(fileName); // здесь без проверки, т.к. параметр fileName аля опциональный
-				//SelPanel->Show();
-				// <Mantis#0000289> - грозно, но со вкусом :-)
-				//ShellUpdatePanels(SelPanel);
-				SelPanel->UpdateIfChanged(UIC_UPDATE_NORMAL);
+				if (SelPanel)
+				{
+					SelPanel->GoToFile(fileName); // здесь без проверки, т.к. параметр fileName аля опциональный
+					//SelPanel->Show();
+					// <Mantis#0000289> - грозно, но со вкусом :-)
+					//ShellUpdatePanels(SelPanel);
+					SelPanel->UpdateIfChanged(UIC_UPDATE_NORMAL);
+				}
 				FrameManager->RefreshFrame(FrameManager->GetTopModal());
 				// </Mantis#0000289>
 				Ret=1;
@@ -4373,18 +4381,19 @@ static bool editorselFunc(const TMacroFunction*)
 	              return 1
 	*/
 	TVar Ret(0ll);
-	TVar Opt; VMStack.Pop(Opt);
+	TVar Opts; VMStack.Pop(Opts);
 	TVar Action; VMStack.Pop(Action);
+
 	int Mode=CtrlObject->Macro.GetMode();
-	Frame* CurFrame=FrameManager->GetCurrentFrame();
 	int NeedType = Mode == MACRO_EDITOR?MODALTYPE_EDITOR:(Mode == MACRO_VIEWER?MODALTYPE_VIEWER:(Mode == MACRO_DIALOG?MODALTYPE_DIALOG:MODALTYPE_PANELS)); // MACRO_SHELL?
+	Frame* CurFrame=FrameManager->GetCurrentFrame();
 
 	if (CurFrame && CurFrame->GetType()==NeedType)
 	{
 		if (Mode==MACRO_SHELL && CtrlObject->CmdLine->IsVisible())
-			Ret=CtrlObject->CmdLine->VMProcess(MCODE_F_EDITOR_SEL,ToPtr(Action.toInteger()),Opt.i());
+			Ret=CtrlObject->CmdLine->VMProcess(MCODE_F_EDITOR_SEL,ToPtr(Action.toInteger()),Opts.i());
 		else
-			Ret=CurFrame->VMProcess(MCODE_F_EDITOR_SEL,ToPtr(Action.toInteger()),Opt.i());
+			Ret=CurFrame->VMProcess(MCODE_F_EDITOR_SEL,ToPtr(Action.toInteger()),Opts.i());
 	}
 
 	VMStack.Push(Ret);
@@ -6924,6 +6933,8 @@ M1:
 
 					if (MacroDlg->GetMacroSettings(key,Mac->Flags,strBufKey))
 					{
+						KMParam->Flags = Mac->Flags;
+						KMParam->Changed = true;
 						// в любом случае - вываливаемся
 						SendDlgMessage(hDlg,DM_CLOSE,1,0);
 						return TRUE;
@@ -6948,7 +6959,7 @@ M1:
 	return DefDlgProc(hDlg,Msg,Param1,Param2);
 }
 
-DWORD KeyMacro::AssignMacroKey()
+int KeyMacro::AssignMacroKey(DWORD &MacroKey, UINT64 &Flags)
 {
 	/*
 	  +------ Define macro ------+
@@ -6963,7 +6974,7 @@ DWORD KeyMacro::AssignMacroKey()
 		{DI_COMBOBOX,5,3,28,3,0,nullptr,nullptr,DIF_FOCUS|DIF_DEFAULTBUTTON,L""},
 	};
 	MakeDialogItemsEx(MacroAssignDlgData,MacroAssignDlg);
-	DlgParam Param={this,0,StartMode,0};
+	DlgParam Param={this,0,Flags,false,StartMode,0};
 	//_SVS(SysLog(L"StartMode=%d",StartMode));
 	IsProcessAssignMacroKey++;
 	Dialog Dlg(MacroAssignDlg,ARRAYSIZE(MacroAssignDlg),AssignMacroDlgProc,&Param);
@@ -6973,9 +6984,11 @@ DWORD KeyMacro::AssignMacroKey()
 	IsProcessAssignMacroKey--;
 
 	if (Dlg.GetExitCode() == -1)
-		return (DWORD)-1;
+		return 0;
 
-	return Param.Key;
+	MacroKey = Param.Key;
+	Flags = Param.Flags;
+	return Param.Changed ? 2 : 1;
 }
 
 static int Set3State(DWORD Flags,DWORD Chk1,DWORD Chk2)
@@ -7202,7 +7215,7 @@ int KeyMacro::GetMacroSettings(int Key,UINT64 &Flags,const wchar_t *Src)
 		MacroSettingsDlg[MS_EDIT_SEQUENCE].strData=Sequence;
 		xf_free(Sequence);
 	}
-	DlgParam Param={this,0,0,0};
+	DlgParam Param={this,0,0,false,0,0};
 	Dialog Dlg(MacroSettingsDlg,ARRAYSIZE(MacroSettingsDlg),ParamMacroDlgProc,&Param);
 	Dlg.SetPosition(-1,-1,73,19);
 	Dlg.SetHelp(L"KeyMacroSetting");

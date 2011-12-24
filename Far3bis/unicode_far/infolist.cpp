@@ -131,7 +131,7 @@ void InfoList::DisplayObject()
 {
 	string strTitle;
 	string strOutStr;
-	Panel *AnotherPanel;
+	Panel *AnotherPanel = CtrlObject->Cp()->GetAnotherPanel(this);
 	string strDriveRoot;
 	string strVolumeName, strFileSystemName;
 	DWORD MaxNameLength,FileSystemFlags,VolumeNumber;
@@ -169,11 +169,24 @@ void InfoList::DisplayObject()
 		PrintText(MInfoCompName);
 		PrintInfo(strComputerName);
 
-		dwSize = 256; //UNLEN
+		LPSERVER_INFO_101 ServerInfo = nullptr;
+		if(NetServerGetInfo(nullptr, 101, reinterpret_cast<LPBYTE*>(&ServerInfo)) == NERR_Success)
+		{
+			if(*ServerInfo->sv101_comment)
+			{
+				GotoXY(X1+2,CurY++);
+				PrintText(MInfoCompDescription);
+				PrintInfo(ServerInfo->sv101_comment);
+			}
+			NetApiBufferFree(ServerInfo);
+		}
+
+
+		dwSize = UNLEN+1;
 		wchar_t *UserName = strUserName.GetBuffer(dwSize);
 		if (Opt.InfoPanel.UserNameFormat == NameUnknown || !GetUserNameEx(Opt.InfoPanel.UserNameFormat, UserName, &dwSize))
 		{
-			dwSize = 256;
+			dwSize = UNLEN+1;
 			GetUserName(UserName, &dwSize);
 		}
 		strUserName.ReleaseBuffer();
@@ -181,12 +194,49 @@ void InfoList::DisplayObject()
 		GotoXY(X1+2,CurY++);
 		PrintText(MInfoUserName);
 		PrintInfo(strUserName);
+
+		dwSize = UNLEN+1;
+		wchar_t UserNameBuffer[UNLEN+1];
+		if (GetUserName(UserNameBuffer, &dwSize))
+		{
+			LPUSER_INFO_1 UserInfo = nullptr;
+			if(NetUserGetInfo(nullptr, strUserName, 1, reinterpret_cast<LPBYTE*>(&UserInfo)) == NERR_Success)
+			{
+				if(*UserInfo->usri1_comment)
+				{
+					GotoXY(X1+2,CurY++);
+					PrintText(MInfoUserDescription);
+					PrintInfo(UserInfo->usri1_comment);
+				}
+				int LabelId = -1;
+				switch (UserInfo->usri1_priv)
+				{
+				case USER_PRIV_GUEST:
+					LabelId = MInfoUserAccessLevelGuest;
+					break;
+				case USER_PRIV_USER:
+					LabelId = MInfoUserAccessLevelUser;
+						break;
+				case USER_PRIV_ADMIN:
+					LabelId = MInfoUserAccessLevelAdministrator;
+						break;
+				}
+				if(LabelId != -1)
+				{
+					GotoXY(X1+2,CurY++);
+					PrintText(MInfoUserAccessLevel);
+					PrintInfo(LabelId);
+				}
+
+				NetApiBufferFree(UserInfo);
+			}
+		}
+
 	}
 
 	/* #2 - disk info */
 	if (SectionState[ILSS_DISKINFO].Show)
 	{
-		AnotherPanel=CtrlObject->Cp()->GetAnotherPanel(this);
 		AnotherPanel->GetCurDir(strCurDir);
 
 		if (strCurDir.IsEmpty())
@@ -459,41 +509,42 @@ void InfoList::DisplayObject()
 		}
 	}
 
-	/* #5 - description */
-	strTitle = MSG(MInfoDescription);
-	DrawTitle(strTitle,ILSS_DIRDESCRIPTION,CurY);
-
-	if (SectionState[ILSS_DIRDESCRIPTION].Show)
+	if (AnotherPanel->GetMode() == FILE_PANEL)
 	{
-		if (!ShowDirDescription(CurY) && DizView)
+		/* #5 - description */
+		strTitle = MSG(MInfoDescription);
+		DrawTitle(strTitle,ILSS_DIRDESCRIPTION,CurY);
+
+		if (SectionState[ILSS_DIRDESCRIPTION].Show)
 		{
-			DizView->SetPosition(X1+1,CurY+1,X2-1,CurY+3);
-			CurY+=2;
-		}
-		else if (DizView)
-		{
-			DizView->SetPosition(X1+1,CurY+1,X2-1,Y2-2);
-			if (CurY < Y2)
-				CurY=Y2-1;
+			if (ShowDirDescription(CurY))
+			{
+				DizView->SetPosition(X1+1,CurY+1,X2-1,Y2-2);
+				if (CurY < Y2)
+					CurY=Y2-1;
+			}
+			else
+			{
+				GotoXY(X1+2,CurY++);
+				PrintText(MInfoDizAbsent);
+			}
 		}
 	}
-	GotoXY(X1+1,SectionState[ILSS_DIRDESCRIPTION].Y);
-	PrintText(SectionState[ILSS_DIRDESCRIPTION].Show?L"[-]":L"[+]");
 
-	/* #6 - Plugin Description */
-	strTitle = MSG(MInfoPlugin);
-	DrawTitle(strTitle,ILSS_PLDESCRIPTION,CurY);
-	if (SectionState[ILSS_PLDESCRIPTION].Show)
+	if (AnotherPanel->GetMode() == PLUGIN_PANEL)
 	{
-		if (ShowPluginDescription(CurY))
+		/* #6 - Plugin Description */
+		strTitle = MSG(MInfoPlugin);
+		DrawTitle(strTitle,ILSS_PLDESCRIPTION,CurY);
+		if (SectionState[ILSS_PLDESCRIPTION].Show)
 		{
-			;
+			if (ShowPluginDescription(CurY))
+			{
+				;
+			}
 		}
 	}
-	GotoXY(X1+1,SectionState[ILSS_PLDESCRIPTION].Y);
-	PrintText(SectionState[ILSS_PLDESCRIPTION].Show?L"[-]":L"[+]");
 }
-
 
 __int64 InfoList::VMProcess(int OpCode,void *vParam,__int64 iParam)
 {
@@ -513,11 +564,11 @@ void InfoList::SelectShowMode(void)
 {
 	MenuDataEx ShowModeMenuItem[]=
 	{
-		MSG(MMenuInfoShowModeDisk),LIF_SELECTED,KEY_CTRL0,
-		MSG(MMenuInfoShowModeMemory),0,KEY_CTRL1,
-		MSG(MMenuInfoShowModeDirDiz),0,KEY_CTRL2,
-		MSG(MMenuInfoShowModePluginDiz),0,KEY_CTRL3,
-		MSG(MMenuInfoShowModePower),0,KEY_CTRL4,
+		MSG(MMenuInfoShowModeDisk),LIF_SELECTED,0,
+		MSG(MMenuInfoShowModeMemory),0,0,
+		MSG(MMenuInfoShowModeDirDiz),0,0,
+		MSG(MMenuInfoShowModePluginDiz),0,0,
+		MSG(MMenuInfoShowModePower),0,0,
 	};
 
 	for (size_t i=0; i<ARRAYSIZE(SectionState); i++)
@@ -685,21 +736,6 @@ int InfoList::ProcessKey(int Key)
 			Redraw();
 			return TRUE;
 		}
-
-		default:
-		{
-			if ((Key >= KEY_CTRL0 && Key <= KEY_CTRL9) || (Key >= KEY_RCTRL0 && Key <= KEY_RCTRL9))
-			{
-				size_t Idx=Key >= KEY_CTRL0 && Key <= KEY_CTRL9? Key-KEY_CTRL0 : Key-KEY_RCTRL0;
-				if (Idx < ARRAYSIZE(SectionState))
-				{
-					SectionState[Idx].Show=!SectionState[Idx].Show;
-					Redraw();
-					return TRUE;
-				}
-			}
-			break;
-		}
 	}
 
 	if (DizView && Key >= 256)
@@ -746,6 +782,9 @@ int InfoList::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		return(RetCode);
 
 	bool NeedRedraw=false;
+	Panel *AnotherPanel = CtrlObject->Cp()->GetAnotherPanel(this);
+	bool ProcessDescription = AnotherPanel->GetMode() == FILE_PANEL;
+	bool ProcessPluginDescription = AnotherPanel->GetMode() == PLUGIN_PANEL;
 	if ((MouseEvent->dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED) && !(MouseEvent->dwEventFlags & MOUSE_MOVED))
 	{
 		if (MouseEvent->dwMousePosition.Y == SectionState[ILSS_DISKINFO].Y)
@@ -758,12 +797,12 @@ int InfoList::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 			SectionState[ILSS_MEMORYINFO].Show=!SectionState[ILSS_MEMORYINFO].Show;
 			NeedRedraw=true;
 		}
-		else if (MouseEvent->dwMousePosition.Y == SectionState[ILSS_DIRDESCRIPTION].Y)
+		else if (ProcessDescription && MouseEvent->dwMousePosition.Y == SectionState[ILSS_DIRDESCRIPTION].Y)
 		{
 			SectionState[ILSS_DIRDESCRIPTION].Show=!SectionState[ILSS_DIRDESCRIPTION].Show;
 			NeedRedraw=true;
 		}
-		else if (MouseEvent->dwMousePosition.Y == SectionState[ILSS_PLDESCRIPTION].Y)
+		else if (ProcessPluginDescription && MouseEvent->dwMousePosition.Y == SectionState[ILSS_PLDESCRIPTION].Y)
 		{
 			SectionState[ILSS_PLDESCRIPTION].Show=!SectionState[ILSS_PLDESCRIPTION].Show;
 			NeedRedraw=true;
@@ -866,61 +905,47 @@ void InfoList::PrintInfo(int MsgID)
 
 bool InfoList::ShowDirDescription(int YPos)
 {
-	Panel *AnotherPanel=CtrlObject->Cp()->GetAnotherPanel(this);
+	Panel *AnotherPanel = CtrlObject->Cp()->GetAnotherPanel(this);
 
-	if (AnotherPanel->GetMode()==FILE_PANEL)
+	string strDizDir;
+	AnotherPanel->GetCurDir(strDizDir);
+
+	if (!strDizDir.IsEmpty())
+		AddEndSlash(strDizDir);
+
+	string strArgName;
+	const wchar_t *NamePtr = Opt.InfoPanel.strFolderInfoFiles;
+
+	while ((NamePtr=GetCommaWord(NamePtr,strArgName)))
 	{
-		string strDizDir;
-		AnotherPanel->GetCurDir(strDizDir);
+		string strFullDizName;
+		strFullDizName = strDizDir;
+		strFullDizName += strArgName;
+		FAR_FIND_DATA_EX FindData;
 
-		if (!strDizDir.IsEmpty())
-			AddEndSlash(strDizDir);
+		if (!apiGetFindDataEx(strFullDizName, FindData))
+			continue;
 
-		string strArgName;
-		const wchar_t *NamePtr = Opt.InfoPanel.strFolderInfoFiles;
+		CutToSlash(strFullDizName, false);
+		strFullDizName += FindData.strFileName;
 
-		while ((NamePtr=GetCommaWord(NamePtr,strArgName)))
-		{
-			string strFullDizName;
-			strFullDizName = strDizDir;
-			strFullDizName += strArgName;
-			FAR_FIND_DATA_EX FindData;
-
-			if (!apiGetFindDataEx(strFullDizName, FindData))
-				continue;
-
-			CutToSlash(strFullDizName, false);
-			strFullDizName += FindData.strFileName;
-
-			if (OpenDizFile(strFullDizName,YPos))
-				return true;
-		}
+		if (OpenDizFile(strFullDizName,YPos))
+			return true;
 	}
-
-	CloseFile();
-	SetColor(COL_PANELTEXT);
-	GotoXY(X1+2,YPos);
-	PrintText(MInfoDizAbsent);
-
 	return false;
 }
 
 
 bool InfoList::ShowPluginDescription(int YPos)
 {
-	Panel *AnotherPanel;
-	AnotherPanel=CtrlObject->Cp()->GetAnotherPanel(this);
-
-	if (AnotherPanel->GetMode()!=PLUGIN_PANEL)
-		return false;
+	Panel *AnotherPanel = CtrlObject->Cp()->GetAnotherPanel(this);
 
 	static wchar_t VertcalLine[2]={BoxSymbols[BS_V2],0};
 
-	CloseFile();
 	OpenPanelInfo Info;
 	AnotherPanel->GetOpenPanelInfo(&Info);
 
-	int Y=YPos+1;
+	int Y=YPos;
 	for (size_t I=0; I<Info.InfoLinesNumber; I++, Y++)
 	{
 		if (Y >= Y2)

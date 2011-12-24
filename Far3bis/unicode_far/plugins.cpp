@@ -436,6 +436,7 @@ bool PluginManager::LoadPlugin(
     const string& lpwszModuleName,
     const FAR_FIND_DATA_EX &FindData,
     bool LoadToMem
+	,bool Manual
 )
 {
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
@@ -446,32 +447,56 @@ bool PluginManager::LoadPlugin(
 		return true;
 	}
 
-	switch (IsModulePlugin(lpwszModuleName))
+	switch (PluginType t=IsModulePlugin(lpwszModuleName))
 	{
 		case UNICODE_PLUGIN: pPlugin = new Plugin(this, lpwszModuleName); break;
 #ifndef NO_WRAPPER
 		case OEM_PLUGIN: pPlugin = new PluginA(this, lpwszModuleName); break;
 #endif // NO_WRAPPER
-		default: return false;
+		default:
+			if (Manual)
+			{
+				SetMessageHelp(L"ErrLoadPlugin");
+				Message(MSG_WARNING,1,MSG(MError),MSG(MPlgUnsupportedError),lpwszModuleName,MSG(MOk));
+			}
+			return false;
 	}
 
 	if (!pPlugin)
+	{
+		_ASSERTE(pPlugin!=nullptr);
 		return false;
+	}
 
 	bool bResult=false,bDataLoaded=false;
 
 	if (!LoadToMem)
 		bResult = pPlugin->LoadFromCache(FindData);
 
-	if (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || !Opt.LoadPlug.PluginsCacheOnly))
+	if (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || !Opt.LoadPlug.PluginsCacheOnly || Manual))
 	{
 		bResult = bDataLoaded = pPlugin->LoadData();
+	}
+	else if (IsDebuggerPresent())
+	{
+		string strDbgInfo=lpwszModuleName + L" - skipped, (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || !Opt.LoadPlug.PluginsCacheOnly || Manual))\n";
+		OutputDebugString(strDbgInfo);
 	}
 
 	//Maximus: AddPlugin Обламывается и никаких ошибок не показывает!!!
 	if (bResult && !AddPlugin(pPlugin))
 	{
 		_ASSERTE((void*)L"AddPlugin failed"==NULL);
+		if (Manual)
+		{
+			SetMessageHelp(L"ErrLoadPlugin");
+			Message(MSG_WARNING,1,MSG(MError),MSG(MPlgRegisterError),lpwszModuleName,MSG(MOk));
+		}
+		else if (IsDebuggerPresent())
+		{
+			string strDbgInfo=lpwszModuleName + L" - AddPlugin failed\n";
+			OutputDebugString(strDbgInfo);
+		}
 		pPlugin->Unload(true);
 		delete pPlugin;
 		return false;
@@ -485,7 +510,7 @@ bool PluginManager::LoadPlugin(
 	return bResult;
 }
 
-bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem)
+bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual)
 {
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
 
@@ -503,7 +528,7 @@ bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadT
 
 		if (apiGetFindDataEx(lpwszModuleName, FindData))
 		{
-			if (!LoadPlugin(lpwszModuleName, FindData, LoadToMem))
+			if (!LoadPlugin(lpwszModuleName, FindData, LoadToMem, Manual))
 				return false;
 			far_qsort(PluginsData, PluginsCount, sizeof(*PluginsData), PluginsSort);
 		}

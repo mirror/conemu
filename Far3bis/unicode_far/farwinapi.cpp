@@ -274,9 +274,10 @@ File::~File()
 	Close();
 }
 
-bool File::Open(const string& Object, DWORD DesiredAccess, DWORD ShareMode, LPSECURITY_ATTRIBUTES SecurityAttributes, DWORD CreationDistribution, DWORD FlagsAndAttributes, HANDLE TemplateFile, bool ForceElevation)
+bool File::Open(const string& Object, DWORD DesiredAccess, DWORD ShareMode, LPSECURITY_ATTRIBUTES SecurityAttributes, DWORD CreationDistribution, DWORD FlagsAndAttributes, File* TemplateFile, bool ForceElevation)
 {
-	Handle = apiCreateFile(Object, DesiredAccess, ShareMode, SecurityAttributes, CreationDistribution, FlagsAndAttributes, TemplateFile, ForceElevation);
+	HANDLE TemplateFileHandle = TemplateFile? TemplateFile->Handle : nullptr;
+	Handle = apiCreateFile(Object, DesiredAccess, ShareMode, SecurityAttributes, CreationDistribution, FlagsAndAttributes, TemplateFileHandle, ForceElevation);
 	return Handle != INVALID_HANDLE_VALUE;
 }
 
@@ -398,6 +399,7 @@ bool File::NtQueryDirectoryFile(PVOID FileInformation, ULONG Length, FILE_INFORM
 		pNameString = &NameString;
 	}
 	NTSTATUS Result = ifn.NtQueryDirectoryFile(Handle, nullptr, nullptr, nullptr, &IoStatusBlock, FileInformation, Length, FileInformationClass, ReturnSingleEntry, pNameString, RestartScan);
+	_ASSERTE(Result!=STATUS_DATATYPE_MISALIGNMENT);
 	SetLastError(ifn.RtlNtStatusToDosError(Result));
 	return Result == STATUS_SUCCESS;
 }
@@ -754,12 +756,12 @@ BOOL apiGetVolumeInformation(
 	return bResult;
 }
 
-BOOL apiGetFindDataEx(const string& FileName, FAR_FIND_DATA_EX& FindData,bool ScanSymLink)
+bool apiGetFindDataEx(const string& FileName, FAR_FIND_DATA_EX& FindData,bool ScanSymLink)
 {
 	FindFile Find(FileName, ScanSymLink);
 	if(Find.Get(FindData))
 	{
-		return TRUE;
+		return true;
 	}
 	else if (!wcspbrk(FileName,L"*?"))
 	{
@@ -791,14 +793,14 @@ BOOL apiGetFindDataEx(const string& FileName, FAR_FIND_DATA_EX& FindData,bool Sc
 			FindData.dwReserved1=0;
 			FindData.strFileName=PointToName(FileName);
 			ConvertNameToShort(FileName,FindData.strAlternateFileName);
-			return TRUE;
+			return true;
 		}
 	}
 
 	FindData.Clear();
 	FindData.dwFileAttributes=INVALID_FILE_ATTRIBUTES; //BUGBUG
 
-	return FALSE;
+	return false;
 }
 
 bool apiGetFileSizeEx(HANDLE hFile, UINT64 &Size)
@@ -1326,7 +1328,7 @@ bool apiGetVolumeNameForVolumeMountPoint(const string& VolumeMountPoint,string& 
 	AddEndSlash(strVolumeMountPoint);
 	if(GetVolumeNameForVolumeMountPoint(strVolumeMountPoint,VolumeNameBuffer,ARRAYSIZE(VolumeNameBuffer)))
 	{
-		VolumeName=VolumeName;
+		VolumeName=VolumeNameBuffer;
 		Result=true;
 	}
 	return Result;

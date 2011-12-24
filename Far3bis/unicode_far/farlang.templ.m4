@@ -2159,49 +2159,49 @@ upd:"Show Info"
 upd:"Show Info"
 
 MMenuInfoShowModeDisk
-"&Диск                 Ctrl-0"
-"&Disk                 Ctrl-0"
-upd:"&Disk                 Ctrl-0"
-upd:"&Disk                 Ctrl-0"
-upd:"&Disk                 Ctrl-0"
-upd:"&Disk                 Ctrl-0"
-upd:"&Disk                 Ctrl-0"
+"&Диск"
+"&Disk"
+upd:"&Disk"
+upd:"&Disk"
+upd:"&Disk"
+upd:"&Disk"
+upd:"&Disk"
 
 MMenuInfoShowModeMemory
-"&Память               Ctrl-1"
-"&Memory               Ctrl-1"
-upd:"&Memory               Ctrl-1"
-upd:"&Memory               Ctrl-1"
-upd:"&Memory               Ctrl-1"
-upd:"&Memory               Ctrl-1"
-upd:"&Memory               Ctrl-1"
+"&Память"
+"&Memory"
+upd:"&Memory"
+upd:"&Memory"
+upd:"&Memory"
+upd:"&Memory"
+upd:"&Memory"
 
 MMenuInfoShowModeDirDiz
-"&Описание папки       Ctrl-2"
-"&Description          Ctrl-2"
-upd:"&Description          Ctrl-2"
-upd:"&Description          Ctrl-2"
-upd:"&Description          Ctrl-2"
-upd:"&Description          Ctrl-2"
-upd:"&Description          Ctrl-2"
+"&Описание папки"
+"&Description"
+upd:"&Description"
+upd:"&Description"
+upd:"&Description"
+upd:"&Description"
+upd:"&Description"
 
 MMenuInfoShowModePluginDiz
-"Пла&гиновая панель    Ctrl-3"
-"Plu&gin panel         Ctrl-3"
-upd:"Plu&gin panel         Ctrl-3"
-upd:"Plu&gin panel         Ctrl-3"
-upd:"Plu&gin panel         Ctrl-3"
-upd:"Plu&gin panel         Ctrl-3"
-upd:"Plu&gin panel         Ctrl-3"
+"Пла&гиновая панель"
+"Plu&gin panel"
+upd:"Plu&gin panel"
+upd:"Plu&gin panel"
+upd:"Plu&gin panel"
+upd:"Plu&gin panel"
+upd:"Plu&gin panel"
 
 MMenuInfoShowModePower
-"Состояние п&итания    Ctrl-4"
-"&Power status         Ctrl-4"
-upd:"&Power status         Ctrl-4"
-upd:"&Power status         Ctrl-4"
-upd:"&Power status         Ctrl-4"
-upd:"&Power status         Ctrl-4"
-upd:"&Power status         Ctrl-4"
+"Состояние п&итания"
+"&Power status"
+upd:"&Power status"
+upd:"&Power status"
+upd:"&Power status"
+upd:"&Power status"
+upd:"&Power status"
 
 MViewConfigTitle
 l:
@@ -9786,6 +9786,15 @@ MInfoCompName
 "Nazwa komputera"
 "Nombre computadora"
 
+MInfoCompDescription
+"Описание компьютера"
+"Computer description"
+upd:"Computer description"
+upd:"Computer description"
+upd:"Computer description"
+upd:"Computer description"
+upd:"Computer description"
+
 MInfoUserName
 "Имя пользователя"
 "User name"
@@ -9795,14 +9804,59 @@ MInfoUserName
 "Nazwa użytkownika"
 "Nombre usuario"
 
+MInfoUserDescription
+"Описание пользователя"
+"User description"
+upd:"User description"
+upd:"User description"
+upd:"User description"
+upd:"User description"
+upd:"User description"
+
+MInfoUserAccessLevel
+"Уровень доступа"
+"Access level"
+upd:"Access level"
+upd:"Access level"
+upd:"Access level"
+upd:"Access level"
+upd:"Access level"
+
+MInfoUserAccessLevelGuest
+"Гость"
+"Guest"
+upd:"Guest"
+upd:"Guest"
+upd:"Guest"
+upd:"Guest"
+upd:"Guest"
+
+MInfoUserAccessLevelUser
+"Пользователь"
+"User"
+upd:"User"
+upd:"User"
+upd:"User"
+upd:"User"
+upd:"User"
+
+MInfoUserAccessLevelAdministrator
+"Администратор"
+"Administrator"
+upd:"Administrator"
+upd:"Administrator"
+upd:"Administrator"
+upd:"Administrator"
+upd:"Administrator"
+
 MInfoDiskTitle
-"Диск"
-"Disk"
-"Disk"
-"Laufwerk"
-"Lemez"
-"Dysk"
-"Disco"
+" Диск "
+" Disk "
+" Disk "
+" Laufwerk "
+" Lemez "
+" Dysk "
+" Disco "
 
 MInfoRemovable
 "Сменный"
@@ -15266,11 +15320,11 @@ MMacroDisAnotherKey
 MMacroEditKey
 "Изменить"
 "Change"
-upd:"Change?"
-upd:"Change?"
-upd:"Change?"
-upd:"Change?"
-upd:"Change?"
+upd:"Change"
+upd:"Change"
+upd:"Change"
+upd:"Change"
+upd:"Change"
 
 MMacroSettingsTitle
 l:
@@ -16170,6 +16224,23 @@ upd:"Plugin betöltési hiba"
 upd:"Błąd ładowania modułu plugina"
 upd:"Error cargando módulo plugin"
 
+MPlgUnsupportedError
+"Файл не является поддерживаемым плагином Far"
+"File is not supported Far plugin"
+upd:"File is not supported Far plugin"
+upd:"File is not supported Far plugin"
+upd:"File is not supported Far plugin"
+upd:"File is not supported Far plugin"
+upd:"File is not supported Far plugin"
+
+MPlgRegisterError
+"Ошибка регистрации плагина (AddPlugin)"
+"Plugin registration failed (AddPlugin)"
+upd:"Plugin registration failed (AddPlugin)"
+upd:"Plugin registration failed (AddPlugin)"
+upd:"Plugin registration failed (AddPlugin)"
+upd:"Plugin registration failed (AddPlugin)"
+upd:"Plugin registration failed (AddPlugin)"
 MCheckBox2State
 l:
 "?"
