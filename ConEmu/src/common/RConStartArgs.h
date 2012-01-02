@@ -28,23 +28,33 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-class CRecreateDlg
+struct RConStartArgs
 {
-protected:
-	HWND   mh_Dlg;
-	int    mn_DlgRc;
-	RConStartArgs* mp_Args;
-	static HHOOK mh_RecreateDlgKeyHook;
-	static BOOL mb_SkipAppsInRecreate;
-public:
-	CRecreateDlg();
-	~CRecreateDlg();
-
-	int RecreateDlg(RConStartArgs* apArgs);
-	HWND GetHWND();
-	void Close();
+	BOOL     bDetached;
+	wchar_t* pszSpecialCmd;
+	wchar_t* pszStartupDir;
 	
-	static LRESULT CALLBACK RecreateDlgKeyHook(int code, WPARAM wParam, LPARAM lParam);
-	static INT_PTR CALLBACK RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam);
-	static int CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData);
+	BOOL     bRunAsAdministrator, bRunAsRestricted;
+	wchar_t* pszUserName, *pszDomain, szUserPassword[MAX_PATH];
+	BOOL     bForceUserDialog;
+	
+	BOOL     bBackgroundTab;
+	
+	BOOL     bBufHeight;
+	UINT     nBufHeight;
+
+ 	enum {
+ 		eConfDefault = 0,
+ 		eConfAlways = 1,
+ 		eConfNever = 2,
+ 	} eConfirmation;
+	
+	BOOL     bRecreate; // Информационно и для CRecreateDlg
+
+	RConStartArgs();
+	~RConStartArgs();
+
+	BOOL CheckUserToken(HWND hPwd);
+
+	void ProcessNewConArg();
 };
