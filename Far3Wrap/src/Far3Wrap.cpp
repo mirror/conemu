@@ -109,6 +109,9 @@ namespace Far2
 #elif MVV_3<=2203
 	#include "pluginW3#2194.hpp"
 	#define MCTLARG(g) &g
+#elif MVV_3<=2342
+	#include "pluginW3#2342.hpp"
+	#define MCTLARG(g) &g
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -402,7 +405,7 @@ struct WrapPluginInfo
 	void FarListItem_2_3(const Far2::FarListItem* p2, FarListItem* p3);
 	void FarListItem_3_2(const FarListItem* p3, Far2::FarListItem* p2);
 	void FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogItem *p3, FarList *pList3, WRAP_FAR_CHAR_INFO& pChars3);
-	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, WRAP_CHAR_INFO& pVBuf2);
+	void FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, WRAP_CHAR_INFO& pVBuf2, BOOL bListPos = FALSE);
 	LONG_PTR CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2, const int Msg2, const int Param1, LONG_PTR Param2);
 	Far2::FarMessagesProc FarMessage_3_2(const int Msg3, const int Param1, void*& Param2, Far2Dialog* pDlg);
 	void FarMessageParam_2_3(const int Msg2, const int Param1, const void* Param2, void* OrgParam2, LONG_PTR lRc);
@@ -1285,9 +1288,13 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 			if (szInfo[0] == 0)
 			{
 				wsprintf(szInfo, L"Far3Wrap\nPlugin loading failed!\n%s\nErrCode=0x%08X\n", ms_PluginDll, dwErr);
+				int nLen = lstrlen(szInfo);
+				wchar_t* pszFmt = szInfo + nLen;
+				int nLeft = ARRAYSIZE(szInfo) - nLen - 1;
 				FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwErr,
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), szInfo+lstrlen(szInfo),
-					ARRAYSIZE(szInfo)-lstrlen(szInfo) - 1, NULL);
+					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), pszFmt, nLeft, NULL);
+				while ((pszFmt = wcschr(pszFmt, L'\r')) != NULL)
+					*pszFmt = L' '; // '\r' отображается в сообщении фара как символ "ноты"
 			}
 
 			wchar_t szSelf[MAX_PATH+1]; szSelf[0] = 0;
@@ -1822,7 +1829,7 @@ void WrapPluginInfo::PluginPanelItem_2_3(const Far2::PluginPanelItem* p2, Plugin
 	p3->LastWriteTime = p2->FindData.ftLastWriteTime;
 	p3->ChangeTime = p2->FindData.ftLastWriteTime;
 	p3->FileSize = p2->FindData.nFileSize;
-	p3->PackSize = p2->FindData.nPackSize;
+	p3->AllocationSize = p2->FindData.nPackSize;
 	p3->FileName = p2->FindData.lpwszFileName;
 	p3->AlternateFileName = p2->FindData.lpwszAlternateFileName;
 	p3->Flags = PluginPanelItemFlags_2_3(p2->Flags);
@@ -1858,7 +1865,7 @@ void WrapPluginInfo::PluginPanelItem_3_2(const PluginPanelItem* p3, Far2::Plugin
 	p2->FindData.ftLastWriteTime = p3->LastWriteTime;
 	//p2->FindData.ftLastWriteTime = p3->ChangeTime;
 	p2->FindData.nFileSize = p3->FileSize;
-	p2->FindData.nPackSize = p3->PackSize;
+	p2->FindData.nPackSize = p3->AllocationSize;
 	p2->FindData.lpwszFileName = p3->FileName;
 	p2->FindData.lpwszAlternateFileName = p3->AlternateFileName;
 	p2->Flags = PluginPanelItemFlags_3_2(p3->Flags);
@@ -1878,7 +1885,7 @@ void WrapPluginInfo::PluginPanelItem_3_2(const PluginPanelItem *p3, Far2::FAR_FI
 	p2->ftLastAccessTime = p3->LastAccessTime;
 	p2->ftLastWriteTime = p3->LastWriteTime;
 	p2->nFileSize = p3->FileSize;
-	p2->nPackSize = p3->PackSize;
+	p2->nPackSize = p3->AllocationSize;
 	p2->lpwszFileName = p3->FileName;
 	p2->lpwszAlternateFileName = p3->AlternateFileName;
 }
@@ -1892,7 +1899,7 @@ void WrapPluginInfo::PluginPanelItem_2_3(const Far2::FAR_FIND_DATA* p2, PluginPa
 	p3->LastWriteTime = p2->ftLastWriteTime;
 	p3->ChangeTime = p2->ftLastWriteTime;
 	p3->FileSize = p2->nFileSize;
-	p3->PackSize = p2->nPackSize;
+	p3->AllocationSize = p2->nPackSize;
 	p3->FileName = p2->lpwszFileName;
 	p3->AlternateFileName = p2->lpwszAlternateFileName;
 }
@@ -2861,7 +2868,7 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 	}
 }
 
-void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, WRAP_CHAR_INFO& pVBuf2)
+void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAllocated3,*/ Far2::FarDialogItem *p2, Far2::FarList *pList2, WRAP_CHAR_INFO& pVBuf2, BOOL bListPos /*= FALSE*/)
 {
 	p2->Param.Reserved = 0;
 
@@ -2905,7 +2912,7 @@ void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAlloca
 			free(pList2->Items);
 			pList2->Items = NULL;
 		}
-		if (p3->ListItems != NULL)
+		if (!bListPos && (p3->ListItems != NULL))
 		{
 			int nItems = p3->ListItems->ItemsNumber;
 			pList2->ItemsNumber = nItems;
@@ -3685,7 +3692,9 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				{
 					const FarDialogItem* p3 = (const FarDialogItem*)Param2;
 					Far2::FarDialogItem* p2 = (Far2::FarDialogItem*)OrgParam2;
-					FarDialogItem_3_2(p3, /*0,*/ p2, &m_ListItems2, m_FarCharInfo2);
+					// В Far2 DM_GETDLGITEMSHORT возвращал ListPos!
+					FarDialogItem_3_2(p3, /*0,*/ p2, &m_ListItems2, m_FarCharInfo2, TRUE);
+					p2->Param.ListPos = (int)psi3.SendDlgMessage(hDlg3, DM_LISTGETCURPOS, Param1, NULL);
 					Far2Dialog* ps = (*gpMapDlg_3_2)[hDlg3];
 					if (ps && ps->m_Colors2 && (ps->m_ItemsNumber > (UINT)Param1) && (ps->m_Colors2[Param1] & Far2::DIF_SETCOLOR))
 					{
@@ -4809,7 +4818,14 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 	case Far2::FCTL_SETUSERSCREEN:
 		iRc = psi3.PanelControl(hPlugin, FCTL_SETUSERSCREEN, Param1, (void*)Param2); break;
 	case Far2::FCTL_SETPANELDIR:
-		iRc = psi3.PanelControl(hPlugin, FCTL_SETPANELDIR, Param1, (void*)Param2); break;
+		{
+			_ASSERTE(!IsBadStringPtr((wchar_t*)Param2, MAX_PATH));
+			GUID FarGuid = {};
+			//TODO: Вроде бы установить через FCTL_SETPANELDIR плагиновую папку нельзя? Поэтому FarGuid
+			FarPanelDirectory setDir = {sizeof(setDir), (wchar_t*)Param2, NULL, FarGuid, NULL};
+			iRc = psi3.PanelControl(hPlugin, FCTL_SETPANELDIRECTORY, 0, &setDir);
+		}
+		break;
 	case Far2::FCTL_SETCMDLINEPOS:
 		iRc = psi3.PanelControl(hPlugin, FCTL_SETCMDLINEPOS, Param1, (void*)Param2); break;
 	case Far2::FCTL_GETCMDLINEPOS:
@@ -4937,7 +4953,29 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 		}
 		break;
 	case Far2::FCTL_GETPANELDIR:
-		iRc = psi3.PanelControl(hPlugin, FCTL_GETPANELDIR, Param1, (void*)Param2); break;
+		{
+			INT_PTR iSize = psi3.PanelControl(hPlugin, FCTL_GETPANELDIRECTORY, 0, 0);
+			if (iSize)
+			{
+				FarPanelDirectory* getDir = (FarPanelDirectory*)calloc(iSize, 1);
+				if (getDir)
+				{
+					getDir->StructSize = sizeof(FarPanelDirectory);
+					iSize = psi3.PanelControl(hPlugin, FCTL_GETPANELDIRECTORY, iSize, getDir);
+					if (Param2)
+					{
+						lstrcpyn((wchar_t*)Param2, getDir->Name ? getDir->Name : L"", (int)Param1);
+						iRc = lstrlen((wchar_t*)Param2);
+					}
+					else
+					{
+						iRc = getDir->Name ? (lstrlen(getDir->Name)+1) : 1;
+					}
+					free(getDir);
+				}
+			}
+		}
+		break;
 	case Far2::FCTL_GETCOLUMNTYPES:
 		iRc = psi3.PanelControl(hPlugin, FCTL_GETCOLUMNTYPES, Param1, (void*)Param2); break;
 	case Far2::FCTL_GETCOLUMNWIDTHS:
@@ -6335,7 +6373,8 @@ void WrapPluginInfo::GetGlobalInfoW3(GlobalInfo *Info)
 	//LOG_CMD(L"GetGlobalInfoW",0,0,0);
 	LoadPluginInfo();
 	
-	Info->StructSize = sizeof(GlobalInfo);
+	//Info->StructSize = sizeof(GlobalInfo);
+	_ASSERTE(Info->StructSize >= sizeof(GlobalInfo));
 	Info->MinFarVersion = FARMANAGERVERSION;
 
 	Info->Version = m_Version;
@@ -6375,9 +6414,9 @@ void WrapPluginInfo::GetPluginInfoInternal()
 
 void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 {
-    memset(Info, 0, sizeof(PluginInfo));
-    
-	Info->StructSize = sizeof(*Info);
+    //memset(Info, 0, sizeof(PluginInfo)); -- Размер выделенной памяти может быть меньше, чем ожидает плагин, memset низя
+	//Info->StructSize = sizeof(*Info);
+	_ASSERTE(Info->StructSize>0 && (Info->StructSize >= (size_t)(((LPBYTE)&Info->MacroFunctionNumber) - (LPBYTE)Info)));
 
 	//_ASSERTE(lbPsi2 && lbPsi3);
 	if (!lbPsi3)
@@ -6628,7 +6667,7 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		case OPEN_PLUGINSMENU:
 			h = OpenPluginW(Far2::OPEN_PLUGINSMENU, nPluginItemNumber); break;
 		case OPEN_FINDLIST:
-			h = OpenPluginW(Far2::OPEN_FINDLIST, Info->Data); break;
+			h = SetFindListW ? OpenPluginW(Far2::OPEN_FINDLIST, Info->Data) : INVALID_HANDLE_VALUE; break;
 		case OPEN_SHORTCUT:
 			h = OpenPluginW(Far2::OPEN_SHORTCUT, Info->Data); break;
 		case OPEN_COMMANDLINE:
@@ -6891,7 +6930,7 @@ int    WrapPluginInfo::GetFindDataW3(GetFindDataInfo *Info)
 		//	p3->LastWriteTime = p2->FindData.ftLastWriteTime;
 		//	p3->ChangeTime = p2->FindData.ftLastWriteTime;
 		//	p3->FileSize = p2->FindData.nFileSize;
-		//	p3->PackSize = p2->FindData.nPackSize;
+		//	p3->AllocationSize = p2->FindData.nPackSize;
 		//	p3->FileName = p2->FindData.lpwszFileName;
 		//	p3->AlternateFileName = p2->FindData.lpwszAlternateFileName;
 		//	p3->Flags = PluginPanelItemFlags_3_2(p2->Flags);

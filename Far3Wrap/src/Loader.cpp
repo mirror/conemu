@@ -57,6 +57,8 @@ namespace Far2
 	#include "pluginW3#2184.hpp"
 #elif MVV_3<=2203
 	#include "pluginW3#2194.hpp"
+#elif MVV_3<=2342
+	#include "pluginW3#2342.hpp"
 #else
 	#include "pluginW3.hpp"
 #endif
