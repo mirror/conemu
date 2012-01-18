@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "shortcuts.hpp"
 #include "dizlist.hpp"
 #include "config.hpp"
+#include "pathmix.hpp"
 
 template<> void DeleteItems<FarSettingsHistory>(FarSettingsHistory* Items,size_t Size)
 {
@@ -62,7 +63,7 @@ bool AbstractSettings::IsValid(void)
 	return true;
 }
 
-PluginSettings::PluginSettings(const GUID& Guid) : PluginsCfg(nullptr)
+PluginSettings::PluginSettings(const GUID& Guid, bool Local) : PluginsCfg(nullptr)
 {
 	//хак чтоб SCTL_* могли работать при ExitFarW.
 	extern PluginManager *PluginManagerForExitFar;
@@ -70,12 +71,14 @@ PluginSettings::PluginSettings(const GUID& Guid) : PluginsCfg(nullptr)
 	if (pPlugin)
 	{
 		string strGuid = GuidToStr(Guid);
-		PluginsCfg = CreatePluginsConfig(strGuid);
+		PluginsCfg = CreatePluginsConfig(strGuid, Local);
 		unsigned __int64& root(*m_Keys.insertItem(0));
 		root=PluginsCfg->CreateKey(0, strGuid, pPlugin->GetTitle());
 
 		DizList Diz;
-		string strDbPath = Opt.ProfilePath + L"\\PluginsData\\";
+		string strDbPath = Local ? Opt.LocalProfilePath : Opt.ProfilePath;
+		AddEndSlash(strDbPath);
+		strDbPath += L"PluginsData\\";
 		Diz.Read(strDbPath);
 		string strDbName = strGuid + L".db";
 		string Description = string(pPlugin->GetTitle()) + L" (" + pPlugin->GetDescription() + L")";
@@ -308,6 +311,43 @@ int FarSettings::Set(const FarSettingsItem& Item)
 
 int FarSettings::Get(FarSettingsItem& Item)
 {
+	switch(Item.Root)
+	{
+		case FSSF_CONFIRMATIONS:
+			{
+				static struct
+				{
+					int* Value;
+					const wchar_t* Name;
+				}
+				Confirmations[]=
+				{
+					{&Opt.Confirm.Copy,L"COPYOVERWRITE"},
+					{&Opt.Confirm.Move,L"MOVEOVERWRITE"},
+					{&Opt.Confirm.RO,L"OVERWRITEDELETEROFILES"},
+					{&Opt.Confirm.Drag,L"DRAGANDDROP"},
+					{&Opt.Confirm.Delete,L"DELETE"},
+					{&Opt.Confirm.DeleteFolder,L"DELETENONEMPTYFOLDERS"},
+					{&Opt.Confirm.Esc,L"INTERRUPTOPERATION"},
+					{&Opt.Confirm.RemoveConnection,L"DISCONNECTNETWORKDRIVE"},
+					{&Opt.Confirm.AllowReedit,L"RELOADEDITEDFILE"},
+					{&Opt.Confirm.HistoryClear,L"CLEARHISTORYLIST"},
+					{&Opt.Confirm.Exit,L"EXIT"},
+				};
+				for(size_t ii=0;ii<sizeof(Confirmations)/sizeof(Confirmations[0]);++ii)
+				{
+					if(!StrCmpI(Item.Name,Confirmations[ii].Name))
+					{
+						Item.Type=FST_QWORD;
+						Item.Number=*Confirmations[ii].Value;
+						return TRUE;
+					}
+				}
+			}
+			break;
+		default:
+			break;
+	}
 	return FALSE;
 }
 
@@ -336,15 +376,15 @@ int FarSettings::Enum(FarSettingsEnum& Enum)
 	switch(Enum.Root)
 	{
 		case FSSF_HISTORY_CMD:
-			return FillHistory(HISTORYTYPE_CMD,Enum,FilterNone);
+			return FillHistory(HISTORYTYPE_CMD,L"",Enum,FilterNone);
 		case FSSF_HISTORY_FOLDER:
-			return FillHistory(HISTORYTYPE_FOLDER,Enum,FilterNone);
+			return FillHistory(HISTORYTYPE_FOLDER,L"",Enum,FilterNone);
 		case FSSF_HISTORY_VIEW:
-			return FillHistory(HISTORYTYPE_VIEW,Enum,FilterView);
+			return FillHistory(HISTORYTYPE_VIEW,L"",Enum,FilterView);
 		case FSSF_HISTORY_EDIT:
-			return FillHistory(HISTORYTYPE_VIEW,Enum,FilterEdit);
+			return FillHistory(HISTORYTYPE_VIEW,L"",Enum,FilterEdit);
 		case FSSF_HISTORY_EXTERNAL:
-			return FillHistory(HISTORYTYPE_VIEW,Enum,FilterExt);
+			return FillHistory(HISTORYTYPE_VIEW,L"",Enum,FilterExt);
 		case FSSF_FOLDERSHORTCUT_0:
 		case FSSF_FOLDERSHORTCUT_1:
 		case FSSF_FOLDERSHORTCUT_2:
@@ -369,6 +409,15 @@ int FarSettings::Enum(FarSettingsEnum& Enum)
 				return TRUE;
 			}
 			break;
+		default:
+			if(Enum.Root>=FSSF_COUNT)
+			{
+				size_t root=Enum.Root-FSSF_COUNT;
+				if((size_t)root<m_Keys.getCount())
+				{
+					return FillHistory(HISTORYTYPE_DIALOG,*m_Keys.getItem(root),Enum,FilterNone);
+				}
+			}
 	}
 	return FALSE;
 }
@@ -380,21 +429,24 @@ int FarSettings::Delete(const FarSettingsValue& Value)
 
 int FarSettings::SubKey(const FarSettingsValue& Value, bool bCreate)
 {
-	return FALSE;
+	if(bCreate||Value.Root!=FSSF_ROOT) return 0;
+	int result=static_cast<int>(m_Keys.getCount());
+	*m_Keys.insertItem(result)=Value.Value;
+	return result+FSSF_COUNT;
 }
 
-int FarSettings::FillHistory(int Type,FarSettingsEnum& Enum,HistoryFilter Filter)
+int FarSettings::FillHistory(int Type,const string& HistoryName,FarSettingsEnum& Enum,HistoryFilter Filter)
 {
 	Vector<FarSettingsHistory>& array=*m_Enum.addItem();
 	FarSettingsHistory item={0};
 	DWORD Index=0;
-	string strName,strHistoryName,strGuid,strFile,strData;
+	string strName,strGuid,strFile,strData;
 
 	unsigned __int64 id;
 	int HType;
 	bool HLock;
 	unsigned __int64 Time;
-	while(HistoryCfg->Enum(Index++,Type,strHistoryName,&id,strName,&HType,&HLock,&Time,strGuid,strFile,strData,false))
+	while(HistoryCfg->Enum(Index++,Type,HistoryName,&id,strName,&HType,&HLock,&Time,strGuid,strFile,strData,false))
 	{
 		if(Filter(HType))
 		{

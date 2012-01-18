@@ -523,9 +523,16 @@ void Viewer::ShowPage(int nMode)
 				ViewerString *tmp = Strings[Y2-Y1];
 				memmove(&Strings[1], &Strings[0], sizeof(Strings[0]) * (Y2-Y1));
 				Strings[0] = tmp;
+
+				Strings[0]->nFilePos = FilePos;
+				SecondPos = Strings[1]->nFilePos;
 			}
-			Strings[0]->nFilePos = FilePos;
-			SecondPos = Strings[1]->nFilePos;
+			else
+			{
+				SecondPos = Strings[0]->nFilePos;
+				Strings[0]->nFilePos = FilePos;
+			}
+
 			ReadString(Strings[0],(int)(SecondPos-FilePos));
 			break;
 		case SHOW_DOWN:
@@ -534,10 +541,17 @@ void Viewer::ShowPage(int nMode)
 				ViewerString *tmp = Strings[0];
 				memmove(&Strings[0], &Strings[1], sizeof(Strings[0]) * (Y2-Y1));
 				Strings[Y2-Y1] = tmp;
+
+				FilePos = Strings[0]->nFilePos;
+				SecondPos = Strings[1]->nFilePos;
+				Strings[Y2-Y1]->nFilePos = Strings[Y2-Y1-1]->nFilePos + Strings[Y2-Y1-1]->linesize;
 			}
-			FilePos = Strings[0]->nFilePos;
-			SecondPos = Strings[1]->nFilePos;
-			Strings[Y2-Y1]->nFilePos = Strings[Y2-Y1-1]->nFilePos + Strings[Y2-Y1-1]->linesize;
+			else
+			{
+				Strings[0]->nFilePos += Strings[0]->linesize;
+				FilePos = Strings[0]->nFilePos;
+				SecondPos = FilePos;
+			}
 			vseek(Strings[Y2-Y1]->nFilePos, SEEK_SET);
 			ReadString(Strings[Y2-Y1],-1);
 			break;
@@ -2964,7 +2978,7 @@ int Viewer::search_text_forward( search_data* sd )
 		to1 = to + (t_buff ? GetStrBytesNum(t_buff, nw1) : sd->ch_size * nw1);
 	}
 
-	int is_eof = (to1 >= FileSize ? 1 : 0), iLast = nw - slen - ww + is_eof;
+	int is_eof = (to1 >= FileSize ? 1 : 0), iLast = nw - slen - ww + ww*is_eof;
 	if ( !LastSearchCase )
 		CharUpperBuff(buff, nw);
 
@@ -2996,7 +3010,7 @@ int Viewer::search_text_forward( search_data* sd )
 	{
 		if ( iLast < 0 || (!up_half && to1 > StartSearchPos) )
 			return -1;
-		sd->CurPos = to1;
+		sd->CurPos = to1 - GetStrBytesNum(t_buff+iLast+1, nw-iLast-1);
 		return 0;
 	}
 }
@@ -3060,19 +3074,20 @@ int Viewer::search_text_backward( search_data* sd )
 		return +1;
 	}
 
-	int ret = 0;
+	int ret = 0, adjust = 1;
 	if ( up_half )
 		ret = (cpos <= StartSearchPos ? -1 : 0);
 	else
 	{
 		if ( cpos <= 0 )
 		{
+			adjust = 0;
 			SetFileSize();
 			cpos = FileSize;
 			ret = (StartSearchPos >= FileSize ? -1 : 0);
 		}
 	}
-	sd->CurPos = cpos;
+	sd->CurPos = cpos + (ret ? 0 : adjust*GetStrBytesNum(t_buff,iFirst+slen-1));
 	return ret;
 }
 
@@ -4130,7 +4145,7 @@ void Viewer::SelectText(const __int64 &match_pos,const __int64 &search_len, cons
 
 	if ( VM.Hex )
 	{
-		int lin_siz = VM.Hex < 2 ? 16 : Width;
+		int lin_siz = VM.Hex < 2 ? 16 : Width * getChSize(VM.CodePage);
 
 		FilePos = (FilePos % lin_siz) + lin_siz*(SelectPos / lin_siz);
 		FilePos = (FilePos < SelectPos ? FilePos : (FilePos > lin_siz ? FilePos-lin_siz : 0));
@@ -4174,9 +4189,9 @@ int Viewer::ViewerControl(int Command,void *Param)
 	{
 		case VCTL_GETINFO:
 		{
-			if (Param)
+			ViewerInfo *Info=(ViewerInfo *)Param;
+			if (CheckStructSize(Info))
 			{
-				ViewerInfo *Info=(ViewerInfo *)Param;
 				memset(&Info->ViewerID,0,Info->StructSize-sizeof(Info->StructSize));
 				Info->ViewerID=Viewer::ViewerID;
 				Info->FileName=strFullFileName;

@@ -99,7 +99,7 @@ class PluginSettings: public AbstractSettings
 		HierarchicalConfig *PluginsCfg;
 		PluginSettings();
 	public:
-		PluginSettings(const GUID& Guid);
+		PluginSettings(const GUID& Guid, bool Local);
 		~PluginSettings();
 		bool IsValid(void);
 		int Set(const FarSettingsItem& Item);
@@ -113,8 +113,9 @@ class FarSettings: public AbstractSettings
 {
 	private:
 		TPointerArray<Vector<FarSettingsHistory> > m_Enum;
+		TPointerArray<string> m_Keys;
 		typedef bool (*HistoryFilter)(int Type);
-		int FillHistory(int Type,FarSettingsEnum& Enum,HistoryFilter Filter);
+		int FillHistory(int Type,const string& HistoryName,FarSettingsEnum& Enum,HistoryFilter Filter);
 	public:
 		FarSettings();
 		~FarSettings();

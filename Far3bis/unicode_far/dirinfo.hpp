@@ -44,12 +44,18 @@ enum GETDIRINFOFLAGS
 	GETDIRINFO_USEFILTER          =0x00000010,
 };
 
-int GetDirInfo(const wchar_t *Title,const wchar_t *DirName,unsigned long &DirCount,
-               unsigned long &FileCount,unsigned __int64 &FileSize,
-               unsigned __int64 &CompressedFileSize,unsigned __int64 &RealSize,
-               unsigned long &ClusterSize,clock_t MsgWaitTime,
-               FileFilter *Filter,
-               DWORD Flags=GETDIRINFO_SCANSYMLINKDEF);
+struct DirInfoData
+{
+	UINT64 FileSize;
+	UINT64 AllocationSize;
+	UINT64 FilesSlack;
+	UINT64 MFTOverhead;
+	UINT64 ClusterSize;
+	DWORD DirCount;
+	DWORD FileCount;
+};
+
+int GetDirInfo(const wchar_t *Title,const wchar_t *DirName, DirInfoData& Data, clock_t MsgWaitTime, FileFilter *Filter, DWORD Flags=GETDIRINFO_SCANSYMLINKDEF);
 
 int GetPluginDirInfo(HANDLE hPlugin,const wchar_t *DirName,unsigned long &DirCount,
                      unsigned long &FileCount,unsigned __int64 &FileSize,

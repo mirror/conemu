@@ -136,6 +136,26 @@ enum OPENFILEPLUGINTYPE
 	OFP_COMMANDS,
 };
 
+enum CALLPLUGINTYPE
+{
+	CPT_CALL,
+	CPT_CONFIGURE,
+	CPT_PREFIX,
+	CPT_INTERNAL,
+};
+
+struct CallPluginInfo
+{
+	CALLPLUGINTYPE CallType;
+	int OpenFrom;
+	union
+	{
+		GUID *ItemGuid;
+		const wchar_t *Command;
+		__int64 Item;
+	};
+};
+
 struct PluginHandle
 {
 	HANDLE hPlugin;
@@ -182,7 +202,7 @@ class PluginManager
 		bool TestPluginInfo(Plugin *Item,PluginInfo *Info);
 		bool TestOPENPANELINFO(Plugin *Item,OpenPanelInfo *Info);
 
-		bool LoadPlugin(const string& lpwszModuleName, const FAR_FIND_DATA_EX &FindData, bool LoadToMem, bool Manual=false);
+		bool LoadPlugin(const string& lpwszModuleName, const FAR_FIND_DATA_EX &FindData, bool LoadToMem, bool* ShowErrors=nullptr, bool Manual=false);
 
 		bool AddPlugin(Plugin *pPlugin);
 		bool RemovePlugin(Plugin *pPlugin);
@@ -238,7 +258,7 @@ class PluginManager
 
 		// $ .09.2000 SVS - Функция CallPlugin - найти плагин по ID и запустить OpenFrom = OPEN_*
 		int CallPlugin(const GUID& SysID,int OpenFrom, void *Data, int *Ret=nullptr);
-		int CallPluginItem(const GUID& Guid, const GUID& ItemGuid);
+		int CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret=nullptr);
 		Plugin *FindPlugin(const GUID& SysID);
 		INT_PTR PluginGuidToPluginNumber(const GUID& PluginId);
 		static const GUID& GetGUID(HANDLE hPlugin);

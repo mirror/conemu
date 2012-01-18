@@ -303,10 +303,10 @@ static int WINAPI FarMessageFnW(const GUID* PluginId,const GUID* Id,unsigned __i
 
 static int WINAPI FarInputBoxW(const GUID* PluginId,const GUID* Id,const wchar_t *Title,const wchar_t *Prompt,
                        const wchar_t *HistoryName,const wchar_t *SrcText,
-                       wchar_t *DestText,int DestLength,
+                       wchar_t *DestText, size_t DestSize,
                        const wchar_t *HelpTopic,unsigned __int64 Flags)
 {
-	return FarInputBox(GetPluginNumber(PluginId),Id,Title,Prompt,HistoryName,SrcText,DestText,DestLength,HelpTopic,Flags);
+	return FarInputBox(GetPluginNumber(PluginId),Id,Title,Prompt,HistoryName,SrcText,DestText,DestSize,HelpTopic,Flags);
 }
 
 static BOOL WINAPI farColorDialog(const GUID* PluginId, COLORDIALOGFLAGS Flags, struct FarColor *Color)
@@ -329,7 +329,7 @@ static INT_PTR WINAPI FarAdvControlW(const GUID* PluginId, ADVANCED_CONTROL_COMM
 	if (ACTL_GETWINDOWTYPE==Command)
 	{
 		WindowType* info=(WindowType*)Param2;
-		if (info&&info->StructSize>=sizeof(WindowType))
+		if (CheckStructSize(info))
 		{
 			int type=CurrentWindowType;
 			switch(type)
@@ -340,7 +340,7 @@ static INT_PTR WINAPI FarAdvControlW(const GUID* PluginId, ADVANCED_CONTROL_COMM
 				case WTYPE_DIALOG:
 				case WTYPE_VMENU:
 				case WTYPE_HELP:
-					info->Type=type;
+					info->Type=(WINDOWINFO_TYPE)type;
 					return TRUE;
 			}
 		}
@@ -734,6 +734,10 @@ bool Plugin::LoadData()
 		}
 
 		PrepareModulePath(m_strModuleName);
+		#ifdef _DEBUG
+		string strDbgMsg=L"FarPluginLoad: "+m_strModuleName+"\n";
+		OutputDebugString(strDbgMsg);
+		#endif
 		m_hModule = LoadLibraryEx(m_strModuleName,nullptr,LOAD_WITH_ALTERED_SEARCH_PATH);
 		GuardLastError Err;
 		FarChDir(strCurPath);
@@ -829,7 +833,7 @@ bool Plugin::Load()
 	return true;
 }
 
-bool Plugin::LoadFromCache(const FAR_FIND_DATA_EX &FindData)
+bool Plugin::LoadFromCache(const FAR_FIND_DATA_EX &FindData, bool* ShowErrors)
 {
 	unsigned __int64 id = PlCacheCfg->GetCacheID(m_strCacheName);
 
@@ -853,7 +857,15 @@ bool Plugin::LoadFromCache(const FAR_FIND_DATA_EX &FindData)
 			string strPluginID = PlCacheCfg->GetSignature(id);
 
 			if (StrCmp(strPluginID, strCurPluginID))   //одинаковые ли бинарники?
+			{
+				if (ShowErrors && *ShowErrors)
+				{
+					SetMessageHelp(L"ErrLoadPlugin");
+					if (Message(MSG_WARNING|MSG_NOPLUGINS,2,MSG(MError),MSG(MPlgBinaryNotMatchError),m_strCacheName,MSG(MOk),MSG(MHSkipErrors))==1)
+						*ShowErrors=false;
+				}
 				return false;
+			}
 		}
 
 		if (!PlCacheCfg->GetMinFarVersion(id, &MinFarVersion))
@@ -896,6 +908,13 @@ bool Plugin::LoadFromCache(const FAR_FIND_DATA_EX &FindData)
 		WorkFlags.Set(PIWF_CACHED); //too much "cached" flags
 		return true;
 	}
+	else if (ShowErrors && *ShowErrors)
+	{
+		SetMessageHelp(L"ErrLoadPlugin");
+		if (Message(MSG_WARNING|MSG_NOPLUGINS,2,MSG(MError),MSG(MPlgCacheItemNotFoundError),m_strCacheName,MSG(MOk),MSG(MHSkipErrors))==1)
+			*ShowErrors=false;
+	}
+
 	return false;
 }
 
@@ -1013,7 +1032,7 @@ bool Plugin::CheckMinFarVersion(bool &bUnloaded)
 HANDLE Plugin::OpenFilePlugin(
     const wchar_t *Name,
     const unsigned char *Data,
-    int DataSize,
+    size_t DataSize,
     int OpMode
 )
 {

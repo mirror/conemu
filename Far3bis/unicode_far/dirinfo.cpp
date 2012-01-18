@@ -77,17 +77,15 @@ static void PR_DrawGetDirInfoMsg()
 	);
 }
 
-int GetDirInfo(const wchar_t *Title,
-               const wchar_t *DirName,
-               unsigned long &DirCount,
-               unsigned long &FileCount,
-               unsigned __int64 &FileSize,
-               unsigned __int64 &CompressedFileSize,
-               unsigned __int64 &RealSize,
-               unsigned long &ClusterSize,
-               clock_t MsgWaitTime,
-               FileFilter *Filter,
-               DWORD Flags)
+class FileIdTree: public Tree<UINT64>
+{
+public:
+	FileIdTree(){}
+	~FileIdTree(){clear();}
+	long compare(Node<UINT64>* first, UINT64* second) {return *first->data-*second;}
+};
+
+int GetDirInfo(const wchar_t *Title, const wchar_t *DirName, DirInfoData& Data, clock_t MsgWaitTime, FileFilter *Filter, DWORD Flags)
 {
 	string strFullDirName, strDriveRoot;
 	string strFullName, strCurDirName, strLastDirName;
@@ -120,15 +118,33 @@ int GetDirInfo(const wchar_t *Title,
 	DWORD SectorsPerCluster=0,BytesPerSector=0,FreeClusters=0,Clusters=0;
 
 	if (GetDiskFreeSpace(strDriveRoot,&SectorsPerCluster,&BytesPerSector,&FreeClusters,&Clusters))
-		ClusterSize=SectorsPerCluster*BytesPerSector;
+		Data.ClusterSize=SectorsPerCluster*BytesPerSector;
 
 	// Временные хранилища имён каталогов
 	strLastDirName.Clear();
 	strCurDirName.Clear();
-	DirCount=FileCount=0;
-	FileSize=CompressedFileSize=RealSize=0;
+	Data.DirCount=Data.FileCount=0;
+	Data.FileSize=Data.AllocationSize=Data.FilesSlack=Data.MFTOverhead=0;
 	ScTree.SetFindPath(DirName,L"*");
 
+	FileIdTree FileIds;
+
+	bool CheckHardlinks = false;
+	DWORD FileSystemFlags = 0;
+	string FileSystemName;
+	string Root;
+	GetPathRoot(DirName, Root);
+	if(apiGetVolumeInformation(Root, nullptr, nullptr, nullptr, &FileSystemFlags, &FileSystemName))
+	{
+		if(WinVer < _WIN32_WINNT_WIN7)
+		{
+			CheckHardlinks = FileSystemName == L"NTFS";
+		}
+		else
+		{
+			CheckHardlinks = (FileSystemFlags&FILE_SUPPORTS_HARD_LINKS) != 0;
+		}
+	}
 	while (ScTree.GetNextName(&FindData,strFullName))
 	{
 		if (!CtrlObject->Macro.IsExecuting())
@@ -172,7 +188,7 @@ int GetDirInfo(const wchar_t *Title,
 			MsgWaitTime=500;
 			OldTitle << MSG(MScanningFolder) << L" " << ShowDirName << fmt::Flush(); // покажем заголовок консоли
 			SetCursorType(FALSE,0);
-			DrawGetDirInfoMsg(Title,ShowDirName,&FileSize);
+			DrawGetDirInfoMsg(Title,ShowDirName,&Data.FileSize);
 		}
 
 		if (FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -180,7 +196,7 @@ int GetDirInfo(const wchar_t *Title,
 			// Счётчик каталогов наращиваем только если не включен фильтр,
 			// в противном случае это будем делать в подсчёте количества файлов
 			if (!(Flags&GETDIRINFO_USEFILTER))
-				DirCount++;
+				Data.DirCount++;
 			else
 			{
 				// Если каталог не попадает под фильтр то его надо полностью
@@ -211,34 +227,42 @@ int GetDirInfo(const wchar_t *Title,
 
 				if (StrCmpI(strCurDirName,strLastDirName))
 				{
-					DirCount++;
+					Data.DirCount++;
 					strLastDirName = strCurDirName;
 				}
 			}
 
-			FileCount++;
-			unsigned __int64 CurSize = FindData.nFileSize;
-			FileSize+=CurSize;
+			Data.FileCount++;
 
-			if (FindData.dwFileAttributes & (FILE_ATTRIBUTE_COMPRESSED|FILE_ATTRIBUTE_SPARSE_FILE))
+			Data.FileSize += FindData.nFileSize;
+
+			bool IsDuplicate = false;
+			if (CheckHardlinks && FindData.FileId)
 			{
-				UINT64 Size=0;
-
-				if (apiGetCompressedFileSize(strFullName,Size))
+				if(FileIds.query(&FindData.FileId))
 				{
-					CurSize=Size;
+					IsDuplicate = true;
+				}
+				else
+				{
+					UINT64* newitem = new UINT64(FindData.FileId);
+					FileIds.insert(newitem);
 				}
 			}
-
-			CompressedFileSize+=CurSize;
-
-			if (ClusterSize>0)
+			if (!IsDuplicate)
 			{
-				RealSize+=CurSize;
-				int Slack=(__int32)(CurSize%ClusterSize);
-
-				if (Slack>0)
-					RealSize+=ClusterSize-Slack;
+				Data.AllocationSize += FindData.nAllocationSize;
+				if(FindData.nAllocationSize > FindData.nFileSize)
+				{
+					if(FindData.nAllocationSize >= Data.ClusterSize)
+					{
+						Data.FilesSlack += FindData.nAllocationSize - FindData.nFileSize;
+					}
+					else
+					{
+						Data.MFTOverhead += FindData.nAllocationSize - FindData.nFileSize;
+					}
+				}
 			}
 		}
 	}
@@ -270,7 +294,7 @@ int GetPluginDirInfo(HANDLE hPlugin,const wchar_t *DirName,unsigned long &DirCou
 			{
 				FileCount++;
 				FileSize+=PanelItem[I].FileSize;
-				CompressedFileSize+=PanelItem[I].PackSize?PanelItem[I].PackSize:PanelItem[I].FileSize;
+				CompressedFileSize+=PanelItem[I].AllocationSize?PanelItem[I].AllocationSize:PanelItem[I].FileSize;
 			}
 		}
 	}

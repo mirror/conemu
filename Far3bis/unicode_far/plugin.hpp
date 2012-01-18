@@ -699,7 +699,7 @@ struct PluginPanelItem
 	FILETIME LastWriteTime;
 	FILETIME ChangeTime;
 	unsigned __int64 FileSize;
-	unsigned __int64 PackSize;
+	unsigned __int64 AllocationSize;
 #ifdef FAR_USE_INTERNALS
 	wchar_t *FileName;
 	wchar_t *AlternateFileName;
@@ -802,6 +802,15 @@ struct CmdLineSelect
 	int SelEnd;
 };
 
+struct FarPanelDirectory
+{
+	size_t StructSize;
+	const wchar_t* Name;
+	const wchar_t* Param;
+	GUID PluginId;
+	const wchar_t* File;
+};
+
 #define PANEL_NONE    ((HANDLE)(-1))
 #define PANEL_ACTIVE  ((HANDLE)(-1))
 #define PANEL_PASSIVE ((HANDLE)(-2))
@@ -818,7 +827,7 @@ enum FILE_CONTROL_COMMANDS
 	FCTL_SETVIEWMODE                = 7,
 	FCTL_INSERTCMDLINE              = 8,
 	FCTL_SETUSERSCREEN              = 9,
-	FCTL_SETPANELDIR                = 10,
+	FCTL_SETPANELDIRECTORY          = 10,
 	FCTL_SETCMDLINEPOS              = 11,
 	FCTL_GETCMDLINEPOS              = 12,
 	FCTL_SETSORTMODE                = 13,
@@ -832,7 +841,7 @@ enum FILE_CONTROL_COMMANDS
 	FCTL_GETPANELITEM               = 21,
 	FCTL_GETSELECTEDPANELITEM       = 22,
 	FCTL_GETCURRENTPANELITEM        = 23,
-	FCTL_GETPANELDIR                = 24,
+	FCTL_GETPANELDIRECTORY          = 24,
 	FCTL_GETCOLUMNTYPES             = 25,
 	FCTL_GETCOLUMNWIDTHS            = 26,
 	FCTL_BEGINSELECTION             = 27,
@@ -1143,6 +1152,7 @@ enum FAR_MACRO_CONTROL_COMMANDS
 	MCTL_GETAREA           = 6,
 	MCTL_ADDMACRO          = 7,
 	MCTL_DELMACRO          = 8,
+	MCTL_GETLASTERROR      = 9,
 };
 
 typedef unsigned __int64 FARKEYMACROFLAGS;
@@ -1181,6 +1191,7 @@ enum FARMACROAREA
 	MACROAREA_SHELLAUTOCOMPLETION        =  15,
 	MACROAREA_DIALOGAUTOCOMPLETION       =  16,
 
+	MACROAREA_COMMON                     = 255,
 };
 
 enum FARMACROSTATE
@@ -1228,19 +1239,6 @@ struct MacroSendMacroText
 	const wchar_t *SequenceText;
 };
 
-struct MacroCheckMacroText
-{
-	union
-	{
-		struct MacroSendMacroText Text;
-		struct MacroParseResult   Result;
-	}
-#ifndef __cplusplus
-	Check
-#endif
-	;
-};
-
 typedef unsigned __int64 FARADDKEYMACROFLAGS;
 static const FARADDKEYMACROFLAGS
 	AKMFLAGS_NONE                = 0;
@@ -1251,10 +1249,11 @@ struct MacroAddMacro
 {
 	size_t StructSize;
 	void* Id;
-	FARKEYMACROFLAGS Flags;
-	INPUT_RECORD AKey;
 	const wchar_t *SequenceText;
 	const wchar_t *Description;
+	FARKEYMACROFLAGS Flags;
+	INPUT_RECORD AKey;
+	enum FARMACROAREA Area;
 	FARMACROCALLBACK Callback;
 };
 
@@ -1382,7 +1381,7 @@ struct WindowInfo
 struct WindowType
 {
 	size_t StructSize;
-	int Type;
+	enum WINDOWINFO_TYPE Type;
 };
 
 enum PROGRESSTATE
@@ -1805,7 +1804,7 @@ typedef int (WINAPI *FARAPIINPUTBOX)(
     const wchar_t *HistoryName,
     const wchar_t *SrcText,
     wchar_t *DestText,
-    int   DestLength,
+    size_t DestSize,
     const wchar_t *HelpTopic,
     INPUTBOXFLAGS Flags
 );
@@ -1905,6 +1904,16 @@ enum FARSETTINGS_SUBFOLDERS
 	FSSF_FOLDERSHORTCUT_7           = 13,
 	FSSF_FOLDERSHORTCUT_8           = 14,
 	FSSF_FOLDERSHORTCUT_9           = 15,
+	FSSF_CONFIRMATIONS              = 16,
+#ifdef FAR_USE_INTERNALS
+	FSSF_COUNT
+#endif // END FAR_USE_INTERNALS
+};
+
+enum FAR_PLUGIN_SETTINGS_LOCATION
+{
+	PSL_ROAMING = 0,
+	PSL_LOCAL   = 1,
 };
 
 struct FarSettingsCreate

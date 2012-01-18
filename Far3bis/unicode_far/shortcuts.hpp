@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 struct ShortcutItem
 {
+	string strName;
 	string strFolder;
 	GUID PluginGuid;
 	string strPluginFile;
@@ -61,6 +62,7 @@ public:
 private:
 	static const size_t KeyCount = 10;
 	DList<ShortcutItem> Items[KeyCount];
+	bool Changed;
 	void MakeItemName(size_t Pos, MenuItemEx* str);
 	void EditItem(VMenu* Menu, ShortcutItem* Item, bool Root);
 };

@@ -59,6 +59,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "palette.hpp"
 #include "vmenu.hpp"
 #include "datetime.hpp"
+#include "window.hpp"
 
 static int LastDizWrapMode = -1;
 static int LastDizWrapType = -1;
@@ -129,6 +130,11 @@ void InfoList::DrawTitle(string &strTitle,int Id,int &CurY)
 
 void InfoList::DisplayObject()
 {
+	if (Flags.Check(FSCROBJ_ISREDRAWING))
+		return;
+
+	Flags.Set(FSCROBJ_ISREDRAWING);
+
 	string strTitle;
 	string strOutStr;
 	Panel *AnotherPanel = CtrlObject->Cp()->GetAnotherPanel(this);
@@ -519,7 +525,7 @@ void InfoList::DisplayObject()
 		{
 			if (ShowDirDescription(CurY))
 			{
-				DizView->SetPosition(X1+1,CurY+1,X2-1,Y2-2);
+				DizView->SetPosition(X1+1,CurY,X2-1,Y2-1);
 				if (CurY < Y2)
 					CurY=Y2-1;
 			}
@@ -544,6 +550,8 @@ void InfoList::DisplayObject()
 			}
 		}
 	}
+
+	Flags.Clear(FSCROBJ_ISREDRAWING);
 }
 
 __int64 InfoList::VMProcess(int OpCode,void *vParam,__int64 iParam)
@@ -1140,4 +1148,18 @@ void InfoList::DynamicUpdateKeyBar()
 
 	KB->ReadRegGroup(L"Info",Opt.strLanguage);
 	KB->SetAllRegGroup();
+}
+
+int InfoList::UpdateIfChanged(int UpdateMode)
+{
+	if (Opt.InfoPanel.ShowPowerStatus && SectionState[ILSS_POWERSTATUS].Show)
+	{
+		if (IsVisible() && Events.PowerChangeEvent.Signaled())
+		{
+			Redraw();
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }

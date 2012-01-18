@@ -246,7 +246,7 @@ bool GetShellType(const string& Ext, string &strType,ASSOCIATIONTYPE aType)
 	bool bVistaType = false;
 	strType.Clear();
 
-	if (WinVer.dwMajorVersion >= 6)
+	if (WinVer >= _WIN32_WINNT_VISTA)
 	{
 		IApplicationAssociationRegistration* pAAR;
 		HRESULT hr = ifn.SHCreateAssociationRegistration(IID_IApplicationAssociationRegistration, (void**)&pAAR);
@@ -503,10 +503,11 @@ Return: true/false - нашли/не нашли
 И подменять ничего не надо, т.к. все параметры мы отсекли раньше
 */
 
-bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsystem)
+static bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsystem,bool &Internal)
 {
 	bool Result=false;
 	ImageSubsystem = IMAGE_SUBSYSTEM_UNKNOWN;
+	Internal = false;
 
 	if (Module && *Module)
 	{
@@ -524,6 +525,7 @@ bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 			{
 				ImageSubsystem=IMAGE_SUBSYSTEM_WINDOWS_CUI;
 				Result=true;
+				Internal = true;
 				break;
 			}
 		}
@@ -631,10 +633,10 @@ bool WINAPI FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 					strFullName=RegPath;
 					strFullName+=Module;
 
-          DWORD samDesired = KEY_QUERY_VALUE;
+					DWORD samDesired = KEY_QUERY_VALUE;
 					DWORD RedirectionFlag = 0;
 					// App Paths key is shared in Windows 7 and above
-					if (WinVer.dwMajorVersion < 6 || (WinVer.dwMajorVersion == 6 && WinVer.dwMinorVersion < 1))
+					if (WinVer < _WIN32_WINNT_WIN7)
 					{
 #ifdef _WIN64
 						RedirectionFlag = KEY_WOW64_32KEY;
@@ -854,7 +856,7 @@ int Execute(const string& CmdStr, // Ком.строка для исполнения
 	apiGetEnvironmentVariable(L"COMSPEC", strComspec);
 	if (strComspec.IsEmpty() && !DirectRun)
 	{
-		Message(MSG_WARNING, 1, MSG(MWarning), MSG(MComspecNotFound), MSG(MErrorCancelled), MSG(MOk));
+		Message(MSG_WARNING, 1, MSG(MError), MSG(MComspecNotFound), MSG(MOk));
 		return -1;
 	}
 
@@ -862,6 +864,7 @@ int Execute(const string& CmdStr, // Ком.строка для исполнения
 	DWORD dwError = 0;
 	HANDLE hProcess = nullptr;
 	LPCWSTR lpVerb = nullptr;
+	bool internal;
 
 	if (FolderRun && DirectRun)
 	{
@@ -869,7 +872,7 @@ int Execute(const string& CmdStr, // Ком.строка для исполнения
 	}
 	else
 	{
-		FindModule(strNewCmdStr,strNewCmdStr,dwSubSystem);
+		FindModule(strNewCmdStr,strNewCmdStr,dwSubSystem,internal);
 
 		if (/*!*NewCmdPar && */ dwSubSystem == IMAGE_SUBSYSTEM_UNKNOWN)
 		{
@@ -896,7 +899,7 @@ int Execute(const string& CmdStr, // Ком.строка для исполнения
 					if (strNewCmdPar.IsEmpty())
 						strNewCmdStr+=L'.';
 
-					FindModule(strNewCmdStr,strNewCmdStr,dwSubSystem);
+					FindModule(strNewCmdStr,strNewCmdStr,dwSubSystem,internal);
 				}
 			}
 		}
@@ -917,7 +920,7 @@ int Execute(const string& CmdStr, // Ком.строка для исполнения
 		}
 		else if (dwSubSystem == IMAGE_SUBSYSTEM_WINDOWS_CUI && !DirectRun)
 		{
-			if (!CmdStr.ContainsAny(ComspecSpecific))
+			if (!CmdStr.ContainsAny(ComspecSpecific)&&!internal)
 			{
 				DirectRun = true;
 			}
@@ -1574,6 +1577,10 @@ int CommandLine::ProcessOSCommands(const string& CmdLine, bool SeparateWindow, b
 		// "set" (display all) or "set var" (display all that begin with "var")
 		if (strCmdLine.IsEmpty() || !strCmdLine.Pos(pos,L'=') || !pos)
 		{
+			//forward "set | command" and "set > file" to COMSPEC
+			if (strCmdLine.At(0)==L'|' || strCmdLine.At(0)==L'>')
+				return FALSE;
+
 			ShowBackground();
 			// display command
 			Redraw();

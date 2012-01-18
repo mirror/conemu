@@ -670,7 +670,7 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 						case 3:  // return LastPos
 						{
 							if (BlockEnd2NumLine(&iPos) != -1)
-								return iPos;
+								return iPos+1;
 
 							return 0;
 						}
@@ -857,7 +857,7 @@ int Editor::ProcessKey(int Key)
 	int ick = (Key==KEY_CTRLC || Key==KEY_RCTRLC || Key==KEY_CTRLINS || Key==KEY_CTRLNUMPAD0 || Key==KEY_RCTRLINS || Key==KEY_RCTRLNUMPAD0);
 	int imk = ((unsigned int)Key >= KEY_MACRO_BASE && (unsigned int)Key <= KEY_MACRO_ENDBASE);
 	int ipk = ((unsigned int)Key >= KEY_OP_BASE && (unsigned int)Key <= KEY_OP_ENDBASE);
-  
+
 	_SVS(SysLog(L"[%d] isk=%d",__LINE__,isk));
 
 	//if ((!isk || CtrlObject->Macro.IsExecuting()) && !isk && !Pasting)
@@ -1107,7 +1107,9 @@ int Editor::ProcessKey(int Key)
 			{
 				if (!SelStart)
 				{
-					CurLine->Select(-1,0);
+					// TODO: Mantis#0001972: ShiftHome и editor.sel(0,2)
+					if (CurPos)
+						CurLine->Select(-1,0);
 				}
 				else
 				{
@@ -1560,7 +1562,15 @@ int Editor::ProcessKey(int Key)
 			if (BlockStart || VBlockStart)
 			{
 				int SelStart,SelEnd;
-				CurLine->GetSelection(SelStart,SelEnd);
+
+				if (BlockStart)
+					CurLine->GetSelection(SelStart,SelEnd);
+				else
+				{
+					SelStart=VBlockX;
+					SelEnd=SelStart+VBlockSizeX-1;
+				}
+
 				Pasting++;
 				bool OldUseInternalClipboard=Clipboard::SetUseInternalClipboardState(true);
 				ProcessKey((Key==KEY_CTRLP || Key==KEY_RCTRLP) ? KEY_CTRLINS:KEY_SHIFTDEL);
@@ -2764,7 +2774,7 @@ int Editor::ProcessKey(int Key)
 					return TRUE;
 				}
 
-				if (((!EdOpt.CursorBeyondEOL && (Key==KEY_RIGHT || Key==KEY_NUMPAD6)) 
+				if (((!EdOpt.CursorBeyondEOL && (Key==KEY_RIGHT || Key==KEY_NUMPAD6))
 					|| Key==KEY_CTRLRIGHT || Key==KEY_RCTRLRIGHT || Key==KEY_CTRLNUMPAD6 || Key==KEY_RCTRLNUMPAD6) &&
 				        CurLine->GetCurPos()>=CurLine->GetLength() &&
 				        CurLine->m_next)
@@ -5891,9 +5901,9 @@ int Editor::EditorControl(int Command,void *Param)
 		// TODO: Если DI_MEMOEDIT не будет юзать раскаску, то должно выполняется в FileEditor::EditorControl(), в диалоге - нафиг ненать
 		case ECTL_ADDCOLOR:
 		{
-			if (Param)
+			EditorColor *col=(EditorColor *)Param;
+			if (CheckStructSize(col))
 			{
-				EditorColor *col=(EditorColor *)Param;
 				_ECTLLOG(SysLog(L"EditorColor{"));
 				_ECTLLOG(SysLog(L"  StringNumber=%d",col->StringNumber));
 				_ECTLLOG(SysLog(L"  ColorItem   =%d (0x%08X)",col->ColorItem,col->ColorItem));
@@ -5926,9 +5936,9 @@ int Editor::EditorControl(int Command,void *Param)
 		// TODO: Если DI_MEMOEDIT не будет юзать раскаску, то должно выполняется в FileEditor::EditorControl(), в диалоге - нафиг ненать
 		case ECTL_GETCOLOR:
 		{
-			if (Param)
+			EditorColor *col=(EditorColor *)Param;
+			if (CheckStructSize(col))
 			{
-				EditorColor *col=(EditorColor *)Param;
 				Edit *CurPtr=GetStringByNumber(col->StringNumber);
 
 				if (!CurPtr)
@@ -5965,9 +5975,9 @@ int Editor::EditorControl(int Command,void *Param)
 		}
 		case ECTL_DELCOLOR:
 		{
-			if (Param)
+			EditorDeleteColor *col=(EditorDeleteColor *)Param;
+			if (CheckStructSize(col))
 			{
-				EditorDeleteColor *col=(EditorDeleteColor *)Param;
 				Edit *CurPtr=GetStringByNumber(col->StringNumber);
 
 				if (!CurPtr)

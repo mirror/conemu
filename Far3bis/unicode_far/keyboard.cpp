@@ -777,25 +777,28 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 	for (;;)
 	{
-		// "Реакция" на максимизацию/восстановление окна консоли
-		if (ZoomedState!=IsZoomed(Console.GetWindow()) && IconicState==IsIconic(Console.GetWindow()))
+		if (!(LoopCount & 15))
 		{
-			ZoomedState=!ZoomedState;
-			ChangeVideoMode(ZoomedState);
-		}
+			// "Реакция" на максимизацию/восстановление окна консоли
+			if (ZoomedState!=IsZoomed(Console.GetWindow()) && IconicState==IsIconic(Console.GetWindow()))
+			{
+				ZoomedState=!ZoomedState;
+				ChangeVideoMode(ZoomedState);
+			}
 
-		bool CurrentFullscreenState=IsConsoleFullscreen();
-		if(CurrentFullscreenState && !FullscreenState)
-		{
-			ChangeVideoMode(25,80);
-		}
-		FullscreenState=CurrentFullscreenState;
+			bool CurrentFullscreenState=IsConsoleFullscreen();
+			if(CurrentFullscreenState && !FullscreenState)
+			{
+				ChangeVideoMode(25,80);
+			}
+			FullscreenState=CurrentFullscreenState;
 
-		Window.Check();
+			Window.Check();
 
-		if(Events.EnvironmentChangeEvent.Signaled())
-		{
-			ReloadEnvironment();
+			if(Events.EnvironmentChangeEvent.Signaled())
+			{
+				ReloadEnvironment();
+			}
 		}
 
 		Console.PeekInput(rec, 1, ReadCount);
@@ -865,7 +868,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		}
 
 		ScrBuf.Flush();
-		Sleep(1);
+		Sleep(10);
 
 		static bool ExitInProcess = false;
 		if (CloseFAR && !ExitInProcess)
@@ -949,10 +952,13 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			}
 		}
 
-		if (PluginSynchroManager.Process())
+		if (!(LoopCount & 3))
 		{
-			ClearStruct(*rec);
-			return KEY_NONE;
+			if (PluginSynchroManager.Process())
+			{
+				ClearStruct(*rec);
+				return KEY_NONE;
+			}
 		}
 
 		LoopCount++;
@@ -2096,6 +2102,23 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
   			VirtKey=FKey;
  			switch (FKey)
  			{
+ 				case KEY_NUMDEL:
+ 					VirtKey=VK_DELETE;
+ 					break;
+ 				case KEY_NUMENTER:
+ 					VirtKey=VK_RETURN;
+ 					break;
+
+ 				case KEY_NONE:
+ 				case KEY_IDLE:
+ 					EventType=MENU_EVENT;
+ 					break;
+
+ 				case KEY_DRAGCOPY:
+ 				case KEY_DRAGMOVE:
+ 					EventType=MENU_EVENT;
+ 					break;
+
  				case KEY_MSWHEEL_UP:
  				case KEY_MSWHEEL_DOWN:
  				case KEY_MSWHEEL_LEFT:
@@ -2106,6 +2129,16 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
  				case KEY_MSM2CLICK:
  				case KEY_MSM3CLICK:
  					EventType=MOUSE_EVENT;
+ 					break;
+				case KEY_KILLFOCUS:
+				case KEY_GOTFOCUS:
+ 					EventType=FOCUS_EVENT;
+ 					break;
+				case KEY_CONSOLE_BUFFER_RESIZE:
+ 					EventType=WINDOW_BUFFER_SIZE_EVENT;
+ 					break;
+				default:
+ 					EventType=MENU_EVENT;
  					break;
  			}
  		}
@@ -2217,10 +2250,13 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 				break;
 			}
 			case WINDOW_BUFFER_SIZE_EVENT:
+				GetVideoMode(Rec->Event.WindowBufferSizeEvent.dwSize);
 				break;
 			case MENU_EVENT:
+				Rec->Event.MenuEvent.dwCommandId=0;
 				break;
 			case FOCUS_EVENT:
+				Rec->Event.FocusEvent.bSetFocus = FKey == KEY_KILLFOCUS?FALSE:TRUE;
 				break;
 		}
 	}
@@ -3408,10 +3444,10 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 		{
 
 			case VK_OEM_MINUS:
-				return '_';
+				return (Char>=' ')?Char:'_';
 				//return KEY_SHIFT|'-';
 			case VK_OEM_PLUS:
-				return '+';
+				return (Char>=' ')?Char:'+';
 				//return KEY_SHIFT|'+';
 			case VK_DIVIDE:
 				return KEY_SHIFT|KEY_DIVIDE;

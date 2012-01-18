@@ -60,6 +60,10 @@ void PluginSynchro::Synchro(bool Plugin, const GUID& PluginId,void* Param)
 
 bool PluginSynchro::Process(void)
 {
+	//Maximus: Ќехорошо вызывать плагины до тех пор, пока фар не прошел полную инициализацию
+	if (!CtrlObject || !CtrlObject->Plugins.IsPluginsLoaded())
+		return false;
+
 	bool res=false;
 	bool process=false; bool plugin=false; GUID PluginId=FarGuid; void* param=nullptr;
 	{

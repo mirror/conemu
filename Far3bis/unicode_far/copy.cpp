@@ -496,14 +496,11 @@ int CmpFullNames(const wchar_t *Src,const wchar_t *Dest)
 	string strSrcFullName, strDestFullName;
 
 	// получим полные пути с учетом символических связей
+	// (ConvertNameToReal eliminates short names too)
 	ConvertNameToReal(Src, strSrcFullName);
 	ConvertNameToReal(Dest, strDestFullName);
 	DeleteEndSlash(strSrcFullName);
 	DeleteEndSlash(strDestFullName);
-
-	// избавимся от коротких имен
-	ConvertNameToLong(strSrcFullName, strSrcFullName);
-	ConvertNameToLong(strDestFullName, strDestFullName);
 
 	return !StrCmpI(strSrcFullName,strDestFullName);
 }
@@ -534,10 +531,10 @@ int CmpFullPath(const wchar_t *Src, const wchar_t *Dest)
 
 	// избавимся от коротких имен
 	if (IsLocalPath(strSrcFullName))
-		ConvertNameToLong(strSrcFullName, strSrcFullName);
+		ConvertNameToReal(strSrcFullName, strSrcFullName);
 
 	if (IsLocalPath(strDestFullName))
-		ConvertNameToLong(strDestFullName, strDestFullName);
+		ConvertNameToReal(strDestFullName, strDestFullName);
 
 	return !StrCmpI(strSrcFullName, strDestFullName);
 }
@@ -1792,8 +1789,8 @@ COPY_CODES ShellCopy::CopyFileTree(const string& Dest)
 			DWORD rattr2 = rattr1;
 			while ( INVALID_FILE_ATTRIBUTES == rattr2 )
 			{
-				int mr = Message(MSG_WARNING, 2, MSG(MError),
-					MSG(MErrorDeviceNotReady), strDestDriveRoot,
+				int mr = Message(MSG_WARNING|MSG_ERRORTYPE, 2, MSG(MError),
+					strDestDriveRoot,
 					MSG(MRetry), MSG(MCancel)
 				);
 				if ( mr )
@@ -2201,24 +2198,11 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 	}
 
 	string strDestPath = strDest;
-	const wchar_t *NamePtr=PointToName(strDestPath);
+
 	DWORD DestAttr=INVALID_FILE_ATTRIBUTES;
 
-	if (strDestPath.At(0)==L'\\' && strDestPath.At(1)==L'\\')
-	{
-		string strRoot;
-		GetPathRoot(strDestPath, strRoot);
-		DeleteEndSlash(strRoot);
-
-		if (!StrCmp(strDestPath,strRoot))
-			DestAttr=FILE_ATTRIBUTE_DIRECTORY;
-	}
-
-	if (!*NamePtr || TestParentFolderName(NamePtr))
-		DestAttr=FILE_ATTRIBUTE_DIRECTORY;
-
 	FAR_FIND_DATA_EX DestData={};
-	if (DestAttr==INVALID_FILE_ATTRIBUTES && !(Flags&FCOPY_COPYTONUL))
+	if (!(Flags&FCOPY_COPYTONUL))
 	{
 		if (apiGetFindDataEx(strDestPath,DestData))
 			DestAttr=DestData.dwFileAttributes;
@@ -2226,30 +2210,33 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 
 	int SameName=0, Append=0;
 
-	if (DestAttr!=INVALID_FILE_ATTRIBUTES && (DestAttr & FILE_ATTRIBUTE_DIRECTORY))
+	if (!(Flags&FCOPY_COPYTONUL) && DestAttr!=INVALID_FILE_ATTRIBUTES && (DestAttr & FILE_ATTRIBUTE_DIRECTORY))
 	{
-		int CmpCode=CmpFullNames(Src,strDestPath);
-
-		if(CmpCode && SrcData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT && RPT==RP_EXACTCOPY && !(Flags&FCOPY_COPYSYMLINKCONTENTS))
+		if(SrcData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		{
-			CmpCode = 0;
-		}
+			int CmpCode=CmpFullNames(Src,strDestPath);
 
-		if (CmpCode==1) // TODO: error check
-		{
-			SameName=1;
-
-			if (Rename)
+			if(CmpCode && SrcData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT && RPT==RP_EXACTCOPY && !(Flags&FCOPY_COPYSYMLINKCONTENTS))
 			{
-				CmpCode=!StrCmp(PointToName(Src),PointToName(strDestPath));
+				CmpCode = 0;
 			}
 
-			if (CmpCode==1)
+			if (CmpCode==1) // TODO: error check
 			{
-				SetMessageHelp(L"ErrCopyItSelf");
-				Message(MSG_WARNING,1,MSG(MError),MSG(MCannotCopyFolderToItself1),
-				        Src,MSG(MCannotCopyFolderToItself2),MSG(MOk));
-				return(COPY_CANCEL);
+				SameName=1;
+
+				if (Rename)
+				{
+					CmpCode=!StrCmp(PointToName(Src),PointToName(strDestPath));
+				}
+
+				if (CmpCode==1)
+				{
+					SetMessageHelp(L"ErrCopyItSelf");
+					Message(MSG_WARNING,1,MSG(MError),MSG(MCannotCopyFolderToItself1),
+							Src,MSG(MCannotCopyFolderToItself2),MSG(MOk));
+					return(COPY_CANCEL);
+				}
 			}
 		}
 
@@ -2414,7 +2401,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 				while (!apiCreateDirectoryEx(
 					// CreateDirectoryEx preserves reparse points,
 					// so we shouldn't use template when copying with content
-					((SrcData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT) && (Flags&FCOPY_COPYSYMLINKCONTENTS))? nullptr : &Src,
+					((SrcData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT) && (Flags&FCOPY_COPYSYMLINKCONTENTS))? L"" : Src,
 					strDestPath,(Flags&FCOPY_COPYSECURITY) ? &sa:nullptr))
 				{
 					int MsgCode=Message(MSG_WARNING|MSG_ERRORTYPE,3,MSG(MError),
@@ -2999,7 +2986,7 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 	{
 		if (!(SrcData.dwFileAttributes&FILE_ATTRIBUTE_ENCRYPTED) ||
 		        ((SrcData.dwFileAttributes&FILE_ATTRIBUTE_ENCRYPTED) &&
-		         ((WinVer.dwMajorVersion >= 5 && WinVer.dwMinorVersion > 0) ||
+		         ((WinVer > _WIN32_WINNT_WIN2K) ||
 		          !(Flags&(FCOPY_DECRYPTED_DESTINATION))))
 		   )
 		{
@@ -3265,8 +3252,9 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 								{
 									DestFile.Close();
 									SetMessageHelp(L"CopyFiles");
-									int MsgCode=Message(MSG_WARNING,4,MSG(MError),
-									                    MSG(MErrorInsufficientDiskSpace),strDestName,
+									SetLastError(LastError);
+									int MsgCode=Message(MSG_WARNING|MSG_ERRORTYPE,4,MSG(MError),
+									                    strDestName,
 									                    MSG(MSplit),MSG(MSkip),MSG(MRetry),MSG(MCancel));
 									PR_ShellCopyMsg();
 
@@ -4077,15 +4065,10 @@ bool ShellCopy::CalcTotalSize()
 		if (FileAttr & FILE_ATTRIBUTE_DIRECTORY)
 		{
 			{
-				unsigned long DirCount,FileCount,ClusterSize;
-				unsigned __int64 CompressedSize,RealFileSize;
+				DirInfoData Data = {};
 				CP->SetScanName(strSelName);
-				int __Ret=GetDirInfo(L"",strSelName,DirCount,FileCount,FileSize,CompressedSize,
-				                     RealFileSize,ClusterSize,-1,
-				                     Filter,
-				                     (Flags&FCOPY_COPYSYMLINKCONTENTS?GETDIRINFO_SCANSYMLINK:0)|
-				                     (UseFilter?GETDIRINFO_USEFILTER:0));
-
+				int __Ret=GetDirInfo(L"",strSelName, Data, -1, Filter, (Flags&FCOPY_COPYSYMLINKCONTENTS?GETDIRINFO_SCANSYMLINK:0)|(UseFilter?GETDIRINFO_USEFILTER:0));
+				FileSize = Data.FileSize;
 				if (__Ret <= 0)
 				{
 					ShowTotalCopySize=false;
@@ -4093,10 +4076,10 @@ bool ShellCopy::CalcTotalSize()
 					return FALSE;
 				}
 
-				if (FileCount > 0)
+				if (Data.FileCount > 0)
 				{
 					TotalCopySize+=FileSize;
-					TotalFilesToProcess += FileCount;
+					TotalFilesToProcess += Data.FileCount;
 				}
 			}
 		}

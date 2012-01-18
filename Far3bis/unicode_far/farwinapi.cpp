@@ -48,6 +48,7 @@ struct PSEUDO_HANDLE
 	PVOID BufferBase;
 	ULONG NextOffset;
 	ULONG BufferSize;
+	bool Extended;
 };
 
 HANDLE FindFirstFileInternal(const string& Name, FAR_FIND_DATA_EX& FindData)
@@ -73,9 +74,17 @@ HANDLE FindFirstFileInternal(const string& Name, FAR_FIND_DATA_EX& FindData)
 					if (Handle->BufferBase)
 					{
 						LPCWSTR NamePtr = PointToName(Name);
-						if(Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileBothDirectoryInformation, FALSE, NamePtr, TRUE))
+						Handle->Extended = true;
+						NTSTATUS QueryStatus = STATUS_SUCCESS;
+						bool QueryResult = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileIdBothDirectoryInformation, FALSE, NamePtr, TRUE, &QueryStatus);
+						if(!QueryResult && (QueryStatus == STATUS_INVALID_INFO_CLASS || QueryStatus == STATUS_NOT_SUPPORTED || QueryStatus == STATUS_INVALID_LEVEL)) // buggy novell, buggy centos, buggy %OSNAME%
 						{
-							PFILE_BOTH_DIR_INFORMATION DirectoryInfo = static_cast<PFILE_BOTH_DIR_INFORMATION>(Handle->BufferBase);
+							Handle->Extended = false;
+							QueryResult = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileBothDirectoryInformation, FALSE, NamePtr, TRUE);
+						}
+						if(QueryResult)
+						{
+							PFILE_ID_BOTH_DIR_INFORMATION DirectoryInfo = static_cast<PFILE_ID_BOTH_DIR_INFORMATION>(Handle->BufferBase);
 							FindData.dwFileAttributes = DirectoryInfo->FileAttributes;
 							FindData.ftCreationTime.dwLowDateTime = DirectoryInfo->CreationTime.LowPart;
 							FindData.ftCreationTime.dwHighDateTime = DirectoryInfo->CreationTime.HighPart;
@@ -86,11 +95,23 @@ HANDLE FindFirstFileInternal(const string& Name, FAR_FIND_DATA_EX& FindData)
 							FindData.ftChangeTime.dwLowDateTime = DirectoryInfo->ChangeTime.LowPart;
 							FindData.ftChangeTime.dwHighDateTime = DirectoryInfo->ChangeTime.HighPart;
 							FindData.nFileSize = DirectoryInfo->EndOfFile.QuadPart;
-							FindData.nPackSize = 0;
+							FindData.nAllocationSize = DirectoryInfo->AllocationSize.QuadPart;
 							FindData.dwReserved0 = FindData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT?DirectoryInfo->EaSize:0;
 							FindData.dwReserved1 = 0;
-							FindData.strFileName.Copy(DirectoryInfo->FileName,DirectoryInfo->FileNameLength/sizeof(WCHAR));
-							FindData.strAlternateFileName.Copy(DirectoryInfo->ShortName,DirectoryInfo->ShortNameLength/sizeof(WCHAR));
+
+							if(Handle->Extended)
+							{
+								FindData.FileId = DirectoryInfo->FileId.QuadPart;
+								FindData.strFileName.Copy(DirectoryInfo->FileName,DirectoryInfo->FileNameLength/sizeof(WCHAR));
+								FindData.strAlternateFileName.Copy(DirectoryInfo->ShortName,DirectoryInfo->ShortNameLength/sizeof(WCHAR));
+							}
+							else
+							{
+								FindData.FileId = 0;
+								PFILE_BOTH_DIR_INFORMATION DirectoryInfoSimple = reinterpret_cast<PFILE_BOTH_DIR_INFORMATION>(DirectoryInfo);
+								FindData.strFileName.Copy(DirectoryInfoSimple->FileName,DirectoryInfoSimple->FileNameLength/sizeof(WCHAR));
+								FindData.strAlternateFileName.Copy(DirectoryInfoSimple->ShortName,DirectoryInfoSimple->ShortNameLength/sizeof(WCHAR));
+							}
 
 							// Bug in SharePoint: FileName is zero-terminated and FileNameLength INCLUDES this zero.
 							if(!FindData.strFileName.At(FindData.strFileName.GetLength()-1))
@@ -138,15 +159,15 @@ bool FindNextFileInternal(HANDLE Find, FAR_FIND_DATA_EX& FindData)
 	bool Result = false;
 	PSEUDO_HANDLE* Handle = static_cast<PSEUDO_HANDLE*>(Find);
 	bool Status = true;
-	PFILE_BOTH_DIR_INFORMATION DirectoryInfo = static_cast<PFILE_BOTH_DIR_INFORMATION>(Handle->BufferBase);
+	PFILE_ID_BOTH_DIR_INFORMATION DirectoryInfo = static_cast<PFILE_ID_BOTH_DIR_INFORMATION>(Handle->BufferBase);
 	if(Handle->NextOffset)
 	{
-		DirectoryInfo = reinterpret_cast<PFILE_BOTH_DIR_INFORMATION>(reinterpret_cast<LPBYTE>(DirectoryInfo)+Handle->NextOffset);
+		DirectoryInfo = reinterpret_cast<PFILE_ID_BOTH_DIR_INFORMATION>(reinterpret_cast<LPBYTE>(DirectoryInfo)+Handle->NextOffset);
 	}
 	else
 	{
 		File* Directory = static_cast<File*>(Handle->ObjectHandle);
-		Status = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileBothDirectoryInformation, FALSE, nullptr, FALSE);
+		Status = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, Handle->Extended? FileIdBothDirectoryInformation : FileBothDirectoryInformation, FALSE, nullptr, FALSE);
 	}
 
 	if(Status)
@@ -161,11 +182,23 @@ bool FindNextFileInternal(HANDLE Find, FAR_FIND_DATA_EX& FindData)
 		FindData.ftChangeTime.dwLowDateTime = DirectoryInfo->ChangeTime.LowPart;
 		FindData.ftChangeTime.dwHighDateTime = DirectoryInfo->ChangeTime.HighPart;
 		FindData.nFileSize = DirectoryInfo->EndOfFile.QuadPart;
-		FindData.nPackSize = 0;
+		FindData.nAllocationSize = DirectoryInfo->AllocationSize.QuadPart;
 		FindData.dwReserved0 = FindData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT?DirectoryInfo->EaSize:0;
 		FindData.dwReserved1 = 0;
-		FindData.strFileName.Copy(DirectoryInfo->FileName,DirectoryInfo->FileNameLength/sizeof(WCHAR));
-		FindData.strAlternateFileName.Copy(DirectoryInfo->ShortName,DirectoryInfo->ShortNameLength/sizeof(WCHAR));
+
+		if(Handle->Extended)
+		{
+			FindData.FileId = DirectoryInfo->FileId.QuadPart;
+			FindData.strFileName.Copy(DirectoryInfo->FileName,DirectoryInfo->FileNameLength/sizeof(WCHAR));
+			FindData.strAlternateFileName.Copy(DirectoryInfo->ShortName,DirectoryInfo->ShortNameLength/sizeof(WCHAR));
+		}
+		else
+		{
+			FindData.FileId = 0;
+			PFILE_BOTH_DIR_INFORMATION DirectoryInfoSimple = reinterpret_cast<PFILE_BOTH_DIR_INFORMATION>(DirectoryInfo);
+			FindData.strFileName.Copy(DirectoryInfoSimple->FileName,DirectoryInfoSimple->FileNameLength/sizeof(WCHAR));
+			FindData.strAlternateFileName.Copy(DirectoryInfoSimple->ShortName,DirectoryInfoSimple->ShortNameLength/sizeof(WCHAR));
+		}
 
 		// Bug in SharePoint: FileName is zero-terminated and FileNameLength INCLUDES this zero.
 		if(!FindData.strFileName.At(FindData.strFileName.GetLength()-1))
@@ -198,7 +231,7 @@ FindFile::FindFile(const string& Object, bool ScanSymLink):
 	empty(false)
 {
 	NTPath strName(Object);
-
+	DeleteEndSlash(strName);
 	// temporary disable elevation to try "real" name first
 	{
 		DisableElevation DE;
@@ -386,7 +419,7 @@ bool File::GetStorageDependencyInformation(GET_STORAGE_DEPENDENCY_FLAG Flags, UL
 	return Result == ERROR_SUCCESS;
 }
 
-bool File::NtQueryDirectoryFile(PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass, bool ReturnSingleEntry, LPCWSTR FileName, bool RestartScan)
+bool File::NtQueryDirectoryFile(PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass, bool ReturnSingleEntry, LPCWSTR FileName, bool RestartScan, NTSTATUS* Status)
 {
 	IO_STATUS_BLOCK IoStatusBlock;
 	PUNICODE_STRING pNameString = nullptr;
@@ -401,6 +434,10 @@ bool File::NtQueryDirectoryFile(PVOID FileInformation, ULONG Length, FILE_INFORM
 	NTSTATUS Result = ifn.NtQueryDirectoryFile(Handle, nullptr, nullptr, nullptr, &IoStatusBlock, FileInformation, Length, FileInformationClass, ReturnSingleEntry, pNameString, RestartScan);
 	_ASSERTE(Result!=STATUS_DATATYPE_MISALIGNMENT);
 	SetLastError(ifn.RtlNtStatusToDosError(Result));
+	if(Status)
+	{
+		*Status = Result;
+	}
 	return Result == STATUS_SUCCESS;
 }
 
@@ -498,6 +535,10 @@ BOOL apiCopyFileEx(
 )
 {
 	NTPath strFrom(ExistingFileName), strTo(NewFileName);
+	if(IsSlash(strTo.Last()))
+	{
+		strTo += PointToName(strFrom);
+	}
 	BOOL Result = CopyFileEx(strFrom, strTo, lpProgressRoutine, lpData, pbCancel, dwCopyFlags);
 	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
 	{
@@ -512,6 +553,10 @@ BOOL apiMoveFile(
 )
 {
 	NTPath strFrom(ExistingFileName), strTo(NewFileName);
+	if(IsSlash(strTo.Last()))
+	{
+		strTo += PointToName(strFrom);
+	}
 	BOOL Result = MoveFile(strFrom, strTo);
 	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
 	{
@@ -527,6 +572,10 @@ BOOL apiMoveFileEx(
 )
 {
 	NTPath strFrom(ExistingFileName), strTo(NewFileName);
+	if(IsSlash(strTo.Last()))
+	{
+		strTo += PointToName(strFrom);
+	}
 	BOOL Result = MoveFileEx(strFrom, strTo, dwFlags);
 	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
 	{
@@ -916,17 +965,17 @@ BOOL apiFindNextFileName(HANDLE hFindStream, string& LinkName)
 
 BOOL apiCreateDirectory(const string& PathName,LPSECURITY_ATTRIBUTES lpSecurityAttributes)
 {
-	return apiCreateDirectoryEx(nullptr, PathName, lpSecurityAttributes);
+	return apiCreateDirectoryEx(L"", PathName, lpSecurityAttributes);
 }
 
-BOOL apiCreateDirectoryEx(const string* TemplateDirectory, const string& NewDirectory, LPSECURITY_ATTRIBUTES SecurityAttributes)
+BOOL apiCreateDirectoryEx(const string& TemplateDirectory, const string& NewDirectory, LPSECURITY_ATTRIBUTES SecurityAttributes)
 {
-	NTPath NtTemplateDirectory(TemplateDirectory? *TemplateDirectory : L"");
+	NTPath NtTemplateDirectory(TemplateDirectory);
 	NTPath NtNewDirectory(NewDirectory);
-	BOOL Result = TemplateDirectory?CreateDirectoryEx(NtTemplateDirectory, NtNewDirectory, SecurityAttributes):CreateDirectory(NtNewDirectory, SecurityAttributes);
+	BOOL Result = TemplateDirectory.IsEmpty()?CreateDirectory(NtNewDirectory, SecurityAttributes):CreateDirectoryEx(NtTemplateDirectory, NtNewDirectory, SecurityAttributes);
 	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST))
 	{
-		Result = Elevation.fCreateDirectoryEx(TemplateDirectory? &NtTemplateDirectory : nullptr, NtNewDirectory, SecurityAttributes);
+		Result = Elevation.fCreateDirectoryEx(NtTemplateDirectory, NtNewDirectory, SecurityAttributes);
 	}
 	return Result;
 }
@@ -969,34 +1018,6 @@ bool apiCreateSymbolicLink(const string& SymlinkFileName, const string& TargetFi
 	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST))
 	{
 		Result=Elevation.fCreateSymbolicLink(NtSymlinkFileName, TargetFileName, dwFlags);
-	}
-	return Result;
-}
-
-bool apiGetCompressedFileSizeInternal(const wchar_t* FileName,UINT64& Size)
-{
-	bool Result=false;
-
-	DWORD High = 0, Low = GetCompressedFileSize(FileName, &High);
-
-	if ((Low != INVALID_FILE_SIZE) || (GetLastError() == NO_ERROR))
-	{
-		ULARGE_INTEGER i = {Low, High};
-		Size = i.QuadPart;
-		Result = true;
-	}
-
-	return Result;
-}
-
-bool apiGetCompressedFileSize(const string& FileName,UINT64& Size)
-{
-	bool Result=false;
-	NTPath NtFileName(FileName);
-	Result = apiGetCompressedFileSizeInternal(NtFileName, Size);
-	if(!Result && ElevationRequired(ELEVATION_READ_REQUEST))
-	{
-		Result=Elevation.fGetCompressedFileSize(NtFileName, Size);
 	}
 	return Result;
 }

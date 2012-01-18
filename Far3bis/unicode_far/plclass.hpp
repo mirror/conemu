@@ -150,7 +150,7 @@ public:
 	virtual bool SetStartupInfo(bool &bUnloaded);
 	virtual bool CheckMinFarVersion(bool &bUnloaded);
 	virtual HANDLE Open(int OpenFrom, const GUID& Guid, INT_PTR Item);
-	virtual HANDLE OpenFilePlugin(const wchar_t *Name, const unsigned char *Data, int DataSize, int OpMode);
+	virtual HANDLE OpenFilePlugin(const wchar_t *Name, const unsigned char *Data, size_t DataSize, int OpMode);
 	virtual int SetFindList(HANDLE hPlugin, const PluginPanelItem *PanelItem, size_t ItemsNumber);
 	virtual int GetFindData(HANDLE hPlugin, PluginPanelItem **pPanelItem, size_t *pItemsNumber, int OpMode);
 	virtual int GetVirtualFindData(HANDLE hPlugin, PluginPanelItem **pPanelItem, size_t *pItemsNumber, const wchar_t *Path);
@@ -252,7 +252,7 @@ public:
 	bool Load();
 	int Unload(bool bExitFAR = false);
 	bool LoadData();
-	bool LoadFromCache(const FAR_FIND_DATA_EX &FindData);
+	bool LoadFromCache(const FAR_FIND_DATA_EX &FindData, bool* ShowErrors=nullptr);
 	bool SaveToCache();
 	bool IsPanelPlugin();
 

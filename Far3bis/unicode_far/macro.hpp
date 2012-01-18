@@ -172,7 +172,7 @@ struct MacroState
 	int MacroPC;
 	int ExecLIBPos;
 	int MacroWORKCount;
-	DWORD HistroyEnable;
+	DWORD HistoryDisable;
 	bool UseInternalClipboard;
 	bool AllocVarTable;
 
@@ -229,6 +229,7 @@ class KeyMacro
 		int RecBufferSize;
 		DWORD *RecBuffer;
 		wchar_t *RecSrc;
+		wchar_t *RecDescription;
 
 		class LockScreen *LockScr;
 
@@ -248,7 +249,7 @@ class KeyMacro
 		void WritePluginFunctions();
 		void WriteMacroRecords();
 		int AssignMacroKey(DWORD &MacroKey, UINT64 &Flags);
-		int GetMacroSettings(int Key,UINT64 &Flags,const wchar_t *Src=nullptr);
+		int GetMacroSettings(int Key,UINT64 &Flags,const wchar_t *Src=nullptr,const wchar_t *Descr=nullptr);
 		void InitInternalVars(BOOL InitedRAM=TRUE);
 		void InitInternalLIBVars();
 		void ReleaseWORKBuffer(BOOL All=FALSE); // удалить временный буфер
@@ -300,9 +301,9 @@ class KeyMacro
 		void RunStartMacro();
 
 		// Поместить временное строковое представление макроса
-		int PostNewMacro(const wchar_t *PlainText,UINT64 Flags=0,DWORD AKey=0,BOOL onlyCheck=FALSE);
+		int PostNewMacro(const wchar_t *PlainText,UINT64 Flags=0,DWORD AKey=0,bool onlyCheck=false);
 		// Поместить временный рекорд (бинарное представление)
-		int PostNewMacro(struct MacroRecord *MRec,BOOL NeedAddSendFlag=0,BOOL IsPluginSend=FALSE);
+		int PostNewMacro(struct MacroRecord *MRec,BOOL NeedAddSendFlag=0,bool IsPluginSend=false);
 
 		bool LoadVarFromDB(const wchar_t *Name, TVar &Value);
 		bool SaveVarToDB(const wchar_t *Name, TVar Value);
@@ -330,16 +331,16 @@ class KeyMacro
 		// проверить флаги текущего исполняемого макроса.
 		BOOL CheckCurMacroFlags(DWORD Flags);
 
-		bool IsHistroyEnable(int TypeHistory);
-		DWORD SetHistroyEnableMask(DWORD Mask);
-		DWORD GetHistroyEnableMask();
+		bool IsHistoryDisable(int TypeHistory);
+		DWORD SetHistoryDisableMask(DWORD Mask);
+		DWORD GetHistoryDisableMask();
 
 		static const wchar_t* GetAreaName(int AreaCode);
 		static int   GetAreaCode(const wchar_t *AreaName);
 		static int   GetMacroKeyInfo(bool FromDB,int Mode,int Pos,string &strKeyName,string &strDescription);
 		static wchar_t *MkTextSequence(DWORD *Buffer,int BufferSize,const wchar_t *Src=nullptr);
 		// из строкового представления макроса сделать MacroRecord
-		int ParseMacroString(struct MacroRecord *CurMacro,const wchar_t *BufPtr,BOOL onlyCheck=FALSE);
+		int ParseMacroString(struct MacroRecord *CurMacro,const wchar_t *BufPtr,bool onlyCheck=false);
 		BOOL GetMacroParseError(DWORD* ErrCode, COORD* ErrPos, string *ErrSrc);
 		BOOL GetMacroParseError(string *Err1, string *Err2, string *Err3, string *Err4);
 
@@ -352,7 +353,7 @@ class KeyMacro
 		static TMacroFunction *RegisterMacroFunction(const TMacroFunction *tmfunc);
 		static bool UnregMacroFunction(size_t Index);
 
-		int AddMacro(const wchar_t *PlainText,const wchar_t *Description,FARKEYMACROFLAGS Flags,const INPUT_RECORD& AKey,const GUID& PluginId,void* Id,FARMACROCALLBACK Callback);
+		int AddMacro(const wchar_t *PlainText,const wchar_t *Description,enum MACROMODEAREA Area,FARKEYMACROFLAGS Flags,const INPUT_RECORD& AKey,const GUID& PluginId,void* Id,FARMACROCALLBACK Callback);
 		int DelMacro(const GUID& PluginId,void* Id);
 		void DelMacro(size_t Index);
 };

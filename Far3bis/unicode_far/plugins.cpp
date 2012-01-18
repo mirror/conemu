@@ -367,10 +367,10 @@ bool PluginManager::AddPlugin(Plugin *pPlugin)
 		AncientPlugin** tmp=new AncientPlugin*(pPlugin);
 		_ASSERTE(*tmp==pPlugin);
 		AncientPlugin** item=PluginsCache->insert(tmp);
-		//Maximus: Вызов из PluginManager::LoadPlugin, и если будет false, то щас он сделает delete pPlugin; что будет после этого? item ведь создан
-		//Maximus: а будет именно false (создается копия?)
 		if(*item!=pPlugin)
 		{
+			// Если попали сюда - значит плагин с таким GUID уже есть в кеше
+			// После возврата false "новая" копия плагина будет выгружена
 			_ASSERTE(*item==pPlugin);
 			return false;
 		}
@@ -436,7 +436,7 @@ bool PluginManager::LoadPlugin(
     const string& lpwszModuleName,
     const FAR_FIND_DATA_EX &FindData,
     bool LoadToMem
-	,bool Manual
+	,bool* ShowErrors, bool Manual
 )
 {
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
@@ -447,17 +447,19 @@ bool PluginManager::LoadPlugin(
 		return true;
 	}
 
-	switch (PluginType t=IsModulePlugin(lpwszModuleName))
+	PluginType Type=IsModulePlugin(lpwszModuleName);
+	switch (Type)
 	{
 		case UNICODE_PLUGIN: pPlugin = new Plugin(this, lpwszModuleName); break;
 #ifndef NO_WRAPPER
 		case OEM_PLUGIN: pPlugin = new PluginA(this, lpwszModuleName); break;
 #endif // NO_WRAPPER
 		default:
-			if (Manual)
+			if (Manual && ShowErrors && *ShowErrors)
 			{
 				SetMessageHelp(L"ErrLoadPlugin");
-				Message(MSG_WARNING,1,MSG(MError),MSG(MPlgUnsupportedError),lpwszModuleName,MSG(MOk));
+				if (Message(MSG_WARNING|MSG_NOPLUGINS,2,MSG(MError),MSG(MPlgUnsupportedError),lpwszModuleName,MSG(MOk),MSG(MHSkipErrors))==1)
+					*ShowErrors=false;
 			}
 			return false;
 	}
@@ -469,11 +471,12 @@ bool PluginManager::LoadPlugin(
 	}
 
 	bool bResult=false,bDataLoaded=false;
+	bool bAlwaysLoad=(!Opt.LoadPlug.PluginsCacheOnly || Manual);
 
 	if (!LoadToMem)
-		bResult = pPlugin->LoadFromCache(FindData);
+		bResult = pPlugin->LoadFromCache(FindData, bAlwaysLoad?nullptr:ShowErrors);
 
-	if (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || !Opt.LoadPlug.PluginsCacheOnly || Manual))
+	if (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || bAlwaysLoad))
 	{
 		bResult = bDataLoaded = pPlugin->LoadData();
 	}
@@ -483,6 +486,33 @@ bool PluginManager::LoadPlugin(
 		OutputDebugString(strDbgInfo);
 	}
 
+	// Загрузка двух плагинов (разные физические файлы) с одинаковыми GUID недопустима
+	if (bResult)
+	{
+		GUID PluginGuid=pPlugin->GetGUID();
+		_ASSERTE(memcmp(&PluginGuid, &FarGuid, sizeof(PluginGuid))!=0 || Type!=UNICODE_PLUGIN);
+		if (memcmp(&PluginGuid, &FarGuid, sizeof(PluginGuid))!=0)
+		{
+			Plugin *pExist=FindPlugin(PluginGuid);
+			if (pExist)
+			{
+				if (Manual)
+				{
+					SetMessageHelp(L"ErrLoadPlugin");
+					Message(MSG_WARNING|MSG_NOPLUGINS,1,MSG(MError),MSG(MPlgDuplacateGuidError),pExist->GetModuleName(),lpwszModuleName,MSG(MOk));
+				}
+				else if (IsDebuggerPresent())
+				{
+					string strDbgInfo=lpwszModuleName + L", " + pExist->GetModuleName() + L" - Same guid, unloaded\n";
+					OutputDebugString(strDbgInfo);
+				}
+				pPlugin->Unload(true);
+				delete pPlugin;
+				return false;
+			}
+		}
+	}
+
 	//Maximus: AddPlugin Обламывается и никаких ошибок не показывает!!!
 	if (bResult && !AddPlugin(pPlugin))
 	{
@@ -490,7 +520,7 @@ bool PluginManager::LoadPlugin(
 		if (Manual)
 		{
 			SetMessageHelp(L"ErrLoadPlugin");
-			Message(MSG_WARNING,1,MSG(MError),MSG(MPlgRegisterError),lpwszModuleName,MSG(MOk));
+			Message(MSG_WARNING|MSG_NOPLUGINS,1,MSG(MError),MSG(MPlgRegisterError),lpwszModuleName,MSG(MOk));
 		}
 		else if (IsDebuggerPresent())
 		{
@@ -528,7 +558,8 @@ bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadT
 
 		if (apiGetFindDataEx(lpwszModuleName, FindData))
 		{
-			if (!LoadPlugin(lpwszModuleName, FindData, LoadToMem, Manual))
+			bool ShowErrors=Manual;
+			if (!LoadPlugin(lpwszModuleName, FindData, LoadToMem, &ShowErrors, Manual))
 				return false;
 			far_qsort(PluginsData, PluginsCount, sizeof(*PluginsData), PluginsSort);
 		}
@@ -774,6 +805,8 @@ void PluginManager::LoadPluginsFromCache()
 	OutputDebugString(L"PluginManager::LoadPluginsFromCache.Loading\n");
 #endif
 
+	bool ShowErrors=true;
+
 	for (DWORD i=0; PlCacheCfg->EnumPlugins(i, strModuleName); i++)
 	{
 		#ifdef _DEBUG
@@ -805,7 +838,7 @@ void PluginManager::LoadPluginsFromCache()
 		FAR_FIND_DATA_EX FindData;
 
 		if (apiGetFindDataEx(strModuleName, FindData))
-			LoadPlugin(strModuleName, FindData, false);
+			LoadPlugin(strModuleName, FindData, false, &ShowErrors);
 	}
 
 #ifdef _DEBUG
@@ -822,9 +855,9 @@ int _cdecl PluginsSort(const void *el1,const void *el2)
 }
 
 HANDLE PluginManager::OpenFilePlugin(
-    const string* Name,
-    int OpMode,
-    OPENFILEPLUGINTYPE Type
+	const string* Name,
+	int OpMode,
+	OPENFILEPLUGINTYPE Type
 )
 {
 	ChangePriority ChPriority(THREAD_PRIORITY_NORMAL);
@@ -845,9 +878,7 @@ HANDLE PluginManager::OpenFilePlugin(
 	Plugin *pPlugin = nullptr;
 
 	File file;
-	LPBYTE Data = nullptr;
-	DWORD DataSize = 0;
-
+	AnalyseInfo Info={sizeof(Info), Name? Name->CPtr() : nullptr, nullptr, 0, OpMode|(Type==OFP_ALTERNATIVE?OPM_PGDN:0)};
 	bool DataRead = false;
 	for (int i = 0; i < PluginsCount; i++)
 	{
@@ -860,11 +891,13 @@ HANDLE PluginManager::OpenFilePlugin(
 		{
 			if (file.Open(*Name, FILE_READ_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 			{
-				Data = new BYTE[Opt.PluginMaxReadData];
-				if (Data)
+				Info.Buffer = new BYTE[Opt.PluginMaxReadData];
+				if (Info.Buffer)
 				{
-					if (file.Read(Data, Opt.PluginMaxReadData, DataSize))
+					DWORD DataSize = 0;
+					if (file.Read(Info.Buffer, Opt.PluginMaxReadData, DataSize))
 					{
+						Info.BufferSize = DataSize;
 						DataRead = true;
 					}
 				}
@@ -891,7 +924,7 @@ HANDLE PluginManager::OpenFilePlugin(
 			{
 				OpMode|=OPM_PGDN; //у анси плагинов OpMode нет.
 			}
-			hPlugin = pPlugin->OpenFilePlugin(Name? Name->CPtr() : nullptr, Data, DataSize, OpMode);
+			hPlugin = pPlugin->OpenFilePlugin(Name? Name->CPtr() : nullptr, (BYTE*)Info.Buffer, Info.BufferSize, OpMode);
 
 			if (hPlugin == (HANDLE)-2)   //сразу на выход, плагин решил нагло обработать все сам (Autorun/PictureView)!!!
 			{
@@ -908,12 +941,6 @@ HANDLE PluginManager::OpenFilePlugin(
 		}
 		else
 		{
-			AnalyseInfo Info={sizeof(Info)};
-			Info.FileName = Name? Name->CPtr() : nullptr;
-			Info.Buffer = Data;
-			Info.BufferSize = DataSize;
-			Info.OpMode = OpMode|(Type==OFP_ALTERNATIVE?OPM_PGDN:0);
-
 			if (pPlugin->Analyse(&Info))
 			{
 				PluginHandle *handle=items.addItem();
@@ -924,11 +951,6 @@ HANDLE PluginManager::OpenFilePlugin(
 
 		if (items.getCount() && !ShowMenu)
 			break;
-	}
-
-	if(Data)
-	{
-		delete[] Data;
 	}
 
 	if (items.getCount() && (hResult != (HANDLE)-2))
@@ -975,7 +997,9 @@ HANDLE PluginManager::OpenFilePlugin(
 			{
 				void* pItem = menu.GetUserData(nullptr, 0);
 				if (pItem)
+				{
 					pResult = *static_cast<PluginHandle**>(pItem);
+				}
 			}
 		}
 		else
@@ -985,7 +1009,7 @@ HANDLE PluginManager::OpenFilePlugin(
 
 		if (pResult && pResult->hPlugin == INVALID_HANDLE_VALUE)
 		{
-			HANDLE h = pResult->pPlugin->Open(OPEN_ANALYSE, FarGuid, 0);
+			HANDLE h = pResult->pPlugin->Open(OPEN_ANALYSE, FarGuid, (INT_PTR)&Info);
 
 			if (h == (HANDLE)-2)
 			{
@@ -1001,6 +1025,11 @@ HANDLE PluginManager::OpenFilePlugin(
 				pResult = nullptr;
 			}
 		}
+	}
+
+	if(Info.Buffer)
+	{
+		delete[] (BYTE*)Info.Buffer;
 	}
 
 	for (size_t i = 0; i < items.getCount(); i++)
@@ -1745,29 +1774,33 @@ int PluginManager::Configure(int StartPos)
 				CtrlObject->Macro.SetMode(MACRO_MENU);
 				DWORD Key=PluginList.ReadInput();
 				int SelPos=PluginList.GetSelectPos();
+				_ASSERTE((SelPos>=0 && SelPos<PluginList.GetItemCount()) || PluginList.GetShowItemCount()==0);
 				PluginMenuItemData *item = (PluginMenuItemData*)PluginList.GetUserData(nullptr,0,SelPos);
 
 				switch (Key)
 				{
 					case KEY_SHIFTF1:
-						strPluginModuleName = item->pPlugin->GetModuleName();
-
-						if (!FarShowHelp(strPluginModuleName,L"Config",FHELP_SELFHELP|FHELP_NOSHOWERROR) &&
-						        !FarShowHelp(strPluginModuleName,L"Configure",FHELP_SELFHELP|FHELP_NOSHOWERROR))
+						if (item)
 						{
-							FarShowHelp(strPluginModuleName,nullptr,FHELP_SELFHELP|FHELP_NOSHOWERROR);
+							strPluginModuleName = item->pPlugin->GetModuleName();
+
+							if (!FarShowHelp(strPluginModuleName,L"Config",FHELP_SELFHELP|FHELP_NOSHOWERROR) &&
+							        !FarShowHelp(strPluginModuleName,L"Configure",FHELP_SELFHELP|FHELP_NOSHOWERROR))
+							{
+								FarShowHelp(strPluginModuleName,nullptr,FHELP_SELFHELP|FHELP_NOSHOWERROR);
+							}
 						}
 						break;
 
 					case KEY_F3:
-						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+						if (item)
 						{
 							ShowPluginInfo(item->pPlugin, item->Guid);
 						}
 						break;
 
 					case KEY_F4:
-						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+						if (item)
 						{
 							/*
 							string strTitle;
@@ -1795,7 +1828,7 @@ int PluginManager::Configure(int StartPos)
 					case KEY_DEL:
 					case KEY_ALTDEL:
 					case KEY_RALTDEL:
-						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+						if (item)
 						{
 							bool bUnload = (Key==KEY_DEL
 							                && (item->pPlugin->GetFuncFlags()&PICFF_LOADED)
@@ -1857,7 +1890,7 @@ int PluginManager::Configure(int StartPos)
 									else
 									{
 										SetMessageHelp(L"ErrLoadPlugin");
-										Message(MSG_WARNING|MSG_ERRORTYPE,1,MSG(MError),MSG(MPlgLoadPluginError),strPluginModuleName,MSG(MOk));
+										Message(MSG_WARNING|MSG_ERRORTYPE|MSG_NOPLUGINS,1,MSG(MError),MSG(MPlgLoadPluginError),strPluginModuleName,MSG(MOk));
 									}
 								}
 								#endif
@@ -1888,6 +1921,7 @@ int PluginManager::Configure(int StartPos)
 					case KEY_CTRLSHIFTHOME:  case KEY_RCTRLSHIFTHOME:
 					case KEY_CTRLPGUP:       case KEY_RCTRLPGUP:
 					case KEY_CTRLSHIFTPGUP:  case KEY_RCTRLSHIFTPGUP:
+						if (item)
 						{
 							PluginList.Hide();
 							string strDirName=g_strFarPath+PluginsFolderName;
@@ -1921,9 +1955,11 @@ int PluginManager::Configure(int StartPos)
 							CtrlObject->Macro.SetMode(PrevMacroMode);
 							return -1;       //  !!! для выхода с игнорированием Меню плагинов/дисков
 						}
+						break;
 
 					case KEY_CTRL1:
 					case KEY_RCTRL1:
+						if (item)
 						{
 							Opt.ChangePlugMenuMode ^= CFGPLUGMENU_SHOW_DLLVER;
 							PluginList.Hide();
@@ -1931,11 +1967,12 @@ int PluginManager::Configure(int StartPos)
 							StartPos=SelPos;
 							PluginList.SetExitCode(SelPos);
 							PluginList.Show();
-							break;
 						}
+						break;
 
 					case KEY_CTRLR:
 					case KEY_RCTRLR:
+						if (item)
 						{
 							LoadPlugins(true); // перечитать папки плагинов
 							PluginList.Hide();
@@ -1943,8 +1980,8 @@ int PluginManager::Configure(int StartPos)
 							StartPos=SelPos;
 							PluginList.SetExitCode(SelPos);
 							PluginList.Show();
-							break;
 						}
+						break;
 
 					case KEY_RIGHT:
 					case KEY_NUMPAD6:
@@ -2105,13 +2142,15 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 				CtrlObject->Macro.SetMode(MACRO_MENU);
 				DWORD Key=PluginList.ReadInput();
 				int SelPos=PluginList.GetSelectPos();
+				_ASSERTE((SelPos>=0 && SelPos<PluginList.GetItemCount()) || PluginList.GetShowItemCount()==0);
 				PluginMenuItemData *item = (PluginMenuItemData*)PluginList.GetUserData(nullptr,0,SelPos);
 
 				switch (Key)
 				{
 					case KEY_SHIFTF1:
 						// Вызываем нужный топик, который передали в CommandsMenu()
-						FarShowHelp(item->pPlugin->GetModuleName(),HistoryName,FHELP_SELFHELP|FHELP_NOSHOWERROR|FHELP_USECONTENTS);
+						if (item)
+							FarShowHelp(item->pPlugin->GetModuleName(),HistoryName,FHELP_SELFHELP|FHELP_NOSHOWERROR|FHELP_USECONTENTS);
 						break;
 
 					case KEY_ALTF11:
@@ -2121,14 +2160,14 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 
 
 					case KEY_F3:
-						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+						if (item)
 						{
 							ShowPluginInfo(item->pPlugin, item->Guid);
 						}
 						break;
 
 					case KEY_F4:
-						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+						if (item)
 						{
 							string strTitle;
 							int nOffset = HotKeysPresent?3:0;
@@ -2149,26 +2188,29 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 					case KEY_ALTSHIFTF9:
 					case KEY_RALTSHIFTF9:
 					{
-						PluginList.Hide();
-						NeedUpdateItems = true;
-						StartPos = SelPos;
-
-						if (Configure() > 0)
+						if (item)
 						{
-							PluginList.SetExitCode(SelPos);
+							PluginList.Hide();
+							NeedUpdateItems = true;
+							StartPos = SelPos;
+
+							if (Configure() > 0)
+							{
+								PluginList.SetExitCode(SelPos);
+							}
+							else                              // значит вышли из Configure() по Ctrl-PgUp
+							{                                 // Меню плагинов надо пропустить
+								PluginList.SetExitCode(-1);
+								goto NEXT;
+							}
+							PluginList.Show();
 						}
-						else                              // значит вышли из Configure() по Ctrl-PgUp
-						{                                 // Меню плагинов надо пропустить
-							PluginList.SetExitCode(-1);
-							goto NEXT;
-						}
-						PluginList.Show();
 						break;
 					}
 
 					case KEY_SHIFTF9:
 					{
-						if (PluginList.GetItemCount() > 0 && SelPos<MenuItemNumber)
+						if (item)
 						{
 							NeedUpdateItems = true;
 							StartPos=SelPos;
@@ -2700,17 +2742,54 @@ int PluginManager::CallPlugin(const GUID& SysID,int OpenFrom, void *Data,int *Re
 	return FALSE;
 }
 
-int PluginManager::CallPluginItem(const GUID& Guid, const GUID& ItemGuid)
+int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret/*=nullptr*/)
 {
+	BOOL Result=FALSE;
+
 	if (!ProcessException)
 	{
 		Plugin *pPlugin = FindPlugin(Guid);
-		if (pPlugin && pPlugin->Load() && pPlugin->HasOpenPanel())
+		if (pPlugin && pPlugin->Load())
 		{
 			int curType = FrameManager->GetCurrentFrame()->GetType();
 			bool Editor = curType==MODALTYPE_EDITOR;
 			bool Viewer = curType==MODALTYPE_VIEWER;
 			bool Dialog = curType==MODALTYPE_DIALOG;
+
+			// Разрешен ли вызов данного типа в текущей области (предварительная проверка)
+			switch (Data->CallType)
+			{
+			case CPT_CALL:
+				if (!pPlugin->HasOpenPanel())
+					return FALSE;
+				break;
+			case CPT_CONFIGURE:
+				if (curType!=MODALTYPE_PANELS)
+				{
+					//TODO: Автокомплит не влияет?
+					_ASSERTE(curType==MODALTYPE_PANELS);
+					return FALSE;
+				}
+				if (!pPlugin->HasConfigure())
+					return FALSE;
+				break;
+			case CPT_PREFIX:
+				if (curType!=MODALTYPE_PANELS)
+				{
+					//TODO: Автокомплит не влияет?
+					_ASSERTE(curType==MODALTYPE_PANELS);
+					return FALSE;
+				}
+				//TODO: OpenPanel или OpenFilePlugin?
+				if (!pPlugin->HasOpenPanel())
+					return FALSE;
+				break;
+			case CPT_INTERNAL:
+				//TODO: Уточнить функцию
+				if (!pPlugin->HasOpenPanel())
+					return FALSE;
+				break;
+			}
 
 			UINT64 IFlags;
 			PluginInfo Info = {sizeof(Info)};
@@ -2719,48 +2798,115 @@ int PluginManager::CallPluginItem(const GUID& Guid, const GUID& ItemGuid)
 			else
 				IFlags = Info.Flags;
 
-			if ((Editor && !(IFlags & PF_EDITOR)) ||
-					(Viewer && !(IFlags & PF_VIEWER)) ||
-					(Dialog && !(IFlags & PF_DIALOG)) ||
-					(!Editor && !Viewer && !Dialog && (IFlags & PF_DISABLEPANELS)))
-				return FALSE;
+			PluginMenuItem *MenuItems=nullptr;
+			GUID ItemGuid;
 
-			bool ItemFound = false;
-			for (int i = 0; i < Info.PluginMenu.Count; i++)
+			// Разрешен ли вызов данного типа в текущей области
+			switch (Data->CallType)
 			{
-				if (memcmp(&ItemGuid,&(Info.PluginMenu.Guids[i]),sizeof(GUID)) == 0)
+			case CPT_CALL:
+				if ((Editor && !(IFlags & PF_EDITOR)) ||
+						(Viewer && !(IFlags & PF_VIEWER)) ||
+						(Dialog && !(IFlags & PF_DIALOG)) ||
+						(!Editor && !Viewer && !Dialog && (IFlags & PF_DISABLEPANELS)))
+					return FALSE;
+				_ASSERTE(curType==MODALTYPE_PANELS || (Editor&&curType==MODALTYPE_EDITOR) || (Viewer&&curType==MODALTYPE_VIEWER) || (Dialog&&curType==MODALTYPE_DIALOG));
+				MenuItems = &Info.PluginMenu;
+				break;
+			case CPT_CONFIGURE:
+				MenuItems = &Info.PluginConfig;
+				break;
+			case CPT_PREFIX:
+				if (!Info.CommandPrefix || !*Info.CommandPrefix)
+					return FALSE;
+				break;
+			case CPT_INTERNAL:
+				break;
+			}
+
+			if (Data->CallType==CPT_CALL || Data->CallType==CPT_CONFIGURE)
+			{
+				bool ItemFound = false;
+				if (Data->ItemGuid==nullptr)
 				{
-					ItemFound = true;
-					break;
+					if (MenuItems->Count==1)
+					{
+						ItemGuid=MenuItems->Guids[0];
+						ItemFound=true;
+					}
 				}
-			}
-			if (!ItemFound)
-				return FALSE;
-				
-			Panel *ActivePanel=CtrlObject->Cp()->ActivePanel;
-			int OpenCode=OPEN_PLUGINSMENU;
-			INT_PTR Item=0;
-			OpenDlgPluginData pd;
-
-			if (Editor)
-			{
-				OpenCode=OPEN_EDITOR;
-			}
-			else if (Viewer)
-			{
-				OpenCode=OPEN_VIEWER;
-			}
-			else if (Dialog)
-			{
-				OpenCode=OPEN_DIALOG;
-				pd.hDlg=(HANDLE)FrameManager->GetCurrentFrame();
-				Item=(INT_PTR)&pd;
+				else
+				{
+					for (int i = 0; i < MenuItems->Count; i++)
+					{
+						if (memcmp(Data->ItemGuid, &(MenuItems->Guids[i]), sizeof(GUID)) == 0)
+						{
+							ItemGuid=*Data->ItemGuid;
+							ItemFound=true;
+							break;
+						}
+					}
+				}
+				if (!ItemFound)
+					return FALSE;
 			}
 
-			HANDLE hPlugin=Open(pPlugin,OpenCode,ItemGuid,Item);
+			HANDLE hPlugin=INVALID_HANDLE_VALUE;
+			Panel *ActivePanel=nullptr;
+
+			switch (Data->CallType)
+			{
+			case CPT_CALL:
+				{
+					ActivePanel=CtrlObject->Cp()->ActivePanel;
+					int OpenCode=OPEN_PLUGINSMENU;
+					INT_PTR Item=0;
+					OpenDlgPluginData pd;
+
+					if (Editor)
+					{
+						OpenCode=OPEN_EDITOR;
+					}
+					else if (Viewer)
+					{
+						OpenCode=OPEN_VIEWER;
+					}
+					else if (Dialog)
+					{
+						OpenCode=OPEN_DIALOG;
+						pd.hDlg=(HANDLE)FrameManager->GetCurrentFrame();
+						Item=(INT_PTR)&pd;
+					}
+
+					hPlugin=Open(pPlugin,OpenCode,ItemGuid,Item);
+
+					Result=TRUE;
+				}
+				break;
+
+			case CPT_CONFIGURE:
+				CtrlObject->Plugins.ConfigureCurrent(pPlugin,ItemGuid);
+				return TRUE;
+
+			case CPT_PREFIX:
+				{
+					ActivePanel=CtrlObject->Cp()->ActivePanel;
+					string command=Data->Command; // Нужна копия строки
+					hPlugin=Open(pPlugin,OPEN_COMMANDLINE,FarGuid,(INT_PTR)command.CPtr());
+
+					Result=TRUE;
+				}
+				break;
+			case CPT_INTERNAL:
+				//TODO: бывший CallPlugin
+				//WARNING: учесть, что он срабатывает без переключения MacroState
+				break;
+			}
 
 			if (hPlugin!=INVALID_HANDLE_VALUE && !Editor && !Viewer && !Dialog)
 			{
+				//BUGBUG: Закрытие панели? Нужно ли оно?
+				//BUGBUG: В ProcessCommandLine зовется перед Open, а в CPT_CALL - после
 				if (ActivePanel->ProcessPluginEvent(FE_CLOSE,nullptr))
 				{
 					ClosePanel(hPlugin);
@@ -2780,9 +2926,6 @@ int PluginManager::CallPluginItem(const GUID& Guid, const GUID& ItemGuid)
 				CurEditor->SetPluginTitle(nullptr);
 			}
 			#endif // NO_WRAPPER
-
-			// CtrlObject->Macro.SetMode(PrevMacroMode); -- надо запоминать/восстанавливать макрообласть?
-			return TRUE;
 		}
 	}
 

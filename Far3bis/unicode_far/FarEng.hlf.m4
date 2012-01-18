@@ -215,17 +215,17 @@ and it is not recommended to specify it during normal operation.
 
   #/clearcache [profilepath]#
   Очистить кэш плагинов и завершить работу.
-  Необязательный параметр profilepath задает полный путь к конфигурационным файлам. 
+  Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
 
-  #/export <out.xml> [profilepath]#
-  Экспортировать все настройки в файл out.xml и завершить работу.
-  Необязательный параметр profilepath задает полный путь к конфигурационным файлам. 
+  #/export <out.farconfig> [profilepath]#
+  Экспортировать все настройки в файл out.farconfig и завершить работу.
+  Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
 
-  #/import <in.xml> [profilepath]#
-  Импортировать все настройки из файла in.xml и завершить работу.
-  Необязательный параметр profilepath задает полный путь к конфигурационным файлам. 
+  #/import <in.farconfig> [profilepath]#
+  Импортировать все настройки из файла in.farconfig и завершить работу.
+  Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
 
   It is possible to specify at most two paths (to folders, files or archives) or
@@ -1006,7 +1006,7 @@ files and folders, perform different file and archive operations. Read
 
  #Wide#          File names and sizes are displayed.
 
- #Detailed#      File names, sizes, packed sizes, last write,
+ #Detailed#      File names, sizes, allocation sizes, last write,
                creation, access time and attributes are displayed.
                Fullscreen mode.
 
@@ -1024,8 +1024,7 @@ files and folders, perform different file and archive operations. Read
 
     You may ~customize file panel view modes~@PanelViewModes@.
 
-    Packed sizes are valid for NTFS compressed files or files inside an
-archive. File owners and number of hard links have meaning for NTFS only. Some
+    File owners and number of hard links have meaning for NTFS only. Some
 file systems may not support file creation and access dates.
 
     If you wish to change the panel view mode, choose it from the
@@ -1106,6 +1105,10 @@ for viewing the folder description file.
     - ^<wrap>полное время работы от баратеи (система оценивает это время исходя из времени до разряда и значения заряда батареи;
 без наличия умных подсистем батареи это значение не актуально и обычно указано как "Не определено").
 
+    ^<wrap>Состояние подключения к сети обновляется автоматически.
+    ^<wrap>В Windows Vista и выше работает автообновление "значения заряда батареи".
+    ^<wrap>Секция, содержащая информацию о системе питания включается в ~настройках~@InfoPanelSettings@.
+
 
     ^<wrap>Секции (кроме имени компьютера и пользователя) можно скрывать или показывать (см. ~Режимы отображения информационной панели~@InfoPanelShowMode@).
 
@@ -1113,8 +1116,8 @@ for viewing the folder description file.
 
 @InfoPanelShowMode
 $ #Режимы отображения информационной панели#
-    Меню режимов отображения ~информационной панели~@InfoPanel@ вызывается комбинацией #Ctrl-F12# 
-и применяется для активной в данный момент информационной панели. Доступны следующие режимы 
+    Меню режимов отображения ~информационной панели~@InfoPanel@ вызывается комбинацией #Ctrl-F12#
+и применяется для активной в данный момент информационной панели. Доступны следующие режимы
 отображения:
 
   информация о диске
@@ -1193,7 +1196,7 @@ $ #Настройка информационной панели#
 
   #Показывать состояние питания#
 
-    Если опция включена, то в ~информационной панели~@InfoPanel@ будет выводится 
+    Если опция включена, то в ~информационной панели~@InfoPanel@ будет выводится
 секция, описывающая состояние системы питания.
 
 @QViewPanel
@@ -1206,10 +1209,9 @@ Many of the ~internal viewer~@Viewer@ commands can be used with the file
 displayed in the panel. For files of registered Windows types the type is shown
 as well.
 
-    For folders, the quick view panel displays total size, total compressed
+    For folders, the quick view panel displays total size, total allocation
 size, number of files and subfolders in the folder, current disk cluster size,
 real files size, including files slack (sum of the unused cluster parts).
-Compressed size has meaning for NTFS drives only.
 
     When viewing reparse points, the path to the source folder is also displayed.
 
@@ -1273,7 +1275,7 @@ respectively. These menus include the following items:
 
    #Wide#                 Display file name and size.
 
-   #Detailed#             Display file name, size, packed size,
+   #Detailed#             Display file name, size, allocation size,
                         last write, creation and access time,
                         attributes. Fullscreen mode.
 
@@ -1603,7 +1605,7 @@ Column types are encoded as one or several characters, delimited with commas.
 Allowed column types are:
 
     S[C,T,F,E] - file size
-    P[C,T,F,E] - packed file size
+    P[C,T,F,E] - allocation file size
     G[C,T,F,E] - size of file streams
                  where: C - format file size;
                         T - use 1000 instead of 1024 as a divider;
@@ -1836,9 +1838,9 @@ rule sets.
 
    #Has more than one hardlink#
 
-                   Used only on disks with NTFS file system. Condition 
-                   evaluates to true, if piece of data, which current 
-                   file is pointing, is also pointed by, at least, 
+                   Used only on disks with NTFS file system. Condition
+                   evaluates to true, if piece of data, which current
+                   file is pointing, is also pointed by, at least,
                    one another file.
 
 
@@ -3492,7 +3494,7 @@ characters, delimited with commas. Allowed column types are:
     X          - file extension
 
     S[C,T,F,E] - file size
-    P[C,T,F,E] - packed file size
+    P[C,T,F,E] - allocation file size
     G[C,T,F,E] - size of file streams
                  where: C - format file size;
                         T - use 1000 instead of 1024 as a divider;
@@ -4482,6 +4484,10 @@ desired options in the dialog:
 
     Allows to edit the recorded key sequence.
 
+   #Description:#
+
+    Allows to edit the description of key sequence.
+
    #Allow screen output while executing macro#
 
     If this option is not set during the macro command execution Far Manager
@@ -4576,11 +4582,13 @@ $ #Макросы: Список установленных макросов#
   ~Панель быстрого просмотра~@KeyMacroQViewList@
   ~Панель папок~@KeyMacroTreeList@
   ~Информационная панель~@KeyMacroInfoList@
+  ~Автодополнение в панелях~@KeyMacroShellAutoCompletionList@
 
   ~Быстрый поиск в панелях~@KeyMacroSearchList@
   ~Поиск папки~@KeyMacroFindFolderList@
 
   ~Диалоги~@KeyMacroDialogList@
+  ~Автодополнение в диалогах~@KeyMacroDialogAutoCompletionList@
 
   ~Главное меню~@KeyMacroMainMenuList@
   ~Меню выбора дисков~@KeyMacroDisksList@
@@ -4752,6 +4760,24 @@ $ #Макросы: Остальные области#
 <!Macro:Other!>
 
     См. так же ~"Список установленных макросов"~@KeyMacroList@
+
+@KeyMacroShellAutoCompletionList
+$ #Макросы: Автодополнение в панелях#
+    Ниже приведены комбинации макроклавиш, действующих в автодополнении в панелях.
+
+<!Macro:Common!>
+<!Macro:Shell.AutoCompletion!>
+
+    См. так же ~«Список установленных макросов»~@KeyMacroList@
+
+@KeyMacroDialogAutoCompletionList
+$ #Макросы: Автодополнение в диалогах#
+    Ниже приведены комбинации макроклавиш, действующих в автодополнении в диалогах.
+
+<!Macro:Common!>
+<!Macro:Dialog.AutoCompletion!>
+
+    См. так же ~«Список установленных макросов»~@KeyMacroList@
 
 @Index
 $ #Index help file#

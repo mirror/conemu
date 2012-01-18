@@ -44,6 +44,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "keyboard.hpp"
 #include "macro.hpp"
 #include "udlist.hpp"
+#include "console.hpp"
+#include "syslog.hpp"
+#include "array.hpp"
+#include "sqlite.h"
 
 GeneralConfig *GeneralCfg;
 AssociationsConfig *AssocConfig;
@@ -54,41 +58,6 @@ int PlCacheCfgEnum = 0;
 PluginsHotkeysConfig *PlHotkeyCfg;
 HistoryConfig *HistoryCfg;
 MacroConfig *MacroCfg;
-
-class Utf8String
-{
-public:
-	Utf8String(const wchar_t* Str)
-	{
-		Init(Str, StrLength(Str));
-	}
-
-	Utf8String(const string& Str)
-	{
-		Init(Str, Str.GetLength());
-	}
-
-	~Utf8String()
-	{
-		delete[] Data;
-	}
-
-	operator const char*() const {return Data;}
-	size_t size() const {return Size;}
-
-
-private:
-	void Init(const wchar_t* Str, size_t Length)
-	{
-		Size = WideCharToMultiByte(CP_UTF8, 0, Str, static_cast<int>(Length), nullptr, 0, nullptr, nullptr) + 1;
-		Data = new char[Size];
-		WideCharToMultiByte(CP_UTF8, 0, Str, static_cast<int>(Length), Data, static_cast<int>(Size-1), nullptr, nullptr);
-		Data[Size-1] = 0;
-	}
-
-	char* Data;
-	size_t Size;
-};
 
 int IntToHex(int h)
 {
@@ -176,11 +145,35 @@ const char *KeyToNameChar(unsigned __int64 Key)
 	return nullptr;
 }
 
+void SetCDataIfNeeded(TiXmlText *text, const char *value)
+{
+	if (strpbrk(value, "\"<>&\r\n"))
+		text->SetCDATA(true);
+}
+
+static inline void PrintError(const wchar_t *Title, const wchar_t *Error, int Row, int Col)
+{
+	FormatString strResult;
+	strResult<<Title<<" ("<<Row<<L","<<Col<<L"): "<<Error<<L"\n";
+	Console.Write(strResult.CPtr(),StrLength(strResult));
+	Console.Commit();
+}
+
+static void PrintError(const wchar_t *Title, const wchar_t *Error, const TiXmlElement *e)
+{
+	PrintError(Title, Error, e->Row(), e->Column());
+}
+
+static void PrintError(const wchar_t *Title, const TiXmlDocument &doc)
+{
+	PrintError(Title, string(doc.ErrorDesc(), CP_UTF8), doc.ErrorRow(), doc.ErrorCol());
+}
+
 void GetDatabasePath(const wchar_t *FileName, string &strOut, bool Local)
 {
 	if(StrCmp(FileName, L":memory:"))
 	{
-		strOut = Local?Opt.LocalProfilePath:Opt.ProfilePath;
+		strOut = Local ? Opt.LocalProfilePath : Opt.ProfilePath;
 		AddEndSlash(strOut);
 		strOut += FileName;
 	}
@@ -190,23 +183,228 @@ void GetDatabasePath(const wchar_t *FileName, string &strOut, bool Local)
 	}
 }
 
+SQLiteStmt::SQLiteStmt():
+	param(1),
+	pStmt(nullptr)
+{
+}
+
+SQLiteStmt::~SQLiteStmt()
+{
+	sqlite3_finalize(pStmt);
+}
+
+SQLiteStmt& SQLiteStmt::Reset()
+{
+	param=1;
+	sqlite3_clear_bindings(pStmt);
+	sqlite3_reset(pStmt);
+	return *this;
+}
+
+bool SQLiteStmt::Step()
+{
+	return sqlite3_step(pStmt) == SQLITE_ROW;
+}
+
+bool SQLiteStmt::StepAndReset()
+{
+	bool b = sqlite3_step(pStmt) == SQLITE_DONE;
+	Reset();
+	return b;
+}
+
+SQLiteStmt& SQLiteStmt::Bind(int Value)
+{
+	sqlite3_bind_int(pStmt,param++,Value);
+	return *this;
+}
+
+SQLiteStmt& SQLiteStmt::Bind(unsigned __int64 Value)
+{
+	sqlite3_bind_int64(pStmt,param++,Value);
+	return *this;
+}
+
+SQLiteStmt& SQLiteStmt::Bind(__int64 Value)
+{
+	sqlite3_bind_int64(pStmt,param++,Value);
+	return *this;
+}
+
+SQLiteStmt& SQLiteStmt::Bind(const wchar_t *Value, bool bStatic)
+{
+	if (Value)
+		sqlite3_bind_text16(pStmt,param++,Value,-1,bStatic?SQLITE_STATIC:SQLITE_TRANSIENT);
+	else
+		sqlite3_bind_null(pStmt,param++);
+	return *this;
+}
+
+SQLiteStmt& SQLiteStmt::Bind(const void *Value, size_t Size, bool bStatic)
+{
+	sqlite3_bind_blob(pStmt, param++, Value, static_cast<int>(Size), bStatic? SQLITE_STATIC : SQLITE_TRANSIENT);
+	return *this;
+}
+
+const wchar_t* SQLiteStmt::GetColText(int Col)
+{
+	return (const wchar_t *)sqlite3_column_text16(pStmt,Col);
+}
+
+const char* SQLiteStmt::GetColTextUTF8(int Col)
+{
+	return (const char *)sqlite3_column_text(pStmt,Col);
+}
+
+int SQLiteStmt::GetColBytes(int Col)
+{
+	return sqlite3_column_bytes(pStmt,Col);
+}
+
+int SQLiteStmt::GetColInt(int Col)
+{
+	return sqlite3_column_int(pStmt,Col);
+}
+
+unsigned __int64 SQLiteStmt::GetColInt64(int Col)
+{
+	return sqlite3_column_int64(pStmt,Col);
+}
+
+const char* SQLiteStmt::GetColBlob(int Col)
+{
+	return (const char *)sqlite3_column_blob(pStmt,Col);
+}
+
+int SQLiteStmt::GetColType(int Col)
+{
+	return sqlite3_column_type(pStmt,Col);
+}
+
+
+SQLiteDb::SQLiteDb():
+	pDb(nullptr)
+{
+};
+
+SQLiteDb::~SQLiteDb()
+{
+	Close();
+}
+
 bool SQLiteDb::Open(const wchar_t *DbFile, bool Local)
 {
 	GetDatabasePath(DbFile, strPath, Local);
-	return sqlite3_open16(strPath.CPtr(),&pDb) == SQLITE_OK;
+	return sqlite3_open16(strPath.CPtr(), &pDb) == SQLITE_OK;
 }
 
-void SQLiteDb::Initialize(const wchar_t* DbName)
+void SQLiteDb::Initialize(const wchar_t* DbName, bool Local)
 {
-	if (!InitializeImpl(DbName))
+	if (!InitializeImpl(DbName, Local))
 	{
 		Close();
-		if (!apiMoveFileEx(strPath, strPath+L".bad", MOVEFILE_REPLACE_EXISTING) || !InitializeImpl(DbName))
+		if (!apiMoveFileEx(strPath, strPath+L".bad", MOVEFILE_REPLACE_EXISTING) || !InitializeImpl(DbName, Local))
 		{
-			InitializeImpl(L":memory:");
+			Close();
+			InitializeImpl(L":memory:", Local);
 		}
 	}
 }
+
+bool SQLiteDb::Exec(const char *Command)
+{
+	return sqlite3_exec(pDb, Command, nullptr, nullptr, nullptr) == SQLITE_OK;
+}
+
+bool SQLiteDb::BeginTransaction()
+{
+	return Exec("BEGIN TRANSACTION;");
+}
+
+bool SQLiteDb::EndTransaction()
+{
+	return Exec("END TRANSACTION;");
+}
+
+bool SQLiteDb::RollbackTransaction()
+{
+	return Exec("ROLLBACK TRANSACTION;");
+}
+
+bool SQLiteDb::IsOpen()
+{
+	return pDb != nullptr;
+}
+
+bool SQLiteDb::InitStmt(SQLiteStmt &stmtStmt, const wchar_t *Stmt)
+{
+	return sqlite3_prepare16_v2(pDb, Stmt, -1, &stmtStmt.pStmt, nullptr) == SQLITE_OK;
+}
+
+int SQLiteDb::Changes()
+{
+	return sqlite3_changes(pDb);
+}
+
+unsigned __int64 SQLiteDb::LastInsertRowID()
+{
+	return sqlite3_last_insert_rowid(pDb);
+}
+
+bool SQLiteDb::Close()
+{
+	bool Result = sqlite3_close(pDb) == SQLITE_OK;
+	pDb = nullptr;
+	return Result;
+}
+
+bool SQLiteDb::SetWALJournalingMode()
+{
+	return Exec("PRAGMA journal_mode = WAL;");
+}
+
+bool SQLiteDb::EnableForeignKeysConstraints()
+{
+	return Exec("PRAGMA foreign_keys = ON;");
+}
+
+
+class Utf8String
+{
+public:
+	Utf8String(const wchar_t* Str)
+	{
+		Init(Str, StrLength(Str));
+	}
+
+	Utf8String(const string& Str)
+	{
+		Init(Str, Str.GetLength());
+	}
+
+	~Utf8String()
+	{
+		delete[] Data;
+	}
+
+	operator const char*() const {return Data;}
+	size_t size() const {return Size;}
+
+
+private:
+	void Init(const wchar_t* Str, size_t Length)
+	{
+		Size = WideCharToMultiByte(CP_UTF8, 0, Str, static_cast<int>(Length), nullptr, 0, nullptr, nullptr) + 1;
+		Data = new char[Size];
+		WideCharToMultiByte(CP_UTF8, 0, Str, static_cast<int>(Length), Data, static_cast<int>(Size-1), nullptr, nullptr);
+		Data[Size-1] = 0;
+	}
+
+	char* Data;
+	size_t Size;
+};
+
 
 class GeneralConfigDb: public GeneralConfig {
 	SQLiteStmt stmtUpdateValue;
@@ -222,10 +420,10 @@ public:
 		Initialize(L"generalconfig.db");
 	}
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
 		return
-			Open(DbName) &&
+			Open(DbName, Local) &&
 
 			//schema
 			Exec("CREATE TABLE IF NOT EXISTS general_config(key TEXT NOT NULL, name TEXT NOT NULL, value BLOB, PRIMARY KEY (key, name));") &&
@@ -499,16 +697,15 @@ class HierarchicalConfigDb: public HierarchicalConfig {
 
 public:
 
-	explicit HierarchicalConfigDb(const wchar_t *DbName)
+	explicit HierarchicalConfigDb(const wchar_t *DbName, bool Local = false)
 	{
-		Initialize(DbName);
+		Initialize(DbName, Local);
 	}
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
-		Close();
 		return
-			Open(DbName) &&
+			Open(DbName, Local) &&
 
 			//schema
 			EnableForeignKeysConstraints() &&
@@ -846,11 +1043,10 @@ public:
 
 	virtual ~AssociationsConfigDb() { }
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
-		Close();
 		return
-			Open(DbName) &&
+			Open(DbName, Local) &&
 
 			//schema
 			EnableForeignKeysConstraints() &&
@@ -1154,14 +1350,13 @@ public:
 
 	PluginsCacheConfigDb()
 	{
-		Initialize(L"plugincache.db");
+		Initialize(L"plugincache.db", true);
 	}
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
-		Close();
 		return
-			Open(DbName, true) &&
+			Open(DbName, Local) &&
 
 			//schema
 			SetWALJournalingMode() &&
@@ -1512,11 +1707,10 @@ public:
 		Initialize(L"pluginhotkeys.db");
 	}
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
-		Close();
 		return
-			Open(DbName) &&
+			Open(DbName, Local) &&
 
 			//schema
 			Exec("CREATE TABLE IF NOT EXISTS pluginhotkeys(pluginkey TEXT NOT NULL, menuguid TEXT NOT NULL, type INTEGER NOT NULL, hotkey TEXT, PRIMARY KEY(pluginkey, menuguid, type));") &&
@@ -1672,6 +1866,8 @@ class HistoryConfigDb: public HistoryConfig {
 	SQLiteStmt stmtGetNext;
 	SQLiteStmt stmtGetPrev;
 	SQLiteStmt stmtGetNewest;
+	SQLiteStmt stmtGetLastEmpty;
+	SQLiteStmt stmtSetLastEmpty;
 	SQLiteStmt stmtSetEditorPos;
 	SQLiteStmt stmtSetEditorBookmark;
 	SQLiteStmt stmtGetEditorPos;
@@ -1692,14 +1888,13 @@ public:
 
 	HistoryConfigDb()
 	{
-		Initialize(L"history.db");
+		Initialize(L"history.db", true);
 	}
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
-		Close();
 		return
-			Open(DbName, true) &&
+			Open(DbName, Local) &&
 
 			//schema
 			SetWALJournalingMode() &&
@@ -2112,11 +2307,10 @@ public:
 		Initialize(L"macros.db");
 	}
 
-	bool InitializeImpl(const wchar_t* DbName)
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
 	{
-		Close();
 		return
-			Open(DbName) &&
+			Open(DbName, Local) &&
 
 			//schema
 			Exec(
@@ -2290,7 +2484,7 @@ public:
 	/* *************** */
 	TiXmlElement *Export()
 	{
-		TiXmlElement * root = new TiXmlElement("macro");
+		TiXmlElement * root = new TiXmlElement("macros");
 		if (!root)
 			return nullptr;
 
@@ -2309,6 +2503,7 @@ public:
 		SQLiteStmt stmtEnumAllKeyMacros;
 		InitStmt(stmtEnumAllKeyMacros, L"SELECT area, key, flags, sequence, description FROM key_macros ORDER BY area, key;");
 
+		// --------------------------------------------------
 		e = new TiXmlElement("constants");
 		if (!e)
 			return nullptr;
@@ -2320,17 +2515,23 @@ public:
 				break;
 
 			se->SetAttribute("name", stmtEnumAllConsts.GetColTextUTF8(0));
-			se->SetAttribute("value", stmtEnumAllConsts.GetColTextUTF8(1));
 			se->SetAttribute("type", stmtEnumAllConsts.GetColTextUTF8(2));
+			const char* value = stmtEnumAllConsts.GetColTextUTF8(1);
+			TiXmlText* vtext = new TiXmlText(value);
+			SetCDataIfNeeded(vtext, value);
+			TiXmlElement *text = new TiXmlElement("text");
+			text->LinkEndChild(vtext);
+			se->LinkEndChild(text);
 			e->LinkEndChild(se);
 		}
 		stmtEnumAllConsts.Reset();
 
 		root->LinkEndChild(e);
 
+		// --------------------------------------------------
 		e = new TiXmlElement("variables");
 		if (!e)
-			return nullptr;
+			return root;
 
 		while (stmtEnumAllVars.Step())
 		{
@@ -2339,17 +2540,23 @@ public:
 				break;
 
 			se->SetAttribute("name", stmtEnumAllVars.GetColTextUTF8(0));
-			se->SetAttribute("value", stmtEnumAllVars.GetColTextUTF8(1));
 			se->SetAttribute("type", stmtEnumAllVars.GetColTextUTF8(2));
+			const char* value = stmtEnumAllVars.GetColTextUTF8(1);
+			TiXmlText* vtext = new TiXmlText(value);
+			SetCDataIfNeeded(vtext, value);
+			TiXmlElement *text = new TiXmlElement("text");
+			text->LinkEndChild(vtext);
+			se->LinkEndChild(text);
 			e->LinkEndChild(se);
 		}
 		stmtEnumAllVars.Reset();
 
 		root->LinkEndChild(e);
 
+		// --------------------------------------------------
 		e = new TiXmlElement("functions");
 		if (!e)
-			return nullptr;
+			return root;
 
 		while (stmtEnumAllFunctions.Step())
 		{
@@ -2371,10 +2578,10 @@ public:
 
 		root->LinkEndChild(e);
 
+		// --------------------------------------------------
 		e = new TiXmlElement("keymacros");
-
 		if (!e)
-			return nullptr;
+			return root;
 
 		while (stmtEnumAllKeyMacros.Step())
 		{
@@ -2395,11 +2602,10 @@ public:
 				se->SetAttribute("description", Description);
 			}
 			const char* sequence = stmtEnumAllKeyMacros.GetColTextUTF8(3);
-			TiXmlText* text = new TiXmlText(sequence);
-			if(strpbrk(sequence,"\"<>&\r\n"))
-			{
-				text->SetCDATA(true);
-			}
+			TiXmlText* stext = new TiXmlText(sequence);
+			SetCDataIfNeeded(stext, sequence);
+			TiXmlElement *text = new TiXmlElement("text");
+			text->LinkEndChild(stext);
 			se->LinkEndChild(text);
 			e->LinkEndChild(se);
 		}
@@ -2414,30 +2620,60 @@ public:
 	bool Import(const TiXmlHandle &root)
 	{
 		BeginTransaction();
+		size_t ErrCount=0;
 
-		for (const TiXmlElement *e = root.FirstChild("macro").FirstChild("constants").FirstChildElement("constant").Element(); e; e=e->NextSiblingElement("constant"))
+		for (const TiXmlElement *e = root.FirstChild("macros").FirstChild("constants").FirstChildElement("constant").Element(); e; e=e->NextSiblingElement("constant"))
 		{
 			const char* name = e->Attribute("name");
-			const char* value = e->Attribute("value");
-			const char* type = e->Attribute("type");
-			if(name && value)
+			const char* type = e->Attribute("type"); // optional
+
+			if(name && *name)
 			{
-				SetConstValue(string(name, CP_UTF8),string(value, CP_UTF8),string(type, CP_UTF8));
+				const TiXmlElement *text = e->FirstChildElement("text");
+				if (text)
+				{
+					const char* value = text->GetText();
+					SetConstValue(string(name, CP_UTF8), string(value, CP_UTF8), string(type, CP_UTF8));
+				}
+				else
+				{
+					DeleteConst(string(name, CP_UTF8));
+				}
+			}
+			else
+			{
+				PrintError(L"Constant", L"<name> is empty or not found", e);
+				ErrCount++;
 			}
 		}
 
-		for (const TiXmlElement *e = root.FirstChild("macro").FirstChild("variables").FirstChildElement("variable").Element(); e; e=e->NextSiblingElement("variable"))
+		for (const TiXmlElement *e = root.FirstChild("macros").FirstChild("variables").FirstChildElement("variable").Element(); e; e=e->NextSiblingElement("variable"))
 		{
 			const char* name = e->Attribute("name");
-			const char* value = e->Attribute("value");
-			const char* type = e->Attribute("type");
-			if(name && value)
+			const char* type = e->Attribute("type"); // optional
+
+			if(name && *name)
 			{
-				SetVarValue(string(name, CP_UTF8),string(value, CP_UTF8),string(type, CP_UTF8));
+				const TiXmlElement *text = e->FirstChildElement("text");
+				if (text)
+				{
+					const char* value = text->GetText();
+					SetVarValue(string(name, CP_UTF8), string(value, CP_UTF8), string(type, CP_UTF8));
+				}
+				else
+				{
+					DeleteVar(string(name, CP_UTF8));
+				}
+			}
+			else
+			{
+				PrintError(L"Variable", L"<name> is empty or not found", e);
+				ErrCount++;
 			}
 		}
 
-		for (const TiXmlElement *e = root.FirstChild("macro").FirstChild("functions").FirstChildElement("function").Element(); e; e=e->NextSiblingElement("functions"))
+		// TODO: к function вернуться, когда будет нужный функционал :-)
+		for (const TiXmlElement *e = root.FirstChild("macros").FirstChild("functions").FirstChildElement("function").Element(); e; e=e->NextSiblingElement("function"))
 		{
 			const char* guid = e->Attribute("guid");
 			const char* fname = e->Attribute("name");
@@ -2455,39 +2691,49 @@ public:
 			}
 		}
 
-		for (const TiXmlElement *e = root.FirstChild("macro").FirstChild("keymacros").FirstChildElement("macro").Element(); e; e=e->NextSiblingElement("macro"))
+		for (const TiXmlElement *e = root.FirstChild("macros").FirstChild("keymacros").FirstChildElement("macro").Element(); e; e=e->NextSiblingElement("macro"))
 		{
 			const char* area = e->Attribute("area");
 			const char* key = e->Attribute("key");
 			const char* flags = e->Attribute("flags"); // optional
 			const char* description = e->Attribute("description"); // optional
-			const char* sequence = e->GetText(); // delete macro if sequence is absent
-			if (area && key)
+
+			if (area && *area && key && *key)
 			{
-				if(sequence && *sequence)
+				const TiXmlElement *text = e->FirstChildElement("text");
+				if (text) // delete macro if sequence is absent
 				{
-					string strSequence=string(sequence, CP_UTF8);
-					string strFlags=string(flags? flags : "", CP_UTF8);
-					SetKeyMacro(string(area, CP_UTF8), string(key, CP_UTF8), RemoveExternalSpaces(strFlags), RemoveExternalSpaces(strSequence), description? string(description, CP_UTF8) : L"");
+					const char *sequence = text->GetText();
+					string strFlags(flags, CP_UTF8);
+					SetKeyMacro(string(area, CP_UTF8), string(key, CP_UTF8), RemoveExternalSpaces(strFlags), string(sequence, CP_UTF8), string(description, CP_UTF8));
 				}
 				else
 				{
 					DeleteKeyMacro(string(area, CP_UTF8), string(key, CP_UTF8));
 				}
 			}
+			else
+			{
+				PrintError(L"Macro", L"<area> or <key> is empty or not found", e);
+				ErrCount++;
+			}
 		}
 
-		EndTransaction();
-		return true;
+		if (!ErrCount)
+			EndTransaction();
+		else
+			RollbackTransaction();
+
+		return !ErrCount;
 	}
 };
 
-HierarchicalConfig *CreatePluginsConfig(const wchar_t *guid)
+HierarchicalConfig *CreatePluginsConfig(const wchar_t *guid, bool Local)
 {
 	string strDbName = L"PluginsData\\";
 	strDbName += guid;
 	strDbName += L".db";
-	return new HierarchicalConfigDb(strDbName);
+	return new HierarchicalConfigDb(strDbName, Local);
 }
 
 HierarchicalConfig *CreateFiltersConfig()
@@ -2502,7 +2748,7 @@ HierarchicalConfig *CreateHighlightConfig()
 
 HierarchicalConfig *CreateShortcutsConfig()
 {
-	return new HierarchicalConfigDb(L"shortcuts.db");
+	return new HierarchicalConfigDb(L"shortcuts.db", true);
 }
 
 HierarchicalConfig *CreatePanelModeConfig()
@@ -2585,7 +2831,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 		root->LinkEndChild(e);
 		delete cfg;
 
-		{
+		{ //TODO: export for local plugin settings
 			string strPlugins = Opt.ProfilePath;
 			strPlugins += L"\\PluginsData\\*.db";
 			FAR_FIND_DATA_EX fd;
@@ -2604,7 +2850,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 
 					TiXmlElement *plugin = new TiXmlElement("plugin");
 					plugin->SetAttribute("guid", guid);
-					cfg = CreatePluginsConfig(fd.strFileName);
+					cfg = CreatePluginsConfig(fd.strFileName, false);
 					plugin->LinkEndChild(cfg->Export());
 					e->LinkEndChild(plugin);
 					delete cfg;
@@ -2621,6 +2867,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 	else // Import
 	{
 		TiXmlDocument doc;
+
 		if (doc.LoadFile(XmlFile))
 		{
 			TiXmlElement *farconfig = doc.FirstChildElement("farconfig");
@@ -2650,6 +2897,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 				cfg->Import(root.FirstChildElement("shortcuts"));
 				delete cfg;
 
+				//TODO: import for local plugin settings
 				for (TiXmlElement *plugin=root.FirstChild("pluginsconfig").FirstChildElement("plugin").Element(); plugin; plugin=plugin->NextSiblingElement("plugin"))
 				{
 					const char *guid = plugin->Attribute("guid");
@@ -2661,7 +2909,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 					mc=2;
 					if (re.Match(Guid, Guid.CPtr() + Guid.GetLength(), m, mc))
 					{
-						cfg = CreatePluginsConfig(Guid);
+						cfg = CreatePluginsConfig(Guid, false);
 						const TiXmlHandle h(plugin);
 						cfg->Import(h);
 						delete cfg;
@@ -2673,6 +2921,9 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 				ret = true;
 			}
 		}
+
+		if (doc.Error())
+			PrintError(L"XML Error", doc);
 	}
 
 	fclose(XmlFile);

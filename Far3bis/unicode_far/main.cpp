@@ -107,9 +107,9 @@ static void show_help()
 	    L" /x   Disable exception handling.\n"
 	    L" /clearcache [profilepath]\n"
 	    L"      Clear plugins cache.\n"
-	    L" /export <out.xml> [profilepath]\n"
+	    L" /export <out.farconfig> [profilepath]\n"
 	    L"      Export settings.\n"
-	    L" /import <in.xml> [profilepath]\n"
+	    L" /import <in.farconfig> [profilepath]\n"
 	    L"      Import settings.\n"
 #ifdef _DEBUGEXC
 	    L" /xd  Enable exception handling.\n"
@@ -417,7 +417,7 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 
 	// Starting with Windows Vista, the system uses the low-fragmentation heap (LFH) as needed to service memory allocation requests.
 	// Applications do not need to enable the LFH for their heaps.
-	if(WinVer.dwMajorVersion<6)
+	if(WinVer < _WIN32_WINNT_VISTA)
 	{
 		apiEnableLowFragmentationHeap();
 	}

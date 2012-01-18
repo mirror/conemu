@@ -220,6 +220,15 @@ MHSkipAll
 "Omiń &wszystkie"
 "Omitir &Todo"
 
+MHSkipErrors
+"Пропустить &ошибки"
+"S&kip errors"
+upd:"S&kip errors"
+upd:"S&kip errors"
+upd:"S&kip errors"
+upd:"S&kip errors"
+upd:"S&kip errors"
+
 MHAbort
 "Прер&вать"
 "&Abort"
@@ -2523,12 +2532,12 @@ MEditConfigScrollbar
 "Mostrar barra de desp&lazamiento"
 
 MEditShowWhiteSpace
-"Про&бельные символы"
-"Show &white space"
-upd:"Show &white space"
-upd:"Show &white space"
-upd:"Show &white space"
-upd:"Show &white space"
+"Пробельные символы"
+"Sh&ow white space"
+upd:"Show white space"
+upd:"Show white space"
+upd:"Show white space"
+upd:"Show white space"
 "Mostrar espacios en blanco"
 
 MEditConfigPickUpWord
@@ -4544,14 +4553,23 @@ MShortcutPlugin
 "<plugin>"
 "<plugin>"
 
-MFSShortcut
-"Введите новую ссылку:"
-"Enter new shortcut:"
-"Zadejte novou zkratku:"
-"Neue Verknüpfung:"
-"A gyorsbillentyűhöz rendelt mappa:"
-"Wprowadź nowy skrót:"
-"Ingrése nuevo acceso:"
+MFSShortcutName
+"Название:"
+"Title:"
+upd:"Title:"
+upd:"Title:"
+upd:"Title:"
+upd:"Title:"
+upd:"Title:"
+
+MFSShortcutPath
+"Путь:"
+"Path:"
+upd:"Path:"
+upd:"Path:"
+upd:"Path:"
+upd:"Path:"
+upd:"Path:"
 
 MNeedNearPath
 "Перейти в ближайшую доступную папку?"
@@ -6661,14 +6679,14 @@ MColumnSize
 "Rozmiar"
 "Tamaño"
 
-MColumnPacked
-"Упаков"
-"Packed"
-"Komprimovaný"
-"Kompr."
-"TMéret"
-"Spakowany"
-"Comprs"
+MColumnAlocatedSize
+"Выделено"
+"Allocated"
+upd:"Allocated"
+upd:"Allocated"
+upd:"Allocated"
+upd:"Allocated"
+upd:"Allocated"
 
 MColumnDate
 "Дата"
@@ -10290,53 +10308,7 @@ upd:"Unknown"
 upd:"Unknown"
 upd:"Unknown"
 
-MErrorInvalidFunction
-l:
-"Некорректная функция"
-"Incorrect function"
-"Nesprávná funkce"
-"Ungültige Funktion"
-"Helytelen funkció"
-"Niewłaściwa funkcja"
-"Función incorrecta"
-
-MErrorBadCommand
-"Команда не распознана"
-"Command not recognized"
-"Příkaz nebyl rozpoznán"
-"Unbekannter Befehl"
-"Ismeretlen parancs"
-"Nieznane polecenie"
-"Comando no reconocido"
-
-MErrorFileNotFound
-"Файл не найден"
-"File not found"
-"Soubor nenalezen"
-"Datei nicht gefunden"
-"A fájl vagy mappa nem található"
-"Nie odnaleziono pliku"
-"archivo no encontrado"
-
-MErrorPathNotFound
-"Путь не найден"
-"Path not found"
-"Cesta nenalezena"
-"Pfad nicht gefunden"
-"Az elérési út nem található"
-"Nie odnaleziono ścieżki"
-"Ruta no encontrada"
-
-MErrorTooManyOpenFiles
-"Слишком много открытых файлов"
-"Too many open files"
-"Příliš mnoho otevřených souborů"
-"Zu viele geöffnete Dateien"
-"Túl sok nyitott fájl"
-"Zbyt wiele otwartych plików"
-"Demasiados archivos abiertos"
-
-MErrorAccessDenied
+MAccessDenied
 "Доступ запрещён"
 "Access denied"
 "Přístup odepřen"
@@ -10344,330 +10316,6 @@ MErrorAccessDenied
 "Hozzáférés megtagadva"
 "Dostęp zabroniony"
 "Acceso denegado"
-
-MErrorNotEnoughMemory
-"Недостаточно памяти"
-"Not enough memory"
-"Nedostatek paměti"
-"Nicht genügend Speicher"
-"Nincs elég memória"
-"Za mało pamięci"
-"No hay memoria libre"
-
-MErrorDiskRO
-"Попытка записи на защищённый от записи диск"
-"Cannot write to write protected disk"
-"Nelze zapisovat na disk chráněný proti zápisu"
-"Der Datenträger ist schreibgeschützt"
-"Írásvédett lemezre nem lehet írni"
-"Nie mogę zapisać na zabezpieczony dysk"
-"No se puede escribir a disco protegido contra escritura"
-
-MErrorDeviceNotReady
-"Устройство не готово"
-"The device is not ready"
-"Zařízení není připraveno"
-"Das Gerät ist nicht bereit"
-"Az eszköz nem kész"
-"Urządzenie nie jest gotowe"
-"El dispositivo no está listo"
-
-MErrorCannotAccessDisk
-"Доступ к диску невозможен"
-"Disk cannot be accessed"
-"Na disk nelze přistoupit"
-"Auf Datenträger kann nicht zugegriffen werden"
-"A lemez nem érhető el"
-"Brak dostępu do dysku"
-"Disco no puede ser accedido"
-
-MErrorSectorNotFound
-"Сектор не найден"
-"Sector not found"
-"Sektor nenalezen"
-"Sektor nicht gefunden"
-"Szektor nem található"
-"Nie odnaleziono sektora"
-"Sector no encontrado"
-
-MErrorOutOfPaper
-"В принтере нет бумаги"
-"The printer is out of paper"
-"V tiskárně došel papír"
-"Der Drucker hat kein Papier mehr"
-"A nyomtatóban nincs papír"
-"Brak papieru w drukarce"
-"No hay papel en la impresora"
-
-MErrorWrite
-"Ошибка записи"
-"Write fault error"
-"Chyba zápisu"
-"Fehler beim Schreibzugriff"
-"Írási hiba"
-"Błąd zapisu"
-"Falla de escritura"
-
-MErrorRead
-"Ошибка чтения"
-"Read fault error"
-"Chyba čtení"
-"Fehler beim Lesezugriff"
-"Olvasási hiba"
-"Błąd odczytu"
-"Falla de lectura"
-
-MErrorDeviceGeneral
-"Общая ошибка устройства"
-"Device general failure"
-"Obecná chyba zařízení"
-"Ein Gerätefehler ist aufgetreten"
-"Eszköz általános hiba"
-"Ogólny błąd urządzenia"
-"Falla general en dispositivo"
-
-MErrorFileSharing
-"Нарушение совместного доступа к файлу"
-"File sharing violation"
-"Narušeno sdílení souborů"
-"Zugriffsverletzung"
-"Fájlmegosztási hiba"
-"Naruszenie zasad współużytkowania pliku"
-"Violación de archivo compartido"
-
-MErrorNetworkPathNotFound
-"Сетевой путь не найден"
-"The network path was not found"
-"Síťová cesta nebyla nalezena"
-"Der Netzwerkpfad wurde nicht gefunden"
-"Hálózati útvonal nem található"
-"Nie odnaleziono ścieżki sieciowej"
-"La ruta de red no ha sido encontrada"
-
-MErrorNetworkBusy
-"Сеть занята"
-"The network is busy"
-"Síť je zaneprázdněna"
-"Das Netzwerk ist beschäftigt"
-"A hálózat zsúfolt"
-"Sieć jest zajęta"
-"La red está ocupada"
-
-MErrorNetworkAccessDenied
-"Сетевой доступ запрещён"
-"Network access is denied"
-"Přístup na síť zakázán"
-"Netzwerkzugriff wurde verweigert"
-"Hálózati hozzáférés megtagadva"
-"Dostęp do sieci zabroniony"
-"Acceso a red es denegado"
-
-MErrorNetworkWrite
-"Ошибка записи в сети"
-"A write fault occurred on the network"
-"Na síti došlo k chybě v zápisu"
-"Fehler beim Schreibzugriff auf das Netzwerk"
-"Írási hiba a hálózaton"
-"Wystąpił błąd zapisu w sieci"
-"Falla de escritura en la red"
-
-MErrorDiskLocked
-"Диск используется или заблокирован другим процессом"
-"The disk is in use or locked by another process"
-"Disk je používán nebo uzamčen jiným procesem"
-"Datenträger wird verwendet oder ist durch einen anderen Prozess gesperrt"
-"A lemezt használja vagy zárolja egy folyamat"
-"Dysk jest w użyciu lub zablokowany przez inny proces"
-"El disco está en uso o bloqueado por otro proceso"
-
-MErrorFileExists
-"Файл или папка уже существует"
-"File or folder already exists"
-"Soubor nebo adresář již existuje"
-"Die Datei oder der Ordner existiert bereits."
-"A fájl vagy mappa már létezik"
-"Plik lub katalog już istnieje"
-"archivo o directorio ya existe"
-
-MErrorInvalidName
-"Указанное имя неверно"
-"The specified name is invalid"
-"Zadaný název je neplatný"
-"Der angegebene Name ist ungültig"
-"A megadott név érvénytelen"
-"Podana nazwa jest niewłaściwa"
-"El nombre especificado es inválido"
-
-MErrorInsufficientDiskSpace
-"Нет места на диске"
-"Insufficient disk space"
-"Nedostatek místa na disku"
-"Unzureichend Speicherplatz am Datenträger"
-"Nincs elég hely a lemezen"
-"Za mało miejsca na dysku"
-"Insuficiente espacio de disco"
-
-MErrorFolderNotEmpty
-"Папка не пустая"
-"The folder is not empty"
-"Adresář není prázdný"
-"Der Ordner ist nicht leer"
-"A mappa nem üres"
-"Katalog nie jest pusty"
-"El directorio no está vacío"
-
-MErrorIncorrectUserName
-"Неверное имя пользователя"
-"Incorrect user name"
-"Neplatné jméno uživatele"
-"Ungültiger Benutzername"
-"Érvénytelen felhasználói név"
-"Niewłaściwa nazwa użytkownika"
-"Nombre de usuario incorrecto"
-
-MErrorIncorrectPassword
-"Неверный пароль"
-"Incorrect password"
-"Neplatné heslo"
-"Ungültiges Passwort"
-"Érvénytelen jelszó"
-"Niewłaściwe hasło"
-"Clave incorrecta"
-
-MErrorLoginFailure
-"Ошибка регистрации"
-"Login failure"
-"Přihlášení selhalo"
-"Login fehlgeschlagen"
-"Sikertelen bejelentkezés"
-"Logowanie nie powiodło się"
-"Falla en conexión"
-
-MErrorConnectionAborted
-"Соединение разорвано"
-"Connection aborted"
-"Spojení přerušeno"
-"Verbindung abgebrochen"
-"Kapcsolat bontva"
-"Połączenie zerwane"
-"Conexión abortada"
-
-MErrorCancelled
-"Операция отменена"
-"Operation cancelled"
-"Operace stornována"
-"Vorgang abgebrochen"
-"A művelet megszakítva"
-"Operacja przerwana"
-"Operación cancelada"
-
-MErrorNetAbsent
-"Сеть отсутствует"
-"No network present"
-"Síť není k dispozici"
-"Kein Netzwerk verfügbar"
-"Nincs hálózat"
-"Brak sieci"
-"No hay red presente"
-
-MErrorNetDeviceInUse
-"Устройство используется и не может быть отсоединено"
-"Device is in use and cannot be disconnected"
-"Zařízení se používá a nemůže být odpojeno"
-"Gerät wird gerade verwendet oder kann nicht getrennt werden"
-"Az eszköz használatban van, nem választható le"
-"Urządzenie jest w użyciu i nie można go odłączyć"
-"Dispositivo está en uso y no puede ser desconectado"
-
-MErrorNetOpenFiles
-"На сетевом диске есть открытые файлы"
-"This network connection has open files"
-"Přes toto síťové spojení jsou otevřeny soubory"
-"Diese Netzwerkverbindung hat geöffnete Dateien"
-"A hálózaton nyitott fájlok vannak"
-"To połączenie sieciowe posiada otwarte pliki"
-"Esta conexión de red tiene archivos abiertos"
-
-MErrorAlreadyAssigned
-"Имя локального устройства уже использовано"
-"The local device name is already in use"
-"Název lokálního zařízení je již používán"
-"Der lokale Gerätename wird bereits verwendet"
-"A helyi eszköznév már foglalt"
-"Nazwa urządzenia lokalnego jest już używana"
-"El nombre del dispositivo local ya está en uso"
-
-MErrorAlreadyRemebered
-"Имя локального устройства уже находится в профиле пользователя"
-"The local device is already in the user profile"
-"Lokální zařízení je již v uživatelově profilu"
-"Der lokale Datenträger ist bereits Teil des Benutzerprofils"
-"A helyi eszköz már a felhasználói profilban van"
-"Lokalne urządzenie znajduje się już w profilu użytkownika"
-"El dispositivo local ya está en el perfil de usuario"
-
-MErrorNotLoggedOn
-"Пользователь не зарегистрирован в сети"
-"User has not logged on to the network"
-"Uživatel nebyl do sítě přihlášen"
-"Benutzer hat sich nicht am Netzwerk angemeldet"
-"A felhasználó nincs a hálózaton"
-"Użytkownik nie jest zalogowany do sieci"
-"Usuario no está conectado a la red"
-
-MErrorInvalidPassword
-"Неверный пароль пользователя"
-"The user password is invalid"
-"Uživatelovo heslo není správné"
-"Das Benutzerpasswort ist ungültig"
-"Érvénytelen felhasználói jelszó"
-"Hasło użytkownika jest niewłaściwe"
-"La clave de usuario es inválida"
-
-MErrorNoRecoveryPolicy
-"Для этой системы отсутствует политика надёжного восстановления шифрования"
-"There is no valid encryption recovery policy configured for this system"
-"V tomto systému není nastaveno žádné platné pravidlo pro dešifrování"
-"Auf diesem System ist keine gültige Richtlinie zum Wiederherstellen der Verschlüsselung konfiguriert."
-"Nincs érvényes titkosítást feloldó szabály a házirendben"
-"Polityka odzyskiwania szyfrowania nie jest skonfigurowana"
-"No hay política de recuperación de encriptación válida en este sistema"
-
-MErrorEncryptionFailed
-"Ошибка при попытке шифрования файла"
-"The specified file could not be encrypted"
-"Zadaný soubor nemohl být zašifrován"
-"Die angegebene Datei konnte nicht verschlüsselt werden"
-"A megadott fájl nem titkosítható"
-"Nie udało się zaszyfrować pliku"
-"El archivo especificado no puede ser encriptado"
-
-MErrorDecryptionFailed
-"Ошибка при попытке расшифровки файла"
-"The specified file could not be decrypted"
-"Zadaný soubor nemohl být dešifrován"
-"Die angegebene Datei konnte nicht entschlüsselt werden"
-"A megadott fájl titkosítása nem oldható fel"
-"Nie udało się odszyfrować pliku"
-"El archivo especificado no puede ser desencriptado"
-
-MErrorFileNotEncrypted
-"Указанный файл не зашифрован"
-"The specified file is not encrypted"
-"Zadaný soubor není zašifrován"
-"Die angegebene Datei ist nicht verschlüsselt"
-"A megadott fájl nem titkosított"
-"Plik nie jest zaszyfrowany"
-"El archivo especificado no está encriptado"
-
-MErrorNoAssociation
-"Указанному файлу не сопоставлено ни одно приложение для выполнения данной операции"
-"No application is associated with the specified file for this operation"
-"K zadanému souboru není asociována žádná aplikace pro tuto operaci"
-"Diesem Dateityp und dieser Aktion ist kein Programm zugewiesen."
-"A fájlhoz nincs társítva program"
-"Z tą operacją dla pliku nie jest skojarzona żadna aplikacja"
-"No hay aplicación asociada para esta operación con el archivo especificado"
 
 MCannotExecute
 l:
@@ -11623,14 +11271,14 @@ MMenuSortByOwner
 "&właściciela                 Ctrl-F11"
 "Dueñ&o                Ctrl-F11"
 
-MMenuSortByCompressedSize
-"&Упакованный размер"
-"Com&pressed size"
-"&Komprimované velikosti"
-"Kom&primierte Größe"
-"Tömörített mér&et"
-"rozmiaru po &kompresji"
-"Tamaño de com&presin"
+MMenuSortByAllocatedSize
+"Выделенный размер"
+"Allocated size"
+upd:"Allocated size"
+upd:"Allocated size"
+upd:"Allocated size"
+upd:"Allocated size"
+upd:"Allocated size"
 
 MMenuSortByNumLinks
 "Ко&личество ссылок"
@@ -12015,8 +11663,8 @@ MChangeCouldNotEjectHotPlugMedia2
 "No se puede remover el dispositivo:"
 
 MChangeHotPlugNotify1
-"Теперь устройство" 
-"The device" 
+"Теперь устройство"
+"The device"
 "Zařízení"
 "Das Gerät"
 "Az eszköz:"
@@ -12470,23 +12118,14 @@ MQuickViewBytes
 "Rozmiar plików      "
 "Tamaño archivos  "
 
-MQuickViewCompressed
-"Упакованный размер  "
-"Compressed size  "
-"Komprim. velikost  "
-"Komprimiert      "
-"Tömörített méret "
-"Po kompresji        "
-"Tamaño comprimido"
-
-MQuickViewRatio
-"Степень сжатия      "
-"Ratio            "
-"Poměr              "
-"Rate             "
-"Tömörítés aránya "
-"Procent             "
-"Promedio"
+MQuickViewAllocated
+"Выделенный размер   "
+"Allocated size   "
+upd:"Allocated size   "
+upd:"Allocated size   "
+upd:"Allocated size   "
+upd:"Allocated size   "
+upd:"Allocated size   "
 
 MQuickViewCluster
 "Размер кластера     "
@@ -12497,15 +12136,6 @@ MQuickViewCluster
 "Rozmiar klastra     "
 "Tamaño cluster   "
 
-MQuickViewRealSize
-"Реальный размер     "
-"Real files size  "
-"Opravdová velikost "
-"Tatsächlich      "
-"Valódi fájlméret "
-"Właściwy rozmiar    "
-"Tamaño real      "
-
 MQuickViewSlack
 "Остатки кластеров   "
 "Files slack      "
@@ -12514,6 +12144,15 @@ MQuickViewSlack
 "Meddő terület    "
 "Przestrzeń stracona "
 "Desperdiciado    "
+
+MQuickViewMFTOverhead
+upd:"MFT overhead        "
+"MFT overhead     "
+upd:"MFT overhead        "
+upd:"MFT overhead        "
+upd:"MFT overhead        "
+upd:"MFT overhead        "
+upd:"MFT overhead        "
 
 MSetAttrTitle
 l:
@@ -15272,6 +14911,15 @@ MMacroSequence
 "Sekwencja:"
 "Secuencia:"
 
+MMacroDescription
+"Описание:"
+"Description:"
+"Popis:"
+"Beschreibung:"
+"Megjegyzés:"
+"Opis:"
+"Descripción:"
+
 MMacroReDefinedKey2
 "Переопределить?"
 "Redefine?"
@@ -16233,6 +15881,24 @@ upd:"File is not supported Far plugin"
 upd:"File is not supported Far plugin"
 upd:"File is not supported Far plugin"
 
+MPlgBinaryNotMatchError
+"Файл не соответствует сохраненному в кеше плагинов Far"
+"File does not match cached binary"
+upd:"File does not match cached binary"
+upd:"File does not match cached binary"
+upd:"File does not match cached binary"
+upd:"File does not match cached binary"
+upd:"File does not match cached binary"
+
+MPlgCacheItemNotFoundError
+"Файл не найден в кеше плагинов Far"
+"File does not match any cached binary"
+upd:"File does not match any cached binary"
+upd:"File does not match any cached binary"
+upd:"File does not match any cached binary"
+upd:"File does not match any cached binary"
+upd:"File does not match any cached binary"
+
 MPlgRegisterError
 "Ошибка регистрации плагина (AddPlugin)"
 "Plugin registration failed (AddPlugin)"
@@ -16241,6 +15907,16 @@ upd:"Plugin registration failed (AddPlugin)"
 upd:"Plugin registration failed (AddPlugin)"
 upd:"Plugin registration failed (AddPlugin)"
 upd:"Plugin registration failed (AddPlugin)"
+
+MPlgDuplacateGuidError
+"Плагин с тем же GUID уже загружен"
+"Same GUID plugin was already loaded"
+upd:"Same GUID plugin was already loaded"
+upd:"Same GUID plugin was already loaded"
+upd:"Same GUID plugin was already loaded"
+upd:"Same GUID plugin was already loaded"
+upd:"Same GUID plugin was already loaded"
+
 MCheckBox2State
 l:
 "?"
@@ -20476,15 +20152,6 @@ upd:"to open this object:"
 upd:"to open this object:"
 upd:"to open this object:"
 "para abrir este objeto:"
-
-MElevationRequiredGetCompressedSize
-"для получения упакованного размера этого объекта:"
-"to get compressed size of this object:"
-upd:"to get compressed size of this object:"
-upd:"to get compressed size of this object:"
-upd:"to get compressed size of this object:"
-upd:"to get compressed size of this object:"
-upd:"to get compressed size of this object:"
 
 MElevationRequiredEncryptFile
 "для шифрования этого объекта:"

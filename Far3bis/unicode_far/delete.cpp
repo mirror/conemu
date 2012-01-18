@@ -324,12 +324,11 @@ void ShellDelete(Panel *SrcPanel,bool Wipe)
 
 							ShellDeleteMsg(strSelName, DEL_SCAN, 0, 0);
 						}
-						ULONG CurrentFileCount,CurrentDirCount,ClusterSize;
-						UINT64 FileSize,CompressedFileSize,RealSize;
+						DirInfoData Data = {};
 
-						if (GetDirInfo(nullptr,strSelName,CurrentDirCount,CurrentFileCount,FileSize,CompressedFileSize,RealSize,ClusterSize,-1,nullptr,0)>0)
+						if (GetDirInfo(nullptr, strSelName, Data, -1, nullptr, 0) > 0)
 						{
-							ItemsCount+=CurrentFileCount+CurrentDirCount+1;
+							ItemsCount+=Data.FileCount+Data.DirCount+1;
 						}
 						else
 						{
@@ -666,12 +665,21 @@ void ShellDeleteMsg(const wchar_t *Name, DEL_MODE Mode, int Percent, int WipePer
 	string strOutFileName(Name);
 	TruncPathStr(strOutFileName,static_cast<int>(Width));
 	CenterStr(strOutFileName,strOutFileName,static_cast<int>(Width));
+	const wchar_t* Progress1 = nullptr;
+	const wchar_t* Progress2 = nullptr;
+	if(!strWipeProgress.IsEmpty())
+	{
+		Progress1 = strWipeProgress.CPtr();
+		Progress2 = strProgress.IsEmpty()? nullptr : strProgress.CPtr();
+	}
+	else
+	{
+		Progress1 = strProgress.IsEmpty()? nullptr : strProgress.CPtr();
+	}
 	Message(0,0,
 		MSG((Mode==DEL_WIPE || Mode==DEL_WIPEPROCESS)?MDeleteWipeTitle:MDeleteTitle),
 		Mode==DEL_SCAN? MSG(MScanningFolder) : MSG((Mode==DEL_WIPE || Mode==DEL_WIPEPROCESS)?MDeletingWiping:MDeleting),
-		strOutFileName,
-		strWipeProgress.IsEmpty()?nullptr:strWipeProgress.CPtr(),
-		strProgress.IsEmpty()?nullptr:strProgress.CPtr());
+		strOutFileName, Progress1, Progress2);
 
 	PreRedrawItem preRedrawItem=PreRedraw.Peek();
 	preRedrawItem.Param.Param1=static_cast<void*>(const_cast<wchar_t*>(Name));
@@ -918,7 +926,7 @@ int RemoveToRecycleBin(const string& Name)
 	ConvertNameToFull(Name, strFullName);
 
 	// При удалении в корзину папки с симлинками получим траблу, если предварительно линки не убрать.
-	if (WinVer.dwMajorVersion<6 && Opt.DeleteToRecycleBinKillLink && apiGetFileAttributes(Name) == FILE_ATTRIBUTE_DIRECTORY)
+	if (WinVer < _WIN32_WINNT_VISTA && Opt.DeleteToRecycleBinKillLink && apiGetFileAttributes(Name) == FILE_ATTRIBUTE_DIRECTORY)
 	{
 		string strFullName2;
 		FAR_FIND_DATA_EX FindData;

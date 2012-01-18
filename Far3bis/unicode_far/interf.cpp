@@ -82,6 +82,23 @@ const size_t StackBufferSize=0x3FC0;
 void InitConsole(int FirstInit)
 {
 	InitRecodeOutTable();
+
+	DWORD Mode;
+	if (FirstInit)
+	{
+		if(!Console.GetMode(Console.GetInputHandle(), Mode))
+		{
+			HANDLE ConIn = CreateFile(L"CONIN$", GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+			SetStdHandle(STD_INPUT_HANDLE, ConIn);
+		}
+		if(!Console.GetMode(Console.GetOutputHandle(), Mode))
+		{
+			HANDLE ConOut = CreateFile(L"CONOUT$", GENERIC_READ|GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+			SetStdHandle(STD_OUTPUT_HANDLE, ConOut);
+			SetStdHandle(STD_ERROR_HANDLE, ConOut);
+		}
+	}
+
 	Console.SetControlHandler(CtrlHandler,TRUE);
 	Console.GetMode(Console.GetInputHandle(),InitialConsoleMode);
 	Console.GetTitle(strInitTitle);
@@ -210,16 +227,20 @@ void SetFarConsoleMode(BOOL SetsActiveBuffer)
 		Console.SetActiveScreenBuffer(Console.GetOutputHandle());
 
 	ChangeConsoleMode(Mode);
+
+	//востановим дефолтный режим вывода, а то есть такие проги что сбрасывают
+	ChangeConsoleMode(ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT, 1);
+	ChangeConsoleMode(ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT, 2);
 }
 
-void ChangeConsoleMode(int Mode)
+void ChangeConsoleMode(int Mode, int Choose)
 {
 	DWORD CurrentConsoleMode;
-	HANDLE hConIn = Console.GetInputHandle();
-	Console.GetMode(hConIn, CurrentConsoleMode);
+	HANDLE hCon = (Choose == 0) ? Console.GetInputHandle() : ((Choose == 1) ? Console.GetOutputHandle() : Console.GetErrorHandle());
+	Console.GetMode(hCon, CurrentConsoleMode);
 
 	if (CurrentConsoleMode!=(DWORD)Mode)
-		Console.SetMode(hConIn, Mode);
+		Console.SetMode(hCon, Mode);
 }
 
 void SaveConsoleWindowRect()
@@ -349,8 +370,8 @@ void GetVideoMode(COORD& Size)
 	Console.GetSize(Size);
 	ScrX=Size.X-1;
 	ScrY=Size.Y-1;
-	assert(ScrX>0);
-	assert(ScrY>0);
+	_ASSERTE(ScrX>0);
+	_ASSERTE(ScrY>0);
 	WidthNameForMessage=(ScrX*38)/100+1;
 
 	if (PrevScrX == -1) PrevScrX=ScrX;
@@ -1164,7 +1185,7 @@ int HiStrlen(const wchar_t *Str)
 				if (Count&1) //нечёт?
 				{
 					if (Hi)
-						Length+=+1;
+						Length++;
 					else
 						Hi=true;
 				}

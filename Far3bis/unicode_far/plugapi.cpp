@@ -188,7 +188,7 @@ int WINAPI FarInputBox(
     const wchar_t *HistoryName,
     const wchar_t *SrcText,
     wchar_t *DestText,
-    int DestLength,
+    size_t DestSize,
     const wchar_t *HelpTopic,
     unsigned __int64 Flags
 )
@@ -198,7 +198,7 @@ int WINAPI FarInputBox(
 
 	string strDest;
 	int nResult = GetString(Title,Prompt,HistoryName,SrcText,strDest,HelpTopic,Flags&~FIB_CHECKBOX,nullptr,nullptr,PluginNumber,Id);
-	xwcsncpy(DestText, strDest, DestLength+1);
+	xwcsncpy(DestText, strDest, DestSize);
 	return nResult;
 }
 
@@ -303,7 +303,10 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 		//	ActlKeyMacro *KeyMacro=(ActlKeyMacro*)Param;
 		//	lbSafe = (KeyMacro->Command == MCMD_GETAREA);
 		//}
-		if (!lbSafe)
+
+		// Некоторые плагины блокируют главную нить для безопасных вызовов API
+		// Отсечь это корректно - сложно, поэтому просто проверяем, а не в OpenPlugin ли мы?
+		if (!lbSafe && !gbInOpenPlugin)
 		{
 			ReportThreadUnsafeCall(L"AdvControl(%u)", Command);
 		}
@@ -474,10 +477,10 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 		   новые ACTL_ для работы с фреймами */
 		case ACTL_GETWINDOWINFO:
 		{
-			if (FrameManager && Param2)
+			WindowInfo *wi=(WindowInfo*)Param2;
+			if (FrameManager && CheckStructSize(wi))
 			{
 				string strType, strName;
-				WindowInfo *wi=(WindowInfo*)Param2;
 				Frame *f;
 
 				/* $ 22.12.2001 VVM
@@ -925,7 +928,7 @@ int WINAPI FarMenuFn(
 				FarMenu.Hide();
 				FarMenu.Show();
 			}
-			else if (ReadRec.EventType==MOUSE_EVENT)
+			else if (ReadRec.EventType==MOUSE_EVENT && !(ReadKey==KEY_MSWHEEL_UP || ReadKey==KEY_MSWHEEL_DOWN || ReadKey==KEY_MSWHEEL_RIGHT || ReadKey==KEY_MSWHEEL_LEFT))
 			{
 				FarMenu.ProcessMouse(&ReadRec.Event.MouseEvent);
 			}
@@ -1342,12 +1345,12 @@ INT_PTR WINAPI FarPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int 
 		case FCTL_GETPANELITEM:
 		case FCTL_GETSELECTEDPANELITEM:
 		case FCTL_GETCURRENTPANELITEM:
-		case FCTL_GETPANELDIR:
+		case FCTL_GETPANELDIRECTORY:
 		case FCTL_GETCOLUMNTYPES:
 		case FCTL_GETCOLUMNWIDTHS:
 		case FCTL_UPDATEPANEL:
 		case FCTL_REDRAWPANEL:
-		case FCTL_SETPANELDIR:
+		case FCTL_SETPANELDIRECTORY:
 		case FCTL_BEGINSELECTION:
 		case FCTL_SETSELECTION:
 		case FCTL_CLEARSELECTION:
@@ -1621,7 +1624,7 @@ int WINAPI FarGetDirList(const wchar_t *Dir,PluginPanelItem **pPanelItem,size_t 
 
 			ItemsList[ItemsNumber].FileAttributes = FindData.dwFileAttributes;
 			ItemsList[ItemsNumber].FileSize = FindData.nFileSize;
-			ItemsList[ItemsNumber].PackSize = FindData.nPackSize;
+			ItemsList[ItemsNumber].AllocationSize = FindData.nAllocationSize;
 			ItemsList[ItemsNumber].CreationTime = FindData.ftCreationTime;
 			ItemsList[ItemsNumber].LastAccessTime = FindData.ftLastAccessTime;
 			ItemsList[ItemsNumber].LastWriteTime = FindData.ftLastWriteTime;
@@ -2443,10 +2446,15 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 				return TRUE;
 			}
 
-			// Param1=FARMACROSENDSTRINGCOMMAND, Param2...
+			// Param1=FARMACROSENDSTRINGCOMMAND, Param2 - MacroSendMacroText
 			case MCTL_SENDSTRING:
 			{
 				if (!Param2)
+					break;
+
+				MacroSendMacroText *PlainText=(MacroSendMacroText*)Param2;
+
+				if (!CheckStructSize(PlainText) || !PlainText->SequenceText || !*PlainText->SequenceText)
 					break;
 
 				switch (Param1)
@@ -2454,13 +2462,7 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 					// Param1=FARMACROSENDSTRINGCOMMAND, Param2 - MacroSendMacroText*
 					case MSSC_POST:
 					{
-						MacroSendMacroText *PlainText=(MacroSendMacroText*)Param2;
-						if (PlainText->SequenceText && *PlainText->SequenceText)
-						{
-							return Macro.PostNewMacro(PlainText->SequenceText,(PlainText->Flags<<8)|MFLAGS_POSTFROMPLUGIN,InputRecordToKey(&PlainText->AKey));
-						}
-
-						break;
+						return Macro.PostNewMacro(PlainText->SequenceText,(PlainText->Flags<<8)|MFLAGS_POSTFROMPLUGIN,InputRecordToKey(&PlainText->AKey));
 					}
 
 					// Param1=FARMACROSENDSTRINGCOMMAND, Param2 - MacroSendMacroText*
@@ -2469,33 +2471,19 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 						break;
 					}
 
-					// Param1=FARMACROSENDSTRINGCOMMAND, Param2 - MacroCheckMacroText*
+					// Param1=FARMACROSENDSTRINGCOMMAND, Param2 - MacroSendMacroText*
 					case MSSC_CHECK:
 					{
-						MacroCheckMacroText *CheckText=(MacroCheckMacroText*)Param2;
-						if (CheckText->Text.SequenceText && *CheckText->Text.SequenceText)
+						MacroRecord CurMacro={};
+						int Ret=Macro.ParseMacroString(&CurMacro,PlainText->SequenceText,(PlainText->Flags&KMFLAGS_SILENTCHECK)?TRUE:FALSE);
+
+						if (Ret)
 						{
-							MacroRecord CurMacro={};
-							int Ret=Macro.ParseMacroString(&CurMacro,CheckText->Text.SequenceText,(CheckText->Text.Flags&KMFLAGS_SILENTCHECK)?TRUE:FALSE);
-
-							if (Ret)
-							{
-								if (CurMacro.BufferSize > 1)
-									xf_free(CurMacro.Buffer);
-
-								ClearStruct(CheckText->Result);
-								CheckText->Result.StructSize=sizeof(MacroParseResult);
-							}
-							else
-							{
-								static string ErrSrc;
-								Macro.GetMacroParseError(&CheckText->Result.ErrCode,&CheckText->Result.ErrPos,&ErrSrc);
-								CheckText->Result.ErrSrc=ErrSrc;
-							}
-							return Ret;
+							if (CurMacro.BufferSize > 1)
+								xf_free(CurMacro.Buffer);
 						}
 
-						break;
+						return Ret;
 					}
 				}
 
@@ -2511,17 +2499,24 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 			// Param1=0, Param2 - 0
 			case MCTL_GETAREA:
 			{
-				return Macro.GetMode();
+				int Area=Macro.GetMode();
+				if (Area == MACRO_COMMON)
+					Area = MACROAREA_COMMON;
+				return Area;
 			}
 
 			case MCTL_ADDMACRO:
 			{
 				if (!Param2)
 					break;
+
 				MacroAddMacro *Data=(MacroAddMacro*)Param2;
-				if (Data->SequenceText && *Data->SequenceText)
+				if (CheckStructSize(Data) && Data->SequenceText && *Data->SequenceText)
 				{
-					return Macro.AddMacro(Data->SequenceText,Data->Description,Data->Flags,Data->AKey,*PluginId,Data->Id,Data->Callback);
+					MACROMODEAREA Area=static_cast<MACROMODEAREA>(Data->Area);
+					if (Data->Area == MACROAREA_COMMON)
+						Area=MACRO_COMMON;
+					return Macro.AddMacro(Data->SequenceText,Data->Description,Area,Data->Flags,Data->AKey,*PluginId,Data->Id,Data->Callback);
 				}
 				break;
 			}
@@ -2529,6 +2524,32 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 			case MCTL_DELMACRO:
 			{
 				return Macro.DelMacro(*PluginId,Param2);
+			}
+
+			//Param1=size of buffer, Param2 - MacroParseResult*
+			case MCTL_GETLASTERROR:
+			{
+				DWORD ErrCode;
+				COORD ErrPos;
+				string ErrSrc;
+				Macro.GetMacroParseError(&ErrCode,&ErrPos,&ErrSrc);
+
+				int Size = ALIGN(sizeof(MacroParseResult));
+				size_t stringOffset = Size;
+				Size += static_cast<int>((ErrSrc.GetLength() + 1)*sizeof(wchar_t));
+
+				MacroParseResult *Result = (MacroParseResult *)Param2;
+
+				if (Param1 >= Size && CheckStructSize(Result))
+				{
+					Result->StructSize = sizeof(MacroParseResult);
+					Result->ErrCode = ErrCode;
+					Result->ErrPos = ErrPos;
+					Result->ErrSrc = (const wchar_t *)((char*)Param2+stringOffset);
+ 					wmemcpy((wchar_t*)Result->ErrSrc,ErrSrc,ErrSrc.GetLength()+1);
+				}
+
+				return Size;
 			}
 		}
 	}
@@ -2720,11 +2741,11 @@ INT_PTR WINAPI farSettingsControl(HANDLE hHandle, FAR_SETTINGS_CONTROL_COMMANDS 
 				break;
 
 			{
-			    FarSettingsCreate* data = (FarSettingsCreate*)Param2;
-				if (data->StructSize>=sizeof(FarSettingsCreate))
+				FarSettingsCreate* data = (FarSettingsCreate*)Param2;
+				if (CheckStructSize(data))
 				{
 					if(IsEqualGUID(FarGuid,data->Guid)) settings=new FarSettings();
-					else settings=new PluginSettings(data->Guid);
+					else settings=new PluginSettings(data->Guid, Param1 == PSL_LOCAL);
 					if (settings->IsValid())
 					{
 						data->Handle=settings;

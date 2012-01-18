@@ -59,6 +59,8 @@ static FileFilterParams FoldersFilter;
 
 static bool bMenuOpen = false;
 
+static bool Changed = false;
+
 FileFilter::FileFilter(Panel *HostPanel, FAR_FILE_FILTER_TYPE FilterType):
 	m_HostPanel(HostPanel),
 	m_FilterType(FilterType)
@@ -89,6 +91,7 @@ bool FileFilter::FilterEdit()
 	if (bMenuOpen)
 		return false;
 
+	Changed = true;
 	bMenuOpen = true;
 	MenuItemEx ListItem;
 	int ExitCode;
@@ -355,7 +358,7 @@ bool FileFilter::FilterEdit()
 				int SelPos=FilterList.GetSelectPos();
 				if (SelPos<0)
 					break;
-				
+
 				if (SelPos<(int)FilterData.getCount())
 				{
 					string strQuotedTitle=FilterData.getItem(SelPos)->GetTitle();
@@ -627,8 +630,8 @@ bool FileFilter::FileInFilter(const FileListItem& fli,enumFileInFilterType *foun
 	fde.ftLastAccessTime=fli.AccessTime;
 	fde.ftLastWriteTime=fli.WriteTime;
 	fde.ftChangeTime=fli.ChangeTime;
-	fde.nFileSize=fli.UnpSize;
-	fde.nPackSize=fli.PackSize;
+	fde.nFileSize=fli.FileSize;
+	fde.nAllocationSize=fli.AllocationSize;
 	fde.strFileName=fli.strName;
 	fde.strAlternateFileName=fli.strShortName;
 	return FileInFilter(fde, foundType, &fli.strName);
@@ -692,7 +695,7 @@ bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *
 				bAnyFolderIncludeFound = true;
 			}
 
-			if (bFolder && FoldersFilter.FileInFilter(fde, CurrentTime, FullName)) 
+			if (bFolder && FoldersFilter.FileInFilter(fde, CurrentTime, FullName))
 			{
 				bFound = true;
 
@@ -720,7 +723,7 @@ bool FileFilter::FileInFilter(const FAR_FIND_DATA_EX& fde,enumFileInFilterType *
 			if (bFolder) //авто-фильтры никогда не могут быть для папок
 				continue;
 
-			if (CurFilterData->FileInFilter(fde, CurrentTime, FullName)) 
+			if (CurFilterData->FileInFilter(fde, CurrentTime, FullName))
 			{
 				bFound = true;
 
@@ -925,6 +928,11 @@ void FileFilter::CloseFilter()
 
 void FileFilter::SaveFilters()
 {
+	if (!Changed)
+		return;
+
+	Changed = false;
+
 	string strKeyName;
 	FileFilterParams *CurFilterData;
 	HierarchicalConfig *cfg = CreateFiltersConfig();
@@ -1022,6 +1030,8 @@ void FileFilter::SwapPanelFlags(FileFilterParams *CurFilterData)
 
 void FileFilter::SwapFilter()
 {
+	Changed = true;
+
 	for (size_t i=0; i<FilterData.getCount(); i++)
 		SwapPanelFlags(FilterData.getItem(i));
 

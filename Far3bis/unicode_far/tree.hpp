@@ -133,7 +133,7 @@ template <class D> D *Tree<D>::insert(D *data)
 #if defined(_DEBUG)
 	if (sizeof(D)==sizeof(void*))
 	{
-		_ASSERTE(*(void**)data != (void*)0xfeeefeee);
+		_ASSERTE(*(void**)data != (void*)0xfeeefeee); // Значит исходный (*data) был удален (delete). Для плагинов этого вобщем быть не должно.
 		_ASSERTE(memcmp(tmp, *(void**)result, sizeof(void*))==0);
 	}
 #endif

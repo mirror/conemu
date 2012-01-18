@@ -201,6 +201,10 @@ inline void ClearArray(T (&a)[N]) { memset(a, 0, sizeof(a[0])*N); }
 #define nullptr NULL
 #endif
 
+template <typename T>
+bool CheckStructSize(const T* s) {return s && (s->StructSize >= sizeof(T));}
+
+
 #include "noncopyable.hpp"
 #include "farrtl.hpp"
 #include "UnicodeString.hpp"

@@ -285,14 +285,15 @@ struct EditorOptions
 		dest.UseExternalEditor = UseExternalEditor;
 		dest.ShowKeyBar = ShowKeyBar;
 		dest.ShowTitleBar = ShowTitleBar;
-		dest.strWordDiv = strWordDiv;
 		dest.ShowScrollBar=ShowScrollBar;
+		dest.EditOpenedForWrite = EditOpenedForWrite;
 		dest.SearchSelFound=SearchSelFound;
 		dest.SearchRegexp=SearchRegexp;
-		dest.ShowWhiteSpace=ShowWhiteSpace;
 		dest.SearchPickUpWord=SearchPickUpWord;
+		dest.ShowWhiteSpace=ShowWhiteSpace;
 		dest.FileSizeLimitLo = FileSizeLimitLo;
 		dest.FileSizeLimitHi = FileSizeLimitHi;
+		dest.strWordDiv = strWordDiv;
 	}
 };
 
@@ -720,3 +721,5 @@ void SaveConfig(int Ask);
 void SetFolderInfoFiles();
 void InfoPanelSettings();
 void AutoCompleteSettings();
+
+bool GetConfigValue(const wchar_t *Key, const wchar_t *Name, string &Value);

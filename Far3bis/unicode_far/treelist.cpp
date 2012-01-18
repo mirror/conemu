@@ -75,6 +75,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filestr.hpp"
 #include "wakeful.hpp"
 #include "palette.hpp"
+#include "FarGuid.hpp"
 
 static int _cdecl SortList(const void *el1,const void *el2);
 static int _cdecl SortCacheList(const void *el1,const void *el2);
@@ -1162,6 +1163,18 @@ int TreeList::ProcessKey(int Key)
 
 			return TRUE;
 		}
+
+		case KEY_APPS:
+		case KEY_SHIFTAPPS:
+		{
+			//вызовем EMenu если он есть
+			if (CtrlObject->Plugins.FindPlugin(EMenuGuid))
+			{
+				CtrlObject->Plugins.CallPlugin(EMenuGuid, OPEN_FILEPANEL, reinterpret_cast<void*>(1)); // EMenu Plugin :-)
+			}
+			return TRUE;
+		}
+
 		default:
 			if ((Key>=KEY_ALT_BASE+0x01 && Key<=KEY_ALT_BASE+65535) || (Key>=KEY_RALT_BASE+0x01 && Key<=KEY_RALT_BASE+65535) ||
 			        (Key>=KEY_ALTSHIFT_BASE+0x01 && Key<=KEY_ALTSHIFT_BASE+65535) || (Key>=KEY_RALTSHIFT_BASE+0x01 && Key<=KEY_RALTSHIFT_BASE+65535))
@@ -1392,6 +1405,15 @@ int TreeList::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		         !MouseEvent->dwEventFlags) ||
 		        (OldFile!=CurFile && Opt.Tree.AutoChangeFolder && !ModalMode))
 		{
+			DWORD control=MouseEvent->dwControlKeyState&(SHIFT_PRESSED|LEFT_ALT_PRESSED|LEFT_CTRL_PRESSED|RIGHT_ALT_PRESSED|RIGHT_CTRL_PRESSED);
+
+			//вызовем EMenu если он есть
+			if ((control==0 || control==SHIFT_PRESSED) && CtrlObject->Plugins.FindPlugin(EMenuGuid))
+			{
+				CtrlObject->Plugins.CallPlugin(EMenuGuid,OPEN_FILEPANEL,nullptr); // EMenu Plugin :-)
+				return TRUE;
+			}
+
 			ProcessEnter();
 			return TRUE;
 		}

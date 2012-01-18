@@ -640,7 +640,7 @@ void ConvertPanelItemA(const oldfar::PluginPanelItem *PanelItemA, PluginPanelIte
 		(*PanelItemW)[i].LastAccessTime = PanelItemA[i].FindData.ftLastAccessTime;
 		(*PanelItemW)[i].LastWriteTime = PanelItemA[i].FindData.ftLastWriteTime;
 		(*PanelItemW)[i].FileSize = (unsigned __int64)PanelItemA[i].FindData.nFileSizeLow + (((unsigned __int64)PanelItemA[i].FindData.nFileSizeHigh)<<32);
-		(*PanelItemW)[i].PackSize = (unsigned __int64)PanelItemA[i].PackSize + (((unsigned __int64)PanelItemA[i].PackSizeHigh)<<32);
+		(*PanelItemW)[i].AllocationSize = (unsigned __int64)PanelItemA[i].PackSize + (((unsigned __int64)PanelItemA[i].PackSizeHigh)<<32);
 		(*PanelItemW)[i].FileName = AnsiToUnicode(PanelItemA[i].FindData.cFileName);
 		(*PanelItemW)[i].AlternateFileName = AnsiToUnicode(PanelItemA[i].FindData.cAlternateFileName);
 	}
@@ -692,8 +692,8 @@ void ConvertPanelItemToAnsi(const PluginPanelItem &PanelItem, oldfar::PluginPane
 	PanelItemA.FindData.ftLastWriteTime = PanelItem.LastWriteTime;
 	PanelItemA.FindData.nFileSizeLow = (DWORD)PanelItem.FileSize;
 	PanelItemA.FindData.nFileSizeHigh = (DWORD)(PanelItem.FileSize>>32);
-	PanelItemA.PackSize = (DWORD)PanelItem.PackSize;
-	PanelItemA.PackSizeHigh = (DWORD)(PanelItem.PackSize>>32);
+	PanelItemA.PackSize = (DWORD)PanelItem.AllocationSize;
+	PanelItemA.PackSizeHigh = (DWORD)(PanelItem.AllocationSize>>32);
 	UnicodeToOEM(PanelItem.FileName,PanelItemA.FindData.cFileName,sizeof(PanelItemA.FindData.cFileName));
 	UnicodeToOEM(PanelItem.AlternateFileName,PanelItemA.FindData.cAlternateFileName,sizeof(PanelItemA.FindData.cAlternateFileName));
 }
@@ -3140,7 +3140,7 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 				hPlugin=PANEL_PASSIVE;
 
 			oldfar::PanelInfo* OldPI=Passive?&AnotherPanelInfoA:&PanelInfoA;
-			PanelInfo PI;
+			PanelInfo PI = {sizeof(PanelInfo)};
 			int ret = static_cast<int>(NativeInfo.PanelControl(hPlugin,FCTL_GETPANELINFO,0,&PI));
 			FreeAnsiPanelInfo(OldPI);
 
@@ -3224,9 +3224,15 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 					}
 				}
 
-				wchar_t CurDir[sizeof(OldPI->CurDir)];
-				NativeInfo.PanelControl(hPlugin,FCTL_GETPANELDIR,sizeof(OldPI->CurDir),CurDir);
-				UnicodeToOEM(CurDir,OldPI->CurDir,sizeof(OldPI->CurDir));
+				size_t dirSize=NativeInfo.PanelControl(hPlugin,FCTL_GETPANELDIRECTORY,0,0);
+				if(dirSize)
+				{
+					FarPanelDirectory* dirInfo=(FarPanelDirectory*)new char[dirSize];
+					dirInfo->StructSize=sizeof(FarPanelDirectory);
+					NativeInfo.PanelControl(hPlugin,FCTL_GETPANELDIRECTORY,static_cast<int>(dirSize),dirInfo);
+					UnicodeToOEM(dirInfo->Name,OldPI->CurDir,sizeof(OldPI->CurDir));
+					delete[](char*)dirInfo;
+				}
 				wchar_t ColumnTypes[sizeof(OldPI->ColumnTypes)];
 				NativeInfo.PanelControl(hPlugin,FCTL_GETCOLUMNTYPES,sizeof(OldPI->ColumnTypes),ColumnTypes);
 				UnicodeToOEM(ColumnTypes,OldPI->ColumnTypes,sizeof(OldPI->ColumnTypes));
@@ -3255,15 +3261,21 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 			if (Command==oldfar::FCTL_GETANOTHERPANELSHORTINFO)
 				hPlugin=PANEL_PASSIVE;
 
-			PanelInfo PI;
+			PanelInfo PI = {sizeof(PanelInfo)};
 			int ret = static_cast<int>(NativeInfo.PanelControl(hPlugin,FCTL_GETPANELINFO,0,&PI));
 
 			if (ret)
 			{
 				ConvertUnicodePanelInfoToAnsi(&PI,OldPI);
-				wchar_t CurDir[sizeof(OldPI->CurDir)];
-				NativeInfo.PanelControl(hPlugin,FCTL_GETPANELDIR,sizeof(OldPI->CurDir),CurDir);
-				UnicodeToOEM(CurDir,OldPI->CurDir,sizeof(OldPI->CurDir));
+				size_t dirSize=NativeInfo.PanelControl(hPlugin,FCTL_GETPANELDIRECTORY,0,0);
+				if(dirSize)
+				{
+					FarPanelDirectory* dirInfo=(FarPanelDirectory*)new char[dirSize];
+					dirInfo->StructSize=sizeof(FarPanelDirectory);
+					NativeInfo.PanelControl(hPlugin,FCTL_GETPANELDIRECTORY,static_cast<int>(dirSize),dirInfo);
+					UnicodeToOEM(dirInfo->Name,OldPI->CurDir,sizeof(OldPI->CurDir));
+					delete[](char*)dirInfo;
+				}
 				wchar_t ColumnTypes[sizeof(OldPI->ColumnTypes)];
 				NativeInfo.PanelControl(hPlugin,FCTL_GETCOLUMNTYPES,sizeof(OldPI->ColumnTypes),ColumnTypes);
 				UnicodeToOEM(ColumnTypes,OldPI->ColumnTypes,sizeof(OldPI->ColumnTypes));
@@ -3315,7 +3327,8 @@ int WINAPI FarPanelControlA(HANDLE hPlugin,int Command,void *Param)
 				return FALSE;
 
 			wchar_t* Dir = AnsiToUnicode((char*)Param);
-			int ret = static_cast<int>(NativeInfo.PanelControl(hPlugin, FCTL_SETPANELDIR,0,Dir));
+			FarPanelDirectory dirInfo={sizeof(FarPanelDirectory),Dir,NULL,FarGuid,NULL};
+			int ret = static_cast<int>(NativeInfo.PanelControl(hPlugin, FCTL_SETPANELDIRECTORY,0,&dirInfo));
 			xf_free(Dir);
 			return ret;
 		}
@@ -3628,8 +3641,8 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			int Param1=0;
 			bool Process=true;
 
-			MacroCheckMacroText kmW={};
-			kmW.Text.StructSize=sizeof(MacroParseResult);
+			MacroSendMacroText mtW = {};
+			mtW.StructSize = sizeof(MacroSendMacroText);
 
 			switch (kmA->Command)
 			{
@@ -3645,18 +3658,18 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 				case oldfar::MCMD_POSTMACROSTRING:
 					Command=MCTL_SENDSTRING;
 					Param1=MSSC_POST;
-					kmW.Text.SequenceText=AnsiToUnicode(kmA->PlainText.SequenceText);
+					mtW.SequenceText=AnsiToUnicode(kmA->PlainText.SequenceText);
 
-					if (kmA->PlainText.Flags&oldfar::KSFLAGS_DISABLEOUTPUT) kmW.Text.Flags|=KMFLAGS_DISABLEOUTPUT;
+					if (kmA->PlainText.Flags&oldfar::KSFLAGS_DISABLEOUTPUT) mtW.Flags|=KMFLAGS_DISABLEOUTPUT;
 
-					if (kmA->PlainText.Flags&oldfar::KSFLAGS_NOSENDKEYSTOPLUGINS) kmW.Text.Flags|=KMFLAGS_NOSENDKEYSTOPLUGINS;
+					if (kmA->PlainText.Flags&oldfar::KSFLAGS_NOSENDKEYSTOPLUGINS) mtW.Flags|=KMFLAGS_NOSENDKEYSTOPLUGINS;
 
 					break;
 
 				case oldfar::MCMD_CHECKMACRO:
 					Command=MCTL_SENDSTRING;
 					Param1=MSSC_CHECK;
-					kmW.Text.SequenceText=AnsiToUnicode(kmA->PlainText.SequenceText);
+					mtW.SequenceText=AnsiToUnicode(kmA->PlainText.SequenceText);
 					break;
 
 				default:
@@ -3668,7 +3681,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 
 			if (Process)
 			{
-				res = NativeInfo.MacroControl(0,Command,Param1,&kmW);
+				res = NativeInfo.MacroControl(0,Command,Param1,&mtW);
 
 				if (Command == MCTL_SENDSTRING)
 				{
@@ -3690,16 +3703,16 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 							kmA->MacroResult.ErrMsg2 = ErrMsg2 = UnicodeToAnsi(ErrMessage[1]);
 							kmA->MacroResult.ErrMsg3 = ErrMsg3 = UnicodeToAnsi(ErrMessage[2]);
 
-							if (kmW.Text.SequenceText)
-								xf_free((void*)kmW.Text.SequenceText);
+							if (mtW.SequenceText)
+								xf_free((void*)mtW.SequenceText);
 
 							break;
 						}
 
 						case MSSC_POST:
 
-							if (kmW.Text.SequenceText)
-								xf_free((void*)kmW.Text.SequenceText);
+							if (mtW.SequenceText)
+								xf_free((void*)mtW.SequenceText);
 
 							break;
 					}
@@ -4105,8 +4118,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 			if(Param)
 			{
 				oldfar::EditorColor* ecA = static_cast<oldfar::EditorColor*>(Param);
-				EditorColor ec={};
-				ec.StructSize = sizeof(ec);
+				EditorColor ec={sizeof(ec)};
 				ec.StringNumber = ecA->StringNumber;
 				ec.StartPos = ecA->StartPos;
 				ec.EndPos = ecA->EndPos;
@@ -4114,8 +4126,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 				if(ecA->Color&oldfar::ECF_TAB1) ec.Color.Flags|=ECF_TABMARKFIRST;
 				ec.Priority=EDITOR_COLOR_NORMAL_PRIORITY;
 				ec.Owner=FarGuid;
-				EditorDeleteColor edc={};
-				edc.StructSize=sizeof(edc);
+				EditorDeleteColor edc={sizeof(edc)};
 				edc.Owner=FarGuid;
 				edc.StringNumber = ecA->StringNumber;
 				edc.StartPos = ecA->StartPos;
@@ -4126,7 +4137,7 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 			if(Param)
 			{
 				oldfar::EditorColor* ecA = static_cast<oldfar::EditorColor*>(Param);
-				EditorColor ec={};
+				EditorColor ec={sizeof(ec)};
 				ec.StringNumber = ecA->StringNumber;
 				ec.ColorItem = ecA->ColorItem;
 				int Result = static_cast<int>(NativeInfo.EditorControl(-1, ECTL_GETCOLOR, 0, &ec));
@@ -4524,8 +4535,7 @@ int WINAPI FarViewerControlA(int Command,void* Param)
 
 			if (!viA->StructSize) return FALSE;
 
-			ViewerInfo viW;
-			viW.StructSize = sizeof(ViewerInfo); //BUGBUG?
+			ViewerInfo viW = {sizeof(viW)};
 
 			if (NativeInfo.ViewerControl(-1,VCTL_GETINFO, 0, &viW) == FALSE) return FALSE;
 
@@ -5008,7 +5018,7 @@ HANDLE PluginA::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 HANDLE PluginA::OpenFilePlugin(
     const wchar_t *Name,
     const unsigned char *Data,
-    int DataSize,
+    size_t DataSize,
     int OpMode
 )
 {
@@ -5024,7 +5034,7 @@ HANDLE PluginA::OpenFilePlugin(
 		if (Name)
 			NameA = UnicodeToAnsi(Name);
 
-		EXECUTE_FUNCTION_EX(FUNCTION(iOpenFilePlugin)(NameA, Data, DataSize), es);
+		EXECUTE_FUNCTION_EX(FUNCTION(iOpenFilePlugin)(NameA, Data, static_cast<int>(DataSize)), es);
 
 		if (NameA) xf_free(NameA);
 
@@ -5795,7 +5805,7 @@ bool PluginA::GetPluginInfo(PluginInfo *pi)
 	{
 		ExecuteStruct es;
 		es.id = EXCEPT_GETPLUGININFO;
-		oldfar::PluginInfo InfoA={};
+		oldfar::PluginInfo InfoA={sizeof(InfoA)};
 		EXECUTE_FUNCTION(FUNCTION(iGetPluginInfo)(&InfoA), es);
 
 		if (!es.bUnloaded)
