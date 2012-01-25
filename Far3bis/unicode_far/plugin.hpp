@@ -1815,11 +1815,34 @@ enum FAR_PLUGINS_CONTROL_COMMANDS
 	PCTL_LOADPLUGIN         = 0,
 	PCTL_UNLOADPLUGIN       = 1,
 	PCTL_FORCEDLOADPLUGIN   = 2,
+	PCTL_GETPLUGINS         = 3,
+	PCTL_GETPLUGININFO      = 4,
+	PCTL_FINDPLUGIN         = 5
 };
 
 enum FAR_PLUGIN_LOAD_TYPE
 {
 	PLT_PATH = 0,
+};
+
+enum FAR_PLUGIN_FIND_MODE
+{
+	PFM_GUID = 0,
+	PFM_MODULENAME = 1
+};
+
+typedef unsigned __int64 FAR_PLUGIN_FLAGS;
+static const FAR_PLUGIN_FLAGS
+	FPF_NONE           = 0,
+	FPF_FAR1           = 0x0000000000000001ULL,
+	FPF_FAR2           = 0x0000000000000002ULL,
+	FPF_LOADED         = 0x0000000000000004ULL;
+
+// PCTL_GETPLUGINS
+struct FarPlugins
+{
+	size_t StructSize;
+	int PluginsCount;
 };
 
 enum FAR_FILE_FILTER_CONTROL_COMMANDS
@@ -2326,6 +2349,16 @@ struct PluginInfo
 	const struct FarMacroFunction *MacroFunctions;
 };
 
+
+// PCTL_GETPLUGININFO
+struct FarGetPluginInfo
+{
+	size_t Size;
+	const wchar_t *ModuleName;
+	FAR_PLUGIN_FLAGS Flags;
+	struct GlobalInfo Info1;
+	struct PluginInfo Info2;
+};
 
 
 struct InfoPanelLine

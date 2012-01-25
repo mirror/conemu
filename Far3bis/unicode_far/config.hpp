@@ -457,6 +457,12 @@ struct MacroOptions
 	string strDateFormat; // Äëÿ $Date
 };
 
+struct KnownModulesIDs
+{
+	GUID Network;
+	GUID Emenu;
+};
+
 struct Options
 {
 	palette Palette;
@@ -700,6 +706,7 @@ struct Options
 	string ProfilePath;
 	string LocalProfilePath;
 	string GlobalUserMenuDir;
+	KnownModulesIDs KnownIDs;
 };
 
 extern Options Opt;

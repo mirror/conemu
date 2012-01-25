@@ -2596,6 +2596,49 @@ INT_PTR WINAPI farPluginsControl(HANDLE hHandle, FAR_PLUGINS_CONTROL_COMMANDS Co
 
 			break;
 		}
+
+		case PCTL_GETPLUGINS:
+		{
+			FarPlugins* Info = (FarPlugins*)Param2;
+			if ((Info) && (Info->StructSize == sizeof(FarPlugins)))
+			{
+				Info->PluginsCount = CtrlObject->Plugins.GetPluginsCount();
+				return true;
+			}
+			break;
+		}
+
+		case PCTL_GETPLUGININFO:
+		{
+			FarGetPluginInfo* Info = (FarGetPluginInfo*)Param2;
+			/* Если Info = null - только подсчет необходимого места */
+			if ((!Info) || (Info->Size >= sizeof(FarGetPluginInfo)))
+			{
+				Plugin* Plug = CtrlObject->Plugins.GetPlugin(Param1);
+				if (Plug)
+					{ return CtrlObject->Plugins.GetPluginInfo(Plug, Info); }
+			}
+			break;
+		}
+
+		case PCTL_FINDPLUGIN:
+		{
+			for (int i = 0; i < CtrlObject->Plugins.GetPluginsCount(); i++)
+			{
+				Plugin* Plug = CtrlObject->Plugins.GetPlugin(i);
+				if (Param1 == PFM_GUID)
+				{
+					if (Plug->GetGUID() == *(GUID*)Param2)
+						{ return i; }
+				}
+				else if (Param1 == PFM_MODULENAME)
+				{
+					if (StrCmpI(Plug->GetModuleName(), (wchar_t*)Param2) == 0)
+						{ return i; }
+				}
+			}
+			return -1;
+		}
 	}
 
 	return 0;

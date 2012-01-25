@@ -442,6 +442,8 @@ bool PluginManager::LoadPlugin(
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
 	if (pPlugin)
 	{
+		// «начит плагин почему-то оказалс€ уже загружен
+		// Ёто может быть, например, если в ключе "/p" указано несколько пересекающихс€ папок
 		// Ќе будем ругатьс€, если регистры различаютс€, а то достало
 		_ASSERTE(pPlugin==nullptr || pPlugin->GetModuleName()!=lpwszModuleName);
 		return true;
@@ -2385,6 +2387,166 @@ void PluginManager::ShowPluginInfo(Plugin *pPlugin, const GUID& Guid)
 	Builder.AddOK();
 	Builder.ShowDialog();
 }
+
+
+static char* BufReserve(char*& Buf, int Count, int& Rest, int& Size)
+{
+	char* Res = nullptr;
+
+	if (Buf)
+	{
+		if (Rest >= Count)
+		{
+			Res = Buf;
+			Buf += Count;
+			Rest -= Count;
+		}
+		else
+		{
+			Buf += Rest;
+			Rest = 0;
+		}
+	}
+
+	Size += Count;
+	return Res;
+}
+
+
+static wchar_t* StrToBuf(const string& Str, char*& Buf, int& Rest, int& Size)
+{
+	int Count = (Str.GetLength() + 1) * sizeof(wchar_t);
+	wchar_t* Res = (wchar_t*)BufReserve(Buf, Count, Rest, Size);
+
+	if (Res)
+		{ wcscpy(Res, Str);	}
+
+	return Res;
+}
+
+
+static void ItemsToBuf(PluginMenuItem& Menu, TArray<string> &NamesArray, TArray<string> &GuidsArray, char*& Buf, int& Rest, int& Size)
+{
+  	Menu.Count = NamesArray.getSize();
+	Menu.Strings = nullptr;
+	Menu.Guids = nullptr;
+
+	if (Menu.Count)
+	{
+		wchar_t** Items = (wchar_t**)BufReserve(Buf, Menu.Count * sizeof(wchar_t*), Rest, Size);
+		GUID* Guids = (GUID*)BufReserve(Buf, Menu.Count * sizeof(GUID), Rest, Size);
+  		Menu.Strings = Items;
+		Menu.Guids = Guids;
+
+		for (int i = 0; i < Menu.Count; i++)
+		{
+  			wchar_t* pStr = StrToBuf(*NamesArray.getItem(i), Buf, Rest, Size);
+			if (Items) 
+				Items[i] = pStr;
+
+			GUID Guid;
+  			if (StrToGuid(*GuidsArray.getItem(i), Guid))
+				Guids[i] = Guid;
+		}
+	}
+}
+
+
+int PluginManager::GetPluginInfo(Plugin *pPlugin, FarGetPluginInfo *pInfo)
+{
+	string Prefix;
+	PLUGIN_FLAGS Flags = 0;
+	TArray<string> MenuNames, MenuGuids, DiskNames, DiskGuids, ConfNames, ConfGuids;
+
+	if (pPlugin->CheckWorkFlags(PIWF_CACHED))
+	{
+		int i;
+		string Name, Guid;
+		unsigned __int64 id = PlCacheCfg->GetCacheID(pPlugin->GetCacheName());
+
+		Flags = PlCacheCfg->GetFlags(id);
+  		Prefix = PlCacheCfg->GetCommandPrefix(id);
+
+		i = 0;
+		while (PlCacheCfg->GetPluginsMenuItem(id, i++, Name, Guid))
+			{ MenuNames.addItem(Name); MenuGuids.addItem(Guid); }
+
+		i = 0;
+		while (PlCacheCfg->GetDiskMenuItem(id, i++, Name, Guid))
+			{ DiskNames.addItem(Name); DiskGuids.addItem(Guid); }
+
+		i = 0;
+		while (PlCacheCfg->GetPluginsConfigMenuItem(id, i++, Name, Guid))
+			{ ConfNames.addItem(Name); ConfGuids.addItem(Guid); }
+	}
+	else
+	{
+		PluginInfo Info = {sizeof(Info)};
+		if (pPlugin->GetPluginInfo(&Info))
+		{
+			Flags = Info.Flags;
+			Prefix = Info.CommandPrefix;
+
+			for (int i = 0; i < Info.PluginMenu.Count; i++)
+				{ MenuNames.addItem(Info.PluginMenu.Strings[i]); MenuGuids.addItem(GuidToStr(Info.PluginMenu.Guids[i])); }
+
+			for (int i = 0; i < Info.DiskMenu.Count; i++)
+				{ DiskNames.addItem(Info.DiskMenu.Strings[i]); DiskGuids.addItem(GuidToStr(Info.DiskMenu.Guids[i])); }
+
+			for (int i = 0; i < Info.PluginConfig.Count; i++)
+				{ ConfNames.addItem(Info.PluginConfig.Strings[i]); ConfGuids.addItem(GuidToStr(Info.PluginConfig.Guids[i])); }
+		}
+	}
+
+	//------------------------------------
+
+	FarGetPluginInfo Temp;
+	char* Buf = nullptr;
+	int Rest = 0;
+
+	if (pInfo)
+	{
+		Rest = pInfo->Size - sizeof(FarGetPluginInfo);
+		Buf = (char*)pInfo + sizeof(FarGetPluginInfo);
+	}
+	else
+	{
+		pInfo = &Temp;
+	}
+
+	int Size = sizeof(FarGetPluginInfo);
+
+	pInfo->ModuleName = StrToBuf(pPlugin->GetModuleName(), Buf, Rest, Size);
+
+	pInfo->Flags = 0;
+	if (pPlugin->IsFar2Plugin())
+		pInfo->Flags |= FPF_FAR2;
+#ifndef NO_WRAPPER
+	else if (pPlugin->IsOemPlugin())
+		pInfo->Flags |= FPF_FAR1;
+#endif // NO_WRAPPER
+	if (pPlugin->m_hModule)
+		pInfo->Flags |= FPF_LOADED;
+
+	pInfo->Info1.StructSize = sizeof(GlobalInfo);
+	pInfo->Info1.Guid = pPlugin->GetGUID();
+	pInfo->Info1.Version = pPlugin->GetVersion();
+	pInfo->Info1.Title = StrToBuf(pPlugin->strTitle, Buf, Rest, Size);
+	pInfo->Info1.Description = StrToBuf(pPlugin->strDescription, Buf, Rest, Size);
+	pInfo->Info1.Author = StrToBuf(pPlugin->strAuthor, Buf, Rest, Size);
+
+	pInfo->Info2.StructSize = sizeof(PluginInfo);
+	pInfo->Info2.Flags = Flags;
+	pInfo->Info2.CommandPrefix = StrToBuf(Prefix, Buf, Rest, Size);
+
+	ItemsToBuf(pInfo->Info2.DiskMenu, DiskNames, DiskGuids, Buf, Rest, Size);
+	ItemsToBuf(pInfo->Info2.PluginMenu, MenuNames, MenuGuids, Buf, Rest, Size);
+	ItemsToBuf(pInfo->Info2.PluginConfig, ConfNames, ConfGuids, Buf, Rest, Size);
+
+	return Size;
+}
+
+
 
 bool PluginManager::GetDiskMenuItem(
      Plugin *pPlugin,
