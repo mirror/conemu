@@ -1,0 +1,11 @@
+LIBRARY
+
+EXPORTS
+; functions
+	GetTextAttributes
+	SetTextAttributes
+	ClearExtraRegions
+	ReadOutput
+	WriteOutput
+	Commit
+	GetColorDialog
