@@ -594,7 +594,7 @@ bool CheckFarPanelsW995()
 		ActlKeyMacro area = {MCMD_GETAREA};
 		INT_PTR nArea = InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_KEYMACRO, &area);
 
-		lbPanelsActive = (nArea == MACROAREA_SHELL);
+		lbPanelsActive = (nArea == MACROAREA_SHELL || nArea == MACROAREA_SEARCH);
 
 		//switch(nArea)
 		//{

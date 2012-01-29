@@ -2439,7 +2439,7 @@ void CRealConsole::PostMouseEvent(UINT messg, WPARAM wParam, COORD crMouse, bool
 			else
 			{
 				// Координата попадает в панель (включая правую/левую рамку)?
-				if (CoordInPanel(crMouse) && !(r.Event.MouseEvent.dwControlKeyState & (SHIFT_PRESSED|RIGHT_ALT_PRESSED|LEFT_ALT_PRESSED|RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED)))
+				if (CoordInPanel(crMouse, TRUE) && !(r.Event.MouseEvent.dwControlKeyState & (SHIFT_PRESSED|RIGHT_ALT_PRESSED|LEFT_ALT_PRESSED|RIGHT_CTRL_PRESSED|LEFT_CTRL_PRESSED)))
 				{
 					lbNormalRBtnMode = true;
 					r.Event.MouseEvent.dwControlKeyState |= RIGHT_ALT_PRESSED|LEFT_CTRL_PRESSED;
@@ -9022,7 +9022,7 @@ BOOL CRealConsole::GetPanelRect(BOOL abRight, RECT* prc, BOOL abFull /*= FALSE*/
 		return FALSE;
 	}
 
-	return mp_RBuf->GetPanelRect(abRight, prc, abFull);
+	return mp_RBuf->GetPanelRect(abRight, prc, abFull, abIncludeEdges);
 }
 
 // Проверить, включен ли в фаре режим "far /w".

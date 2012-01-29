@@ -5041,6 +5041,11 @@ bool CVirtualConsole::UpdatePanelRgn(bool abLeftPanel, bool abTestOnly, bool abO
 bool CVirtualConsole::UpdatePanelView(bool abLeftPanel, bool abOnRegister/*=false*/)
 {
 	PanelViewInit* pp = abLeftPanel ? &m_LeftPanelView : &m_RightPanelView;
+	if (!IsWindow(pp->hWnd))
+	{
+		// Это при закрытии фара может так случиться
+		return false;
+	}
 
 	// Чтобы плагин знал, что поменялась палитра (это или Fade, или реальная перенастройка цветов).
 	//for (int i=0; i<16; i++)
