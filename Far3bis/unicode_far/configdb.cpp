@@ -1132,7 +1132,7 @@ class PluginsCacheConfigDb: public PluginsCacheConfig, public SQLiteDb {
 		DRIVE_MENU
 	};
 
-	bool GetMenuItem(unsigned __int64 id, MenuItemTypeEnum type, int index, string &Text, string &Guid)
+	bool GetMenuItem(unsigned __int64 id, MenuItemTypeEnum type, size_t index, string &Text, string &Guid)
 	{
 		bool b = stmtGetMenuItem.Bind(id).Bind((int)type).Bind(index).Step();
 		if (b)
@@ -1144,7 +1144,7 @@ class PluginsCacheConfigDb: public PluginsCacheConfig, public SQLiteDb {
 		return b;
 	}
 
-	bool SetMenuItem(unsigned __int64 id, MenuItemTypeEnum type, int index, const wchar_t *Text, const wchar_t *Guid)
+	bool SetMenuItem(unsigned __int64 id, MenuItemTypeEnum type, size_t index, const wchar_t *Text, const wchar_t *Guid)
 	{
 		return stmtSetMenuItem.Bind(id).Bind((int)type).Bind(index).Bind(Guid).Bind(Text).StepAndReset();
 	}
@@ -1382,17 +1382,17 @@ public:
 		return b;
 	}
 
-	bool GetDiskMenuItem(unsigned __int64 id, int index, string &Text, string &Guid)
+	bool GetDiskMenuItem(unsigned __int64 id, size_t index, string &Text, string &Guid)
 	{
 		return GetMenuItem(id, DRIVE_MENU, index, Text, Guid);
 	}
 
-	bool GetPluginsMenuItem(unsigned __int64 id, int index, string &Text, string &Guid)
+	bool GetPluginsMenuItem(unsigned __int64 id, size_t index, string &Text, string &Guid)
 	{
 		return GetMenuItem(id, PLUGINS_MENU, index, Text, Guid);
 	}
 
-	bool GetPluginsConfigMenuItem(unsigned __int64 id, int index, string &Text, string &Guid)
+	bool GetPluginsConfigMenuItem(unsigned __int64 id, size_t index, string &Text, string &Guid)
 	{
 		return GetMenuItem(id, CONFIG_MENU, index, Text, Guid);
 	}
@@ -1421,17 +1421,17 @@ public:
 		return stmtSetSignature.Bind(id).Bind(Signature).StepAndReset();
 	}
 
-	bool SetDiskMenuItem(unsigned __int64 id, int index, const wchar_t *Text, const wchar_t *Guid)
+	bool SetDiskMenuItem(unsigned __int64 id, size_t index, const wchar_t *Text, const wchar_t *Guid)
 	{
 		return SetMenuItem(id, DRIVE_MENU, index, Text, Guid);
 	}
 
-	bool SetPluginsMenuItem(unsigned __int64 id, int index, const wchar_t *Text, const wchar_t *Guid)
+	bool SetPluginsMenuItem(unsigned __int64 id, size_t index, const wchar_t *Text, const wchar_t *Guid)
 	{
 		return SetMenuItem(id, PLUGINS_MENU, index, Text, Guid);
 	}
 
-	bool SetPluginsConfigMenuItem(unsigned __int64 id, int index, const wchar_t *Text, const wchar_t *Guid)
+	bool SetPluginsConfigMenuItem(unsigned __int64 id, size_t index, const wchar_t *Text, const wchar_t *Guid)
 	{
 		return SetMenuItem(id, CONFIG_MENU, index, Text, Guid);
 	}
@@ -2610,7 +2610,7 @@ void ReleaseDb()
 
 bool ExportImportConfig(bool Export, const wchar_t *XML)
 {
-	FILE* XmlFile = _wfopen(NTPath(XML), Export?L"wb":L"rb");
+	FILE* XmlFile = _wfopen(NTPath(XML), Export?L"w":L"rb");
 	if(!XmlFile)
 		return false;
 

@@ -338,7 +338,7 @@ PluginManager::~PluginManager()
 	Plugin *pPlugin;
 
 	PluginManagerForExitFar = this;
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		pPlugin = PluginsData[i];
 		pPlugin->Unload(true);
@@ -411,7 +411,7 @@ bool PluginManager::RemovePlugin(Plugin *pPlugin)
 	{
 		PluginsCache->remove((AncientPlugin**)&pPlugin);
 	}
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		if (PluginsData[i] == pPlugin)
 		{
@@ -432,7 +432,7 @@ bool PluginManager::RemovePlugin(Plugin *pPlugin)
 }
 
 
-bool PluginManager::LoadPlugin(
+Plugin* PluginManager::LoadPlugin(
     const string& lpwszModuleName,
     const FAR_FIND_DATA_EX &FindData,
     bool LoadToMem
@@ -446,7 +446,7 @@ bool PluginManager::LoadPlugin(
 		// Ёто может быть, например, если в ключе "/p" указано несколько пересекающихс€ папок
 		// Ќе будем ругатьс€, если регистры различаютс€, а то достало
 		_ASSERTE(pPlugin==nullptr || pPlugin->GetModuleName()!=lpwszModuleName);
-		return true;
+		return pPlugin;
 	}
 
 	PluginType Type=IsModulePlugin(lpwszModuleName);
@@ -531,7 +531,7 @@ bool PluginManager::LoadPlugin(
 		}
 		pPlugin->Unload(true);
 		delete pPlugin;
-		return false;
+		return nullptr;
 	}
 
 	if (bDataLoaded)
@@ -539,10 +539,10 @@ bool PluginManager::LoadPlugin(
 		bResult = pPlugin->Load();
 	}
 
-	return bResult;
+	return pPlugin;
 }
 
-bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual)
+HANDLE PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual)
 {
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
 
@@ -551,7 +551,7 @@ bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadT
 		if (LoadToMem && !pPlugin->Load())
 		{
 			RemovePlugin(pPlugin);
-			return false;
+			return nullptr;
 		}
 	}
 	else
@@ -561,12 +561,13 @@ bool PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadT
 		if (apiGetFindDataEx(lpwszModuleName, FindData))
 		{
 			bool ShowErrors=Manual;
-			if (!LoadPlugin(lpwszModuleName, FindData, LoadToMem, &ShowErrors, Manual))
-				return false;
+			pPlugin = LoadPlugin(lpwszModuleName, FindData, LoadToMem, &ShowErrors, Manual);
+			if (!pPlugin)
+				return nullptr;
 			far_qsort(PluginsData, PluginsCount, sizeof(*PluginsData), PluginsSort);
 		}
 	}
-	return true;
+	return pPlugin;
 }
 
 int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove)
@@ -614,18 +615,14 @@ int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove
 	return nResult;
 }
 
-int PluginManager::UnloadPluginExternal(const string& lpwszModuleName)
+//Plugin *pPlugin = GetPlugin(lpwszModuleName);
+int PluginManager::UnloadPluginExternal(HANDLE hPlugin)
 {
-//BUGBUG нужны проверки на легальность выгрузки
+	//BUGBUG нужны проверки на легальность выгрузки
 	int nResult = FALSE;
-	Plugin *pPlugin = GetPlugin(lpwszModuleName);
-
-	if (pPlugin)
-	{
-		nResult = pPlugin->Unload(true);
-		RemovePlugin(pPlugin);
-	}
-
+	Plugin* pPlugin = reinterpret_cast<Plugin*>(hPlugin);
+	nResult = pPlugin->Unload(true);
+	RemovePlugin(pPlugin);
 	return nResult;
 }
 
@@ -633,7 +630,7 @@ Plugin *PluginManager::GetPlugin(const wchar_t *lpwszModuleName)
 {
 	Plugin *pPlugin;
 
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		pPlugin = PluginsData[i];
 
@@ -644,9 +641,9 @@ Plugin *PluginManager::GetPlugin(const wchar_t *lpwszModuleName)
 	return nullptr;
 }
 
-Plugin *PluginManager::GetPlugin(int PluginNumber)
+Plugin *PluginManager::GetPlugin(size_t PluginNumber)
 {
-	if (PluginNumber < PluginsCount && PluginNumber >= 0)
+	if (PluginNumber < PluginsCount)
 		return PluginsData[PluginNumber];
 
 	return nullptr;
@@ -656,7 +653,7 @@ bool PluginManager::IsPluginValid(Plugin *pPlugin)
 {
 	Plugin *pTest;
 
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		pTest = PluginsData[i];
 		if (pTest == pPlugin)
@@ -683,7 +680,7 @@ void PluginManager::LoadPlugins(bool Redraw)
 		string strFullName;
 		FAR_FIND_DATA_EX FindData;
 		PluginPathList.SetParameters(0,0,ULF_UNIQUE);
-		int i=0;
+		size_t i=0;
 
 		// сначала подготовим список
 		if (Opt.LoadPlug.MainPluginDir) // только основные и персональные?
@@ -752,8 +749,15 @@ void PluginManager::LoadPlugins(bool Redraw)
 		{
 			for (i=0; i < PluginsCount; i++)
 			{
-				if (apiGetFileAttributes(PluginsData[i]->GetModuleName())==INVALID_FILE_ATTRIBUTES)
-					UnloadPluginExternal(PluginsData[i]->GetModuleName());
+				string strModuleName = PluginsData[i]->GetModuleName();
+				if (apiGetFileAttributes(strModuleName)==INVALID_FILE_ATTRIBUTES)
+				{
+					Plugin *pPlugin = GetPlugin(strModuleName);
+					if (pPlugin)
+					{
+						UnloadPluginExternal(reinterpret_cast<HANDLE>(pPlugin));
+					}
+				}
 			}
 		}
 	}
@@ -882,7 +886,7 @@ HANDLE PluginManager::OpenFilePlugin(
 	File file;
 	AnalyseInfo Info={sizeof(Info), Name? Name->CPtr() : nullptr, nullptr, 0, OpMode|(Type==OFP_ALTERNATIVE?OPM_PGDN:0)};
 	bool DataRead = false;
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		pPlugin = PluginsData[i];
 
@@ -1063,7 +1067,7 @@ HANDLE PluginManager::OpenFindListPlugin(const PluginPanelItem *PanelItem, size_
 	TPointerArray<PluginHandle> items;
 	Plugin *pPlugin=nullptr;
 
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		pPlugin = PluginsData[i];
 
@@ -1164,7 +1168,7 @@ void PluginManager::ClosePanel(HANDLE hPlugin)
 
 int PluginManager::ProcessEditorInput(INPUT_RECORD *Rec)
 {
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		Plugin *pPlugin = PluginsData[i];
 
@@ -1184,7 +1188,7 @@ int PluginManager::ProcessEditorEvent(int Event,void *Param)
 	{
 		Plugin *pPlugin = nullptr;
 
-		for (int i = 0; i < PluginsCount; i++)
+		for (size_t i = 0; i < PluginsCount; i++)
 		{
 			pPlugin = PluginsData[i];
 
@@ -1201,7 +1205,7 @@ int PluginManager::ProcessViewerEvent(int Event, void *Param)
 {
 	int nResult = 0;
 
-	for (int i = 0; i < PluginsCount; i++)
+	for (size_t i = 0; i < PluginsCount; i++)
 	{
 		Plugin *pPlugin = PluginsData[i];
 
@@ -1214,7 +1218,7 @@ int PluginManager::ProcessViewerEvent(int Event, void *Param)
 
 int PluginManager::ProcessDialogEvent(int Event, FarDialogEvent *Param)
 {
-	for (int i=0; i<PluginsCount; i++)
+	for (size_t i=0; i<PluginsCount; i++)
 	{
 		Plugin *pPlugin = PluginsData[i];
 
@@ -1257,7 +1261,7 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 {
 	int nResult = 0;
 
-	for (int i=0; i<PluginsCount; i++)
+	for (size_t i=0; i<PluginsCount; i++)
 	{
 		Plugin *pPlugin = PluginsData[i];
 
@@ -1646,7 +1650,7 @@ int PluginManager::Configure(int StartPos)
 				string strHotKey, strName;
 				GUID guid;
 
-				for (int I=0; I<PluginsCount; I++)
+				for (size_t I=0; I<PluginsCount; I++)
 				{
 					Plugin *pPlugin = PluginsData[I];
 					bool bCached = pPlugin->CheckWorkFlags(PIWF_CACHED)?true:false;
@@ -1663,7 +1667,7 @@ int PluginManager::Configure(int StartPos)
 							continue;
 					}
 
-					for (int J=0; ; J++)
+					for (size_t J=0; ; J++)
 					{
 						bool bNext=false;
 						if (bCached)
@@ -2057,7 +2061,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 				string strHotKey, strName;
 				GUID guid;
 
-				for (int I=0; I<PluginsCount; I++)
+				for (size_t I=0; I<PluginsCount; I++)
 				{
 					Plugin *pPlugin = PluginsData[I];
 					bool bCached = pPlugin->CheckWorkFlags(PIWF_CACHED)?true:false;
@@ -2084,7 +2088,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 					        (!Editor && !Viewer && !Dialog && (IFlags & PF_DISABLEPANELS)))
 						continue;
 
-					for (int J=0; ; J++)
+					for (size_t J=0; ; J++)
 					{
 						if (bCached)
 						{
@@ -2388,8 +2392,7 @@ void PluginManager::ShowPluginInfo(Plugin *pPlugin, const GUID& Guid)
 	Builder.ShowDialog();
 }
 
-
-static char* BufReserve(char*& Buf, int Count, int& Rest, int& Size)
+char* BufReserve(char*& Buf, size_t Count, size_t& Rest, size_t& Size)
 {
 	char* Res = nullptr;
 
@@ -2413,46 +2416,52 @@ static char* BufReserve(char*& Buf, int Count, int& Rest, int& Size)
 }
 
 
-static wchar_t* StrToBuf(const string& Str, char*& Buf, int& Rest, int& Size)
+wchar_t* StrToBuf(const string& Str, char*& Buf, size_t& Rest, size_t& Size)
 {
-	int Count = (Str.GetLength() + 1) * sizeof(wchar_t);
-	wchar_t* Res = (wchar_t*)BufReserve(Buf, Count, Rest, Size);
-
+	size_t Count = (Str.GetLength() + 1) * sizeof(wchar_t);
+	wchar_t* Res = reinterpret_cast<wchar_t*>(BufReserve(Buf, Count, Rest, Size));
 	if (Res)
-		{ wcscpy(Res, Str);	}
-
+	{
+		wcscpy(Res, Str);
+	}
 	return Res;
 }
 
 
-static void ItemsToBuf(PluginMenuItem& Menu, TArray<string> &NamesArray, TArray<string> &GuidsArray, char*& Buf, int& Rest, int& Size)
+void ItemsToBuf(PluginMenuItem& Menu, TArray<string>& NamesArray, TArray<string>& GuidsArray, char*& Buf, size_t& Rest, size_t& Size)
 {
-  	Menu.Count = NamesArray.getSize();
+	Menu.Count = NamesArray.getSize();
 	Menu.Strings = nullptr;
 	Menu.Guids = nullptr;
 
 	if (Menu.Count)
 	{
-		wchar_t** Items = (wchar_t**)BufReserve(Buf, Menu.Count * sizeof(wchar_t*), Rest, Size);
-		GUID* Guids = (GUID*)BufReserve(Buf, Menu.Count * sizeof(GUID), Rest, Size);
-  		Menu.Strings = Items;
+		wchar_t** Items = reinterpret_cast<wchar_t**>(BufReserve(Buf, Menu.Count * sizeof(wchar_t*), Rest, Size));
+		GUID* Guids = reinterpret_cast<GUID*>(BufReserve(Buf, Menu.Count * sizeof(GUID), Rest, Size));
+		Menu.Strings = Items;
 		Menu.Guids = Guids;
 
-		for (int i = 0; i < Menu.Count; i++)
+		for (size_t i = 0; i < Menu.Count; ++i)
 		{
-  			wchar_t* pStr = StrToBuf(*NamesArray.getItem(i), Buf, Rest, Size);
+			wchar_t* pStr = StrToBuf(*NamesArray.getItem(i), Buf, Rest, Size);
 			if (Items) 
+			{
 				Items[i] = pStr;
+			}
 
-			GUID Guid;
-  			if (StrToGuid(*GuidsArray.getItem(i), Guid))
-				Guids[i] = Guid;
+			if (Guids)
+			{
+				GUID Guid;
+				if (StrToGuid(*GuidsArray.getItem(i), Guid))
+				{
+					Guids[i] = Guid;
+				}
+			}
 		}
 	}
 }
 
-
-int PluginManager::GetPluginInfo(Plugin *pPlugin, FarGetPluginInfo *pInfo)
+size_t PluginManager::GetPluginInformation(Plugin *pPlugin, FarGetPluginInformation *pInfo, size_t BufferSize)
 {
 	string Prefix;
 	PLUGIN_FLAGS Flags = 0;
@@ -2460,24 +2469,29 @@ int PluginManager::GetPluginInfo(Plugin *pPlugin, FarGetPluginInfo *pInfo)
 
 	if (pPlugin->CheckWorkFlags(PIWF_CACHED))
 	{
-		int i;
-		string Name, Guid;
 		unsigned __int64 id = PlCacheCfg->GetCacheID(pPlugin->GetCacheName());
-
 		Flags = PlCacheCfg->GetFlags(id);
-  		Prefix = PlCacheCfg->GetCommandPrefix(id);
+		Prefix = PlCacheCfg->GetCommandPrefix(id);
 
-		i = 0;
-		while (PlCacheCfg->GetPluginsMenuItem(id, i++, Name, Guid))
-			{ MenuNames.addItem(Name); MenuGuids.addItem(Guid); }
+		string Name, Guid;
 
-		i = 0;
-		while (PlCacheCfg->GetDiskMenuItem(id, i++, Name, Guid))
-			{ DiskNames.addItem(Name); DiskGuids.addItem(Guid); }
+		for(int i = 0; PlCacheCfg->GetPluginsMenuItem(id, i, Name, Guid); ++i)
+		{
+			MenuNames.addItem(Name);
+			MenuGuids.addItem(Guid);
+		}
 
-		i = 0;
-		while (PlCacheCfg->GetPluginsConfigMenuItem(id, i++, Name, Guid))
-			{ ConfNames.addItem(Name); ConfGuids.addItem(Guid); }
+		for(int i = 0; PlCacheCfg->GetPluginsMenuItem(id, i, Name, Guid); ++i)
+		{
+			DiskNames.addItem(Name);
+			DiskGuids.addItem(Guid);
+		}
+
+		for(int i = 0; PlCacheCfg->GetPluginsMenuItem(id, i, Name, Guid); ++i)
+		{
+			ConfNames.addItem(Name);
+			ConfGuids.addItem(Guid);
+		}
 	}
 	else
 	{
@@ -2487,70 +2501,83 @@ int PluginManager::GetPluginInfo(Plugin *pPlugin, FarGetPluginInfo *pInfo)
 			Flags = Info.Flags;
 			Prefix = Info.CommandPrefix;
 
-			for (int i = 0; i < Info.PluginMenu.Count; i++)
-				{ MenuNames.addItem(Info.PluginMenu.Strings[i]); MenuGuids.addItem(GuidToStr(Info.PluginMenu.Guids[i])); }
+			for (size_t i = 0; i < Info.PluginMenu.Count; i++)
+			{
+					MenuNames.addItem(Info.PluginMenu.Strings[i]);
+					MenuGuids.addItem(GuidToStr(Info.PluginMenu.Guids[i]));
+			}
 
-			for (int i = 0; i < Info.DiskMenu.Count; i++)
-				{ DiskNames.addItem(Info.DiskMenu.Strings[i]); DiskGuids.addItem(GuidToStr(Info.DiskMenu.Guids[i])); }
+			for (size_t i = 0; i < Info.DiskMenu.Count; i++)
+			{
+				DiskNames.addItem(Info.DiskMenu.Strings[i]);
+				DiskGuids.addItem(GuidToStr(Info.DiskMenu.Guids[i]));
+			}
 
-			for (int i = 0; i < Info.PluginConfig.Count; i++)
-				{ ConfNames.addItem(Info.PluginConfig.Strings[i]); ConfGuids.addItem(GuidToStr(Info.PluginConfig.Guids[i])); }
+			for (size_t i = 0; i < Info.PluginConfig.Count; i++)
+			{
+				ConfNames.addItem(Info.PluginConfig.Strings[i]);
+				ConfGuids.addItem(GuidToStr(Info.PluginConfig.Guids[i]));
+			}
 		}
 	}
 
-	//------------------------------------
-
-	FarGetPluginInfo Temp;
-	char* Buf = nullptr;
-	int Rest = 0;
+	FarGetPluginInformation Temp;
+	char* Buffer = nullptr;
+	size_t Rest = 0;
 
 	if (pInfo)
 	{
-		Rest = pInfo->Size - sizeof(FarGetPluginInfo);
-		Buf = (char*)pInfo + sizeof(FarGetPluginInfo);
+		Rest = BufferSize - sizeof(FarGetPluginInformation);
+		Buffer = reinterpret_cast<char*>(pInfo+1);
 	}
 	else
 	{
 		pInfo = &Temp;
 	}
 
-	int Size = sizeof(FarGetPluginInfo);
+	size_t Size = sizeof(FarGetPluginInformation);
 
-	pInfo->ModuleName = StrToBuf(pPlugin->GetModuleName(), Buf, Rest, Size);
+	pInfo->ModuleName = StrToBuf(pPlugin->GetModuleName(), Buffer, Rest, Size);
 
 	pInfo->Flags = 0;
-	if (pPlugin->IsFar2Plugin())
-		pInfo->Flags |= FPF_FAR2;
-#ifndef NO_WRAPPER
-	else if (pPlugin->IsOemPlugin())
-		pInfo->Flags |= FPF_FAR1;
-#endif // NO_WRAPPER
+
 	if (pPlugin->m_hModule)
+	{
 		pInfo->Flags |= FPF_LOADED;
+	}
+	
+	if (pPlugin->IsFar2Plugin())
+	{
+		pInfo->Flags |= FPF_FAR2;
+	}
+#ifndef NO_WRAPPER
+	if (pPlugin->IsOemPlugin())
+	{
+		pInfo->Flags |= FPF_ANSI;
+	}
+#endif // NO_WRAPPER
 
-	pInfo->Info1.StructSize = sizeof(GlobalInfo);
-	pInfo->Info1.Guid = pPlugin->GetGUID();
-	pInfo->Info1.Version = pPlugin->GetVersion();
-	pInfo->Info1.Title = StrToBuf(pPlugin->strTitle, Buf, Rest, Size);
-	pInfo->Info1.Description = StrToBuf(pPlugin->strDescription, Buf, Rest, Size);
-	pInfo->Info1.Author = StrToBuf(pPlugin->strAuthor, Buf, Rest, Size);
+	pInfo->GInfo.StructSize = sizeof(GlobalInfo);
+	pInfo->GInfo.Guid = pPlugin->GetGUID();
+	pInfo->GInfo.Version = pPlugin->GetVersion();
+	pInfo->GInfo.Title = StrToBuf(pPlugin->strTitle, Buffer, Rest, Size);
+	pInfo->GInfo.Description = StrToBuf(pPlugin->strDescription, Buffer, Rest, Size);
+	pInfo->GInfo.Author = StrToBuf(pPlugin->strAuthor, Buffer, Rest, Size);
 
-	pInfo->Info2.StructSize = sizeof(PluginInfo);
-	pInfo->Info2.Flags = Flags;
-	pInfo->Info2.CommandPrefix = StrToBuf(Prefix, Buf, Rest, Size);
+	pInfo->PInfo.StructSize = sizeof(PluginInfo);
+	pInfo->PInfo.Flags = Flags;
+	pInfo->PInfo.CommandPrefix = StrToBuf(Prefix, Buffer, Rest, Size);
 
-	ItemsToBuf(pInfo->Info2.DiskMenu, DiskNames, DiskGuids, Buf, Rest, Size);
-	ItemsToBuf(pInfo->Info2.PluginMenu, MenuNames, MenuGuids, Buf, Rest, Size);
-	ItemsToBuf(pInfo->Info2.PluginConfig, ConfNames, ConfGuids, Buf, Rest, Size);
+	ItemsToBuf(pInfo->PInfo.DiskMenu, DiskNames, DiskGuids, Buffer, Rest, Size);
+	ItemsToBuf(pInfo->PInfo.PluginMenu, MenuNames, MenuGuids, Buffer, Rest, Size);
+	ItemsToBuf(pInfo->PInfo.PluginConfig, ConfNames, ConfGuids, Buffer, Rest, Size);
 
 	return Size;
 }
 
-
-
 bool PluginManager::GetDiskMenuItem(
      Plugin *pPlugin,
-     int PluginItem,
+     size_t PluginItem,
      bool &ItemPresent,
      wchar_t& PluginHotkey,
      string &strPluginText,
@@ -2625,7 +2652,7 @@ void PluginManager::ReloadLanguage()
 {
 	Plugin *PData;
 
-	for (int I=0; I<PluginsCount; I++)
+	for (size_t I=0; I<PluginsCount; I++)
 	{
 		PData = PluginsData[I];
 #ifdef _DEBUG
@@ -2645,7 +2672,7 @@ void PluginManager::ReloadLanguage()
 
 void PluginManager::DiscardCache()
 {
-	for (int I=0; I<PluginsCount; I++)
+	for (size_t I=0; I<PluginsCount; I++)
 	{
 		Plugin *pPlugin = PluginsData[I];
 #ifdef _DEBUG
@@ -2667,7 +2694,7 @@ void PluginManager::LoadIfCacheAbsent()
 {
 	if (PlCacheCfg->IsCacheEmpty())
 	{
-		for (int I=0; I<PluginsCount; I++)
+		for (size_t I=0; I<PluginsCount; I++)
 		{
 			Plugin *pPlugin = PluginsData[I];
 			pPlugin->Load();
@@ -2707,7 +2734,7 @@ int PluginManager::ProcessCommandLine(const wchar_t *CommandParam,Panel *Target)
 	string strPluginPrefix;
 	TPointerArray<PluginData> items;
 
-	for (int I=0; I<PluginsCount; I++)
+	for (size_t I=0; I<PluginsCount; I++)
 	{
 		UINT64 PluginFlags=0;
 
@@ -2999,7 +3026,7 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 				}
 				else
 				{
-					for (int i = 0; i < MenuItems->Count; i++)
+					for (size_t i = 0; i < MenuItems->Count; i++)
 					{
 						if (memcmp(Data->ItemGuid, &(MenuItems->Guids[i]), sizeof(GUID)) == 0)
 						{
@@ -3129,7 +3156,7 @@ HANDLE PluginManager::Open(Plugin *pPlugin,int OpenFrom,const GUID& Guid,INT_PTR
 
 bool PluginManager::HasGetCustomData()
 {
-	for (int i=0; i<PluginsCount; i++)
+	for (size_t i=0; i<PluginsCount; i++)
 	{
 		if (PluginsData[i]->HasGetCustomData())
 		{
@@ -3156,7 +3183,7 @@ void PluginManager::GetCustomData(FileListItem *ListItem)
 	//}
 #endif
 
-	for (int i=0; i<PluginsCount; i++)
+	for (size_t i=0; i<PluginsCount; i++)
 	{
 		Plugin *pPlugin = PluginsData[i];
 

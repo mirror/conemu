@@ -331,7 +331,7 @@ static INT_PTR WINAPI FarAdvControlW(const GUID* PluginId, ADVANCED_CONTROL_COMM
 		WindowType* info=(WindowType*)Param2;
 		if (CheckStructSize(info))
 		{
-			int type=CurrentWindowType;
+			WINDOWINFO_TYPE type=ModalType2WType(CurrentWindowType);
 			switch(type)
 			{
 				case WTYPE_PANELS:
@@ -340,8 +340,10 @@ static INT_PTR WINAPI FarAdvControlW(const GUID* PluginId, ADVANCED_CONTROL_COMM
 				case WTYPE_DIALOG:
 				case WTYPE_VMENU:
 				case WTYPE_HELP:
-					info->Type=(WINDOWINFO_TYPE)type;
+					info->Type=type;
 					return TRUE;
+				default:
+					break;
 			}
 		}
 		return FALSE;
@@ -432,6 +434,7 @@ FarStandardFunctions NativeFSF =
 	farConvertPath,
 	farGetReparsePointInfo,
 	farGetCurrentDirectory,
+	farFormatFileSize,
 };
 
 PluginStartupInfo NativeInfo =
@@ -562,17 +565,17 @@ bool Plugin::SaveToCache()
 			PlCacheCfg->SetSignature(id, strCurPluginID);
 		}
 
-		for (int i = 0; i < Info.DiskMenu.Count; i++)
+		for (size_t i = 0; i < Info.DiskMenu.Count; i++)
 		{
 			PlCacheCfg->SetDiskMenuItem(id, i, Info.DiskMenu.Strings[i], GuidToStr(Info.DiskMenu.Guids[i]));
 		}
 
-		for (int i = 0; i < Info.PluginMenu.Count; i++)
+		for (size_t i = 0; i < Info.PluginMenu.Count; i++)
 		{
 			PlCacheCfg->SetPluginsMenuItem(id, i, Info.PluginMenu.Strings[i], GuidToStr(Info.PluginMenu.Guids[i]));
 		}
 
-		for (int i = 0; i < Info.PluginConfig.Count; i++)
+		for (size_t i = 0; i < Info.PluginConfig.Count; i++)
 		{
 			PlCacheCfg->SetPluginsConfigMenuItem(id, i, Info.PluginConfig.Strings[i], GuidToStr(Info.PluginConfig.Guids[i]));
 		}

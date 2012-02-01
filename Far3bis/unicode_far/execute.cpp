@@ -1038,7 +1038,10 @@ int Execute(const string& CmdStr, // Ком.строка для исполнения
 
 	if(!Silent)
 	{
+		/*
 		Console.ScrollScreenBuffer(!DirectRun && !SeparateWindow?1:2);
+		*/
+		Console.ScrollScreenBuffer(1);
 	}
 
 	if (ShellExecuteEx(&seInfo))

@@ -87,12 +87,12 @@ extern DWORD gnMainThreadId;
 // для диалога назначения клавиши
 struct DlgParam
 {
+	UINT64 Flags;
 	KeyMacro *Handle;
 	DWORD Key;
-	UINT64 Flags;
-	bool Changed;
 	int Mode;
 	int Recurse;
+	bool Changed;
 };
 
 TMacroKeywords MKeywords[] =
@@ -434,8 +434,10 @@ static bool pluginsFunc(const TMacroFunction*);
 static bool promptFunc(const TMacroFunction*);
 static bool replaceFunc(const TMacroFunction*);
 static bool rindexFunc(const TMacroFunction*);
+static bool size2strFunc(const TMacroFunction*);
 static bool sleepFunc(const TMacroFunction*);
 static bool stringFunc(const TMacroFunction*);
+static bool strwrapFunc(const TMacroFunction*);
 static bool substrFunc(const TMacroFunction*);
 static bool testfolderFunc(const TMacroFunction*);
 static bool trimFunc(const TMacroFunction*);
@@ -533,8 +535,10 @@ static TMacroFunction intMacroFunction[]=
 	{L"PROMPT",           nullptr, L"S=Prompt([Title[,Prompt[,flags[,Src[,History]]]]])",        promptFunc,         nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PROMPT,           5, 5},
 	{L"REPLACE",          nullptr, L"S=Replace(Str,Find,Replace[,Cnt[,Mode]])",                  replaceFunc,        nullptr, 0, 0,                                      MCODE_F_REPLACE,          5, 2},
 	{L"RINDEX",           nullptr, L"S=RIndex(S1,S2[,Mode])",                                    rindexFunc,         nullptr, 0, 0,                                      MCODE_F_RINDEX,           3, 1},
+ 	{L"SIZE2STR",         nullptr, L"S=Size2Str(N,Flags[,Width])",                               size2strFunc,       nullptr, 0, 0,                                      MCODE_F_SIZE2STR,         3, 1},
 	{L"SLEEP",            nullptr, L"N=Sleep(N)",                                                sleepFunc,          nullptr, 0, 0,                                      MCODE_F_SLEEP,            1, 0},
 	{L"STRING",           nullptr, L"S=String(V)",                                               stringFunc,         nullptr, 0, 0,                                      MCODE_F_STRING,           1, 0},
+	{L"STRWRAP",          nullptr, L"S=StrWrap(Text,Width[,Break[,Flags]])",                     strwrapFunc,        nullptr, 0, 0,                                      MCODE_F_STRWRAP,          4, 2},
 	{L"SUBSTR",           nullptr, L"S=substr(S,start[,length])",                                substrFunc,         nullptr, 0, 0,                                      MCODE_F_SUBSTR,           3, 1},
 	{L"TESTFOLDER",       nullptr, L"N=testfolder(S)",                                           testfolderFunc,     nullptr, 0, 0,                                      MCODE_F_TESTFOLDER,       1, 0},
 	{L"TRIM",             nullptr, L"S=Trim(S[,N])",                                             trimFunc,           nullptr, 0, 0,                                      MCODE_F_TRIM,             2, 1},
@@ -2462,6 +2466,20 @@ static bool rindexFunc(const TMacroFunction*)
 	return Ret;
 }
 
+// S=Size2Str(Size,Flags[,Width])
+static bool size2strFunc(const TMacroFunction*)
+{
+	int Width = (int)VMStack.Pop().getInteger();
+	TVar Flags;  VMStack.Pop(Flags);
+	TVar Size;   VMStack.Pop(Size);
+
+	string strDestStr;
+	FileSizeToStr(strDestStr,Size.i(), !Width?-1:Width, Flags.i());
+
+	VMStack.Push(TVar(strDestStr.CPtr()));
+	return true;
+}
+
 // S=date([S])
 static bool dateFunc(const TMacroFunction*)
 {
@@ -4330,6 +4348,27 @@ static bool stringFunc(const TMacroFunction*)
 	return true;
 }
 
+// S=StrWrap(Text,Width[,Break[,Flags]])
+static bool strwrapFunc(const TMacroFunction*)
+{
+	DWORD Flags=(DWORD)VMStack.Pop().getInteger();
+	TVar Break; VMStack.Pop(Break);
+	int  Width=(int)VMStack.Pop().getInteger();
+	TVar Text;  VMStack.Pop(Text);
+
+	if (Break.isInteger() && !Break.i())
+	{
+		Break=L"";
+		Break.toString();
+	}
+
+
+	string strDest;
+	FarFormatText(Text.s(),Width,strDest,*Break.s()?Break.s():nullptr,Flags);
+	VMStack.Push(strDest.CPtr());
+	return true;
+}
+
 static bool intFunc(const TMacroFunction*)
 {
 	TVar Val;
@@ -4511,8 +4550,14 @@ static bool pluginunloadFunc(const TMacroFunction*)
 	TVar Ret(0ll);
 	TVar DllPath; VMStack.Pop(DllPath);
 	if (DllPath.s())
-		Ret=(__int64)farPluginsControl(INVALID_HANDLE_VALUE, PCTL_UNLOADPLUGIN, 0, (void*)DllPath.s());
-	VMStack.Push(Ret);
+	{
+		Plugin* p = CtrlObject->Plugins.GetPlugin(DllPath.s());
+		if(p)
+		{
+			Ret=(__int64)farPluginsControl(p, PCTL_UNLOADPLUGIN, 0, nullptr);
+			VMStack.Push(Ret);
+		}
+	}
 	return Ret.i()!=0;
 }
 
@@ -7042,7 +7087,7 @@ int KeyMacro::AssignMacroKey(DWORD &MacroKey, UINT64 &Flags)
 		{DI_COMBOBOX,5,3,28,3,0,nullptr,nullptr,DIF_FOCUS|DIF_DEFAULTBUTTON,L""},
 	};
 	MakeDialogItemsEx(MacroAssignDlgData,MacroAssignDlg);
-	DlgParam Param={this,0,Flags,false,StartMode,0};
+	DlgParam Param={Flags, this, 0, StartMode, 0, false};
 	//_SVS(SysLog(L"StartMode=%d",StartMode));
 	IsProcessAssignMacroKey++;
 	Dialog Dlg(MacroAssignDlg,ARRAYSIZE(MacroAssignDlg),AssignMacroDlgProc,&Param);
@@ -7295,7 +7340,7 @@ int KeyMacro::GetMacroSettings(int Key,UINT64 &Flags,const wchar_t *Src,const wc
 
 	MacroSettingsDlg[MS_EDIT_DESCR].strData=(Descr && *Descr)?Descr:RecDescription;
 
-	DlgParam Param={this,0,0,false,0,0};
+	DlgParam Param={0, this, 0, 0, 0, false};
 	Dialog Dlg(MacroSettingsDlg,ARRAYSIZE(MacroSettingsDlg),ParamMacroDlgProc,&Param);
 	Dlg.SetPosition(-1,-1,73,21);
 	Dlg.SetHelp(L"KeyMacroSetting");

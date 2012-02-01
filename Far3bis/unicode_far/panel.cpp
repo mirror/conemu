@@ -229,7 +229,8 @@ static size_t AddPluginItems(VMenu &ChDisk, int Pos, int DiskCount, bool SetSele
 {
 	TArray<ChDiskPluginItem> MPItems;
 	ChDiskPluginItem OneItem;
-	int PluginItem, PluginNumber = 0; // IS: счетчики - плагинов и пунктов плагина
+	int PluginItem;
+	size_t PluginNumber = 0;
 	bool ItemPresent,Done=false;
 	string strMenuText;
 	string strPluginText;
@@ -473,7 +474,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 				{
 					DriveType=DRIVE_SUBSTITUTE;
 				}
-				else if(DriveType == DRIVE_FIXED && GetVHDName(LocalName, strAssocPath))
+				else if(DriveCanBeVirtual(DriveType) && GetVHDName(LocalName, strAssocPath))
 				{
 					DriveType=DRIVE_VIRTUAL;
 				}
@@ -735,6 +736,22 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 					}
 					break;
 				}
+
+				case KEY_APPS:
+				case KEY_SHIFTAPPS:
+				case KEY_MSRCLICK:
+				{
+					//вызовем EMenu если он есть
+					if (item && !item->bIsPlugin && CtrlObject->Plugins.FindPlugin(Opt.KnownIDs.Emenu))
+					{
+						string DeviceName("?:\\");
+						DeviceName.Replace(0, item->cDrive);
+						struct DiskMenuParam {const wchar_t* CmdLine; BOOL Apps;} p = {DeviceName, Key!=KEY_MSRCLICK};
+						CtrlObject->Plugins.CallPlugin(Opt.KnownIDs.Emenu, OPEN_LEFTDISKMENU, &p); // EMenu Plugin :-)
+					}
+					break;
+				}
+
 				case KEY_SHIFTNUMDEL:
 				case KEY_SHIFTDECIMAL:
 				case KEY_SHIFTDEL:

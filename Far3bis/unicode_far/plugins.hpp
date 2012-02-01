@@ -176,9 +176,9 @@ class PluginManager
 	private:
 
 		Plugin **PluginsData;
-		int PluginsCount;
+		size_t PluginsCount;
 #ifndef NO_WRAPPER
-		int OemPluginsCount;
+		size_t OemPluginsCount;
 #endif // NO_WRAPPER
 		PluginTree* PluginsCache;
 
@@ -202,7 +202,7 @@ class PluginManager
 		bool TestPluginInfo(Plugin *Item,PluginInfo *Info);
 		bool TestOPENPANELINFO(Plugin *Item,OpenPanelInfo *Info);
 
-		bool LoadPlugin(const string& lpwszModuleName, const FAR_FIND_DATA_EX &FindData, bool LoadToMem, bool* ShowErrors=nullptr, bool Manual=false);
+		Plugin* LoadPlugin(const string& lpwszModuleName, const FAR_FIND_DATA_EX &FindData, bool LoadToMem, bool* ShowErrors=nullptr, bool Manual=false);
 
 		bool AddPlugin(Plugin *pPlugin);
 		bool RemovePlugin(Plugin *pPlugin);
@@ -223,20 +223,20 @@ class PluginManager
 
 	public:
 
-		bool LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual=false);
-
 		int UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove = false);
-		int UnloadPluginExternal(const string& lpwszModuleName);
+
+		HANDLE LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual=false);
+		int UnloadPluginExternal(HANDLE hPlugin);
 
 		void LoadPlugins(bool Redraw=false);
 
 		Plugin *GetPlugin(const wchar_t *lpwszModuleName);
-		Plugin *GetPlugin(int PluginNumber);
+		Plugin *GetPlugin(size_t PluginNumber);
 		bool IsPluginValid(Plugin *pPlugin);
 
-		int GetPluginsCount() { return PluginsCount; }
+		size_t GetPluginsCount() { return PluginsCount; }
 #ifndef NO_WRAPPER
-		int GetOemPluginsCount() { return OemPluginsCount; }
+		size_t GetOemPluginsCount() { return OemPluginsCount; }
 #endif // NO_WRAPPER
 
 		BOOL IsPluginsLoaded() { return Flags.Check(PSIF_PLUGINSLOADDED); }
@@ -246,7 +246,7 @@ class PluginManager
 		int Configure(int StartPos=0);
 		void ConfigureCurrent(Plugin *pPlugin,const GUID& Guid);
 		int CommandsMenu(int ModalType,int StartPos,const wchar_t *HistoryName=nullptr);
-		bool GetDiskMenuItem(Plugin *pPlugin,int PluginItem,bool &ItemPresent, wchar_t& PluginHotkey, string &strPluginText, GUID &Guid);
+		bool GetDiskMenuItem(Plugin *pPlugin,size_t PluginItem,bool &ItemPresent, wchar_t& PluginHotkey, string &strPluginText, GUID &Guid);
 
 		int UseFarCommand(HANDLE hPlugin,int CommandType);
 		void ReloadLanguage();
@@ -255,9 +255,7 @@ class PluginManager
 
 		bool SetHotKeyDialog(Plugin *pPlugin, const GUID& Guid, PluginsHotkeysConfig::HotKeyTypeEnum HotKeyType, const wchar_t *DlgPluginTitle);
 		void ShowPluginInfo(Plugin *pPlugin, const GUID& Guid);
-
-		// Запрос информации о плагине через API межплагинного взаимодействия (PCTL_GETPLUGININFO)
-		int GetPluginInfo(Plugin *pPlugin, FarGetPluginInfo *pInfo);
+		size_t GetPluginInformation(Plugin *pPlugin, FarGetPluginInformation *pInfo, size_t BufferSize);
 
 		// $ .09.2000 SVS - Функция CallPlugin - найти плагин по ID и запустить OpenFrom = OPEN_*
 		int CallPlugin(const GUID& SysID,int OpenFrom, void *Data, int *Ret=nullptr);

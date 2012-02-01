@@ -514,10 +514,13 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 				}
 
 				wi->Pos=FrameManager->IndexOf(f);
-				wi->Type=static_cast<WINDOWINFO_TYPE>(f->GetType());
+				wi->Type=ModalType2WType(f->GetType());
 				wi->Flags=0;
-				if (f->IsFileModified()) wi->Flags|=WIF_MODIFIED;
-				if (f==FrameManager->GetCurrentFrame()) wi->Flags|=WIF_CURRENT;
+				if (f->IsFileModified())
+					wi->Flags|=WIF_MODIFIED;
+				if (f==FrameManager->GetCurrentFrame())
+					wi->Flags|=WIF_CURRENT;
+
 				switch (wi->Type)
 				{
 					case WTYPE_VIEWER:
@@ -2570,75 +2573,104 @@ INT_PTR WINAPI farMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 	return 0;
 }
 
-INT_PTR WINAPI farPluginsControl(HANDLE hHandle, FAR_PLUGINS_CONTROL_COMMANDS Command, int Param1, void* Param2)
+INT_PTR WINAPI farPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	switch (Command)
 	{
 		case PCTL_LOADPLUGIN:
-		case PCTL_UNLOADPLUGIN:
 		case PCTL_FORCEDLOADPLUGIN:
-		{
 			if (Param1 == PLT_PATH)
 			{
-				if (Param2 )
+				if (Param2)
 				{
 					string strPath;
-					ConvertNameToFull((const wchar_t *)Param2, strPath);
-
-					if (Command == PCTL_LOADPLUGIN)
-						return CtrlObject->Plugins.LoadPluginExternal(strPath, false, true);
-					else if (Command == PCTL_FORCEDLOADPLUGIN)
-						return CtrlObject->Plugins.LoadPluginExternal(strPath, true, true);
-					else
-						return CtrlObject->Plugins.UnloadPluginExternal(strPath);
+					ConvertNameToFull(reinterpret_cast<const wchar_t*>(Param2), strPath);
+					return reinterpret_cast<INT_PTR>(CtrlObject->Plugins.LoadPluginExternal(strPath, Command == PCTL_FORCEDLOADPLUGIN));
 				}
 			}
-
 			break;
-		}
-
-		case PCTL_GETPLUGINS:
-		{
-			FarPlugins* Info = (FarPlugins*)Param2;
-			if ((Info) && (Info->StructSize == sizeof(FarPlugins)))
-			{
-				Info->PluginsCount = CtrlObject->Plugins.GetPluginsCount();
-				return true;
-			}
-			break;
-		}
-
-		case PCTL_GETPLUGININFO:
-		{
-			FarGetPluginInfo* Info = (FarGetPluginInfo*)Param2;
-			/* Если Info = null - только подсчет необходимого места */
-			if ((!Info) || (Info->Size >= sizeof(FarGetPluginInfo)))
-			{
-				Plugin* Plug = CtrlObject->Plugins.GetPlugin(Param1);
-				if (Plug)
-					{ return CtrlObject->Plugins.GetPluginInfo(Plug, Info); }
-			}
-			break;
-		}
 
 		case PCTL_FINDPLUGIN:
 		{
-			for (int i = 0; i < CtrlObject->Plugins.GetPluginsCount(); i++)
+			Plugin* plugin = nullptr;
+			switch(Param1)
 			{
-				Plugin* Plug = CtrlObject->Plugins.GetPlugin(i);
-				if (Param1 == PFM_GUID)
+				case PFM_GUID:
+					plugin = CtrlObject->Plugins.FindPlugin(*reinterpret_cast<GUID*>(Param2));
+					break;
+
+				case PFM_MODULENAME:
 				{
-					if (Plug->GetGUID() == *(GUID*)Param2)
-						{ return i; }
-				}
-				else if (Param1 == PFM_MODULENAME)
-				{
-					if (StrCmpI(Plug->GetModuleName(), (wchar_t*)Param2) == 0)
-						{ return i; }
+					string strPath;
+					ConvertNameToFull(reinterpret_cast<const wchar_t*>(Param2), strPath);
+					for (size_t i = 0; i < CtrlObject->Plugins.GetPluginsCount(); ++i)
+					{
+						Plugin* p = CtrlObject->Plugins.GetPlugin(i);
+						if (!StrCmpI(p->GetModuleName(), strPath))
+						{
+							plugin = p;
+							break;
+						}
+					}
+					break;
 				}
 			}
-			return -1;
+			return reinterpret_cast<INT_PTR>(plugin);
 		}
+
+		case PCTL_UNLOADPLUGIN:
+			{
+				return CtrlObject->Plugins.UnloadPluginExternal(Handle);
+			}
+			break;
+
+		case PCTL_GETPLUGININFORMATION:
+			{
+				FarGetPluginInformation* Info = reinterpret_cast<FarGetPluginInformation*>(Param2);
+				if (!Info || (CheckStructSize(Info) && static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation)))
+				{
+					Plugin* plugin = reinterpret_cast<Plugin*>(Handle);
+					if(plugin)
+					{
+						return CtrlObject->Plugins.GetPluginInformation(plugin, Info, Param1);
+					}
+				}
+				//BUG: Проблема bis-сборки. Размер структуры Info->PInfo ожидается большего размера
+				else if (Info
+					&& Info->StructSize == (sizeof(*Info) - sizeof(Info->PInfo.MacroFunctionNumber) - sizeof(Info->PInfo.MacroFunctions))
+					&& static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation))
+				{
+					Plugin* plugin = reinterpret_cast<Plugin*>(Handle);
+					if(plugin)
+					{
+						size_t nRc = CtrlObject->Plugins.GetPluginInformation(plugin, Info, Param1);
+						if (nRc)
+						{
+							Info->PInfo.StructSize = ((LPBYTE)&Info->PInfo.MacroFunctionNumber) - ((LPBYTE)&Info->PInfo);
+							memmove(&Info->PInfo.MacroFunctionNumber, &Info->GInfo, sizeof(Info->GInfo));
+						}
+						return nRc;
+					}
+
+				}
+			}
+			break;
+
+		case PCTL_GETPLUGINS:
+			{
+				size_t PluginsCount = CtrlObject->Plugins.GetPluginsCount();
+				if(Param1 && Param2)
+				{
+					HANDLE* Plugins = static_cast<HANDLE*>(Param2);
+					size_t Count = Min(static_cast<size_t>(Param1), PluginsCount);
+					for(size_t i = 0; i < Count; ++i)
+					{
+						Plugins[i] = CtrlObject->Plugins.GetPlugin(i);
+					}
+				}
+				return PluginsCount;
+			}
+			break;
 	}
 
 	return 0;
@@ -2840,4 +2872,31 @@ size_t WINAPI farGetCurrentDirectory(size_t Size,wchar_t* Buffer)
 	}
 
 	return strCurDir.GetLength()+1;
+}
+
+size_t WINAPI farFormatFileSize(unsigned __int64 Size, int Width, FARFORMATFILESIZEFLAGS Flags, wchar_t *Dest, size_t DestSize)
+{
+	static unsigned __int64 FlagsPair[]={
+		FFFS_COMMAS,            COLUMN_COMMAS,         // Вставлять разделитель между тысячами
+		FFFS_THOUSAND,          COLUMN_THOUSAND,       // Вместо делителя 1024 использовать делитель 1000
+		FFFS_FLOATSIZE,         COLUMN_FLOATSIZE,      // Показывать размер файла в стиле Windows Explorer (т.е. 999 байт будут показаны как 999, а 1000 байт как 0.97 K)
+		FFFS_ECONOMIC,          COLUMN_ECONOMIC,       // Экономичный режим, не показывать пробел перед суффиксом размера файла (т.е. 0.97K)
+		FFFS_MINSIZEINDEX,      COLUMN_MINSIZEINDEX,   // Минимально допустимый индекс при форматировании
+		FFFS_SHOWBYTESINDEX,    COLUMN_SHOWBYTESINDEX, // Показывать суффиксы B,K,M,G,T,P,E
+	};
+
+	string strDestStr;
+	unsigned __int64 FinalFlags=Flags & COLUMN_MINSIZEINDEX_MASK;
+	for (size_t I=0; I < ARRAYSIZE(FlagsPair); I+=2)
+		if (Flags & FlagsPair[I])
+			FinalFlags |= FlagsPair[I+1];
+
+	FileSizeToStr(strDestStr,Size,Width,FinalFlags);
+
+	if (Dest && DestSize)
+	{
+		xwcsncpy(Dest,strDestStr,DestSize);
+	}
+
+	return strDestStr.GetLength()+1;
 }
