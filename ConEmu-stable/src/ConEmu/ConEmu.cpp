@@ -154,7 +154,7 @@ CConEmuMain::CConEmuMain()
 	//mb_InConsoleResize = FALSE;
 	//ProgressBars = NULL;
 	//cBlinkShift=0;
-	mh_DebugPopup = mh_EditPopup = mh_ActiveVConPopup = mh_VConListPopup = mh_HelpPopup = NULL;
+	mh_DebugPopup = mh_EditPopup = mh_ActiveVConPopup = mh_TerminateVConPopup = mh_VConListPopup = mh_HelpPopup = NULL;
 	Title[0] = 0; TitleCmp[0] = 0; /*MultiTitle[0] = 0;*/ mn_Progress = -1;
 	mb_InTimer = FALSE;
 	//mb_InClose = FALSE;
@@ -451,6 +451,7 @@ CConEmuMain::CConEmuMain()
 	mn_MsgInitVConGhost = ++nAppMsg;
 	mn_MsgCreateCon = ++nAppMsg;
 	mn_MsgRequestUpdate = ++nAppMsg;
+	mn_MsgTaskBarCreated = RegisterWindowMessage(L"TaskbarCreated");
 	//// В Win7x64 WM_INPUTLANGCHANGEREQUEST не приходит (по крайней мере при переключении мышкой)
 	//wmInputLangChange = WM_INPUTLANGCHANGE;
 
@@ -824,7 +825,8 @@ HMENU CConEmuMain::GetSystemMenu(BOOL abInitial /*= FALSE*/)
 		InsertMenu(hwndMain, 0, MF_BYPOSITION | MF_POPUP | MF_ENABLED, (UINT_PTR)mh_VConListPopup, _T("Console &list"));
 		
 		if (mh_ActiveVConPopup) DestroyMenu(mh_ActiveVConPopup);
-		mh_ActiveVConPopup = CreateVConPopupMenu(NULL, NULL, FALSE);
+		if (mh_TerminateVConPopup) { DestroyMenu(mh_TerminateVConPopup); mh_TerminateVConPopup = NULL; }
+		mh_ActiveVConPopup = CreateVConPopupMenu(NULL, NULL, FALSE, mh_TerminateVConPopup);
 		InsertMenu(hwndMain, 0, MF_BYPOSITION | MF_POPUP | MF_ENABLED, (UINT_PTR)mh_ActiveVConPopup, _T("Acti&ve console"));
 		
 		// --------------------
@@ -1693,6 +1695,12 @@ CConEmuMain::~CConEmuMain()
 	{
 		DestroyMenu(mh_EditPopup);
 		mh_EditPopup = NULL;
+	}
+	
+	if (mh_TerminateVConPopup)
+	{
+		DestroyMenu(mh_TerminateVConPopup);
+		mh_TerminateVConPopup = NULL;
 	}
 	
 	if (mh_ActiveVConPopup)
@@ -5536,7 +5544,7 @@ LRESULT CConEmuMain::OnInitMenuPopup(HWND hWnd, HMENU hMenu, LPARAM lParam)
 		
 		if (mh_ActiveVConPopup)
 		{
-			CreateVConPopupMenu(NULL, mh_ActiveVConPopup, FALSE);
+			CreateVConPopupMenu(NULL, mh_ActiveVConPopup, FALSE, mh_TerminateVConPopup);
 		}
 		else
 		{
@@ -7801,13 +7809,16 @@ HMENU CConEmuMain::CreateVConListPopupMenu(HMENU ahExist, BOOL abFirstTabOnly)
 	return h;
 }
 
-HMENU CConEmuMain::CreateVConPopupMenu(CVirtualConsole* apVCon, HMENU ahExist, BOOL abAddNew)
+HMENU CConEmuMain::CreateVConPopupMenu(CVirtualConsole* apVCon, HMENU ahExist, BOOL abAddNew, HMENU& hTerminate)
 {
 	//BOOL lbEnabled = TRUE;
 	HMENU hMenu = ahExist;
 	
 	if (!apVCon)
 		apVCon = ActiveCon();
+
+	if (!hTerminate)
+		hTerminate = CreatePopupMenu();
 	
 	if (!hMenu)
 	{	
@@ -7831,7 +7842,10 @@ HMENU CConEmuMain::CreateVConPopupMenu(CVirtualConsole* apVCon, HMENU ahExist, B
 		
 		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_CLOSE,     L"&Close");
 		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_DETACH,    L"Detach");
-		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_TERMINATE, L"&Terminate");
+		AppendMenu(hTerminate, MF_STRING | MF_ENABLED, IDM_TERMINATECON, L"&Console");
+		AppendMenu(hTerminate, MF_SEPARATOR, 0, L"");
+		AppendMenu(hTerminate, MF_STRING | MF_ENABLED, IDM_TERMINATEPRC, L"&Active process");
+		AppendMenu(hMenu, MF_POPUP | MF_ENABLED, (UINT_PTR)hTerminate, L"&Terminate");
 		AppendMenu(hMenu, MF_SEPARATOR, 0, L"");
 		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_RESTART,   L"&Restart");
 		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_RESTARTAS, L"Restart as...");
@@ -7864,7 +7878,8 @@ HMENU CConEmuMain::CreateVConPopupMenu(CVirtualConsole* apVCon, HMENU ahExist, B
 
 		EnableMenuItem(hMenu, IDM_CLOSE, MF_BYCOMMAND | (lbCanCloseTab ? MF_ENABLED : MF_GRAYED));
 		EnableMenuItem(hMenu, IDM_DETACH, MF_BYCOMMAND | MF_ENABLED);
-		EnableMenuItem(hMenu, IDM_TERMINATE, MF_BYCOMMAND | MF_ENABLED);
+		EnableMenuItem(hTerminate, IDM_TERMINATECON, MF_BYCOMMAND | MF_ENABLED);
+		EnableMenuItem(hTerminate, IDM_TERMINATEPRC, MF_BYCOMMAND | MF_ENABLED);
 		EnableMenuItem(hMenu, IDM_RESTART, MF_BYCOMMAND | MF_ENABLED);
 		EnableMenuItem(hMenu, IDM_RESTARTAS, MF_BYCOMMAND | MF_ENABLED);
 		//EnableMenuItem(hMenu, IDM_ADMIN_DUPLICATE, MF_BYCOMMAND | (lbIsPanels ? MF_ENABLED : MF_GRAYED));
@@ -7875,7 +7890,8 @@ HMENU CConEmuMain::CreateVConPopupMenu(CVirtualConsole* apVCon, HMENU ahExist, B
 	{
 		EnableMenuItem(hMenu, IDM_CLOSE, MF_BYCOMMAND | MF_GRAYED);
 		EnableMenuItem(hMenu, IDM_DETACH, MF_BYCOMMAND | MF_GRAYED);
-		EnableMenuItem(hMenu, IDM_TERMINATE, MF_BYCOMMAND | MF_GRAYED);
+		EnableMenuItem(hTerminate, IDM_TERMINATECON, MF_BYCOMMAND | MF_GRAYED);
+		EnableMenuItem(hTerminate, IDM_TERMINATEPRC, MF_BYCOMMAND | MF_GRAYED);
 		EnableMenuItem(hMenu, IDM_RESTART, MF_BYCOMMAND | MF_GRAYED);
 		EnableMenuItem(hMenu, IDM_RESTARTAS, MF_BYCOMMAND | MF_GRAYED);
 		EnableMenuItem(hMenu, IDM_SAVE, MF_BYCOMMAND | MF_GRAYED);
@@ -14185,6 +14201,10 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 					return 0;
 				}
 				return 0;
+			}
+			else if (messg == gpConEmu->mn_MsgTaskBarCreated)
+			{
+				Icon.OnTaskbarCreated();
 			}
 
 			//else if (messg == gpConEmu->mn_MsgCmdStarted || messg == gpConEmu->mn_MsgCmdStopped) {
