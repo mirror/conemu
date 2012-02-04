@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 	#ifdef LOG_ORIGINAL_CALL
 		extern bool gbSuppressShowCall;
-		#define ORIGINALSHOWCALL(n) if (!gbSuppressShowCall) { char sFunc[128]; _wsprintfA(sFunc, SKIPLEN(countof(sFunc)) "Hook: %s\n", #n); OutputDebugStringA(sFunc); gbSuppressShowCall = false; SetLastError(0); }
+		#define ORIGINALSHOWCALL(n) if (!gbSuppressShowCall) { DWORD nErr=GetLastError(); char sFunc[128]; _wsprintfA(sFunc, SKIPLEN(countof(sFunc)) "Hook: %s\n", #n); OutputDebugStringA(sFunc); gbSuppressShowCall = false; SetLastError(nErr); } else { gbSuppressShowCall = false; }
 		#define SUPPRESSORIGINALSHOWCALL gbSuppressShowCall = true
 		#define _ASSERTRESULT(x) //DWORD dwResultLastErr = GetLastError(); if (!(x) || (dwResultLastErr==ERROR_INVALID_DATA)) { _ASSERTEX((x) && dwResultLastErr==0); }
 	#else
