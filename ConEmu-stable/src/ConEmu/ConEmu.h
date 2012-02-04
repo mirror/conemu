@@ -105,9 +105,19 @@ enum TrackMenuPlace
 	tmp_Cmd,
 };
 
+struct MsgSrvStartedArg
+{
+	HWND  hConWnd;
+	DWORD nSrcPID;
+	DWORD timeStart;
+	DWORD timeRecv;
+	DWORD timeFin;
+};
+
 #include "DwmHelper.h"
 #include "TaskBar.h"
 #include "FrameHolder.h"
+#include "GuiServer.h"
 
 class CConEmuMain :
 	public CDwmHelper,
@@ -222,6 +232,9 @@ class CConEmuMain :
 		CDragDrop *mp_DragDrop;
 		BOOL mb_SkipOnFocus;
 	protected:
+		friend class CGuiServer;
+		CGuiServer m_GuiServer;
+
 		//CProgressBars *ProgressBars;
 		HMENU mh_DebugPopup, mh_EditPopup, mh_ActiveVConPopup, mh_TerminateVConPopup, mh_VConListPopup, mh_HelpPopup; // Popup's для SystemMenu
 		TCHAR Title[MAX_TITLE_SIZE+192], TitleCmp[MAX_TITLE_SIZE+192]; //, MultiTitle[MAX_TITLE_SIZE+30];
@@ -340,12 +353,6 @@ class CConEmuMain :
 		UINT mn_MsgCreateCon;
 		UINT mn_MsgRequestUpdate;
 		UINT mn_MsgTaskBarCreated;
-
-		//
-		static DWORD CALLBACK GuiServerThread(LPVOID lpvParam);
-		void GuiServerThreadCommand(HANDLE hPipe);
-		DWORD mn_GuiServerThreadId; HANDLE mh_GuiServerThread, mh_GuiServerThreadTerminate;
-		wchar_t ms_ServerPipe[MAX_PATH];
 
 		//
 		virtual void OnUseGlass(bool abEnableGlass);

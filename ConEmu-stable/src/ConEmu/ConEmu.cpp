@@ -109,14 +109,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 const wchar_t* gsHomePage = L"http://conemu-maximus5.googlecode.com";
 const wchar_t* gsReportBug = L"http://code.google.com/p/conemu-maximus5/issues/entry";
 
-struct MsgSrvStartedArg
-{
-	HWND  hConWnd;
-	DWORD nSrcPID;
-	DWORD timeStart;
-	DWORD timeRecv;
-	DWORD timeFin;
-};
 
 CConEmuMain::CConEmuMain()
 {
@@ -164,7 +156,6 @@ CConEmuMain::CConEmuMain()
 	mb_IgnoreSizeChange = false;
 	//mb_IgnoreStoreNormalRect = false;
 	//mn_CurrentKeybLayout = (DWORD_PTR)GetKeyboardLayout(0);
-	mn_GuiServerThreadId = 0; mh_GuiServerThread = NULL; mh_GuiServerThreadTerminate = NULL; ms_ServerPipe[0] = 0;
 	//mpsz_RecreateCmd = NULL;
 	mb_InImeComposition = false; mb_ImeMethodChanged = false;
 	ZeroStruct(mrc_Ideal);
@@ -1714,6 +1705,8 @@ CConEmuMain::~CConEmuMain()
 	//	DeleteObject(mh_RecreatePasswFont);
 	//	mh_RecreatePasswFont = NULL;
 	//}
+
+	m_GuiServer.Stop(true);
 	
 	// По идее, уже должен был быть вызван в OnDestroy
 	FinalizePortableReg();
@@ -3808,6 +3801,7 @@ LRESULT CConEmuMain::OnSize(WPARAM wParam, WORD newClientWidth, WORD newClientHe
 	HWND hWndDC = pVCon ? pVCon->GetView() : NULL;
 	if (hWndDC)
 	{
+		WARNING("DoubleView и не только: Переделать. Ресайз должен жить в ConEmuChild!");
 		GetWindowRect(hWndDC, &rcCurCon);
 		MapWindowPoints(NULL, ghWnd, (LPPOINT)&rcCurCon, 2);
 		lbPosChanged = memcmp(&rcCurCon, &rcNewCon, sizeof(RECT))!=0;
@@ -7069,7 +7063,13 @@ LPCTSTR CConEmuMain::GetVConTitle(int nIdx)
 	if (!mp_VCon[nIdx] || !mp_VCon[nIdx]->RCon())
 		return NULL;
 
-	return mp_VCon[nIdx]->RCon()->GetTitle();
+	LPCWSTR pszTitle = mp_VCon[nIdx]->RCon()->GetTitle();
+	if (pszTitle == NULL)
+	{
+		_ASSERTE(pszTitle!=NULL);
+		pszTitle = GetDefaultTitle();
+	}
+	return pszTitle;
 }
 
 // Возвращает индекс (0-based) активной консоли
@@ -8032,11 +8032,13 @@ LRESULT CConEmuMain::OnCreate(HWND hWnd, LPCREATESTRUCT lpCreate)
 
 	//CreateCon();
 	// Запустить серверную нить
-	mh_GuiServerThreadTerminate = CreateEvent(NULL, TRUE, FALSE, NULL);
+	// 120122 - теперь через PipeServer
+	if (!m_GuiServer.Start())
+	{
+		// Ошибка уже показана
+		return -1;
+	}
 
-	if (mh_GuiServerThreadTerminate) ResetEvent(mh_GuiServerThreadTerminate);
-
-	mh_GuiServerThread = CreateThread(NULL, 0, GuiServerThread, (LPVOID)this, 0, &mn_GuiServerThreadId);
 	return 0;
 }
 
@@ -8465,40 +8467,9 @@ LRESULT CConEmuMain::OnDestroy(HWND hWnd)
 		mb_MouseCaptured = FALSE;
 	}
 
-	if (mh_GuiServerThread)
-	{
-		SetEvent(mh_GuiServerThreadTerminate);
-		wchar_t szServerPipe[MAX_PATH];
-		_ASSERTE(ghWnd!=NULL);
-		_wsprintf(szServerPipe, SKIPLEN(countof(szServerPipe)) CEGUIPIPENAME, L".", (DWORD)ghWnd); //-V205
-		HANDLE hPipe = CreateFile(szServerPipe,GENERIC_WRITE,0,NULL,OPEN_EXISTING,0,NULL);
+	//120122 - Теперь через PipeServer
+	m_GuiServer.Stop();
 
-		if (hPipe == INVALID_HANDLE_VALUE)
-		{
-			DEBUGSTR(L"All pipe instances closed?\n");
-		}
-		else
-		{
-			DEBUGSTR(L"Waiting server pipe thread\n");
-#ifdef _DEBUG
-			DWORD dwWait =
-#endif
-			    WaitForSingleObject(mh_GuiServerThread, 200); // пытаемся дождаться, пока нить завершится
-			// Просто закроем пайп - его нужно было передернуть
-			CloseHandle(hPipe);
-			hPipe = INVALID_HANDLE_VALUE;
-		}
-
-		// Если нить еще не завершилась - прибить
-		if (WaitForSingleObject(mh_GuiServerThread,0) != WAIT_OBJECT_0)
-		{
-			DEBUGSTR(L"### Terminating mh_ServerThread\n");
-			TerminateThread(mh_GuiServerThread,0);
-		}
-
-		SafeCloseHandle(mh_GuiServerThread);
-		SafeCloseHandle(mh_GuiServerThreadTerminate);
-	}
 
 	for (size_t i = 0; i < countof(mp_VCon); i++)
 	{
@@ -13080,380 +13051,6 @@ LRESULT CConEmuMain::OnVConTerminated(CVirtualConsole* apVCon, BOOL abPosted /*=
 	// А теперь можно обновить активную закладку
 	gpConEmu->mp_TabBar->OnConsoleActivated(ActiveConNum()+1/*, FALSE*/);
 	return 0;
-}
-
-DWORD CConEmuMain::GuiServerThread(LPVOID lpvParam)
-{
-	BOOL fConnected = FALSE;
-	DWORD dwErr = 0;
-	HANDLE hPipe = NULL;
-#ifdef _DEBUG
-	DWORD dwTID = GetCurrentThreadId();
-#endif
-	MCHKHEAP;
-	_ASSERTE(ghWnd!=NULL);
-	_wsprintf(gpConEmu->ms_ServerPipe, SKIPLEN(countof(gpConEmu->ms_ServerPipe)) CEGUIPIPENAME, L".", (DWORD)ghWnd); //-V205
-	// The main loop creates an instance of the named pipe and
-	// then waits for a client to connect to it. When the client
-	// connects, a thread is created to handle communications
-	// with that client, and the loop is repeated.
-	MCHKHEAP;
-
-	// Пока окно не закрыто
-	do
-	{
-		while(!fConnected)
-		{
-			_ASSERTE(hPipe == NULL);
-			hPipe = CreateNamedPipe(
-			            gpConEmu->ms_ServerPipe,             // pipe name
-			            PIPE_ACCESS_DUPLEX,       // read/write access
-			            PIPE_TYPE_MESSAGE |       // message type pipe
-			            PIPE_READMODE_MESSAGE |   // message-read mode
-			            PIPE_WAIT,                // blocking mode
-			            PIPE_UNLIMITED_INSTANCES, // max. instances
-			            PIPEBUFSIZE,              // output buffer size
-			            PIPEBUFSIZE,              // input buffer size
-			            0,                        // client time-out
-			            gpLocalSecurity);          // default security attribute
-			_ASSERTE(hPipe != INVALID_HANDLE_VALUE);
-
-			if (hPipe == INVALID_HANDLE_VALUE)
-			{
-				//DisplayLastError(L"CreateNamedPipe failed");
-				hPipe = NULL;
-				Sleep(50);
-				continue;
-			}
-
-			MCHKHEAP;
-			// Wait for the client to connect; if it succeeds,
-			// the function returns a nonzero value. If the function
-			// returns zero, GetLastError returns ERROR_PIPE_CONNECTED.
-			fConnected = ConnectNamedPipe(hPipe, NULL) ? TRUE : ((dwErr = GetLastError()) == ERROR_PIPE_CONNECTED);
-
-			if ((dwErr = WaitForSingleObject(gpConEmu->mh_GuiServerThreadTerminate, 0)) == WAIT_OBJECT_0)
-			{
-				SafeCloseHandle(hPipe);
-				return 0; // GUI закрывается
-			}
-
-			if (!fConnected)
-				SafeCloseHandle(hPipe);
-		}
-
-		if (fConnected)
-		{
-			// сразу сбросим, чтобы не забыть
-			fConnected = FALSE;
-			gpConEmu->GuiServerThreadCommand(hPipe);    // При необходимости - записывает в пайп результат сама
-		}
-
-		FlushFileBuffers(hPipe);
-		//DisconnectNamedPipe(hPipe);
-		SafeCloseHandle(hPipe);
-	} // Перейти к открытию нового instance пайпа
-
-	while(WaitForSingleObject(gpConEmu->mh_GuiServerThreadTerminate, 0) != WAIT_OBJECT_0);
-
-	return 0;
-}
-
-// Эта функция пайп не закрывает!
-void CConEmuMain::GuiServerThreadCommand(HANDLE hPipe)
-{
-	CESERVER_REQ in= {{0}}, *pIn=NULL;
-	DWORD cbRead = 0, cbWritten = 0, dwErr = 0;
-	BOOL fSuccess = FALSE;
-	// Send a message to the pipe server and read the response.
-	fSuccess = ReadFile(
-	               hPipe,            // pipe handle
-	               &in,              // buffer to receive reply
-	               sizeof(in),       // size of read buffer
-	               &cbRead,          // bytes read
-	               NULL);            // not overlapped
-
-	if (!fSuccess && ((dwErr = GetLastError()) != ERROR_MORE_DATA))
-	{
-		_ASSERTE("ReadFile(pipe) failed"==NULL || (dwErr==ERROR_BROKEN_PIPE && cbRead==0));
-		//CloseHandle(hPipe);
-		return;
-	}
-
-	if (in.hdr.nVersion != CESERVER_REQ_VER)
-	{
-		gpConEmu->ReportOldCmdVersion(in.hdr.nCmd, in.hdr.nVersion, -1, in.hdr.nSrcPID, in.hdr.hModule, in.hdr.nBits);
-		return;
-	}
-
-	_ASSERTE(in.hdr.cbSize>=sizeof(CESERVER_REQ_HDR) && cbRead>=sizeof(CESERVER_REQ_HDR));
-
-	if (cbRead < sizeof(CESERVER_REQ_HDR) || /*in.hdr.cbSize < cbRead ||*/ in.hdr.nVersion != CESERVER_REQ_VER)
-	{
-		//CloseHandle(hPipe);
-		return;
-	}
-	
-	gpSetCls->debugLogCommand(&in, TRUE, timeGetTime(), 0, ms_ServerPipe);
-
-	if (in.hdr.cbSize <= cbRead)
-	{
-		pIn = &in; // выделение памяти не требуется
-	}
-	else
-	{
-		int nAllSize = in.hdr.cbSize;
-		pIn = (CESERVER_REQ*)calloc(nAllSize,1);
-		_ASSERTE(pIn!=NULL);
-		memmove(pIn, &in, cbRead);
-		_ASSERTE(pIn->hdr.nVersion==CESERVER_REQ_VER);
-		LPBYTE ptrData = ((LPBYTE)pIn)+cbRead;
-		nAllSize -= cbRead;
-
-		while(nAllSize>0)
-		{
-			//_tprintf(TEXT("%s\n"), chReadBuf);
-
-			// Break if TransactNamedPipe or ReadFile is successful
-			if (fSuccess)
-				break;
-
-			// Read from the pipe if there is more data in the message.
-			fSuccess = ReadFile(
-			               hPipe,      // pipe handle
-			               ptrData,    // buffer to receive reply
-			               nAllSize,   // size of buffer
-			               &cbRead,    // number of bytes read
-			               NULL);      // not overlapped
-
-			// Exit if an error other than ERROR_MORE_DATA occurs.
-			if (!fSuccess && ((dwErr = GetLastError()) != ERROR_MORE_DATA))
-				break;
-
-			ptrData += cbRead;
-			nAllSize -= cbRead;
-		}
-
-		TODO("Может возникнуть ASSERT, если консоль была закрыта в процессе чтения");
-		_ASSERTE(nAllSize==0);
-
-		if (nAllSize>0)
-		{
-			//CloseHandle(hPipe);
-			return; // удалось считать не все данные
-		}
-	}
-
-#ifdef _DEBUG
-	UINT nDataSize = pIn->hdr.cbSize - sizeof(CESERVER_REQ_HDR);
-#endif
-	// Все данные из пайпа получены, обрабатываем команду и возвращаем (если нужно) результат
-
-	if (pIn->hdr.nCmd == CECMD_NEWCMD)
-	{
-		// Приходит из другой копии ConEmu.exe, когда она запущена с ключом /single
-		DEBUGSTR(L"GUI recieved CECMD_NEWCMD\n");
-		pIn->Data[0] = FALSE;
-		pIn->hdr.cbSize = sizeof(CESERVER_REQ_HDR) + 1;
-
-		if (isIconic())
-			SendMessage(ghWnd, WM_SYSCOMMAND, SC_RESTORE, 0);
-
-		apiSetForegroundWindow(ghWnd);
-		WARNING("");
-		RConStartArgs *pArgs = new RConStartArgs;
-		pArgs->pszSpecialCmd = lstrdup(pIn->NewCmd.szCommand);
-		pArgs->pszStartupDir = lstrdup(pIn->NewCmd.szCurDir);
-
-		gpConEmu->PostCreateCon(pArgs);
-
-		// Отпустим команду сразу, во избежание блокирования и задержек в консоли
-		pIn->Data[0] = TRUE;
-
-		/*
-		CVirtualConsole* pVCon = CreateCon(&args);
-
-		if (pVCon)
-		{
-			pIn->Data[0] = TRUE;
-		}
-		*/
-
-		// Отправляем
-		fSuccess = WriteFile(
-		               hPipe,        // handle to pipe
-		               pIn,         // buffer to write from
-		               pIn->hdr.cbSize,  // number of bytes to write
-		               &cbWritten,   // number of bytes written
-		               NULL);        // not overlapped I/O
-	}
-	else if (pIn->hdr.nCmd == CECMD_TABSCMD)
-	{
-		// 0: спрятать/показать табы, 1: перейти на следующую, 2: перейти на предыдущую, 3: commit switch
-		DEBUGSTR(L"GUI recieved CECMD_TABSCMD\n");
-		_ASSERTE(nDataSize>=1);
-		DWORD nTabCmd = pIn->Data[0];
-		TabCommand(nTabCmd);
-	}
-	else if (pIn->hdr.nCmd == CECMD_ATTACH2GUI)
-	{
-		// Получен запрос на Attach из сервера
-		CESERVER_REQ* pOut = ExecuteNewCmd(CECMD_ATTACH2GUI, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_STARTSTOPRET));
-		if (AttachRequested(pIn->StartStop.hWnd, &(pIn->StartStop), &(pOut->StartStopRet)))
-		{
-			fSuccess = WriteFile(hPipe, pOut, pOut->hdr.cbSize, &cbWritten, NULL);
-		}
-		ExecuteFreeResult(pOut);
-	}
-	else if (pIn->hdr.nCmd == CECMD_SRVSTARTSTOP)
-	{
-		CESERVER_REQ* pOut = ExecuteNewCmd(CECMD_SRVSTARTSTOP, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_STARTSTOPRET));
-
-		if (pIn->dwData[0] == 1)
-		{
-			// Запущен процесс сервера
-			HWND hConWnd = (HWND)pIn->dwData[1];
-			_ASSERTE(hConWnd && IsWindow(hConWnd));
-
-			DWORD nStartTick = timeGetTime();
-
-			//LRESULT l = 0;
-			//DWORD_PTR dwRc = 0;
-			//2010-05-21 Поскольку это критично - лучше ждать до упора, хотя может быть DeadLock?
-			//l = SendMessageTimeout(ghWnd, gpConEmu->mn_MsgSrvStarted, (WPARAM)hConWnd, pIn->hdr.nSrcPID,
-			//	SMTO_BLOCK, 5000, &dwRc);
-			//111002 - вернуть должен HWND окна отрисовки (дочернее окно ConEmu)
-			MsgSrvStartedArg arg = {hConWnd, pIn->hdr.nSrcPID, nStartTick};
-			HWND hWndDC = (HWND)SendMessage(ghWnd, gpConEmu->mn_MsgSrvStarted, 0, (LPARAM)&arg);
-			_ASSERTE(hWndDC!=NULL);
-
-			#ifdef _DEBUG
-			DWORD dwErr = GetLastError(), nEndTick = timeGetTime(), nDelta = nEndTick - nStartTick;
-			if (hWndDC && nDelta >= EXECUTE_CMD_WARN_TIMEOUT)
-			{
-				if (!IsDebuggerPresent())
-				{
-					//_ASSERTE(nDelta <= EXECUTE_CMD_WARN_TIMEOUT || (pIn->hdr.nCmd == CECMD_CMDSTARTSTOP && nDelta <= EXECUTE_CMD_WARN_TIMEOUT2));
-					_ASSERTEX(nDelta <= EXECUTE_CMD_WARN_TIMEOUT);
-				}
-			}
-			#endif
-
-			//pIn->dwData[0] = (DWORD)ghWnd; //-V205
-			//pIn->dwData[1] = (DWORD)dwRc; //-V205
-			//pIn->dwData[0] = (l == 0) ? 0 : 1;
-			pOut->StartStopRet.hWnd = ghWnd;
-			pOut->StartStopRet.hWndDC = hWndDC;
-			pOut->StartStopRet.dwPID = GetCurrentProcessId();
-		}
-		else if (pIn->dwData[0] == 101)
-		{
-			// Процесс сервера завершается
-			CRealConsole* pRCon = NULL;
-
-			for (size_t i = 0; i < countof(gpConEmu->mp_VCon); i++)
-			{
-				if (gpConEmu->mp_VCon[i] && gpConEmu->mp_VCon[i]->RCon() && gpConEmu->mp_VCon[i]->RCon()->GetServerPID() == pIn->hdr.nSrcPID)
-				{
-					pRCon = gpConEmu->mp_VCon[i]->RCon();
-					break;
-				}
-			}
-
-			if (pRCon)
-				pRCon->OnServerClosing(pIn->hdr.nSrcPID);
-
-			//pIn->dwData[0] = 1;
-		}
-		else
-		{
-			_ASSERTE((pIn->dwData[0] == 1) || (pIn->dwData[0] == 101));
-		}
-
-		// Отправляем
-		fSuccess = WriteFile(
-		               hPipe,        // handle to pipe
-		               pOut,         // buffer to write from
-		               pOut->hdr.cbSize,  // number of bytes to write
-		               &cbWritten,   // number of bytes written
-		               NULL);        // not overlapped I/O
-
-		ExecuteFreeResult(pOut);
-	}
-	else if (pIn->hdr.nCmd == CECMD_ASSERT)
-	{
-		DWORD nBtn = MessageBox(NULL, pIn->AssertInfo.szDebugInfo, pIn->AssertInfo.szTitle, pIn->AssertInfo.nBtns);
-		ExecutePrepareCmd(&pIn->hdr, CECMD_ASSERT, sizeof(CESERVER_REQ_HDR) + sizeof(DWORD));
-		pIn->dwData[0] = nBtn;
-		// Отправляем
-		fSuccess = WriteFile(
-		               hPipe,        // handle to pipe
-		               pIn,         // buffer to write from
-		               pIn->hdr.cbSize,  // number of bytes to write
-		               &cbWritten,   // number of bytes written
-		               NULL);        // not overlapped I/O
-	}
-	else if (pIn->hdr.nCmd == CECMD_ATTACHGUIAPP)
-	{
-		CESERVER_REQ Out;
-		ExecutePrepareCmd(&Out.hdr, CECMD_ATTACHGUIAPP, sizeof(CESERVER_REQ_HDR)+sizeof(Out.AttachGuiApp));
-		Out.AttachGuiApp = pIn->AttachGuiApp;
-		
-		#ifdef SHOW_GUIATTACH_START
-		if (pIn->AttachGuiApp.hWindow == NULL)
-		{
-			wchar_t szDbg[1024];
-			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"AttachGuiApp requested from:\n%s\nPID=%u", pIn->AttachGuiApp.sAppFileName, pIn->AttachGuiApp.nPID);
-			//MBoxA(szDbg);
-			MessageBox(NULL, szDbg, L"ConEmu", MB_SYSTEMMODAL);
-		}
-		#endif
-
-		// Уведомить ожидающую вкладку
-		CRealConsole* pRCon = gpConEmu->AttachRequestedGui(pIn->AttachGuiApp.sAppFileName, pIn->AttachGuiApp.nPID);
-		if (pRCon)
-		{
-			RECT rcPrev = Out.AttachGuiApp.rcWindow;
-			HWND hView = pRCon->GetView();
-			// Размер должен быть независим от возможности наличия прокрутки в VCon
-			GetWindowRect(hView, &Out.AttachGuiApp.rcWindow);
-			Out.AttachGuiApp.rcWindow.right -= Out.AttachGuiApp.rcWindow.left;
-			Out.AttachGuiApp.rcWindow.bottom -= Out.AttachGuiApp.rcWindow.top;
-			Out.AttachGuiApp.rcWindow.left = Out.AttachGuiApp.rcWindow.top = 0;
-			//MapWindowPoints(NULL, hView, (LPPOINT)&Out.AttachGuiApp.rcWindow, 2);
-			pRCon->CorrectGuiChildRect(Out.AttachGuiApp.nStyle, Out.AttachGuiApp.nStyleEx, Out.AttachGuiApp.rcWindow);
-			
-			// Уведомить RCon и ConEmuC, что гуй подцепился
-			// Вызывается два раза. Первый (при запуске exe) ahGuiWnd==NULL, второй - после фактического создания окна
-			pRCon->SetGuiMode(pIn->AttachGuiApp.nFlags, pIn->AttachGuiApp.hWindow, pIn->AttachGuiApp.nStyle, pIn->AttachGuiApp.nStyleEx, pIn->AttachGuiApp.sAppFileName, pIn->AttachGuiApp.nPID, rcPrev);
-
-			Out.AttachGuiApp.nFlags = agaf_Success;
-			Out.AttachGuiApp.nPID = pRCon->GetServerPID();
-			Out.AttachGuiApp.hWindow = pRCon->GetView();
-			Out.AttachGuiApp.hSrvConWnd = pRCon->ConWnd();
-			Out.AttachGuiApp.hkl = (DWORD)(LONG_PTR)(LONG)GetKeyboardLayout(mn_MainThreadId);
-		}
-		else
-		{
-			Out.AttachGuiApp.nFlags = agaf_Fail;
-		}
-		// Отправляем
-		fSuccess = WriteFile(
-		               hPipe,        // handle to pipe
-		               &Out,         // buffer to write from
-		               Out.hdr.cbSize,  // number of bytes to write
-		               &cbWritten,   // number of bytes written
-		               NULL);        // not overlapped I/O
-	}
-	
-
-	// Освободить память
-	if (pIn && (LPVOID)pIn != (LPVOID)&in)
-	{
-		free(pIn); pIn = NULL;
-	}
-
-	return;
 }
 
 //void CConEmuMain::PostSetBackground(CVirtualConsole* apVCon, CESERVER_REQ_SETBACKGROUND* apImgData)

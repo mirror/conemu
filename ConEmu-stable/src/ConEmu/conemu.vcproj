@@ -21,8 +21,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug_E|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -99,8 +99,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_E|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -179,8 +179,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
-			IntermediateDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
+			OutputDirectory="$(SolutionDir)\_VCBUILD\$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(SolutionDir)\_VCBUILD\$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
@@ -262,8 +262,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|x64"
-			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
-			IntermediateDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
+			OutputDirectory="$(SolutionDir)\_VCBUILD\$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(SolutionDir)\_VCBUILD\$(PlatformName)\$(ConfigurationName)\$(ProjectName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
@@ -347,8 +347,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_C|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -424,8 +424,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_C|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -503,8 +503,8 @@
 		</Configuration>
 		<Configuration
 			Name="Instrument|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
@@ -586,8 +586,8 @@
 		</Configuration>
 		<Configuration
 			Name="Instrument|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
@@ -671,8 +671,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_R|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -748,8 +748,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_R|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -827,8 +827,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_F|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -904,8 +904,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_F|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -983,8 +983,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release_PDB|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
@@ -1066,8 +1066,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release_PDB|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
@@ -1151,8 +1151,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_F2|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -1228,8 +1228,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_F2|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -1307,8 +1307,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_F3|Win32"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -1386,8 +1386,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug_F3|x64"
-			OutputDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
-			IntermediateDirectory="C:\Temp\CE\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			OutputDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
+			IntermediateDirectory="C:\Temp\CE-STBL\$(ProjectName).$(PlatformName).$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -1525,6 +1525,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\GuiServer.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\LoadImg.cpp"
 				>
 			</File>
@@ -1570,6 +1574,10 @@
 			</File>
 			<File
 				RelativePath=".\RealConsole.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\RealServer.cpp"
 				>
 			</File>
 			<File
@@ -1703,6 +1711,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\GuiServer.h"
+				>
+			</File>
+			<File
 				RelativePath=".\Header.h"
 				>
 			</File>
@@ -1760,6 +1772,10 @@
 			</File>
 			<File
 				RelativePath=".\RealConsole.h"
+				>
+			</File>
+			<File
+				RelativePath=".\RealServer.h"
 				>
 			</File>
 			<File
