@@ -112,6 +112,15 @@ namespace Far2
 #elif MVV_3<=2342
 	#include "pluginW3#2342.hpp"
 	#define MCTLARG(g) &g
+#elif MVV_3<=2375
+	#include "pluginW3#2375.hpp"
+	#define MCTLARG(g) &g
+#elif MVV_3<=2400 // условно, где поломалось - искать лень
+	#include "pluginW3#2400.hpp"
+	#define MCTLARG(g) &g
+#elif MVV_3<=2426
+	#include "pluginW3#2426.hpp"
+	#define MCTLARG(g) &g
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -413,6 +422,7 @@ struct WrapPluginInfo
 	PanelMode* PanelModes_2_3(const Far2::PanelMode *PanelModesArray, int PanelModesNumber);
 	static LPCWSTR FormatGuid(const GUID* guid, wchar_t* tmp, BOOL abQuote = FALSE);
 	static LPWSTR MacroFromMultiSZ(LPCWSTR aszMultiSZ);
+	MacroParseResult* mp_MacroResult; size_t mn_MaxMacroResult;
 
 
 /* ******************************** */
@@ -739,6 +749,8 @@ WrapPluginInfo::WrapPluginInfo(Far3WrapFunctions *pInfo2)
 	ZeroStruct(m_FarCharInfo3);
 	mn_EditorColorPriority = 0;
 
+	mp_MacroResult = NULL; mn_MaxMacroResult = 0;
+
 	gnMsg_2 = 0; gnParam1_2 = 0; gnParam1_3 = 0;
 	gnMsg_3 = DM_FIRST;
 	gnMsgKey_3 = DM_FIRST; gnMsgClose_3 = DM_FIRST;
@@ -849,6 +861,11 @@ WrapPluginInfo::~WrapPluginInfo()
 	{
 		free(gpsz_LastAnalyzeFile);
 		gpsz_LastAnalyzeFile = NULL;
+	}
+	if (mp_MacroResult)
+	{
+		free(mp_MacroResult);
+		mp_MacroResult = NULL;
 	}
 }
 
@@ -5414,23 +5431,57 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 					break;
 				case Far2::MCMD_CHECKMACRO:
 					{
-						MacroCheckMacroText mcr = {{sizeof(MacroCheckMacroText)}};
-						mcr.Text.SequenceText = p2->Param.PlainText.SequenceText;
+						MacroSendMacroText mcr = {sizeof(mcr)};
+						mcr.SequenceText = p2->Param.PlainText.SequenceText;
 						wchar_t *pszDeMultiSz = NULL;
 						if (p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ)
 						{
 							if ((pszDeMultiSz = MacroFromMultiSZ(p2->Param.PlainText.SequenceText)) != NULL)
-								mcr.Text.SequenceText = pszDeMultiSz;
+								mcr.SequenceText = pszDeMultiSz;
 						}
-						mcr.Text.Flags = 0
+						mcr.Flags = 0
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_DISABLEOUTPUT) ? KMFLAGS_DISABLEOUTPUT : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_NOSENDKEYSTOPLUGINS) ? KMFLAGS_NOSENDKEYSTOPLUGINS : 0)
 							//| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_REG_MULTI_SZ) ? KMFLAGS_REG_MULTI_SZ : 0)
 							| ((p2->Param.PlainText.Flags & Far2::KSFLAGS_SILENTCHECK) ? KMFLAGS_SILENTCHECK : 0);
 						iRc = psi3.MacroControl(MCTLARG(guid), MCTL_SENDSTRING, MSSC_CHECK, &mcr);
+						#if MVV_3<=2375
+						// пока оставлено для истории
 						p2->Param.MacroResult.ErrCode = mcr.Result.ErrCode;
 						p2->Param.MacroResult.ErrPos = mcr.Result.ErrPos;
 						p2->Param.MacroResult.ErrSrc = mcr.Result.ErrSrc;
+						#else
+						if (iRc == FALSE)
+						{
+							p2->Param.MacroResult.ErrCode = -1;
+							p2->Param.MacroResult.ErrPos.X = p2->Param.MacroResult.ErrPos.Y = 0;
+							p2->Param.MacroResult.ErrSrc = L"";
+
+							size_t iRcSize = psi3.MacroControl(MCTLARG(guid), MCTL_GETLASTERROR, 0, NULL);
+							if (!mp_MacroResult || mn_MaxMacroResult < iRcSize)
+							{
+								if (mp_MacroResult) free(mp_MacroResult);
+								mn_MaxMacroResult = iRcSize;
+								mp_MacroResult = (MacroParseResult*)malloc(mn_MaxMacroResult);
+								if (mp_MacroResult)
+								{
+									mp_MacroResult->StructSize = sizeof(*mp_MacroResult);
+									psi3.MacroControl(MCTLARG(guid), MCTL_GETLASTERROR, iRcSize, mp_MacroResult);
+									p2->Param.MacroResult.ErrCode = mp_MacroResult->ErrCode;
+									p2->Param.MacroResult.ErrPos = mp_MacroResult->ErrPos;
+									p2->Param.MacroResult.ErrSrc = mp_MacroResult->ErrSrc;
+								}
+							}
+						}
+						else
+						{
+							//OK
+							p2->Param.MacroResult.ErrCode = 0;
+							p2->Param.MacroResult.ErrPos.X = p2->Param.MacroResult.ErrPos.Y = 0;
+							p2->Param.MacroResult.ErrSrc = NULL;
+						}
+						#endif
+						// Fin
 						if (pszDeMultiSz)
 							free(pszDeMultiSz);
 					}
@@ -6416,7 +6467,8 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
 {
     //memset(Info, 0, sizeof(PluginInfo)); -- Размер выделенной памяти может быть меньше, чем ожидает плагин, memset низя
 	//Info->StructSize = sizeof(*Info);
-	_ASSERTE(Info->StructSize>0 && (Info->StructSize >= (size_t)(((LPBYTE)&Info->MacroFunctionNumber) - (LPBYTE)Info)));
+	//_ASSERTE(Info->StructSize>0 && (Info->StructSize >= (size_t)(((LPBYTE)&Info->MacroFunctionNumber) - (LPBYTE)Info)));
+	_ASSERTE(Info->StructSize>=sizeof(*Info));
 
 	//_ASSERTE(lbPsi2 && lbPsi3);
 	if (!lbPsi3)
@@ -7050,8 +7102,13 @@ int    WrapPluginInfo::ProcessEditorEventW3(const struct ProcessEditorEventInfo 
 {
 	LOG_CMD0(L"ProcessEditorEventW(%i)",Info->Event,0,0);
 	int iRc = 0;
-	if (ProcessEditorEventW)
-		iRc = ProcessEditorEventW(Info->Event, Info->Param);
+	if (ProcessEditorEventW && Info->Event >= EE_READ && Info->Event <= EE_KILLFOCUS)
+	{
+		void* Param = Info->Param;
+		if (Info->Event == EE_CLOSE || Info->Event == EE_KILLFOCUS || Info->Event == EE_GOTFOCUS)
+			Param = (void*)&Info->EditorID;
+		iRc = ProcessEditorEventW(Info->Event, Param);
+	}
 	return iRc;
 }
 int    WrapPluginInfo::ProcessEditorInputW3(const ProcessEditorInputInfo *Info)
