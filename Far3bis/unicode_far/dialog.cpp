@@ -60,7 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarGuid.hpp"
 #include "colormix.hpp"
 
-// debug
+//Maximus: debug
 #include "plugapi.hpp"
 
 #define VTEXT_ADN_SEPARATORS	1
@@ -334,7 +334,7 @@ void Dialog::Init(FARWINDOWPROC DlgProc,      // ƒиалогова€ процедура
 	CanLoseFocus = FALSE;
 	HelpTopic = nullptr;
 	//Ќомер плагина, вызвавшего диалог (-1 = Main)
-	PluginNumber=-1;
+	PluginOwner = nullptr;
 	DataDialog=InitParam;
 	DialogMode.Set(DMODE_ISCANMOVE);
 	SetDropDownOpened(FALSE);
@@ -2302,9 +2302,9 @@ __int64 Dialog::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		{
 			static string strOwner;
 			GUID Owner = FarGuid;
-			if (PluginNumber && PluginNumber!=-1)
+			if (PluginOwner)
 			{
-				Owner = reinterpret_cast<Plugin*>(PluginNumber)->GetGUID();
+				Owner = PluginOwner->GetGUID();
 			}
 			strOwner = GuidToStr(Owner);
 			return reinterpret_cast<INT_PTR>(strOwner.CPtr());
@@ -2502,7 +2502,7 @@ int Dialog::ProcessKey(int Key)
 
 			// ѕеред выводом диалога посылаем сообщение в обработчик
 			//   и если вернули что надо, то выводим подсказку
-			if (!Help::MkTopic(PluginNumber,
+			if (!Help::MkTopic(PluginOwner,
 			                   (const wchar_t*)DlgProc(this,DN_HELP,FocusPos,
 			                                           (HelpTopic?HelpTopic:nullptr)),
 			                   strStr).IsEmpty())
@@ -4621,9 +4621,9 @@ INT_PTR WINAPI DefDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						di->Id=Dlg->Id;
 						di->Owner=FarGuid;
 						Result=true;
-						if (Dlg->PluginNumber && Dlg->PluginNumber!=-1)
+						if (Dlg->PluginOwner)
 						{
-							di->Owner = reinterpret_cast<Plugin*>(Dlg->PluginNumber)->GetGUID();
+							di->Owner = Dlg->PluginOwner->GetGUID();
 						}
 					}
 				}
@@ -4690,15 +4690,17 @@ INT_PTR WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 	if (!hDlg)
 		return 0;
 
+	#if 1
+	//Maximus: дл€ отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId() && Msg < DM_USER)
 	{
-		// дл€ отлова недобросовестных плагинов
 		BOOL lbSafe = FALSE;
 		if (!lbSafe)
 		{
 			ReportThreadUnsafeCall(L"SendDlgMessage(%u)", Msg);
 		}
 	}
+	#endif
 
 	Dialog* Dlg=(Dialog*)hDlg;
 	CriticalSectionLock Lock(Dlg->CS);

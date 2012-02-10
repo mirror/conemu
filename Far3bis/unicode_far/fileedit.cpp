@@ -378,7 +378,7 @@ FileEditor::~FileEditor()
 	{
 		FileEditor *save = CtrlObject->Plugins.CurEditor;
 		CtrlObject->Plugins.CurEditor=this;
-		CtrlObject->Plugins.ProcessEditorEvent(EE_CLOSE,&FEditEditorID);
+		CtrlObject->Plugins.ProcessEditorEvent(EE_CLOSE,nullptr,FEditEditorID);
 		CtrlObject->Plugins.CurEditor = save;
 	}
 
@@ -661,7 +661,7 @@ void FileEditor::Init(
 	}
 
 	CtrlObject->Plugins.CurEditor=this;//&FEdit;
-	CtrlObject->Plugins.ProcessEditorEvent(EE_READ,nullptr);
+	CtrlObject->Plugins.ProcessEditorEvent(EE_READ,nullptr,m_editor->EditorID);
 	bEE_READ_Sent = true;
 	ShowConsoleTitle();
 	EditKeyBar.SetOwner(this);
@@ -754,7 +754,7 @@ void FileEditor::DisplayObject()
 		{
 			m_editor->Flags.Clear(FEDITOR_ISRESIZEDCONSOLE);
 			CtrlObject->Plugins.CurEditor=this;
-			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);//EEREDRAW_ALL);
+			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,m_editor->EditorID);
 		}
 
 		m_editor->Show();
@@ -1145,11 +1145,14 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						}
 						Done=TRUE;
 					}
+					#if 1
+					//Maximus
 					else if (SaveResult==SAVEFILE_CANCEL)
 					{
 						// Если был отказ от сохранения - не нужно повторно спрашивать (по ShiftF10), сохранить или нет
 						return FALSE;
 					}
+					#endif
 					else
 					{
 						Done=TRUE;
@@ -1157,7 +1160,10 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 					}
 				}
 
+				#if 1
+				//Maximus: возможно, этот фикс уже не нужен
 				FarChDir(strOldCurDir); // возможно правильнее выкинуть: FarChDir(strStartDir); - 2 вызова //???
+				#endif
 				return TRUE;
 			}
 			// $ 30.05.2003 SVS - Shift-F4 в редакторе/вьювере позволяет открывать другой редактор/вьювер (пока только редактор)
@@ -1300,10 +1306,13 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						ChangeEditKeyBar();
 					}
 				}
+				#if 1
+				//Maximus: из патча w17 не вошедшего в trunk
 				else
 				{
 					Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorSwitchUnicodeCPDisabled),MSG(MEditorTryReloadFile),MSG(MOk));
 				}
+				#endif
 
 				return TRUE;
 			}
@@ -1333,10 +1342,13 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 					}
 				}
+				#if 1
+				//Maximus: из патча w17 не вошедшего в trunk
 				else
 				{
 					Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorSwitchUnicodeCPDisabled),MSG(MEditorTryReloadFile),MSG(MOk));
 				}
+				#endif
 
 				return TRUE;
 			}
@@ -1886,10 +1898,11 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, int TextForma
 			}
 		}
 
-		CtrlObject->Plugins.ProcessEditorEvent(EE_SAVE,nullptr);
+		CtrlObject->Plugins.ProcessEditorEvent(EE_SAVE,nullptr,m_editor->EditorID);
 		File EditFile;
 		DWORD dwWritten=0;
 		// Don't use CreationDisposition=CREATE_ALWAYS here - it's kills alternate streams
+		//Maximus: поковыряться еще, вроде в far2bis правил, но реакции не было
 		// TRUNCATE_EXISTING may cause errors - http://forum.farmanager.com/viewtopic.php?p=84675#p84675
 		if(!EditFile.Open(Name, GENERIC_WRITE, FILE_SHARE_READ, nullptr, Flags.Check(FFILEEDIT_NEW)?CREATE_NEW:TRUNCATE_EXISTING, FILE_ATTRIBUTE_ARCHIVE|FILE_FLAG_SEQUENTIAL_SCAN))
 		{
@@ -1966,8 +1979,12 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, int TextForma
 
 			CurPtr->GetBinaryString(&SaveStr,&EndSeq,Length);
 
+			#if 1
 			//Maximus5: Если плагин сказал - EOL не нужен - зачем фар его пишет?
 			if (!*EndSeq && CurPtr->m_next && (*CurPtr->GetEOL()))
+			#else
+			if (!*EndSeq && CurPtr->m_next)
+			#endif
 				EndSeq=*m_editor->GlobalEOL ? m_editor->GlobalEOL:DOS_EOL_fmt;
 
 			if (TextFormat && *EndSeq)
@@ -2061,6 +2078,8 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, int TextForma
 		else
 		{
 			SysErrorCode=GetLastError();
+			//Maximus: поковыряться еще, вроде в far2bis правил, но реакции не было
+			//         http://forum.farmanager.com/viewtopic.php?p=84675#p84675
 			//BUGBUG: в некоторых случаях происходит облом (сетевая шара MacOS)
 			//  ErrCode=0x0000003A (58) - The specified server cannot perform the requested operation.
 			EditFile.Close();
@@ -2487,7 +2506,7 @@ void FileEditor::OnChangeFocus(int focus)
 	Frame::OnChangeFocus(focus);
 	CtrlObject->Plugins.CurEditor=this;
 	int FEditEditorID=m_editor->EditorID;
-	CtrlObject->Plugins.ProcessEditorEvent(focus?EE_GOTFOCUS:EE_KILLFOCUS,&FEditEditorID);
+	CtrlObject->Plugins.ProcessEditorEvent(focus?EE_GOTFOCUS:EE_KILLFOCUS,nullptr,FEditEditorID);
 }
 
 
@@ -2506,6 +2525,7 @@ int FileEditor::EditorControl(int Command, void *Param)
 	_ECTLLOG(SysLog(L"(Command=%s, Param=[%d/0x%08X])",_ECTL_ToName(Command),(int)Param,Param));
 #endif
 
+	if(m_editor->EditorControlLocked()) return FALSE;
 	if (m_bClosing && (Command != ECTL_GETINFO) && (Command != ECTL_GETBOOKMARKS) && (Command!=ECTL_GETFILENAME))
 		return FALSE;
 

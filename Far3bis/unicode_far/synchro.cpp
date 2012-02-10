@@ -60,9 +60,15 @@ void PluginSynchro::Synchro(bool Plugin, const GUID& PluginId,void* Param)
 
 bool PluginSynchro::Process(void)
 {
+	#if 1
 	//Maximus: Ќехорошо вызывать плагины до тех пор, пока фар не прошел полную инициализацию
 	if (!CtrlObject || !CtrlObject->Plugins.IsPluginsLoaded())
+	{
+		//Ёто тема дл€ багрепорта на Mantis?
+		_ASSERTE(CtrlObject && CtrlObject->Plugins.IsPluginsLoaded());
 		return false;
+	}
+	#endif
 
 	bool res=false;
 	bool process=false; bool plugin=false; GUID PluginId=FarGuid; void* param=nullptr;
@@ -86,10 +92,12 @@ bool PluginSynchro::Process(void)
 		{
 			Plugin* pPlugin=CtrlObject?CtrlObject->Plugins.FindPlugin(PluginId):nullptr;
 
-			// «десь не провер€лась валидность pPlugin. ќн мог быть выгружен (например через FarCmd -> unload:)
-			if (pPlugin && CtrlObject->Plugins.IsPluginValid(pPlugin))
-
+			if (pPlugin)
 			{
+				#ifdef _DEBUG
+				//Maximus: вроде должно быть исправлено, проверим
+				_ASSERTE(CtrlObject->Plugins.IsPluginValid(pPlugin));
+				#endif
 				pPlugin->ProcessSynchroEvent(SE_COMMONSYNCHRO,param);
 				res=true;
 			}

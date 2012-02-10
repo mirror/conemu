@@ -1076,7 +1076,6 @@ void FilePanels::OnChangeFocus(int f)
 		    Redraw вызываетс€ следом во Frame::OnChangeFocus.
 		*/
 //    Redraw();
-		// »наче при возврате из редактора в панели по CtrlTab директори€ будет невалидной!
 		ActivePanel->SetCurPath();
 		Frame::OnChangeFocus(1);
 	}

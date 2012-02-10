@@ -59,7 +59,10 @@ enum
 	PVS_FOLDERUPPERCASE       = 0x00000008,
 	PVS_FILELOWERCASE         = 0x00000010,
 	PVS_FILEUPPERTOLOWERCASE  = 0x00000020,
+	#if 1
+	//Maximus: оптимизация колонки C0
 	PVS_PRELOADC0DATA         = 0x00000040,
+	#endif
 };
 
 enum
@@ -182,9 +185,14 @@ class Panel:public ScreenObject
 
 		virtual int GetCurDir(string &strCurDir);
 
-		virtual int GetSelCount() {return 0;}
-		virtual int GetRealSelCount() {return 0;}
+		virtual size_t GetSelCount() {return 0;}
+		virtual size_t GetRealSelCount() {return 0;}
+		#if 1
+		//Maximus: отображение владельцев с плагиновых панелей
 		virtual int GetSelName(string *strName,DWORD &FileAttr,string *ShortName=nullptr,FAR_FIND_DATA_EX *fd=nullptr,string *strOwner=nullptr) {return FALSE;}
+		#else
+		virtual int GetSelName(string *strName,DWORD &FileAttr,string *ShortName=nullptr,FAR_FIND_DATA_EX *fd=nullptr) {return FALSE;}
+		#endif
 		virtual void UngetSelName() {}
 		virtual void ClearLastGetSelection() {}
 		virtual unsigned __int64 GetLastSelectedSize() {return (unsigned __int64)(-1);}
@@ -319,6 +327,13 @@ class Panel:public ScreenObject
 
 		BOOL NeedUpdatePanel(Panel *AnotherPanel);
 
+		#if 1
+		//Maximus: многострочная статусная область
 		virtual int GetPanelStatusHeight() { return 0; };
+		#endif
+		
+		#if 1
+		//Maximus: оптимизация колонки C0
 		virtual void ClearCustomData() {};
+		#endif
 };

@@ -2447,7 +2447,6 @@ void ArchiveSearch(HANDLE hDlg, const wchar_t *ArcName)
 
 	if (hArc==(HANDLE)-2)
 	{
-		// Не, ну с какой радости ОСТАНАВЛИВАТЬ поиск, если я отказался от обработки ОДНОГО ФАЙЛА?
 		//StopEvent.Set(); // ??
 		_ALGO(SysLog(L"return: hArc==(HANDLE)-2"));
 		return;

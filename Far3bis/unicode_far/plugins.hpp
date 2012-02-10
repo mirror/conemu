@@ -58,6 +58,7 @@ enum
 	PLUGIN_FAROTHER
 };
 
+//Maximus: Расширенное меню плагинов
 enum
 {
 	CFGPLUGMENU_SHOW_DLLVER = 0x00000001,
@@ -121,7 +122,6 @@ enum PLUGINITEMCALLFUNCFLAGS
 enum PLUGINSETFLAGS
 {
 	PSIF_ENTERTOOPENPLUGIN        = 0x00000001, // ввалились в плагин OpenPlugin
-	PSIF_DIALOG                   = 0x00000002, // была бадяга с диалогом
 	PSIF_PLUGINSLOADDED           = 0x80000000, // плагины загружены
 };
 
@@ -136,6 +136,7 @@ enum OPENFILEPLUGINTYPE
 	OFP_COMMANDS,
 };
 
+//Maximus: параметры вызова макрофункций plugin.call и т.п.
 enum CALLPLUGINTYPE
 {
 	CPT_CALL,
@@ -144,6 +145,7 @@ enum CALLPLUGINTYPE
 	CPT_INTERNAL,
 };
 
+//Maximus: параметры вызова макрофункций plugin.call и т.п.
 struct CallPluginInfo
 {
 	CALLPLUGINTYPE CallType;
@@ -182,6 +184,8 @@ class PluginManager
 #endif // NO_WRAPPER
 		PluginTree* PluginsCache;
 
+		DList<Plugin*> UnloadedPlugins;
+
 	public:
 
 		BitFlags Flags;        // флаги манагера плагинов
@@ -202,7 +206,12 @@ class PluginManager
 		bool TestPluginInfo(Plugin *Item,PluginInfo *Info);
 		bool TestOPENPANELINFO(Plugin *Item,OpenPanelInfo *Info);
 
+		#if 1
+		//Maximus: отображение ошибок загрузки плагинов
 		Plugin* LoadPlugin(const string& lpwszModuleName, const FAR_FIND_DATA_EX &FindData, bool LoadToMem, bool* ShowErrors=nullptr, bool Manual=false);
+		#else
+		Plugin* LoadPlugin(const string& lpwszModuleName, const FAR_FIND_DATA_EX &FindData, bool LoadToMem);
+		#endif
 
 		bool AddPlugin(Plugin *pPlugin);
 		bool RemovePlugin(Plugin *pPlugin);
@@ -213,8 +222,11 @@ class PluginManager
 
 		void SetFlags(DWORD NewFlags) { Flags.Set(NewFlags); }
 		void SkipFlags(DWORD NewFlags) { Flags.Clear(NewFlags); }
-		
+
+		#if 1
+		//Maximus: расширенное меню плагинов		
 		void GetPluginVersion(LPCTSTR ModuleName,string &strModuleVer);
+		#endif
 
 	public:
 
@@ -223,16 +235,30 @@ class PluginManager
 
 	public:
 
-		int UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove = false);
 
+		int UnloadPlugin(Plugin *pPlugin, DWORD dwException);
+
+		#if 1
+		//Maximus: отображение ошибок загрузки плагинов
 		HANDLE LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual=false);
+		#else
+		HANDLE LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem);
+		#endif
 		int UnloadPluginExternal(HANDLE hPlugin);
 
+		#if 1
+		//Maximus: расширенное меню плагинов
 		void LoadPlugins(bool Redraw=false);
+		#else
+		void LoadPlugins();
+		#endif
 
 		Plugin *GetPlugin(const wchar_t *lpwszModuleName);
 		Plugin *GetPlugin(size_t PluginNumber);
+		#if 1
+		//Maximus: для отлова багов
 		bool IsPluginValid(Plugin *pPlugin);
+		#endif
 
 		size_t GetPluginsCount() { return PluginsCount; }
 #ifndef NO_WRAPPER
@@ -243,7 +269,12 @@ class PluginManager
 
 		BOOL CheckFlags(DWORD NewFlags) { return Flags.Check(NewFlags); }
 
+		#if 1
+		//Maximus: расширенное меню плагинов
 		int Configure(int StartPos=0);
+		#else
+		void Configure(int StartPos=0);
+		#endif
 		void ConfigureCurrent(Plugin *pPlugin,const GUID& Guid);
 		int CommandsMenu(int ModalType,int StartPos,const wchar_t *HistoryName=nullptr);
 		bool GetDiskMenuItem(Plugin *pPlugin,size_t PluginItem,bool &ItemPresent, wchar_t& PluginHotkey, string &strPluginText, GUID &Guid);
@@ -259,10 +290,16 @@ class PluginManager
 
 		// $ .09.2000 SVS - Функция CallPlugin - найти плагин по ID и запустить OpenFrom = OPEN_*
 		int CallPlugin(const GUID& SysID,int OpenFrom, void *Data, int *Ret=nullptr);
+		#if 1
+		//Maximus: макрофункции plugin.call и т.п.
 		int CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret=nullptr);
+		#endif
 		Plugin *FindPlugin(const GUID& SysID);
 		INT_PTR PluginGuidToPluginNumber(const GUID& PluginId);
 		static const GUID& GetGUID(HANDLE hPlugin);
+
+		void RefreshPluginsList();
+		void UndoRemove(Plugin* plugin);
 
 //api functions
 
@@ -287,8 +324,8 @@ class PluginManager
 		int ProcessEvent(HANDLE hPlugin,int Event,void *Param);
 		int Compare(HANDLE hPlugin,const PluginPanelItem *Item1,const PluginPanelItem *Item2,unsigned int Mode);
 		int ProcessEditorInput(INPUT_RECORD *Rec);
-		int ProcessEditorEvent(int Event,void *Param);
-		int ProcessViewerEvent(int Event,void *Param);
+		int ProcessEditorEvent(int Event,void *Param,int EditorID);
+		int ProcessViewerEvent(int Event,void *Param,int ViewerID);
 		int ProcessDialogEvent(int Event,FarDialogEvent *Param);
 #if defined(MANTIS_0000466)
 		int ProcessMacro(const GUID& guid,ProcessMacroInfo *Info);
@@ -297,7 +334,10 @@ class PluginManager
 		int ProcessConsoleInput(ProcessConsoleInputInfo *Info);
 #endif
 		void GetCustomData(FileListItem *ListItem);
+		#if 1
+		//Maximus: оптимизация колонки C0
 		bool HasGetCustomData();
+		#endif
 
 		friend class Plugin;
 };

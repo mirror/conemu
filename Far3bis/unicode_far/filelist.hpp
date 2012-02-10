@@ -81,6 +81,9 @@ struct FileListItem
 	DWORD ReparseTag;
 
 	string strCustomData;
+	
+	#if 1
+	//Maximus: оптимизация колонки C0
 	bool CustomDataLoaded;
 
 	void ClearCustomData()
@@ -88,6 +91,7 @@ struct FileListItem
 		strCustomData.Clear();
 		CustomDataLoaded=false;
 	}
+	#endif
 
 	void Clear()
 	{
@@ -119,7 +123,12 @@ struct FileListItem
 		strName.Clear();
 		strShortName.Clear();
 		ReparseTag=0;
+		#if 1
+		//Maximus: оптимизация колонки C0
 		ClearCustomData();
+		#else
+		strCustomData.Clear();
+		#endif
 	}
 
 	FileListItem& operator=(const FileListItem &fliCopy)
@@ -154,7 +163,10 @@ struct FileListItem
 			strName = fliCopy.strName;
 			strShortName = fliCopy.strShortName;
 			strCustomData = fliCopy.strCustomData;
+			#if 1
+			//Maximus: оптимизация колонки C0
 			CustomDataLoaded = fliCopy.CustomDataLoaded;
+			#endif
 		}
 
 		return *this;
@@ -206,9 +218,9 @@ class FileList:public Panel
 		HANDLE hListChange;
 		long UpperFolderTopFile,LastCurFile;
 		long ReturnCurrentFile;
-		long SelFileCount;
+		size_t SelFileCount;
 		long GetSelPosition,LastSelPosition;
-		long TotalFileCount;
+		size_t TotalFileCount;
 		unsigned __int64 SelFileSize;
 		unsigned __int64 TotalFileSize;
 		unsigned __int64 FreeDiskSize;
@@ -261,8 +273,13 @@ class FileList:public Panel
 		void UpdatePlugin(int KeepSelection, int IgnoreVisible);
 
 		void MoveSelection(FileListItem **FileList,long FileCount,FileListItem **OldList,long OldFileCount);
-		virtual int GetSelCount();
+		virtual size_t GetSelCount();
+		#if 1
+		//Maximus: отображение владельца с плагиновых панелей
 		virtual int GetSelName(string *strName,DWORD &FileAttr,string *strShortName=nullptr,FAR_FIND_DATA_EX *fde=nullptr,string *strOwner=nullptr);
+		#else
+		virtual int GetSelName(string *strName,DWORD &FileAttr,string *strShortName=nullptr,FAR_FIND_DATA_EX *fde=nullptr);
+		#endif
 		virtual void UngetSelName();
 		virtual void ClearLastGetSelection();
 
@@ -415,7 +432,7 @@ class FileList:public Panel
 
 		void ResetLastUpdateTime() {LastUpdateTime = 0;}
 		virtual HANDLE GetPluginHandle();
-		virtual int GetRealSelCount();
+		virtual size_t GetRealSelCount();
 		static void SetFilePanelModes();
 		static void SavePanelModes();
 		static void ReadPanelModes();
@@ -427,6 +444,13 @@ class FileList:public Panel
 		static bool IsModeFullScreen(int Mode);
 		static string &AddPluginPrefix(FileList *SrcPanel,string &strPrefix);
 
+		#if 1
+		//Maximus: многострочная статусная строка
 		virtual int GetPanelStatusHeight();
+		#endif
+		
+		#if 1
+		//Maximus: оптимизация колонки C0
 		virtual void ClearCustomData();
+		#endif
 };

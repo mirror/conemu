@@ -148,6 +148,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif // __GNUC__
 
 
+//Maximus: для отладки
 #ifdef _DEBUG
 	#ifndef _CRT_WIDE
 	#define __CRT_WIDE(_String) L ## _String

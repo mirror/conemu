@@ -96,7 +96,8 @@ Editor::Editor(ScreenObject *pOwner,bool DialogUsed):
 	EditorID(::EditorID++),
 	HostFileEditor(nullptr),
 	SortColorLockCount(0),
-	SortColorUpdate(false)
+	SortColorUpdate(false),
+	EditorControlLock(0)
 {
 	_KEYMACRO(SysLog(L"Editor::Editor()"));
 	_KEYMACRO(SysLog(1));
@@ -264,11 +265,11 @@ int Editor::GetRawData(wchar_t **DestBuf,int& SizeDestBuf,int TextFormat)
 
 void Editor::DisplayObject()
 {
-	ShowEditor(FALSE);
+	ShowEditor();
 }
 
 
-void Editor::ShowEditor(int CurLineOnly)
+void Editor::ShowEditor(void)
 {
 	if (Locked() || !TopList)
 		return;
@@ -276,7 +277,6 @@ void Editor::ShowEditor(int CurLineOnly)
 	Edit *CurPtr;
 	int LeftPos,CurPos,Y;
 
-//_SVS(SysLog(L"Enter to ShowEditor, CurLineOnly=%i",CurLineOnly));
 	/*$ 10.08.2000 skv
 	  To make sure that CurEditor is set to required value.
 	*/
@@ -335,37 +335,18 @@ void Editor::ShowEditor(int CurLineOnly)
 	{
 		/*$ 10.08.2000 skv
 		  Don't send EE_REDRAW while macro is being executed.
-		  Send EE_REDRAW with param=2 if text was just modified.
 
 		*/
 		_SYS_EE_REDRAW(CleverSysLog Clev(L"Editor::ShowEditor()"));
 
 		if (!ScrBuf.GetLockCount())
 		{
-			/*$ 13.09.2000 skv
-			  EE_REDRAW 1 and 2 replaced.
-			*/
-			if (Flags.Check(FEDITOR_JUSTMODIFIED))
+			if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
 			{
-				Flags.Clear(FEDITOR_JUSTMODIFIED);
-
-				if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
-				{
-					_SYS_EE_REDRAW(SysLog(L"Call ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE)"));
-					SortColorLock();
-					CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
-					SortColorUnlock();
-				}
-			}
-			else
-			{
-				if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
-				{
-					_SYS_EE_REDRAW(SysLog(L"Call ProcessEditorEvent(EE_REDRAW,%s)",(CurLineOnly?"EEREDRAW_LINE":"EEREDRAW_ALL")));
-					SortColorLock();
-					CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,CurLineOnly?EEREDRAW_LINE:EEREDRAW_ALL);
-					SortColorUnlock();
-				}
+				_SYS_EE_REDRAW(SysLog(L"Call ProcessEditorEvent(EE_REDRAW)"));
+				SortColorLock();
+				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
+				SortColorUnlock();
 			}
 		}
 		_SYS_EE_REDRAW(else SysLog(L"ScrBuf Locked !!!"));
@@ -373,40 +354,37 @@ void Editor::ShowEditor(int CurLineOnly)
 
 	DrawScrollbar();
 
-	if (!CurLineOnly)
-	{
-		LeftPos=CurLine->GetLeftPos();
+	LeftPos=CurLine->GetLeftPos();
 #if 0
 
-		// крайне эксперементальный кусок!
-		if (CurPos+LeftPos < XX2)
-			LeftPos=0;
-		else if (CurLine->X2 < XX2)
-			LeftPos=CurLine->GetLength()-CurPos;
+	// крайне эксперементальный кусок!
+	if (CurPos+LeftPos < XX2)
+		LeftPos=0;
+	else if (CurLine->X2 < XX2)
+		LeftPos=CurLine->GetLength()-CurPos;
 
-		if (LeftPos < 0)
-			LeftPos=0;
+	if (LeftPos < 0)
+		LeftPos=0;
 
 #endif
 
-		for (CurPtr=TopScreen,Y=Y1; Y<=Y2; Y++)
-			if (CurPtr)
-			{
-				CurPtr->SetEditBeyondEnd(TRUE);
-				CurPtr->SetPosition(X1,Y,XX2,Y);
-				//CurPtr->SetTables(UseDecodeTable ? &TableSet:nullptr);
-				//_D(SysLog(L"Setleftpos 3 to %i",LeftPos));
-				CurPtr->SetLeftPos(LeftPos);
-				CurPtr->SetTabCurPos(CurPos);
-				CurPtr->FastShow();
-				CurPtr->SetEditBeyondEnd(EdOpt.CursorBeyondEOL);
-				CurPtr=CurPtr->m_next;
-			}
-			else
-			{
-				SetScreen(X1,Y,XX2,Y,L' ',ColorIndexToColor(COL_EDITORTEXT)); //Пустые строки после конца текста
-			}
-	}
+	for (CurPtr=TopScreen,Y=Y1; Y<=Y2; Y++)
+		if (CurPtr)
+		{
+			CurPtr->SetEditBeyondEnd(TRUE);
+			CurPtr->SetPosition(X1,Y,XX2,Y);
+			//CurPtr->SetTables(UseDecodeTable ? &TableSet:nullptr);
+			//_D(SysLog(L"Setleftpos 3 to %i",LeftPos));
+			CurPtr->SetLeftPos(LeftPos);
+			CurPtr->SetTabCurPos(CurPos);
+			CurPtr->FastShow();
+			CurPtr->SetEditBeyondEnd(EdOpt.CursorBeyondEOL);
+			CurPtr=CurPtr->m_next;
+		}
+		else
+		{
+			SetScreen(X1,Y,XX2,Y,L' ',ColorIndexToColor(COL_EDITORTEXT)); //Пустые строки после конца текста
+		}
 
 	CurLine->SetOvertypeMode(Flags.Check(FEDITOR_OVERTYPE));
 	CurLine->Show();
@@ -449,15 +427,10 @@ void Editor::ShowEditor(int CurLineOnly)
 
 /*$ 10.08.2000 skv
   Wrapper for Modified.
-  Set JustModified every call to 1
-  to track any text state change.
-  Even if state==0, this can be
-  last UNDO.
 */
 void Editor::TextChanged(int State)
 {
 	Flags.Change(FEDITOR_MODIFIED,State);
-	Flags.Set(FEDITOR_JUSTMODIFIED);
 }
 
 
@@ -1127,7 +1100,6 @@ int Editor::ProcessKey(int Key)
 		case KEY_SHIFTNUMPAD1:
 		{
 			{
-				int LeftPos=CurLine->GetLeftPos();
 				Pasting++;
 				Lock();
 				int CurLength=CurLine->GetLength();
@@ -1154,7 +1126,7 @@ int Editor::ProcessKey(int Key)
 				else
 				{
 					CurLine->FastShow();
-					ShowEditor(LeftPos==CurLine->GetLeftPos());
+					ShowEditor();
 				}
 			}
 			return TRUE;
@@ -1191,8 +1163,6 @@ int Editor::ProcessKey(int Key)
 				}
 			}
 
-			int LeftPos=CurLine->GetLeftPos();
-			Edit *OldCur=CurLine;
 			int _OldNumLine=NumLine;
 			Pasting++;
 			ProcessKey(KEY_LEFT);
@@ -1203,7 +1173,7 @@ int Editor::ProcessKey(int Key)
 				BlockStartLine=NumLine;
 			}
 
-			ShowEditor(OldCur==CurLine && LeftPos==CurLine->GetLeftPos());
+			ShowEditor();
 			return TRUE;
 		}
 		case KEY_SHIFTRIGHT:  case KEY_SHIFTNUMPAD6:
@@ -1225,7 +1195,6 @@ int Editor::ProcessKey(int Key)
 			}
 
 			Edit *OldCur=CurLine;
-			int OldLeft=CurLine->GetLeftPos();
 			Pasting++;
 			ProcessKey(KEY_RIGHT);
 			Pasting--;
@@ -1244,7 +1213,7 @@ int Editor::ProcessKey(int Key)
 				}
 			}
 
-			ShowEditor(OldCur==CurLine && OldLeft==CurLine->GetLeftPos());
+			ShowEditor();
 			return TRUE;
 		}
 		case KEY_CTRLSHIFTLEFT:  case KEY_CTRLSHIFTNUMPAD4:
@@ -1656,9 +1625,8 @@ int Editor::ProcessKey(int Key)
 			}
 			else
 			{
-				int LeftPos=CurLine->GetLeftPos();
 				CurLine->ProcessKey(KEY_LEFT);
-				ShowEditor(LeftPos==CurLine->GetLeftPos());
+				ShowEditor();
 			}
 
 			return TRUE;
@@ -1702,7 +1670,10 @@ int Editor::ProcessKey(int Key)
 							CurLine->GetSelection(SelStart,SelEnd);
 							CurLine->m_next->GetSelection(NextSelStart,NextSelEnd);
 							const wchar_t *Str;
+							#if 1
+							//Maximus: softbreaks
 							const wchar_t *NextEOL = CurLine->m_next->GetEOL();
+							#endif
 							int NextLength;
 							CurLine->m_next->GetBinaryString(&Str,nullptr,NextLength);
 							CurLine->InsertBinaryString(Str,NextLength);
@@ -1710,7 +1681,13 @@ int Editor::ProcessKey(int Key)
 							CurLine->SetCurPos(CurPos);
 							DeleteString(CurLine->m_next,NumLine+1,TRUE,NumLine+1);
 
+							#if 1
+							//Maximus: softbreaks
 							CurLine->SetEOL(NextEOL);
+							#else
+							if (!NextLength)
+								CurLine->SetEOL(L"");
+							#endif
 
 
 							if (NextSelStart!=-1)
@@ -1733,7 +1710,7 @@ int Editor::ProcessKey(int Key)
 						AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,CurLine->GetCurPos(),CurLine->GetLength());
 						CurLine->ProcessKey(KEY_DEL);
 					}
-
+					Change(ECTYPE_CHANGED,NumLine);
 					TextChanged(1);
 				}
 
@@ -1778,6 +1755,7 @@ int Editor::ProcessKey(int Key)
 				{
 					AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,CurLine->GetCurPos(),CurLine->GetLength());
 					CurLine->ProcessKey(KEY_BS);
+					Change(ECTYPE_CHANGED,NumLine);
 				}
 
 				Show();
@@ -1800,6 +1778,7 @@ int Editor::ProcessKey(int Key)
 				{
 					AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,CurLine->GetCurPos(),CurLine->GetLength());
 					CurLine->ProcessKey(KEY_CTRLBS);
+					Change(ECTYPE_CHANGED,NumLine);
 				}
 
 				Show();
@@ -1816,7 +1795,7 @@ int Editor::ProcessKey(int Key)
 				Up();
 
 				if (TopScreen==LastTopScreen)
-					ShowEditor(TRUE);
+					ShowEditor();
 				else
 					Show();
 
@@ -1839,7 +1818,7 @@ int Editor::ProcessKey(int Key)
 				Down();
 
 				if (TopScreen==LastTopScreen)
-					ShowEditor(TRUE);
+					ShowEditor();
 				else
 					Show();
 
@@ -2607,6 +2586,7 @@ int Editor::ProcessKey(int Key)
 
 				AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,CurLine->GetCurPos(),CurLine->GetLength());
 				CurLine->ProcessKey(Key);
+				Change(ECTYPE_CHANGED,NumLine);
 				Pasting--;
 				Show();
 			}
@@ -2633,6 +2613,7 @@ int Editor::ProcessKey(int Key)
 
 				AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,CurLine->GetCurPos(),CurLine->GetLength());
 				CurLine->ProcessCtrlQ();
+				Change(ECTYPE_CHANGED,NumLine);
 				Flags.Clear(FEDITOR_PROCESSCTRLQ);
 				Pasting--;
 				Show();
@@ -2765,7 +2746,7 @@ int Editor::ProcessKey(int Key)
 					  fix бага с ctrl-left в начале строки
 					  в блоке с переопределённым плагином фоном.
 					*/
-					ShowEditor(FALSE);
+					ShowEditor();
 					//if(!Flags.Check(FEDITOR_DIALOGMEMOEDIT)){
 					//CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
 					//_D(SysLog(L"%08d EE_REDRAW",__LINE__));
@@ -2790,7 +2771,7 @@ int Editor::ProcessKey(int Key)
 						//_D(SysLog(L"%08d EE_REDRAW",__LINE__));
 						_SYS_EE_REDRAW(SysLog(L"Editor::ProcessKey[%d](!EdOpt.CursorBeyondEOL): EE_REDRAW(EEREDRAW_ALL)",__LINE__));
 						SortColorLock();
-						CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
+						CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
 						SortColorUnlock();
 					}
 
@@ -2798,7 +2779,7 @@ int Editor::ProcessKey(int Key)
 					  А то EEREDRAW_ALL то уходит, а на самом деле
 					  только текущая линия перерисовывается.
 					*/
-					ShowEditor(0);
+					ShowEditor();
 					return TRUE;
 				}
 
@@ -2861,8 +2842,6 @@ int Editor::ProcessKey(int Key)
 					CmpStr[Length]=0;
 				}
 
-				int LeftPos=CurLine->GetLeftPos();
-
 				if (Key == KEY_OP_XLAT)
 				{
 					Xlat();
@@ -2902,6 +2881,7 @@ int Editor::ProcessKey(int Key)
 						if (NewLength!=Length || memcmp(CmpStr,NewCmpStr,Length*sizeof(wchar_t))!=0)
 						{
 							AddUndoData(UNDO_EDIT,CmpStr,CurLine->GetEOL(),NumLine,CurPos,Length); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
+							Change(ECTYPE_CHANGED,NumLine);
 							TextChanged(1);
 						}
 
@@ -2969,7 +2949,7 @@ int Editor::ProcessKey(int Key)
 					}
 
 					// </Bug 794>
-					ShowEditor(LeftPos==CurLine->GetLeftPos());
+					ShowEditor();
 					return TRUE;
 				}
 				else if (!SkipCheckUndo)
@@ -3080,11 +3060,12 @@ int Editor::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 			if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
 			{
 				CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
-				_SYS_EE_REDRAW(SysLog(L"Editor::ProcessMouse[%08d] ProcessEditorEvent(EE_REDRAW,EEREDRAW_LINE)",__LINE__));
+				_SYS_EE_REDRAW(SysLog(L"Editor::ProcessMouse[%08d] ProcessEditorEvent(EE_REDRAW)",__LINE__));
 				SortColorLock();
-				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_LINE);
+				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
 				SortColorUnlock();
 			}
+			ShowEditor();
 		}
 
 		return TRUE;
@@ -3178,6 +3159,7 @@ void Editor::DeleteString(Edit *DelPtr, int LineNumber, int DeleteLast,int UndoL
 	{
 		AddUndoData(UNDO_EDIT,DelPtr->GetStringAddr(),DelPtr->GetEOL(),UndoLine,DelPtr->GetCurPos(),DelPtr->GetLength());
 		DelPtr->SetString(L"");
+		Change(ECTYPE_CHANGED,UndoLine);
 		return;
 	}
 
@@ -3281,6 +3263,8 @@ void Editor::DeleteString(Edit *DelPtr, int LineNumber, int DeleteLast,int UndoL
 		AddUndoData(UNDO_DELSTR,DelPtr->GetStringAddr(),DelPtr->GetEOL(),UndoLine,0,DelPtr->GetLength());
 
 	delete DelPtr;
+
+	Change(ECTYPE_DELETED,UndoLine);
 }
 
 
@@ -3306,6 +3290,7 @@ void Editor::InsertString()
 	if (!NewString)
 		return;
 
+	Change(ECTYPE_ADDED,NumLine+1);
 	//NewString->SetTables(UseDecodeTable ? &TableSet:nullptr); // ??
 	int Length;
 	const wchar_t *CurLineStr;
@@ -3316,6 +3301,11 @@ void Editor::InsertString()
 	   Если не был определен тип конца строки, то считаем что конец строки
 	   у нас равен DOS_EOL_fmt и установим его явно.
 	*/
+	#if 0
+	//Maximus: для softbreaks этот код не нужен
+	if (!*EndSeq)
+		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
+	#endif
 
 	CurPos=CurLine->GetCurPos();
 	CurLine->GetSelection(SelStart,SelEnd);
@@ -3396,7 +3386,12 @@ void Editor::InsertString()
 		AddUndoData(UNDO_BEGIN);
 		AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,
 		            CurLine->GetCurPos(),CurLine->GetLength());
-		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		#if 1
+		//Maximus: softbreaks
+		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0);
+		#else
+		AddUndoData(UNDO_INSSTR,nullptr,EndList==CurLine?L"":GlobalEOL,NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		#endif
 		AddUndoData(UNDO_END);
 		wchar_t *NewCurLineStr = (wchar_t *) xf_malloc((CurPos+1)*sizeof(wchar_t));
 
@@ -3414,14 +3409,27 @@ void Editor::InsertString()
 		}
 
 		CurLine->SetBinaryString(NewCurLineStr,StrSize);
+		//Maximus: для softbreaks этот код не нужен
+		#if 0
+		CurLine->SetEOL(EndSeq);
+		#endif
 		xf_free(NewCurLineStr);
+		//Maximus: BUGBUG: softbreaks: нужно проверить
+		Change(ECTYPE_CHANGED,NumLine);
 	}
 	else
 	{
 		NewString->SetString(L"");
-		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		#if 1
+		//Maximus: softbreaks
+		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0);
+		#else
+		AddUndoData(UNDO_INSSTR,nullptr,L"",NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
+		#endif
 	}
 
+	#if 1
+	//Maximus: softbreaks
 	if (EndSeq && *EndSeq)
 	{
 		CurLine->SetEOL(EndSeq);
@@ -3431,6 +3439,10 @@ void Editor::InsertString()
 		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
 		NewString->SetEOL(EndSeq);
 	}
+	#endif
+
+	//Maximus: BUGBUG: softbreaks: нужно проверить
+	Change(ECTYPE_CHANGED,NumLine+1);
 
 	if (VBlockStart && NumLine<VBlockY+VBlockSizeY)
 	{
@@ -3472,7 +3484,7 @@ void Editor::InsertString()
 	if (IndentPos>0)
 	{
 		int OrgIndentPos=IndentPos;
-		ShowEditor(FALSE);
+		ShowEditor();
 		CurLine->GetBinaryString(&CurLineStr,nullptr,Length);
 
 		if (SpaceOnly)
@@ -3973,6 +3985,7 @@ BOOL Editor::Search(int Next)
 							}
 
 							delete [] NewStr;
+							Change(ECTYPE_CHANGED,NumLine);
 							TextChanged(1);
 						}
 
@@ -4123,6 +4136,7 @@ void Editor::Paste(const wchar_t *Src)
 					CurPos=CurLine->GetCurPos();
 					AddUndoData(UNDO_EDIT,Str,CurLine->GetEOL(),NumLine,CurPos,Length); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
 					CurLine->InsertBinaryString(&ClipText[I],Pos-I);
+					Change(ECTYPE_CHANGED,NumLine);
 				}
 
 				I=Pos;
@@ -4389,6 +4403,10 @@ void Editor::DeleteBlock()
 		CurPtr->SetBinaryString(TmpStr,Length);
 		xf_free(TmpStr);
 		CurPtr->SetCurPos(CurPos);
+		if (StartSel || EndSel)
+		{
+			Change(ECTYPE_CHANGED,BlockStartLine);
+		}
 
 		if (DeleteNext && EndSel==-1)
 		{
@@ -4757,13 +4775,15 @@ void Editor::Undo(int redo)
 	for (;;)
 	{
 		if (ud->Type!=UNDO_BEGIN && ud->Type!=UNDO_END)
+		{
 			GoToLine(ud->StrNum);
+		}
 
 		switch (ud->Type)
 		{
 			case UNDO_INSSTR:
 				ud->SetData(UNDO_DELSTR,CurLine->GetStringAddr(),CurLine->GetEOL(),ud->StrNum,ud->StrPos,CurLine->GetLength());
-				DeleteString(CurLine,NumLine,TRUE,NumLine>0 ? NumLine-1:NumLine);
+				DeleteString(CurLine,NumLine,TRUE,redo?NumLine:(NumLine>0 ? NumLine-1:NumLine));
 				break;
 			case UNDO_DELSTR:
 				ud->Type=UNDO_INSSTR;
@@ -4787,6 +4807,7 @@ void Editor::Undo(int redo)
 				{
 					CurLine->SetString(ud->Str,ud->Length);
 					CurLine->SetEOL(ud->EOL); // необходимо дополнительно выставлять, т.к. SetString вызывает Edit::SetBinaryString и... дальше по тексту
+					Change(ECTYPE_CHANGED,NumLine);
 				}
 
 				break;
@@ -4799,6 +4820,7 @@ void Editor::Undo(int redo)
 				{
 					CurLine->SetString(ud->Str,ud->Length);
 					CurLine->SetEOL(ud->EOL); // необходимо дополнительно выставлять, т.к. SetString вызывает Edit::SetBinaryString и... дальше по тексту
+					Change(ECTYPE_CHANGED,NumLine);
 				}
 
 				CurLine->SetCurPos(ud->StrPos);
@@ -4968,6 +4990,7 @@ void Editor::BlockLeft()
 			if (!MoveLine)
 				CurPtr->Select(StartSel>0 ? StartSel-1:StartSel,EndSel>0 ? EndSel-1:EndSel);
 
+			Change(ECTYPE_CHANGED,LineNum);
 			TextChanged(1);
 		}
 
@@ -5043,6 +5066,7 @@ void Editor::BlockRight()
 			if (!MoveLine)
 				CurPtr->Select(StartSel>0 ? StartSel+1:StartSel,EndSel>0 ? EndSel+1:EndSel);
 
+			Change(ECTYPE_CHANGED,LineNum);
 			TextChanged(1);
 		}
 
@@ -5130,6 +5154,7 @@ void Editor::DeleteVBlock()
 
 		CurPtr->SetCurPos(CurPos);
 		delete[] TmpStr;
+		Change(ECTYPE_CHANGED,BlockStartLine+Line);
 	}
 
 	AddUndoData(UNDO_END);
@@ -5391,6 +5416,7 @@ void Editor::VBlockShift(int Left)
 		StrLen+=EndLength;
 		CurPtr->SetBinaryString(TmpStr,StrLen);
 		delete[] TmpStr;
+		Change(ECTYPE_CHANGED,BlockStartLine+Line);
 	}
 
 	VBlockX+=Left ? -1:1;
@@ -5404,6 +5430,7 @@ int Editor::EditorControl(int Command,void *Param)
 	_ECTLLOG(CleverSysLog SL(L"Editor::EditorControl()"));
 	_ECTLLOG(SysLog(L"Command=%s Param=[%d/0x%08X]",_ECTL_ToName(Command),Param,Param));
 
+	if(EditorControlLocked()) return FALSE;
 	switch (Command)
 	{
 		case ECTL_GETSTRING:
@@ -5498,7 +5525,19 @@ int Editor::EditorControl(int Command,void *Param)
 				Lock();
 
 				while (*Str)
-					ProcessKey(*(Str++));
+				{
+					if(L'\n'==*Str)
+					{
+						--Pasting;
+						InsertString();
+						++Pasting;
+					}
+					else
+					{
+						ProcessKey(*Str);
+					}
+					++Str;
+				}
 
 				Unlock();
 				Pasting--;
@@ -5570,6 +5609,7 @@ int Editor::EditorControl(int Command,void *Param)
 				int CurPos=CurPtr->GetCurPos();
 				CurPtr->SetBinaryString(NewStr,Length+LengthEOL);
 				CurPtr->SetCurPos(CurPos);
+				Change(ECTYPE_CHANGED,DestLine);
 				TextChanged(1);    // 10.08.2000 skv - Modified->TextChanged
 				xf_free(NewStr);
 			}
@@ -5650,7 +5690,13 @@ int Editor::EditorControl(int Command,void *Param)
 				if (EdOpt.ShowWhiteSpace)
 				{
 					Info->Options|=EOPT_SHOWWHITESPACE;
+					#if 1
+					// far version
+					if (EdOpt.ShowWhiteSpace==1)
+					#else
+					// my version
 					if (EdOpt.ShowWhiteSpace==2)
+					#endif
 						Info->Options|=EOPT_SHOWLINEBREAK;
 				}
 
@@ -5893,7 +5939,7 @@ int Editor::EditorControl(int Command,void *Param)
 				}
 
 				AddUndoData(UNDO_EDIT,CurPtr->GetStringAddr(),CurPtr->GetEOL(),StringNumber,CurPtr->GetCurPos(),CurPtr->GetLength());
-				CurPtr->ReplaceTabs();
+				if(CurPtr->ReplaceTabs()) Change(ECTYPE_CHANGED,StringNumber);
 			}
 
 			return TRUE;
@@ -6635,6 +6681,7 @@ void Editor::Xlat()
 
 			AddUndoData(UNDO_EDIT,CurPtr->GetStringAddr(),CurPtr->GetEOL(),BlockStartLine+Line,CurLine->GetCurPos(),CurPtr->GetLength());
 			::Xlat(CurPtr->Str,TBlockX,TBlockX+CopySize,Opt.XLat.Flags);
+			Change(ECTYPE_CHANGED,BlockStartLine+Line);
 		}
 
 		DoXlat=TRUE;
@@ -6662,6 +6709,7 @@ void Editor::Xlat()
 
 				AddUndoData(UNDO_EDIT,CurPtr->GetStringAddr(),CurPtr->GetEOL(),BlockStartLine+Line,CurLine->GetCurPos(),CurPtr->GetLength());
 				::Xlat(CurPtr->Str,StartSel,EndSel,Opt.XLat.Flags);
+				Change(ECTYPE_CHANGED,BlockStartLine+Line);
 				Line++;
 				CurPtr=CurPtr->m_next;
 			}
@@ -6697,6 +6745,7 @@ void Editor::Xlat()
 
 				AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,start,CurLine->GetLength());
 				::Xlat(Str,start,end,Opt.XLat.Flags);
+				Change(ECTYPE_CHANGED,NumLine);
 			}
 		}
 	}
@@ -6742,15 +6791,22 @@ void Editor::SetConvertTabs(int NewMode)
 	{
 		EdOpt.ExpandTabs=NewMode;
 		Edit *CurPtr=TopList;
+		int Pos=0;
 
 		while (CurPtr)
 		{
 			CurPtr->SetConvertTabs(NewMode);
 
 			if (NewMode == EXPAND_ALLTABS)
-				CurPtr->ReplaceTabs();
+			{
+				if(CurPtr->ReplaceTabs())
+				{
+					Change(ECTYPE_CHANGED,Pos);
+				}
+			}
 
 			CurPtr=CurPtr->m_next;
+			++Pos;
 		}
 	}
 }
@@ -7199,4 +7255,14 @@ void Editor::SortColorUnlock()
 bool Editor::SortColorLocked()
 {
 	return (SortColorLockCount > 0);
+}
+
+void Editor::Change(EDITOR_CHANGETYPE Type,int StrNum)
+{
+	if (StrNum==-1)
+		StrNum=NumLine;
+	EditorChange ec={sizeof(EditorChange),Type,StrNum};
+	++EditorControlLock;
+	CtrlObject->Plugins.ProcessEditorEvent(EE_CHANGE,&ec,EditorID);
+	--EditorControlLock;
 }

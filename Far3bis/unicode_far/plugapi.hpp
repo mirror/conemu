@@ -33,9 +33,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#if 1
+//Maximus: для отладки
 extern BOOL gbInOpenPlugin, gbInEditorEvent;
 extern DWORD gnMainThreadId;
 extern void ReportThreadUnsafeCall(const wchar_t* asFormat, DWORD anCommand);
+#endif
 
 #include "plugin.hpp"
 
@@ -124,7 +127,7 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 //  Функция расширенного диалога
 HANDLE WINAPI FarDialogInit(INT_PTR PluginNumber, const GUID* Id, int X1, int Y1, int X2, int Y2,
                             const wchar_t *HelpTopic, const struct FarDialogItem *Item,
-                           size_t ItemsNumber, DWORD Reserved, unsigned __int64 Flags,
+                           size_t ItemsNumber, DWORD_PTR Reserved, unsigned __int64 Flags,
                             FARWINDOWPROC Proc, void* Param);
 int WINAPI FarDialogRun(HANDLE hDlg);
 void WINAPI FarDialogFree(HANDLE hDlg);

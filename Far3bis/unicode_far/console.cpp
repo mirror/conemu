@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interf.hpp"
 #include "setcolor.hpp"
 
+//Maximus: для отладки
 #ifdef _DEBUG
 	//#define DEBUG_PEEK_INPUT
 	#undef DEBUG_PEEK_INPUT
@@ -94,8 +95,11 @@ virtual bool GetSize(COORD& Size) const
 {
 	bool Result=false;
 	CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
+#ifdef _DEBUG
+	//Maximus: для отладки
 	HANDLE hOut=GetOutputHandle();
 	DWORD dwErr=GetLastError(), dwErr2=0;
+#endif
 	if(GetConsoleScreenBufferInfo(GetOutputHandle(), &ConsoleScreenBufferInfo))
 	{
 		if(Opt.WindowMode)
@@ -109,11 +113,14 @@ virtual bool GetSize(COORD& Size) const
 		}
 		Result=true;
 	}
+#ifdef _DEBUG
+	//Maximus: для отладки
 	else
 	{
 		dwErr2=GetLastError();
 		_ASSERTE(Result && dwErr2==0);
 	}
+#endif
 	return Result;
 }
 
@@ -251,6 +258,7 @@ virtual bool SetMode(HANDLE ConsoleHandle, DWORD Mode) const
 }
 
 #ifdef DEBUG_PEEK_INPUT
+//Maximus: для отладки
 INPUT_RECORD gPeek[255] = {{0}};
 DWORD gnLastPeekButtons = 0;
 #endif
@@ -258,9 +266,8 @@ DWORD gnLastPeekButtons = 0;
 virtual bool PeekInput(INPUT_RECORD* Buffer, size_t Length, size_t& NumberOfEventsRead) const
 {
 	DWORD dwNumberOfEventsRead = 0;
-	#ifndef DEBUG_PEEK_INPUT
-	bool Result=PeekConsoleInput(GetInputHandle(), Buffer, static_cast<DWORD>(Length), &dwNumberOfEventsRead)!=FALSE;
-	#else
+	#ifdef DEBUG_PEEK_INPUT
+	//Maximus: для отладки
 	//_ASSERTE(Length==1);
 	bool Result=PeekConsoleInput(GetInputHandle(), gPeek, (DWORD)min(Length,ARRAYSIZE(gPeek)), &dwNumberOfEventsRead)!=FALSE;
 	if (Result && dwNumberOfEventsRead)
@@ -269,6 +276,8 @@ virtual bool PeekInput(INPUT_RECORD* Buffer, size_t Length, size_t& NumberOfEven
 		if (gPeek->EventType == MOUSE_EVENT)
 			gnLastPeekButtons = gPeek->Event.MouseEvent.dwButtonState;
 	}
+	#else
+	bool Result=PeekConsoleInput(GetInputHandle(), Buffer, static_cast<DWORD>(Length), &dwNumberOfEventsRead)!=FALSE;
 	#endif
 	NumberOfEventsRead = dwNumberOfEventsRead;
 	if(Opt.WindowMode && Buffer->EventType==MOUSE_EVENT)

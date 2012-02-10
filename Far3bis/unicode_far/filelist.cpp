@@ -310,12 +310,15 @@ void FileList::SortFileList(int KeepPosition)
 
 		hSortPlugin=(PanelMode==PLUGIN_PANEL && hPlugin!=INVALID_HANDLE_VALUE && static_cast<PluginHandle*>(hPlugin)->pPlugin->HasCompare()) ? hPlugin:nullptr;
 
+		#if 1
+		//Maximus: оптимизация колонки C0
 		if (PanelMode!=PLUGIN_PANEL && ListSortMode==BY_CUSTOMDATA)
 		{
 			for (int i=0; i < FileCount; i++)
 				if (!ListData[i]->CustomDataLoaded)
 					CtrlObject->Plugins.GetCustomData(ListData[i]);
 		}
+		#endif
 
 		far_qsort(ListData,FileCount,sizeof(*ListData),SortList);
 
@@ -2291,7 +2294,7 @@ int FileList::ProcessKey(int Key)
 			//вызовем EMenu если он есть
 			if (CtrlObject->Plugins.FindPlugin(Opt.KnownIDs.Emenu))
 			{
-				CtrlObject->Plugins.CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(1)); // EMenu Plugin :-)
+				CtrlObject->Plugins.CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(static_cast<INT_PTR>(1))); // EMenu Plugin :-)
 			}
 			return TRUE;
 		}
@@ -2839,7 +2842,10 @@ int FileList::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 
 	FileListItem *CurPtr;
 	int RetCode;
+	#if 1
+	//Maximus: многострочная статусная строка
 	int StatusHeight = GetPanelStatusHeight();
+	#endif
 
 	if (IsVisible() && Opt.ShowColumnTitles && !MouseEvent->dwEventFlags &&
 	        MouseEvent->dwMousePosition.Y==Y1+1 &&
@@ -2915,7 +2921,12 @@ int FileList::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		return(RetCode);
 
 	if (MouseEvent->dwMousePosition.Y>Y1+Opt.ShowColumnTitles &&
+			#if 1
+			//Maximus: многострочная статусная строка
 	        MouseEvent->dwMousePosition.Y<Y2-StatusHeight)
+	        #else
+	        MouseEvent->dwMousePosition.Y<Y2-2*Opt.ShowPanelStatus)
+	        #endif
 	{
 		SetFocus();
 
@@ -3011,14 +3022,24 @@ int FileList::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		return TRUE;
 	}
 
+	#if 1
+	//Maximus: многострочная статусная строка
 	if (MouseEvent->dwMousePosition.Y>=Y2-StatusHeight)
+	#else
+	if (MouseEvent->dwMousePosition.Y>=Y2-2)
+	#endif
 	{
 		SetFocus();
 
 		if (!FileCount)
 			return TRUE;
 
+		#if 1
+		//Maximus: многострочная статусная строка
 		while (IsMouseButtonPressed() && IntKeyState.MouseY>=Y2-StatusHeight)
+		#else
+		while (IsMouseButtonPressed() && IntKeyState.MouseY>=Y2-2)
+		#endif
 		{
 			Down(1);
 
@@ -3597,19 +3618,24 @@ bool FileList::GetPlainString(string& Dest,int ListPos)
 	return false;
 }
 
-int FileList::GetSelCount()
+size_t FileList::GetSelCount()
 {
 	assert(!FileCount || !(ReturnCurrentFile||!SelFileCount) || (CurFile<FileCount));
 	return FileCount?((ReturnCurrentFile||!SelFileCount)?(TestParentFolderName(ListData[CurFile]->strName)?0:1):SelFileCount):0;
 }
 
-int FileList::GetRealSelCount()
+size_t FileList::GetRealSelCount()
 {
 	return FileCount?SelFileCount:0;
 }
 
 
+#if 1
+//Maximus: отображение владельца с плагиновых панелей
 int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FAR_FIND_DATA_EX *fde,string *strOwner)
+#else
+int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FAR_FIND_DATA_EX *fde)
+#endif
 {
 	if (!strName)
 	{
@@ -3624,8 +3650,11 @@ int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FA
 		{
 			GetSelPosition=1;
 			*strName = ListData[CurFile]->strName;
+			#if 1
+			//Maximus: отображение владельца с плагиновых панелей
 			if (strOwner)
 				*strOwner = ListData[CurFile]->strOwner;
+			#endif
 
 			if (strShortName)
 			{
@@ -3661,8 +3690,11 @@ int FileList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FA
 		if (ListData[GetSelPosition++]->Selected)
 		{
 			*strName = ListData[GetSelPosition-1]->strName;
+			#if 1
+			//Maximus: отображение владельца с плагиновых панелей
 			if (strOwner)
 				*strOwner = ListData[GetSelPosition-1]->strOwner;
+			#endif
 
 			if (strShortName)
 			{
@@ -4853,6 +4885,13 @@ bool FileList::ApplyCommand()
 
 	SaveSelection();
 
+	string CommandLine;
+	CtrlObject->CmdLine->GetString(CommandLine);
+	int SelStart, SelEnd;
+	CtrlObject->CmdLine->GetSelection(SelStart, SelEnd);
+	int CursorPosition = CtrlObject->CmdLine->GetCurPos();
+	int LeftPosition = CtrlObject->CmdLine->GetLeftPos();
+
 	++UpdateDisabled;
 	GetSelName(nullptr,FileAttr);
 	CtrlObject->CmdLine->LockUpdatePanel(true);
@@ -4902,6 +4941,11 @@ bool FileList::ApplyCommand()
 		if (!strAnotherShortListName.IsEmpty())
 			apiDeleteFile(strAnotherShortListName);
 	}
+
+
+	CtrlObject->CmdLine->SetString(CommandLine);
+	CtrlObject->CmdLine->Select(SelStart, SelEnd);
+	CtrlObject->CmdLine->SetCurPos(CursorPosition, LeftPosition);
 
 	CtrlObject->CmdLine->LockUpdatePanel(false);
 	CtrlObject->CmdLine->Show();

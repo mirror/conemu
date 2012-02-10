@@ -275,10 +275,18 @@ static size_t AddPluginItems(VMenu &ChDisk, int Pos, int DiskCount, bool SetSele
 				item->bIsPlugin = true;
 				item->pPlugin = pPlugin;
 				item->Guid = guid;
+				#if 1
+				//Maximus: поддержка Far3wrap
 				if (pPlugin->IsFar2Plugin())
 					OneItem.Item.Flags=LIF_CHECKED|L'2';
+				#endif
 #ifndef NO_WRAPPER
+				#if 1
+				//Maximus: поддержка Far3wrap
 				else if (pPlugin->IsOemPlugin())
+				#else
+				if (pPlugin->IsOemPlugin())
+				#endif
 					OneItem.Item.Flags=LIF_CHECKED|L'A';
 #endif // NO_WRAPPER
 				OneItem.Item.strName = strMenuText;
@@ -836,8 +844,13 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 					if (Opt.ChangeDriveMode&DRIVE_SHOW_PLUGINS)
 					{
 						ChDisk.Hide();
+						#if 1
+						//Maximus: расширенное меню плагинов
 						if (CtrlObject->Plugins.Configure() < 0)   // значит вышли из Configure() по Ctrl-PgUp
 							return -1;
+						#else
+						CtrlObject->Plugins.Configure();
+						#endif
 					}
 
 					return SelPos;
@@ -1718,7 +1731,8 @@ void Panel::EndDrag()
 void Panel::DragMessage(int X,int Y,int Move)
 {
 	string strDragMsg, strSelName;
-	int SelCount,MsgX,Length;
+	size_t SelCount;
+	int MsgX,Length;
 
 	if (!(SelCount=SrcDragPanel->GetSelCount()))
 		return;
@@ -2134,7 +2148,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 			if(!CheckStructSize(Info))
 				break;
 
-			ClearStruct(*Info); // Зашибись, плагин передал размер структуры, а фар на нее забил?
+			ClearStruct(*Info);
 			Info->StructSize = sizeof(PanelInfo);
 
 			UpdateIfRequired();

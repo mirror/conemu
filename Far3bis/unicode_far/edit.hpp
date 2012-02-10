@@ -217,7 +217,7 @@ class Edit:public ScreenObject
 		void SetPersistentBlocks(int Mode) {Flags.Change(FEDITLINE_PERSISTENTBLOCKS,Mode);}
 		int  GetPersistentBlocks() {return Flags.Check(FEDITLINE_PERSISTENTBLOCKS); }
 
-		void SetShowWhiteSpace(int Mode) {Flags.Change(FEDITLINE_SHOWWHITESPACE,Mode!=0); Flags.Change(FEDITLINE_SHOWLINEBREAK,Mode==1);}
+		void SetShowWhiteSpace(int Mode) {Flags.Change(FEDITLINE_SHOWWHITESPACE, Mode!=0); Flags.Change(FEDITLINE_SHOWLINEBREAK, Mode == 1);}
 
 		void  GetString(wchar_t *Str, int MaxSize);
 		void  GetString(string &strStr);
@@ -277,7 +277,7 @@ class Edit:public ScreenObject
 		void  GetRealSelection(int &Start,int &End);
 		void  SetEditBeyondEnd(int Mode) {Flags.Change(FEDITLINE_EDITBEYONDEND,Mode);};
 		void  SetEditorMode(int Mode) {Flags.Change(FEDITLINE_EDITORMODE,Mode);};
-		void  ReplaceTabs();
+		bool  ReplaceTabs();
 
 		void  InsertTab();
 

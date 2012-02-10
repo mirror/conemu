@@ -55,17 +55,17 @@ extern int ColumnTypeWidth[];
 
 static wchar_t OutCharacter[8]={};
 
-static int __FormatEndSelectedPhrase(int Count)
+static int __FormatEndSelectedPhrase(size_t Count)
 {
 	int M_Fmt=MListFileSize;
 
 	if (Count != 1)
 	{
-		char StrItems[32];
-		_itoa(Count,StrItems,10);
-		int LenItems=(int)strlen(StrItems);
+		FormatString StrItems;
+		StrItems << Count;
+		size_t LenItems= StrItems.GetLength();
 
-		if (StrItems[LenItems-1] == '1' && Count != 11)
+		if (StrItems.At(LenItems-1) == '1' && Count != 11)
 			M_Fmt=MListFilesSize1;
 		else
 			M_Fmt=MListFilesSize2;
@@ -77,7 +77,12 @@ static int __FormatEndSelectedPhrase(int Count)
 
 void FileList::DisplayObject()
 {
+	#if 1
+	//Maximus: многострочная статусная область
 	Height=Y2-Y1+!Opt.ShowColumnTitles-(Opt.ShowPanelStatus ? (GetPanelStatusHeight()+2) : 2);
+	#else
+	Height=Y2-Y1-4+!Opt.ShowColumnTitles+(Opt.ShowPanelStatus ? 0:2);
+	#endif
 	_OT(SysLog(L"[%p] FileList::DisplayObject()",this));
 
 	if (UpdateRequired)
@@ -418,22 +423,28 @@ void FileList::ShowFileList(int Fast)
 	if ((Opt.ShowPanelTotals || Opt.ShowPanelFree) &&
 	        (Opt.ShowPanelStatus || !SelFileCount))
 	{
-		//Maximus5: При старте сюда приходит неинициализированная структура (0xCCCCCCCCC)
+		//Maximus5: BUGBUG: При старте сюда приходит неинициализированная структура (0xCCCCCCCCC)
 		ShowTotalSize(Info);
 	}
 
+	#if 1
+	//Maximus: оптимизация колонки C0
 	string strLastDir;
 	if (GetMode()!=PLUGIN_PANEL && IsColumnDisplayed(CUSTOM_COLUMN0))
 	{
 		apiGetCurrentDirectory(strLastDir);
 		apiSetCurrentDirectory(strCurDir);
 	}
+	#endif
 
 	ShowList(FALSE,0);
 	ShowSelectedSize();
 
+	#if 1
+	//Maximus: оптимизация колонки C0
 	if (!strLastDir.IsEmpty())
 		apiSetCurrentDirectory(strLastDir);
+	#endif
 
 	if (Opt.ShowPanelScrollbar)
 	{
@@ -443,7 +454,12 @@ void FileList::ShowFileList(int Fast)
 
 	ShowScreensCount();
 
+	#if 1
+	//Maximus: убрал "!ProcessingPluginCommand", а то QView не обновляется после UpdatePos/Redraw из плагина
+	if (LastCurFile!=CurFile)
+	#else
 	if (!ProcessingPluginCommand && LastCurFile!=CurFile)
+	#endif
 	{
 		LastCurFile=CurFile;
 		UpdateViewPanel();
@@ -492,8 +508,13 @@ void FileList::ShowSelectedSize()
 	if (Opt.ShowPanelStatus)
 	{
 		SetColor(COL_PANELBOX);
+		#if 1
+		//Maximus: многострочная статусная область
 		int StatusHeight = GetPanelStatusHeight();
 		DrawSeparator(Y2-StatusHeight);
+		#else
+		DrawSeparator(Y2-2);
+		#endif
 
 		for (int I=0,ColumnPos=X1+1; I<ViewSettings.ColumnCount-1; I++)
 		{
@@ -502,7 +523,12 @@ void FileList::ShowSelectedSize()
 				continue;
 
 			ColumnPos+=ViewSettings.ColumnWidth[I];
+			#if 1
+			//Maximus: многострочная статусная область
 			GotoXY(ColumnPos,Y2-StatusHeight);
+			#else
+			GotoXY(ColumnPos,Y2-2);
+			#endif
 
 			bool DoubleLine = Opt.DoubleGlobalColumnSeparator && (!((I+1)%ColumnsInGlobal));
 			BoxText(BoxSymbols[DoubleLine?BS_B_H1V2:BS_B_H1V1]);
@@ -517,12 +543,17 @@ void FileList::ShowSelectedSize()
 		TruncStr(strSelStr,X2-X1-1);
 		Length=(int)strSelStr.GetLength();
 		SetColor(COL_PANELSELECTEDINFO);
+		#if 1
+		//Maximus: многострочная статусная область
 		GotoXY(X1+(X2-X1+1-Length)/2,Y2-GetPanelStatusHeight());
+		#else
+		GotoXY(X1+(X2-X1+1-Length)/2,Y2-2*Opt.ShowPanelStatus);
+		#endif
 		Text(strSelStr);
 	}
 }
 
-//Maximus5: При старте сюда приходит неинициализированная структура (0xCCCCCCCCC)
+//Maximus5: BUGBUG: При старте сюда приходит неинициализированная структура (0xCCCCCCCCC)
 void FileList::ShowTotalSize(OpenPanelInfo &Info)
 {
 	if (!Opt.ShowPanelTotals && PanelMode==PLUGIN_PANEL && !(Info.Flags & OPIF_REALNAMES))
@@ -714,18 +745,30 @@ void FileList::PrepareViewSettings(int ViewMode,OpenPanelInfo *PlugInfo)
 	}
 
 	Columns=PreparePanelView(&ViewSettings);
+	#if 1
+	//Maximus: многострочная статусная область
 	Height=Y2-Y1-(Opt.ShowPanelStatus ? (GetPanelStatusHeight()+2) : 2);
+	#else
+	Height=Y2-Y1-4;
+	#endif
 
 	if (!Opt.ShowColumnTitles)
 		Height++;
 
 	if (!Opt.ShowPanelStatus)
+		#if 1
+		//Maximus: многострочная статусная область
 		Height+=GetPanelStatusHeight(); //Maximus5: BUGBUG: ???
+		#else
+		Height+=2;
+		#endif
 }
 
 
 int FileList::PreparePanelView(PanelViewSettings *PanelView)
 {
+	#if 1
+	//Maximus: многострочная статусная область
 	for (int S=0; S<PanelView->StatusColumnCount;)
 	{
 		int Columns=PanelView->StatusColumnCount-S;
@@ -744,6 +787,10 @@ int FileList::PreparePanelView(PanelViewSettings *PanelView)
 				PanelView->StatusColumnWidthType+S,Columns,(PanelView->Flags&PVS_FULLSCREEN)==PVS_FULLSCREEN,true);
 		S=NextLine; //количество колонок+<BR>
 	}
+	#else
+	PrepareColumnWidths(PanelView->StatusColumnType,PanelView->StatusColumnWidth,PanelView->StatusColumnWidthType,
+	                    PanelView->StatusColumnCount,(PanelView->Flags&PVS_FULLSCREEN)==PVS_FULLSCREEN,true);
+	#endif
 	return(PrepareColumnWidths(PanelView->ColumnType,PanelView->ColumnWidth,PanelView->ColumnWidthType,
 	                           PanelView->ColumnCount,(PanelView->Flags&PVS_FULLSCREEN)==PVS_FULLSCREEN,false));
 }
@@ -758,11 +805,14 @@ int FileList::PrepareColumnWidths(unsigned __int64 *ColumnTypes, int *ColumnWidt
 
 	for (I=0; I<ColumnCount; I++)
 	{
+		#if 1
+		//Maximus: многострочная статусная область
 		if ((ColumnTypes[I]&0xFF)==LINEBREAK_COLUMN)
 		{
 			ColumnCount=I;
 			break;
 		}
+		#endif
 		if (ColumnWidths[I]<0)
 		{
 			EmptyColumns++;
@@ -936,9 +986,14 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	int StatusShown=FALSE;
 	int MaxLeftPos=0,MinLeftPos=FALSE;
 	int ColumnCount=ShowStatus ? ViewSettings.StatusColumnCount:ViewSettings.ColumnCount;
+	#if 1
+	//Maximus: многострочная статусная область
 	int StatusHeight=GetPanelStatusHeight();
+	#endif
 	unsigned __int64 *ColumnTypes=ShowStatus ? ViewSettings.StatusColumnType:ViewSettings.ColumnType;
 	int *ColumnWidths=ShowStatus ? ViewSettings.StatusColumnWidth:ViewSettings.ColumnWidth;
+	#if 1
+	//Maximus: многострочная статусная область
 	int K0=0;
 	unsigned __int64 StatusAlign=0;
 	
@@ -969,15 +1024,26 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			ColumnWidths+=K0;
 		}
 	}
+	#endif
 
+	#if 1
+	//Maximus: многострочная статусная область
 	for (int I=Y1+1+Opt.ShowColumnTitles,J=CurTopFile; I<Y2-StatusHeight; I++,J++)
+	#else
+	for (int I=Y1+1+Opt.ShowColumnTitles,J=CurTopFile; I<Y2-2*Opt.ShowPanelStatus; I++,J++)
+	#endif
 	{
 		int CurColumn=StartColumn;
 
 		if (ShowStatus)
 		{
 			SetColor(COL_PANELTEXT);
+			#if 1
+			//Maximus: многострочная статусная область
 			GotoXY(X1+1,Y2-StatusHeight+ShowStatus);
+			#else
+			GotoXY(X1+1,Y2-1);
+			#endif
 		}
 		else
 		{
@@ -988,12 +1054,15 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 		int StatusLine=FALSE;
 		int Level = 1;
 
+		#if 1
+		//Maximus: многострочная статусная область
 		if (ShowStatus)
 		{
 			//Maximus: TODO: выставить цвет N-ой строки статуса
 		}
 		
 		FormatString strLine;
+		#endif
 				
 		for (int K=0; K<ColumnCount; K++)
 		{
@@ -1032,8 +1101,13 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			{
 				if (!ShowStatus && !StatusShown && CurFile==ListPos && Opt.ShowPanelStatus)
 				{
+					#if 1
+					//Maximus: многострочная статусная область
 					for (int S=1; S<StatusHeight; S++)
 						ShowList(S,CurColumn);
+					#else
+					ShowList(TRUE,CurColumn);
+					#endif
 					GotoXY(CurX,CurY);
 					StatusShown=TRUE;
 					SetShowColor(ListPos);
@@ -1052,11 +1126,14 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 					if (!ColumnData)
 					{
+						#if 1
+						//Maximus: оптимизация колонки C0
 						if (PanelMode!=PLUGIN_PANEL && !ListData[ListPos]->CustomDataLoaded)
 						{
 							//Maximus: BUGBUG: требуется установка текущей папки для панели (это может быть пассивная панель!)
 							CtrlObject->Plugins.GetCustomData(ListData[ListPos]);
 						}
+						#endif
 						ColumnData=ListData[ListPos]->strCustomData;//L"";
 					}
 
@@ -1072,7 +1149,12 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						}
 					}
 
+					#if 1
+					//Maximus: многострочная статусная область
 					strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ColumnData+CurLeftPos;
+					#else
+					FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ColumnData+CurLeftPos;
+					#endif
 				}
 				else
 				{
@@ -1085,11 +1167,16 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 							if ((ViewFlags & COLUMN_MARK) && Width>2)
 							{
+								#if 1
+								//Maximus: многострочная статусная область
 								const wchar_t *MarkPtr = ListData[ListPos]->Selected?L"\x221A ":L"  ";
 								if (!ShowStatus)
 									Text(MarkPtr);
 								else
 									strLine.Append(MarkPtr);
+								#else
+								Text(ListData[ListPos]->Selected?L"\x221A ":L"  ");
+								#endif
 								Width-=2;
 							}
 
@@ -1100,8 +1187,13 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								FarColor OldColor=GetColor();
 
 								if (!ShowStatus)
+								#if 1
+								//Maximus: многострочная статусная область
 								{
+								#endif
 									SetShowColor(ListPos,HIGHLIGHTCOLORTYPE_MARKCHAR);
+								#if 1
+								//Maximus: многострочная статусная область
 									Text(OutCharacter);
 									SetColor(OldColor);
 								}
@@ -1109,6 +1201,10 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								{
 									strLine.Append(OutCharacter);
 								}
+								#else
+								Text(OutCharacter);
+								SetColor(OldColor);
+								#endif
 							}
 
 							const wchar_t *NamePtr = ShowShortNames && !ListData[ListPos]->strShortName.IsEmpty() && !ShowStatus ? ListData[ListPos]->strShortName:ListData[ListPos]->strName;
@@ -1203,10 +1299,15 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 									strName.Lower();
 							}
 
+							#if 1
+							//Maximus: многострочная статусная область
 							if (!ShowStatus)
 								Text(strName);
 							else
 								strLine.Append(strName);
+							#else
+							Text(strName);
+							#endif
 
 
 							if (!ShowStatus)
@@ -1249,6 +1350,8 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							}
 							if (ExtPtr && *ExtPtr) ExtPtr++; else ExtPtr = L"";
 
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
 
 							if (!ShowStatus)
@@ -1256,6 +1359,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								Text(strLine);
 								strLine.Clear();
 							}
+							#else
+							FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+							#endif
 
 							if (!ShowStatus && StrLength(ExtPtr) > ColumnWidth)
 							{
@@ -1279,6 +1385,8 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						case PACKED_COLUMN:
 						case STREAMSSIZE_COLUMN:
 						{
+							#if 1
+							//Maximus: многострочная статусная область
                             strLine.Append(FormatStr_Size(
                             		ListData[ListPos]->FileSize,
                             		ListData[ListPos]->AllocationSize,
@@ -1290,6 +1398,19 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
                             		ColumnType,
                             		ColumnTypes[K],
                             		ColumnWidth).CPtr());
+                            #else
+							Text(FormatStr_Size(
+								ListData[ListPos]->FileSize,
+								ListData[ListPos]->AllocationSize,
+								ListData[ListPos]->StreamsSize,
+								ListData[ListPos]->strName,
+								ListData[ListPos]->FileAttr,
+								ListData[ListPos]->ShowFolderSize,
+								ListData[ListPos]->ReparseTag,
+								ColumnType,
+								ColumnTypes[K],
+								ColumnWidth).CPtr());
+                            #endif
 							break;
 						}
 
@@ -1321,13 +1442,23 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 									break;
 							}
 
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<FormatStr_DateTime(FileTime,ColumnType,ColumnTypes[K],ColumnWidth);
+							#else
+							FS<<FormatStr_DateTime(FileTime,ColumnType,ColumnTypes[K],ColumnWidth);
+							#endif
 							break;
 						}
 
 						case ATTR_COLUMN:
 						{
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<FormatStr_Attribute(ListData[ListPos]->FileAttr,ColumnWidth);
+							#else
+							FS<<FormatStr_Attribute(ListData[ListPos]->FileAttr,ColumnWidth);
+							#endif
 							break;
 						}
 
@@ -1351,7 +1482,12 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							if (strDizText.Pos(pos,L'\4'))
 								strDizText.SetLength(pos);
 
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<strDizText;
+							#else
+							FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<strDizText;
+							#endif
 							break;
 						}
 
@@ -1383,35 +1519,59 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								}
 							}
 
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<Owner+CurLeftPos;
+							#else
+							FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<Owner+CurLeftPos;
+							#endif
 							break;
 						}
 
 						case NUMLINK_COLUMN:
 						{
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
+							#else
+							FS<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
+							#endif
 							break;
 						}
 
 						case NUMSTREAMS_COLUMN:
 						{
+							#if 1
+							//Maximus: многострочная статусная область
 							strLine<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfStreams;
+							#else
+							FS<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfStreams;
+							#endif
 							break;
 						}
 
 					}
 				}
 			}
+			#if 0
+			else
+			{
+				FS<<fmt::Width(ColumnWidth)<<L"";
+			}
+			#else
+			//Maximus: многострочная статусная область
 			else
 			{
 				strLine<<fmt::Width(ColumnWidth)<<L"";
 			}
 			
+			//Maximus: многострочная статусная область
 			if (!ShowStatus)
 			{
 		        Text(strLine);
 		        strLine.Clear();
 			}
+			#endif
 
 			if (ShowDivider==FALSE)
 				GotoXY(CurX+ColumnWidth+1,CurY);
@@ -1429,10 +1589,16 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 				if (K==ColumnCount-1)
 					BoxText(CurX+ColumnWidth==X2 ? BoxSymbols[BS_V2]:L' ');
+				#if 0
+				else
+					BoxText(ShowStatus ? L' ':BoxSymbols[(Opt.DoubleGlobalColumnSeparator && Level == ColumnsInGlobal)?BS_V2:BS_V1]);
+				#else
+				//Maximus: многострочная статусная область
 				else if (!ShowStatus)
 					BoxText(BoxSymbols[(Opt.DoubleGlobalColumnSeparator && Level == ColumnsInGlobal)?BS_V2:BS_V1]);
 				else
 					strLine.Append(L" ");
+				#endif
 
 				if (!ShowStatus)
 					SetColor(COL_PANELTEXT);
@@ -1449,7 +1615,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 				Level++;
 			}
 		}
-		
+
+		#if 1
+		//Maximus: многострочная статусная область		
 		if (ShowStatus && !strLine.IsEmpty())
 		{
 			GotoXY(X1+1,WhereY());
@@ -1472,6 +1640,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			}
 	        FS<<fmt::Width(LineLen)<<fmt::Precision(LineLen)<<strLine/*LinePtr*/;
         }
+        #endif
 
 		if ((!ShowStatus || StatusLine) && WhereX()<X2)
 		{
@@ -1531,6 +1700,8 @@ int FileList::IsColumnDisplayed(int Type)
 	return FALSE;
 }
 
+#if 1
+//Maximus: многострочная статусная область		
 int FileList::GetPanelStatusHeight()
 {
 	if (!Opt.ShowPanelStatus)
@@ -1546,7 +1717,10 @@ int FileList::GetPanelStatusHeight()
 	}
 	return Count+2; // <Number of status lines> + 1 (delimiter line)
 }
+#endif
 
+#if 1
+//Maximus: Оптимизация колонки C0
 void FileList::ClearCustomData()
 {
 	if (GetType()==FILE_PANEL && GetMode()==NORMAL_PANEL && ListData)
@@ -1557,3 +1731,4 @@ void FileList::ClearCustomData()
 		}
 	}
 }
+#endif

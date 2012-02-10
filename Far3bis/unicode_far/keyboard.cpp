@@ -646,11 +646,17 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			//Info.hPanel
 			if (WaitInMainLoop)
 				Info.Flags|=PCIF_FROMMAIN;
+			#if 1
+			//Maximus: не нужны эти события в ProcessConsoleInput?
 			if (Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS)
 			{
 				if (CtrlObject->Plugins.ProcessConsoleInput(&Info))
 					Key=KEY_NONE;
 			}
+			#else
+			if (CtrlObject->Plugins.ProcessConsoleInput(&Info))
+				Key=KEY_NONE;
+			#endif
 		}
 	}
 	return Key;
@@ -779,6 +785,11 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 	{
 		if (!(LoopCount & 15))
 		{
+			if(CtrlObject->Plugins.GetPluginsCount())
+			{
+				SetFarConsoleMode();
+			}
+
 			// "Реакция" на максимизацию/восстановление окна консоли
 			if (ZoomedState!=IsZoomed(Console.GetWindow()) && IconicState==IsIconic(Console.GetWindow()))
 			{
@@ -1415,13 +1426,6 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			           (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
 			           (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
 			           (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
-			/*
-			ClearStruct(*rec);
-			rec->Event.KeyEvent.wVirtualKeyCode=VK_F24+(CalcKey==KEY_MSWHEEL_UP?2:1);
-			rec->Event.KeyEvent.dwControlKeyState=CtrlState;
-			rec->Event.KeyEvent.bKeyDown=TRUE;
-			rec->EventType = KEY_EVENT;
-			*/
 		}
 
 		// Обработка горизонтального колесика (NT>=6)
@@ -1434,18 +1438,6 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			           (CtrlState&RIGHT_CTRL_PRESSED?KEY_RCTRL:0)|
 			           (CtrlState&LEFT_ALT_PRESSED?KEY_ALT:0)|
 			           (CtrlState&RIGHT_ALT_PRESSED?KEY_RALT:0);
-			/*
-			ClearStruct(*rec);
-			rec->Event.KeyEvent.wVirtualKeyCode=VK_F24+(CalcKey==KEY_MSWHEEL_RIGHT?4:3);
-			rec->Event.KeyEvent.dwControlKeyState=CtrlState;
-			rec->Event.KeyEvent.bKeyDown=TRUE;
-			rec->EventType = KEY_EVENT;
-			// Ахтунг! Для мышиной клавиши вернем значение MOUSE_EVENT, соответствующее _последнему_ событию мыши.
-			rec->EventType=MOUSE_EVENT;
-			rec->Event.MouseEvent=lastMOUSE_EVENT_RECORD;
-			rec->Event.MouseEvent.dwButtonState=MAKELONG(0,120);
-			rec->Event.MouseEvent.dwEventFlags=MOUSE_WHEELED;
-			*/
 		}
 
 		if (rec->EventType==MOUSE_EVENT && (!ExcludeMacro||ProcessMouse) && CtrlObject && (ProcessMouse || !(CtrlObject->Macro.IsRecording() || CtrlObject->Macro.IsExecuting())))
@@ -2031,7 +2023,9 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 		else if (FKey && FKey < WCHAR_MAX)
 		{
 			short Vk = VkKeyScan(static_cast<WCHAR>(FKey));
-#ifdef _DEBUG
+			
+			#ifdef _DEBUG
+			//Maximus: для отладки
 			// На некоторых системах, почему-то обламывается VkKeyScan на '[', после этого
 			// начинает глючить CalcKeyCode
 			if (static_cast<WCHAR>(FKey) == L'[')
@@ -2039,7 +2033,8 @@ int TranslateKeyToVK(int Key,int &VirtKey,int &ControlState,INPUT_RECORD *Rec)
 				_ASSERTE(static_cast<WCHAR>(FKey) == L'[');
 				Vk = -1;
 			}
-#endif
+			#endif
+			
 			if (Vk == -1)
 			{
 				for (i=0; i < ARRAYSIZE(Layout); ++i)
@@ -2730,22 +2725,8 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 	*/
 
 	/* ------------------------------------------------------------- */
-	_ASSERTE(KeyCode!=(VK_F24+1) && KeyCode!=(VK_F24+2) && KeyCode!=(VK_F24+3) && KeyCode!=(VK_F24+4));
 	switch (KeyCode)
 	{
-		// begin: Этого блока быть НЕ ДОЛЖНО
-		/*
-		case VK_F24+1:
-			return Modif|KEY_MSWHEEL_DOWN;
-		case VK_F24+2:
-			return Modif|KEY_MSWHEEL_UP;
-		case VK_F24+3:
-			return Modif|KEY_MSWHEEL_LEFT;
-		case VK_F24+4:
-			return Modif|KEY_MSWHEEL_RIGHT;
-		*/
-		// end: Этого блока быть НЕ ДОЛЖНО
-
 		case VK_INSERT:
 		case VK_NUMPAD0:
 
@@ -3461,7 +3442,10 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 
 	}
 
+	#if 1
+	//Maximus: для отладки
 	_ASSERTE((!IntKeyState.CtrlPressed && !IntKeyState.AltPressed) || Char);
+	#endif
 
 	if (Char && (ModifAlt || ModifCtrl))
 		return Modif|Char;

@@ -54,6 +54,7 @@ GeneralConfig *GeneralCfg;
 AssociationsConfig *AssocConfig;
 PluginsCacheConfig *PlCacheCfg;
 #ifdef _DEBUG
+//Maximus: для отладки
 int PlCacheCfgEnum = 0;
 #endif
 PluginsHotkeysConfig *PlHotkeyCfg;
@@ -1162,6 +1163,7 @@ public:
 
 	PluginsCacheConfigDb()
 	{
+		//Maximus: нет смысла хранить все битности в одной базе. "/co" с ума сойдет
 		#ifdef _WIN64
 		Initialize(L"plugincache64.db", true);
 		#else

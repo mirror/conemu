@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "language.hpp"
 #include "bitflags.hpp"
 #include "plugin.hpp"
+#include "interf.hpp"
 
 class AncientPlugin
 {
@@ -56,7 +57,6 @@ struct ExecuteStruct
 		BOOL bDefaultResult;
 	};
 	int id; //function id
-	bool bUnloaded;
 };
 
 #define EXECUTE_FUNCTION(function, es) \
@@ -64,7 +64,6 @@ struct ExecuteStruct
 	__Prolog(); \
 	es.nResult = 0; \
 	es.nDefaultResult = 0; \
-	es.bUnloaded = false; \
 	if ( Opt.ExceptRules ) \
 	{ \
 		__try \
@@ -73,8 +72,7 @@ struct ExecuteStruct
 		} \
 		__except(xfilter(es.id, GetExceptionInformation(), this, 0)) \
 		{ \
-			m_owner->UnloadPlugin(this, es.id, true); \
-			es.bUnloaded = true; \
+			m_owner->UnloadPlugin(this, es.id); \
 			es.nResult = es.nDefaultResult; \
 			ProcessException=FALSE; \
 		} \
@@ -134,9 +132,10 @@ enum EXPORTS_ENUM
 
 	iOpenFilePlugin,
 	iGetMinFarVersion,
-#ifndef NO_WRAPPER
+	#if 1
+	//Maximus: поддержка Far3wrap
 	iWrapperFunction2, // FarWrapGetProcAddress
-#endif // NO_WRAPPER
+	#endif
 	i_LAST
 };
 
@@ -147,8 +146,8 @@ public:
 	virtual ~Plugin();
 
 	virtual bool GetGlobalInfo(GlobalInfo *Info);
-	virtual bool SetStartupInfo(bool &bUnloaded);
-	virtual bool CheckMinFarVersion(bool &bUnloaded);
+	virtual bool SetStartupInfo();
+	virtual bool CheckMinFarVersion();
 	virtual HANDLE Open(int OpenFrom, const GUID& Guid, INT_PTR Item);
 	virtual HANDLE OpenFilePlugin(const wchar_t *Name, const unsigned char *Data, size_t DataSize, int OpMode);
 	virtual int SetFindList(HANDLE hPlugin, const PluginPanelItem *PanelItem, size_t ItemsNumber);
@@ -170,8 +169,8 @@ public:
 	virtual void FreeVirtualFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
 	virtual void ClosePanel(HANDLE hPlugin);
 	virtual int ProcessEditorInput(const INPUT_RECORD *D);
-	virtual int ProcessEditorEvent(int Event, PVOID Param);
-	virtual int ProcessViewerEvent(int Event, PVOID Param);
+	virtual int ProcessEditorEvent(int Event, PVOID Param,int EditorID);
+	virtual int ProcessViewerEvent(int Event, PVOID Param,int ViewerID);
 	virtual int ProcessDialogEvent(int Event, FarDialogEvent *Param);
 	virtual int ProcessSynchroEvent(int Event, PVOID Param);
 #if defined(MANTIS_0000466)
@@ -187,7 +186,10 @@ public:
 #ifndef NO_WRAPPER
 	virtual bool IsOemPlugin() const { return false; }
 #endif // NO_WRAPPER
+	#if 1
+	//Maximus: поддержка Far3wrap
 	virtual bool IsFar2Plugin() const { return HasWrapperFunction2(); }
+	#endif
 	virtual const wchar_t *GetHotkeyName() const { return m_strGuid; }
 
 	virtual bool InitLang(const wchar_t *Path) { return PluginLang.Init(Path); }
@@ -233,7 +235,10 @@ public:
 	bool HasOpenFilePlugin()      const { return Exports[iOpenFilePlugin]!=nullptr; }
 	bool HasMinFarVersion()       const { return Exports[iGetMinFarVersion]!=nullptr; }
 
+	#if 1
+	//Maximus: поддержка Far3wrap
 	bool HasWrapperFunction2()    const { return Exports[iWrapperFunction2]!=nullptr; }
+	#endif
 
 	const string &GetModuleName() const { return m_strModuleName; }
 	const wchar_t *GetCacheName() const  { return m_strCacheName; }
@@ -252,7 +257,12 @@ public:
 	bool Load();
 	int Unload(bool bExitFAR = false);
 	bool LoadData();
+	#if 1
+	//Maximus: отображение ошибок загрузки
 	bool LoadFromCache(const FAR_FIND_DATA_EX &FindData, bool* ShowErrors=nullptr);
+	#else
+	bool LoadFromCache(const FAR_FIND_DATA_EX &FindData);
+	#endif
 	bool SaveToCache();
 	bool IsPanelPlugin();
 
@@ -266,6 +276,7 @@ protected:
 
 	PluginManager *m_owner; //BUGBUG
 	Language PluginLang;
+	bool bPendingRemove;
 
 private:
 	void InitExports();

@@ -90,7 +90,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define EXP_OPENFILEPLUGIN      "OpenFilePlugin"
 #define EXP_GETMINFARVERSION    "GetMinFarVersion"
 
+#if 1
+//Maximus: поддержка Far3wrap
 #define EXP_WRAPPERFUNCTION2    ""
+#endif
 
 
 static const char* _ExportsNamesA[i_LAST] =
@@ -135,7 +138,10 @@ static const char* _ExportsNamesA[i_LAST] =
 	EXP_OPENFILEPLUGIN,
 	EXP_GETMINFARVERSION,
 	
+	#if 1
+	//Maximus: поддержка Far3wrap
 	EXP_WRAPPERFUNCTION2,
+	#endif
 };
 
 
@@ -181,7 +187,10 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 	W(EXP_OPENFILEPLUGIN),
 	W(EXP_GETMINFARVERSION),
 	
+	#if 1
+	//Maximus: поддержка Far3wrap
 	W(EXP_WRAPPERFUNCTION2),
+	#endif
 };
 
 typedef void   (WINAPI *iClosePanelPrototype)          (HANDLE hPlugin);
@@ -1553,7 +1562,8 @@ public:
 
 LONG_PTR WINAPI FarDefDlgProcA(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
-	LONG_PTR Result = NativeInfo.DefDlgProc(OriginalEvents.Peek()->hDlg, OriginalEvents.Peek()->Msg, OriginalEvents.Peek()->Param1, OriginalEvents.Peek()->Param2);
+	FarDialogEvent* TopEvent = OriginalEvents.Peek();
+	LONG_PTR Result = NativeInfo.DefDlgProc(TopEvent->hDlg, TopEvent->Msg, TopEvent->Param1, TopEvent->Param2);
 	switch(Msg)
 	{
 	case DN_CTLCOLORDIALOG:
@@ -3833,9 +3843,7 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 		case oldfar::ACTL_GETSYSTEMSETTINGS:
 		{
 			INT_PTR ss = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETSYSTEMSETTINGS, 0, 0);
-			INT_PTR ret = 0;
-
-			if (ss&FSS_CLEARROATTRIBUTE)          ret|=oldfar::FSS_CLEARROATTRIBUTE;
+			INT_PTR ret = oldfar::FSS_CLEARROATTRIBUTE;
 
 			if (ss&FSS_DELETETORECYCLEBIN)        ret|=oldfar::FSS_DELETETORECYCLEBIN;
 
@@ -4362,12 +4370,24 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 
 				switch (oldsp->Type)
 				{
-					case oldfar::ESPT_AUTOINDENT:				newsp.Type = ESPT_AUTOINDENT; break;
-					case oldfar::ESPT_CHARCODEBASE:			newsp.Type = ESPT_CHARCODEBASE; break;
-					case oldfar::ESPT_CURSORBEYONDEOL:	newsp.Type = ESPT_CURSORBEYONDEOL; break;
-					case oldfar::ESPT_LOCKMODE:					newsp.Type = ESPT_LOCKMODE; break;
-					case oldfar::ESPT_SAVEFILEPOSITION:	newsp.Type = ESPT_SAVEFILEPOSITION; break;
-					case oldfar::ESPT_TABSIZE:					newsp.Type = ESPT_TABSIZE; break;
+					case oldfar::ESPT_AUTOINDENT:
+						newsp.Type = ESPT_AUTOINDENT;
+						break;
+					case oldfar::ESPT_CHARCODEBASE:
+						newsp.Type = ESPT_CHARCODEBASE;
+						break;
+					case oldfar::ESPT_CURSORBEYONDEOL:
+						newsp.Type = ESPT_CURSORBEYONDEOL;
+						break;
+					case oldfar::ESPT_LOCKMODE:
+						newsp.Type = ESPT_LOCKMODE;
+						break;
+					case oldfar::ESPT_SAVEFILEPOSITION:
+						newsp.Type = ESPT_SAVEFILEPOSITION;
+						break;
+					case oldfar::ESPT_TABSIZE:
+						newsp.Type = ESPT_TABSIZE;
+						break;
 					case oldfar::ESPT_CHARTABLE: //BUGBUG, недоделано в фаре
 					{
 						if (!oldsp->iParam) return FALSE;
@@ -4886,7 +4906,7 @@ bool PluginA::GetGlobalInfo(GlobalInfo* Info)
 	return true;
 }
 
-bool PluginA::SetStartupInfo(bool &bUnloaded)
+bool PluginA::SetStartupInfo()
 {
 	if (Exports[iSetStartupInfo] && !ProcessException)
 	{
@@ -4902,9 +4922,8 @@ bool PluginA::SetStartupInfo(bool &bUnloaded)
 		es.id = EXCEPT_SETSTARTUPINFO;
 		EXECUTE_FUNCTION(FUNCTION(iSetStartupInfo)(&_info), es);
 
-		if (es.bUnloaded)
+		if (bPendingRemove)
 		{
-			bUnloaded = true;
 			return false;
 		}
 	}
@@ -4912,7 +4931,7 @@ bool PluginA::SetStartupInfo(bool &bUnloaded)
 	return true;
 }
 
-bool PluginA::CheckMinFarVersion(bool &bUnloaded)
+bool PluginA::CheckMinFarVersion()
 {
 	if (Exports[iGetMinFarVersion] && !ProcessException)
 	{
@@ -4921,9 +4940,8 @@ bool PluginA::CheckMinFarVersion(bool &bUnloaded)
 		es.nDefaultResult = 0;
 		EXECUTE_FUNCTION_EX(FUNCTION(iGetMinFarVersion)(), es);
 
-		if (es.bUnloaded)
+		if (bPendingRemove)
 		{
-			bUnloaded = true;
 			return false;
 		}
 	}
@@ -4977,7 +4995,7 @@ HANDLE PluginA::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		//CurPluginItem=nullptr; //BUGBUG
 		/*    CtrlObject->Macro.SetRedrawEditor(TRUE); //BUGBUG
 
-		    if ( !es.bUnloaded )
+		    if ( !bUnloaded )
 		    {
 
 		      if(OpenFrom == OPEN_EDITOR &&
@@ -4985,7 +5003,6 @@ HANDLE PluginA::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		         CtrlObject->Plugins.CurEditor &&
 		         CtrlObject->Plugins.CurEditor->IsVisible() )
 		      {
-		        CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
 		        CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
 		        CtrlObject->Plugins.CurEditor->Show();
 		      }
@@ -5095,7 +5112,8 @@ int PluginA::ProcessEditorInput(
 
 int PluginA::ProcessEditorEvent(
     int Event,
-    PVOID Param
+    PVOID Param,
+    int EditorID
 )
 {
 	if (Load() && Exports[iProcessEditorEvent] && !ProcessException)
@@ -5103,7 +5121,18 @@ int PluginA::ProcessEditorEvent(
 		ExecuteStruct es;
 		es.id = EXCEPT_PROCESSEDITOREVENT;
 		es.nDefaultResult = 0;
-		EXECUTE_FUNCTION_EX(FUNCTION(iProcessEditorEvent)(Event, Param), es);
+		switch(Event)
+		{
+			case EE_CLOSE:
+			case EE_GOTFOCUS:
+			case EE_KILLFOCUS:
+				Param=&EditorID;
+			case EE_READ:
+			case EE_SAVE:
+			case EE_REDRAW:
+				EXECUTE_FUNCTION_EX(FUNCTION(iProcessEditorEvent)(Event, Param), es);
+				break;
+		}
 	}
 
 	return 0; //oops!
@@ -5111,7 +5140,8 @@ int PluginA::ProcessEditorEvent(
 
 int PluginA::ProcessViewerEvent(
     int Event,
-    void *Param
+    void *Param,
+    int ViewerID
 )
 {
 	if (Load() && Exports[iProcessViewerEvent] && !ProcessException)
@@ -5119,7 +5149,16 @@ int PluginA::ProcessViewerEvent(
 		ExecuteStruct es;
 		es.id = EXCEPT_PROCESSVIEWEREVENT;
 		es.nDefaultResult = 0;
-		EXECUTE_FUNCTION_EX(FUNCTION(iProcessViewerEvent)(Event, Param), es);
+		switch(Event)
+		{
+			case VE_CLOSE:
+			case VE_GOTFOCUS:
+			case VE_KILLFOCUS:
+				Param=&ViewerID;
+			case VE_READ:
+				EXECUTE_FUNCTION_EX(FUNCTION(iProcessViewerEvent)(Event, Param), es);
+				break;
+		}
 	}
 
 	return 0; //oops, again!
@@ -5805,7 +5844,7 @@ bool PluginA::GetPluginInfo(PluginInfo *pi)
 		oldfar::PluginInfo InfoA={sizeof(InfoA)};
 		EXECUTE_FUNCTION(FUNCTION(iGetPluginInfo)(&InfoA), es);
 
-		if (!es.bUnloaded)
+		if (!bPendingRemove)
 		{
 			ConvertPluginInfo(InfoA, pi);
 			return true;

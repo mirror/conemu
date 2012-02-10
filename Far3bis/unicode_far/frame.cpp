@@ -37,7 +37,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "frame.hpp"
 #include "keybar.hpp"
 #include "manager.hpp"
+#if 1
+//Maximus: артефакты отрисовки
 #include "scrbuf.hpp"
+#endif
 #include "syslog.hpp"
 
 Frame::Frame():
@@ -93,9 +96,12 @@ void Frame::OnChangeFocus(int focus)
 			iModal=iModal->NextModal;
 		}
 
+		#if 1
+		//Maximus: артефакты отрисовки
 		// Иначе в некоторых случаях после смены фрейма в {0x0} отрисовывается
 		// артефакт от предыдущего фрейма (из-за вызова ScrBuf.RestoreMacroChar)
 		ScrBuf.Flush();
+		#endif
 	}
 	else
 	{

@@ -1016,7 +1016,6 @@ enum ADVANCED_CONTROL_COMMANDS
 
 enum FarSystemSettings
 {
-	FSS_CLEARROATTRIBUTE               = 0x00000001,
 	FSS_DELETETORECYCLEBIN             = 0x00000002,
 	FSS_USESYSTEMCOPYROUTINE           = 0x00000004,
 	FSS_COPYFILESOPENEDFORWRITING      = 0x00000008,
@@ -1504,6 +1503,7 @@ enum EDITOR_EVENTS
 
 	EE_GOTFOCUS   =6,
 	EE_KILLFOCUS  =7,
+	EE_CHANGE     =8,
 };
 
 enum DIALOG_EVENTS
@@ -1519,8 +1519,6 @@ enum SYNCHRO_EVENTS
 };
 
 #define EEREDRAW_ALL    (void*)0
-#define EEREDRAW_CHANGE (void*)1
-#define EEREDRAW_LINE   (void*)2
 
 enum EDITOR_CONTROL_COMMANDS
 {
@@ -1778,6 +1776,20 @@ struct EditorSaveFile
 	const wchar_t *FileName;
 	const wchar_t *FileEOL;
 	UINT CodePage;
+};
+
+enum EDITOR_CHANGETYPE
+{
+	ECTYPE_CHANGED = 0,
+	ECTYPE_ADDED   = 1,
+	ECTYPE_DELETED = 2,
+};
+
+struct EditorChange
+{
+	size_t StructSize;
+	enum EDITOR_CHANGETYPE Type;
+	int StringNumber;
 };
 
 typedef unsigned __int64 INPUTBOXFLAGS;
@@ -2663,6 +2675,7 @@ struct ProcessEditorEventInfo
 	size_t StructSize;
 	int Event;
 	void* Param;
+	int EditorID;
 };
 
 struct ProcessDialogEventInfo
@@ -2684,6 +2697,7 @@ struct ProcessViewerEventInfo
 	size_t StructSize;
 	int Event;
 	void* Param;
+	int ViewerID;
 };
 
 struct ClosePanelInfo

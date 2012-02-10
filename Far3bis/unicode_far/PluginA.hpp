@@ -41,8 +41,8 @@ public:
 	~PluginA();
 
 	virtual bool GetGlobalInfo(GlobalInfo *Info);
-	virtual bool SetStartupInfo(bool &bUnloaded);
-	virtual bool CheckMinFarVersion(bool &bUnloaded);
+	virtual bool SetStartupInfo();
+	virtual bool CheckMinFarVersion();
 	virtual HANDLE Open(int OpenFrom, const GUID& Guid, INT_PTR Item);
 	virtual HANDLE OpenFilePlugin(const wchar_t *Name, const unsigned char *Data, size_t DataSize, int OpMode);
 	virtual int SetFindList(HANDLE hPlugin, const PluginPanelItem *PanelItem, size_t ItemsNumber);
@@ -64,8 +64,8 @@ public:
 	virtual void FreeVirtualFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
 	virtual void ClosePanel(HANDLE hPlugin);
 	virtual int ProcessEditorInput(const INPUT_RECORD *D);
-	virtual int ProcessEditorEvent(int Event, PVOID Param);
-	virtual int ProcessViewerEvent(int Event, PVOID Param);
+	virtual int ProcessEditorEvent(int Event, PVOID Param,int EditorID);
+	virtual int ProcessViewerEvent(int Event, PVOID Param,int ViewerID);
 	virtual int ProcessDialogEvent(int Event, FarDialogEvent *Param);
 	virtual int ProcessSynchroEvent(int Event, PVOID Param) { return 0; }
 #if defined(MANTIS_0000466)

@@ -121,7 +121,7 @@ class TreeList: public Panel
 		void SyncDir();
 		void SaveTreeFile();
 		int ReadTreeFile();
-		virtual int GetSelCount();
+		virtual size_t GetSelCount();
 		void DynamicUpdateKeyBar();
 		int GetNextNavPos();
 		int GetPrevNavPos();
@@ -182,7 +182,12 @@ class TreeList: public Panel
 		virtual BOOL GetItem(int Index,void *Dest);
 		virtual int GetCurrentPos();
 
+		#if 1
+		//Maximus: Отображение владельцев с плагиновых панелей
 		virtual int GetSelName(string *strName,DWORD &FileAttr,string *ShortName=nullptr,FAR_FIND_DATA_EX *fd=nullptr,string *strOwner=nullptr);
+		#else
+		virtual int GetSelName(string *strName,DWORD &FileAttr,string *ShortName=nullptr,FAR_FIND_DATA_EX *fd=nullptr);
+		#endif
 
 	public:
 		static void AddTreeName(const wchar_t *Name);

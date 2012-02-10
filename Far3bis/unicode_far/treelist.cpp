@@ -1170,7 +1170,7 @@ int TreeList::ProcessKey(int Key)
 			//вызовем EMenu если он есть
 			if (CtrlObject->Plugins.FindPlugin(Opt.KnownIDs.Emenu))
 			{
-				CtrlObject->Plugins.CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(1)); // EMenu Plugin :-)
+				CtrlObject->Plugins.CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(static_cast<INT_PTR>(1))); // EMenu Plugin :-)
 			}
 			return TRUE;
 		}
@@ -1641,13 +1641,18 @@ int TreeList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 }
 
 
-int TreeList::GetSelCount()
+size_t TreeList::GetSelCount()
 {
 	return 1;
 }
 
 
+#if 1
+//Maximus: Отображение владельцев с плагиновых панелей
 int TreeList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FAR_FIND_DATA_EX *fd,string *strOwner)
+#else
+int TreeList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FAR_FIND_DATA_EX *fd)
+#endif
 {
 	if (!strName)
 	{
@@ -1662,8 +1667,11 @@ int TreeList::GetSelName(string *strName,DWORD &FileAttr,string *strShortName,FA
 		if (strShortName )
 			*strShortName = *strName;
 
+		#if 1
+		//Maximus: Отображение владельцев с плагиновых панелей
 		if (strOwner)
 			strOwner->Clear();
+		#endif
 
 		FileAttr=FILE_ATTRIBUTE_DIRECTORY;
 		GetSelPosition++;

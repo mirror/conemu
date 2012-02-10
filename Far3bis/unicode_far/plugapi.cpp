@@ -78,6 +78,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mix.hpp"
 #include "FarGuid.hpp"
 
+#if 1
+//Maximus: для отладки
 //#define SHOW_UNSAFE_MSG
 #undef SHOW_UNSAFE_MSG
 BOOL gbInOpenPlugin = FALSE;
@@ -118,6 +120,7 @@ void ReportThreadUnsafeCall(const wchar_t* asFormat, DWORD anCommand)
 		OutputDebugString(szUnsafe);
 #endif
 }
+#endif
 
 wchar_t *WINAPI FarItoa(int value, wchar_t *string, int radix)
 {
@@ -272,7 +275,8 @@ BOOL WINAPI FarShowHelp(
 */
 INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
-	// для отлова недобросовестных плагинов
+	#if 1
+	//Maximus: для отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId())
 	{
 		// Некоторые плагины блокируют главную нить для безопасных вызовов API
@@ -311,6 +315,7 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 			ReportThreadUnsafeCall(L"AdvControl(%u)", Command);
 		}
 	}
+	#endif
 
 	struct Opt2Flags
 	{
@@ -605,7 +610,6 @@ INT_PTR WINAPI FarAdvControl(INT_PTR ModuleNumber, ADVANCED_CONTROL_COMMANDS Com
 			DWORD Options=0;
 			static Opt2Flags OSys[]=
 			{
-				{&Opt.ClearReadOnly,FSS_CLEARROATTRIBUTE},
 				{&Opt.DeleteToRecycleBin,FSS_DELETETORECYCLEBIN},
 				{&Opt.CMOpt.UseSystemCopy,FSS_USESYSTEMCOPYROUTINE},
 				{&Opt.CMOpt.CopyOpened,FSS_COPYFILESOPENEDFORWRITING},
@@ -855,7 +859,7 @@ int WINAPI FarMenuFn(
 		{
 			string strTopic;
 
-			if (Help::MkTopic(PluginNumber,HelpTopic,strTopic))
+			if (Help::MkTopic(reinterpret_cast<Plugin*>(PluginNumber),HelpTopic,strTopic))
 				FarMenu.SetHelp(strTopic);
 		}
 
@@ -877,7 +881,7 @@ int WINAPI FarMenuFn(
 		FarMenu.SetFlags(MenuFlags);
 		MenuItemEx CurItem;
 		CurItem.Clear();
-		int Selected=0;
+		size_t Selected=0;
 
 		for (size_t i=0; i < ItemsNumber; i++)
 		{
@@ -990,45 +994,9 @@ INT_PTR WINAPI FarSendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 	return 0;
 }
 
-#if !defined(__GNUC__)
-/* Цель данной функции - выставить флаг Flags - признак того, что
-   мы упали где то в плагине
-*/
-static int Except_FarDialogEx()
-{
-	if (CtrlObject)
-		CtrlObject->Plugins.Flags.Set(PSIF_DIALOG);
-
-	Frame *frame;
-
-	if ((frame=FrameManager->GetBottomFrame()) )
-	{
-		//while(!frame->Refreshable()) // А может все таки нужно???
-		frame->Unlock(); // теперь можно :-)
-	}
-
-//  CheckScreenLock();
-	FrameManager->RefreshFrame(); //??
-	return EXCEPTION_CONTINUE_SEARCH; // продолжим исполнения цепочки исключений!
-}
-#endif
-
-static int FarDialogExSehed(Dialog *FarDialog)
-{
-	__try
-	{
-		FarDialog->Process();
-		return FarDialog->GetExitCode();
-	}
-	__except(Except_FarDialogEx())
-	{
-		return -1;
-	}
-}
-
 HANDLE WINAPI FarDialogInit(INT_PTR PluginNumber, const GUID* Id, int X1, int Y1, int X2, int Y2,
                             const wchar_t *HelpTopic, const FarDialogItem *Item,
-                            size_t ItemsNumber, DWORD Reserved, unsigned __int64 Flags,
+                            size_t ItemsNumber, DWORD_PTR Reserved, unsigned __int64 Flags,
                             FARWINDOWPROC DlgProc, void* Param)
 {
 	HANDLE hDlg=INVALID_HANDLE_VALUE;
@@ -1082,7 +1050,7 @@ HANDLE WINAPI FarDialogInit(INT_PTR PluginNumber, const GUID* Id, int X1, int Y1
 		/* $ 29.08.2000 SVS
 		   Запомним номер плагина - сейчас в основном для формирования HelpTopic
 		*/
-		FarDialog->SetPluginNumber(PluginNumber);
+		FarDialog->SetPluginOwner(reinterpret_cast<Plugin*>(PluginNumber));
 	}
 	return hDlg;
 }
@@ -1092,36 +1060,18 @@ int WINAPI FarDialogRun(HANDLE hDlg)
 	if (FrameManager->ManagerIsDown())
 		return -1;
 
-	if (hDlg==INVALID_HANDLE_VALUE) return -1;
-
-	Frame *frame;
-
-	if ((frame=FrameManager->GetBottomFrame()) )
-		frame->Lock(); // отменим прорисовку фрейма
+	if (!hDlg || hDlg==INVALID_HANDLE_VALUE)
+		return -1;
 
 	int ExitCode=-1;
+
 	Dialog *FarDialog = (Dialog *)hDlg;
 
-	if (Opt.ExceptRules)
-	{
-		CtrlObject->Plugins.Flags.Clear(PSIF_DIALOG);
-		ExitCode=FarDialogExSehed(FarDialog);
-	}
-	else
-	{
-		FarDialog->Process();
-		ExitCode=FarDialog->GetExitCode();
-	}
+	FarDialog->Process();
+	ExitCode=FarDialog->GetExitCode();
 
-	/* $ 15.05.2002 SKV
-		Однако разлочивать нужно ровно то, что залочили.
-	*/
-	if (frame )
-		frame->Unlock(); // теперь можно :-)
-
-	//CheckScreenLock();
 	FrameManager->RefreshFrame(); //?? - //AY - это нужно чтоб обновлять панели после выхода из диалога
-	return(ExitCode);
+	return ExitCode;
 }
 
 void WINAPI FarDialogFree(HANDLE hDlg)
@@ -1146,10 +1096,12 @@ const wchar_t* WINAPI FarGetMsgFn(INT_PTR PluginHandle,int MsgId)
 			if (pPlugin->InitLang(strPath))
 				return pPlugin->GetMsg(MsgId);
 		}
+		//Maximus: для отладки
 		_ASSERTE((PluginHandle!=-1) && FALSE);
 	}
 	else
 	{
+		//Maximus: Для отладки
 		_ASSERTE((PluginHandle!=-1) && FALSE);
 	}
 	return L"";
@@ -1284,7 +1236,7 @@ int WINAPI FarMessageFn(INT_PTR PluginNumber,const GUID* Id,unsigned __int64 Fla
 	{
 		string strTopic;
 
-		if (Help::MkTopic(PluginNumber,HelpTopic,strTopic))
+		if (Help::MkTopic(reinterpret_cast<Plugin*>(PluginNumber),HelpTopic,strTopic))
 			SetMessageHelp(strTopic);
 	}
 
@@ -1322,7 +1274,8 @@ INT_PTR WINAPI FarPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int 
 	if (Command == FCTL_CHECKPANELSEXIST)
 		return Opt.OnlyEditorViewerUsed? FALSE:TRUE;
 
-	// для отлова недобросовестных плагинов
+	#if 1
+	//Maximus: для отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId())
 	{
 		// Некоторые плагины блокируют главную нить для безопасных вызовов API
@@ -1333,6 +1286,7 @@ INT_PTR WINAPI FarPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int 
 			ReportThreadUnsafeCall(L"Control(%u)", Command);
 		}
 	}
+	#endif
 
 	if (Opt.OnlyEditorViewerUsed || !CtrlObject || !FrameManager || FrameManager->ManagerIsDown())
 		return 0;
@@ -1555,7 +1509,7 @@ HANDLE WINAPI FarSaveScreen(int X1,int Y1,int X2,int Y2)
 	if (Y2==-1)
 		Y2=ScrY;
 
-	return((HANDLE)(new SaveScreen(X1,Y1,X2,Y2)));
+	return new SaveScreen(X1,Y1,X2,Y2);
 }
 
 
@@ -1914,7 +1868,8 @@ void WINAPI FarFreePluginDirList(PluginPanelItem *PanelItem, size_t ItemsNumber)
 int WINAPI FarViewer(const wchar_t *FileName,const wchar_t *Title,
                      int X1,int Y1,int X2, int Y2,unsigned __int64 Flags, UINT CodePage)
 {
-	// для отлова недобросовестных плагинов
+	#if 1
+	//Maximus: для отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId())
 	{
 		// Некоторые плагины блокируют главную нить для безопасных вызовов API
@@ -1925,6 +1880,7 @@ int WINAPI FarViewer(const wchar_t *FileName,const wchar_t *Title,
 			ReportThreadUnsafeCall(L"Viewer()", 0);
 		}
 	}
+	#endif
 
 
 	if (FrameManager->ManagerIsDown())
@@ -2012,7 +1968,8 @@ int WINAPI FarEditorInternal(
     UINT CodePage
 )
 {
-	// для отлова недобросовестных плагинов
+	#if 1
+	//Maximus: для отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId())
 	{
 		// Некоторые плагины блокируют главную нить для безопасных вызовов API
@@ -2023,6 +1980,7 @@ int WINAPI FarEditorInternal(
 			ReportThreadUnsafeCall(L"Editor()", 0);
 		}
 	}
+	#endif
 
 	if (FrameManager->ManagerIsDown())
 		return EEC_OPEN_ERROR;
@@ -2184,7 +2142,8 @@ void WINAPI FarText(int X,int Y,const FarColor* Color,const wchar_t *Str)
 
 INT_PTR WINAPI FarEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
-	// для отлова недобросовестных плагинов
+	#if 1
+	//Maximus: для отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId())
 	{
 		// Некоторые плагины блокируют главную нить для безопасных вызовов API
@@ -2195,6 +2154,7 @@ INT_PTR WINAPI FarEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, i
 			ReportThreadUnsafeCall(L"EditorControl(%u)", Command);
 		}
 	}
+	#endif
 
 	if (FrameManager->ManagerIsDown())
 		return 0;
@@ -2227,7 +2187,8 @@ INT_PTR WINAPI FarEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, i
 
 INT_PTR WINAPI FarViewerControl(int ViewerID, VIEWER_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
-	// для отлова недобросовестных плагинов
+	#if 1
+	//Maximus: для отлова недобросовестных плагинов
 	if (gnMainThreadId != GetCurrentThreadId())
 	{
 		// Некоторые плагины блокируют главную нить для безопасных вызовов API
@@ -2238,6 +2199,7 @@ INT_PTR WINAPI FarViewerControl(int ViewerID, VIEWER_CONTROL_COMMANDS Command, i
 			ReportThreadUnsafeCall(L"ViewerControl(%u)", Command);
 		}
 	}
+	#endif
 
 	if (FrameManager->ManagerIsDown())
 		return 0;
@@ -2585,7 +2547,12 @@ INT_PTR WINAPI farPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 				{
 					string strPath;
 					ConvertNameToFull(reinterpret_cast<const wchar_t*>(Param2), strPath);
+					#if 1
+					//Maximus5: Manual=true, чтобы показать ошибки загрузки, если таковые будут
+					return reinterpret_cast<INT_PTR>(CtrlObject->Plugins.LoadPluginExternal(strPath, Command == PCTL_FORCEDLOADPLUGIN, true));
+					#else
 					return reinterpret_cast<INT_PTR>(CtrlObject->Plugins.LoadPluginExternal(strPath, Command == PCTL_FORCEDLOADPLUGIN));
+					#endif
 				}
 			}
 			break;
@@ -2635,7 +2602,8 @@ INT_PTR WINAPI farPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 						return CtrlObject->Plugins.GetPluginInformation(plugin, Info, Param1);
 					}
 				}
-				//BUG: Проблема bis-сборки. Размер структуры Info->PInfo ожидается большего размера
+				#if 1
+				//Maximus: Проблема bis-сборки. Размер структуры Info->PInfo ожидается большего размера
 				else if (Info
 					&& Info->StructSize == (sizeof(*Info) - sizeof(Info->PInfo.MacroFunctionNumber) - sizeof(Info->PInfo.MacroFunctions))
 					&& static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation))
@@ -2653,6 +2621,7 @@ INT_PTR WINAPI farPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 					}
 
 				}
+				#endif
 			}
 			break;
 

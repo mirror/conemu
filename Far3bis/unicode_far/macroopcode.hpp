@@ -224,10 +224,13 @@ enum MACRO_OP_CODE
 	MCODE_F_FMATCH,                   // N=FMatch(S,Mask)
 	MCODE_F_PLUGIN_LOAD,              // N=Plugin.Load(DllPath[,ForceLoad])
 	MCODE_F_PLUGIN_UNLOAD,            // N=Plugin.UnLoad(DllPath)
+	#if 1
+	//Maximus: plugin.call и т.п.
 	MCODE_F_PLUGIN_CALL,              // N=Plugin.Call(Guid,MenuGuid)
 	MCODE_F_PLUGIN_CONFIG,            // N=Plugin.Config(Guid[,MenuGuid])
 	MCODE_F_PLUGIN_PREFIX,            // N=Plugin.Prefix(Guid,Command)
 	MCODE_F_PLUGIN_INT,               // N=Plugin.Int(Guid,Item)
+	#endif
 	MCODE_F_MENU_FILTER,              // N=Menu.Filter(Action[,Mode])
 	MCODE_F_MENU_FILTERSTR,           // S=Menu.FilterStr([Action[,S]])
 	MCODE_F_DLG_SETFOCUS,             // N=Dlg.SetFocus([ID])
@@ -326,8 +329,11 @@ enum MACRO_OP_CODE
 	MCODE_V_PPANEL_DRIVETYPE,         // PPanel.DriveType - пассивная панель: тип привода
 	MCODE_V_APANEL_HEIGHT,            // APanel.Height - активная панель:  высота панели
 	MCODE_V_PPANEL_HEIGHT,            // PPanel.Height - пассивная панель: высота панели
+	#if 1
+	//Maximus: многострочная статусная строка
 	MCODE_V_APANEL_STATUSHEIGHT,      // APanel.StatusHeight - активная панель:  высота статусной области панели
 	MCODE_V_PPANEL_STATUSHEIGHT,      // PPanel.StatusHeight - пассивная панель: высота статусной области панели
+	#endif
 	MCODE_V_APANEL_COLUMNCOUNT,       // APanel.ColumnCount - активная панель:  количество колонок
 	MCODE_V_PPANEL_COLUMNCOUNT,       // PPanel.ColumnCount - пассивная панель: количество колонок
 	MCODE_V_APANEL_HOSTFILE,          // APanel.HostFile - активная панель:  имя Host-файла

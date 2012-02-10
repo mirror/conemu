@@ -231,17 +231,26 @@ class VMenu: public Modal
 
 		bool bFilterEnabled;
 		bool bFilterLocked;
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		bool bFilterMaskMode;
+		#endif
 		string strFilter;
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		string strMaskFilter;
+		#endif
 
 		MenuItemEx **Item;
 
 		int ItemCount;
 		int ItemHiddenCount;
 		int ItemSubMenusCount;
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		int SeparatorCount;
 		int SeparatorHiddenCount;
+		#endif
 
 		FarColor Colors[VMENU_COLOR_COUNT];
 
@@ -268,7 +277,10 @@ class VMenu: public Modal
 		void UpdateInternalCounters(UINT64 OldFlags, UINT64 NewFlags);
 		bool IsFilterEditKey(int Key);
 		bool ShouldSendKeyToFilter(int Key);
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		void ShortenFilterString(int Key);
+		#endif
 		//коректировка текущей позиции и флагов SELECTED
 		void UpdateSelectPos();
 
@@ -329,18 +341,32 @@ class VMenu: public Modal
 		int  FindItem(const FarListFind *FindItem);
 		int  FindItem(int StartIndex,const wchar_t *Pattern,UINT64 Flags=0);
 		void RestoreFilteredItems();
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		void FilterStringUpdated();
+		#else
+		void FilterStringUpdated(bool bLonger);
+		#endif
 		void FilterUpdateHeight(bool bShrink=false);
 		void SetFilterEnabled(bool bEnabled) { bFilterEnabled=bEnabled; };
 		void SetFilterLocked(bool bLocked) { bFilterEnabled=bLocked; };
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		void SetFilterMaskMode(bool bMaskMode) { bFilterMaskMode=bMaskMode; };
+		#endif
  		bool AddToFilter(const wchar_t *str);
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
  		const wchar_t *GetFilterString();
+ 		#endif
  		void SetFilterString(const wchar_t *str);
 
 		int  GetItemCount() { return ItemCount; };
 		int  GetShowItemCount() { return ItemCount-ItemHiddenCount; };
+		#if 1
+		//Maximus: расширенный фильтр from DataMan
 		int  GetShowSeparatorCount() { return SeparatorCount-SeparatorHiddenCount; };
+		#endif
 		int  GetVisualPos(int Pos);
 		int  VisualPosToReal(int VPos);
 

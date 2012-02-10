@@ -48,7 +48,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filestr.hpp"
 #include "codepage.hpp"
 #include "cache.hpp"
+#if 1
+//Maximus: не вызывать elevation для попытки установки атрибута Hidden
 #include "elevation.hpp"
+#endif
 
 static DizRecord **SearchDizData;
 static int _cdecl SortDizIndex(const void *el1,const void *el2);
@@ -96,7 +99,7 @@ void DizList::Reset()
 
 void DizList::PR_ReadingMsg()
 {
-	//BUGBUG: Проверить, это экрана убирается?
+	//Maximus: BUGBUG: Проверить, это с экрана убирается?
 	Message(0,0,L"",MSG(MReadingDiz));
 }
 
@@ -472,9 +475,11 @@ bool DizList::Flush(const string& Path,const string* DizName)
 
 		if(!(FileAttr&FILE_ATTRIBUTE_READONLY))
 		{
+			#if 1
 			//Maximus5: На некоторых сетевых устройствах атрибуты вообще не устанавливаются
 			// Поэтому возвращается ошибка, и производится попытка Elevation (что бессмысленно)
 			DisableElevation DE;
+			#endif
 			apiSetFileAttributes(strDizFileName,FILE_ATTRIBUTE_ARCHIVE);
 		}
 		else

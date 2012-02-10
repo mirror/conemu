@@ -104,7 +104,10 @@ Edit::Edit(ScreenObject *pOwner, bool bAllocateData):
 	TabExpandMode = EXPAND_NOTABS;
 	Flags.Change(FEDITLINE_DELREMOVESBLOCKS,Opt.EdOpt.DelRemovesBlocks);
 	Flags.Change(FEDITLINE_PERSISTENTBLOCKS,Opt.EdOpt.PersistentBlocks);
-	Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace!=0);
+#pragma message("edit.cpp(107): warning: Check Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace)")
+	// far
+	Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace);
+	//Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace!=0); //my
 	Flags.Change(FEDITLINE_SHOWLINEBREAK,Opt.EdOpt.ShowWhiteSpace==1);
 	m_codepage = 0; //BUGBUG
 }
@@ -340,12 +343,16 @@ void Edit::FastShow()
 	if (Mask && *Mask)
 		RefreshStrByMask();
 
-	wchar_t *OutStrTmp=(wchar_t *)xf_malloc((EditLength+2)*sizeof(wchar_t));
+#pragma message("edit.cpp(346): warning: (EditLength+2)?")
+	wchar_t *OutStrTmp=(wchar_t *)xf_malloc((EditLength+1)*sizeof(wchar_t));
+	//wchar_t *OutStrTmp=(wchar_t *)xf_malloc((EditLength+2)*sizeof(wchar_t));
 
 	if (!OutStrTmp)
 		return;
 
-	wchar_t *OutStr=(wchar_t *)xf_malloc((EditLength+2)*sizeof(wchar_t));
+#pragma message("edit.cpp(353): warning: (EditLength+2)?")
+	wchar_t *OutStr=(wchar_t *)xf_malloc((EditLength+1)*sizeof(wchar_t));
+	//wchar_t *OutStr=(wchar_t *)xf_malloc((EditLength+2)*sizeof(wchar_t));
 
 	if (!OutStr)
 	{
@@ -403,13 +410,56 @@ void Edit::FastShow()
 
 		if (Flags.Check(FEDITLINE_PASSWORDMODE))
 			wmemset(OutStr,L'*',OutStrLength);
-	}
-	
+
+#if 0
+	//Maximus: в bis было так
 	if (Flags.Check(FEDITLINE_SHOWLINEBREAK) && Flags.Check(FEDITLINE_EDITORMODE) && (OutStrLength < EditLength))
 	{
 		const wchar_t* EndSeq = GetEOL();
 		if (EndSeq && *EndSeq)
 			OutStr[OutStrLength++]=L'\xB6'; //L'\x266A';
+	}
+#endif
+		if (Flags.Check(FEDITLINE_SHOWLINEBREAK) && Flags.Check(FEDITLINE_EDITORMODE) && (OutStrLength < EditLength))
+		{
+			switch(EndType)
+			{
+			case EOL_CR:
+				OutStr[OutStrLength++]=Oem2Unicode[13];
+				break;
+			case EOL_LF:
+				OutStr[OutStrLength++]=Oem2Unicode[10];
+				break;
+			case EOL_CRLF:
+				#if 1
+				//Maximus: "обычные" переводы строк - символом параграфа
+				OutStr[OutStrLength++]=L'\xB6';
+				#else
+				OutStr[OutStrLength++]=Oem2Unicode[13];
+				if(OutStrLength < EditLength)
+				{
+					OutStr[OutStrLength++]=Oem2Unicode[10];
+				}
+				#endif
+				break;
+			case EOL_CRCRLF:
+				OutStr[OutStrLength++]=Oem2Unicode[13];
+				if(OutStrLength < EditLength)
+				{
+					OutStr[OutStrLength++]=Oem2Unicode[13];
+					if(OutStrLength < EditLength)
+					{
+						OutStr[OutStrLength++]=Oem2Unicode[10];
+					}
+				}
+				break;
+			}
+		}
+
+		if(!m_next && Flags.Check(FEDITLINE_SHOWWHITESPACE) && Flags.Check(FEDITLINE_EDITORMODE) && (OutStrLength < EditLength))
+		{
+			OutStr[OutStrLength++]=L'\x25a1';
+		}
 	}
 
 	OutStr[OutStrLength]=0;
@@ -2298,13 +2348,13 @@ void Edit::InsertTab()
 }
 
 
-void Edit::ReplaceTabs()
+bool Edit::ReplaceTabs()
 {
 	wchar_t *TabPtr;
 	int Pos=0,S;
 
 	if (Flags.Check(FEDITLINE_READONLY))
-		return;
+		return false;
 
 	bool changed=false;
 
@@ -2341,6 +2391,7 @@ void Edit::ReplaceTabs()
 	}
 
 	if (changed) Changed();
+	return changed;
 }
 
 
@@ -2644,11 +2695,13 @@ void Edit::AddColor(ColorItem *col,bool skipsort)
 	}
 
 	#ifdef _DEBUG
+	//Maximus: для отладки
 	_ASSERTE(ColorCount<MaxColorCount);
 	#endif
 
 	if (skipsort && !ColorListNeedSort && ColorCount && ColorList[ColorCount-1].Priority>col->Priority)
 		ColorListNeedSort=true;
+
 
 	ColorList[ColorCount++]=*col;
 

@@ -674,7 +674,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 	};
 	MakeDialogItemsEx(AttrDlgData,AttrDlg);
 	SetAttrDlgParam DlgParam={};
-	int SelCount=SrcPanel?SrcPanel->GetSelCount():1;
+	size_t SelCount=SrcPanel?SrcPanel->GetSelCount():1;
 
 	if (!SelCount)
 	{
@@ -702,7 +702,10 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 		{
 			AttrDlg[SA_BUTTON_SET].Flags|=DIF_DISABLE;
 			AttrDlg[SA_BUTTON_SYSTEMDLG].Flags|=DIF_DISABLE;
+			#if 1
+			//Maximus: отображение владельца в плагиновых панелях
 			AttrDlg[SA_EDIT_OWNER].Flags|=DIF_READONLY;
+			#endif
 			DlgParam.Plugin=true;
 		}
 	}
@@ -737,12 +740,21 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 
 	{
 		DWORD FileAttr=INVALID_FILE_ATTRIBUTES;
-		string strSelName, strSelOwner;
+		string strSelName;
+		#if 1
+		//Maximus: отображение владельца в плагиновых панелях
+		string strSelOwner;
+		#endif
 		FAR_FIND_DATA_EX FindData;
 		if(SrcPanel)
 		{
 			SrcPanel->GetSelName(nullptr,FileAttr);
+			#if 1
+			//Maximus: отображение владельца в плагиновых панелях
 			SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData,&strSelOwner);
+			#else
+			SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData);
+			#endif
 		}
 		else
 		{
@@ -987,6 +999,8 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 				SrcPanel->GetCurDir(strCurDir);
 				CurPath2ComputerName(strCurDir, strComputerName);
 			}
+			#if 1
+			//Maximus: отображение владельца в плагиновых панелях
 			if (DlgParam.Plugin)
 			{
 				AttrDlg[SA_EDIT_OWNER].strData=strSelOwner;
@@ -995,6 +1009,9 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 			{
 				GetFileOwner(strComputerName,strSelName,AttrDlg[SA_EDIT_OWNER].strData);
 			}
+			#else
+			GetFileOwner(strComputerName,strSelName,AttrDlg[SA_EDIT_OWNER].strData);
+			#endif
 		}
 		else
 		{
@@ -1035,7 +1052,12 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 				CurPath2ComputerName(strCurDir, strComputerName);
 
 				bool CheckOwner=true;
+				#if 1
+				//Maximus: отображение владельца в плагиновых панелях
 				while (SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData,&strSelOwner))
+				#else
+				while (SrcPanel->GetSelName(&strSelName,FileAttr,nullptr,&FindData))
+				#endif
 				{
 					if (!FolderPresent&&(FileAttr&FILE_ATTRIBUTE_DIRECTORY))
 					{
@@ -1061,10 +1083,15 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 					if(CheckOwner)
 					{
 						string strCurOwner;
+						#if 1
+						//Maximus: отображение владельца в плагиновых панелях
 						if (DlgParam.Plugin)
 							strCurOwner=strSelOwner;
 						else
 							GetFileOwner(strComputerName,strSelName,strCurOwner);
+						#else
+						GetFileOwner(strComputerName,strSelName,strCurOwner);
+						#endif
 						if(AttrDlg[SA_EDIT_OWNER].strData.IsEmpty())
 						{
 							AttrDlg[SA_EDIT_OWNER].strData=strCurOwner;
@@ -1112,12 +1139,12 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 			{
 				// снимаем 3-state, если "есть все или нет ничего"
 				// за исключением случая, если есть Фолдер среди объектов
-				if ((!AttrDlg[i].Selected || AttrDlg[i].Selected >= SelCount) && !FolderPresent)
+				if ((!AttrDlg[i].Selected || static_cast<size_t>(AttrDlg[i].Selected) >= SelCount) && !FolderPresent)
 				{
 					AttrDlg[i].Flags&=~DIF_3STATE;
 				}
 
-				AttrDlg[i].Selected=(AttrDlg[i].Selected >= SelCount)?BST_CHECKED:(!AttrDlg[i].Selected?BSTATE_UNCHECKED:BSTATE_3STATE);
+				AttrDlg[i].Selected=(static_cast<size_t>(AttrDlg[i].Selected) >= SelCount)?BST_CHECKED:(!AttrDlg[i].Selected?BSTATE_UNCHECKED:BSTATE_3STATE);
 			}
 		}
 

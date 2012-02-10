@@ -161,7 +161,8 @@ ControlObject::~ControlObject()
 	delete ViewHistory;
 	delete CmdLine;
 	delete HiFiles;
-	delete FolderShortcuts; //Maximus5: Здесь периодически вылезает Assert на ::~Shortcuts => GetKeyID => SQLiteStmt::Reset
+	//Maximus5: (вроде уже нет) Здесь периодически вылезает Assert на ::~Shortcuts => GetKeyID => SQLiteStmt::Reset
+	delete FolderShortcuts;
 
 	History::CompactHistory();
 	FilePositionCache::CompactHistory();

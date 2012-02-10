@@ -104,7 +104,6 @@ struct EditorUndoData
 enum FLAGS_CLASS_EDITOR
 {
 	FEDITOR_MODIFIED              = 0x00000200,
-	FEDITOR_JUSTMODIFIED          = 0x00000400,   // 10.08.2000 skv: need to send EE_REDRAW 2.
 	// set to 1 by TextChanged, no matter what
 	// is value of State.
 	FEDITOR_MARKINGBLOCK          = 0x00000800,
@@ -215,10 +214,11 @@ class Editor:public ScreenObject
 
 		int SortColorLockCount;
 		bool SortColorUpdate;
+		int EditorControlLock;
 
 	private:
 		virtual void DisplayObject();
-		void ShowEditor(int CurLineOnly);
+		void ShowEditor(void);
 		void DeleteString(Edit *DelPtr,int LineNumber,int DeleteLast,int UndoLine);
 		void InsertString();
 		void Up();
@@ -279,6 +279,7 @@ class Editor:public ScreenObject
 		bool CheckLine(Edit* line);
 		wchar_t *Block2Text(wchar_t *ptrInitData);
 		wchar_t *VBlock2Text(wchar_t *ptrInitData);
+		void Change(EDITOR_CHANGETYPE Type,int StrNum);
 
 	public:
 		Editor(ScreenObject *pOwner=nullptr,bool DialogUsed=false);
@@ -402,4 +403,5 @@ class Editor:public ScreenObject
 		void SortColorLock();
 		void SortColorUnlock();
 		bool SortColorLocked();
+		bool EditorControlLocked() {return EditorControlLock?true:false;}
 };

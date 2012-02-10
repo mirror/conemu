@@ -75,11 +75,19 @@ HANDLE FindFirstFileInternal(const string& Name, FAR_FIND_DATA_EX& FindData)
 					{
 						LPCWSTR NamePtr = PointToName(Name);
 						Handle->Extended = true;
+
 						bool QueryResult = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileIdBothDirectoryInformation, FALSE, NamePtr, TRUE);
 						if(!QueryResult)
 						{
 							Handle->Extended = false;
-							QueryResult = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileBothDirectoryInformation, FALSE, NamePtr, TRUE);
+
+							// re-create handle to avoid weird bugs with some network emulators
+							Directory->Close();
+							if(Directory->Open(strDirectory, FILE_LIST_DIRECTORY, FILE_SHARE_READ|FILE_SHARE_WRITE, nullptr, OPEN_EXISTING))
+							{
+								Handle->ObjectHandle =static_cast<HANDLE>(Directory);
+								QueryResult = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileBothDirectoryInformation, FALSE, NamePtr, TRUE);
+							}
 						}
 						if(QueryResult)
 						{
@@ -225,6 +233,7 @@ bool FindCloseInternal(HANDLE Find)
 	return true;
 }
 
+//-------------------------------------------------------------------------
 FindFile::FindFile(const string& Object, bool ScanSymLink):
 	Handle(INVALID_HANDLE_VALUE),
 	empty(false)
@@ -293,7 +302,7 @@ bool FindFile::Get(FAR_FIND_DATA_EX& FindData)
 
 
 
-
+//-------------------------------------------------------------------------
 File::File():
 	Handle(INVALID_HANDLE_VALUE),
 	Pointer(0),
@@ -431,6 +440,7 @@ bool File::NtQueryDirectoryFile(PVOID FileInformation, ULONG Length, FILE_INFORM
 		pNameString = &NameString;
 	}
 	NTSTATUS Result = ifn.NtQueryDirectoryFile(Handle, nullptr, nullptr, nullptr, &IoStatusBlock, FileInformation, Length, FileInformationClass, ReturnSingleEntry, pNameString, RestartScan);
+	//Maximus: для отладки
 	_ASSERTE(Result!=STATUS_DATATYPE_MISALIGNMENT);
 	SetLastError(ifn.RtlNtStatusToDosError(Result));
 	if(Status)
@@ -460,6 +470,113 @@ bool File::Eof()
 	GetSize(Size);
 	return static_cast<UINT64>(Ptr) >= Size;
 }
+//-------------------------------------------------------------------------
+FileWalker::FileWalker():
+FileSize(0),
+	AllocSize(0),
+	ProcessedSize(0),
+	CurrentChunk(nullptr),
+	ChunkSize(ChunkSize),
+	Sparse(false)
+{
+	SingleChunk.Offset = 0;
+	SingleChunk.Size = 0;
+}
+
+bool FileWalker::InitWalk(DWORD BlockSize)
+{
+	bool Result = false;
+	ChunkSize = BlockSize;
+	if(GetSize(FileSize) && FileSize)
+	{
+		BY_HANDLE_FILE_INFORMATION bhfi;
+		Sparse = GetInformation(bhfi) && bhfi.dwFileAttributes&FILE_ATTRIBUTE_SPARSE_FILE;
+
+		if(Sparse)
+		{
+			FILE_ALLOCATED_RANGE_BUFFER QueryRange = {};
+			QueryRange.Length.QuadPart = FileSize;
+			static FILE_ALLOCATED_RANGE_BUFFER Ranges[1024];
+			DWORD BytesReturned;
+			for(;;)
+			{
+				bool QueryResult = IoControl(FSCTL_QUERY_ALLOCATED_RANGES, &QueryRange, sizeof(QueryRange), Ranges, sizeof(Ranges), &BytesReturned);
+				if((QueryResult || GetLastError() == ERROR_MORE_DATA) && BytesReturned)
+				{
+					for(size_t i = 0; i < BytesReturned/sizeof(FILE_ALLOCATED_RANGE_BUFFER); ++i)
+					{
+						AllocSize += Ranges[i].Length.QuadPart;
+						UINT64 RangeEndOffset = Ranges[i].FileOffset.QuadPart + Ranges[i].Length.QuadPart;
+						for(UINT64 j = Ranges[i].FileOffset.QuadPart; j < RangeEndOffset; j+=ChunkSize)
+						{
+							Chunk c = {j, Min(static_cast<DWORD>(RangeEndOffset - j), ChunkSize)};
+							ChunkList.Push(&c);
+						}
+					}
+					QueryRange.FileOffset.QuadPart = ChunkList.Last()->Offset+ChunkList.Last()->Size;
+					QueryRange.Length.QuadPart = FileSize - QueryRange.FileOffset.QuadPart;
+				}
+				else
+				{
+					break;
+				}
+			}
+			Result = !ChunkList.Empty();
+		}
+		else
+		{
+			AllocSize = FileSize;
+			CurrentChunk = &SingleChunk;
+			Result = true;
+		}
+	}
+	return Result;
+}
+
+
+bool FileWalker::Step()
+{
+	bool Result = false;
+	if(Sparse)
+	{
+		CurrentChunk = ChunkList.Next(CurrentChunk);
+		if(CurrentChunk)
+		{
+			SetPointer(CurrentChunk->Offset, nullptr, FILE_BEGIN);
+			ProcessedSize += CurrentChunk->Size;
+			Result = true;
+		}
+	}
+	else
+	{
+		UINT64 NewOffset = (!CurrentChunk->Size)? 0 : CurrentChunk->Offset + ChunkSize;
+		if(NewOffset < FileSize)
+		{
+			CurrentChunk->Offset = NewOffset;
+			CurrentChunk->Size = Min(static_cast<DWORD>(FileSize - NewOffset), ChunkSize);
+			ProcessedSize += CurrentChunk->Size;
+			Result = true;
+		}
+	}
+	return Result;
+}
+
+UINT64 FileWalker::GetChunkOffset() const
+{
+	return CurrentChunk->Offset;
+}
+
+DWORD FileWalker::GetChunkSize() const
+{
+	return CurrentChunk->Size;
+}
+
+int FileWalker::GetPercent() const
+{
+	return AllocSize? (ProcessedSize) * 100 / AllocSize : 0;
+}
+
+//-------------------------------------------------------------------------
 
 NTSTATUS GetLastNtStatus()
 {
@@ -503,7 +620,7 @@ HANDLE apiCreateFile(const string& Object, DWORD DesiredAccess, DWORD ShareMode,
 			Handle = CreateFile(strObject, DesiredAccess, ShareMode, SecurityAttributes, CreationDistribution, FlagsAndAttributes, TemplateFile);
 		}
 		#if 0
-		// после "drkns 04.07.2011 13:49:58 +0200 - build 2096" вроде не требуется
+		//Maximus: после "drkns 04.07.2011 13:49:58 +0200 - build 2096" вроде не требуется
 		else if(Error==ERROR_ACCESS_DENIED && !ForceElevation && strObject.GetLength()==7)
 		{
 			string strNoSlash(strObject);
@@ -670,11 +787,13 @@ BOOL apiSetCurrentDirectory(const string& PathName, bool Validate)
 		}
 	}
 
-#ifdef _DEBUG
+	#ifdef _DEBUG
+	//Maximus: для отладки
 	OutputDebugStringW(L"apiSetCurrentDirectory(");
 	OutputDebugStringW(strDir.CPtr());
 	OutputDebugStringW(L")\n");
-#endif
+	#endif
+	
 	strCurrentDirectory()=strDir;
 
 #ifndef NO_WRAPPER

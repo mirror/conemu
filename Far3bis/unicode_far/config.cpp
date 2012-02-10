@@ -121,8 +121,6 @@ void SystemSettings()
 {
 	DialogBuilder Builder(MConfigSystemTitle, L"SystemSettings");
 
-	Builder.AddCheckbox(MConfigRO, &Opt.ClearReadOnly);
-
 	DialogItemEx *DeleteToRecycleBin = Builder.AddCheckbox(MConfigRecycleBin, &Opt.DeleteToRecycleBin);
 	DialogItemEx *DeleteLinks = Builder.AddCheckbox(MConfigRecycleBinLink, &Opt.DeleteToRecycleBinKillLink);
 	DeleteLinks->Indent(4);
@@ -511,8 +509,7 @@ void EditorConfig(EditorOptions &EdOpt,bool Local)
 	Builder.AddCheckbox(MEditConfigAutoIndent, &EdOpt.AutoIndent);
 	DialogItemEx *TabSize = Builder.AddIntEditField(&EdOpt.TabSize, 3);
 	Builder.AddTextAfter(TabSize, MEditConfigTabSize);
-	DialogItemEx *WhiteSpace = Builder.AddCheckbox(MEditShowWhiteSpace, &EdOpt.ShowWhiteSpace);
-	WhiteSpace->Flags|=DIF_3STATE;
+	Builder.AddCheckbox(MEditShowWhiteSpace, &EdOpt.ShowWhiteSpace, 0, true);
 	Builder.ColumnBreak();
 	Builder.AddCheckbox(MEditConfigDelRemovesBlocks, &EdOpt.DelRemovesBlocks);
 	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MEditConfigSaveShortPos, &EdOpt.SaveShortPos);
@@ -692,7 +689,6 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"SaveViewHistory",&Opt.SaveViewHistory,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"UseRegisteredTypes",&Opt.UseRegisteredTypes,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"AutoSaveSetup",&Opt.AutoSaveSetup,0, 0},
-	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"ClearReadOnly",&Opt.ClearReadOnly,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"DeleteToRecycleBin",&Opt.DeleteToRecycleBin,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"DeleteToRecycleBinKillLink",&Opt.DeleteToRecycleBinKillLink,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"WipeSymbol",&Opt.WipeSymbol,0, 0},
@@ -746,7 +742,10 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"CASRule",&Opt.CASRule,0xFFFFFFFFU, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"AllCtrlAltShiftRule",&Opt.AllCtrlAltShiftRule,0x0000FFFF, 0},
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"ScanJunction",&Opt.ScanJunction,1, 0},
+	#if 1
+	//Maximus: расширенное меню плагинов
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"PlugMenuMode",&Opt.ChangePlugMenuMode, 0, 0},
+	#endif
 	{1, GeneralConfig::TYPE_INTEGER, NKeySystem,L"ElevationMode",&Opt.ElevationMode,0x0FFFFFFFU, 0},
 	{0, GeneralConfig::TYPE_INTEGER, NKeySystem,L"WindowMode",&Opt.WindowMode, 0, 0},
 

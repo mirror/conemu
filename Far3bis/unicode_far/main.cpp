@@ -79,8 +79,6 @@ static void show_help()
 	    L"          for the passive panel\n\n"
 	    L"The following switches may be used in the command line:\n\n"
 	    L" /?   This help.\n"
-	    L" /export <out.xml> [<configpath>]\n"
-   	    L" /import <in.xml> [<configpath>]\n"
 	    L" /a   Disable display of characters with codes 0 - 31 and 255.\n"
 	    L" /ag  Disable display of pseudographics characters.\n"
 	    L" /co  Forces FAR to load plugins from the cache only.\n"
@@ -322,7 +320,10 @@ int MainProcessSEH(string& strEditName,string& strViewName,string& DestName1,str
 	return Result;
 }
 
+#if 1
+//Maximus: для отладки
 DWORD gnMainThreadId = 0;
+#endif
 
 void InitProfile(string &strProfilePath)
 {
@@ -407,7 +408,10 @@ int ExportImportMain(bool Export, const wchar_t *XML, const wchar_t *ProfilePath
 
 int _cdecl wmain(int Argc, wchar_t *Argv[])
 {
+	#if 1
+	//Maximus: для отладки
 	gnMainThreadId = GetCurrentThreadId();
+	#endif
 
 	std::set_new_handler(nullptr);
 	QueryPerformanceCounter(&FarUpTime);

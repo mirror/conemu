@@ -722,7 +722,12 @@ UINT SelectCodePage(UINT nCurrent, bool bShowUnicode, bool bShowUTF, bool bShowU
 			case KEY_RCTRLH:
 				Opt.CPMenuMode = !Opt.CPMenuMode;
 				CodePages->SetBottomTitle(MSG(!Opt.CPMenuMode?MGetCodePageBottomTitle:MGetCodePageBottomShortTitle));
+				#if 1
+				//Maximus: вроде патч от w17 не вошедший в транк
 				FillCodePagesVMenu(bShowUnicode, bShowUTF, bShowUTF7, bShowAutoDetect);
+				#else
+				FillCodePagesVMenu(bShowUnicode, bShowUTF, bShowUTF7);
+				#endif
 				break;
 			// Обработка удаления таблицы символов из списка выбранных
 			case KEY_DEL:

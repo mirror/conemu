@@ -61,6 +61,8 @@ extern int DisablePluginsOutput;
 extern BOOL IsProcessAssignMacroKey;
 extern BOOL IsRedrawFramesInProcess;
 
+extern size_t PluginPanelsCount;
+
 extern const wchar_t* Version;
 extern const wchar_t* Copyright;
 
@@ -83,8 +85,6 @@ class SaveScreen;
 extern SaveScreen *GlobalSaveScrPtr;
 
 extern int CriticalInternalError;
-
-extern int _localLastError;
 
 extern int KeepUserScreen;
 extern string g_strDirToSet; //RAVE!!!

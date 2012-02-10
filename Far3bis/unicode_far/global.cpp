@@ -49,6 +49,8 @@ BOOL IsProcessVE_FindFile=FALSE;
 // Идёт процесс перерисовки всех фреймов
 BOOL IsRedrawFramesInProcess=FALSE;
 
+size_t PluginPanelsCount = 0;
+
 // идет процесс быстрого поиска в панелях?
 int WaitInFastFind=FALSE;
 
@@ -91,8 +93,6 @@ class SaveScreen;
 SaveScreen *GlobalSaveScrPtr=nullptr;
 
 int CriticalInternalError=FALSE;
-
-int _localLastError=0;
 
 int KeepUserScreen;
 string g_strDirToSet;

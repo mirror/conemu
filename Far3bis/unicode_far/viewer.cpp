@@ -226,7 +226,7 @@ Viewer::~Viewer()
 	if (!OpenFailed && bVE_READ_Sent)
 	{
 		CtrlObject->Plugins.CurViewer=this; //HostFileViewer;
-		CtrlObject->Plugins.ProcessViewerEvent(VE_CLOSE,&ViewerID);
+		CtrlObject->Plugins.ProcessViewerEvent(VE_CLOSE,nullptr,ViewerID);
 	}
 }
 
@@ -289,8 +289,10 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	}
 	else
 	{
-		//Maximus: в версии 2useven10 здесь FILE_READ_DATA вместо GENERIC_READ. В итоге, отваливается Anamorphosis
+		#if 1
+		//Maximus: FILE_READ_DATA вместо GENERIC_READ. приводит, к отваливванию Anamorphosis
 		if (!ViewFile.Open(strFileName, GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, nullptr, OPEN_EXISTING))
+		#endif
 		ViewFile.Open(strFileName, FILE_READ_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, nullptr, OPEN_EXISTING);
 	}
 
@@ -402,7 +404,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	CtrlObject->Plugins.CurViewer=this; // HostFileViewer;
 	/* $ 15.09.2001 tran
 	   пора легализироваться */
-	CtrlObject->Plugins.ProcessViewerEvent(VE_READ,nullptr);
+	CtrlObject->Plugins.ProcessViewerEvent(VE_READ,nullptr,ViewerID);
 	bVE_READ_Sent = true;
 
 	last_update_check = GetTickCount();
@@ -1729,7 +1731,7 @@ int Viewer::ProcessKey(int Key)
 		{
 			if (FilePos>0 && ViewFile.Opened())
 			{
-				Up(1);	// LastPage = 0
+				Up(1); // LastPage = 0
 
 				if (VM.Hex)
 				{
@@ -2195,7 +2197,12 @@ void Viewer::CacheLine( __int64 start, int length, bool have_eol )
 			}
 		}
 #if defined(_DEBUG) && 1 // it is legal case if file changed...
+		#if 1
+		//Maximus: для отладки
 		_ASSERTE( !reset );
+		#else
+		assert( !reset );
+		#endif
 #endif
 		if ( reset )
 		{

@@ -82,7 +82,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarGuid.hpp"
 #include "configdb.hpp"
 
+#if 1
+//Maximus: для отладки
 extern DWORD gnMainThreadId;
+#endif
 
 // для диалога назначения клавиши
 struct DlgParam
@@ -177,8 +180,11 @@ TMacroKeywords MKeywords[] =
 	{2,  L"PPanel.UNCPath",     MCODE_V_PPANEL_UNCPATH,0},
 	{2,  L"APanel.Height",      MCODE_V_APANEL_HEIGHT,0},
 	{2,  L"PPanel.Height",      MCODE_V_PPANEL_HEIGHT,0},
+	#if 1
+	//Maximus: многострочная статусная область
 	{2,  L"APanel.StatusHeight",MCODE_V_APANEL_STATUSHEIGHT,0},
 	{2,  L"PPanel.StatusHeight",MCODE_V_PPANEL_STATUSHEIGHT,0},
+	#endif
 	{2,  L"APanel.Width",       MCODE_V_APANEL_WIDTH,0},
 	{2,  L"PPanel.Width",       MCODE_V_PPANEL_WIDTH,0},
 	{2,  L"APanel.OPIFlags",    MCODE_V_APANEL_OPIFLAGS,0},
@@ -389,6 +395,10 @@ static bool absFunc(const TMacroFunction*);
 static bool ascFunc(const TMacroFunction*);
 static bool atoiFunc(const TMacroFunction*);
 static bool beepFunc(const TMacroFunction*);
+#if 0
+//Maximus: замена на plugininternalFunc
+static bool callpluginFunc(const TMacroFunction*);
+#endif
 static bool chrFunc(const TMacroFunction*);
 static bool clipFunc(const TMacroFunction*);
 static bool dateFunc(const TMacroFunction*);
@@ -448,10 +458,13 @@ static bool windowscrollFunc(const TMacroFunction*);
 static bool xlatFunc(const TMacroFunction*);
 static bool pluginloadFunc(const TMacroFunction*);
 static bool pluginunloadFunc(const TMacroFunction*);
+#if 1
+//Maximus: plugin.call и т.п.
 static bool plugincallFunc(const TMacroFunction*);
 static bool pluginconfigFunc(const TMacroFunction*);
 static bool pluginprefixFunc(const TMacroFunction*);
 static bool plugininternalFunc(const TMacroFunction*);
+#endif
 
 static TMacroFunction intMacroFunction[]=
 {
@@ -472,7 +485,12 @@ static TMacroFunction intMacroFunction[]=
 	{L"BM.BACK",          nullptr, L"N=BM.Back()",                                               usersFunc,          nullptr, 0, 0,                                      MCODE_F_BM_BACK,          0, 0},
 	{L"BM.PUSH",          nullptr, L"N=BM.Push()",                                               usersFunc,          nullptr, 0, 0,                                      MCODE_F_BM_PUSH,          0, 0},
 	{L"BM.STAT",          nullptr, L"N=BM.Stat([N])",                                            usersFunc,          nullptr, 0, 0,                                      MCODE_F_BM_STAT,          1, 1},
+	#if 1
+	//Maximus: замена на plugininternalFunc
 	{L"CALLPLUGIN",       nullptr, L"V=CallPlugin(SysID[,param])",                               plugininternalFunc, nullptr, 0, 0,                                      MCODE_F_CALLPLUGIN,       2, 1},
+	#else
+	{L"CALLPLUGIN",       nullptr, L"V=CallPlugin(SysID[,param])",                               callpluginFunc,     nullptr, 0, 0,                                      MCODE_F_CALLPLUGIN,       2, 1},
+	#endif
 	{L"CHECKHOTKEY",      nullptr, L"N=CheckHotkey(S[,N])",                                      usersFunc,          nullptr, 0, 0,                                      MCODE_F_MENU_CHECKHOTKEY, 2, 1},
 	{L"CHR",              nullptr, L"S=Chr(N)",                                                  chrFunc,            nullptr, 0, 0,                                      MCODE_F_CHR,              1, 0},
 	{L"CLIP",             nullptr, L"V=Clip(N[,V])",                                             clipFunc,           nullptr, 0, 0,                                      MCODE_F_CLIP,             2, 1},
@@ -527,10 +545,13 @@ static TMacroFunction intMacroFunction[]=
 	{L"PANELITEM",        nullptr, L"V=PanelItem(Panel,Index,TypeInfo)",                         panelitemFunc,      nullptr, 0, 0,                                      MCODE_F_PANELITEM,        3, 0},
 	{L"PLUGIN.LOAD",      nullptr, L"N=Plugin.Load(DllPath[,ForceLoad])",                        pluginloadFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_LOAD,      2, 1},
 	{L"PLUGIN.UNLOAD",    nullptr, L"N=Plugin.UnLoad(DllPath)",                                  pluginunloadFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_UNLOAD,    1, 0},
+	#if 1
+	//Maximus: plugin.call и т.п.
 	{L"PLUGIN.CALL",      nullptr, L"N=Plugin.Call(Guid[,MenuGuid])",                            plugincallFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,      2, 1},
 	{L"PLUGIN.CONFIG",    nullptr, L"N=Plugin.Config(Guid[,MenuGuid])",                          pluginconfigFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_CONFIG,    2, 1},
 	{L"PLUGIN.PREFIX",    nullptr, L"N=Plugin.Prefix(Guid,Command)",                             pluginprefixFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_PREFIX,    2, 0},
 	{L"PLUGIN.INT",       nullptr, L"N=Plugin.Int(Guid,Item)",                                   plugininternalFunc, nullptr, 0, 0,                                      MCODE_F_PLUGIN_INT,       2, 0},
+	#endif
 	{L"PRINT",            nullptr, L"N=Print(Str)",                                              usersFunc,          nullptr, 0, 0,                                      MCODE_F_PRINT,            1, 0},
 	{L"PROMPT",           nullptr, L"S=Prompt([Title[,Prompt[,flags[,Src[,History]]]]])",        promptFunc,         nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PROMPT,           5, 5},
 	{L"REPLACE",          nullptr, L"S=Replace(Str,Find,Replace[,Cnt[,Mode]])",                  replaceFunc,        nullptr, 0, 0,                                      MCODE_F_REPLACE,          5, 2},
@@ -1516,8 +1537,7 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 
 					if (SelPanel)
 					{
-						int SelCount=SelPanel->GetRealSelCount();
-						Cond=SelCount >= 1?1:0; //??
+						Cond = SelPanel->GetRealSelCount() > 0; //??
 					}
 
 					break;
@@ -1580,6 +1600,8 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 					break;
 				}
 
+				#if 1
+				//Maximus: многострочная статусная область
 				case MCODE_V_APANEL_STATUSHEIGHT: // APanel.StatusHeight
 				case MCODE_V_PPANEL_STATUSHEIGHT: // PPanel.StatusHeight
 					{
@@ -1590,6 +1612,7 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 
 						break;
 					}
+				#endif
 
 				case MCODE_V_APANEL_OPIFLAGS:  // APanel.OPIFlags
 				case MCODE_V_PPANEL_OPIFLAGS:  // PPanel.OPIFlags
@@ -2887,7 +2910,12 @@ static bool menushowFunc(const TMacroFunction*)
 		{
 			Menu.SetFilterEnabled(true);
 			Menu.SetFilterString(VFindOrFilter.toString());
+			#if 1
+			//Maximus: расширенная фильтрация списков
 			Menu.FilterStringUpdated();
+			#else
+			Menu.FilterStringUpdated(true);
+			#endif
 			Menu.Show();
 		}
 		else
@@ -4187,7 +4215,10 @@ static bool panelitemFunc(const TMacroFunction*)
 	}
 
 	int TypePanel=SelPanel->GetType(); //FILE_PANEL,TREE_PANEL,QVIEW_PANEL,INFO_PANEL
+	#if 1
+	//Maximus: оптимизация колонки C0
 	int SelPanelMode=SelPanel->GetMode(); //NORMAL_PANEL,PLUGIN_PANEL
+	#endif
 
 	if (!(TypePanel == FILE_PANEL || TypePanel ==TREE_PANEL))
 	{
@@ -4300,11 +4331,14 @@ static bool panelitemFunc(const TMacroFunction*)
 				Ret=TVar((__int64)FileTimeToUI64(&filelistItem.ChangeTime));
 				break;
 			case 22:  // CustomData
+				#if 1
+				//Maximus: оптимизация колонки C0
 				if (SelPanelMode==NORMAL_PANEL && !filelistItem.CustomDataLoaded)
 				{
 					//Maximus: BUGBUG: требуется установка текущей папки для панели (это может быть пассивная панель!)
 					CtrlObject->Plugins.GetCustomData(&filelistItem);
 				}
+				#endif
 				Ret=TVar(filelistItem.strCustomData);
 				break;
 		}
@@ -4561,6 +4595,9 @@ static bool pluginunloadFunc(const TMacroFunction*)
 	return Ret.i()!=0;
 }
 
+#if 1
+//Maximus: функции plugin.call и т.п.
+
 // N=Plugin.Call(Guid[,MenuGuid])
 static bool plugincallFunc(const TMacroFunction*)
 {
@@ -4619,6 +4656,7 @@ static bool pluginprefixFunc(const TMacroFunction*)
 	VMStack.Push(Ret);
 	return true;
 }
+#endif
 
 // V=callplugin(SysID[,param])
 #if 0
@@ -4730,8 +4768,13 @@ struct OpenDlgPluginData
 	return Ret?true:false;
 }
 #else
+#if 1
+//Maximus: замена callpluginFunc на plugininternalFunc
 // N=Plugin.Int(Guid,Item)
 static bool plugininternalFunc(const TMacroFunction*)
+#else
+static bool callpluginFunc(const TMacroFunction*)
+#endif
 {
 	//TODO: Заменить на вызов CtrlObject->Plugins.CallPluginItem(guid,&Data)
 	__int64 Ret=0;
@@ -4925,12 +4968,14 @@ int KeyMacro::GetKey()
 {
 	MacroRecord *MR;
 #ifdef _DEBUG
+	//Maximus: для отладки
 	MacroRecord MRD = {};
 	int dbgCurPCStack0 = CurPCStack, dbgCurPCStack = -99, dbgInitialLoops = -1, dbgBeginLoops = -1, dbgRunLoops = -1;
 #endif
 	TVar tmpVar;
 	TVarSet *tmpVarSet=nullptr;
 #ifdef _DEBUG
+	//Maximus: для отладки
 	size_t jj = 0;
 	TMacroFunction ff = {};
 #endif
@@ -4961,8 +5006,7 @@ int KeyMacro::GetKey()
 			        CtrlObject->Plugins.CurEditor->IsVisible() &&
 			        LockScr)
 			{
-				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
-				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
+				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,CtrlObject->Plugins.CurEditor->GetId());
 				CtrlObject->Plugins.CurEditor->Show();
 			}
 
@@ -5002,6 +5046,7 @@ int KeyMacro::GetKey()
 
 initial:
 	#ifdef _DEBUG
+	//Maximus: для отладки
 	dbgInitialLoops++;
 	#endif
 
@@ -5012,6 +5057,7 @@ initial:
 	}
 
 #ifdef _DEBUG
+	//Maximus: для отладки
 	MRD = *MR;
 	dbgCurPCStack = CurPCStack;
 	#define CHECKMR() _ASSERTE(MRD.Buffer==MR->Buffer && MRD.BufferSize==MR->BufferSize)
@@ -5025,10 +5071,11 @@ initial:
 	if (!Work.ExecLIBPos && !LockScr && (MR->Flags&MFLAGS_DISABLEOUTPUT))
 		LockScr=new LockScreen;
 
-	CHECKMR();
+	CHECKMR(); //Maximus: для отладки
 	
 begin:
 	#ifdef _DEBUG
+	//Maximus: для отладки
 	dbgBeginLoops++;
 	#endif
 
@@ -5039,7 +5086,6 @@ done:
 		/*$ 10.08.2000 skv
 			If we are in editor mode, and CurEditor defined,
 			we need to call this events.
-			EE_REDRAW EEREDRAW_CHANGE - to notify that text changed.
 			EE_REDRAW EEREDRAW_ALL    - to notify that whole screen updated
 			->Show() to actually update screen.
 
@@ -5052,11 +5098,10 @@ done:
 		        CtrlObject->Plugins.CurEditor->IsVisible()
 		        /* && LockScr*/) // Mantis#0001595
 		{
-			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_CHANGE);
-			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
+			CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,CtrlObject->Plugins.CurEditor->GetId());
 			CtrlObject->Plugins.CurEditor->Show();
 
-			CHECKMR();
+			CHECKMR(); //Maximus: для отладки
 		}
 
 		if (CurPCStack < 0 && (Work.MacroWORKCount-1) <= 0) // mantis#351
@@ -5065,14 +5110,14 @@ done:
 			LockScr=nullptr;
 			MR->Flags&=~MFLAGS_DISABLEOUTPUT; // ????
 
-			CHECKMR();
+			CHECKMR(); //Maximus: для отладки
 		}
 
 		Clipboard::SetUseInternalClipboardState(false); //??
 		Work.Executing=MACROMODE_NOMACRO;
 		ReleaseWORKBuffer();
 
-		//CHECKMR(); -- был release
+		//CHECKMR(); -- был release //Maximus: для отладки
 
 		// проверим - "а есть ли в временном стеке еще макрЫсы"?
 		if (Work.MacroWORKCount > 0)
@@ -5088,7 +5133,7 @@ done:
 		//FrameManager->PluginCommit();
 		_KEYMACRO(SysLog(-1); SysLog(L"[%d] **** End Of Execute Macro ****",__LINE__));
 
-		//CHECKMR(); -- был release
+		//CHECKMR(); -- был release //Maximus: для отладки
 
 		if (Work.MacroWORKCount <= 0 && CurPCStack >= 0)
 		{
@@ -5105,15 +5150,16 @@ done:
 	}
 
 	#ifdef _DEBUG
+	//Maximus: для отладки
 	dbgRunLoops++;
 	#endif
 
-	CHECKMR();
+	CHECKMR(); //Maximus: для отладки
 	
 	if (!Work.ExecLIBPos)
 		Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
 
-	CHECKMR();
+	CHECKMR(); //Maximus: для отладки
 		
 	// Mantis#0000581: Добавить возможность прервать выполнение макроса
 	{
@@ -5129,7 +5175,7 @@ done:
 		}
 	}
 
-	CHECKMR();
+	CHECKMR(); //Maximus: для отладки
 	
 	DWORD Key=!MR?MCODE_OP_EXIT:GetOpCode(MR,Work.ExecLIBPos++);
 
@@ -5142,7 +5188,7 @@ done:
 		goto return_func;
 	}
 
-	CHECKMR();
+	CHECKMR(); //Maximus: для отладки
 	
 	switch (Key)
 	{
@@ -5965,6 +6011,7 @@ done:
 			{
 				const TMacroFunction *MFunc = KeyMacro::GetMacroFunction(J);
 				#ifdef _DEBUG
+				//Maximus: для отладки
 				jj = J;
 				ff = *MFunc;
 				#endif
@@ -6362,6 +6409,7 @@ void KeyMacro::ReadVarsConsts()
 void KeyMacro::SetMacroConst(const wchar_t *ConstName, const TVar& Value)
 {
 #if 0
+	//Maximus: для отладки
 	if (ConstName == constMsButton)
 	{
 		static int LastMsButton;
@@ -6530,7 +6578,7 @@ TMacroFunction *KeyMacro::RegisterMacroFunction(const TMacroFunction *tmfunc)
 		AllocatedFuncCount=AllocatedFuncCount+64;
 
 		if (!(pTemp=(TMacroFunction *)xf_realloc(AMacroFunction,AllocatedFuncCount*sizeof(TMacroFunction))))
-			return false;
+			return nullptr;
 
 		AMacroFunction=pTemp;
 	}
@@ -7567,6 +7615,7 @@ void MacroState::Init(TVarTable *tbl)
 
 int KeyMacro::PushState(bool CopyLocalVars)
 {
+	//Maximus: для отладки
 	_ASSERTE(GetCurrentThreadId()==gnMainThreadId);
 	
 	if (CurPCStack+1 >= STACKLEVEL)
@@ -7581,6 +7630,7 @@ int KeyMacro::PushState(bool CopyLocalVars)
 
 int KeyMacro::PopState()
 {
+	//Maximus: для отладки
 	_ASSERTE(GetCurrentThreadId()==gnMainThreadId);
 	
 	if (CurPCStack < 0)
@@ -7643,6 +7693,7 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
 							//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
 							if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
 							{
+								//Maximus: для отладки
 								_ASSERTE((((DWORD_PTR)MPtr->Callback)&0xFFFFFFFF)!=0xCDCDCDCD);
 							    if(!MPtr->Callback||MPtr->Callback(MPtr->Id,AKMFLAGS_NONE))
 							    	return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
@@ -7914,7 +7965,7 @@ BOOL KeyMacro::CheckAll(int /*CheckMode*/,UINT64 CurFlags)
 		if (CurFlags&(MFLAGS_SELECTION|MFLAGS_NOSELECTION|MFLAGS_PSELECTION|MFLAGS_PNOSELECTION))
 			if (Mode!=MACRO_EDITOR && Mode != MACRO_DIALOG && Mode!=MACRO_VIEWER)
 			{
-				int SelCount=ActivePanel->GetRealSelCount();
+				size_t SelCount=ActivePanel->GetRealSelCount();
 
 				if (((CurFlags&MFLAGS_SELECTION) && SelCount < 1) || ((CurFlags&MFLAGS_NOSELECTION) && SelCount >= 1))
 					return FALSE;
@@ -8015,6 +8066,7 @@ void KeyMacro::Sort()
 {
 	typedef int (__cdecl *qsort_fn)(const void*,const void*);
 	// сортируем
+	//Maximus: для отладки
 	_ASSERTE(MacroLIBCount>=0 && MacroLIBCount<99999);
 	far_qsort(MacroLIB,MacroLIBCount,sizeof(MacroRecord),(qsort_fn)SortMacros);
 	// перестраиваем индекс начал
@@ -8040,6 +8092,7 @@ void KeyMacro::Sort()
 DWORD KeyMacro::GetOpCode(MacroRecord *MR,int PC)
 {
 	#ifdef _DEBUG
+	//Maximus: для отладки
 	_ASSERTE(IsBadReadPtr(MR,sizeof(*MR))==FALSE);
 	_ASSERTE(MR->BufferSize<=1 || (PC>=0 && PC<MR->BufferSize));
 	#endif
@@ -8157,6 +8210,7 @@ int KeyMacro::AddMacro(const wchar_t *PlainText,const wchar_t *Description,enum 
 		return FALSE;
 
 #ifdef _DEBUG
+	//Maximus: для отладки
 	{
 		string strDbgInfo=L"AddMacro: "+GuidToStr(PluginId)+L":";
 		wchar_t szID[32];
@@ -8198,6 +8252,7 @@ int KeyMacro::AddMacro(const wchar_t *PlainText,const wchar_t *Description,enum 
 			KeyMacro::Sort();
 			return TRUE;
 		}
+		//Maximus: для отладки
 		_ASSERTE(MacroLIBCount>=0 && MacroLIBCount<99999);
 	}
 	return FALSE;

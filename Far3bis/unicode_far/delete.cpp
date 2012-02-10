@@ -59,7 +59,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "panelmix.hpp"
 #include "mix.hpp"
 #include "dirinfo.hpp"
+#if 1
+//Maximus: RemoveToRecycleBin глобальная, используется в расширенном меню плагинов
 #include "delete.hpp"
+#endif
 #include "elevation.hpp"
 #include "wakeful.hpp"
 
@@ -75,8 +78,11 @@ static void ShellDeleteMsg(const wchar_t* Name, DEL_MODE Mode, int Percent, int 
 static int AskDeleteReadOnly(const string& Name,DWORD Attr,int Wipe);
 static int ShellRemoveFile(const string& Name,int Wipe, int TotalPercent);
 static int ERemoveDirectory(const string& Name,int Wipe);
-//static int RemoveToRecycleBin(const string& Name);
-static int WipeFile(const string& Name, int TotalPercent);
+#if 0
+//Maximus: RemoveToRecycleBin глобальная, используется в расширенном меню плагинов
+static int RemoveToRecycleBin(const string& Name);
+#endif
+static bool WipeFile(const string& Name, int TotalPercent, bool& Cancel);
 static int WipeDirectory(const string& Name);
 static void PR_ShellDeleteMsg();
 
@@ -98,7 +104,8 @@ void ShellDelete(Panel *SrcPanel,bool Wipe)
 	string strDizName;
 	string strFullName;
 	DWORD FileAttr;
-	int SelCount,UpdateDiz;
+	size_t SelCount;
+	int UpdateDiz;
 	int DizPresent;
 	int Ret;
 	BOOL NeedUpdate=TRUE, NeedSetUpADir=FALSE;
@@ -145,18 +152,18 @@ void ShellDelete(Panel *SrcPanel,bool Wipe)
 	{
 		// в зависимости от числа ставим нужное окончание
 		const wchar_t *Ends;
-		wchar_t StrItems[16];
-		_itow(SelCount,StrItems,10);
+		FormatString StrItems;
+		StrItems << SelCount;
 		Ends=MSG(MAskDeleteItemsA);
-		int LenItems=StrLength(StrItems);
+		size_t LenItems = StrItems.GetLength();
 
 		if (LenItems > 0)
 		{
-			if ((LenItems >= 2 && StrItems[LenItems-2] == L'1') ||
-			        StrItems[LenItems-1] >= L'5' ||
-			        StrItems[LenItems-1] == L'0')
+			if ((LenItems >= 2 && StrItems.At(LenItems-2) == L'1') ||
+			        StrItems.At(LenItems-1) >= L'5' ||
+			        StrItems.At(LenItems-1) == L'0')
 				Ends=MSG(MAskDeleteItemsS);
-			else if (StrItems[LenItems-1] == L'1')
+			else if (StrItems.At(LenItems-1) == L'1')
 				Ends=MSG(MAskDeleteItems0);
 		}
 
@@ -773,9 +780,13 @@ int ShellRemoveFile(const string& Name,int Wipe, int TotalPercent)
 				case 1:
 					SkipWipeMode=0;
 				case 0:
-
-					if (WipeFile(Name, TotalPercent))
-						return DELETE_SUCCESS;
+					{
+						bool Cancel = false;
+						if (WipeFile(Name, TotalPercent, Cancel))
+							return DELETE_SUCCESS;
+						else if(Cancel)
+							return DELETE_CANCEL;
+					}
 			}
 		}
 		else if (!Opt.DeleteToRecycleBin)
@@ -946,62 +957,55 @@ int RemoveToRecycleBin(const string& Name)
 	return MoveToRecycleBinInternal(lpwszName);
 }
 
-int WipeFile(const string& Name, int TotalPercent)
+bool WipeFile(const string& Name, int TotalPercent, bool& Cancel)
 {
-	unsigned __int64 FileSize;
+	bool Result = false;
+
 	apiSetFileAttributes(Name,FILE_ATTRIBUTE_NORMAL);
-	File WipeFile;
-	if(!WipeFile.Open(Name, GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_WRITE_THROUGH|FILE_FLAG_SEQUENTIAL_SCAN))
-	{
-		return FALSE;
-	}
 
-	if (!WipeFile.GetSize(FileSize))
-	{
-		WipeFile.Close();
-		return FALSE;
-	}
+	FileWalker WipeFile;
 
-	if(FileSize)
+	if(WipeFile.Open(Name, FILE_READ_DATA|FILE_WRITE_DATA, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_WRITE_THROUGH|FILE_FLAG_SEQUENTIAL_SCAN))
 	{
-		INT64 InitFileSize = FileSize;
-		const size_t BufSize=65536;
-		static BYTE Buf[BufSize];
-		static bool BufInit = false;
-		if(!BufInit)
+		const DWORD BufSize=65536;
+		if(WipeFile.InitWalk(BufSize))
 		{
-			memset(Buf, Opt.WipeSymbol, BufSize); // используем символ заполнитель
-			BufInit = true;
-		}
-		DWORD Written;
-		DWORD StartTime=GetTickCount();
-
-		while (FileSize>0)
-		{
-			DWORD WriteSize=(DWORD)Min((unsigned __int64)BufSize,FileSize);
-			WipeFile.Write(Buf,WriteSize,Written);
-			FileSize-=WriteSize;
-			DWORD CurTime=GetTickCount();
-			if (CurTime-StartTime>RedrawTimeout)
+			static BYTE Buf[BufSize];
+			static bool BufInit = false;
+			if(!BufInit)
 			{
-				StartTime=CurTime;
-				int WipePercent = (InitFileSize-FileSize)*100/InitFileSize;
-				ShellDeleteMsg(Name, DEL_WIPEPROCESS, TotalPercent, WipePercent);
+				memset(Buf, Opt.WipeSymbol, BufSize); // используем символ заполнитель
+				BufInit = true;
 			}
+
+			DWORD StartTime=GetTickCount();
+			while(WipeFile.Step())
+			{
+				DWORD Written;
+				WipeFile.Write(Buf, WipeFile.GetChunkSize(), Written);
+				DWORD CurTime=GetTickCount();
+				if (CurTime-StartTime>RedrawTimeout)
+				{
+					StartTime=CurTime;
+
+					if (CheckForEscSilent() && ConfirmAbortOp())
+					{
+						Cancel=true;
+						return false;
+					}
+
+					ShellDeleteMsg(Name, DEL_WIPEPROCESS, TotalPercent, WipeFile.GetPercent());
+				}
+			}
+			WipeFile.SetPointer(0,nullptr,FILE_BEGIN);
+			WipeFile.SetEnd();
 		}
-		WipeFile.SetPointer(0,nullptr,FILE_BEGIN);
-		//WipeFile.SetEnd();
+		WipeFile.Close();
+		string strTempName;
+		FarMkTempEx(strTempName,nullptr,FALSE);
+		Result = apiMoveFile(Name,strTempName) && apiDeleteFile(strTempName);
 	}
-
-	WipeFile.Close();
-	string strTempName;
-	FarMkTempEx(strTempName,nullptr,FALSE);
-
-	if (apiMoveFile(Name,strTempName))
-		return apiDeleteFile(strTempName);
-
-	SetLastError((_localLastError = GetLastError()));
-	return FALSE;
+	return Result;
 }
 
 
@@ -1020,7 +1024,6 @@ int WipeDirectory(const string& Name)
 
 	if (!apiMoveFile(Name, strTempName))
 	{
-		SetLastError((_localLastError = GetLastError()));
 		return FALSE;
 	}
 
@@ -1043,7 +1046,6 @@ int DeleteFileWithFolder(const string& FileName)
 		}
 	}
 
-	SetLastError((_localLastError = GetLastError()));
 	return FALSE;
 }
 

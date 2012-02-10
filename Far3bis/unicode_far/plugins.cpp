@@ -62,7 +62,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interf.hpp"
 #include "filelist.hpp"
 #include "message.hpp"
+#if 1
+//Maximus: расширенное меню плагинов
 #include "delete.hpp"
+#endif
 #include "FarGuid.hpp"
 #include "configdb.hpp"
 #include "FarDlgBuilder.hpp"
@@ -298,6 +301,7 @@ PluginTree::~PluginTree()
 long PluginTree::compare(Node<AncientPlugin*>* first,AncientPlugin** second)
 {
 #ifdef _DEBUG
+	//Maximus: для отладки
 	AncientPlugin** p1 = first->data;
 	_ASSERTE(*p1!=(AncientPlugin*)0xcccccccc);
 	const GUID& guid = (*p1)->GetGUID();
@@ -311,6 +315,7 @@ AncientPlugin** PluginTree::query(const GUID& value)
 {
 	PluginSearch plugin(value);
 	AncientPlugin* get=&plugin;
+	//Maximus: для отладки
 	_ASSERTE(root==NULL || *root->data!=(AncientPlugin*)0xcccccccc);
 	return Tree<AncientPlugin*>::query(&get);
 }
@@ -364,6 +369,8 @@ bool PluginManager::AddPlugin(Plugin *pPlugin)
 {
 	if (PluginsCache)
 	{
+		#if 1
+		//Maximus: для отладки
 		AncientPlugin** tmp=new AncientPlugin*(pPlugin);
 		_ASSERTE(*tmp==pPlugin);
 		AncientPlugin** item=PluginsCache->insert(tmp);
@@ -374,6 +381,11 @@ bool PluginManager::AddPlugin(Plugin *pPlugin)
 			_ASSERTE(*item==pPlugin);
 			return false;
 		}
+		#else
+		AncientPlugin** item=new AncientPlugin*(pPlugin);
+		item=PluginsCache->insert(item);
+		if(*item!=pPlugin) return false;
+		#endif
 	}
 	Plugin **NewPluginsData=(Plugin**)xf_realloc(PluginsData,sizeof(*PluginsData)*(PluginsCount+1));
 
@@ -436,9 +448,11 @@ Plugin* PluginManager::LoadPlugin(
     const string& lpwszModuleName,
     const FAR_FIND_DATA_EX &FindData,
     bool LoadToMem
-	,bool* ShowErrors, bool Manual
+	,bool* ShowErrors, bool Manual //Maximus: диагностика ошибок загрузки
 )
 {
+	#if 1
+	//Maximus: не выполнять лишние действия
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
 	if (pPlugin)
 	{
@@ -448,14 +462,24 @@ Plugin* PluginManager::LoadPlugin(
 		_ASSERTE(pPlugin==nullptr || pPlugin->GetModuleName()!=lpwszModuleName);
 		return pPlugin;
 	}
+	#else
+	Plugin *pPlugin = nullptr;
+	#endif
 
+	#if 1
+	//Maximus: Тип нам пригодится дальше
 	PluginType Type=IsModulePlugin(lpwszModuleName);
 	switch (Type)
+	#else
+	switch (IsModulePlugin(lpwszModuleName))
+	#endif
 	{
 		case UNICODE_PLUGIN: pPlugin = new Plugin(this, lpwszModuleName); break;
 #ifndef NO_WRAPPER
 		case OEM_PLUGIN: pPlugin = new PluginA(this, lpwszModuleName); break;
 #endif // NO_WRAPPER
+		#if 1
+		//Maximus: диагностика ошибок загрузки
 		default:
 			if (Manual && ShowErrors && *ShowErrors)
 			{
@@ -464,31 +488,49 @@ Plugin* PluginManager::LoadPlugin(
 					*ShowErrors=false;
 			}
 			return false;
+		#else
+		default: return nullptr;
+		#endif
 	}
 
 	if (!pPlugin)
 	{
+		//Maximus: для отладки
 		_ASSERTE(pPlugin!=nullptr);
-		return false;
+		return nullptr;
 	}
 
 	bool bResult=false,bDataLoaded=false;
+	#if 1
+	//Maximus: диагностика ошибок загрузки
 	bool bAlwaysLoad=(!Opt.LoadPlug.PluginsCacheOnly || Manual);
+	#endif
 
 	if (!LoadToMem)
+		#if 1
+		//Maximus: диагностика ошибок загрузки
 		bResult = pPlugin->LoadFromCache(FindData, bAlwaysLoad?nullptr:ShowErrors);
+		#else
+		bResult = pPlugin->LoadFromCache(FindData);
+		#endif
 
+	#if 1
+	//Maximus: диагностика ошибок загрузки
 	if (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || bAlwaysLoad))
+	#else
+	if (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || !Opt.LoadPlug.PluginsCacheOnly))
+	#endif
 	{
 		bResult = bDataLoaded = pPlugin->LoadData();
 	}
+	//Maximus: диагностика ошибок загрузки
 	else if (IsDebuggerPresent())
 	{
 		string strDbgInfo=lpwszModuleName + L" - skipped, (!bResult && (pPlugin->CheckWorkFlags(PIWF_PRELOADED) || !Opt.LoadPlug.PluginsCacheOnly || Manual))\n";
 		OutputDebugString(strDbgInfo);
 	}
 
-	// Загрузка двух плагинов (разные физические файлы) с одинаковыми GUID недопустима
+	//Maximus: Загрузка двух плагинов (разные физические файлы) с одинаковыми GUID недопустима
 	if (bResult)
 	{
 		GUID PluginGuid=pPlugin->GetGUID();
@@ -515,9 +557,10 @@ Plugin* PluginManager::LoadPlugin(
 		}
 	}
 
-	//Maximus: AddPlugin Обламывается и никаких ошибок не показывает!!!
+	//Maximus: BUGBUG: AddPlugin Обламывается и никаких ошибок не показывает!!!
 	if (bResult && !AddPlugin(pPlugin))
 	{
+		//Maximus: диагностика ошибок загрузки
 		_ASSERTE((void*)L"AddPlugin failed"==NULL);
 		if (Manual)
 		{
@@ -542,15 +585,20 @@ Plugin* PluginManager::LoadPlugin(
 	return pPlugin;
 }
 
+#if 1
+//Maximus: диагностика ошибок загрузки
 HANDLE PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem, bool Manual)
+#else
+HANDLE PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem)
+#endif
 {
 	Plugin *pPlugin = GetPlugin(lpwszModuleName);
 
 	if (pPlugin)
 	{
-		if (LoadToMem && !pPlugin->Load())
+		if ((LoadToMem || pPlugin->bPendingRemove) && !pPlugin->Load())
 		{
-			RemovePlugin(pPlugin);
+			UnloadedPlugins.Push(&pPlugin);
 			return nullptr;
 		}
 	}
@@ -560,8 +608,13 @@ HANDLE PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool Loa
 
 		if (apiGetFindDataEx(lpwszModuleName, FindData))
 		{
+			#if 1
+			//Maximus: диагностика ошибок загрузки
 			bool ShowErrors=Manual;
 			pPlugin = LoadPlugin(lpwszModuleName, FindData, LoadToMem, &ShowErrors, Manual);
+			#else
+			pPlugin = LoadPlugin(lpwszModuleName, FindData, LoadToMem);
+			#endif
 			if (!pPlugin)
 				return nullptr;
 			far_qsort(PluginsData, PluginsCount, sizeof(*PluginsData), PluginsSort);
@@ -570,7 +623,7 @@ HANDLE PluginManager::LoadPluginExternal(const string& lpwszModuleName, bool Loa
 	return pPlugin;
 }
 
-int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove)
+int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException)
 {
 	int nResult = FALSE;
 
@@ -578,16 +631,20 @@ int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove
 	{
 		//какие-то непонятные действия...
 		CurPluginItem=nullptr;
-		Frame *frame;
 
-		if ((frame = FrameManager->GetBottomFrame()) )
-			frame->Unlock();
-
-		if (Flags.Check(PSIF_DIALOG))   // BugZ#52 exception handling for floating point incorrect
+		for(int i = FrameManager->GetModalStackCount()-1; i >= 0; --i)
 		{
-			Flags.Clear(PSIF_DIALOG);
-			FrameManager->DeleteFrame();
-			FrameManager->PluginCommit();
+			Frame *frame = FrameManager->GetModalFrame(i);
+			if((frame->GetType()==MODALTYPE_DIALOG && static_cast<Dialog*>(frame)->GetPluginOwner() == pPlugin) || frame->GetType()==MODALTYPE_HELP)
+			{
+				frame->Lock();
+				if(i)
+				{
+					FrameManager->GetModalFrame(i-1)->Lock();
+				}
+				FrameManager->DeleteFrame(frame);
+				FrameManager->PluginCommit();
+			}
 		}
 
 		bool bPanelPlugin = pPlugin->IsPanelPlugin();
@@ -596,6 +653,8 @@ int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove
 			nResult = pPlugin->Unload(true);
 		else
 			nResult = pPlugin->Unload(false);
+
+		pPlugin->WorkFlags.Set(PIWF_DONTLOADAGAIN);
 
 		if (bPanelPlugin /*&& bUpdatePanels*/)
 		{
@@ -608,21 +667,31 @@ int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException, bool bRemove
 			AnotherPanel->Redraw();
 		}
 
-		if (bRemove)
-			RemovePlugin(pPlugin);
+		UnloadedPlugins.Push(&pPlugin);
 	}
 
 	return nResult;
 }
 
-//Plugin *pPlugin = GetPlugin(lpwszModuleName);
 int PluginManager::UnloadPluginExternal(HANDLE hPlugin)
 {
 	//BUGBUG нужны проверки на легальность выгрузки
 	int nResult = FALSE;
 	Plugin* pPlugin = reinterpret_cast<Plugin*>(hPlugin);
 	nResult = pPlugin->Unload(true);
-	RemovePlugin(pPlugin);
+	bool Added = false;
+	for(Plugin** p  = UnloadedPlugins.First(); p; p = UnloadedPlugins.Next(p))
+	{
+		if(*p == pPlugin)
+		{
+			Added = true;
+			break;
+		}
+	}
+	if(!Added)
+	{
+		UnloadedPlugins.Push(&pPlugin);
+	}
 	return nResult;
 }
 
@@ -663,7 +732,12 @@ bool PluginManager::IsPluginValid(Plugin *pPlugin)
 	return false;
 }
 
+#if 1
+//Maximus: поддержка CtrlR в меню плагинов
 void PluginManager::LoadPlugins(bool Redraw)
+#else
+void PluginManager::LoadPlugins()
+#endif
 {
 	TaskBar TB(false);
 	Flags.Clear(PSIF_PLUGINSLOADDED);
@@ -680,6 +754,7 @@ void PluginManager::LoadPlugins(bool Redraw)
 		string strFullName;
 		FAR_FIND_DATA_EX FindData;
 		PluginPathList.SetParameters(0,0,ULF_UNIQUE);
+		//Maximus: поддержка CtrlR в меню плагинов
 		size_t i=0;
 
 		// сначала подготовим список
@@ -730,6 +805,7 @@ void PluginManager::LoadPlugins(bool Redraw)
 			{
 				if (CmpName(L"*.dll",FindData.strFileName,false) && !(FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				{
+					//Maximus: поддержка CtrlR в меню плагинов
 					if (Redraw)
 					{
 						for (i=0; i < PluginsCount; i++)
@@ -745,6 +821,7 @@ void PluginManager::LoadPlugins(bool Redraw)
 			} // end while
 		}
 
+		//Maximus: поддержка CtrlR в меню плагинов
 		if (Redraw)
 		{
 			for (i=0; i < PluginsCount; i++)
@@ -765,7 +842,7 @@ void PluginManager::LoadPlugins(bool Redraw)
 	Flags.Set(PSIF_PLUGINSLOADDED);
 	far_qsort(PluginsData, PluginsCount, sizeof(*PluginsData), PluginsSort);
 
-	// Иначе после загрузка Far в панелях не загрузятся колонки C0
+	//Maximus: Иначе после загрузка Far в панелях не загрузятся колонки C0
 	if (HasGetCustomData())
 	{
 		Panel *ActivePanel=CtrlObject->Cp()->ActivePanel;
@@ -789,12 +866,14 @@ void PluginManager::LoadPluginsFromCache()
 {
 	string strModuleName;
 
+#if 1
+	//Maximus: загрузка с "/co" только "своих" плагинов
 	string strPluginsDir=g_strFarPath+PluginsFolderName+L"\\"; // глюки с /co
 	strPluginsDir.Upper();
 	size_t nMainLen = strPluginsDir.GetLength();
 	//TODO: (Opt.LoadPlug.MainPluginDir || !Opt.LoadPlug.strCustomPluginsPath.IsEmpty() || (Opt.LoadPlug.PluginsPersonal && !Opt.LoadPlug.strPersonalPluginsPath.IsEmpty()))
 
-#ifdef _DEBUG
+	#ifdef _DEBUG
 	_ASSERTE(PlCacheCfgEnum==0);
 	PlCacheCfgEnum++;
 
@@ -809,13 +888,15 @@ void PluginManager::LoadPluginsFromCache()
 	}
 	string strPrevModuleName;
 	OutputDebugString(L"PluginManager::LoadPluginsFromCache.Loading\n");
-#endif
+	#endif
 
 	bool ShowErrors=true;
+#endif
 
 	for (DWORD i=0; PlCacheCfg->EnumPlugins(i, strModuleName); i++)
 	{
 		#ifdef _DEBUG
+		//Maximus: для отладки
 		strTest.Format(L"%3i: %s\n", i, (LPCWSTR)strModuleName);
 		OutputDebugString(strTest);
 		_ASSERTE(wcscmp(strPrevModuleName, strModuleName)!=0);
@@ -829,13 +910,17 @@ void PluginManager::LoadPluginsFromCache()
 
 		ReplaceSlashToBSlash(strModuleName);
 
+		#if 1
+		//Maximus: загрузка с "/co" только "своих" плагинов
 		if (strModuleName.SubStr(0, nMainLen).Upper() != strPluginsDir)
 			continue; // глюки с /co
 		const wchar_t* ModuleExt=PointToExt(strModuleName);
 		if (!ModuleExt || _wcsicmp(ModuleExt, L".dll")!=0)
 			continue;
+		#endif
 
 		#ifdef _DEBUG
+		//Maximus: для отладки
 		Plugin *pExist = GetPlugin(strModuleName);
 		// может различаться регистром, в кеше может быть ДВА и более одинаковых элементов
 		_ASSERTE(pExist==nullptr || pExist->GetModuleName()!=strModuleName);
@@ -844,13 +929,19 @@ void PluginManager::LoadPluginsFromCache()
 		FAR_FIND_DATA_EX FindData;
 
 		if (apiGetFindDataEx(strModuleName, FindData))
+			#if 1
+			//Maximus: отображение ошибок загрузки
 			LoadPlugin(strModuleName, FindData, false, &ShowErrors);
+			#else
+			LoadPlugin(strModuleName, FindData, false);
+			#endif
 	}
 
-#ifdef _DEBUG
+	#ifdef _DEBUG
+	//Maximus: для отладки
 	PlCacheCfgEnum--;
 	_ASSERTE(PlCacheCfgEnum==0);
-#endif
+	#endif
 }
 
 int _cdecl PluginsSort(const void *el1,const void *el2)
@@ -1180,7 +1271,7 @@ int PluginManager::ProcessEditorInput(INPUT_RECORD *Rec)
 }
 
 
-int PluginManager::ProcessEditorEvent(int Event,void *Param)
+int PluginManager::ProcessEditorEvent(int Event,void *Param,int EditorID)
 {
 	int nResult = 0;
 
@@ -1193,7 +1284,7 @@ int PluginManager::ProcessEditorEvent(int Event,void *Param)
 			pPlugin = PluginsData[i];
 
 			if (pPlugin->HasProcessEditorEvent())
-				nResult = pPlugin->ProcessEditorEvent(Event, Param);
+				nResult = pPlugin->ProcessEditorEvent(Event, Param, EditorID);
 		}
 	}
 
@@ -1201,7 +1292,7 @@ int PluginManager::ProcessEditorEvent(int Event,void *Param)
 }
 
 
-int PluginManager::ProcessViewerEvent(int Event, void *Param)
+int PluginManager::ProcessViewerEvent(int Event, void *Param,int ViewerID)
 {
 	int nResult = 0;
 
@@ -1210,7 +1301,7 @@ int PluginManager::ProcessViewerEvent(int Event, void *Param)
 		Plugin *pPlugin = PluginsData[i];
 
 		if (pPlugin->HasProcessViewerEvent())
-			nResult = pPlugin->ProcessViewerEvent(Event, Param);
+			nResult = pPlugin->ProcessViewerEvent(Event, Param, ViewerID);
 	}
 
 	return nResult;
@@ -1261,16 +1352,22 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 {
 	int nResult = 0;
 
+	#if 1
+	//Maximus: а про ProcessConsoleInput (int->size_t) забыли
 	for (size_t i=0; i<PluginsCount; i++)
+	#else
+	for (int i=0; i<PluginsCount; i++)
+	#endif
 	{
 		Plugin *pPlugin = PluginsData[i];
 
 		if (pPlugin->HasProcessConsoleInput())
 		{
-			//BUGBUG: При запуске фара как "far /co" получаем облом - видимо в процессе исполнения ProcessConsoleInput 
-			//BUGBUG: происходит изменение PluginsData
+			//Maximus: вроде сейчас все ок
+			//-- //BUGBUG: При запуске фара как "far /co" получаем облом - видимо в процессе исполнения ProcessConsoleInput
+			//-- //BUGBUG: происходит изменение PluginsData
 			_ASSERTE(pPlugin == PluginsData[i]);
-			//BUGBUG: MacroLib.dll, загруженный при "/co" не перехватывает клаву до первого вызова его по F11
+			//-- //BUGBUG: MacroLib.dll, загруженный при "/co" не перехватывает клаву до первого вызова его по F11
 			if ((nResult = pPlugin->ProcessConsoleInput(Info)) != 0)
 				break;
 		}
@@ -1542,6 +1639,7 @@ int PluginManager::Compare(
 	return ph->pPlugin->Compare(ph->hPlugin, Item1, Item2, Mode);
 }
 
+//Maximus: расширенное меню плагинов от DataMan
 void PluginManager::GetPluginVersion(LPCTSTR ModuleName,string &strModuleVer)
 {
 	struct VerInfo
@@ -1620,11 +1718,21 @@ struct PluginMenuItemData
    ! При настройке "параметров внешних модулей" закрывать окно с их
      списком только при нажатии на ESC
 */
+#if 1
+//Maximus: Расширенное меню плагинов
 int PluginManager::Configure(int StartPos)
+#else
+void PluginManager::Configure(int StartPos)
+#endif
 {
 	// Полиция 4 - Параметры внешних модулей
 	if (Opt.Policies.DisabledOptions&FFPOL_MAINMENUPLUGINS)
+		#if 1
+		//Maximus: Расширенное меню плагинов
 		return 1;
+		#else
+		return;
+		#endif
 
 	int PrevMacroMode = CtrlObject->Macro.GetMode();
 	CtrlObject->Macro.SetMode(MACRO_MENU);
@@ -1637,7 +1745,7 @@ int PluginManager::Configure(int StartPos)
 		for (;;)
 		{
 			bool NeedUpdateItems = true;
-			int MenuItemNumber = 0;
+			size_t MenuItemNumber = 0;
 			bool HotKeysPresent = PlHotkeyCfg->HotkeysPresent(PluginsHotkeysConfig::CONFIG_MENU);
 
 			if (NeedUpdateItems)
@@ -1669,31 +1777,54 @@ int PluginManager::Configure(int StartPos)
 
 					for (size_t J=0; ; J++)
 					{
+						//Maximus: Расширенное меню плагинов
 						bool bNext=false;
+						
 						if (bCached)
 						{
 							string strGuid;
 
-							if (!PlCacheCfg->GetPluginsConfigMenuItem(id, J, strName, strGuid)
-								|| !StrToGuid(strGuid,guid))
+							if (!PlCacheCfg->GetPluginsConfigMenuItem(id, J, strName, strGuid))
+							#if 1
+							//Maximus: Расширенное меню плагинов
 							{
 								bNext=true;
 								goto NEXT;
 							}
+							#else
+								break;
+							#endif
+							if (!StrToGuid(strGuid,guid))
+							#if 1
+							//Maximus: Расширенное меню плагинов
+							{
+								bNext=true;
+								goto NEXT;
+							}
+							#else
+								break;
+							#endif
 						}
 						else
 						{
 							if (J >= Info.PluginConfig.Count)
+							#if 1
+							//Maximus: Расширенное меню плагинов
 							{
 								bNext=true;
 								goto NEXT;
 							}
+							#else
+								break;
+							#endif
 
 							strName = Info.PluginConfig.Strings[J];
 							guid = Info.PluginConfig.Guids[J];
 						}
 
-	NEXT:
+						#if 1
+						//Maximus: Расширенное меню плагинов
+NEXT:
 						if (bNext)
 						{
 							if (J==0)
@@ -1705,16 +1836,29 @@ int PluginManager::Configure(int StartPos)
 							}
 							else break;
 						}
+						#endif
+						
 						GetPluginHotKey(pPlugin,guid,PluginsHotkeysConfig::CONFIG_MENU,strHotKey);
 						MenuItemEx ListItem;
 						ListItem.Clear();
 
+						#if 1
+						//Maximus: показ Far2Wrapper
 						if (pPlugin->IsFar2Plugin())
 							ListItem.Flags=LIF_CHECKED|L'2';
+						#endif
 #ifndef NO_WRAPPER
+						#if 1
+						//Maximus
 						else if (pPlugin->IsOemPlugin())
+						#else
+						if (pPlugin->IsOemPlugin())
+						#endif
 							ListItem.Flags=LIF_CHECKED|L'A';
 #endif // NO_WRAPPER
+
+						#if 1
+						//Maximus: Расширенное меню плагинов
 						if (!bNext)
 							ListItem.Flags|=MIF_SUBMENU;
 
@@ -1734,23 +1878,29 @@ int PluginManager::Configure(int StartPos)
 
 						string strNameTmp;
 						strNameTmp.Format(L"%c%c%c%s%s", BoxSymbols[BS_V1],state,BoxSymbols[BS_V1],(const wchar_t*)strModuleVer,(const wchar_t*)strName);
-
+						#endif
 
 						if (!HotKeysPresent)
-							/*
-							ListItem.strName = strName;
-							*/
+							#if 1
+							//Maximus: Расширенное меню плагинов
 							ListItem.strName=strNameTmp;
+							#else
+							ListItem.strName = strName;
+							#endif
 						else if (!strHotKey.IsEmpty())
-							/*
-							ListItem.strName.Format(L"&%c%s  %s",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
-							*/
+							#if 1
+							//Maximus: Расширенное меню плагинов
 							ListItem.strName.Format(L"&%c%s  %s", strHotKey.At(0), (strHotKey.At(0)==L'&'?L"&":L""), (const wchar_t*)strNameTmp);
+							#else
+							ListItem.strName.Format(L"&%c%s  %s",strHotKey.At(0),(strHotKey.At(0)==L'&'?L"&":L""), strName.CPtr());
+							#endif
 						else
-							/*
-							ListItem.strName.Format(L"   %s", strName.CPtr());
-							*/
+							#if 1
+							//Maximus: Расширенное меню плагинов
 							ListItem.strName.Format(L"   %s", (const wchar_t*)strNameTmp);
+							#else
+							ListItem.strName.Format(L"   %s", strName.CPtr());
+							#endif
 
 						//ListItem.SetSelect(MenuItemNumber++ == StartPos);
 						MenuItemNumber++;
@@ -1762,12 +1912,19 @@ int PluginManager::Configure(int StartPos)
 				}
 
 				PluginList.AssignHighlights(FALSE);
+				#if 1
+				//Maximus: Расширенное меню плагинов
 				PluginList.SetBottomTitle(MSG(MPluginHotKeyBottomCfg));
+				#else
+				PluginList.SetBottomTitle(MSG(MPluginHotKeyBottom));
+				#endif
 				PluginList.ClearDone();
-				/*
-				PluginList.SortItems(0,HotKeysPresent?3:0);
-				*/
+				#if 1
+				//Maximus: Расширенное меню плагинов
 				PluginList.SortItems(0,HotKeysPresent?6:3);
+				#else
+				PluginList.SortItems(0,HotKeysPresent?3:0);
+				#endif
 				PluginList.SetSelectPos(StartPos,1);
 				NeedUpdateItems = false;
 			}
@@ -1780,6 +1937,7 @@ int PluginManager::Configure(int StartPos)
 				CtrlObject->Macro.SetMode(MACRO_MENU);
 				DWORD Key=PluginList.ReadInput();
 				int SelPos=PluginList.GetSelectPos();
+				//Maximus: для отладки
 				_ASSERTE((SelPos>=0 && SelPos<PluginList.GetItemCount()) || PluginList.GetShowItemCount()==0);
 				PluginMenuItemData *item = (PluginMenuItemData*)PluginList.GetUserData(nullptr,0,SelPos);
 
@@ -1789,7 +1947,6 @@ int PluginManager::Configure(int StartPos)
 						if (item)
 						{
 							strPluginModuleName = item->pPlugin->GetModuleName();
-
 							if (!FarShowHelp(strPluginModuleName,L"Config",FHELP_SELFHELP|FHELP_NOSHOWERROR) &&
 							        !FarShowHelp(strPluginModuleName,L"Configure",FHELP_SELFHELP|FHELP_NOSHOWERROR))
 							{
@@ -1808,16 +1965,18 @@ int PluginManager::Configure(int StartPos)
 					case KEY_F4:
 						if (item)
 						{
-							/*
 							string strTitle;
-							int nOffset = HotKeysPresent?3:0;
-							strTitle = PluginList.GetItemPtr()->strName.CPtr()+nOffset;
-							RemoveExternalSpaces(strTitle);
-							*/
+							#if 1
+							//Maximus: Расширенное меню плагинов
 							size_t nOffset;
 							if (!PluginList.GetItemPtr()->strName.Pos(nOffset,BoxSymbols[BS_V1]))
 								nOffset = 0;
-							string strTitle = (const wchar_t*)PluginList.GetItemPtr()->strName+nOffset+(Opt.ChangePlugMenuMode&CFGPLUGMENU_SHOW_DLLVER?38:3);
+							strTitle = PluginList.GetItemPtr()->strName.CPtr()+nOffset+(Opt.ChangePlugMenuMode&CFGPLUGMENU_SHOW_DLLVER?38:3);
+							#else
+							int nOffset = HotKeysPresent?3:0;
+							strTitle = PluginList.GetItemPtr()->strName.CPtr()+nOffset;
+							#endif
+							RemoveExternalSpaces(strTitle);
 
 							if (SetHotKeyDialog(item->pPlugin, item->Guid, PluginsHotkeysConfig::CONFIG_MENU, strTitle))
 							{
@@ -1831,6 +1990,8 @@ int PluginManager::Configure(int StartPos)
 						}
 						break;
 
+					#if 1
+					//Maximus: Расширенное меню плагинов
 					case KEY_DEL:
 					case KEY_ALTDEL:
 					case KEY_RALTDEL:
@@ -1995,6 +2156,8 @@ int PluginManager::Configure(int StartPos)
 						StartPos=SelPos;
 						PluginList.SetExitCode(SelPos);
 						break;
+					//Maximus: end - Расширенное меню плагинов
+					#endif
 
 					default:
 						PluginList.ProcessInput();
@@ -2018,7 +2181,10 @@ int PluginManager::Configure(int StartPos)
 
 	CtrlObject->Macro.SetMode(PrevMacroMode);
 
+	#if 1
+	//Maximus: Расширенное меню плагинов
 	return 1;
+	#endif
 }
 
 int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *HistoryName)
@@ -2031,7 +2197,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 		}
 	}
 
-	int MenuItemNumber = 0;
+	size_t MenuItemNumber = 0;
 	int PrevMacroMode = CtrlObject->Macro.GetMode();
 	CtrlObject->Macro.SetMode(MACRO_MENU);
 
@@ -2112,10 +2278,18 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 						MenuItemEx ListItem;
 						ListItem.Clear();
 
+						#if 1
+						//Maximus: показ Far2Wrapper
 						if (pPlugin->IsFar2Plugin())
 							ListItem.Flags=LIF_CHECKED|L'2';
+						#endif
 #ifndef NO_WRAPPER
+						#if 1
+						//Maximus
 						else if (pPlugin->IsOemPlugin())
+						#else
+						if (pPlugin->IsOemPlugin())
+						#endif
 							ListItem.Flags=LIF_CHECKED|L'A';
 #endif // NO_WRAPPER
 						if (!HotKeysPresent)
@@ -2148,6 +2322,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 				CtrlObject->Macro.SetMode(MACRO_MENU);
 				DWORD Key=PluginList.ReadInput();
 				int SelPos=PluginList.GetSelectPos();
+				//Maximus: для отладки
 				_ASSERTE((SelPos>=0 && SelPos<PluginList.GetItemCount()) || PluginList.GetShowItemCount()==0);
 				PluginMenuItemData *item = (PluginMenuItemData*)PluginList.GetUserData(nullptr,0,SelPos);
 
@@ -2200,6 +2375,8 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 							NeedUpdateItems = true;
 							StartPos = SelPos;
 
+							#if 1
+							//Maximus: расширенное меню плагинов
 							if (Configure() > 0)
 							{
 								PluginList.SetExitCode(SelPos);
@@ -2209,6 +2386,10 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 								PluginList.SetExitCode(-1);
 								goto NEXT;
 							}
+							#else
+							PluginList.SetExitCode(SelPos);
+							Configure();
+							#endif
 							PluginList.Show();
 						}
 						break;
@@ -2241,7 +2422,11 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 				break;
 		}
 
-	NEXT:
+		#if 1
+		//Maximus: расширенное меню плагинов
+NEXT:
+		#endif
+		
 		int ExitCode=PluginList.Modal::GetExitCode();
 		PluginList.Hide();
 
@@ -2370,7 +2555,12 @@ void PluginManager::ShowPluginInfo(Plugin *pPlugin, const GUID& Guid)
 			strPluginPrefix = Info.CommandPrefix;
 		}
 	}
+	#if 1
+	//Maximus: сделаем пошире, а то совсем куций
 	const int Width = 56;
+	#else
+	const int Width = 36;
+	#endif
 	DialogBuilder Builder(MPluginInformation, L"ShowPluginInfo");
 	Builder.AddText(MPluginModuleTitle);
 	Builder.AddConstEditField(pPlugin->GetTitle(), Width);
@@ -2444,7 +2634,7 @@ void ItemsToBuf(PluginMenuItem& Menu, TArray<string>& NamesArray, TArray<string>
 		for (size_t i = 0; i < Menu.Count; ++i)
 		{
 			wchar_t* pStr = StrToBuf(*NamesArray.getItem(i), Buf, Rest, Size);
-			if (Items) 
+			if (Items)
 			{
 				Items[i] = pStr;
 			}
@@ -2545,11 +2735,14 @@ size_t PluginManager::GetPluginInformation(Plugin *pPlugin, FarGetPluginInformat
 	{
 		pInfo->Flags |= FPF_LOADED;
 	}
-	
+
+	#if 1
+	//Maximus: поддержка Far2Wrapper	
 	if (pPlugin->IsFar2Plugin())
 	{
 		pInfo->Flags |= FPF_FAR2;
 	}
+	#endif
 #ifndef NO_WRAPPER
 	if (pPlugin->IsOemPlugin())
 	{
@@ -2656,6 +2849,7 @@ void PluginManager::ReloadLanguage()
 	{
 		PData = PluginsData[I];
 #ifdef _DEBUG
+		//Maximus: для отладки
 		// Если плагин еще не загружен - не будем закрывать LangData
 		// в принципе, это не очень хорошо, поскольку останутся старые (на старом языке)
 		// кешированные строки для меню плагинов, конфигураций и т.п.
@@ -2676,6 +2870,7 @@ void PluginManager::DiscardCache()
 	{
 		Plugin *pPlugin = PluginsData[I];
 #ifdef _DEBUG
+		//Maximus: для отладки
 		// Если плагин еще не загружен - не будем закрывать LangData
 		// в принципе, это не очень хорошо, поскольку останутся старые (на старом языке)
 		// кешированные строки для меню плагинов, конфигураций и т.п.
@@ -2931,6 +3126,8 @@ int PluginManager::CallPlugin(const GUID& SysID,int OpenFrom, void *Data,int *Re
 	return FALSE;
 }
 
+#if 1
+//Maximus: поддержка макрофункций plugin.call, plugin.cmd, plugin.config и т.п
 int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret/*=nullptr*/)
 {
 	BOOL Result=FALSE;
@@ -3120,6 +3317,7 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 
 	return FALSE;
 }
+#endif
 
 Plugin *PluginManager::FindPlugin(const GUID& SysID)
 {
@@ -3154,6 +3352,8 @@ HANDLE PluginManager::Open(Plugin *pPlugin,int OpenFrom,const GUID& Guid,INT_PTR
 	return hPlugin;
 }
 
+#if 1
+//Maximus: оптимизация колонки C0
 bool PluginManager::HasGetCustomData()
 {
 	for (size_t i=0; i<PluginsCount; i++)
@@ -3165,12 +3365,14 @@ bool PluginManager::HasGetCustomData()
 	}
 	return false;
 }
+#endif
 
 void PluginManager::GetCustomData(FileListItem *ListItem)
 {
 	NTPath FilePath(ListItem->strName);
 
 #ifdef _DEBUG
+	//Maximus: для отладки
 	_ASSERTE(ListItem->CustomDataLoaded==false);
 	//HANDLE hFile = apiCreateFile(FilePath.CPtr(), FILE_READ_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE, nullptr, OPEN_EXISTING);
 	//if (hFile == INVALID_HANDLE_VALUE)
@@ -3200,11 +3402,38 @@ void PluginManager::GetCustomData(FileListItem *ListItem)
 		}
 	}
 
+	#if 1
+	//Maximus: оптимизация колонки C0
 	ListItem->CustomDataLoaded = true;
+	#endif
 }
 
 const GUID& PluginManager::GetGUID(HANDLE hPlugin)
 {
 	PluginHandle *ph = (PluginHandle*)hPlugin;
 	return ph->pPlugin->GetGUID();
+}
+
+void PluginManager::RefreshPluginsList()
+{
+	if(!UnloadedPlugins.Empty())
+	{
+		for(Plugin** p = UnloadedPlugins.First(); p; p = UnloadedPlugins.Next(p))
+		{
+			RemovePlugin(*p);
+		}
+		UnloadedPlugins.Clear();
+	}
+}
+
+void PluginManager::UndoRemove(Plugin* plugin)
+{
+	for(Plugin** p = UnloadedPlugins.First(); p; p = UnloadedPlugins.Next(p))
+	{
+		if(*p == plugin)
+		{
+			UnloadedPlugins.Delete(p);
+			break;
+		}
+	}
 }

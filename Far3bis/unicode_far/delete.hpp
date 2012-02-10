@@ -36,4 +36,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 void ShellDelete(Panel *SrcPanel,bool Wipe);
 void DeleteDirTree(const string& Dir);
 int DeleteFileWithFolder(const string&FileName);
+#if 1
+//Maximus: RemoveToRecycleBin глобальная, используется в расширенном меню плагинов
 int RemoveToRecycleBin(const string& Name);
+#endif

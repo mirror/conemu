@@ -80,13 +80,19 @@ VMenu::VMenu(const wchar_t *Title,       // заголовок меню
 	Used(new bool[WCHAR_MAX]),
 	bFilterEnabled(false),
 	bFilterLocked(false),
+	#if 1
+	//Maximus: расширенный фильтр
 	bFilterMaskMode(false),
+	#endif
 	Item(nullptr),
 	ItemCount(0),
 	ItemHiddenCount(0),
 	ItemSubMenusCount(0),
+	#if 1
+	//Maximus: расширенный фильтр
 	SeparatorCount(0),
 	SeparatorHiddenCount(0),
+	#endif
 	MenuId(FarGuid)
 {
 	SaveScr=nullptr;
@@ -190,12 +196,15 @@ void VMenu::UpdateInternalCounters(UINT64 OldFlags, UINT64 NewFlags)
 	if (!ItemIsVisible(OldFlags))
 		ItemHiddenCount--;
 
+	#if 1
+	//Maximus: расширенный фильтр
 	if (OldFlags & LIF_SEPARATOR)
 	{
 		SeparatorCount--;
 		if (!ItemIsVisible(OldFlags))
 		SeparatorHiddenCount--;
 	}
+	#endif
 
 	if (NewFlags&MIF_SUBMENU)
 		ItemSubMenusCount++;
@@ -203,12 +212,15 @@ void VMenu::UpdateInternalCounters(UINT64 OldFlags, UINT64 NewFlags)
 	if (!ItemIsVisible(NewFlags))
 		ItemHiddenCount++;
 
+	#if 1
+	//Maximus: расширенный фильтр
 	if (NewFlags & LIF_SEPARATOR)
 	{
 		SeparatorCount++;
 		if (!ItemIsVisible(NewFlags))
 			SeparatorHiddenCount++;
 	}
+	#endif
 }
 
 void VMenu::UpdateItemFlags(int Pos, UINT64 NewFlags)
@@ -595,7 +607,10 @@ int VMenu::DeleteItem(int ID, int Count)
 			TopPos -= Count;
 	}
 
+	#if 1
+	//Maximus: расширенный фильтр
 	SetFlags(VMENU_UPDATEREQUIRED|(bFilterEnabled?VMENU_REFILTERREQUIRED:0));
+	#endif
 
 	return ItemCount;
 }
@@ -619,8 +634,11 @@ void VMenu::DeleteItems()
 	Item=nullptr;
 	ItemCount=0;
 	ItemHiddenCount=0;
+	#if 1
+	//Maximus: расширенный фильтр
 	SeparatorCount=0;
 	SeparatorHiddenCount=0;
+	#endif
 	ItemSubMenusCount=0;
 	SelectPos=-1;
 	TopPos=0;
@@ -671,7 +689,10 @@ void VMenu::RestoreFilteredItems()
 	}
 
 	ItemHiddenCount=0;
+	#if 1
+	//Maximus: расширенный фильтр
 	SeparatorHiddenCount=0;
+	#endif
 
 	FilterUpdateHeight();
 
@@ -680,18 +701,29 @@ void VMenu::RestoreFilteredItems()
 	SetSelectPos(&pos);
 }
 
+#if 1
+//Maximus: расширенный фильтр
 void VMenu::FilterStringUpdated()
+#else
+void VMenu::FilterStringUpdated(bool bLonger)
+#endif
 {
+	#if 1
+	//Maximus: расширенный фильтр
 	if ((!bFilterMaskMode && strFilter.IsEmpty()) || (bFilterMaskMode && strMaskFilter.IsEmpty()))
 	{
 		RestoreFilteredItems();
 		return;
 	}
+	#endif
 
 	int PrevSeparator = -1, PrevGroup = -1;
 	int UpperVisible = -1, LowerVisible = -2;
 	bool bBottomMode = false;
+	#if 1
+	//Maximus: расширенный фильтр
 	string strName;
+	#endif
 
 	if (SelectPos > 0)
 	{
@@ -703,7 +735,8 @@ void VMenu::FilterStringUpdated()
 			bBottomMode = true;
 	}
 
-#if 1 // from DAtaMan
+#if 1
+//Maximus: from DAtaMan
 	
 	MenuItemEx *CurItem=nullptr;
 	ItemHiddenCount=0;
@@ -927,20 +960,34 @@ void VMenu::FilterUpdateHeight(bool bShrink)
 
 bool VMenu::IsFilterEditKey(int Key)
 {
+	#if 1
+	//Maximus: расширенный фильтр
 	return (Key>=(int)KEY_SPACE && Key<0xffff) || Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_RCTRLBS || Key==KEY_CTRLDEL || Key==KEY_RCTRLDEL || Key==KEY_CTRLNUMDEL || Key==KEY_RCTRLNUMDEL;
+	#else
+	return (Key>=(int)KEY_SPACE && Key<0xffff) || Key==KEY_BS;
+	#endif
 }
 
 bool VMenu::ShouldSendKeyToFilter(int Key)
 {
+	#if 1
+	//Maximus: расширенный фильтр
 	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM)
+	#else
+	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF)
+	#endif
 		return true;
 
 	if (bFilterEnabled)
 	{
-		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM || Key==KEY_CTRLV || Key==KEY_RCTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0)
-			return true;
-
-		if (Key==KEY_MULTIPLY || Key==KEY_ADD || Key==KEY_SUBTRACT || Key==KEY_SUBTRACT || Key==KEY_DECIMAL || Key==KEY_DIVIDE)
+		#if 1
+		//Maximus: расширенный фильтр
+		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM || Key==KEY_CTRLV
+			|| Key==KEY_MULTIPLY || Key==KEY_RCTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0
+			|| Key==KEY_ADD || Key==KEY_SUBTRACT || Key==KEY_SUBTRACT || Key==KEY_DECIMAL || Key==KEY_DIVIDE)
+		#else
+		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL)
+		#endif
 			return true;
 
 		if (!bFilterLocked && IsFilterEditKey(Key))
@@ -1143,6 +1190,25 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		case MCODE_F_MENU_FILTER:
 		{
 			__int64 RetValue = 0;
+			#if 0
+			//far version
+			/*
+			Action
+			  0 - фильтр
+			    Mode
+			      -1 - (по умолчанию) вернуть 1 если фильтр уже включен, 0 - фильтр выключен
+				   1 - включить фильтр, если фильтр уже включен - ничего не делает
+				   0 - выключить фильтр
+			  1 - фиксация текста фильтра
+			    Mode
+			      -1 - (по умолчанию) вернуть 1 если текст фильтра зафиксирован, 0 - фильтр можно менять с клавиатуры
+				   1 - зафиксировать фильтр
+				   0 - отменить фиксацию фильтра
+			  2 - вернуть 1 если фильтр включен и строка фильтра не пуста
+			  3 - вернуть количество отфильтрованных (невидимых) строк\
+			  4 - (по умолчанию) подправить высоту списка под количество элементов
+			*/
+			#else
 			/*
 			Action
 			  0 - фильтр
@@ -1161,6 +1227,7 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			  4 - (по умолчанию) подправить высоту списка под количество элементов
 			  5 - вернуть 1 если "масочный" фильтр включен и строка фильтра не пуста
 			*/
+			#endif
 			switch (iParam)
 			{
 				case 0:
@@ -1173,13 +1240,18 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 								bFilterEnabled=((INT_PTR)vParam == 1);
 								bFilterLocked=false;
 								strFilter.Clear();
+								#if 1
+								//Maximus: расширенный фильтр
 								strMaskFilter.Clear();
+								#endif
 								if (!vParam)
 									RestoreFilteredItems();
 								DisplayObject();
 							}
 							RetValue = 1;
 							break;
+						#if 1
+						//Maximus: расширенный фильтр
 						case 2:
 							if (bFilterMaskMode != ((INT_PTR)vParam == 1))
 							{
@@ -1194,6 +1266,7 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 							}
 							RetValue = 1;
 							break;
+						#endif
 						case -1:
 							RetValue = bFilterEnabled ? 1 : 0;
 							break;
@@ -1229,15 +1302,28 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 					RetValue = 1;
 					break;
 
+				#if 1
+				//Maximus: расширенный фильтр
 				case 5:
 					RetValue = (bFilterEnabled && !strMaskFilter.IsEmpty()) ? 1 : 0;
 					break;
+				#endif
 
 			}
 			return RetValue;
 		}
 		case MCODE_F_MENU_FILTERSTR:
 		{
+			#if 0
+			//far version
+			/*
+			Action
+			  0 - (по умолчанию) вернуть текущую строку, если фильтр включен
+			  1 - установить в фильтре строку S.
+			      Если фильтр не был включен - включает его, режим фиксации не трогается, но игнорируется.
+				  Возвращает предыдущее значение строки фильтра.
+			*/
+			#else
 			/*
 			Action
 			  0 - (по умолчанию) вернуть текущую строку, если фильтр включен
@@ -1249,8 +1335,13 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			      Если "масочный" фильтр не был включен - включает его, режим фиксации не трогается, но игнорируется.
 				  Возвращает предыдущее значение строки "масочного" фильтра.
 			*/
+			#endif
+			
+			#if 1
+			//Maximus: расширенный фильтр
 			bool prevLocked;
 			string oldFilter;
+			#endif
 			switch (iParam)
 			{
 				case 0:
@@ -1263,18 +1354,35 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 				case 1:
 					if (!bFilterEnabled)
 						bFilterEnabled=true;
+					#if 1
+					//Maximus: расширенный фильтр
 					prevLocked = bFilterLocked;
+					#else
+					bool prevLocked = bFilterLocked;
+					#endif
 					bFilterLocked = false;
 					RestoreFilteredItems();
+					#if 1
+					//Maximus: расширенный фильтр
 					oldFilter = strFilter;
+					#else
+					string oldFilter = strFilter;
+					#endif
 					strFilter.Clear();
 					if (vParam!=nullptr)
 						AddToFilter(((string *)vParam)->CPtr());
+					#if 1
+					//Maximus: расширенный фильтр
 					FilterStringUpdated();
+					#else
+					FilterStringUpdated(true);
+					#endif
 					bFilterLocked = prevLocked;
 					DisplayObject();
 					*(string *)vParam = oldFilter;
 					return 1;
+				#if 1
+				//Maximus: расширенный фильтр
 				case 2:
 					if (bFilterEnabled)
 					{
@@ -1300,6 +1408,7 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 					DisplayObject();
 					*(string *)vParam = oldFilter;
 					return 1;
+				#endif
 			}
 
 			return 0;
@@ -1316,6 +1425,8 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 	return 0;
 }
 
+#if 1
+//Maximus: расширенный фильтр
 void VMenu::ShortenFilterString(int Key)
 {
 	string FilterString=GetFilterString();
@@ -1354,6 +1465,7 @@ void VMenu::ShortenFilterString(int Key)
 		SetFilterString(FilterString);
 	}
 }
+#endif
 
 bool VMenu::AddToFilter(const wchar_t *str)
 {
@@ -1365,11 +1477,18 @@ bool VMenu::AddToFilter(const wchar_t *str)
 		{
 			if( IsFilterEditKey(Key) )
 			{
+				#if 1
+				//Maximus: расширенный фильтр
 				if ( Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_RCTRLBS || Key==KEY_CTRLDEL || Key==KEY_RCTRLDEL || Key==KEY_CTRLNUMDEL || Key==KEY_RCTRLNUMDEL)
 					ShortenFilterString(Key);
 				else if (bFilterMaskMode)
 						strMaskFilter += Key;
 				else if (GetShowItemCount() > GetShowSeparatorCount())
+				#else
+				if ( Key==KEY_BS && !strFilter.IsEmpty() )
+					strFilter.SetLength(strFilter.GetLength()-1);
+				else
+				#endif
 					strFilter += Key;
 			}
 			++str;
@@ -1382,12 +1501,19 @@ bool VMenu::AddToFilter(const wchar_t *str)
 
 void VMenu::SetFilterString(const wchar_t *str)
 {
+	#if 0
+	strFilter=str;
+	#else
+	//Maximus: расширенный фильтр
 	if (bFilterMaskMode)
 		strMaskFilter=str;
 	else
 		strFilter=str;
+	#endif
 }
 
+#if 1
+//Maximus: расширенный фильтр
 const wchar_t *VMenu::GetFilterString()
 {
 	if (bFilterMaskMode)
@@ -1395,6 +1521,7 @@ const wchar_t *VMenu::GetFilterString()
 	else
 		return strFilter;
 }
+#endif
 
 int VMenu::ProcessKey(int Key)
 {
@@ -1412,14 +1539,15 @@ int VMenu::ProcessKey(int Key)
 
 		if ( AddToFilter(str) ) // для фильтра: всю строку целиком в фильтр, а там разберемся.
 		{
-#if 1 // from DAtaMan
+			#if 1
+			//Maximus: расширенный фильтр from DAtaMan
 			FilterStringUpdated();
-#else
+			#else
 			if (strFilter.IsEmpty())
 				RestoreFilteredItems();
 			else
 				FilterStringUpdated(true);
-#endif
+			#endif
 			DisplayObject();
 
 			return TRUE;
@@ -1430,12 +1558,22 @@ int VMenu::ProcessKey(int Key)
 
 	SetFlags(VMENU_UPDATEREQUIRED);
 
+	#if 1
+	//Maximus: расширенный фильтр
 	if ((GetShowItemCount() == GetShowSeparatorCount()) && !bFilterMaskMode)
+	#else
+	if (!GetShowItemCount())
+	#endif
 	{
 		if ((Key!=KEY_F1 && Key!=KEY_SHIFTF1 && Key!=KEY_F10 && Key!=KEY_ESC && Key!=KEY_ALTF9 && Key!=KEY_RALTF9))
 		{
+			#if 1
+			//Maximus: расширенный фильтр
 			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLBS && Key!=KEY_RCTRLBS && Key!=KEY_CTRLDEL && Key!=KEY_RCTRLDEL &&
 				Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF && Key!=KEY_CTRLALTM && Key!=KEY_RCTRLRALTM))
+			#else
+			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF))
+			#endif
 			{
 				Modal::ExitCode = -1;
 				return FALSE;
@@ -1612,9 +1750,15 @@ int VMenu::ProcessKey(int Key)
 		{
 			bFilterEnabled=!bFilterEnabled;
 			bFilterLocked=false;
+			#if 1
+			//Maximus: расширенный фильтр
 			bFilterMaskMode=false;
+			#endif
 			strFilter.Clear();
+			#if 1
+			//Maximus: расширенный фильтр
 			strMaskFilter.Clear();
+			#endif
 			if (!bFilterEnabled)
 				RestoreFilteredItems();
 
@@ -1634,14 +1778,15 @@ int VMenu::ProcessKey(int Key)
 
 				if ( AddToFilter(ClipText) )
 				{
-#if 1 // from DAtaMan
+					#if 1
+					//Maximus: расширенный фильтр from DAtaMan
 					FilterStringUpdated();
-#else
+					#else
 					if (strFilter.IsEmpty())
 						RestoreFilteredItems();
 					else
 						FilterStringUpdated(true);
-#endif
+					#endif
 					DisplayObject();
 				}
 
@@ -1659,6 +1804,8 @@ int VMenu::ProcessKey(int Key)
 				break;
 			}
 		}
+		#if 1
+		//Maximus: расширенный фильтр from DAtaMan
 		case KEY_CTRLALTM:
 		case KEY_RCTRLRALTM:
 		{
@@ -1670,17 +1817,24 @@ int VMenu::ProcessKey(int Key)
 				break;
 			}
 		}
+		#endif
 		case KEY_TAB:
 		case KEY_SHIFTTAB:
 		default:
 		{
 			if (bFilterEnabled && !bFilterLocked && IsFilterEditKey(Key))
 			{
+				#if 1
+				//Maximus: расширенный фильтр from DAtaMan
 				if (Key==KEY_BS || Key==KEY_CTRLBS || Key==KEY_RCTRLBS || Key==KEY_CTRLDEL || Key==KEY_RCTRLDEL || Key==KEY_CTRLNUMDEL || Key==KEY_RCTRLNUMDEL)
+				#else
+				if (Key==KEY_BS)
+				#endif
 				{
-#if 1 // from DAtaMan
+					#if 1
+					//Maximus: расширенный фильтр from DAtaMan
 					ShortenFilterString(Key);
-#else
+					#else
 					if (!strFilter.IsEmpty())
 					{
 						strFilter.SetLength(strFilter.GetLength()-1);
@@ -1696,17 +1850,28 @@ int VMenu::ProcessKey(int Key)
 					{
 						return TRUE;
 					}
-#endif
+					#endif
 				}
 				else
 				{
+					#if 1
+					//Maximus: расширенный фильтр from DAtaMan
 					if (bFilterMaskMode)
 						strMaskFilter += (wchar_t)Key;
 					else if (GetShowItemCount() > GetShowSeparatorCount())
 						strFilter += (wchar_t)Key;
+					#else
+					if (!GetShowItemCount())
+						return TRUE;
+
+					strFilter += (wchar_t)Key;
+					#endif
 				}
 
+				#if 1
+				//Maximus: расширенный фильтр from DAtaMan
 				FilterStringUpdated();
+				#endif
 
 				DisplayObject();
 
@@ -2170,7 +2335,12 @@ void VMenu::DisplayObject()
 		{
 			RestoreFilteredItems();
 			if (!strFilter.IsEmpty())
+				#if 1
+				//Maximus: расширенный фильтр from DAtaMan
 				FilterStringUpdated();
+				#else
+				FilterStringUpdated(true);
+				#endif
 		}
 		ClearFlags(VMENU_REFILTERREQUIRED);
 	}
@@ -2244,6 +2414,8 @@ void VMenu::DrawTitles()
 
 			strDisplayTitle += bFilterLocked?L"<":L"[";
 
+			#if 1
+			//Maximus: расширенный фильтр from DAtaMan
 			if (bFilterMaskMode)
 				strDisplayTitle += strMaskFilter;
 			else
@@ -2254,6 +2426,10 @@ void VMenu::DrawTitles()
 
 			if (bFilterMaskMode)
 				strDisplayTitle += L" M";
+			#else
+			strDisplayTitle += strFilter;
+			strDisplayTitle += bFilterLocked?L">":L"]";
+			#endif
 		}
 
 		WidthTitle=(int)strDisplayTitle.GetLength();
@@ -2793,6 +2969,29 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 	if (CheckFlags(VMENU_LISTBOX))
 		EndLoop = FALSE;
 
+	//Maximus: BUGBUG: а нужен ли этот патч?
+	#if 0
+	//far version
+	for (int I=0; I < ItemCount; I++)
+	{
+		MenuItemEx *CurItem = Item[I];
+
+		if (ItemCanHaveFocus(CurItem->Flags) && ((!Type && CurItem->AccelKey && Key == CurItem->AccelKey) || (Type && IsKeyHighlighted(CurItem->strName,Key,Translate,CurItem->AmpPos))))
+		{
+			SetSelectPos(I,1);
+			ShowMenu(true);
+
+			if ((!ParentDialog  || CheckFlags(VMENU_COMBOBOX)) && ItemCanBeEntered(Item[SelectPos]->Flags))
+			{
+				Modal::ExitCode = I;
+				EndLoop = TRUE;
+			}
+
+			break;
+		}
+	}
+	#else
+	//Maximus: from DataMan
 	// Если нажата кнопка с правыми Ctrl или Alt по возможности обработать их как левые
 	bool RightAccel = (Key&(KEY_RCTRL|KEY_RALT))!=0 && (Key&(KEY_CTRL|KEY_ALT))==0;
 	bool KeyFound = false;
@@ -2837,6 +3036,7 @@ bool VMenu::CheckKeyHiOrAcc(DWORD Key, int Type, int Translate)
 			}
 		}
 	}
+	#endif
 
 	return EndLoop==TRUE;
 }
@@ -3387,7 +3587,12 @@ void VMenu::SortItems(int Direction, int Offset, BOOL SortForDataDWORD)
 	// скорректируем SelectPos
 	UpdateSelectPos();
 
+	#if 1
+	//Maximus: расширенный фильтр from DataMan
 	SetFlags(VMENU_UPDATEREQUIRED|(bFilterEnabled?VMENU_REFILTERREQUIRED:0));
+	#else
+	SetFlags(VMENU_UPDATEREQUIRED);
+	#endif
 }
 
 void VMenu::SortItems(TMENUITEMEXCMPFUNC user_cmp_func,int Direction,int Offset)
@@ -3409,7 +3614,12 @@ void VMenu::SortItems(TMENUITEMEXCMPFUNC user_cmp_func,int Direction,int Offset)
 	// скорректируем SelectPos
 	UpdateSelectPos();
 
+	#if 1
+	//Maximus: расширенный фильтр from DataMan
 	SetFlags(VMENU_UPDATEREQUIRED|(bFilterEnabled?VMENU_REFILTERREQUIRED:0));
+	#else
+	SetFlags(VMENU_UPDATEREQUIRED);
+	#endif
 }
 
 bool VMenu::Pack()
@@ -3433,7 +3643,10 @@ bool VMenu::Pack()
 		}
 		FirstIndex++;
 	}
+	#if 1
+	//Maximus: расширенный фильтр from DataMan
 	SetFlags(VMENU_UPDATEREQUIRED|(bFilterEnabled?VMENU_REFILTERREQUIRED:0));
+	#endif
 	return (OldItemCount!=ItemCount);
 }
 

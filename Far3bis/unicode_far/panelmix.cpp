@@ -48,9 +48,19 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "datetime.hpp"
 
+#if 1
+//Maximus: многострочная статусная область
 int ColumnTypeWidth[]={0, 6, 6, 8, 5, 14, 14, 14, 14, 6, 0, 0, 3, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+#else
+int ColumnTypeWidth[]={0, 6, 6, 8, 5, 14, 14, 14, 14, 6, 0, 0, 3, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+#endif
 
+#if 1
+//Maximus: многострочная статусная область
 static const wchar_t *ColumnSymbol[]={L"N",L"S",L"P",L"D",L"T",L"DM",L"DC",L"DA",L"DE",L"A",L"Z",L"O",L"LN",L"F",L"G",L"X",L"C0",L"C1",L"C2",L"C3",L"C4",L"C5",L"C6",L"C7",L"C8",L"C9",L"B"};
+#else
+static const wchar_t *ColumnSymbol[]={L"N",L"S",L"P",L"D",L"T",L"DM",L"DC",L"DA",L"DE",L"A",L"Z",L"O",L"LN",L"F",L"G",L"X",L"C0",L"C1",L"C2",L"C3",L"C4",L"C5",L"C6",L"C7",L"C8",L"C9"};
+#endif
 
 
 void ShellUpdatePanels(Panel *SrcPanel,BOOL NeedSetUpADir)
@@ -265,6 +275,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 						unsigned __int64 *ViewColumnTypes,int *ViewColumnWidths,int *ViewColumnWidthsTypes,int &ColumnCount)
 {
 	const wchar_t *TextPtr=ColumnTitles;
+	//Maximus: для отладки
 	_ASSERTE(ARRAYSIZE(ColumnTypeWidth)==ARRAYSIZE(ColumnSymbol));
 
 	for (ColumnCount=0; ColumnCount < PANEL_COLUMNCOUNT; ColumnCount++)
@@ -386,6 +397,17 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 					}
 					else
 					{
+						#if 0
+						for (unsigned I=0; I<ARRAYSIZE(ColumnSymbol); I++)
+						{
+							if (!StrCmp(strArgName,ColumnSymbol[I]))
+							{
+								ViewColumnTypes[ColumnCount]=I;
+								break;
+							}
+						}
+						#else
+						//Maximus: многострочная статусная область
 						if (strArgName.At(0)==L'B')
 						{
 							unsigned __int64 &ColumnType=ViewColumnTypes[ColumnCount];
@@ -420,6 +442,7 @@ void TextToViewSettings(const wchar_t *ColumnTitles,const wchar_t *ColumnWidths,
 								}
 							}
 						}
+						#endif
 					}
 				}
 			}
@@ -512,6 +535,8 @@ void ViewSettingsToText(unsigned __int64 *ViewColumnTypes,int *ViewColumnWidths,
 				strType += L"L";
 		}
 
+		#if 1
+		//Maximus: многострочная статусная область
 		if (ColumnType==LINEBREAK_COLUMN)
 		{
 			if (ViewColumnTypes[I] & COLUMN_CENTERALIGN)
@@ -519,6 +544,7 @@ void ViewSettingsToText(unsigned __int64 *ViewColumnTypes,int *ViewColumnWidths,
 			else if (ViewColumnTypes[I] & COLUMN_RIGHTALIGN)
 				strType += L"R";
 		}
+		#endif
 
 		strColumnTitles += strType;
 		wchar_t *lpwszWidth = strType.GetBuffer(20);

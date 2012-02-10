@@ -485,7 +485,6 @@ struct Options
 	int LeftSelectedFirst;
 	int SelectFolders;
 	int ReverseSort;
-	int ClearReadOnly;
 	int SortFolderExt;
 	int DeleteToRecycleBin;         // удалять в корзину?
 	int DeleteToRecycleBinKillLink; // перед удалением папки в корзину кильнем вложенные симлинки.
@@ -518,7 +517,10 @@ struct Options
 	int SetupArgv; // количество каталогов в комюстроке ФАРа
 	int ChangeDriveMode;
 	int ChangeDriveDisconnetMode;
+	#if 1
+	//Maximus: расширенное меню плагинов
 	int ChangePlugMenuMode;
+	#endif
 
 	int SaveHistory;
 	int HistoryCount;

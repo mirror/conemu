@@ -57,9 +57,16 @@ template <class D> class Node
 		AVL_SKEW skew;
 		virtual void init(void);
 	public:
+	#ifdef _DEBUG
+		//Maximus: дл€ отладки
 		Node() { init(); _ASSERTE(data!=(D*)0xcccccccc); }
 		Node(D *value) { init(); data=value; _ASSERTE(data!=(D*)0xcccccccc); }
 		virtual ~Node() { _ASSERTE(data!=(D*)0xcccccccc); delete data; }
+	#else
+		Node() { init(); }
+		Node(D *value) { init(); data=value; }
+		virtual ~Node() { delete data; }
+	#endif
 		const D *get_data(void) const;
 	friend class Tree<D>;
 };
@@ -123,6 +130,7 @@ template <class D> D *Tree<D>::insert(D *data)
 	D *result=nullptr;
 
 #if defined(_DEBUG)
+	//Maximus: дл€ отладки
 	void* tmp=nullptr;
 	if (sizeof(D)==sizeof(void*))
 		tmp = *(void**)data;
@@ -131,6 +139,7 @@ template <class D> D *Tree<D>::insert(D *data)
 	internal_insert(&root,data,&result);
 
 #if defined(_DEBUG)
+	//Maximus: дл€ отладки
 	if (sizeof(D)==sizeof(void*))
 	{
 		_ASSERTE(*(void**)data != (void*)0xfeeefeee); // «начит исходный (*data) был удален (delete). ƒл€ плагинов этого вобщем быть не должно.
