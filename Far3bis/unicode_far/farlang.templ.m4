@@ -4359,6 +4359,15 @@ MEditSearchSearch
 "&Szukaj"
 "Buscar"
 
+MEditSearchAll
+"Вс&ё"
+"&All"
+upd:"&All"
+upd:"&All"
+upd:"&All"
+upd:"&All"
+upd:"&All"
+
 MEditSearchCancel
 "Отменить"
 "Cancel"
@@ -4405,6 +4414,15 @@ l:
 "Keresett szöveg:"
 "Szukam"
 "Buscando por"
+
+MEditSearchStatistics
+"Вхождений: %u, строк: %u"
+"Occurrences: %u, lines: %u"
+upd:"Occurrences: %u, lines: %u"
+upd:"Occurrences: %u, lines: %u"
+upd:"Occurrences: %u, lines: %u"
+upd:"Occurrences: %u, lines: %u"
+upd:"Occurrences: %u, lines: %u"
 
 MEditNotFound
 "Строка не найдена"

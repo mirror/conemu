@@ -774,6 +774,7 @@ bool Plugin::LoadData()
 		OutputDebugString(strDbgMsg);
 		#endif
 		m_hModule = LoadLibraryEx(m_strModuleName,nullptr,0);
+		if(!m_hModule) m_hModule = LoadLibraryEx(m_strModuleName,nullptr,LOAD_WITH_ALTERED_SEARCH_PATH);
 		GuardLastError Err;
 		FarChDir(strCurPath);
 

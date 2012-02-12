@@ -305,8 +305,14 @@ int KeyBar::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 
 	int KeyWidth=(X2-X1-1)/12;
 
+#if 1
+	//Maximus: на таблетках лучше бы все кнопки показать, для пальцетыканья
+	if (KeyWidth<3)
+		KeyWidth=3;
+#else
 	if (KeyWidth<8)
 		KeyWidth=8;
+#endif
 
 	int X=MouseEvent->dwMousePosition.X-X1;
 
