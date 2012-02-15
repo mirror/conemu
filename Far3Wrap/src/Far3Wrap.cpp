@@ -121,6 +121,9 @@ namespace Far2
 #elif MVV_3<=2426
 	#include "pluginW3#2426.hpp"
 	#define MCTLARG(g) &g
+#elif MVV_3<=2457
+	#include "pluginW3#2457.hpp"
+	#define MCTLARG(g) &g
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -382,7 +385,7 @@ struct WrapPluginInfo
 	KeyBarTitles* KeyBarTitles_2_3(const Far2::KeyBarTitles* KeyBar);
 
 	static int OpMode_3_2(OPERATION_MODES OpMode3);
-	static int OpenFrom_3_2(OPENFROM OpenFrom3);
+	int OpenFrom_3_2(OPENFROM OpenFrom3, INT_PTR Data, INT_PTR& Item);
 	static OPENPANELINFO_FLAGS OpenPanelInfoFlags_2_3(DWORD Flags2);
 	static Far2::OPENPLUGININFO_SORTMODES SortMode_3_2(OPENPANELINFO_SORTMODES Mode3);
 	static OPENPANELINFO_SORTMODES SortMode_2_3(/*Far2::OPENPLUGININFO_SORTMODES*/int Mode2);
@@ -589,7 +592,7 @@ struct WrapPluginInfo
 
 	BOOL mb_ExportsLoaded;
 	// Exported Far2(!) Function
-	typedef int    (WINAPI* _AnalyseW)(const struct AnalyseInfo *Info);
+	typedef int    (WINAPI* _AnalyseW)(const struct Far2::AnalyseData *Info);
 	_AnalyseW AnalyseW;
 	typedef void   (WINAPI* _ClosePluginW)(HANDLE hPlugin);
 	_ClosePluginW ClosePluginW;
@@ -1710,10 +1713,78 @@ int WrapPluginInfo::OpMode_3_2(OPERATION_MODES OpMode3)
 //{
 //}
 
-int WrapPluginInfo::OpenFrom_3_2(OPENFROM OpenFrom3)
+int WrapPluginInfo::OpenFrom_3_2(OPENFROM OpenFrom3, INT_PTR Data, INT_PTR& Item)
 {
 	int OpenFrom2 = 0;
 	
+	#if MVV_3>=2458
+	if (OpenFrom3 == OPEN_FROMMACRO)
+	{
+		INT_PTR nArea = psi3.MacroControl(MCTLARG(mguid_Plugin), MCTL_GETAREA, 0, 0);
+		switch(nArea)
+		{
+			case MACROAREA_SHELL:
+			case MACROAREA_SHELLAUTOCOMPLETION:
+			case MACROAREA_INFOPANEL:
+			case MACROAREA_QVIEWPANEL:
+			case MACROAREA_TREEPANEL:
+			case MACROAREA_SEARCH:
+			case MACROAREA_FINDFOLDER:
+				OpenFrom2 |= Far2::OPEN_FILEPANEL; break;
+			case MACROAREA_VIEWER:
+				OpenFrom2 |= Far2::OPEN_VIEWER; break;
+			case MACROAREA_EDITOR:
+				OpenFrom2 |= Far2::OPEN_EDITOR; break;
+			case MACROAREA_DIALOG:
+			case MACROAREA_DIALOGAUTOCOMPLETION:
+				OpenFrom2 = Far2::OPEN_DIALOG; break;
+				break;
+			case MACROAREA_DISKS:
+				OpenFrom2 |= Far2::OPEN_DISKMENU; break;
+			case MACROAREA_HELP:
+			case MACROAREA_MAINMENU:
+			case MACROAREA_MENU:
+			case MACROAREA_USERMENU:
+			case MACROAREA_OTHER:
+				OpenFrom2 |= 0; //TODO: ???
+				break;
+			default:
+				_ASSERTE(FALSE); // неизвестная область?
+				OpenFrom2 = 0;
+		}
+		
+		Item = 0;
+		OpenFrom2 |= Far2::OPEN_FROMMACRO;
+		
+		OpenMacroInfo* p = (OpenMacroInfo*)Data;
+		if (p->StructSize >= sizeof(*p) && p->Count)
+		{
+			switch (p->Values[0].Type)
+			{
+			case FMVT_UNKNOWN:
+				// Вызов без параметров
+				break;
+			case FMVT_INTEGER:
+				Item = p->Values[0].Integer;
+				break;
+			case FMVT_DOUBLE:
+				Item = (INT_PTR)p->Values[0].Double; // С округлением придется смириться
+				break;
+			case FMVT_STRING:
+				Item = (INT_PTR)p->Values[0].String;
+				if (Item)
+				{
+					OpenFrom2 |= Far2::OPEN_FROMMACROSTRING;
+				}
+				else
+				{
+					_ASSERTE(p->Values[0].String != NULL);
+				}
+				break;
+			}
+		}
+	}
+	#else
 	switch ((OpenFrom3 & OPEN_FROM_MASK))
 	{
 		case OPEN_LEFTDISKMENU:
@@ -1738,9 +1809,10 @@ int WrapPluginInfo::OpenFrom_3_2(OPENFROM OpenFrom3)
 			OpenFrom2 |= Far2::OPEN_ANALYSE; break;
 		//case OPEN_RIGHTDISKMENU: -- в Far2 отсутсвует
 	}
-	
 	if (OpenFrom3 & OPEN_FROMMACRO_MASK)
 		OpenFrom2 |= Far2::OPEN_FROMMACRO;
+	Item = Data;
+	#endif
 	
 	return OpenFrom2;
 }
@@ -6605,23 +6677,37 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 
 	HANDLE h = INVALID_HANDLE_VALUE;
 
-	if ((Info->OpenFrom & OPEN_FROMMACRO_MASK))
+	if (
+		#if MVV_3>=2458
+		(Info->OpenFrom == OPEN_FROMMACRO)
+		#else
+		(Info->OpenFrom & OPEN_FROMMACRO_MASK)
+		#endif
+	   )
 	{
 		_ASSERTE(m_Info.StructSize!=0);
 		if (m_Info.Reserved 
+			#if MVV_3<2458
 			&& (((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACRO)
 				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == OPEN_FROMMACROSTRING)
 				|| ((Info->OpenFrom & OPEN_FROMMACRO_MASK) == (OPEN_FROMMACRO|OPEN_FROMMACROSTRING)))
+			#endif
 		    && OpenPluginW)
 		{
+			#if MVV_3>=2458
+			INT_PTR Item = 0;
+			DWORD nOpen2 = OpenFrom_3_2(Info->OpenFrom, Info->Data, Item);
+			#else
 			DWORD nOpen2 = Far2::OPEN_FROMMACRO;
+			INT_PTR Item = Info->Data;
 			if ((HIBYTE(LOWORD(m_MinFarVersion)) > 2)
 				|| ((HIBYTE(LOWORD(m_MinFarVersion)) == 2) && (HIWORD(m_MinFarVersion) >= 1800)))
 			{
 				nOpen2 |= ((Info->OpenFrom & OPEN_FROMMACROSTRING)?Far2::OPEN_FROMMACROSTRING:0);
 				nOpen2 |= LOWORD(Info->OpenFrom);
 			}
-			h = OpenPluginW(nOpen2, Info->Data);
+			#endif
+			h = OpenPluginW(nOpen2, Item);
 		}
 		goto trap;
 	}
@@ -6683,7 +6769,10 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		if (AnalyseW)
 		{
 			// В принципе, в Far2 была такая функция, так что если плаг ее экспортит - зовем
-			h = OpenPluginW(OpenFrom_3_2(Info->OpenFrom), Info->Data);
+			AnalyseInfo* fad3 = (AnalyseInfo*)Info->Data;
+			_ASSERTE(fad3 && fad3->StructSize >= sizeof(fad3));
+			Far2::AnalyseData fad2 = {sizeof(fad2), fad3->FileName, (const unsigned char *)fad3->Buffer, fad3->BufferSize, OpMode_3_2(fad3->OpMode)};
+			h = OpenPluginW(Far2::OPEN_ANALYSE, (INT_PTR)&fad2);
 			goto trap;
 		}
 		if (mn_AnalyzeReturn == -2)
@@ -6772,7 +6861,10 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 	}
 	gpsz_LastAnalyzeFile = NULL;
 	if (AnalyseW) // В Far2 была такая функция, так что если экспорт есть - зовем
-		return AnalyseW(Info);
+	{
+		Far2::AnalyseData fad2 = {sizeof(fad2), Info->FileName, (const unsigned char *)Info->Buffer, Info->BufferSize, OpMode_3_2(Info->OpMode)};
+		return AnalyseW(&fad2);
+	}
 	if (mp_Analyze)
 	{
 		free(mp_Analyze);

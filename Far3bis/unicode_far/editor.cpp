@@ -1924,7 +1924,10 @@ int Editor::ProcessKey(int Key)
 				TopScreen=CurLine=TopList;
 
 				if (Key == KEY_CTRLHOME || Key == KEY_RCTRLHOME || Key == KEY_CTRLNUMPAD7 || Key == KEY_RCTRLNUMPAD7)
+				{
 					CurLine->SetCurPos(0);
+					CurLine->SetLeftPos(0);
+				}
 				else
 					CurLine->SetTabCurPos(StartPos);
 
@@ -3724,6 +3727,11 @@ BOOL Editor::Search(int Next)
 	LastSearchSelFound=SelectFound;
 	LastSearchRegexp=Regexp;
 
+	if(FindAllReferences)
+	{
+		ReverseSearch = FALSE;
+	}
+
 	if (strSearchStr.IsEmpty())
 		return TRUE;
 
@@ -3737,7 +3745,7 @@ BOOL Editor::Search(int Next)
 	};
 
 	VMenu FindAllList(L"", nullptr, 0);
-	UINT AllRefLines = 1;
+	UINT AllRefLines = 0;
 
 	{
 		//SaveScreen SaveScr;
@@ -3771,14 +3779,23 @@ BOOL Editor::Search(int Next)
 		if (!ReverseSearch && (Next || (EdOpt.F7Rules && !ReplaceMode)))
 			CurPos++;
 
-		NewNumLine=NumLine;
-		CurPtr=CurLine;
+		if(FindAllReferences)
+		{
+			NewNumLine = 0;
+			CurPtr = TopList;
+		}
+		else
+		{
+			NewNumLine = NumLine;
+			CurPtr = CurLine;
+		}
+
 		DWORD StartTime=GetTickCount();
 		int StartLine=NumLine;
 		TaskBar TB;
 		wakeful W;
 
-		int LastLine = 0;
+		int LastCheckedLine = -1;
 
 		while (CurPtr)
 		{
@@ -3827,9 +3844,9 @@ BOOL Editor::Search(int Next)
 					Item.UserDataSize = sizeof(coord);
 					FindAllList.AddItem(&Item);
 					CurPos+=SearchLength;
-					if(NewNumLine != LastLine)
+					if(NewNumLine != LastCheckedLine)
 					{
-						LastLine = NewNumLine;
+						LastCheckedLine = NewNumLine;
 						++AllRefLines;
 					}
 				}
@@ -4076,8 +4093,8 @@ BOOL Editor::Search(int Next)
 	if(FindAllReferences && Match)
 	{
 		FindAllList.SetPosition(-1, -1, 0, 0);
-		string BottomTitle;
-		BottomTitle.Format(MSG(MEditSearchStatistics), FindAllList.GetItemCount(), AllRefLines);
+		TemplateString BottomTitle(MSG(MEditSearchStatistics));
+		BottomTitle << FindAllList.GetItemCount() << AllRefLines;
 		FindAllList.SetBottomTitle(BottomTitle);
 		FindAllList.Show();
 		while (!FindAllList.Done())

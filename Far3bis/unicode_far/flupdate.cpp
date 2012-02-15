@@ -350,8 +350,6 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 				StartTime = CurTime;
 				if (IsVisible())
 				{
-					string strReadMsg;
-
 					if (!IsShowTitle)
 					{
 						if (!DrawMessage)
@@ -362,7 +360,8 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 						}
 					}
 
-					strReadMsg.Format(MSG(MReadingFiles),FileCount);
+					TemplateString strReadMsg(MSG(MReadingFiles));
+					strReadMsg << FileCount;
 
 					if (DrawMessage)
 					{

@@ -1352,12 +1352,7 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 {
 	int nResult = 0;
 
-	#if 1
-	//Maximus: а про ProcessConsoleInput (int->size_t) забыли
 	for (size_t i=0; i<PluginsCount; i++)
-	#else
-	for (int i=0; i<PluginsCount; i++)
-	#endif
 	{
 		Plugin *pPlugin = PluginsData[i];
 

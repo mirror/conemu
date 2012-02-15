@@ -1949,6 +1949,15 @@ struct OpenPluginInfo
 	long                  Reserved;
 };
 
+struct AnalyseData
+{
+	int StructSize;
+	const wchar_t *lpwszFileName;
+	const unsigned char *pBuffer;
+	DWORD dwBufferSize;
+	int OpMode;
+};
+
 enum OPENPLUGIN_OPENFROM
 {
 	OPEN_FROM_MASK          = 0x000000FF,
