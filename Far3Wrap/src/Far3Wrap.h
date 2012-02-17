@@ -8,7 +8,8 @@ typedef void (WINAPI* _SetStartupInfoWrap)(struct WrapPluginInfo* wpi, PluginSta
 typedef void (WINAPI* _GetGlobalInfoWrap)(struct WrapPluginInfo* wpi, GlobalInfo *Info);
 typedef void (WINAPI* _GetPluginInfoWrap)(struct WrapPluginInfo* wpi, PluginInfo *Info);
 typedef HANDLE (WINAPI* _OpenWrap)(struct WrapPluginInfo* wpi, const OpenInfo *Info);
-typedef int (WINAPI* _AnalyseWrap)(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
+typedef HANDLE (WINAPI* _AnalyseWrap)(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
+typedef void (WINAPI* _CloseAnalyseWrap)(struct WrapPluginInfo* wpi, const CloseAnalyseInfo *Info);
 typedef void (WINAPI* _ClosePanelWrap)(struct WrapPluginInfo* wpi, const struct ClosePanelInfo *Info);
 typedef int (WINAPI* _CompareWrap)(struct WrapPluginInfo* wpi, const CompareInfo *Info);
 typedef int (WINAPI* _ConfigureWrap)(struct WrapPluginInfo* wpi, const struct ConfigureInfo *Info);
@@ -142,6 +143,7 @@ struct Far3WrapFunctions
 	_GetPluginInfoWrap GetPluginInfoWrap;
 	_OpenWrap OpenWrap;
 	_AnalyseWrap AnalyseWrap;
+	_CloseAnalyseWrap CloseAnalyseWrap;
 	_ClosePanelWrap ClosePanelWrap;
 	_CompareWrap CompareWrap;
 	_ConfigureWrap ConfigureWrap;

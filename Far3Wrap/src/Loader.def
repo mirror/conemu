@@ -28,6 +28,7 @@ EXPORTS
 	OpenW
 	ExitFARW
 	ConfigureW
+	CloseAnalyseW
 	ClosePanelW
 	SetDirectoryW
 	ProcessSynchroEventW

@@ -124,6 +124,9 @@ namespace Far2
 #elif MVV_3<=2457
 	#include "pluginW3#2457.hpp"
 	#define MCTLARG(g) &g
+#elif MVV_3<=2461
+	#include "pluginW3#2461.hpp"
+	#define MCTLARG(g) &g
 #else
 	#include "pluginW3.hpp"
 	#define MCTLARG(g) &g
@@ -443,8 +446,10 @@ struct WrapPluginInfo
 	       void          GetPluginInfoW3  (PluginInfo *Info);
 	static HANDLE WINAPI OpenWrap(struct WrapPluginInfo* wpi, const OpenInfo *Info);
 	       HANDLE        OpenW3  (const OpenInfo *Info);
-	static int    WINAPI AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
-	       int           AnalyseW3  (const AnalyseInfo *Info);
+	static HANDLE WINAPI AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
+	       HANDLE        AnalyseW3  (const AnalyseInfo *Info);
+	static void   WINAPI CloseAnalyseWrap(struct WrapPluginInfo* wpi, const CloseAnalyseInfo *Info);
+	       void          CloseAnalyseW3  (const CloseAnalyseInfo *Info);
 	static void   WINAPI ClosePanelWrap(struct WrapPluginInfo* wpi, const struct ClosePanelInfo *Info);
 	       void          ClosePanelW3  (const struct ClosePanelInfo *Info);
 	static int    WINAPI CompareWrap(struct WrapPluginInfo* wpi, const CompareInfo *Info);
@@ -1765,7 +1770,7 @@ int WrapPluginInfo::OpenFrom_3_2(OPENFROM OpenFrom3, INT_PTR Data, INT_PTR& Item
 				// Вызов без параметров
 				break;
 			case FMVT_INTEGER:
-				Item = p->Values[0].Integer;
+				Item = (INT_PTR)p->Values[0].Integer;
 				break;
 			case FMVT_DOUBLE:
 				Item = (INT_PTR)p->Values[0].Double; // С округлением придется смириться
@@ -6766,13 +6771,32 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 
 	if ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_ANALYSE)
 	{
+		#if MVV_3>=2462
+		OpenAnalyseInfo* p3 = (OpenAnalyseInfo*)Info->Data;
+		if (p3 && (p3->StructSize >= sizeof(*p3)))
+		{
+			h = p3->Handle;
+			_ASSERTE(h!=INVALID_HANDLE_VALUE);
+			// Если в плагине нету AnalyseW, а есть только OpenFilePlugin
+			// то в p3->Handle уже готовый хэндл. А вот после AnalyseW,
+			// плагин еще нужно открыть
+			_ASSERTE(h || AnalyseW);
+			if ((h == NULL) && AnalyseW && OpenPluginW)
+			{
+				Far2::AnalyseData fad2 = {sizeof(fad2), p3->Info->FileName, (const unsigned char *)p3->Info->Buffer, p3->Info->BufferSize, OpMode_3_2(p3->Info->OpMode)};
+				h = OpenPluginW(Far2::OPEN_ANALYSE, (INT_PTR)&fad2);
+			}
+		}
+		goto trap;
+		#else
 		if (AnalyseW)
 		{
 			// В принципе, в Far2 была такая функция, так что если плаг ее экспортит - зовем
 			AnalyseInfo* fad3 = (AnalyseInfo*)Info->Data;
 			_ASSERTE(fad3 && fad3->StructSize >= sizeof(fad3));
 			Far2::AnalyseData fad2 = {sizeof(fad2), fad3->FileName, (const unsigned char *)fad3->Buffer, fad3->BufferSize, OpMode_3_2(fad3->OpMode)};
-			h = OpenPluginW(Far2::OPEN_ANALYSE, (INT_PTR)&fad2);
+			if (OpenPluginW)
+				h = OpenPluginW(Far2::OPEN_ANALYSE, (INT_PTR)&fad2);
 			goto trap;
 		}
 		if (mn_AnalyzeReturn == -2)
@@ -6796,6 +6820,7 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 				mp_Analyze->BufferSize,
 				OpMode_3_2(mp_Analyze->OpMode));
 		goto trap;
+		#endif
 	}
 	
 	if (OpenPluginW)
@@ -6845,7 +6870,7 @@ trap:
 	return h;
 }
 
-int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
+HANDLE    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 {
 	LOG_CMD(L"AnalyseW",0,0,0);
 	mn_AnalyzeReturn = 0;
@@ -6854,24 +6879,48 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 		if (mpsz_LastAnalyzeFile != gpsz_LastAnalyzeFile)
 		{
 			if (Info->FileName && !lstrcmp(Info->FileName, gpsz_LastAnalyzeFile))
+			{
+				// Файл уже обработан другим плагином (например PicView2)
+				#if MVV_3>=2462
+				return INVALID_HANDLE_VALUE;
+				#else
 				return FALSE;
+				#endif
+			}
 		}
 		free(gpsz_LastAnalyzeFile);
 		gpsz_LastAnalyzeFile = NULL;
 	}
 	gpsz_LastAnalyzeFile = NULL;
+	
 	if (AnalyseW) // В Far2 была такая функция, так что если экспорт есть - зовем
 	{
 		Far2::AnalyseData fad2 = {sizeof(fad2), Info->FileName, (const unsigned char *)Info->Buffer, Info->BufferSize, OpMode_3_2(Info->OpMode)};
+		#if MVV_3>=2462
+		int lb2 = AnalyseW(&fad2);
+		if (!lb2)
+			return INVALID_HANDLE_VALUE; // Плагин отказался
+		else
+			return NULL; // В "OpenW" плагин нужно будет "открыть"
+		#else
 		return AnalyseW(&fad2);
+		#endif
 	}
 	if (mp_Analyze)
 	{
 		free(mp_Analyze);
 		mp_Analyze = NULL;
 	}
+
 	if (!OpenFilePluginW)
+	{
+		#if MVV_3>=2462
+		return INVALID_HANDLE_VALUE;
+		#else
 		return FALSE;
+		#endif
+	}
+	
 	size_t nNewSize = sizeof(*mp_Analyze) + Info->BufferSize
 			+ ((Info->FileName ? lstrlen(Info->FileName) : 0)+1)*sizeof(wchar_t);
 	mp_Analyze = (AnalyseInfo*)malloc(nNewSize);
@@ -6902,8 +6951,12 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 		(const unsigned char*)mp_Analyze->Buffer,
 		mp_Analyze->BufferSize,
 		OpMode_3_2(Info->OpMode));
+	
 	if (h && h != INVALID_HANDLE_VALUE && ((INT_PTR)h) != -2)
 	{
+		#if MVV_3>=2462
+		return h;
+		#else
 		if (m_AnalyzeMode == 1)
 		{
 			//TODO: Не закрывать. только вопрос - когда его можно будет закрыть, если OpenW НЕ будет вызван?
@@ -6914,6 +6967,7 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 		if (ClosePluginW)
 			ClosePluginW(h);
 		return TRUE;
+		#endif
 	}
 	if (mp_Analyze)
 	{
@@ -6941,9 +6995,32 @@ int    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 			mcr.Flags = KMFLAGS_DISABLEOUTPUT;
 			psi3.MacroControl(MCTLARG(mguid_Plugin), MCTL_SENDSTRING, 0, &mcr);
 		}
+		#if MVV_3>=2462
+		return (HANDLE)-2; // "больше никем не открывать"
+		#else
 		return TRUE;
+		#endif
 	}
+	
+	#if MVV_3>=2462
+	return INVALID_HANDLE_VALUE;
+	#else
 	return 0;
+	#endif
+}
+void    WrapPluginInfo::CloseAnalyseW3(const CloseAnalyseInfo *Info)
+{
+	LOG_CMD(L"CloseAnalyseW",0,0,0);
+	if (ClosePluginW && Info && (Info->StructSize >= sizeof(*Info)))
+	{
+		if (Info->Handle && (Info->Handle != INVALID_HANDLE_VALUE) && (((INT_PTR)Info->Handle) != -2))
+			ClosePluginW(Info->Handle);
+	}
+	if (mp_Analyze)
+	{
+		free(mp_Analyze);
+		mp_Analyze = NULL;
+	}
 }
 void   WrapPluginInfo::ClosePanelW3(const struct ClosePanelInfo *Info)
 {
@@ -7414,9 +7491,13 @@ HANDLE WrapPluginInfo::OpenWrap(struct WrapPluginInfo* wpi, const OpenInfo *Info
 {
 	return wpi->OpenW3(Info);
 }
-int    WrapPluginInfo::AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info)
+HANDLE    WrapPluginInfo::AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info)
 {
 	return wpi->AnalyseW3(Info);
+}
+void    WrapPluginInfo::CloseAnalyseWrap(struct WrapPluginInfo* wpi, const CloseAnalyseInfo *Info)
+{
+	wpi->CloseAnalyseW3(Info);
 }
 void   WrapPluginInfo::ClosePanelWrap(struct WrapPluginInfo* wpi, const struct ClosePanelInfo *Info)
 {
@@ -8570,6 +8651,7 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	SET_FN(GetPluginInfoWrap);
 	SET_FN(OpenWrap);
 	SET_FN(AnalyseWrap);
+	SET_FN(CloseAnalyseWrap);
 	SET_FN(ClosePanelWrap);
 	SET_FN(CompareWrap);
 	SET_FN(ConfigureWrap);

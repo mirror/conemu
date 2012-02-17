@@ -5,7 +5,7 @@
 /*
   plugin.hpp
 
-  Plugin API for Far Manager 3.0 build 2460
+  Plugin API for Far Manager 3.0 build 2462
 */
 
 /*
@@ -43,7 +43,10 @@ other possible license with no implications from the above license on them.
 #define FARMANAGERVERSION_MAJOR 3
 #define FARMANAGERVERSION_MINOR 0
 #define FARMANAGERVERSION_REVISION 0
-#define FARMANAGERVERSION_BUILD 2460
+#define FARMANAGERVERSION_BUILD 2462
+#define FARMANAGERVERSION_STAGE 8
+
+#undef FARMANAGERVERSION_STAGE
 #define FARMANAGERVERSION_STAGE VS_RELEASE
 
 #ifndef RC_INVOKED
@@ -2347,6 +2350,13 @@ struct AnalyseInfo
 	OPERATION_MODES OpMode;
 };
 
+struct OpenAnalyseInfo
+{
+	size_t StructSize;
+	struct AnalyseInfo* Info;
+	HANDLE Handle;
+};
+
 struct OpenMacroInfo
 {
 	size_t StructSize;
@@ -2572,6 +2582,12 @@ struct ClosePanelInfo
 	HANDLE hPanel;
 };
 
+struct CloseAnalyseInfo
+{
+	size_t StructSize;
+	HANDLE Handle;
+};
+
 struct ConfigureInfo
 {
 	size_t StructSize;
@@ -2584,7 +2600,8 @@ extern "C"
 #endif
 // Exported Functions
 
-	int    WINAPI AnalyseW(const struct AnalyseInfo *Info);
+	HANDLE WINAPI AnalyseW(const struct AnalyseInfo *Info);
+	void   WINAPI CloseAnalyseW(const struct CloseAnalyseInfo *Info);
 	void   WINAPI ClosePanelW(const struct ClosePanelInfo *Info);
 	int    WINAPI CompareW(const struct CompareInfo *Info);
 	int    WINAPI ConfigureW(const struct ConfigureInfo *Info);

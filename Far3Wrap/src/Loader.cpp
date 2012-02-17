@@ -67,6 +67,8 @@ namespace Far2
 	#include "pluginW3#2426.hpp"
 #elif MVV_3<=2457
 	#include "pluginW3#2457.hpp"
+#elif MVV_3<=2461
+	#include "pluginW3#2461.hpp"
 #else
 	#include "pluginW3.hpp"
 #endif
@@ -373,12 +375,20 @@ HANDLE WINAPI OpenW(const OpenInfo *Info)
 	return fwf.OpenWrap(fwf.wpi, Info);
 }
 
-int    WINAPI AnalyseW(const AnalyseInfo *Info)
+HANDLE WINAPI AnalyseW(const AnalyseInfo *Info)
 {
 	if (!gbLoadWrapperCalled)
 		LoadWrapper(gszWrapper);
 	CHECKFNRET(AnalyseWrap,0);
 	return fwf.AnalyseWrap(fwf.wpi, Info);
+}
+
+void   WINAPI CloseAnalyseW(const struct CloseAnalyseInfo *Info)
+{
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
+	CHECKFN(CloseAnalyseWrap);
+	fwf.CloseAnalyseWrap(fwf.wpi, Info);
 }
 
 void   WINAPI ClosePanelW(const struct ClosePanelInfo *Info)
