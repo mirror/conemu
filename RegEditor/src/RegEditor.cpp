@@ -35,11 +35,9 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 //#endif
 
 #ifdef _UNICODE
-	#if FAR_UNICODE>=1900
-		#define AnalyseData AnalyseInfo
-	#else
+	#if FARMANAGERVERSION_BUILD<1900
 		#define OPEN_ANALYSE 9
-		struct AnalyseData
+		struct AnalyseInfo
 		{
 			int StructSize;
 			const wchar_t *FileName;
@@ -47,8 +45,8 @@ BOOL APIENTRY DllMain( HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 			DWORD BufferSize;
 			DWORD OpMode;
 		};
+		struct AnalyseInfo *gpLastAnalyse = NULL;
 	#endif
-struct AnalyseData *gpLastAnalyse = NULL;
 #endif
 
 #if defined(__GNUC__)
@@ -71,7 +69,7 @@ extern "C"{
   //#ifdef _UNICODE
   //int WINAPI ProcessSynchroEventW(int Event, void *Param);
   //int WINAPI ProcessEditorEventW(int Event, void *Param);
-  //int WINAPI AnalyseW(const AnalyseData *pData);
+  //int WINAPI AnalyseW(const AnalyseInfo *pData);
   //#endif
   //#if FAR_UNICODE>=1900
   //int WINAPI ProcessPanelInputW(HANDLE hPlugin,const struct ProcessPanelInputInfo *Info);
@@ -102,8 +100,8 @@ BOOL WINAPI _DllMainCRTStartup(HANDLE hDll,DWORD dwReason,LPVOID lpReserved)
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
 {
-	memset(Info, 0, sizeof(GlobalInfo));
-	Info->StructSize = sizeof(GlobalInfo);
+	//memset(Info, 0, sizeof(GlobalInfo));
+	_ASSERTE(Info->StructSize == sizeof(GlobalInfo));
 	
 	Info->MinFarVersion = /*FARMANAGERVERSION*/
 		MAKEFARVERSION(
@@ -155,8 +153,13 @@ void WINAPI GetPluginInfoW(struct PluginInfo *pi)
 	
 	MCHKHEAP;
 	
-	memset(pi, 0, sizeof(struct PluginInfo));
+	//memset(pi, 0, sizeof(struct PluginInfo));
+	//pi->StructSize = sizeof(struct PluginInfo);
+	#if FAR_UNICODE>=1906
+	_ASSERTE(pi->StructSize >= sizeof(struct PluginInfo));
+	#else
 	pi->StructSize = sizeof(struct PluginInfo);
+	#endif
 
 	pi->Flags = cfg->bAddToPluginsMenu ? 0 : PF_DISABLEPANELS;
 
@@ -293,7 +296,7 @@ void   WINAPI ExitFARW(const struct ExitInfo *Info)
 void   WINAPI ExitFARW(void)
 #endif
 {
-	#ifdef _UNICODE
+	#if defined(_UNICODE) && (FARMANAGERVERSION_BUILD<2462)
 	SafeFree(gpLastAnalyse);
 	#endif
 
@@ -480,15 +483,33 @@ HANDLE WINAPI OpenPluginW(
 	// После AnalyseW вызывается OpenPluginW, а не OpenFilePluginW
 	if (OpenFrom == OPEN_ANALYSE)
 	{
-		HANDLE hPlugin = OpenFilePluginW(gpLastAnalyse->FileName,
-					(const unsigned char *)gpLastAnalyse->Buffer,
-					gpLastAnalyse->BufferSize, 0/*OpMode*/);
+		AnalyseInfo* p;
+		
+		#if (FARMANAGERVERSION_BUILD<2462)
+		p = gpLastAnalyse;
+		#else
+		OpenAnalyseInfo* pa = (OpenAnalyseInfo*)Info->Data;
+		if ((pa == NULL) || (pa->StructSize < sizeof(*pa)))
+		{
+			InvalidOp();
+			return INVALID_HANDLE_VALUE;
+		}
+		p = pa->Info;
+		#endif
+		
+		HANDLE hPlugin = OpenFilePluginW(p->FileName, (const unsigned char *)p->Buffer, p->BufferSize, 0/*OpMode*/);
+		
+		#if defined(_UNICODE) && (FARMANAGERVERSION_BUILD<2462)
 		SafeFree(gpLastAnalyse);
+		#endif
+		
 		if (hPlugin == (HANDLE)-2)
 			hPlugin = INVALID_HANDLE_VALUE;
 		return hPlugin;
 	}
+	#if defined(_UNICODE) && (FARMANAGERVERSION_BUILD<2462)
 	SafeFree(gpLastAnalyse);
+	#endif
 	#endif
 
 
@@ -715,24 +736,47 @@ BOOL IsFileSupported(const TCHAR *Name, const unsigned char *Data, int DataSize,
 }
 
 #ifdef FAR_UNICODE
-int WINAPI AnalyseW(const AnalyseData *pData)
+#if (FARMANAGERVERSION_BUILD<2462)
+#define AnalyseRcType int
+#else
+#define AnalyseRcType HANDLE
+#endif
+AnalyseRcType WINAPI AnalyseW(const struct AnalyseInfo *pData)
 {
 	int nFormat = -1;
 
+	#if (FARMANAGERVERSION_BUILD<2462)
 	SafeFree(gpLastAnalyse);
+	#endif
 
 	if (!IsFileSupported(pData->FileName, (const unsigned char *)pData->Buffer, pData->BufferSize, nFormat))
-		return 0;
+	{
+		#if (FARMANAGERVERSION_BUILD<2462)
+		return FALSE;
+		#else
+		return INVALID_HANDLE_VALUE;
+		#endif
+	}
 
+	#if (FARMANAGERVERSION_BUILD<2462)
 	// Запомнить
 	int nAllSize = (int)sizeof(*gpLastAnalyse) + pData->BufferSize;
-	gpLastAnalyse = (struct AnalyseData*)malloc(nAllSize);
+	gpLastAnalyse = (struct AnalyseInfo*)malloc(nAllSize);
 	*gpLastAnalyse = *pData;
 	gpLastAnalyse->Buffer = (void*)(((const unsigned char*)gpLastAnalyse) + sizeof(*gpLastAnalyse));
 	memmove((void*)gpLastAnalyse->Buffer, pData->Buffer, pData->BufferSize);
+	#endif
 
-	return TRUE;
+	return (AnalyseRcType)TRUE;
 }
+
+#if (FARMANAGERVERSION_BUILD>=2462)
+void WINAPI CloseAnalyseW(const struct CloseAnalyseInfo *Info)
+{
+	return;
+}
+#endif
+
 #endif
 
 // Far3 note: Для удобства у нас используется эта функция, но в экспортах для Far3 ее уже нет
@@ -1711,20 +1755,32 @@ int WINAPI ProcessEditorEventW(
 							if (psz)
 							{
 								// Можно проверять макрос
-								MacroParseResult Result = {0};
+								MacroParseResult* Result = NULL;
 								#if FAR_UNICODE>=1900
-								MacroCheckMacroText mcr = {{sizeof(MacroCheckMacroText)}};
-								mcr.Text.SequenceText = pszMacro;
-								mcr.Text.Flags = KMFLAGS_SILENTCHECK;
+								MacroSendMacroText mcr = {sizeof(mcr)};
+								mcr.SequenceText = pszMacro;
+								mcr.Flags = KMFLAGS_SILENTCHECK;
 								#define MCTLARG0 ((gFarVersion.Build>=2159) ? &guid_PluginGuid : (GUID*)INVALID_HANDLE_VALUE)
-								psi.MacroControl(MCTLARG0, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
-								Result = mcr.Result;
+								if (psi.MacroControl(MCTLARG0, MCTL_SENDSTRING, MSSC_CHECK, &mcr) == FALSE)
+								{
+									size_t iRcSize = psi.MacroControl(MCTLARG0, MCTL_GETLASTERROR, 0, NULL);
+									Result = (MacroParseResult*)calloc(iRcSize,0);
+									if (Result)
+									{
+										Result->StructSize = sizeof(*Result);
+										psi.MacroControl(MCTLARG0, MCTL_GETLASTERROR, iRcSize, Result);
+									}
+								}
+								else
+								{
+									Result = (MacroParseResult*)calloc(sizeof(MacroParseResult),1);
+								}
 								#else
 								ActlKeyMacro mcr = {MCMD_CHECKMACRO};
 								mcr.Param.PlainText.SequenceText = pszMacro;
 								mcr.Param.PlainText.Flags = KSFLAGS_SILENTCHECK;
 								psi.AdvControl(PluginNumber, ACTL_KEYMACRO, &mcr);
-								Result = mcr.Param.MacroResult;
+								Result = &mcr.Param.MacroResult;
 								#endif
 								
 								//if (!psi.AdvControl(PluginNumber, ACTL_KEYMACRO, &mcr))
@@ -1732,25 +1788,29 @@ int WINAPI ProcessEditorEventW(
 								//	REPlugin::Message(REM_MPEC_INTPARSERERROR);
 								//}							
 								//else
-								if (Result.ErrCode == MPEC_INTPARSERERROR || Result.ErrCode > MPEC_CONTINUE_OTL)
+								if (!Result)
+								{
+									InvalidOp();
+								}
+								else if (Result->ErrCode == MPEC_INTPARSERERROR || Result->ErrCode > MPEC_CONTINUE_OTL)
 								{
 									REPlugin::Message(REM_MPEC_INTPARSERERROR);
 								}
 								else
-								if (Result.ErrCode != 0)
+								if (Result->ErrCode != 0)
 								{
 									// Ошибка!
-									EditorSetPosition esp = {Result.ErrPos.Y, 0, -1, -1, -1, -1};
+									EditorSetPosition esp = {Result->ErrPos.Y, 0, -1, -1, -1, -1};
 									#if FAR_UNICODE>=1900
 									psi.EditorControl(-1, ECTL_SETPOSITION, 0, &esp);
 									#else
 									psi.EditorControl(ECTL_SETPOSITION, &esp);
 									#endif
-									int nMsgId = REM_MPEC_UNRECOGNIZED_KEYWORD + (Result.ErrCode - MPEC_UNRECOGNIZED_KEYWORD);
+									int nMsgId = REM_MPEC_UNRECOGNIZED_KEYWORD + (Result->ErrCode - MPEC_UNRECOGNIZED_KEYWORD);
 									LPCWSTR pszMsgFormat = GetMsg(nMsgId);
 									if (pszMsgFormat)
 									{
-										int nLine = Result.ErrPos.Y, nCol = Result.ErrPos.X;
+										int nLine = Result->ErrPos.Y, nCol = Result->ErrPos.X;
 										//if (nLine > 0 && nLine < ei.TotalLines)
 										//{
 										//	if (nCol >= pnStart[nLine])
@@ -1760,11 +1820,11 @@ int WINAPI ProcessEditorEventW(
 										//{
 										//	if (pnStart[i] <= 
 										//}
-										nLen = Result.ErrSrc ? lstrlen(Result.ErrSrc) : 0;
+										nLen = Result->ErrSrc ? lstrlen(Result->ErrSrc) : 0;
 										nLen += lstrlen(pszMsgFormat) + 64;
 										psz = (wchar_t*)calloc(nLen, 2);
 										if (wcsstr(pszMsgFormat, L"%s"))
-											wsprintfW(psz, pszMsgFormat, Result.ErrSrc ? Result.ErrSrc : L"", nLine+1, nCol+1);
+											wsprintfW(psz, pszMsgFormat, Result->ErrSrc ? Result->ErrSrc : L"", nLine+1, nCol+1);
 										else
 											wsprintfW(psz, pszMsgFormat, nLine+1, nCol+1);
 										REPlugin::Message(psz);
@@ -1773,6 +1833,11 @@ int WINAPI ProcessEditorEventW(
 										REPlugin::Message(REM_MPEC_INTPARSERERROR);
 									}
 								}
+
+								#if FAR_UNICODE>=1900
+								if (Result)
+									free(Result);
+								#endif
 							}
 						}
 						SafeFree(pszMacro);
@@ -1807,6 +1872,12 @@ int WINAPI ProcessKeyW(HANDLE hPlugin, int Key, unsigned int ControlState)
 	CPluginActivator a(hPlugin,0);
 
 #if FAR_UNICODE>=1900
+	if (Info->Rec.EventType != KEY_EVENT)
+	{
+		// Приходит "мусор" в Info->Rec.Event.KeyEvent
+		//_ASSERTE(!(Info->Rec.EventType==MENU_EVENT && Info->Rec.Event.KeyEvent.wVirtualKeyCode==VK_F3));
+		return FALSE;
+	}
 	#define IsKey(VK) (Info->Rec.Event.KeyEvent.wVirtualKeyCode == VK)
 	#define ALL_MODS (LEFT_ALT_PRESSED|LEFT_CTRL_PRESSED|RIGHT_ALT_PRESSED|RIGHT_CTRL_PRESSED|SHIFT_PRESSED)
 	#define IsModNone ((Info->Rec.Event.KeyEvent.dwControlKeyState & ALL_MODS) == 0)

@@ -100,7 +100,7 @@ REPlugin* REPluginList::GetOpposite(REPlugin* pPlugin)
 		if (Plugins[i] == pPlugin)
 			continue;
 		
-		PanelInfo inf; memset(&inf, 0, sizeof(inf));
+		PanelInfo inf = {sizeof(inf)};
 		int nFRc;
 		#ifdef _UNICODE
 			#if FAR_UNICODE>=1988

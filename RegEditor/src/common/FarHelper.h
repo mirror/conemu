@@ -29,7 +29,7 @@ extern GUID guid_PluginGuid;
 		#define PanelItemWrite(p) (p).LastWriteTime
 		#define PanelItemChange(p) (p).ChangeTime
 		#define PanelItemFileSize(p) (p).FileSize
-		#define PanelItemPackSize(p) (p).PackSize
+		#define PanelItemPackSize(p) (p).AllocationSize
 		#define MenuItemIsSeparator(p) (((p).Flags & MIF_SEPARATOR) == MIF_SEPARATOR)
 		#define MenuItemSetSeparator(p) (p).Flags |= MIF_SEPARATOR
 		#define MenuItemIsSelected(p) (((p).Flags & MIF_SELECTED) == MIF_SELECTED)

@@ -947,7 +947,7 @@ RegItem* REPlugin::GetCurrentItem(const PluginPanelItem** ppPluginPaneItem /*= N
 		return NULL;
 
 	RegItem* pItem = NULL;
-	PanelInfo inf; memset(&inf, 0, sizeof(inf));
+	PanelInfo inf = {sizeof(inf)};
 	INT_PTR nCurLen = 0;
 	PluginPanelItem* item=NULL;
 
@@ -1041,7 +1041,7 @@ MRegistryBase* REPlugin::Worker()
 
 void REPlugin::LoadCurrentSortMode(int *pnSortMode, bool *pbReverseSort)
 {
-	PanelInfo pi;
+	PanelInfo pi = {sizeof(pi)};
 	if (!psiControl(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, F757NA &pi))
 		return;
 	*pnSortMode = pi.SortMode;
@@ -2576,7 +2576,7 @@ RegFolder* REPlugin::PrepareExportKey(
 
 	MCHKHEAP;
 	
-	PanelInfo inf; memset(&inf, 0, sizeof(inf));
+	PanelInfo inf = {sizeof(inf)};
 	INT_PTR nCurLen = 0, nMaxLen = 0;
 	PluginPanelItem* item=NULL;
 	RegItem* pItem = NULL;
@@ -2805,7 +2805,7 @@ void REPlugin::RedrawPanel(RegItem* pNewSel /*= NULL*/)
 	{
 		// Ќужно получить содержимое панели (сортированное), чтобы найти нужный элемент
 		RegItem* pItem = NULL;
-		PanelInfo inf; memset(&inf, 0, sizeof(inf));
+		PanelInfo inf = {sizeof(inf)};
 		INT_PTR nCurLen = 0, nMaxLen = 0;
 		PluginPanelItem* item=NULL;
 
