@@ -1,9 +1,19 @@
 
 #define MVV_1 1
-#define MVV_2 0
+#define MVV_2 14
 #define MVV_3 0
-#define MVV_4 12
+#define MVV_4 FARMANAGERVERSION_BUILD
 #define MVV_4a ""
+
+#ifdef _UNICODE
+	#if FAR_UNICODE>=1906
+		#include "common/far3/pluginW3.hpp"
+	#else
+		#include "common/unicode/pluginW.hpp"
+	#endif
+#else
+	#include "common/ascii/pluginA.hpp"
+#endif
 
 
 #define STRING2(x) #x
@@ -26,7 +36,7 @@
 //#endif
 
 //#define BLOCKEDITORVERS STRING(MVV_1) "." STRING(MVV_2) "." STRING(MVV_3) MVV_4a
-#define BLOCKEDITORVERS STRING(MVV_1) "." STRING(MVV_2) "." STRING(MVV_3) "." STRING(MVV_4)
+#define BLOCKEDITORVERS STRING(MVV_1) "." STRING(MVV_2) "#" STRING(MVV_4)
 
 #ifdef __GNUC__
 #define BLOCKEDITORVERN MVV_1,MVV_2,MVV_3,MVV_4

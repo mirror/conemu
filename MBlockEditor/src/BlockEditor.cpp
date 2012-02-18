@@ -258,16 +258,36 @@ INT_PTR EditCtrl(int Cmd, void* Parm)
 	return iRc;
 }
 
-HANDLE OpenKey(LPCTSTR pszSubKey)
+struct FarSetHandle
 {
-	HANDLE hKey = NULL;
+	HANDLE hKey;
+	#if defined(_UNICODE) && (FAR_UNICODE>=1906)
+	INT_PTR nSubKey;
+	#endif
+};
+
+FarSetHandle OpenKey(LPCTSTR pszSubKey)
+{
+	FarSetHandle Key = {NULL};
 	#if FAR_UNICODE>=1906
 
 		FarSettingsCreate sc = {sizeof(FarSettingsCreate), guid_BlockEditor, INVALID_HANDLE_VALUE};
 		FarSettingsItem fsi = {0};
-		BOOL lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc) != 0;
+		bool lbKeyOpened = psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc) != 0;
 		if (lbKeyOpened)
-			hKey = sc.Handle;
+		{
+			Key.hKey = sc.Handle;
+			if (pszSubKey && *pszSubKey)
+			{
+				FarSettingsValue fsv = {0, pszSubKey};
+				Key.nSubKey = psi.SettingsControl(sc.Handle, SCTL_OPENSUBKEY, 0, &fsv) != 0;
+				if (!Key.nSubKey)
+				{
+					psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+					Key.hKey = NULL;
+				}
+			}
+		}
 
 	#else
 	
@@ -278,34 +298,34 @@ HANDLE OpenKey(LPCTSTR pszSubKey)
 		lstrcat(pszKey, _T("\\"));
 		lstrcat(pszKey, pszSubKey);
 		
-		if (RegOpenKeyEx(HKEY_CURRENT_USER, pszKey, 0, KEY_READ, (HKEY*)&hKey) != 0)
-			hKey = NULL;
+		if (RegOpenKeyEx(HKEY_CURRENT_USER, pszKey, 0, KEY_READ, (HKEY*)&Key.hKey) != 0)
+			Key.hKey = NULL;
 			
 		free(pszKey);
 		
 	#endif
-	return hKey;
+	return Key;
 }
 
-void CloseKey(HANDLE& hKey)
+void CloseKey(FarSetHandle& Key)
 {
 	#if FAR_UNICODE>=1906
-		psi.SettingsControl(hKey, SCTL_FREE, 0, 0);
+		psi.SettingsControl(Key.hKey, SCTL_FREE, 0, 0);
 	#else
-		if (hKey)
-			RegCloseKey((HKEY)hKey);
+		if (Key.hKey)
+			RegCloseKey((HKEY)Key.hKey);
 	#endif
-	hKey = NULL;
+	memset(&Key, 0, sizeof(Key));
 }
 
-BOOL QueryValue(HANDLE hKey, LPCTSTR pszName, LPTSTR pszValue, int cchValueMax)
+BOOL QueryValue(const FarSetHandle& Key, LPCTSTR pszName, LPTSTR pszValue, int cchValueMax)
 {
 	BOOL lbRc = FALSE;
 	#if FAR_UNICODE>=1906
-		FarSettingsItem fsi = {0};
+		FarSettingsItem fsi = {Key.nSubKey};
 		fsi.Name = pszName;
 		fsi.Type = FST_STRING;
-		if (psi.SettingsControl(hKey, SCTL_GET, 0, &fsi))
+		if (psi.SettingsControl(Key.hKey, SCTL_GET, 0, &fsi))
 		{
 			lstrcpynW(pszValue, fsi.String, cchValueMax-1);
 			lbRc = TRUE;
@@ -317,7 +337,7 @@ BOOL QueryValue(HANDLE hKey, LPCTSTR pszName, LPTSTR pszValue, int cchValueMax)
 	#else
 		DWORD dwSize = cchValueMax*sizeof(*pszValue);
 		DWORD dwResult = dwSize-2*sizeof(TCHAR);
-		if ((RegQueryValueEx((HKEY)hKey, pszName, NULL, NULL, (LPBYTE)pszValue, &dwResult) == 0)
+		if ((RegQueryValueEx((HKEY)Key.hKey, pszName, NULL, NULL, (LPBYTE)pszValue, &dwResult) == 0)
 			&& dwResult < dwSize) // ASCIIZ
 		{
 			lbRc = TRUE;
@@ -847,19 +867,24 @@ void SetCommentDefaults(LPCTSTR psExt)
 void LoadCommentSettings(LPCTSTR pszFileName, TCHAR (&szComment)[100], TCHAR (&szCommentBegin)[100], TCHAR (&szCommentEnd)[100])
 {
 	// CommentFromBegin
-	HANDLE hk = 0;
+	FarSetHandle hk = {NULL};
 	TCHAR szTemp[16] = {0};
 	TCHAR szKey[MAX_PATH];
 	//lstrcpy(szKey, psi.RootKey); 
 	//if (lstrlen(szKey) < (MAX_PATH - 15))
 	//{
+	#if defined(_UNICODE) && FARMANAGERVERSION_BUILD>=2460
+	*szKey = 0;
+	#else
 	lstrcpy(szKey, _T("MBlockEditor"));
+	#endif
 
 	//[HKEY_CURRENT_USER\Software\Far2\Plugins\MBlockEditor]
 	//;; value "off" means 'comments are inserted at first non-space symbol'
 	//;; value "on"  means '... inserted at the line beginning'
 	//"CommentFromBegin"="off"
-	if ((hk = OpenKey(szKey)) != NULL)
+	hk = OpenKey(szKey);
+	if (hk.hKey != NULL)
 	{
 		//DWORD dwSize;
 		if (QueryValue(hk, _T("CommentFromBegin"), szTemp, ARRAYSIZE(szTemp)))
@@ -876,10 +901,15 @@ void LoadCommentSettings(LPCTSTR pszFileName, TCHAR (&szComment)[100], TCHAR (&s
 	{
 		if ((lstrlen(szKey) + 2 + lstrlen(psExt)) < MAX_PATH)
 		{
+			#if defined(_UNICODE) && FARMANAGERVERSION_BUILD>=2460
+			*szKey = 0;
+			#else
 			lstrcat(szKey, _T("\\"));
+			#endif
 			lstrcat(szKey, psExt);
 			
-			if ((hk = OpenKey(szKey)) != NULL)
+			hk = OpenKey(szKey);
+			if (hk.hKey != NULL)
 			{
 				//DWORD dwSize, dwSize2;
 				// May be overrided for each extension
@@ -1700,10 +1730,25 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
     //psi.Menu(
 
 #ifdef _UNICODE
+	#if FARMANAGERVERSION_BUILD>=2460
+	if ((OpenFrom == OPEN_FROMMACRO))
+	{
+		OpenMacroInfo* pi = (OpenMacroInfo*)Item;
+		if (pi && (pi->StructSize >= sizeof(*pi)) && (pi->Count > 0))
+		{
+			if ((pi->Values[0].Type == FMVT_INTEGER)
+				&& (pi->Values[0].Integer >= ewmFirst && pi->Values[0].Integer <= ewmLastValidCall))
+			{
+				nMode = (int)pi->Values[0].Integer;
+			}
+		}
+	}
+	#else
 	if (((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO) && (Item >= ewmFirst && Item <= ewmLastValidCall))
 	{
 		nMode = (int)Item;
 	}
+	#endif
 #endif
 
 
