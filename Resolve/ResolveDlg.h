@@ -22,6 +22,7 @@
 
 #define DEFAULT_INCS \
 "#include <windows.h>\r\n" \
+"//#include <ntstatus.h>\r\n" \
 "#include <stdio.h>\r\n" \
 "#include <shlobj.h>\r\n" \
 "#include <COMMCTRL.H>\r\n\r\n" \

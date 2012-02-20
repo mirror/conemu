@@ -34,6 +34,20 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#define _ASSERTE(x)
 #endif
 #include "version.h"
+
+// Heap checking
+#if defined(_DEBUG)
+	#ifdef MVALIDATE_HEAP
+		#define MCHKHEAP _ASSERT(HeapValidate(GetProcessHeap(),0,NULL));
+	#else
+		#define MCHKHEAP
+	#endif
+#elif defined(MVALIDATE_HEAP)
+	#define MCHKHEAP HeapValidate(GetProcessHeap(),0,NULL);
+#else
+	#define MCHKHEAP
+#endif
+
 #include "ResolveDlg.h"
 
 #include <tchar.h>
@@ -320,8 +334,7 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *Info)
 	
 	Info->MinFarVersion = FARMANAGERVERSION;
 	
-	// Build: YYMMDDX (YY - две цифры года, MM - месяц, DD - день, X - 0 и выше-номер подсборки)
-	Info->Version = MAKEFARVERSION(MVV_1,MVV_2,MVV_3,((MVV_1 % 100)*100000) + (MVV_2*1000) + (MVV_3*10) + (MVV_4 % 10),VS_RELEASE);
+	Info->Version = MAKEFARVERSION(MVV_1,MVV_2,MVV_3,MVV_4,VS_RELEASE);
 	
 	Info->Guid = guid_PluginGuid;
 	Info->Title = L"Resolve";
@@ -630,14 +643,15 @@ wchar_t* SaveEnvVar(LPCWSTR asVarName)
 	return pszSave;
 }
 
-#define ResolveBtnId 4
-#define ErrLookBtnId 5
-#define Copy1BtnId 10 // Value only
-#define Copy2BtnId 11 // <type> <name> = <value>
-#define Copy3BtnId 12 // value/*name*/
 #define ExprId 2
-#define TypeId 7
-#define ValueId 9
+#define SourceId 4
+#define ResolveBtnId 5
+#define ErrLookBtnId 6
+#define TypeId 9
+#define ValueId 11
+#define Copy1BtnId 12 // Value only
+#define Copy2BtnId 13 // <type> <name> = <value>
+#define Copy3BtnId 14 // value/*name*/
 #if FAR_UNICODE>=2460
 HANDLE WINAPI OpenW(const struct OpenInfo *Info)
 #else
@@ -648,40 +662,43 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 
 #if FAR_UNICODE>=2460
 	FarDialogItem dialog[] = {
-	{ DI_DOUBLEBOX,    3,  1, 52, 10, {0}, 0,0,0, L"CPP Resolve" },
+	{ DI_DOUBLEBOX,    3,  1, 53, 11, {0}, 0,0,0, L"CPP Resolve" },
 	{ DI_TEXT,         5,  3,  0,  0, {0}, 0,0,0, L"&Expr:" },
-	{ DI_EDIT,        12,  3, 50,  0, {0}, L"resolve_expr", 0, DIF_HISTORY},
-	{ DI_BUTTON,       27, 4,  0,  0, {0}, 0,0,0, L"&Resolve" },
-	{ DI_BUTTON,       40, 4,  0,  0, {0}, 0,0,0, L"Err&Look" },
+	{ DI_EDIT,        13,  3, 51,  0, {0}, L"resolve_expr", 0, DIF_HISTORY},
+	{ DI_TEXT,         5,  4,  0,  0, {0}, 0,0,0, L"&Source:" },
+	{ DI_EDIT,        13,  4, 51,  0, {0}, L"resolve_source", 0, DIF_HISTORY|DIF_USELASTHISTORY/*, L"ntdll.dll"*/},
+	{ DI_BUTTON,       27, 5,  0,  0, {0}, 0,0,0, L"&Resolve" },
+	{ DI_BUTTON,       40, 5,  0,  0, {0}, 0,0,0, L"Err&Look" },
 	//
-	{ DI_TEXT,         5,  5,  0,  0, {0}, 0,0, DIF_SEPARATOR},
+	{ DI_TEXT,         5,  6,  0,  0, {0}, 0,0, DIF_SEPARATOR},
 	//
-	{ DI_TEXT,         5,  7,  0,  0, {0}, 0,0,0, L"&Type:"},
-	{ DI_EDIT,        12,  7, 50,  0, {0}, 0,0, DIF_READONLY, L""},
-	{ DI_TEXT,         5,  8,  0,  0, {0}, 0,0,0, L"&Value:"},
-	{ DI_EDIT,        12,  8, 50,  0, {0}, 0,0, DIF_READONLY, L""},
-	{ DI_BUTTON,       12, 9,  0,  0, {0}, 0,0,0, L"&1 Copy"},
-	{ DI_BUTTON,       24, 9,  0,  0, {0}, 0,0,0, L"&2 Copy #"},
-	{ DI_BUTTON,       38, 9,  0,  0, {0}, 0,0,0, L"&3 Copy /*"}
+	{ DI_TEXT,         5,  8,  0,  0, {0}, 0,0,0, L"&Type:"},
+	{ DI_EDIT,        13,  8, 51,  0, {0}, 0,0, DIF_READONLY, L""},
+	{ DI_TEXT,         5,  9,  0,  0, {0}, 0,0,0, L"&Value:"},
+	{ DI_EDIT,        13,  9, 51,  0, {0}, 0,0, DIF_READONLY, L""},
+	{ DI_BUTTON,       13,10,  0,  0, {0}, 0,0,0, L"&1 Copy"},
+	{ DI_BUTTON,       25,10,  0,  0, {0}, 0,0,0, L"&2 Copy #"},
+	{ DI_BUTTON,       39,10,  0,  0, {0}, 0,0,0, L"&3 Copy /*"}
 	}; //type,x1,y1,x2,y2,{Sel},History,Mask,Flags,Data,MaxLength,UserData
 #else
 	FarDialogItem dialog[] = {
-	{ DI_DOUBLEBOX,    3,  1, 52, 10, 0, {0}, 0, 0, L"CPP Resolve" },
+	{ DI_DOUBLEBOX,    3,  1, 53, 11, 0, {0}, 0, 0, L"CPP Resolve" },
 	{ DI_TEXT,         5,  3,  0,  0, 0, {0}, 0, 0, L"&Expr:" },
-	{ DI_EDIT,        12,  3, 50,  0, 1, {(int)L"resolve_expr"}, DIF_HISTORY, 0, 0 },
-	{ DI_BUTTON,       27, 4,  0,  0, 0, {0}, 0, 0, L"&Resolve" },
-	{ DI_BUTTON,       40, 4,  0,  0, 0, {0}, 0, 0, L"Err&Look" },
+	{ DI_EDIT,        13,  3, 50,  0, 1, {(int)L"resolve_expr"}, DIF_HISTORY, 0, 0 },
+	{ DI_TEXT,         5,  4,  0,  0, 0, {0}, 0, 0, L"&Source:" },
+	{ DI_EDIT,        13,  4, 51,  0, 1, {(int)L"resolve_source"}, DIF_HISTORY|DIF_USELASTHISTORY/*, 0, L"ntdll.dll"*/},
+	{ DI_BUTTON,       27, 5,  0,  0, 0, {0}, 0, 0, L"&Resolve" },
+	{ DI_BUTTON,       40, 5,  0,  0, 0, {0}, 0, 0, L"Err&Look" },
 	//
-	{ DI_TEXT,         5,  5,  0,  0, 0, {0}, DIF_SEPARATOR, 0, L"" },
+	{ DI_TEXT,         5,  6,  0,  0, 0, {0}, DIF_SEPARATOR, 0, L"" },
 	//
-	{ DI_TEXT,         5,  7,  0,  0, 0, {0}, 0, 0, L"&Type:" },
-	{ DI_EDIT,        12,  7, 50,  0, 0, {0}, DIF_DISABLE, 0, L"" },
-	{ DI_TEXT,         5,  8,  0,  0, 0, {0}, 0, 0, L"&Value:" },
-	{ DI_EDIT,        12,  8, 50,  0, 0, {0}, DIF_DISABLE, 0, L"" },
-	{ DI_BUTTON,       12, 9,  0,  0, 0, {0}, 0, 0, L"&1 Copy" },
-	{ DI_BUTTON,       24, 9,  0,  0, 0, {0}, 0, 0, L"&2 Copy #" },
-	{ DI_BUTTON,       38, 9,  0,  0, 0, {0}, 0, 0, L"&3 Copy /*" }
-	//{ DI_TEXT,         5,  6,  0,  0, 0, 0, 0, 0, L"&Value:" },
+	{ DI_TEXT,         5,  8,  0,  0, 0, {0}, 0, 0, L"&Type:" },
+	{ DI_EDIT,        13,  8, 51,  0, 0, {0}, DIF_DISABLE, 0, L"" },
+	{ DI_TEXT,         5,  9,  0,  0, 0, {0}, 0, 0, L"&Value:" },
+	{ DI_EDIT,        13,  9, 51,  0, 0, {0}, DIF_DISABLE, 0, L"" },
+	{ DI_BUTTON,       13,10,  0,  0, 0, {0}, 0, 0, L"&1 Copy" },
+	{ DI_BUTTON,       25,10,  0,  0, 0, {0}, 0, 0, L"&2 Copy #" },
+	{ DI_BUTTON,       39,10,  0,  0, 0, {0}, 0, 0, L"&3 Copy /*" }
 	}; //type,x1,y1,x2,y2,Focus,{Sel},Flags,Def,Data
 #endif
 
@@ -692,10 +709,10 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	pResolve = new CResolveDlg();
 
 #if FAR_UNICODE>=2460
-	HANDLE hDlg = psi.DialogInit(&guid_PluginGuid, &guid_ResolveDlg, -1, -1, 56, 12, NULL, dialog,
+	HANDLE hDlg = psi.DialogInit(&guid_PluginGuid, &guid_ResolveDlg, -1, -1, 57, 13, NULL, dialog,
               sizeof(dialog)/sizeof(dialog[0]), 0, 0, ResolveDlgProc, 0);
 #else
-	HANDLE hDlg = psi.DialogInit(psi.ModuleNumber, -1, -1, 56, 12, NULL, dialog,
+	HANDLE hDlg = psi.DialogInit(psi.ModuleNumber, -1, -1, 57, 13, NULL, dialog,
               sizeof(dialog)/sizeof(dialog[0]), 0, 0, ResolveDlgProc, 0);
 #endif
     psi.DialogRun(hDlg);
@@ -719,8 +736,57 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	return INVALID_HANDLE_VALUE;
 }
 
+#include "FacList.h"
+#include "InetErrNames.h"
+#include "WinErrorNames.h"
+#include "NtStatusNames.h"
+
+void LookupErrName(DWORD nErr, wchar_t (&szMnemo)[96], LPCWSTR asModule)
+{
+	szMnemo[0] = 0;
+	
+	if (lstrcmpiW(asModule, L"wininet.dll")==0 || lstrcmpiW(asModule, L"wininet")==0)
+	{
+		for (size_t i = 0; i < ARRAYSIZE(InetErr); i++)
+		{
+			if (InetErr[i].nErr == nErr)
+			{
+				//lstrcpynW(szMnemo, InetErr[i].sErr, ARRAYSIZE(szMnemo));
+				MultiByteToWideChar(CP_ACP, 0, InetErr[i].sErr, -1, szMnemo, ARRAYSIZE(szMnemo));
+				return;
+			}
+		}
+	}
+	
+	// Попробовать поискать в ntstatus.h и WinError.h
+	if (lstrcmpiW(asModule, L"ntdll.dll")==0 || lstrcmpiW(asModule, L"ntdll")==0)
+	{
+		for (size_t i = 0; i < ARRAYSIZE(NtErr); i++)
+		{
+			if (NtErr[i].nErr == nErr)
+			{
+				//lstrcpynW(szMnemo, NtErr[i].sErr, ARRAYSIZE(szMnemo));
+				MultiByteToWideChar(CP_ACP, 0, NtErr[i].sErr, -1, szMnemo, ARRAYSIZE(szMnemo));
+				return;
+			}
+		}
+	}
+	
+	for (size_t i = 0; i < ARRAYSIZE(WinErr); i++)
+	{
+		if (WinErr[i].nErr == nErr)
+		{
+			//lstrcpynW(szMnemo, WinErr[i].sErr, ARRAYSIZE(szMnemo));
+			MultiByteToWideChar(CP_ACP, 0, WinErr[i].sErr, -1, szMnemo, ARRAYSIZE(szMnemo));
+			return;
+		}
+	}
+}
+
 void DoErrLookup(HANDLE hDlg)
 {
+	MCHKHEAP;
+
 	INT_PTR nLen = 0;
 	//_asm int 3;
 	nLen = psi.SendDlgMessage(hDlg, DM_GETTEXTLENGTH, ExprId, 0);
@@ -731,6 +797,17 @@ void DoErrLookup(HANDLE hDlg)
 		fdid.PtrData = (wchar_t*)calloc(nLen+1,2);
 		
 		psi.SendDlgMessage(hDlg, DM_GETTEXT, ExprId, (FARDLGPARM)&fdid);
+		MCHKHEAP;
+
+		INT_PTR nSrcLen = psi.SendDlgMessage(hDlg, DM_GETTEXTLENGTH, SourceId, 0);
+		wchar_t* pszSrc = NULL;
+		HMODULE hSource = NULL;
+		if (nSrcLen > 0)
+		{
+			pszSrc = (wchar_t*)calloc(nSrcLen+1, sizeof(*pszSrc));
+			psi.SendDlgMessage(hDlg, DM_GETTEXTPTR, SourceId, (FARDLGPARM)pszSrc);
+			hSource = LoadLibrary(pszSrc);
+		}
 
 		DWORD nVal = 0;
 		WCHAR *psz = fdid.PtrData;
@@ -741,33 +818,132 @@ void DoErrLookup(HANDLE hDlg)
 		else
 			nVal = wcstoul(psz, &endptr, 10);
 
+
+
 		WCHAR* pszFull = NULL;
 		WCHAR* lpMsgBuf=NULL;
-		if (FormatMessageW( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, nVal, 
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &lpMsgBuf, 0, NULL ))
+		DWORD nFormatRc = 0;
+		HMODULE hNtDll = GetModuleHandle(L"ntdll.dll");
+		bool lbNtDll = (hSource && (hSource == hNtDll));
+		LPCWSTR pszModule = lbNtDll ? L"ntdll.dll" : pszSrc ? FSF.PointToName(pszSrc) : NULL;
+		DWORD nLookupErr = nVal;
+
+		if (!nFormatRc)
+		{
+			nFormatRc = FormatMessageW( FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+				(hSource ? FORMAT_MESSAGE_FROM_HMODULE : 0) |
+				FORMAT_MESSAGE_FROM_SYSTEM | 
+				FORMAT_MESSAGE_IGNORE_INSERTS, 
+				hSource, nVal, 
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &lpMsgBuf, 0, NULL );
+		}
+		//A.I. Для WinInet.dll код ошибки содержится в младших 16-и битах
+		if (!nFormatRc && (HIWORD(nVal)==0x8007))
+		{
+			nFormatRc = FormatMessageW( FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+				(hSource ? FORMAT_MESSAGE_FROM_HMODULE : 0) |
+				FORMAT_MESSAGE_FROM_SYSTEM | 
+				FORMAT_MESSAGE_IGNORE_INSERTS, 
+				hSource, LOWORD(nVal), 
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &lpMsgBuf, 0, NULL );
+			if (nFormatRc)
+				nLookupErr = LOWORD(nVal);
+		}
+		//A.I. 0xC000xxxx - это скорее всего ошибка из NTSTATUS (ntdll.dll)
+		if (!nFormatRc && (HIWORD(nVal)==0xC000 || HIWORD(nVal)==0x8000 || HIWORD(nVal)==0x4000))
+		{
+			nFormatRc = FormatMessageW( FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+				FORMAT_MESSAGE_FROM_HMODULE |
+				FORMAT_MESSAGE_FROM_SYSTEM | 
+				FORMAT_MESSAGE_IGNORE_INSERTS, 
+				hNtDll, nVal, 
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &lpMsgBuf, 0, NULL );
+			if (nFormatRc)
+			{
+				lbNtDll = true;
+				pszModule = L"ntdll.dll";
+			}
+		}
+
+
+		wchar_t szTitle[512], szDec[64], szMnemo[96];
+		LookupErrName(nLookupErr, szMnemo, pszModule);
+		DWORD nSev = /*HRESULT_SEVERITY(nVal)*/ ((nVal >> 30) & 0x3);
+		DWORD nFac = HRESULT_FACILITY(nVal);
+		
+		wsprintf(szDec, nSev ? L"Dec=%i, Word=%u" : L"Dec=%i", (int)nVal, LOWORD(nVal));
+		
+		if (*szMnemo)
+			wsprintf(szTitle, L"Resolve\nName=%s\nErr=0x%08X, %s\n", szMnemo, nVal, szDec);
+		else
+			wsprintf(szTitle, L"Resolve\nErr=0x%08X, %s\n", nVal, szDec);
+			
+		if (nSev || nFac)
+		{
+			// 2 бита на Severity не только у NTSTATUS но и у WINERROR
+			// 1 бит заявлен только для HRESULT, но и то... Microsoft путается в показаниях...
+			//if (lbNtDll)
+			//{
+			switch(nSev)
+			{
+			case 0: lstrcatW(szTitle, L"STATUS_SEVERITY_SUCCESS, "); break;
+			case 1: lstrcatW(szTitle, L"STATUS_SEVERITY_INFORMATIONAL, "); break;
+			case 2: lstrcatW(szTitle, L"STATUS_SEVERITY_WARNING, "); break;
+			default: lstrcatW(szTitle, L"SEVERITY_ERROR, ");
+			}
+			//}
+			//else
+			//{
+			//	lstrcatW(szTitle, nSev ? L"SEVERITY_ERROR, " : L"SEVERITY_SUCCESS, ");
+			//}
+			
+			bool bFound = false;
+			for (size_t i = 0; i < ARRAYSIZE(Facs); i++)
+			{
+				if (Facs[i].nFac == nFac)
+				{
+					bFound = true;
+					lstrcatW(szTitle, Facs[i].sFac);
+					lstrcatW(szTitle, L"\n");
+					break;
+				}
+			}
+			
+			if (!bFound)
+			{
+				wsprintfW(szTitle+lstrlenW(szTitle), L"Facility=%i\n", nFac);
+			}
+		}
+
+
+		if (nFormatRc)
 		{
 			while ((pszFull = wcsstr(lpMsgBuf, L"\r\n")) != NULL)
 			{
 				pszFull[0] = L' '; pszFull[1] = L'\n';
 			}
 
-			pszFull = (WCHAR*)calloc(200+lstrlen(lpMsgBuf),2);
-			wsprintf(pszFull, L"Resolve\nErrCode=0x%08X (%i)\n\n%s\nOK", nVal, (int)nVal,
-				(WCHAR*)lpMsgBuf);
+			pszFull = (WCHAR*)calloc(64+lstrlen(lpMsgBuf)+lstrlen(szTitle),2);
+			wsprintf(pszFull, L"%s\n%s\nOK", szTitle, (WCHAR*)lpMsgBuf);
 			LocalFree(lpMsgBuf);
 		}
 		else
 		{
-			pszFull = (WCHAR*)calloc(200,2);
-			wsprintf(pszFull, L"Resolve\nErrCode=0x%08X (%i)\n\nCan't get description\nOK", nVal, (int)nVal);
+			pszFull = (WCHAR*)calloc(lstrlen(szTitle)+128,2);
+			wsprintf(pszFull, L"%s\nCan't get description\nOK", szTitle);
 		}
+		MCHKHEAP;
 
 		psi.Message(_PluginNumber(guid_Msg3), FMSG_ALLINONE|FMSG_WARNING|FMSG_LEFTALIGN, NULL, 
 		(const wchar_t * const *)pszFull, 0, 1);
 
 		free(fdid.PtrData);
 		free(pszFull);
-
+		if (pszSrc)
+			free(pszSrc);
+		if (hSource)
+			FreeLibrary(hSource);
+		MCHKHEAP;
 	}
 	else
 	{
@@ -788,6 +964,7 @@ void DoResolve(HANDLE hDlg)
 	nLen = psi.SendDlgMessage(hDlg, DM_GETTEXTLENGTH, ExprId, 0);
 	if (nLen>0 && nLen<1000)
 	{
+		MCHKHEAP;
 		WCHAR szText[1024];
 		FarDialogItemData fdid;
 		fdid.PtrLength = nLen+1;
@@ -814,6 +991,7 @@ void DoResolve(HANDLE hDlg)
 
 		TCHAR TempDir[MAX_PATH];
 		FSF.MkTemp(TempDir,ARRAYSIZE(TempDir),L"Rsl");
+		MCHKHEAP;
 
 		BOOL lbRc = pResolve->OnResolve(
 			TempDir,
@@ -828,6 +1006,7 @@ void DoResolve(HANDLE hDlg)
 		psi.RestoreScreen(hScr);
 
 		psi.SendDlgMessage(hDlg, DM_SHOWDIALOG, TRUE, 0);
+		MCHKHEAP;
 
 		if (lbRc)
 		{
@@ -839,7 +1018,7 @@ void DoResolve(HANDLE hDlg)
 			psi.Message(_PluginNumber(guid_Msg3), FMSG_ALLINONE|(lbRc ? 0 : FMSG_WARNING)|FMSG_LEFTALIGN|FMSG_MB_OK, NULL, 
 				(const TCHAR * const *)lsResult, 0, 0);
 		}
-			
+		MCHKHEAP;			
 	}
 }
 
@@ -882,6 +1061,7 @@ FARDLGRET WINAPI ResolveDlgProc(
 					DoErrLookup(hDlg);
 				else
 					DoResolve(hDlg);
+				MCHKHEAP;
 			}
 		}
 		return FALSE;
@@ -893,17 +1073,20 @@ FARDLGRET WINAPI ResolveDlgProc(
 		case ResolveBtnId:
 			{
 				DoResolve(hDlg);
+				MCHKHEAP;
 			}
 			break;
 		case ErrLookBtnId:
 			{
 				DoErrLookup(hDlg);
+				MCHKHEAP;
 			}
 			break;
 		case Copy1BtnId:
 		case Copy2BtnId:
 		case Copy3BtnId:
 			{
+				MCHKHEAP;
 				INT_PTR nName = psi.SendDlgMessage(hDlg, DM_GETTEXTLENGTH, ExprId, 0);
 				INT_PTR nType = psi.SendDlgMessage(hDlg, DM_GETTEXTLENGTH, TypeId, 0);
 				INT_PTR nVal  = psi.SendDlgMessage(hDlg, DM_GETTEXTLENGTH, ValueId, 0);
@@ -950,6 +1133,7 @@ FARDLGRET WINAPI ResolveDlgProc(
 						(const TCHAR * const *)_T("CPP Resolve\nClipboard failed"), 0, 0);
 					GlobalFree(hMem);
 				}
+				MCHKHEAP;
 			}
 			break;
 		}

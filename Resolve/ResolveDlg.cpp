@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 CResolveDlg::CResolveDlg()
 {
 	m_szConstant = NULL;
+	ms_TempDir = NULL;
 
 	ms_CurDir = (TCHAR*)calloc(1000, sizeof(TCHAR));
 	GetCurrentDirectory(1000, ms_CurDir);

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<renewal>
+	<!--
+		This file contains static information about the supported plug-ins.
+		Do not change it manually - it can be overwritten during an upgrade.
+		Custom settings can be specified in the file RenewalCustom.xml.
+
+		Format description:
+		<plugin guid="[plugin's GUID]">
+			<url arch="[Architecture]">[Web page URL with link to download plugin's archive package]</url>
+			<regex arch="[Architecture]">[Regular expression with version description, also used as link to download]</regex>
+			<srcpath arch="[Architecture]">[Source folder path]</srcpath>
+			<dstpath arch="[Architecture]">[Destination folder path]</dstpath>
+			<postinstall arch="[Architecture]">[Post install command. Executed in cmd.exe in plugins folder after install]</postinstall>
+		</plugin>
+
+		[Architecture] can be "x86" for Intel x86 architecture;
+		                      "x64" for AMD x86-64 architecture;
+		                      "any" for both architectures;
+		<srcpath> and <dstpath> is folders used to determine correct location:
+		    [Unpack folder]\[srcpath] -> Far\Plugins\[Plugin dir]\[dstpath]
+	-->
+
+	<!-- Resolve -->
+	<plugin guid="{FC5E35F4-02F8-4DC0-9ACC-F6B6C962A51C}">
+		<url arch="any">http://code.google.com/p/conemu-maximus5/downloads/list</url>
+		<!-- "Resolve.1.2.7z", or may be "Resolve.1.2.2555.7z" -->
+		<regex arch="any">//conemu-maximus5.googlecode.com/files/Resolve\.(\d+)\.(\d+)(\.(\d+))*\.7z</regex>
+		<postinstall arch="x86">del &quot;ResolveW.dll&quot; &quot;ResolveW x64.dll&quot; &quot;ResolveW3 x64.dll&quot;</postinstall>
+		<postinstall arch="x64">del &quot;ResolveW.dll&quot; &quot;ResolveW x64.dll&quot; &quot;ResolveW3.dll&quot;</postinstall>
+	</plugin>
+
+</renewal>
