@@ -28,38 +28,24 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include "VConRelease.h"
+
 class CVirtualConsole;
+class CVConGuard;
 
-class CVConRelease
+class CVConGroup
+	// : public VConRelease
 {
-private:
-	LONG volatile mn_RefCount;
-public:
-	CVConRelease();
-	void AddRef();
-	int Release();
 protected:
-	virtual ~CVConRelease();
-};
-
-class CVConGuard
-{
-private:
-	CVirtualConsole *mp_Ref;
+	CVirtualConsole* mp_VCon[MAX_CONSOLE_COUNT];
+	CVirtualConsole* mp_VActive;
 	
 public:
-	CVConGuard();
-	CVConGuard(CVirtualConsole* apRef);
-	~CVConGuard();
-	void Release();
-
+	CVConGroup();
+	~CVConGroup();
 public:
-	// Dereference
-	CVirtualConsole* operator->() const;
-
-	// Releases any current VCon and loads specified
-	CVConGuard& operator=(CVirtualConsole* apRef);
-	
-	// Ptr, No Asserts
-	CVirtualConsole* VCon();
+	CVConGuard& ActiveVCon();
+	int GetActiveVCon();
+	CVConGuard& GetVCon(int nIdx);
+	CVConGuard& GetVConFromPoint(POINT ptScreen);
 };
