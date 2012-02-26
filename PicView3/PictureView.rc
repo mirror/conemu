@@ -1,0 +1,36 @@
+#define VS_VERSION_INFO                 1
+#include "version.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION MYDLLVERN
+ PRODUCTVERSION MYDLLVERN
+ FILEFLAGSMASK 0x17L
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILESUBTYPE 0x0L
+ FILEOS 0x4L
+ FILETYPE 0x2L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041904b0"
+        BEGIN
+            VALUE "FileDescription", "PictureView"
+            VALUE "FileVersion", MYDLLVERS
+            VALUE "LegalCopyright", "© Skakov Pavel, 2009. © Maximus5, 2009-2011"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x419, 1200
+    END
+END
+/////////////////////////////////////////////////////////////////////////////

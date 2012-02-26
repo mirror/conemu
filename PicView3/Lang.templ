@@ -1,0 +1,546 @@
+﻿#hpp file name
+PictureView_Lang.h
+#number of languages
+2
+#id:0 language file name, language name, language description
+lng\PictureView_ru.lng Russian "Russian (Русский)"
+#id:1 language file name, language name, language description
+lng\PictureView_en.lng English "English"
+
+#head of the hpp file
+hhead:
+hhead:#pragma once
+hhead:
+
+#tail of the hpp file
+#htail:
+#htail:
+#and so on as much as needed
+
+#--------------------------------------------------------------------
+#now come the lng feeds
+#--------------------------------------------------------------------
+#first comes the text name from the enum which can be preceded with
+#comments that will go to the hpp file
+#h://This comment will appear before MYes
+#he://This comment will appear after MYes
+#MYes
+#now come the lng lines for all the languages in the order defined
+#above, they can be preceded with comments as shown below
+#l://This comment will appear in all the lng files before the lng line
+#le://This comment will appear in all the lng files after the lng line
+#ls://This comment will appear only in Russian lng file before the lng line
+#lse://This comment will appear only in Russian lng file after the lng line
+#"Да"
+#ls://This comment will appear only in English lng file before the lng line
+#lse://This comment will appear only in English lng file after the lng line
+#"Yes"
+#ls://This comment will appear only in Czech lng file before the lng line
+#lse://This comment will appear only in Czech lng file after the lng line
+#upd:"Ano"
+#
+#lng lines marked with "upd:" will cause a warning to be printed to the
+#screen reminding that this line should be updated/translated
+
+MIPluginName=0
+l:// Plugin title
+"Picture View 3"
+"Picture View 3"
+
+MIQViewPanelTitle
+" Быстрый просмотр "
+" Quick view "
+
+
+
+MIOK
+l:
+"OK"
+"OK"
+
+MICancel
+"Отмена"
+"Cancel"
+
+
+
+MIMain
+l:
+l:// TABs in main config dialog
+"&1Главн"
+"&1Main"
+
+MIDecoders
+"&2Модули"
+"&2Modules"
+
+MIAdvanced
+"&3Доп"
+"&3Misc"
+
+MIOSD
+"&4OSD"
+"&4OSD"
+
+MILOG
+"&5Отчёт"
+"&5Log"
+
+
+
+MIHook
+l:
+l:// Main config TAB
+"Обрабатываемые операции, префикс:"
+"Process actions, prefix:"
+
+MIHookArc
+"В&ход в архив"
+"Ente&r archive"
+
+MIHookQuickView
+"Б&ыстрый просмотр"
+"&QuickView"
+
+MIHookView
+"&Просмотр"
+"&View    "
+
+MIHookCtrlShiftF3
+"CtrlSh&iftF3"
+"CtrlSh&iftF3"
+
+MIHookEdit
+"&Редактирование"
+"&Edit    "
+
+MIHookCtrlShiftF4
+"CtrlShif&tF4"
+"CtrlShif&tF4"
+
+MIUseDecoders
+" Общие интерфейсы декодеров "
+" Common decoder interfaces "
+
+MIAutoCaching
+"Опережающее декодирование:"
+"Advance decoding of neighbor images:"
+
+MIAutoCachingRP
+"В р&еальных панелях"
+"In real panel&s"
+
+MIAutoCachingVP
+"В в&иртуальных панелях"
+"In virt&ual panels"
+
+MIMiscSettings
+"Различные параметры:"
+"Miscellaneous settings:"
+
+MITrayDisable
+"Скрыва&ть панель задач в полноэкранном режиме"
+"&Hide taskbar in fullscreen mode"
+
+MIFullscreen
+"Полно&экранный режим при запуске"
+"&Fullscreen on startup"
+
+MILoopJump
+"Переходить по кру&гу"
+"Loop &jumping"
+
+MIMarkBySpace
+"Помечать клавишей Space"
+"&Mark by Space"
+
+MIFreePosition
+"&Свободное позиционирование"
+"Free positionin&g"
+
+MIFullDirectDrawInit
+"Полная переинициализация &дисплея"
+"Full reinitialization of &Display"
+
+MIAutoPagingKey
+"Листание"
+"Paging key"
+
+MIAutoPagingSet
+"Включать"
+"Auto set"
+
+MICMYKtoRGBprocessing
+"Преобразование CMYK в RGB"
+"CMYK to RGB processing"
+
+MICMYKtoRGBFast
+"Быстрое"
+"Fast"
+
+MICMYKtoRGBApproximate
+"Примерное"
+"Approximate"
+
+MICMYKtoRGBPrecise
+"Точное"
+"Precise"
+
+
+
+
+
+MIPVDDecoderList
+l:
+l:// Modules config TAB
+#"PVD (Имя|запрет|неактивные|активные)"
+"Имя PVD    |Запрещ. |Неактив.|Активные расширения"
+#"PVD (Name|forbid|inactive|active)"
+"PVD name   |Forbid. |Inactive|Active extensions  "
+
+MIPVDActiveDisplayModule
+"Модуль вывода по умолчанию:"
+"Default display module:"
+
+MIIgnoredExtensions
+" Необрабатываемые &расширения через запятую "
+" Ignored &extensions (comma-separated) "
+
+MIIgnoredExtensionsBtn
+"Сброс"
+"Reset"
+
+
+
+
+MIAutoZoomSettings
+l:
+l:// Advanced config TAB
+"Автомасштабирование:"
+"Autosize:"
+
+MIAutoZoomOnImageLoad
+"&Авторазмер при загрузке изображения"
+"&Autosize on image load"
+
+MIAutoZoomLimitMin
+"Ми&нимальный масштаб:"
+"Mi&nimal size:"
+
+MIAutoZoomLimitMax
+"Ма&ксимальный масштаб:"
+"Ma&ximal size:"
+
+MIKeepZoomBetweenFiles
+"Удерживать масштаб/положение при смене изображений"
+"Keep zoom and pos between pictures"
+
+MIKeepPosCenter
+"От &центра изображения"
+"From image &center"
+
+MIKeepPosFromEdges
+"От &краев изображения"
+"From image &edges"
+
+MIKeepZoomOnly
+"Удерживать только &масштаб"
+"Keep &zoom only"
+
+MIKeyboardScrollingAndZooming
+"Прокрутка и масштабирование с клавиатуры:"
+"Keyboard scrolling and zooming:"
+
+MISmoothScrolling
+"Плавная &прокрутка:"
+"Smooth &scrolling:"
+
+MISmoothZooming
+"Плавное &масштабирование:"
+"Smooth &zooming:"
+
+MIMouseZoomMode
+"Режим масштабирования с мышки:"
+"Mouse zoom mode:"
+
+MIMouseZoomSimple
+"&В центр видимой области"
+"T&o center of current view"
+
+MIMouseZoomCenter
+"&Центрировать выбранную точку"
+"&Center point under cursor"
+
+MIMouseZoomHoldPos
+"&Удерживать выбранную точку"
+"&Hold point under cursor"
+
+
+
+
+MIBackgroundColor
+l:
+l:// OSD config TAB
+"Цвет &фона:"
+"&Background:"
+
+MIBackgroundQView
+"QView:"
+"&QView:"
+
+MISelect
+"..."
+"..."
+
+MITitleTemplate
+" Шаблон &заголовка "
+" &Title template "
+
+MITitleTemplateReset
+"Сброс"
+"Reset"
+
+MIQViewTemplate
+" Шаблон QView "
+" QView template "
+
+MIQView1
+"&Строка 1:"
+"&Line 1:"
+
+MIQView2
+"С&трока 2:"
+"L&ine 2:"
+
+MIQView3
+"Ст&рока 3:"
+"Li&ne 3:"
+
+
+
+
+
+MISubpluginSettings
+l:
+l:// Subplugin config & About
+"Настройки субплагина"
+"Subplugin settings"
+
+MISubpluginResetExt
+"Сбросить"
+"Reset"
+
+MISubpluginReloadExt
+"Проверить"
+"Reload"
+
+MISubpluginActiveExtensions
+"Активные расширения через запятую"
+"Active extensions"
+
+MISubpluginInactiveExtensions
+"Неактивные расширения"
+"Inactive extensions"
+
+MISubpluginForbiddenExtensions
+"Запрещенные расширения"
+"Forbidden extensions"
+
+MISubpluginDefaultPriority
+"Приоритет по умолчанию"
+"Default priority"
+
+MISubpluginName
+"Название субплагина"
+"Subplugin name"
+
+MISubpluginVersion
+"Версия (?)"
+"Version (?)"
+
+MISubpluginVersionI1
+"Версия (i1)"
+"Version (i1)"
+
+MISubpluginVersionI2
+"Версия (i2)"
+"Version (i2)"
+
+MISubpluginFlags
+"Свойства"
+"Features"
+
+MISubpluginComments
+"Комментарий"
+"Subplugin comments"
+
+MISubpluginFullPathName
+"Полный путь к субплагину"
+"Subplugin FullPathName"
+
+MISubpluginMessages
+"Статус субплагина"
+"Subplugin status"
+
+MISubpluginReload
+"Загрузить"
+"&Reload"
+
+MISubpluginUnload
+"Выгрузить"
+"&Unload"
+
+MISubpluginAbout
+"О модуле (F3)"
+"About (F3)"
+
+MIAddTitleConfig
+" [Настройка]"
+" [Config]"
+
+MIAddTitleAbout
+" [О модуле]"
+" [About]"
+
+
+
+
+
+
+MIWallpaperConfirm
+"Установить текущее изображение как фон рабочего стола?"
+"Set current image as desktop wallpaper?"
+
+
+
+
+
+MIModuleWasNotLoaded
+l:
+l:// Subplugin statuses & errors
+"-- Ошибка загрузки модуля --"
+"-- Module was not loaded --"
+
+MIDisplayModule
+"-- Модуль отображения --"
+"-- Display module --"
+
+MIPostprocessingModule
+"-- Модуль обработки --"
+"-- Postprocessing module --"
+
+MIUnknownModuleType
+"-- Неизвестный тип модуля --"
+"-- Unknown module type --"
+
+MIModuleInfoNotLoaded
+"«данные не были загружены»"
+"«module info was not loaded»"
+
+MICantLoadLibrary
+"Ошибка загрузки библиотеки плагина"
+"Can't load subplugin library"
+
+MIPluginUnloaded
+"Плагин был выгружен"
+"Unloaded"
+
+MISubpluginFileNotFound
+"Файл субплагина не найден!"
+"Subplugin file not found!"
+
+MISubpluginLoadingFailed
+"Ошибка загрузки субплагина!"
+"Subplugin loading failed!"
+
+
+
+
+
+MICantProcessCMYKpalette
+l:
+l:// CMYK palette messages
+"Не удалось загрузить палитру CMYK"
+"Can't process CMYK palette file"
+
+MICMYKCoInitializeFailed
+"Ошибка CoInitialize. Код=0x%08X"
+"CoInitialize failed. Code=0x%08X"
+
+MICMYKLoadLibraryFailed
+"Ошибка LoadLibrary(GdiPlus.dll). Код=0x%08X"
+"LoadLibrary(GdiPlus.dll) failed. Code=0x%08X"
+
+MICMYKBadGdiFlat
+"Не найдена одна из функций GdiPlus flat api!"
+"One of GdiPlus flat api functions not found!"
+
+MICMYKGdipStartupFailed
+"Ошибка GdiplusStartup. Код=%i"
+"GdiplusStartup failed. Code=%i"
+
+MICMYKCreateBitmapFailed
+"Ошибка GdipCreateBitmapFromFile(CMYK.png). Код=%i"
+"GdipCreateBitmapFromFile(CMYK.png) failed. Code=%i"
+
+MICMYKLockBitsFailed
+"Ошибка GdipBitmapLockBits. Код=%i"
+"GdipBitmapLockBits failed. Code=%i"
+
+MICMYKStartThreadFailed
+"Ошибка CreateThread(CMYK_ThreadProc). Код=0x%08X"
+"CreateThread(CMYK_ThreadProc) failed. Code=0x%08X"
+
+MICMYKpaletteInvalidSize
+"Размер файла палитры должен быть 256x256"
+"Palette file size must be 256x256"
+
+MICMYKpaletteInvalidBPP
+"Глубина цвета должна быть 24 бита"
+"Palette file bit depth is not 24bpp"
+
+MICMYKpaletteInvalidColor
+"Изображение должно быть декодировано в BGR"
+"Only BGR color model is supported"
+
+#MICMYKpaletteCantOpen
+#"Ни один декодер не смог открыть файл палитры"
+#"No one decoder can load palette file"
+
+MIMemoryAllocationFailed
+"Ошибка выделения памяти"
+"Memory allocation failed"
+
+MIDecoderColon
+"Декодер: "
+"Decoder: "
+
+
+
+
+
+MIConEmuPluginWarning
+l:
+l:// Error message boxes
+"Picture View 3\nОШИБКА: Отображение картинки невозможно\nРодительское окно (FAR Manager'а) невидимое\nВозможно, FAR запущен в ConEmu без плагина ConEmu"
+"Picture View 3\nERROR: Cannot display image\nParent window (FAR manager) is invisible\n(Probably FAR was started in ConEmu without ConEmu plugin)"
+
+MIOpenImgPlugException
+"Picture View 3\nИсключение при OpenImagePlugin!"
+"Picture View 3\nOpenImagePlugin raised an exception!"
+
+MIOpenUnknownExtension
+"Picture View 3\nРасширение файла не подходит ни одному декодеру."
+"Picture View 3\nNo decoder for this file extension"
+
+MIOpenFailedMsg
+"Picture View 3\nНи один декодер не смог открыть файл.\nБолее подробную информацию смотрите\nна вкладке [Отчёт] диалога настроек плагина."
+"Picture View 3\nNo decoder can open file\nSee details on [Log] tab of Configuration dialog"
+
+MIPluginNameError
+"Picture View 3\nИмя файл плагина должно начинаться с '0'.\nВ противном случае возможны проблемы с листанием."
+"Picture View 3\nFirst char of plugin file name must be '0'\nOtherwise paging may be impossible"
+
+MIFarBuildError
+"Picture View 3\nЭта версия FAR 2 не поддерживается.\nОбновите FAR 2."
+"Picture View 3\nThis version of FAR manager is not supported\nPlease, update FAR 2"

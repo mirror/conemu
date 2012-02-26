@@ -1,0 +1,701 @@
+﻿.Language=English,English
+.PluginContents=PictureView
+
+@Contents
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+ This plugin allows to view or QView pictures of miscellaneous formats directly in
+ the #FAR Manager# window. Plugin works with pictures via subplugins (decoders).
+ 
+ #Short list of features#
+ • Many decoders and hundreds of formats are supported
+ • Multipage and animated pictures
+ • Smooth zooming and panning
+ • Advance decoding of neighbor images
+ • Transparency and partially transparency
+
+
+ ~Keyboard and mouse~@Controls@
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+ ~Advanced settings~@AdvSettings@
+ ~OSD~@OSD@
+ ~LOG~@LOG@
+
+
+@Controls
+$^#Keyboard and mouse#
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+
+    #Control commands#
+
+  Exit                                                   #Esc, F10, F3, Enter#
+                                                          #Right Mouse Button#
+
+  Next/Previous file      #Space/Backspace, PageDown/PageUp, «N»/«B», «[»/«]»#
+    Current file will be marked if Space is pressed              #Mouse Wheel#
+    and option «Mark by Space» is turned on.
+
+  Next/Previous page from file (e.g. in *.tif, *.pdf files)
+                #Ctrl# plus #Space/Backspace, PageDown/PageUp, «N»/«B», «[»/«]»#
+                                                      #Ctrlt# plus #Mouse Wheel#
+
+  First/Last picture                                       #Home/End, «R»/«E»#
+
+  Jump to page with number                                   #Numbers + Enter#
+
+  Reopen file with Next/Previous decoder               #Alt# + #PageDown/PageUp#
+
+  Switch normal/fullscreen viewing                             #Numpad 5, «F»#
+                                                #Left Mouse Button Doublelick#
+
+  Scrolling                                            #Left, Right, Up, Down#
+    Holding #Alt# switch smooth scrolling                       #Mouse dragging#
+    with Left, Right, Up and Down.
+ 
+ 
+    #Control commands for Zooming#
+ 
+  Switch Autozoom/100%                                                #Gray /# 
+                                                   #Middle Mouse Button Click#
+    
+  Switch Zoom 100% / Autozoom «Fit» / Autozoom «Fill»                 #Gray *#
+
+  Zoom 100%                                                    #Ctrl-<Gray *># 
+
+  Autozoom «Fit»                                              #Shift-<Gray *># 
+
+  Autozoom «Fill»                                               #Alt-<Gray *># 
+
+  Zooming                                                 #<Gray +>, <Gray -># 
+    Holding #Alt# switch smooth zooming with «+»/«-».
+                       #Mouse Wheel# with #Shift# or #Left Mouse Button depressed#
+
+
+    #Other Control commands#
+
+  Turn current file selection on/off                                #Ins, Del#
+ 
+  This help                                                               #F1#
+  Configuration dialog                                            #AltShiftF9#
+  Configuration dialog, Modules page, active decoder selected             #F9#
+  Reload picture (may not works sometimes)                                #F5#
+
+  Show windows taskbar                                     #Ctrl-Alt-Shift-F2#
+    (if plugin was improperly terminated and taskbar was not displayed)
+ 
+ 
+Notes:
+
+ Far may hang, after switching to another window, when help or configuration is shown.
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+ ~PictureView description~@Contents@
+
+@Settings
+$^#Main plugin settings#
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+
+#Using decoder interfaces#
+ PictureView plugin can handle pictures via PVD interface only. Read ~here~@Modules@ about tuning.
+
+
+#Process actions#
+ Select type of actions, plugin'll handle.
+
+ #Plugin prefix#. Activation by prefix - is preferable method. Default prefix is #pic#.
+But, You must create file associations. I.e., to viewing pictures
+by #F3# create file association (F9 C A Insert) for extensions
+#*.jpg,*.bmp,*.gif,*.tif,*.png,*.djvu#, and put #pic:!.!# in the field #View command#.
+
+ Turning on #Enter archive# checkbox allows plugin to catch #Enter# and #CtrlPgDn# in
+panels, whith cursor on the file.
+
+ #View# and #Editr# activates plugin on every open of internal viewer or editor. Cause of
+this opening is unimportant (F3, F4, macro, ...) By default, plugin will not catch viewer or editor
+when #Ctrl+Shift# is depressed. So, You may view or edit file source by #CtrlShiftF3#/#CtrlShiftF4#.
+You may ignore #Ctrl+Shift# state by turning on #CtrlShiftF3# and #CtrlShiftF4# checkboxes.
+
+ #QuickView# allows display pictures in the CtrlQ panel (FAR's QuickView panel).
+
+
+#Advance decoding of neighbor images#
+ This allows plugin to decode next/previous picture, while You are looking current picture.
+ Unfortunately, advance decoding in plugin panels is unstable.
+
+#Hide taskbar in fullscreen mode#
+ Not actual for Windows XP and higher.
+ Remove taskbar blinking in some cases. However, on abnormal plugin termination taskbar'll left hidden (use CtrlAltShiftF2 on next plugin activation to restore taskbar).
+
+#Fullscreen on startup#
+ On first picture open in FAR session plugin will starts in Fullscreen mode.
+Plugin remembers last Fullscreen state and does not depends on this option any more in this FAR session.
+
+#Loop jumping#
+ Paging to next file on the last file involve jumping to first file, to previous file on the first - to the last file.
+
+#Mark by Space#
+ When this checkbox is turned on - pressing Space involves not only jumping to the next file, but also marking current file.
+
+#Free positioning#
+ When #unchecked# small pictures locked in window center, scrolling out of picture borders is disabled.
+ When #checked# You may scroll out of picture borders.
+
+#Full reinitialization of Display#
+ Some slower startup (using DirectX), but exclude FAR restart after screen resolution change.
+
+#Paging key# and #Auto set#
+ While looking at multipage pictures listing pages performs while holding #Ctrl#.
+However, holding #Ctrl# is not comfortable. You may choose one of modifier-keys (Caps/Scroll/Num) turning which will
+invert meaning of Ctrl holding while pressing paging keys. Turn on checkbos #Paging key# to enable this feature.
+ When checkbox #Auto set# is turned on, modifier-key will be auto-toggled for the first file in series
+(on multipage #non#animated pictures - turned on, otherwise - turned off).
+
+#CMYK to RGB processing#
+ Some decoders returns CMYK picture data in RGB colorspace, but colorspace conversion is not always proper.
+In others (~GFL.pvd~@GFL.pvd@) You can disable CMYK->RGB conversion, forcing decoder to returns raw CMYK data.
+PictureView may handle CMYK images himself, and You can choose type of CMYK->Display conversion:
+#Fast#, #Approximate# or #Precise#.
+ #Fast# conversion uses most fast, but least accurate algorithm {R=255-C-K; G=255-M-K; B=255-Y-K;}.
+This method is used by most of decoders (GFL, AcdSee, and so on).
+ #Approximate# or #Precise# gives colors much closer to #CMYK U.S. Web Coated (SWOP) v2#.
+ This methods use #palette file CMYK.png#. On #Precise# conversion result is adjusted by two nearest palette points.
+ All conversions uses CPU, which may take extra time to display picture.
+
+
+ ~List of modules~@Modules@
+ ~Advanced settings~@AdvSettings@
+ ~OSD~@OSD@
+ ~LOG~@LOG@
+ ~PictureView description~@Contents@
+
+@AdvSettings
+$^#Extended settings#
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+
+#Autosize:#
+
+ #Autosize on image load#
+  При открытии изображения включается режим автомасштабирования под видимую область.
+  При выключенной опции - устанавливается масштаб 100%.
+
+ #Minimal size# and #Maximal size#
+  Позволяет ограничить диапазон масштабов в режиме автомасштабирования.
+  Например, чтобы запретить автоматически увеличивать изображения, нужно поставить ограничение на максимальный масштаб в 100%.
+
+ #Keep zoom and pos between pictures#
+  Если авторазмер отключён (отключён флажок или при просмотре выбран произвольный масштаб), то при листании
+файлов масштаб и точка просмотра будут сохраняться. Вы можете выбрать точку, относительно которой будет
+удерживаться положение изображения при листании: #From image center# или #From image edges#.
+
+
+#Keyboard scrolling and zooming:#
+
+ Текущие режимы (плавные/нет) прокрутки и масштабирования переключаются на противоположные при нажатии с Alt.
+
+ #Smooth scrolling#
+  Разрешает плавную прокрутку по умолчанию.
+  Параметр задаёт сдвиг за шаг в пикселях, то есть скорость прокрутки.
+
+ #Smooth zooming#
+  Разрешает плавное изменение масштаба по умолчанию.
+  Параметр задаёт коэффициент изменения за шаг в десятых долях процента, то есть скорость масштабирования.
+
+
+#Mouse zoom mode:#
+
+ #To center of current view#
+  При изменении масштаба центральная точка видимой области остаётся неподвижной.
+  Полностью эквивалентно масштабированию с клавиатуры.
+
+ #Center point under cursor#
+  При изменении масштаба точка под курсором мыши становится центром видимой области.
+
+ #Hold point under cursor#
+  При изменении масштаба точка под курсором мыши остаётся неподвижной.
+
+
+#Background#
+ Позволяет выбрать цвет для неиспользуемой области вокруг изображения (0xbbggrr).
+ Цвет для полнооконного (полноэкранного) режима и QView задаются раздельно.
+ При нажатии кнопки #[ ... ]# запускается стандартный диалог выбора цвета, от чего Far иногда зависает.
+
+
+
+
+ ~Main settings~@Settings@
+ ~PictureView description~@Contents@
+
+@OSD
+$^#OSD#
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+
+#Шаблон заголовка#
+ Задаёт формат заголовка окна Far'а во время работы плагина. Пустая строка означает возврат к стандартной.
+ Строка формата может содержать обычные символы, которые просто копируются в заголовок окна, и #спецсимволы#, начинающиеся с «\».
+ Для удобства редактирования длинных строк шаблонов рекомендую попробовать плагин #DialogTools#.
+
+#Шаблон QView#
+ Задаёт формат трёх информационных строк панели QView во время работы плагина. Если строка пустая - соответствующая
+строка панели тоже будет пустая (забита пробелами или линией). Как и в #шаблоне заголовка#, здесь могут содержаться и
+обычные символы, и #спецсимволы#, начинающиеся с «\».
+ В #шаблоне QView# допускается использование символов выравнивания.
+ Если строка начинается с #$#, строка выравнивается по центру.
+ Если строка начинается с# ## #, строка выравнивается по правому краю.
+
+ Любой из шаблонов можно вернуть к стандартному, нажав кнопку #Сброс#.
+
+
+ Спецсимволы:
+
+  \\ - символ «\»
+  \B - количество бит на пиксель
+       \B0 - количество бит на пиксель в декодированном изображении
+  \C - тип сжатия
+  \D - имя декодера
+  \E - время декодирования в формате «#открытие#+#декодирование#+#перенос#+#отображение#» в миллисекундах
+  \F - название формата изображения
+  \H - ширина изображения
+       \H0 - ширина декодированной области
+  \I - номер текущего файла и общее количество файлов
+  \M - комментарии к изображению
+  \N - имя файла изображения
+       \NLxxx - xxx (число) ограничение длины имени файла
+  \P - текущая страница изображения и общее количество страниц
+  \Q - путь файла изображения
+  \R - имя модуля вывода
+  \T - время декодирования в миллисекундах
+  \W - ширина изображения
+       \W0 - ширина декодированной области
+  \Z - текущий масштаб в процентах
+
+  \{* и \} - условный оператор - текст между этими двумя спецсимволами включается в заголовок, только если выполнено условие, заданное на месте *:
+
+   C - есть информация о типе сжатия
+   F - есть информация о формате изображения
+   I - известен номер текущего файла и общее количество файлов
+   M - есть комментарии к изображению
+   P - многостраничное изображение
+   S - файл изображения помечен в Far'е
+   T - изображение декодировано (в процессе декодирования недоступна информация спецсимволов \I, \T, \Z)
+   W - есть информация о размере изображения
+
+   Неизвестные условия считаются невыполненными.
+   Маленькие буквы задают отрицание условия аналогичной заглавной буквы.
+   Вложенные условия поддерживаются.
+
+
+
+ ~Plugin settings~@Settings@
+ ~PictureView description~@Contents@
+
+@LOG
+$^#LOG#
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+
+ You can see here all messages and errors from decoders and displays modules.
+
+ ~Plugin settings~@Settings@
+ ~PictureView description~@Contents@
+
+@Modules
+$^#Subplugins (modules)#
+$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+
+ #Начиная с mod13, плагин не имеет встроенных декодеров и работает с изображениями только через интерфейс PVD#
+
+ В поставку плагина входят несколько PVD-декодеров (см. ниже), позволяющих просматривать
+множество форматов изображений. У декодеров могут быть как достоинства, так и
+недостатки. Какой декодер использовать для изображений конкретного формата, вы
+можете указать через настройку декодеров (см. ниже).
+ По умолчанию декодеры настраиваются так, чтобы декодер не пытался открывать
+файлы проблемного для него формата (список игнорируемых расширений декодера).
+ Все настройки (порядок обхода декодеров, игнорируемые и обрабатываемые расширения,
+внутренние настройки самих декодеров и пр.) хранятся в ключах реестра:
+[HKEY_CURRENT_USER\Software\Far2\Plugins\PictureView\#имя.файла.декодера#]
+и могут быть изменены через интерфейс плагина.
+
+
+ #Default display module#
+
+ Начиная с mod15, плагин не имеет встроенного модуля вывода (весь вывод выполняется через интерфейс PVD).
+ В поставку плагина входят два модуля вывода: #DX.pvd# и #GDI+.pvd#. Вы можете выбрать любой из них.
+ ~DX.pvd~@DX.pvd@ работает через DirectX. Отличается высокой производительностью собственно отрисовки
+(zoom, scroll, ...), но не работает в терминальных сессиях. Можно сказать, что при использовании
+этого модуля PictureView работает так же, как и предыдущие версии плагина.
+ ~GDI+.pvd~@GDI+.pvd@ не использует DirectX, а работает через Windows API. С одной стороны, это сильно
+влияет на скорость собственно отрисовки (zoom & scroll работают ощутимо медленнее). С другой стороны,
+при использовании этого же модуля как декодера, PictureView открывает картинки #значительно# быстрее.
+Кроме того, этот модуль должен работать в терминальных сессиях.
+ Некоторые модули вывода в списке могут быть #недоступны# (показаны серыми). Скорее
+всего, это модули #Private display#, совмещённые с декодером. Такие модули
+могут отображать только то, что сами же и декодировали. Эти модули вывода
+активируются автоматически при выборе того же декодера.
+
+
+ #Ignored extensions (comma-separated)#
+
+ В некоторых случаях PictureView может ошибочно открывать архивы (например Zip без
+сжатия) или пытаться открывать файлы, заведомо не являющимися изображениями (txt,
+descript.ion и т.п). Здесь можно указать список расширений, которые плагин не будет
+пытаться открыть вообще. Чтобы не обрабатывать файлы без расширения, укажите
+здесь точку.
+ Пример: #.,zip,rar,7z,cab,exe,dll,avi,mpg,mp3,mp4,mkv,vob,ogg,wav,iso,ape,wv,ion,bbs#
+
+
+ #Настройка декодеров#
+
+ Каждый декодер может быть настроен (F4 или двойной щелчок левой кнопки мыши по строке с декодером).
+Как минимум, в диалоге настройки вы можете указать #Активные (Active)#, #Неактивные (Inactive)# и #Запрещенные (Forbidden)#
+расширения, перечисленные через запятую. Допускается указание #*# (в активных и неактивных - PictureView
+будет пытаться открыть декодером любой файл, в запрещенных - декодер отключён). Для
+файлов без расширения можно указать #точку (.)#.
+
+ При попытке открыть файл изображения, PictureView пытается подобрать декодер по следующим правилам (перебор
+останавливается на первом же декодере, согласившимся открыть изображение):
+ #A#. При явном вызове PicView (F11 или префикс) #не# учитываются #необрабатываемые расширения#.
+ #B#. Декодер #никогда# не вызывается для файла, при попадании в #запрещенные расширения#.
+ #1#. Перебирает декодеры сверху вниз по #активным# расширениям.
+ #2#. Перебирает декодеры сверху вниз по #неактивным# расширениям.
+ #3#. Если на шагах #1# и #2# подобрать декодер #не# удалось, и это первый и явный (F11 или префикс) вызов плагина,
+то плагин пытается открыть файл любым декодером (который ещё не вызывался), с единственным условием - расширение
+#не# попадает в #запрещенные#.
+
+ При попытке открыть #следующий# файл (PgUp/PgDn,...), PictureView перебирает декодеры сверху вниз с учётом активных и неактивных расширений.
+
+
+
+ #Modules in PictureView supply#
+
+ ~GFL.pvd~@GFL.pvd@
+ ~GDI+.pvd~@GDI+.pvd@ (#Decoder and display#)
+ ~DX.pvd~@DX.pvd@ (#DirectX display#)
+ ~DJVU.pvd~@DJVU.pvd@
+ ~WIC.pvd~@WIC.pvd@ (#RAW-formats support and more#)
+ ~ICO.pvd~@ICO.pvd@
+ ~WMF.pvd~@WMF.pvd@
+ ~BMP.pvd~@BMP.pvd@
+ ~Shell.pvd~@Shell.pvd@
+
+
+ #Third party decoders#
+
+ #homme_curieux#
+ ~in_APL.pvd~@in_APL.pvd@   - allows to use ACDSee plugins to decode images.
+ ~in_GFL.pvd~@in_GFL.pvd@
+ ~in_UIC.pvd~@in_UIC.pvd@
+ Download: #http://forum.farmanager.com/viewtopic.php?p=52480##p52480#
+
+ #Max Rusov#
+ ~GdiPlus.pvd~@GdiPlus.pvd@ - fast and smooth decoder and display.
+ Download: #http://forum.farmanager.com/viewtopic.php?f=11&t=4774#
+
+ #HalfElf#
+ ~theX.pvd~@theX.pvd@ - Просмотр спектрумовской графики.
+ Скачать: #http://thex.untergrund.net/pvd/#
+
+
+ ~Main settings~@Settings@
+
+@GFL.pvd
+$^#Module description GFL.pvd#
+
+ Открывает множество форматов (заявлено более 200 расширений файлов). Наиболее
+известные форматы: #BMP,CUR,EMF,EPS,FLC,FLI,GIF,ICO,JPG,PCX,PIC,PNG,PSD,SCR,TGA,TIF,WMF#.
+
+ При установленном ~GhostScript~@http://sourceforge.net/projects/ghostscript/@ может
+открывать файлы формата PDF.
+
+ После установки (просто скопируйте файлы X*.dll в папку плагина) субплагинов GFL
+добавляется поддержка форматов: #FPX,JBIG,JP2,JPEGLS,JNG,SUSIE#. Плагин Xdjvu.dll
+ставить смысла нет, т.к. он не умеет работать с текущей версией стандарта DjVu. Для
+работы с DjVu пользуйтесь ~DJVU.pvd~@DJVU.pvd@.
+ Читайте о GFL-плагинах в файле #GflPlugins.txt#.
+
+ Для работы декодера необходима библиотека libgfl*.dll. Поддерживаются как ANSI,
+так и юникодная версия библиотеки. Плагин рассчитан на версию библиотеки
+3.11, но может работать и с другими версиями.
+
+ К сожалению, декодер GFL имеет проблемы при работе с форматами GIF, PNG, PSD, ICO (а
+возможно, и с другими).
+ #Проблемы с GIF# - некорректно открываются фреймы (>0) в анимированных GIF, отсутствует
+информация о длительности фрейма. Были замечены проблемы с прозрачностью. Для работы с этим форматом рекомендуется
+использовать декодер ~GDI+.pvd~@GDI+.pvd@.
+ #Проблемы с PNG# - не поддерживает alpha-каналы для grayscale и palette-based PNG-файлов. Для работы с этим форматом рекомендуется
+использовать декодер ~GDI+.pvd~@GDI+.pvd@.
+ #Проблемы с PSD# - считает, что изображение прозрачно, даже если alpha-канал в
+файле отключён. Рекомендуется указать формат #PSD# в списке #Ignore alpha channel in formats#
+в параметрах декодера.
+ #Проблемы с ICO# - часто ошибочно считает, что значок непрозрачный. Для работы с этим форматом рекомендуется
+использовать специализированный декодер ~ICO.pvd~@ICO.pvd@.
+ #Проблемы с WMF# - при открытии изображений мусорит в консоль. Для этого формата можно попробовать ~WMF.pvd~@WMF.pvd@.
+ #Проблемы с CMYK# - некорректно преобразовывает (использует «быстрое» преобразование) изображения
+из цветового пространства CMYK в RGB. Поэтому рекомендуется отключать флажок #Convert CMYK to RGB internally#
+в настройках этого субплагина.
+
+ #Рекомендации по настройке GFL.pvd#
+ В настройках декодера укажите:
+ #Необрабатываемые расширения через запятую#     GIF,PNG,ICO
+ #Ignore alpha channel in formats#               PSD
+ #Convert CMYK to RGB internally#                Отключен
+ #File or full path of GFL library#              libgfl311.dll
+           Библиотека ищется в той же папке, где лежит GFL.pvd
+ #GFL subplugins folder\#                        
+           Должен указывать на папку, содержащую плагины самого
+           GFL (Xjp2.dll например).
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+
+
+@GDI+.pvd
+$^#Module description и модуля вывода GDI+.pvd#
+
+ #Декодер# открывает изображения через стандартный интерфейс Windows - GDI+.
+Как правило, это позволяет открывать изображения формата: #BMP,GIF,PNG,JPG,TIF,ICO,WMF#.
+
+ Для работы декодера необходима библиотека GdiPlus.dll. Похоже, что сам GdiPlus.dll
+(по крайней мере, в последних версиях Windows) за собственно декодированием изображений
+обращается к #Windows Imaging Component (WIC)#.
+
+ GDI+ работает медленнее, чем GFL, но не имеет проблем с анимированными
+изображениями (GIF) и прозрачностью (GIF,PNG).
+
+ Также необходимо отметить, что старые версии GdiPlus.dll имеют дыру в
+безопасности при декодировании специально составленных файлов.
+
+
+ #When GdiPlus.dll can not be loaded# just copy this file to the plugin folder.
+
+ #Проблемы с блокировкой файла#
+ С некоторыми версиями GdiPlus.dll может возникать блокировка просматриваемых файлов.
+Для избежания блокировок можно включить флажок '[x] Force stream instead of file' в настройках модуля.
+
+ #Проблемы с ICO#
+ Открывается только первый значок в файле. Для работы с этим форматом рекомендуется
+использовать специализированный декодер ~ICO.pvd~@ICO.pvd@.
+
+
+ #Вывод# изображений выполняется через Windows API (GDI+). С одной стороны, это сильно
+влияет на скорость собственно отрисовки (zoom & scroll работают ощутимо медленнее). С другой стороны,
+при использовании этого же модуля как декодера PictureView открывает картинки #значительно# быстрее.
+Кроме того, этот модуль должен работать в терминальных сессиях.
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+
+
+@DX.pvd
+$^#Описание модуля вывода DX.pvd#
+
+ ~DX.pvd~@DX.pvd@ работает через DirectX. Отличается высокой скоростью собственно отрисовки
+(zoom, scroll, ...), но не работает в терминальных сессиях. Можно сказать, что при использовании
+этого модуля PictureView работает так же, как и предыдущие версии плагина.
+
+ 
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+
+
+@DJVU.pvd
+$^#Module description DJVU.pvd#
+
+ Специальный декодер для файлов формата #DjVu#. Многостраничный формат, разработанный для хранения сканированных документов - книг, журналов, чертежей и пр.
+ Декодер написан на основе #DjVuLibre 3.5.22#.
+
+ Формат DjVu можно также отрывать декодером ~WIC.pvd~@WIC.pvd@ при наличии установленного кодека:
+~DjVu Shell Extension Pack~@http://dev.caminova.jp/beta/djvu-wic/@
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+
+
+@ICO.pvd
+$^#Module description ICO.pvd#
+
+ Открывает значки формата Windows (#*.ico#), в том числе 256x256 PNG. Для
+декодирования содержимого PNG-фреймов используется GDI+.
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+
+
+@WIC.pvd
+$^#Module description WIC.pvd#
+
+ #Декодер# работает через интерфейс #Windows Imaging Component (WIC)# (~http://en.wikipedia.org/wiki/Windows_Imaging_Component~@http://en.wikipedia.org/wiki/Windows_Imaging_Component@).
+ По умолчанию этот интерфейс открывает форматы: #BMP,GIF,ICO,JPEG,PNG,TIFF# и #Windows Media Photo# (~http://ru.wikipedia.org/wiki/HD_Photo~@http://ru.wikipedia.org/wiki/HD_Photo@).
+
+ Основное преимущество интерфейса в том, что он может расширяться путём установки специальных #кодеков#.
+
+ WIC.pvd умеет декодировать изображение в заданное разрешение, выполняя качественное сглаживание (антиалиасинг). Естественно, эта функция декодера
+доступна только при использовании в #PicView2 mod16# и выше. Качество сглаживания можно указать в параметре #Interpolation quality#
+в диалоге настроек модуля. 0 - Nearest, 1 - Bilinear, 2 - Bicubic, 3 - Fant.
+
+ Например, после установки #FastPictureViewer WIC RAW Codec Pack# версии 1.30
+добавляется поддержка следующих форматов.
+
+  #*.tga, *.tpic#  Truevision Targa (TGA)
+  #*.dng#  Adobe Digital Negative
+  #*.raf#  Fuji Raw Image
+  #*.mrw#  Minolta Raw Image
+  #*.orf#  Olympus Raw Image
+  #*.rw2#  Panasonic Raw Image
+  #*.pef#  Pentax Raw Image
+  #*.x3f#  Sigma Raw Image
+  #*.cr2, *.crw#  Canon Raw Image
+  #*.3fr, *.fff#  Hasselblad Raw Image
+  #*.dcr, *.kdc#  Kodak Raw Image
+  #*.raw, *.rwl#  Leica Raw Image
+  #*.nef, *.nrw#  Nikon Raw Image
+  #*.arw, *.sr2, *.srf#  Sony Raw Image
+
+ После установки кодек-пака предлагается перезагрузить ПК, но это не всегда
+обязательно.
+
+ FastPictureViewer WIC RAW Codec Pack 1.30 #was# free for personal/educational use.
+ ~http://www.fastpictureviewer.com/codecs/~@http://www.fastpictureviewer.com/codecs/@
+
+ Для некоторых форматов можно выбрать, какой компонент файла отображать (RAW или встроенный JPEG).
+Для этого запустите устанавливаемую вместе с FastPictureViewer программу:
+#C:\WINDOWS\WICCodecs\{A6D092A4-081A-4F0E-9356-DA167E87D922}\Configuration Tool\WCPConfig.exe#
+и выберите требуемые опции. Декодирование RAW занимает больше времени и может быть менее качественным,
+чем JPEG (зависит от декодера). 
+
+ Можно также попробовать #DjVu Shell Extension Pack#:
+ ~http://dev.caminova.jp/beta/djvu-wic/~@http://dev.caminova.jp/beta/djvu-wic/@
+ #Обнаруженная проблема:# на некоторых файлах отказывается открывать последнюю страницу.
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+
+
+@WMF.pvd
+$^#Module description WMF.pvd#
+
+ Открывает и отображает файлы #WMF# и #EMF#.
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@BMP.pvd
+$^#Module description BMP.pvd#
+
+ Умеет работать только с #BMP#-файлами. Just a sample decoder.
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@Shell.pvd
+$^#Module description Shell.pvd#
+
+ Этот декодер умеет «просматривать» всё, для чего Проводник Windows может показать
+предпросмотр (в режиме эскизов). Качество (разрешение) картинки, естественно, оставляет
+желать лучшего, но пока это единственный способ для предпросмотра файлов:
+ * CAD-систем (чертежи, трёхмерные модели и прочее);
+ * файлов PhotoFiltre (*.pfi).
+
+ Декодер пытается определить список расширений файлов, для которых Windows
+может сформировать предпросмотр. Однако список, возможно, вам придётся откорректировать,
+если Проводник показывает предпросмотр, но расширение в списке не указано.
+
+ На счет размеров и прочего. Размер декодированного изображения #сильно# зависит от различных условий (версии ОС,
+x64/x86, установленных в системе интерфейсов, и т.п.). В результате могут быть поля или картинка может быть обрезана.
+Может быть прозрачной или не быть... Вариантов масса и документировать их в принципе нельзя.
+
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@in_APL.pvd
+$^#Module description IN_APL#
+
+ Decoder authorship of ~homme_curieux~@http://forum.farmanager.com/memberlist.php?mode=viewprofile&u=10920@,
+which allows to use ACDSee plugins to decode images.
+
+ Download: #http://forum.farmanager.com/viewtopic.php?p=52480##p52480#
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@in_GFL.pvd
+$^#Module description IN_GFL#
+
+ Субплагин автора ~homme_curieux~@http://forum.farmanager.com/memberlist.php?mode=viewprofile&u=10920@,
+позволяющий использовать для декодирования библиотеку GFL.
+
+ Скачать: #http://forum.farmanager.com/viewtopic.php?p=52480##p52480#
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@in_UIC.pvd
+$^#Module description IN_UIC#
+
+ Субплагин автора ~homme_curieux~@http://forum.farmanager.com/memberlist.php?mode=viewprofile&u=10920@.
+
+ Скачать: #http://forum.farmanager.com/viewtopic.php?p=52480##p52480#
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@GdiPlus.pvd
+$^#Module description GdiPlus#
+
+ Субплагин автора ~Max Rusov~@http://forum.farmanager.com/memberlist.php?mode=viewprofile&u=577@.
+
+ Субплагин предназначен для декодирования и просмотра изображений через 
+интерфейс GDI+. Имеет ряд преимуществ по сравнению со стандартным
+декодером GDI+ из комплекта поставки PicView2:
+
+ - Быстрое масштабирование/панорамирование без потери качества
+ - Фоновое декодирование в отдельном потоке
+ - Опережающее декодирование соседних изображений
+ - Поддержка эскизов (thumbnail) для быстрого листания
+ - Автоповорот изображений по EXIF
+
+ Скачать: #http://code.google.com/p/far-plugins/#
+
+
+ ~List of modules~@Modules@
+ ~Main settings~@Settings@
+
+@theX.pvd
+$^#Описание декодера theX - Speccy Gfx decoder#
+
+ Субплагин автора ~HalfElf~@http://theX.untergrund.net@.
+
+ Субплагин предназначен для просмотра спектрумовской графики
+
+ Скачать: #http://thex.untergrund.net/pvd/#
+
+
+ ~В список модулей~@Modules@
+ ~Основные параметры~@Settings@
+

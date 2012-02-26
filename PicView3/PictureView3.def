@@ -1,0 +1,14 @@
+LIBRARY
+EXPORTS
+	GetGlobalInfoW
+	GetMinFarVersionW
+	ClosePanelW=ClosePluginW
+	ConfigureW
+	ExitFARW
+	GetPluginInfoW
+	AnalyseW
+	OpenW=OpenPluginW
+	ProcessEditorEventW
+	ProcessViewerEventW
+	ProcessConsoleInputW
+	SetStartupInfoW
