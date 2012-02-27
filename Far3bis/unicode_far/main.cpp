@@ -34,7 +34,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "headers.hpp"
 #pragma hdrstop
 
-#include "lang.hpp"
 #include "keys.hpp"
 #include "chgprior.hpp"
 #include "colors.hpp"
@@ -51,7 +50,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "farexcpt.hpp"
 #include "imports.hpp"
 #include "syslog.hpp"
-#include "localOEM.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
 #include "clipboard.hpp"
@@ -141,7 +139,7 @@ static int MainProcess(
 			_tran(SysLog(L"create dummy panels"));
 			CtrlObj.CreateFilePanels();
 			CtrlObj.Cp()->LeftPanel=CtrlObj.Cp()->RightPanel=CtrlObj.Cp()->ActivePanel=DummyPanel;
-			CtrlObj.Plugins.LoadPlugins();
+			CtrlObj.Plugins->LoadPlugins();
 			CtrlObj.Macro.LoadMacros(TRUE,FALSE);
 
 			if (*lpwszEditName)
@@ -417,6 +415,7 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 	QueryPerformanceCounter(&FarUpTime);
 
 	DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &MainThreadHandle, 0, FALSE, DUPLICATE_SAME_ACCESS);
+	MainThreadId = GetCurrentThreadId();
 	GetVersionEx(&WinVer);
 
 	// Starting with Windows Vista, the system uses the low-fragmentation heap (LFH) as needed to service memory allocation requests.
@@ -698,7 +697,7 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 
 	//Настройка OEM сортировки
 #ifndef NO_WRAPPER
-	LocalUpperInit();
+	wrapper::LocalUpperInit();
 #endif // NO_WRAPPER
 
 	//Инициализация массива клавиш.

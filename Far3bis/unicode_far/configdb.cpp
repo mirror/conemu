@@ -51,6 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "sqlite.h"
 
 GeneralConfig *GeneralCfg;
+ColorsConfig *ColorsCfg;
 AssociationsConfig *AssocConfig;
 PluginsCacheConfig *PlCacheCfg;
 #ifdef _DEBUG
@@ -123,9 +124,29 @@ const char *Int64ToHexString(unsigned __int64 X)
 	return Bin;
 }
 
+const char *IntToHexString(unsigned int X)
+{
+	static char Bin[8+1];
+	for (int i=7; i>=0; i--, X>>=4)
+		Bin[i] = IntToHex(X&0xFull);
+	return Bin;
+}
+
 unsigned __int64 HexStringToInt64(const char *Hex)
 {
 	unsigned __int64 x = 0;
+	while (*Hex)
+	{
+		x <<= 4;
+		x += HexToInt(*Hex);
+		Hex++;
+	}
+	return x;
+}
+
+unsigned int HexStringToInt(const char *Hex)
+{
+	unsigned int x = 0;
 	while (*Hex)
 	{
 		x <<= 4;
@@ -690,6 +711,14 @@ public:
 
 	}
 
+	virtual void SerializeBlob(const char* Name, const char* Blob, int Size, TiXmlElement *e)
+	{
+			char* hex = BlobToHexString(Blob, Size);
+			e->SetAttribute("type", "hex");
+			e->SetAttribute("value", hex);
+			xf_free(hex);
+	}
+
 	void Export(unsigned __int64 id, TiXmlElement *key)
 	{
 		stmtEnumValues.Bind(id);
@@ -699,7 +728,8 @@ public:
 			if (!e)
 				break;
 
-			e->SetAttribute("name", stmtEnumValues.GetColTextUTF8(0));
+			const char* name = stmtEnumValues.GetColTextUTF8(0);
+			e->SetAttribute("name", name);
 
 			switch (stmtEnumValues.GetColType(1))
 			{
@@ -712,12 +742,7 @@ public:
 					e->SetAttribute("value", stmtEnumValues.GetColTextUTF8(1));
 					break;
 				default:
-				{
-					char *hex = BlobToHexString(stmtEnumValues.GetColBlob(1),stmtEnumValues.GetColBytes(1));
-					e->SetAttribute("type", "hex");
-					e->SetAttribute("value", hex);
-					xf_free(hex);
-				}
+					SerializeBlob(name, stmtEnumValues.GetColBlob(1), stmtEnumValues.GetColBytes(1), e);
 			}
 
 			key->LinkEndChild(e);
@@ -757,6 +782,13 @@ public:
 		return root;
 	}
 
+	virtual int DeserializeBlob(const char* Name, const char* Type, const char* Value, const TiXmlElement *e, char*& Blob)
+	{
+		int Size = 0;
+		Blob = HexStringToBlob(Value, &Size);
+		return Size;
+	}
+
 	void Import(unsigned __int64 root, const TiXmlElement *key)
 	{
 		unsigned __int64 id;
@@ -779,21 +811,21 @@ public:
 			const char *type = e->Attribute("type");
 			const char *value = e->Attribute("value");
 
-			if (!name || !type || !value)
+			if (!name || !type)
 				continue;
 
 			string Name(name, CP_UTF8);
 
-			if (!strcmp(type,"qword"))
+			if (value && !strcmp(type,"qword"))
 			{
 				SetValue(id, Name, HexStringToInt64(value));
 			}
-			else if (!strcmp(type,"text"))
+			else if (value && !strcmp(type,"text"))
 			{
 				string Value(value, CP_UTF8);
 				SetValue(id, Name, Value);
 			}
-			else if (!strcmp(type,"hex"))
+			else if (value && !strcmp(type,"hex"))
 			{
 				int Size = 0;
 				char *Blob = HexStringToBlob(value, &Size);
@@ -805,7 +837,14 @@ public:
 			}
 			else
 			{
-				continue;
+				// custom types, value is optional
+				char* Blob = nullptr;
+				int Size = DeserializeBlob(name, type, value, e, Blob);
+				if (Blob)
+				{
+					SetValue(id, Name, Blob, Size);
+					xf_free(Blob);
+				}
 			}
 		}
 
@@ -826,6 +865,203 @@ public:
 		EndTransaction();
 		return true;
 	}
+};
+
+struct _ColorFlagNames
+{
+	FARCOLORFLAGS Value;
+	const wchar_t* Name;
+}
+ColorFlagNames[] =
+{
+	{FCF_FG_4BIT,      L"bg4bit"   },
+	{FCF_BG_4BIT,      L"fg4bit"   },
+	{FCF_FG_BOLD,      L"bold"     },
+	{FCF_FG_ITALIC,    L"italic"   },
+	{FCF_FG_UNDERLINE, L"underline"},
+};
+
+class HighlightHierarchicalConfigDb: public HierarchicalConfigDb
+{
+public:
+	explicit HighlightHierarchicalConfigDb(const wchar_t *DbName, bool Local = false):HierarchicalConfigDb(DbName, Local) {}
+
+private:
+	HighlightHierarchicalConfigDb();
+
+	virtual void SerializeBlob(const char* Name, const char* Blob, int Size, TiXmlElement *e)
+	{
+		if(!strcmp(Name, "NormalColor") || !strcmp(Name, "SelectedColor") ||
+			!strcmp(Name, "CursorColor") || !strcmp(Name, "SelectedCursorColor") ||
+			!strcmp(Name, "MarkCharNormalColor") || !strcmp(Name, "MarkCharSelectedColor") ||
+			!strcmp(Name, "MarkCharCursorColor") || !strcmp(Name, "MarkCharSelectedCursorColor"))
+		{
+			const FarColor* Color = reinterpret_cast<const FarColor*>(Blob);
+			e->SetAttribute("type", "color");
+			e->SetAttribute("background", IntToHexString(Color->BackgroundColor));
+			e->SetAttribute("foreground", IntToHexString(Color->ForegroundColor));
+			e->SetAttribute("flags", Utf8String(FlagsToString(Color->Flags, ColorFlagNames)));
+		}
+		else
+		{
+			return HierarchicalConfigDb::SerializeBlob(Name, Blob, Size, e);
+		}
+	}
+
+	virtual int DeserializeBlob(const char* Name, const char* Type, const char* Value, const TiXmlElement *e, char*& Blob)
+	{
+		int Result = 0;
+		if(!strcmp(Type, "color"))
+		{
+			const char *background = e->Attribute("background");
+			const char *foreground = e->Attribute("foreground");
+			const char *flags = e->Attribute("flags");
+
+			if(background && foreground && flags)
+			{
+				Result = sizeof(FarColor);
+				FarColor* Color = static_cast<FarColor*>(xf_malloc(Result));
+				Color->BackgroundColor = HexStringToInt(background);
+				Color->ForegroundColor = HexStringToInt(foreground);
+				Color->Flags = StringToFlags(string(flags, CP_UTF8), ColorFlagNames);
+				Blob = reinterpret_cast<char*>(Color);
+			}
+		}
+		else
+		{
+			Result = HierarchicalConfigDb::DeserializeBlob(Name, Type, Value, e, Blob);
+		}
+		return Result;
+	}
+};
+
+class ColorsConfigDb: public ColorsConfig, public SQLiteDb
+{
+	SQLiteStmt stmtUpdateValue;
+	SQLiteStmt stmtInsertValue;
+	SQLiteStmt stmtGetValue;
+	SQLiteStmt stmtDelValue;
+
+public:
+
+	ColorsConfigDb()
+	{
+		Initialize(L"colors.db");
+	}
+
+	bool BeginTransaction() { return SQLiteDb::BeginTransaction(); }
+	bool EndTransaction() { return SQLiteDb::EndTransaction(); }
+	bool RollbackTransaction() { return SQLiteDb::RollbackTransaction(); }
+
+	bool InitializeImpl(const wchar_t* DbName, bool Local)
+	{
+		return
+			Open(DbName, Local) &&
+
+			//schema
+			Exec("CREATE TABLE IF NOT EXISTS colors(name TEXT NOT NULL PRIMARY KEY, value BLOB);") &&
+
+			//update value statement
+			InitStmt(stmtUpdateValue, L"UPDATE colors SET value=?1 WHERE name=?2;") &&
+
+			//insert value statement
+			InitStmt(stmtInsertValue, L"INSERT INTO colors VALUES (?1,?2);") &&
+
+			//get value statement
+			InitStmt(stmtGetValue, L"SELECT value FROM colors WHERE name=?1;") &&
+
+			//delete value statement
+			InitStmt(stmtDelValue, L"DELETE FROM colors WHERE name=?1;")
+			;
+	}
+
+	virtual ~ColorsConfigDb() { }
+
+	bool SetValue(const wchar_t *Name, const FarColor& Value)
+	{
+		bool b = stmtUpdateValue.Bind(&Value, sizeof(Value)).Bind(Name).StepAndReset();
+		if (!b || Changes() == 0)
+			b = stmtInsertValue.Bind(Name).Bind(&Value, sizeof(Value)).StepAndReset();
+		return b;
+	}
+
+	bool GetValue(const wchar_t *Name, FarColor& Value)
+	{
+		bool b = stmtGetValue.Bind(Name).Step();
+		if (b)
+		{
+			const void* blob = stmtGetValue.GetColBlob(0);
+			Value = *static_cast<const FarColor*>(blob);
+		}
+		stmtGetValue.Reset();
+		return b;
+	}
+
+	bool DeleteValue(const wchar_t *Name)
+	{
+		return stmtDelValue.Bind(Name).StepAndReset();
+	}
+
+	TiXmlElement *Export()
+	{
+		TiXmlElement * root = new TiXmlElement("colors");
+		if (!root)
+			return nullptr;
+
+		SQLiteStmt stmtEnumAllValues;
+		InitStmt(stmtEnumAllValues, L"SELECT name, value FROM colors ORDER BY name;");
+
+		while (stmtEnumAllValues.Step())
+		{
+			TiXmlElement *e = new TiXmlElement("object");
+			if (!e)
+				break;
+
+			e->SetAttribute("name", stmtEnumAllValues.GetColTextUTF8(0));
+			const FarColor* Color = reinterpret_cast<const FarColor*>(stmtEnumAllValues.GetColBlob(1));
+			e->SetAttribute("background", IntToHexString(Color->BackgroundColor));
+			e->SetAttribute("foreground", IntToHexString(Color->ForegroundColor));
+			e->SetAttribute("flags", Utf8String(FlagsToString(Color->Flags, ColorFlagNames)));
+			root->LinkEndChild(e);
+		}
+
+		stmtEnumAllValues.Reset();
+
+		return root;
+	}
+
+	bool Import(const TiXmlHandle &root)
+	{
+		BeginTransaction();
+		for (const TiXmlElement *e = root.FirstChild("colors").FirstChildElement("object").Element(); e; e=e->NextSiblingElement("object"))
+		{
+			const char *name = e->Attribute("name");
+			const char *background = e->Attribute("background");
+			const char *foreground = e->Attribute("foreground");
+			const char *flags = e->Attribute("flags");
+
+			if (!name)
+				continue;
+
+			string Name(name, CP_UTF8);
+
+			if(background && foreground && flags)
+			{
+				FarColor Color = {};
+				Color.BackgroundColor = HexStringToInt(background);
+				Color.ForegroundColor = HexStringToInt(foreground);
+				Color.Flags = StringToFlags(string(flags, CP_UTF8), ColorFlagNames);
+				SetValue(Name, Color);
+			}
+			else
+			{
+				DeleteValue(Name);
+			}
+		}
+		EndTransaction();
+		return true;
+	}
+
 };
 
 class AssociationsConfigDb: public AssociationsConfig, public SQLiteDb {
@@ -1108,6 +1344,9 @@ class PluginsCacheConfigDb: public PluginsCacheConfig, public SQLiteDb {
 	SQLiteStmt stmtGetTitle;
 	SQLiteStmt stmtGetAuthor;
 	SQLiteStmt stmtGetPrefix;
+#if defined(MANTIS_0000466)
+	SQLiteStmt stmtGetMacroFuncs;
+#endif
 	SQLiteStmt stmtGetDescription;
 	SQLiteStmt stmtGetFlags;
 	SQLiteStmt stmtGetMinFarVersion;
@@ -1119,6 +1358,9 @@ class PluginsCacheConfigDb: public PluginsCacheConfig, public SQLiteDb {
 	SQLiteStmt stmtSetTitle;
 	SQLiteStmt stmtSetAuthor;
 	SQLiteStmt stmtSetPrefix;
+#if defined(MANTIS_0000466)
+	SQLiteStmt stmtSetMacroFuncs;
+#endif
 	SQLiteStmt stmtSetDescription;
 	SQLiteStmt stmtSetFlags;
 	SQLiteStmt stmtSetMinFarVersion;
@@ -1197,6 +1439,9 @@ public:
 				"CREATE TABLE IF NOT EXISTS pluginversions(cid INTEGER NOT NULL PRIMARY KEY, version BLOB NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE);"
 				"CREATE TABLE IF NOT EXISTS flags(cid INTEGER NOT NULL PRIMARY KEY, bitmask INTEGER NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE);"
 				"CREATE TABLE IF NOT EXISTS prefixes(cid INTEGER NOT NULL PRIMARY KEY, prefix TEXT NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE);"
+#if defined(MANTIS_0000466)
+				"CREATE TABLE IF NOT EXISTS macrofuncs(cid INTEGER NOT NULL PRIMARY KEY, func TEXT NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE);"
+#endif
 				"CREATE TABLE IF NOT EXISTS exports(cid INTEGER NOT NULL, export TEXT NOT NULL, enabled INTEGER NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (cid, export));"
 				"CREATE TABLE IF NOT EXISTS menuitems(cid INTEGER NOT NULL, type INTEGER NOT NULL, number INTEGER NOT NULL, guid TEXT NOT NULL, name TEXT NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (cid, type, number));"
 			) &&
@@ -1243,6 +1488,10 @@ public:
 			//get command prefix statement
 			InitStmt(stmtGetPrefix, L"SELECT prefix FROM prefixes WHERE cid=?1;") &&
 
+#if defined(MANTIS_0000466)
+			//get macro func statement
+			InitStmt(stmtGetMacroFuncs, L"SELECT func FROM macrofuncs WHERE cid=?1;") &&
+#endif
 			//get flags statement
 			InitStmt(stmtGetFlags, L"SELECT bitmask FROM flags WHERE cid=?1;") &&
 
@@ -1276,6 +1525,10 @@ public:
 			//set command prefix statement
 			InitStmt(stmtSetPrefix, L"INSERT OR REPLACE INTO prefixes VALUES (?1,?2);") &&
 
+#if defined(MANTIS_0000466)
+			//set macro function statement
+			InitStmt(stmtSetMacroFuncs, L"INSERT OR REPLACE INTO macrofuncs VALUES (?1,?2);") &&
+#endif
 			//set flags statement
 			InitStmt(stmtSetFlags, L"INSERT OR REPLACE INTO flags VALUES (?1,?2);") &&
 
@@ -1404,6 +1657,13 @@ public:
 		return GetTextFromID(stmtGetPrefix, id);
 	}
 
+#if defined(MANTIS_0000466)
+	string GetMacroFunctions(unsigned __int64 id)
+	{
+		return GetTextFromID(stmtGetMacroFuncs, id);
+	}
+#endif
+
 	unsigned __int64 GetFlags(unsigned __int64 id)
 	{
 		unsigned __int64 flags = 0;
@@ -1443,6 +1703,12 @@ public:
 		return stmtSetPrefix.Bind(id).Bind(Prefix).StepAndReset();
 	}
 
+#if defined(MANTIS_0000466)
+	bool SetMacroFunctions(unsigned __int64 id, const wchar_t *MacroFunc)
+	{
+		return stmtSetMacroFuncs.Bind(id).Bind(MacroFunc).StepAndReset();
+	}
+#endif
 	bool SetFlags(unsigned __int64 id, unsigned __int64 Flags)
 	{
 		return stmtSetFlags.Bind(id).Bind(Flags).StepAndReset();
@@ -2571,7 +2837,7 @@ HierarchicalConfig *CreateFiltersConfig()
 
 HierarchicalConfig *CreateHighlightConfig()
 {
-	return new HierarchicalConfigDb(L"highlight.db");
+	return new HighlightHierarchicalConfigDb(L"highlight.db");
 }
 
 HierarchicalConfig *CreateShortcutsConfig()
@@ -2587,6 +2853,7 @@ HierarchicalConfig *CreatePanelModeConfig()
 void InitDb()
 {
 	GeneralCfg = new GeneralConfigDb();
+	ColorsCfg = new ColorsConfigDb();
 	AssocConfig = new AssociationsConfigDb();
 	PlCacheCfg = new PluginsCacheConfigDb();
 	PlHotkeyCfg = new PluginsHotkeysConfigDb();
@@ -2596,12 +2863,13 @@ void InitDb()
 
 void ReleaseDb()
 {
-	delete GeneralCfg;
-	delete AssocConfig;
-	delete PlCacheCfg;
-	delete PlHotkeyCfg;
-	delete HistoryCfg;
 	delete MacroCfg;
+	delete HistoryCfg;
+	delete PlHotkeyCfg;
+	delete PlCacheCfg;
+	delete AssocConfig;
+	delete ColorsCfg;
+	delete GeneralCfg;
 }
 
 bool ExportImportConfig(bool Export, const wchar_t *XML)
@@ -2630,6 +2898,8 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 		root->SetAttribute("version", ver);
 
 		root->LinkEndChild(GeneralCfg->Export());
+
+		root->LinkEndChild(ColorsCfg->Export());
 
 		root->LinkEndChild(AssocConfig->Export());
 
@@ -2704,6 +2974,8 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 				const TiXmlHandle root(farconfig);
 
 				GeneralCfg->Import(root);
+
+				ColorsCfg->Import(root);
 
 				AssocConfig->Import(root);
 

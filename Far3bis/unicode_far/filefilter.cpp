@@ -35,7 +35,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma hdrstop
 
 #include "filefilter.hpp"
-#include "lang.hpp"
 #include "keys.hpp"
 #include "ctrlobj.hpp"
 #include "filepanels.hpp"
@@ -74,7 +73,7 @@ FileFilter::~FileFilter()
 
 Panel *FileFilter::GetHostPanel()
 {
-	if (m_HostPanel == (Panel *)PANEL_ACTIVE)
+	if (!m_HostPanel || m_HostPanel == (Panel *)PANEL_ACTIVE)
 	{
 		return CtrlObject->Cp()->ActivePanel;
 	}

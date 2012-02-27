@@ -28,10 +28,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "language.hpp"
 #include "bitflags.hpp"
-#include "plugin.hpp"
-#include "interf.hpp"
+#include "language.hpp"
 
 class AncientPlugin
 {
@@ -64,6 +62,7 @@ struct ExecuteStruct
 	__Prolog(); \
 	es.nResult = 0; \
 	es.nDefaultResult = 0; \
+	++Activity; \
 	if ( Opt.ExceptRules ) \
 	{ \
 		__try \
@@ -81,6 +80,7 @@ struct ExecuteStruct
 	{ \
 		function; \
 	} \
+	--Activity; \
 	__Epilog(); \
 }
 
@@ -129,6 +129,7 @@ enum EXPORTS_ENUM
 	iAnalyse,
 	iGetCustomData,
 	iFreeCustomData,
+	iCloseAnalyse,
 
 	iOpenFilePlugin,
 	iGetMinFarVersion,
@@ -179,7 +180,8 @@ public:
 #if defined(MANTIS_0001687)
 	virtual int ProcessConsoleInput(ProcessConsoleInputInfo *Info);
 #endif
-	virtual int Analyse(const AnalyseInfo *Info);
+	virtual HANDLE Analyse(const AnalyseInfo *Info);
+	virtual void CloseAnalyse(HANDLE hHandle);
 	virtual bool GetPluginInfo(PluginInfo *pi);
 	virtual int Configure(const GUID& Guid);
 	virtual void ExitFAR(const ExitInfo *Info);
@@ -248,7 +250,7 @@ public:
 	const VersionInfo& GetVersion() { return PluginVersion; }
 	const wchar_t* GetVersionString() { return VersionString; }
 	const GUID& GetGUID() const { return m_Guid; }
-	const wchar_t *GetMsg(int nID) const { return PluginLang.GetMsg(nID); }
+	const wchar_t *GetMsg(LNGID nID) const { return PluginLang.GetMsg(nID); }
 
 	bool CheckWorkFlags(DWORD flags) const { return WorkFlags.Check(flags)==TRUE; }
 	DWORD GetWorkFlags() const { return WorkFlags.Flags; }
@@ -265,6 +267,7 @@ public:
 	#endif
 	bool SaveToCache();
 	bool IsPanelPlugin();
+	bool Active() {return Activity != 0;}
 
 protected:
 	virtual void __Prolog() {};
@@ -276,6 +279,7 @@ protected:
 
 	PluginManager *m_owner; //BUGBUG
 	Language PluginLang;
+	size_t Activity;
 	bool bPendingRemove;
 
 private:
@@ -308,6 +312,3 @@ private:
 
 extern PluginStartupInfo NativeInfo;
 extern FarStandardFunctions NativeFSF;
-
-size_t WINAPI FarKeyToName(int Key,wchar_t *KeyText,size_t Size);
-int WINAPI KeyNameToKeyW(const wchar_t *Name);

@@ -37,7 +37,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filelist.hpp"
 #include "flink.hpp"
 #include "colors.hpp"
-#include "lang.hpp"
 #include "filepanels.hpp"
 #include "cmdline.hpp"
 #include "filefilter.hpp"
@@ -80,7 +79,7 @@ void FileList::Update(int Mode)
 			case PLUGIN_PANEL:
 			{
 				OpenPanelInfo Info;
-				CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,&Info);
+				CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
 				ProcessPluginCommand();
 
 				if (PanelMode!=PLUGIN_PANEL)
@@ -336,7 +335,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 			}
 
 			if (ReadCustomData)
-				CtrlObject->Plugins.GetCustomData(NewPtr);
+				CtrlObject->Plugins->GetCustomData(NewPtr);
 
 			if (!(fdata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				TotalFileCount++;
@@ -360,7 +359,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 						}
 					}
 
-					TemplateString strReadMsg(MSG(MReadingFiles));
+					LangString strReadMsg(MReadingFiles);
 					strReadMsg << FileCount;
 
 					if (DrawMessage)
@@ -449,7 +448,12 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 		strPath = strCurDir;
 		AddEndSlash(strPath);
 
-		if (CtrlObject->Plugins.GetVirtualFindData(hAnotherPlugin,&PanelData,&PanelCount,strPath))
+		#if 1
+		//Maximus: один раз свалилось в GetVirtualFindData
+		_ASSERTE(hAnotherPlugin!=NULL);
+		#endif
+
+		if (CtrlObject->Plugins->GetVirtualFindData(hAnotherPlugin,&PanelData,&PanelCount,strPath))
 		{
 			FileListItem **pTemp;
 
@@ -477,7 +481,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 				FileCount+=static_cast<int>(PanelCount);
 			}
 
-			CtrlObject->Plugins.FreeVirtualFindData(hAnotherPlugin,PanelData,PanelCount);
+			CtrlObject->Plugins->FreeVirtualFindData(hAnotherPlugin,PanelData,PanelCount);
 		}
 	}
 
@@ -658,7 +662,7 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 	CloseChangeNotification();
 	LastCurFile=-1;
 	OpenPanelInfo Info;
-	CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,&Info);
+	CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
 
 	FreeDiskSize=0;
 	if (Opt.ShowPanelFree)
@@ -676,7 +680,7 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 	PluginPanelItem *PanelData=nullptr;
 	size_t PluginFileCount;
 
-	if (!CtrlObject->Plugins.GetFindData(hPlugin,&PanelData,&PluginFileCount,0))
+	if (!CtrlObject->Plugins->GetFindData(hPlugin,&PanelData,&PluginFileCount,0))
 	{
 		DeleteListData(ListData,FileCount);
 		PopPlugin(TRUE);
@@ -836,7 +840,7 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 		ReadDiz(PanelData,static_cast<int>(PluginFileCount),RDF_NO_UPDATE);
 
 	CorrectPosition();
-	CtrlObject->Plugins.FreeFindData(hPlugin,PanelData,PluginFileCount);
+	CtrlObject->Plugins->FreeFindData(hPlugin,PanelData,PluginFileCount);
 
 	if (KeepSelection || PrevSelFileCount>0)
 	{
@@ -877,7 +881,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 		PluginPanelItem *PanelData=nullptr;
 		size_t PluginFileCount=0;
 		OpenPanelInfo Info;
-		CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,&Info);
+		CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
 
 		if (!Info.DescrFilesNumber)
 			return;
@@ -888,7 +892,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 		    + Обработка флага RDF_NO_UPDATE */
 		if (!ItemList && !(dwFlags & RDF_NO_UPDATE))
 		{
-			GetCode=CtrlObject->Plugins.GetFindData(hPlugin,&PanelData,&PluginFileCount,0);
+			GetCode=CtrlObject->Plugins->GetFindData(hPlugin,&PanelData,&PluginFileCount,0);
 		}
 		else
 		{
@@ -912,7 +916,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 
 						if (FarMkTempEx(strTempDir) && apiCreateDirectory(strTempDir,nullptr))
 						{
-							if (CtrlObject->Plugins.GetFile(hPlugin,CurPanelData,strTempDir,strDizName,OPM_SILENT|OPM_VIEW|OPM_QUICKVIEW|OPM_DESCR))
+							if (CtrlObject->Plugins->GetFile(hPlugin,CurPanelData,strTempDir,strDizName,OPM_SILENT|OPM_VIEW|OPM_QUICKVIEW|OPM_DESCR))
 							{
 								strPluginDizName = Info.DescrFiles[I];
 								Diz.Read(L"", &strDizName);
@@ -931,7 +935,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 			/* $ 25.02.2001 VVM
 			    + Обработка флага RDF_NO_UPDATE */
 			if (!ItemList && !(dwFlags & RDF_NO_UPDATE))
-				CtrlObject->Plugins.FreeFindData(hPlugin,PanelData,PluginFileCount);
+				CtrlObject->Plugins->FreeFindData(hPlugin,PanelData,PluginFileCount);
 		}
 	}
 

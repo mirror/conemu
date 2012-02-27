@@ -40,7 +40,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vmenu.hpp"
 #include "keyboard.hpp"
-#include "lang.hpp"
 #include "keys.hpp"
 #include "macroopcode.hpp"
 #include "colors.hpp"
@@ -59,6 +58,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "cmdline.hpp"
 #include "FarGuid.hpp"
+#if 1
+//Maximus: функция apiProcessName требуется для "масочных" фильтров
+#include "plugapi.hpp"
+#endif
 
 VMenu::VMenu(const wchar_t *Title,       // заголовок меню
              MenuDataEx *Data, // пункты меню
@@ -112,7 +115,7 @@ VMenu::VMenu(const wchar_t *Title,       // заголовок меню
 		NewItem.Clear();
 
 		if (!IsPtr(Data[I].Name))
-			NewItem.strName = MSG((int)(DWORD_PTR)Data[I].Name);
+			NewItem.strName = MSG(static_cast<LNGID>(reinterpret_cast<DWORD_PTR>(Data[I].Name)));
 		else
 			NewItem.strName = Data[I].Name;
 
@@ -773,7 +776,7 @@ void VMenu::FilterStringUpdated(bool bLonger)
 			strName=CurItem->strName;
 			RemoveExternalSpaces(strName);
 			RemoveChar(strName,L'&',TRUE);
-			if ((bFilterMaskMode && !ProcessName(strMaskFilter.CPtr(), (wchar_t *) strName.CPtr(), 0, PN_CMPNAMELIST)) ||
+			if ((bFilterMaskMode && !pluginapi::apiProcessName(strMaskFilter.CPtr(), (wchar_t *) strName.CPtr(), 0, PN_CMPNAMELIST)) ||
 				     (!bFilterMaskMode && !StrStrI(strName, strFilter)))
 			{
 				CurItem->Flags |= LIF_HIDDEN;

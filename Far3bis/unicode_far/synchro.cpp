@@ -62,10 +62,10 @@ bool PluginSynchro::Process(void)
 {
 	#if 1
 	//Maximus: Нехорошо вызывать плагины до тех пор, пока фар не прошел полную инициализацию
-	if (!CtrlObject || !CtrlObject->Plugins.IsPluginsLoaded())
+	if (!CtrlObject || !CtrlObject->Plugins->IsPluginsLoaded())
 	{
 		//Это тема для багрепорта на Mantis?
-		_ASSERTE(CtrlObject && CtrlObject->Plugins.IsPluginsLoaded());
+		_ASSERTE(CtrlObject && CtrlObject->Plugins->IsPluginsLoaded());
 		return false;
 	}
 	#endif
@@ -90,13 +90,13 @@ bool PluginSynchro::Process(void)
 	{
 		if(plugin)
 		{
-			Plugin* pPlugin=CtrlObject?CtrlObject->Plugins.FindPlugin(PluginId):nullptr;
+			Plugin* pPlugin=CtrlObject?CtrlObject->Plugins->FindPlugin(PluginId):nullptr;
 
 			if (pPlugin)
 			{
 				#ifdef _DEBUG
 				//Maximus: вроде должно быть исправлено, проверим
-				_ASSERTE(CtrlObject->Plugins.IsPluginValid(pPlugin));
+				_ASSERTE(CtrlObject->Plugins->IsPluginValid(pPlugin));
 				#endif
 				pPlugin->ProcessSynchroEvent(SE_COMMONSYNCHRO,param);
 				res=true;

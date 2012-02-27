@@ -58,7 +58,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vmenu.hpp"
 #include "chgmmode.hpp"
 #include "colormix.hpp"
-#include "lang.hpp"
 #include "fileedit.hpp"
 
 static int Recurse=0;
@@ -2812,7 +2811,7 @@ void Edit::ApplyColor()
 	if(Flags.Check(FEDITLINE_EDITORMODE))
 	{
 		EditorInfo ei={};
-		CtrlObject->Plugins.CurEditor->EditorControl(ECTL_GETINFO, &ei);
+		CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETINFO, &ei);
 		XPos = ei.CurTabPos;
 	}
 
@@ -3071,96 +3070,6 @@ void Edit::SetDialogParent(DWORD Sets)
 		Flags.Set(FEDITLINE_PARENT_MULTILINE);
 	}
 }
-
-/*
-SystemCPEncoder::SystemCPEncoder(int nCodePage)
-{
-	m_nCodePage = nCodePage;
-	m_nRefCount = 1;
-	m_strName.Format(L"codepage - %d", m_nCodePage);
-}
-
-SystemCPEncoder::~SystemCPEncoder()
-{
-}
-
-int __stdcall SystemCPEncoder::AddRef()
-{
-	return ++m_nRefCount;
-}
-
-int __stdcall SystemCPEncoder::Release()
-{
-	if (!(--m_nRefCount))
-	{
-		delete this;
-		return 0;
-	}
-
-	return m_nRefCount;
-}
-
-const wchar_t* __stdcall SystemCPEncoder::GetName()
-{
-	return (const wchar_t*)m_strName;
-}
-
-int __stdcall SystemCPEncoder::Encode(
-    const char *lpString,
-    int nLength,
-    wchar_t *lpwszResult,
-    int nResultLength
-)
-{
-	int length = MultiByteToWideChar(m_nCodePage, 0, lpString, nLength, nullptr, 0);
-
-	if (lpwszResult)
-		length = MultiByteToWideChar(m_nCodePage, 0, lpString, nLength, lpwszResult, nResultLength);
-
-	return length;
-}
-
-int __stdcall SystemCPEncoder::Decode(
-    const wchar_t *lpwszString,
-    int nLength,
-    char *lpResult,
-    int nResultLength
-)
-{
-	int length = WideCharToMultiByte(m_nCodePage, 0, lpwszString, nLength, nullptr, 0, nullptr, nullptr);
-
-	if (lpResult)
-		length = WideCharToMultiByte(m_nCodePage, 0, lpwszString, nLength, lpResult, nResultLength, nullptr, nullptr);
-
-	return length;
-}
-
-int __stdcall SystemCPEncoder::Transcode(
-    const wchar_t *lpwszString,
-    int nLength,
-    ICPEncoder *pFrom,
-    wchar_t *lpwszResult,
-    int nResultLength
-)
-{
-	int length = pFrom->Decode(lpwszString, nLength, nullptr, 0);
-	char *lpDecoded = (char *)xf_malloc(length);
-
-	if (lpDecoded)
-	{
-		pFrom->Decode(lpwszString, nLength, lpDecoded, length);
-		length = Encode(lpDecoded, length, nullptr, 0);
-
-		if (lpwszResult)
-			length = Encode(lpDecoded, length, lpwszResult, nResultLength);
-
-		xf_free(lpDecoded);
-		return length;
-	}
-
-	return -1;
-}
-*/
 
 EditControl::EditControl(ScreenObject *pOwner,Callback* aCallback,bool bAllocateData,History* iHistory,FarList* iList,DWORD iFlags):Edit(pOwner,bAllocateData)
 {

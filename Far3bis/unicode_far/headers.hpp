@@ -110,6 +110,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # include <cfgmgr32.h>
 # include <ntddscsi.h>
 # include <virtdisk.h>
+# include <RestartManager.h>
 #endif // _MSC_VER
 
 #ifdef __GNUC__
@@ -200,6 +201,10 @@ inline void ClearArray(T (&a)[N]) { memset(a, 0, sizeof(a[0])*N); }
 
 #if defined(_MSC_VER) && _MSC_VER<1600
 #define nullptr NULL
+#endif
+
+#ifdef __GNUC__
+enum LNGID:DWORD;
 #endif
 
 template <typename T>

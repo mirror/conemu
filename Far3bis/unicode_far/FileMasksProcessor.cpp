@@ -37,6 +37,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "FileMasksProcessor.hpp"
 #include "processname.hpp"
+#include "configdb.hpp"
+#include "strmix.hpp"
 
 FileMasksProcessor::FileMasksProcessor():
 	BaseFileMask(),
@@ -73,19 +75,34 @@ void FileMasksProcessor::Free()
 bool FileMasksProcessor::Set(const string& masks, DWORD Flags)
 {
 	Free();
-	// разделителем масок является не только запятая, но и точка с запятой!
-	DWORD flags=ULF_PACKASTERISKS|ULF_PROCESSBRACKETS|ULF_SORT|ULF_UNIQUE;
 
-	if (Flags&FMPF_ADDASTERISK)
-		flags|=ULF_ADDASTERISK;
+	string expmasks(masks);
+	size_t StartPos = 0;
+	for(;;)
+	{
+		size_t LBPos, RBPos;
+		if(expmasks.Pos(LBPos, L'<', StartPos) && expmasks.Pos(RBPos, L'>', LBPos))
+		{
+			string MaskGroupNameWB = expmasks.SubStr(LBPos, RBPos-LBPos+1);
+			string MaskGroupName = expmasks.SubStr(LBPos+1, RBPos-LBPos-1);
+			string MaskGroupValue;
+			if(GeneralCfg->GetValue(L"Masks", MaskGroupName, MaskGroupValue, L""))
+			{
+				ReplaceStrings(expmasks, MaskGroupNameWB, MaskGroupValue);
+			}
+			StartPos = RBPos+1;
+		}
+		else
+			break;
+	}
 
-	bRE = (masks && *masks == L'/');
+	bRE = expmasks.At(0) == L'/';
 
 	if (bRE)
 	{
 		re = new RegExp;
 
-		if (re && re->Compile(masks, OP_PERLSTYLE|OP_OPTIMIZE))
+		if (re && re->Compile(expmasks, OP_PERLSTYLE|OP_OPTIMIZE))
 		{
 			n = re->GetBracketsCount();
 			m = (SMatch *)xf_malloc(n*sizeof(SMatch));
@@ -102,8 +119,14 @@ bool FileMasksProcessor::Set(const string& masks, DWORD Flags)
 		return false;
 	}
 
+	// разделителем масок является не только запятая, но и точка с запятой!
+	DWORD flags=ULF_PACKASTERISKS|ULF_PROCESSBRACKETS|ULF_SORT|ULF_UNIQUE;
+
+	if (Flags&FMPF_ADDASTERISK)
+		flags|=ULF_ADDASTERISK;
+
 	Masks.SetParameters(L',',L';',flags);
-	return Masks.Set(masks);
+	return Masks.Set(expmasks);
 }
 
 bool FileMasksProcessor::IsEmpty()

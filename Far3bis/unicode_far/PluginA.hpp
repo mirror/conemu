@@ -31,6 +31,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef NO_WRAPPER
 
 #include "plclass.hpp"
+namespace wrapper
+{
+
 #include "pluginold.hpp"
 
 class PluginA: public Plugin
@@ -74,7 +77,8 @@ public:
 #if defined(MANTIS_0001687)
 	virtual int ProcessConsoleInput(ProcessConsoleInputInfo *Info) {return 0;}
 #endif
-	virtual int Analyse(const AnalyseInfo *Info) { return FALSE; }
+	virtual HANDLE Analyse(const AnalyseInfo *Info) { return nullptr; }
+	virtual void CloseAnalyse(HANDLE hHandle) {}
 	virtual bool GetPluginInfo(PluginInfo *pi);
 	virtual int Configure(const GUID& Guid);
 	virtual void ExitFAR(const ExitInfo *Info);
@@ -83,7 +87,7 @@ public:
 	virtual const wchar_t *GetHotkeyName() const { return GetCacheName(); }
 
 	virtual bool InitLang(const wchar_t *Path) { return PluginLang.InitA(Path); }
-	const char *GetMsgA(int nID) const { return PluginLang.GetMsgA(nID); }
+	const char *GetMsgA(LNGID nID) const { return PluginLang.GetMsgA(nID); }
 
 private:
 	virtual void __Prolog() { SetFileApisToOEM(); OEMApiCnt++; }
@@ -106,4 +110,7 @@ private:
 	UINT64 OEMApiCnt;
 };
 
+void LocalUpperInit();
+
+};
 #endif // NO_WRAPPER

@@ -44,13 +44,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "panelmix.hpp"
 #include "privilege.hpp"
 #include "message.hpp"
-#include "lang.hpp"
 #include "language.hpp"
 #include "dirmix.hpp"
 #include "treelist.hpp"
 #include "elevation.hpp"
 
-bool WINAPI CreateVolumeMountPoint(const string& TargetVolume, const string& Object)
+bool CreateVolumeMountPoint(const string& TargetVolume, const string& Object)
 {
 	bool Result=false;
 	string strBuf;
@@ -152,7 +151,7 @@ bool SetREPARSE_DATA_BUFFER(const string& Object,PREPARSE_DATA_BUFFER rdb)
 	return Result;
 }
 
-bool WINAPI CreateReparsePoint(const string& Target, const string& Object,ReparsePointTypes Type)
+bool CreateReparsePoint(const string& Target, const string& Object,ReparsePointTypes Type)
 {
 	bool Result=false;
 
@@ -287,7 +286,7 @@ bool GetREPARSE_DATA_BUFFER(const string& Object,PREPARSE_DATA_BUFFER rdb)
 	return Result;
 }
 
-bool WINAPI DeleteReparsePoint(const string& Object)
+bool DeleteReparsePoint(const string& Object)
 {
 	bool Result=false;
 	LPBYTE Buff=new BYTE[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
@@ -309,7 +308,7 @@ bool WINAPI DeleteReparsePoint(const string& Object)
 	return Result;
 }
 
-DWORD WINAPI GetReparsePointInfo(const string& Object, string &strDestBuff,LPDWORD lpReparseTag)
+DWORD GetReparsePointInfo(const string& Object, string &strDestBuff,LPDWORD lpReparseTag)
 {
 	WORD NameLength=0;
 	LPBYTE szBuff=new BYTE[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
@@ -362,7 +361,7 @@ DWORD WINAPI GetReparsePointInfo(const string& Object, string &strDestBuff,LPDWO
 	return NameLength;
 }
 
-int WINAPI GetNumberOfLinks(const string& Name)
+int GetNumberOfLinks(const string& Name)
 {
 	int NumberOfLinks=1;
 	File file;
@@ -379,7 +378,7 @@ int WINAPI GetNumberOfLinks(const string& Name)
 }
 
 
-int WINAPI MkHardLink(const wchar_t *ExistingName,const wchar_t *NewName)
+int MkHardLink(const wchar_t *ExistingName,const wchar_t *NewName)
 {
 	return apiCreateHardLink(NewName, ExistingName, nullptr) != FALSE;
 }
@@ -569,56 +568,6 @@ bool DuplicateReparsePoint(const string& Src,const string& Dst)
 	return Result;
 }
 
-BOOL WINAPI FarMkLink(const wchar_t *Src,const wchar_t *Dest, LINK_TYPE Type, MKLINK_FLAGS Flags)
-{
-	int Result=0;
-
-	if (Src && *Src && Dest && *Dest)
-	{
-		switch (Type)
-		{
-			case LINK_HARDLINK:
-				Result=MkHardLink(Src,Dest);
-				break;
-			case LINK_JUNCTION:
-			case LINK_VOLMOUNT:
-			case LINK_SYMLINKFILE:
-			case LINK_SYMLINKDIR:
-				{
-					ReparsePointTypes LinkType=RP_JUNCTION;
-
-					switch (Type)
-					{
-						case LINK_VOLMOUNT:
-							LinkType=RP_VOLMOUNT;
-							break;
-						case LINK_SYMLINK:
-							LinkType=RP_SYMLINK;
-							break;
-						case LINK_SYMLINKFILE:
-							LinkType=RP_SYMLINKFILE;
-							break;
-						case LINK_SYMLINKDIR:
-							LinkType=RP_SYMLINKDIR;
-							break;
-						default:
-							break;
-					}
-
-					Result=MkSymLink(Src,Dest,LinkType,(Flags&MLF_SHOWERRMSG?0:FCOPY_NOSHOWMSGLINK));
-				}
-				break;
-			default:
-				break;
-		}
-	}
-
-	if (Result && !(Flags&MLF_DONOTUPDATEPANEL))
-		ShellUpdatePanels(nullptr,FALSE);
-
-	return Result;
-}
-
 void NormalizeSymlinkName(string &strLinkName)
 {
 	if (!StrCmpN(strLinkName,L"\\??\\",4))
@@ -729,12 +678,9 @@ int MkSymLink(const wchar_t *SelName,const wchar_t *Dest,ReparsePointTypes LinkT
 						{
 							if (LinkType==RP_VOLMOUNT)
 							{
-								TemplateString strMsgBuf[2] = {MSG(MCopyMountVolFailed), MSG(MCopyMountVolFailed2)};
-								strMsgBuf[0] << SelName;
-								strMsgBuf[1] << strDestFullName;
 								Message(MSG_WARNING,1,MSG(MError),
-								        strMsgBuf[0],
-								        strMsgBuf[1],
+								        LangString(MCopyMountVolFailed) << SelName,
+								        LangString(MCopyMountVolFailed2) << strDestFullName,
 								        MSG(MCopyFolderNotEmpty),
 								        MSG(MOk));
 							}
@@ -859,10 +805,11 @@ int MkSymLink(const wchar_t *SelName,const wchar_t *Dest,ReparsePointTypes LinkT
 			{
 				if (!(Flags&FCOPY_NOSHOWMSGLINK))
 				{
-					TemplateString strMsgBuf[2] = {MSG(MCopyMountVolFailed), MSG(MCopyMountVolFailed2)};
-					strMsgBuf[0] << SelName;
-					strMsgBuf[1] << strDestFullName;
-					Message(MSG_WARNING|MSG_ERRORTYPE,1,MSG(MError),strMsgBuf[0],strMsgBuf[1],MSG(MOk));
+					Message(MSG_WARNING|MSG_ERRORTYPE,1,
+						MSG(MError),
+						LangString(MCopyMountVolFailed) << SelName,
+						LangString(MCopyMountVolFailed2) << strDestFullName,
+						MSG(MOk));
 				}
 
 				return 0;

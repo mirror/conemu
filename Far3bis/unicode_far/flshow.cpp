@@ -36,7 +36,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "filelist.hpp"
 #include "colors.hpp"
-#include "lang.hpp"
 #include "filefilter.hpp"
 #include "cmdline.hpp"
 #include "filepanels.hpp"
@@ -55,9 +54,9 @@ extern int ColumnTypeWidth[];
 
 static wchar_t OutCharacter[8]={};
 
-static int __FormatEndSelectedPhrase(size_t Count)
+static LNGID __FormatEndSelectedPhrase(size_t Count)
 {
-	int M_Fmt=MListFileSize;
+	LNGID M_Fmt=MListFileSize;
 
 	if (Count != 1)
 	{
@@ -114,7 +113,7 @@ void FileList::ShowFileList(int Fast)
 		if (ProcessPluginEvent(FE_REDRAW,nullptr))
 			return;
 
-		CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,&Info);
+		CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
 		strInfoCurDir=Info.CurDir;
 	}
 
@@ -146,7 +145,7 @@ void FileList::ShowFileList(int Fast)
 
 		if (Opt.ShowColumnTitles)
 		{
-			int IDMessage=-1;
+			LNGID IDMessage=MColumnUnknown;
 
 			switch (ViewSettings.ColumnType[I] & 0xff)
 			{
@@ -169,7 +168,7 @@ void FileList::ShowFileList(int Fast)
 					IDMessage=MColumnTime;
 					break;
 				case WDATE_COLUMN:
-						IDMessage=MColumnWrited;
+					IDMessage=MColumnWrited;
 					break;
 				case CDATE_COLUMN:
 					IDMessage=MColumnCreated;
@@ -200,8 +199,7 @@ void FileList::ShowFileList(int Fast)
 					break;
 			}
 
-			if (IDMessage != -1)
-				strTitle=MSG(IDMessage);
+			strTitle=MSG(IDMessage);
 
 			if (PanelMode==PLUGIN_PANEL && Info.PanelModesArray &&
 			        ViewMode<static_cast<int>(Info.PanelModesNumber) &&
@@ -259,7 +257,7 @@ void FileList::ShowFileList(int Fast)
 		                        BY_NUMSTREAMS,BY_STREAMSSIZE,
 		                        BY_FULLNAME,BY_CUSTOMDATA
 		                       };
-		static int SortStrings[]={MMenuUnsorted,MMenuSortByName,
+		static LNGID SortStrings[]={MMenuUnsorted,MMenuSortByName,
 		                          MMenuSortByExt,MMenuSortByWrite,MMenuSortByCreation,
 		                          MMenuSortByAccess,MMenuSortByChange,MMenuSortBySize,MMenuSortByDiz,MMenuSortByOwner,
 		                          MMenuSortByAllocatedSize,MMenuSortByNumLinks,MMenuSortByNumStreams,MMenuSortByStreamsSize,
@@ -538,7 +536,7 @@ void FileList::ShowSelectedSize()
 	{
 		string strFormStr;
 		InsertCommas(SelFileSize,strFormStr);
-		TemplateString strSelStr(MSG(__FormatEndSelectedPhrase(SelFileCount)));
+		LangString strSelStr(__FormatEndSelectedPhrase(SelFileCount));
 		strSelStr << strFormStr << SelFileCount;
 		TruncStr(strSelStr,X2-X1-1);
 		int Length=(int)strSelStr.GetLength();
@@ -570,9 +568,7 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 	{
 		if (!Opt.ShowPanelFree || strFreeSize.IsEmpty())
 		{
-			TemplateString str(MSG(__FormatEndSelectedPhrase(TotalFileCount)));
-			str << strFormSize << TotalFileCount;
-			strTotalStr = str;
+			strTotalStr = LangString(__FormatEndSelectedPhrase(TotalFileCount)) << strFormSize << TotalFileCount;
 		}
 		else
 		{
@@ -592,9 +588,7 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 	}
 	else
 	{
-		TemplateString str(MSG(MListFreeSize));
-		str << (!strFreeSize.IsEmpty()? strFreeSize : L"???");
-		strTotalStr = str;
+		strTotalStr = LangString(MListFreeSize) << (!strFreeSize.IsEmpty()? strFreeSize : L"???");
 	}
 	SetColor(COL_PANELTOTALINFO);
 	/* $ 01.08.2001 VVM
@@ -677,7 +671,7 @@ void FileList::PrepareViewSettings(int ViewMode,OpenPanelInfo *PlugInfo)
 	if (PanelMode==PLUGIN_PANEL)
 	{
 		if (!PlugInfo)
-			CtrlObject->Plugins.GetOpenPanelInfo(hPlugin,&Info);
+			CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
 		else
 			Info=*PlugInfo;
 	}
@@ -1141,7 +1135,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						if (PanelMode!=PLUGIN_PANEL && !ListData[ListPos]->CustomDataLoaded)
 						{
 							//Maximus: BUGBUG: требуется установка текущей папки для панели (это может быть пассивная панель!)
-							CtrlObject->Plugins.GetCustomData(ListData[ListPos]);
+							CtrlObject->Plugins->GetCustomData(ListData[ListPos]);
 						}
 						#endif
 						ColumnData=ListData[ListPos]->strCustomData;//L"";

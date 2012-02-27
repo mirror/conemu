@@ -36,7 +36,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "help.hpp"
 #include "keyboard.hpp"
-#include "lang.hpp"
 #include "keys.hpp"
 #include "colors.hpp"
 #include "scantree.hpp"
@@ -677,9 +676,7 @@ void Help::AddLine(const wchar_t *Line)
 
 void Help::AddTitle(const wchar_t *Title)
 {
-	FormatString strIndexHelpTitle;
-	strIndexHelpTitle << L"^ #" << Title << L"#";
-	AddLine(strIndexHelpTitle);
+	AddLine(FormatString() << L"^ #" << Title << L"#");
 }
 
 void Help::HighlightsCorrection(string &strStr)
@@ -1812,9 +1809,9 @@ void Help::ReadDocumentsHelp(int TypeIndex)
 	{
 		case HIDX_PLUGINS:
 		{
-			for (size_t I=0; I<CtrlObject->Plugins.GetPluginsCount(); I++)
+			for (size_t I=0; I<CtrlObject->Plugins->GetPluginsCount(); I++)
 			{
-				strPath = CtrlObject->Plugins.GetPlugin(I)->GetModuleName();
+				strPath = CtrlObject->Plugins->GetPlugin(I)->GetModuleName();
 				CutToSlash(strPath);
 				UINT nCodePage = CP_OEMCP;
 				FILE *HelpFile=OpenLangFile(strPath,HelpFileMask,Opt.strHelpLanguage,strFullFileName, nCodePage);
@@ -1861,7 +1858,7 @@ string &Help::MkTopic(Plugin* pPlugin,const wchar_t *HelpTopic,string &strTopic)
 		}
 		else
 		{
-			if (pPlugin != INVALID_HANDLE_VALUE && pPlugin && *HelpTopic!=HelpBeginLink)
+			if (pPlugin && *HelpTopic!=HelpBeginLink)
 			{
 				strTopic.Format(HelpFormatLinkModule, pPlugin->GetModuleName().CPtr(), HelpTopic);
 			}

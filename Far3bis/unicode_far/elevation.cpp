@@ -35,7 +35,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "elevation.hpp"
 #include "config.hpp"
-#include "lang.hpp"
 #include "language.hpp"
 #include "dialog.hpp"
 #include "pathmix.hpp"
@@ -179,7 +178,6 @@ elevation::elevation():
 	Process(nullptr),
 	Job(nullptr),
 	PID(0),
-	MainThreadID(GetCurrentThreadId()),
 	Elevation(false),
 	DontAskAgain(false),
 	Approve(false),
@@ -436,11 +434,11 @@ struct EAData
 {
 	Event* pEvent;
 	const string& Object;
-	int Why;
+	LNGID Why;
 	bool& AskApprove;
 	bool& Approve;
 	bool& DontAskAgain;
-	EAData(Event* pEvent, const string& Object, int Why, bool& AskApprove, bool& Approve, bool& DontAskAgain):
+	EAData(Event* pEvent, const string& Object, LNGID Why, bool& AskApprove, bool& Approve, bool& DontAskAgain):
 		pEvent(pEvent), Object(Object), Why(Why), AskApprove(AskApprove), Approve(Approve), DontAskAgain(DontAskAgain){}
 };
 
@@ -475,7 +473,7 @@ void ElevationApproveDlgSync(LPVOID Param)
 	}
 }
 
-bool elevation::ElevationApproveDlg(int Why, const string& Object)
+bool elevation::ElevationApproveDlg(LNGID Why, const string& Object)
 {
 	if(!(Opt.IsUserAdmin && !(Opt.CurrentElevationMode&ELEVATION_USE_PRIVILEGES)) &&
 		AskApprove && !DontAskAgain && !Recurse &&
@@ -485,7 +483,7 @@ bool elevation::ElevationApproveDlg(int Why, const string& Object)
 		GuardLastError error;
 		TaskBarPause TBP;
 		EAData Data(nullptr, Object, Why, AskApprove, Approve, DontAskAgain);
-		if(GetCurrentThreadId()!=MainThreadID)
+		if(!MainThread())
 		{
 			Data.pEvent=new Event();
 			if(Data.pEvent)
@@ -910,7 +908,7 @@ bool elevation::fCreateSymbolicLink(const string& Object, const string& Target, 
 int elevation::fMoveToRecycleBin(SHFILEOPSTRUCT& FileOpStruct)
 {
 	CriticalSectionLock Lock(CS);
-	int Result=0;
+	int Result=0x78; //DE_ACCESSDENIEDSRC
 	if(ElevationApproveDlg(MElevationRequiredRecycle, FileOpStruct.pFrom))
 	{
 		if(Opt.IsUserAdmin)
@@ -943,6 +941,10 @@ int elevation::fMoveToRecycleBin(SHFILEOPSTRUCT& FileOpStruct)
 						}
 					}
 				}
+			}
+			else
+			{
+				Result=0x75; // DE_OPCANCELLED
 			}
 		}
 	}

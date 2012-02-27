@@ -35,10 +35,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "plclass.hpp"
 #include "plugins.hpp"
 #include "pathmix.hpp"
-#include "dirmix.hpp"
-#include "strmix.hpp"
-#include "message.hpp"
-#include "lang.hpp"
 #include "lasterror.hpp"
 #include "config.hpp"
 #include "farexcpt.hpp"
@@ -47,24 +43,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ctrlobj.hpp"
 #include "farversion.hpp"
 #include "plugapi.hpp"
-#include "flink.hpp"
-#include "xlat.hpp"
-#include "stddlg.hpp"
-#include "clipboard.hpp"
-#include "plugins.hpp"
 #include "message.hpp"
 #include "dirmix.hpp"
 #include "strmix.hpp"
-#include "processname.hpp"
-#include "vmenu.hpp"
-#include "dialog.hpp"
-#include "colormix.hpp"
-#include "keyboard.hpp"
-#include "synchro.hpp"
-#include "setcolor.hpp"
-#include "mix.hpp"
 #include "FarGuid.hpp"
-#include "console.hpp"
 
 typedef void   (WINAPI *iClosePanelPrototype)          (const ClosePanelInfo *Info);
 typedef int    (WINAPI *iComparePrototype)             (const CompareInfo *Info);
@@ -99,9 +81,11 @@ typedef int    (WINAPI *iProcessMacroPrototype)        (const ProcessMacroInfo *
 #if defined(MANTIS_0001687)
 typedef int    (WINAPI *iProcessConsoleInputPrototype) (const ProcessConsoleInputInfo *Info);
 #endif
-typedef int    (WINAPI *iAnalysePrototype)             (const AnalyseInfo *Info);
+typedef HANDLE (WINAPI *iAnalysePrototype)             (const AnalyseInfo *Info);
 typedef int    (WINAPI *iGetCustomDataPrototype)       (const wchar_t *FilePath, wchar_t **CustomData);
 typedef void   (WINAPI *iFreeCustomDataPrototype)      (wchar_t *CustomData);
+typedef void   (WINAPI *iCloseAnalysePrototype)        (const CloseAnalyseInfo *Info);
+
 #if 1
 //Maximus: поддержка Far3wrap
 typedef void*  (WINAPI *iWrapperFunction2Prototype)    (HMODULE hModule, LPCSTR lpProcName);
@@ -144,6 +128,7 @@ typedef void*  (WINAPI *iWrapperFunction2Prototype)    (HMODULE hModule, LPCSTR 
 #define EXP_ANALYSE             "AnalyseW"
 #define EXP_GETCUSTOMDATA       "GetCustomDataW"
 #define EXP_FREECUSTOMDATA      "FreeCustomDataW"
+#define EXP_CLOSEANALYSE        "CloseAnalyseW"
 
 #define EXP_OPENFILEPLUGIN      ""
 #define EXP_GETMINFARVERSION    ""
@@ -192,6 +177,7 @@ static const char* _ExportsNamesA[i_LAST] =
 	EXP_ANALYSE,
 	EXP_GETCUSTOMDATA,
 	EXP_FREECUSTOMDATA,
+	EXP_CLOSEANALYSE,
 
 	EXP_OPENFILEPLUGIN,
 	EXP_GETMINFARVERSION,
@@ -241,6 +227,7 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 	W(EXP_ANALYSE),
 	W(EXP_GETCUSTOMDATA),
 	W(EXP_FREECUSTOMDATA),
+	W(EXP_CLOSEANALYSE),
 
 	W(EXP_OPENFILEPLUGIN),
 	W(EXP_GETMINFARVERSION),
@@ -250,138 +237,6 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 	W(EXP_WRAPPERFUNCTION2),
 	#endif
 };
-
-size_t WINAPI FarKeyToName(int Key,wchar_t *KeyText,size_t Size)
-{
-	string strKT;
-
-	if (!KeyToText(Key,strKT))
-		return 0;
-
-	size_t len = strKT.GetLength();
-
-	if (Size && KeyText)
-	{
-		if (Size <= len) len = Size-1;
-
-		wmemcpy(KeyText, strKT.CPtr(), len);
-		KeyText[len] = 0;
-	}
-	else if (KeyText) *KeyText = 0;
-
-	return (len+1);
-}
-
-int WINAPI KeyNameToKeyW(const wchar_t *Name)
-{
-	string strN(Name);
-	return KeyNameToKey(strN);
-}
-
-static size_t WINAPI InputRecordToKeyName(const INPUT_RECORD* Key, wchar_t *KeyText, size_t Size)
-{
-	return FarKeyToName(InputRecordToKey(Key),KeyText,Size);
-}
-
-static BOOL WINAPI KeyNameToInputRecord(const wchar_t *Name,INPUT_RECORD* RecKey)
-{
-	int Key=KeyNameToKeyW(Name);
-	return Key > 0?(KeyToInputRecord(Key,RecKey)!=0?TRUE:FALSE):FALSE;
-}
-
-#define GuidToPlugin(Id) (CtrlObject?CtrlObject->Plugins.PluginGuidToPluginNumber(*Id):-1)
-
-static int WINAPI FarGetPluginDirListW(const GUID* PluginId,HANDLE hPlugin,
-                               const wchar_t *Dir,struct PluginPanelItem **pPanelItem,
-                               size_t *pItemsNumber)
-{
-	return FarGetPluginDirList(GuidToPlugin(PluginId),hPlugin,Dir,pPanelItem,pItemsNumber);
-}
-
-static int WINAPI FarMenuFnW(const GUID* PluginId,const GUID* Id,int X,int Y,int MaxHeight,
-                     unsigned __int64 Flags,const wchar_t *Title,const wchar_t *Bottom,
-                     const wchar_t *HelpTopic,const FarKey *BreakKeys,int *BreakCode,
-                     const struct FarMenuItem *Item, size_t ItemsNumber)
-{
-	return FarMenuFn(GuidToPlugin(PluginId),Id,X,Y,MaxHeight,Flags,Title,Bottom,HelpTopic,BreakKeys,BreakCode,Item,ItemsNumber);
-}
-
-static int WINAPI FarMessageFnW(const GUID* PluginId,const GUID* Id,unsigned __int64 Flags,
-                        const wchar_t *HelpTopic,const wchar_t * const *Items,size_t ItemsNumber,
-                        int ButtonsNumber)
-{
-  return FarMessageFn(GuidToPlugin(PluginId),Id,Flags,HelpTopic,Items,ItemsNumber,ButtonsNumber);
-}
-
-static int WINAPI FarInputBoxW(const GUID* PluginId,const GUID* Id,const wchar_t *Title,const wchar_t *Prompt,
-                       const wchar_t *HistoryName,const wchar_t *SrcText,
-                       wchar_t *DestText, size_t DestSize,
-                       const wchar_t *HelpTopic,unsigned __int64 Flags)
-{
-	return FarInputBox(GuidToPlugin(PluginId),Id,Title,Prompt,HistoryName,SrcText,DestText,DestSize,HelpTopic,Flags);
-}
-
-static BOOL WINAPI farColorDialog(const GUID* PluginId, COLORDIALOGFLAGS Flags, struct FarColor *Color)
-{
-	BOOL Result = FALSE;
-	if (!FrameManager->ManagerIsDown())
-	{
-		Result = Console.GetColorDialog(*Color, true, false);
-	}
-	return Result;
-}
-
-static INT_PTR WINAPI FarAdvControlW(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Command, int Param1, void* Param2)
-{
-	if (ACTL_SYNCHRO==Command) //must be first
-	{
-		PluginSynchroManager.Synchro(true, *PluginId, Param2);
-		return 0;
-	}
-	if (ACTL_GETWINDOWTYPE==Command)
-	{
-		WindowType* info=(WindowType*)Param2;
-		if (CheckStructSize(info))
-		{
-			WINDOWINFO_TYPE type=ModalType2WType(CurrentWindowType);
-			switch(type)
-			{
-				case WTYPE_PANELS:
-				case WTYPE_VIEWER:
-				case WTYPE_EDITOR:
-				case WTYPE_DIALOG:
-				case WTYPE_VMENU:
-				case WTYPE_HELP:
-					info->Type=type;
-					return TRUE;
-				default:
-					break;
-			}
-		}
-		return FALSE;
-	}
-	return FarAdvControl(GuidToPlugin(PluginId), Command, Param1, Param2);
-}
-
-static HANDLE WINAPI FarDialogInitW(const GUID* PluginId, const GUID* Id, int X1, int Y1, int X2, int Y2,
-                            const wchar_t *HelpTopic, const struct FarDialogItem *Item,
-                            size_t ItemsNumber, DWORD_PTR Reserved, unsigned __int64 Flags,
-                            FARWINDOWPROC Proc, void* Param)
-{
-	return FarDialogInit(GuidToPlugin(PluginId),Id,X1,Y1,X2,Y2,HelpTopic,Item,ItemsNumber,Reserved,Flags,Proc,Param);
-}
-
-static const wchar_t* WINAPI FarGetMsgFnW(const GUID* PluginId,int MsgId)
-{
-	#if 1
-	//Maximus: для отладки
-	INT_PTR PluginNumber = GuidToPlugin(PluginId);
-	_ASSERTE(PluginNumber!=-1);
-	return FarGetMsgFn(PluginNumber,MsgId);
-	#else
-	return FarGetMsgFn(GuidToPlugin(PluginId),MsgId);
-	#endif
-}
 
 static BOOL PrepareModulePath(const wchar_t *ModuleName)
 {
@@ -403,92 +258,92 @@ static void CheckScreenLock()
 FarStandardFunctions NativeFSF =
 {
 	sizeof(NativeFSF),
-	FarAtoi,
-	FarAtoi64,
-	FarItoa,
-	FarItoa64,
-	swprintf,
+	pluginapi::apiAtoi,
+	pluginapi::apiAtoi64,
+	pluginapi::apiItoa,
+	pluginapi::apiItoa64,
+	pluginapi::apiSprintf,
 	swscanf,
-	FarQsort,
-	FarBsearch,
-	FarQsortEx,
-	_snwprintf,
-	{},
-	farIsLower,
-	farIsUpper,
-	farIsAlpha,
-	farIsAlphaNum,
-	farUpper,
-	farLower,
-	farUpperBuf,
-	farLowerBuf,
-	farStrUpper,
-	farStrLower,
-	farStrCmpI,
-	farStrCmpNI,
-	Unquote,
-	RemoveLeadingSpaces,
-	RemoveTrailingSpaces,
-	RemoveExternalSpaces,
-	TruncStr,
-	TruncPathStr,
-	QuoteSpaceOnly,
-	PointToName,
-	farGetPathRoot,
-	AddEndSlash,
-	CopyToClipboard,
-	PasteFromClipboard,
-	InputRecordToKeyName,
-	KeyNameToInputRecord,
-	Xlat,
-	farGetFileOwner,
-	farGetNumberOfLinks,
-	FarRecursiveSearch,
-	FarMkTemp,
-	DeleteBuffer,
-	ProcessName,
-	FarMkLink,
-	farConvertPath,
-	farGetReparsePointInfo,
-	farGetCurrentDirectory,
-	farFormatFileSize,
+	pluginapi::apiQsort,
+	pluginapi::apiBsearch,
+	pluginapi::apiQsortEx,
+	pluginapi::apiSnprintf,
+	{}, //Reserved
+	pluginapi::apiIsLower,
+	pluginapi::apiIsUpper,
+	pluginapi::apiIsAlpha,
+	pluginapi::apiIsAlphaNum,
+	pluginapi::apiUpper,
+	pluginapi::apiLower,
+	pluginapi::apiUpperBuf,
+	pluginapi::apiLowerBuf,
+	pluginapi::apiStrUpper,
+	pluginapi::apiStrLower,
+	pluginapi::apiStrCmpI,
+	pluginapi::apiStrCmpNI,
+	pluginapi::apiUnquote,
+	pluginapi::apiRemoveLeadingSpaces,
+	pluginapi::apiRemoveTrailingSpaces,
+	pluginapi::apiRemoveExternalSpaces,
+	pluginapi::apiTruncStr,
+	pluginapi::apiTruncPathStr,
+	pluginapi::apiQuoteSpaceOnly,
+	pluginapi::apiPointToName,
+	pluginapi::apiGetPathRoot,
+	pluginapi::apiAddEndSlash,
+	pluginapi::apiCopyToClipboard,
+	pluginapi::apiPasteFromClipboard,
+	pluginapi::apiInputRecordToKeyName,
+	pluginapi::apiKeyNameToInputRecord,
+	pluginapi::apiXlat,
+	pluginapi::apiGetFileOwner,
+	pluginapi::apiGetNumberOfLinks,
+	pluginapi::apiRecursiveSearch,
+	pluginapi::apiMkTemp,
+	pluginapi::apiDeleteBuffer,
+	pluginapi::apiProcessName,
+	pluginapi::apiMkLink,
+	pluginapi::apiConvertPath,
+	pluginapi::apiGetReparsePointInfo,
+	pluginapi::apiGetCurrentDirectory,
+	pluginapi::apiFormatFileSize,
 };
 
 PluginStartupInfo NativeInfo =
 {
 	sizeof(NativeInfo),
 	nullptr, //ModuleName, dynamic
-	FarMenuFnW,
-	FarMessageFnW,
-	FarGetMsgFnW,
-	FarPanelControl,
-	FarSaveScreen,
-	FarRestoreScreen,
-	FarGetDirList,
-	FarGetPluginDirListW,
-	FarFreeDirList,
-	FarFreePluginDirList,
-	FarViewer,
-	FarEditor,
-	FarText,
-	FarEditorControl,
-	nullptr, //FSF, dynamic
-	FarShowHelp,
-	FarAdvControlW,
-	FarInputBoxW,
-	farColorDialog,
-	FarDialogInitW,
-	FarDialogRun,
-	FarDialogFree,
-	FarSendDlgMessage,
-	FarDefDlgProc,
-	0,
-	FarViewerControl,
-	farPluginsControl,
-	farFileFilterControl,
-	farRegExpControl,
-	farMacroControl,
-	farSettingsControl,
+	pluginapi::apiMenuFn,
+	pluginapi::apiMessageFn,
+	pluginapi::apiGetMsgFn,
+	pluginapi::apiPanelControl,
+	pluginapi::apiSaveScreen,
+	pluginapi::apiRestoreScreen,
+	pluginapi::apiGetDirList,
+	pluginapi::apiGetPluginDirList,
+	pluginapi::apiFreeDirList,
+	pluginapi::apiFreePluginDirList,
+	pluginapi::apiViewer,
+	pluginapi::apiEditor,
+	pluginapi::apiText,
+	pluginapi::apiEditorControl,
+	nullptr, // FSF, dynamic
+	pluginapi::apiShowHelp,
+	pluginapi::apiAdvControl,
+	pluginapi::apiInputBox,
+	pluginapi::apiColorDialog,
+	pluginapi::apiDialogInit,
+	pluginapi::apiDialogRun,
+	pluginapi::apiDialogFree,
+	pluginapi::apiSendDlgMessage,
+	pluginapi::apiDefDlgProc,
+	0, //Reserved
+	pluginapi::apiViewerControl,
+	pluginapi::apiPluginsControl,
+	pluginapi::apiFileFilterControl,
+	pluginapi::apiRegExpControl,
+	pluginapi::apiMacroControl,
+	pluginapi::apiSettingsControl,
 };
 
 void CreatePluginStartupInfo(const Plugin* pPlugin, PluginStartupInfo *PSI, FarStandardFunctions *FSF)
@@ -505,15 +360,12 @@ void CreatePluginStartupInfo(const Plugin* pPlugin, PluginStartupInfo *PSI, FarS
 
 static void ShowMessageAboutIllegalPluginVersion(const wchar_t* plg,const VersionInfo& required)
 {
-	TemplateString strMsg1(MSG(MPlgRequired)), strMsg2(MSG(MPlgRequired2));
-	string strPlgName;
-	FormatString str;
-	str << required.Major << L'.' << required.Minor << L'.' << required.Revision << L'.' << required.Build;
-	strMsg1 << str;
-	str.Clear();
-	str << FAR_VERSION.Major << L'.' << FAR_VERSION.Minor << L'.' << FAR_VERSION.Revision << L'.' << FAR_VERSION.Build;
-	strMsg2 << str;
-	Message(MSG_WARNING|MSG_NOPLUGINS,1,MSG(MError),MSG(MPlgBadVers),plg,strMsg1,strMsg2,MSG(MOk));
+	Message(MSG_WARNING|MSG_NOPLUGINS, 1,
+		MSG(MError),
+		MSG(MPlgBadVers),
+		LangString(MPlgRequired) << (FormatString() << required.Major << L'.' << required.Minor << L'.' << required.Revision << L'.' << required.Build),
+		LangString(MPlgRequired2) << (FormatString() << FAR_VERSION.Major << L'.' << FAR_VERSION.Minor << L'.' << FAR_VERSION.Revision << L'.' << FAR_VERSION.Build),
+		MSG(MOk));
 }
 
 bool Plugin::SaveToCache()
@@ -607,6 +459,9 @@ bool Plugin::SaveToCache()
 		}
 
 		PlCacheCfg->SetCommandPrefix(id, NullToEmpty(Info.CommandPrefix));
+#if defined(MANTIS_0000466)
+		PlCacheCfg->SetMacroFunctions(id, NullToEmpty(Info.MacroFunctions));
+#endif
 		PlCacheCfg->SetFlags(id, Info.Flags);
 
 		PlCacheCfg->SetMinFarVersion(id, &MinFarVersion);
@@ -688,6 +543,7 @@ void Plugin::InitExports()
 	OPT_GetProcAddress(iAnalyse);
 	OPT_GetProcAddress(iGetCustomData);
 	OPT_GetProcAddress(iFreeCustomData);
+	OPT_GetProcAddress(iCloseAnalyse);
 
 	OPT_GetProcAddress(iOpenFilePlugin);
 	OPT_GetProcAddress(iGetMinFarVersion);
@@ -704,6 +560,7 @@ Plugin::Plugin(PluginManager *owner, const wchar_t *lpwszModuleName):
 	ExportsNamesW(_ExportsNamesW),
 	ExportsNamesA(_ExportsNamesA),
 	m_owner(owner),
+	Activity(0),
 	bPendingRemove(false)
 {
 	m_strModuleName = lpwszModuleName;
@@ -846,6 +703,7 @@ bool Plugin::LoadData()
 
 bool Plugin::Load()
 {
+
 	if (WorkFlags.Check(PIWF_DONTLOADAGAIN))
 		return false;
 
@@ -991,31 +849,34 @@ int Plugin::Unload(bool bExitFAR)
 	#endif
 	#endif
 
-	if (bExitFAR)
+	if (FuncFlags.Check(PICFF_LOADED))
 	{
-		const ExitInfo Info={sizeof(Info)};
-		ExitFAR(&Info);
+		if (bExitFAR)
+		{
+			const ExitInfo Info={sizeof(Info)};
+			ExitFAR(&Info);
+		}
+
+		if (!WorkFlags.Check(PIWF_CACHED))
+		{
+			#if 0
+			#ifdef _DEBUG
+			//Maximus: для отладки
+			bool bPreload = (Info.Flags & PF_PRELOAD);
+			extern PluginManager *PluginManagerForExitFar;
+			_ASSERTE(bPreload==false || PluginManagerForExitFar!=nullptr);
+			#endif
+			#endif
+
+			nResult = FreeLibrary(m_hModule);
+			ClearExports();
+		}
+
+		m_hModule = nullptr;
+		FuncFlags.Clear(PICFF_LOADED);
+		WorkFlags.Clear(PIWF_DATALOADED);
+		bPendingRemove = true;
 	}
-
-	if (!WorkFlags.Check(PIWF_CACHED))
-	{
-		#if 0
-		#ifdef _DEBUG
-		//Maximus: для отладки
-		bool bPreload = (Info.Flags & PF_PRELOAD);
-		extern PluginManager *PluginManagerForExitFar;
-		_ASSERTE(bPreload==false || PluginManagerForExitFar!=nullptr);
-		#endif
-		#endif
-
-		nResult = FreeLibrary(m_hModule);
-		ClearExports();
-	}
-
-	m_hModule = nullptr;
-	FuncFlags.Clear(PICFF_LOADED); //??
-	WorkFlags.Clear(PIWF_DATALOADED);
-	bPendingRemove = true;
 	return nResult;
 }
 
@@ -1095,22 +956,34 @@ HANDLE Plugin::OpenFilePlugin(
     int OpMode
 )
 {
-	return INVALID_HANDLE_VALUE;
+	return nullptr;
 }
 
-int Plugin::Analyse(const AnalyseInfo *Info)
+HANDLE Plugin::Analyse(const AnalyseInfo *Info)
 {
 	if (Load() && Exports[iAnalyse] && !ProcessException)
 	{
 		ExecuteStruct es;
 		es.id = EXCEPT_ANALYSE;
 		es.bDefaultResult = FALSE;
-		es.bResult = FALSE;
+		es.hResult = nullptr;
 		EXECUTE_FUNCTION_EX(FUNCTION(iAnalyse)(Info), es);
-		return es.bResult;
+		return (es.hResult == INVALID_HANDLE_VALUE)? nullptr : es.hResult;
 	}
 
-	return FALSE;
+	return nullptr;
+}
+
+void Plugin::CloseAnalyse(HANDLE hHandle)
+{
+	if (Exports[iCloseAnalyse] && !ProcessException)
+	{
+		ExecuteStruct es;
+		es.id = EXCEPT_CLOSEANALYSE;
+		CloseAnalyseInfo Info = {sizeof(Info)};
+		Info.Handle = hHandle;
+		EXECUTE_FUNCTION(FUNCTION(iCloseAnalyse)(&Info), es);
+	}
 }
 
 HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
@@ -1133,14 +1006,14 @@ HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		//CurPluginItem=this; //BUGBUG
 		ExecuteStruct es;
 		es.id = EXCEPT_OPEN;
-		es.hDefaultResult = INVALID_HANDLE_VALUE;
-		es.hResult = INVALID_HANDLE_VALUE;
+		es.hDefaultResult = nullptr;
+		es.hResult = nullptr;
 		OpenInfo Info = {sizeof(Info)};
 		Info.OpenFrom = static_cast<OPENFROM>(OpenFrom);
 		Info.Guid = &Guid;
 		Info.Data = Item;
 		EXECUTE_FUNCTION_EX(FUNCTION(iOpen)(&Info), es);
-		hResult = es.hResult;
+		hResult = (es.hResult == INVALID_HANDLE_VALUE)? nullptr : es.hResult;
 		//CurPluginItem=nullptr; //BUGBUG
 		/*    CtrlObject->Macro.SetRedrawEditor(TRUE); //BUGBUG
 
@@ -1149,11 +1022,11 @@ HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 
 		      if(OpenFrom == OPEN_EDITOR &&
 		         !CtrlObject->Macro.IsExecuting() &&
-		         CtrlObject->Plugins.CurEditor &&
-		         CtrlObject->Plugins.CurEditor->IsVisible() )
+		         CtrlObject->Plugins->CurEditor &&
+		         CtrlObject->Plugins->CurEditor->IsVisible() )
 		      {
-		        CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
-		        CtrlObject->Plugins.CurEditor->Show();
+		        CtrlObject->Plugins->ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
+		        CtrlObject->Plugins->CurEditor->Show();
 		      }
 		      if (hInternal!=INVALID_HANDLE_VALUE)
 		      {

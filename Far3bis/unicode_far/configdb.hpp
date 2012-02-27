@@ -32,6 +32,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "udlist.hpp"
+
 struct VersionInfo;
 class TiXmlElement;
 class TiXmlHandle;
@@ -108,6 +110,15 @@ public:
 	virtual bool Flush() = 0;
 };
 
+class ColorsConfig: public XmlConfig, public Transactional {
+
+public:
+
+	virtual ~ColorsConfig() {}
+	virtual bool SetValue(const wchar_t *Name, const FarColor& Value) = 0;
+	virtual bool GetValue(const wchar_t *Name, FarColor& Value) = 0;
+};
+
 class AssociationsConfig: public XmlConfig, public Transactional {
 
 public:
@@ -146,6 +157,9 @@ public:
 	virtual bool GetPluginsMenuItem(unsigned __int64 id, size_t index, string &Text, string &Guid) = 0;
 	virtual bool GetPluginsConfigMenuItem(unsigned __int64 id, size_t index, string &Text, string &Guid) = 0;
 	virtual string GetCommandPrefix(unsigned __int64 id) = 0;
+#if defined(MANTIS_0000466)
+	virtual string GetMacroFunctions(unsigned __int64 id) = 0;
+#endif
 	virtual unsigned __int64 GetFlags(unsigned __int64 id) = 0;
 	virtual bool SetPreload(unsigned __int64 id, bool Preload) = 0;
 	virtual bool SetSignature(unsigned __int64 id, const wchar_t *Signature) = 0;
@@ -153,6 +167,9 @@ public:
 	virtual bool SetPluginsMenuItem(unsigned __int64 id, size_t index, const wchar_t *Text, const wchar_t *Guid) = 0;
 	virtual bool SetPluginsConfigMenuItem(unsigned __int64 id, size_t index, const wchar_t *Text, const wchar_t *Guid) = 0;
 	virtual bool SetCommandPrefix(unsigned __int64 id, const wchar_t *Prefix) = 0;
+#if defined(MANTIS_0000466)
+	virtual bool SetMacroFunctions(unsigned __int64 id, const wchar_t *MacroFunc) = 0;
+#endif
 	virtual bool SetFlags(unsigned __int64 id, unsigned __int64 Flags) = 0;
 	virtual bool SetExport(unsigned __int64 id, const wchar_t *ExportName, bool Exists) = 0;
 	virtual bool SetMinFarVersion(unsigned __int64 id, const VersionInfo *Version) = 0;
@@ -244,6 +261,7 @@ public:
 };
 
 extern GeneralConfig *GeneralCfg;
+extern ColorsConfig *ColorsCfg;
 extern AssociationsConfig *AssocConfig;
 extern PluginsCacheConfig *PlCacheCfg;
 #ifdef _DEBUG
@@ -264,3 +282,64 @@ HierarchicalConfig *CreateFiltersConfig();
 HierarchicalConfig *CreateHighlightConfig();
 HierarchicalConfig *CreateShortcutsConfig();
 HierarchicalConfig *CreatePanelModeConfig();
+
+
+template<class T, class Y>
+const wchar_t* GetNameOfValue(T Value, const Y& From)
+{
+	for(size_t i = 0; i < ARRAYSIZE(From); ++i)
+	{
+		if(From[i].Value == Value)
+		{
+			return From[i].Name;
+		}
+	}
+	return L"";
+}
+
+template<class T>
+auto GetValueOfVame(const wchar_t* Name, const T& From) -> decltype(From->Value)
+{
+	for(size_t i = 0; i < ARRAYSIZE(From); ++i)
+	{
+		if(!StrCmpI(From[i].Name, Name))
+		{
+			return From[i].Value;
+		}
+	}
+	return 0;
+}
+
+template<class T, class Y>
+const string FlagsToString(T Flags, const Y& From)
+{
+	string strFlags;
+	for(size_t i = 0; T(1) << i <= Flags; ++i)
+	{
+		if(Flags&(T(1)<<i))
+		{
+			if(!strFlags.IsEmpty())
+			{
+				strFlags += L"|";
+			}
+			strFlags+=GetNameOfValue(Flags&(T(1)<<i), From);
+		}
+	}
+	return strFlags;
+}
+
+template<class T>
+auto StringToFlags(const string& strFlags, const T& From) -> decltype(From->Value)
+{
+	decltype(From->Value) Flags = 0;
+	if(!strFlags.IsEmpty())
+	{
+		UserDefinedList FlagList(L'|', L'|', ULF_UNIQUE);
+		FlagList.Set(strFlags);
+		while(!FlagList.IsEmpty())
+		{
+			Flags |= GetValueOfVame(FlagList.GetNext(), From);
+		}
+	}
+	return Flags;
+}

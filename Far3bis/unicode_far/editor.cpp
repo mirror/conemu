@@ -37,7 +37,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "editor.hpp"
 #include "edit.hpp"
 #include "keyboard.hpp"
-#include "lang.hpp"
 #include "macroopcode.hpp"
 #include "keys.hpp"
 #include "ctrlobj.hpp"
@@ -281,7 +280,7 @@ void Editor::ShowEditor(void)
 	  To make sure that CurEditor is set to required value.
 	*/
 	if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
-		CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
+		CtrlObject->Plugins->CurEditor=HostFileEditor; // this;
 
 	XX2=X2-(EdOpt.ShowScrollBar?1:0);
 	/* 17.04.2002 skv
@@ -345,7 +344,7 @@ void Editor::ShowEditor(void)
 			{
 				_SYS_EE_REDRAW(SysLog(L"Call ProcessEditorEvent(EE_REDRAW)"));
 				SortColorLock();
-				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
+				CtrlObject->Plugins->ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
 				SortColorUnlock();
 			}
 		}
@@ -1071,25 +1070,7 @@ int Editor::ProcessKey(int Key)
 		{
 			Pasting++;
 			Lock();
-
-			if (SelAtBeginning)
-			{
-				CurLine->Select(0,SelEnd);
-			}
-			else
-			{
-				if (!SelStart)
-				{
-					// TODO: Mantis#0001972: ShiftHome è editor.sel(0,2)
-					if (CurPos)
-						CurLine->Select(-1,0);
-				}
-				else
-				{
-					CurLine->Select(0,SelStart);
-				}
-			}
-
+			CurLine->Select(0,SelAtBeginning?SelEnd:SelStart);
 			ProcessKey(KEY_HOME);
 			Pasting--;
 			Unlock();
@@ -2135,8 +2116,8 @@ int Editor::ProcessKey(int Key)
 			/*
 			      if(!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
 			      {
-			        CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
-			        if (CtrlObject->Plugins.CommandsMenu(MODALTYPE_EDITOR,0,"Editor"))
+			        CtrlObject->Plugins->CurEditor=HostFileEditor; // this;
+			        if (CtrlObject->Plugins->CommandsMenu(MODALTYPE_EDITOR,0,"Editor"))
 			          *PluginTitle=0;
 			        Show();
 			      }
@@ -2751,9 +2732,9 @@ int Editor::ProcessKey(int Key)
 					*/
 					ShowEditor();
 					//if(!Flags.Check(FEDITOR_DIALOGMEMOEDIT)){
-					//CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
+					//CtrlObject->Plugins->CurEditor=HostFileEditor; // this;
 					//_D(SysLog(L"%08d EE_REDRAW",__LINE__));
-					//CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
+					//CtrlObject->Plugins->ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL);
 					//}
 					return TRUE;
 				}
@@ -2770,11 +2751,11 @@ int Editor::ProcessKey(int Key)
 
 					if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
 					{
-						CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
+						CtrlObject->Plugins->CurEditor=HostFileEditor; // this;
 						//_D(SysLog(L"%08d EE_REDRAW",__LINE__));
 						_SYS_EE_REDRAW(SysLog(L"Editor::ProcessKey[%d](!EdOpt.CursorBeyondEOL): EE_REDRAW(EEREDRAW_ALL)",__LINE__));
 						SortColorLock();
-						CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
+						CtrlObject->Plugins->ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
 						SortColorUnlock();
 					}
 
@@ -3062,10 +3043,10 @@ int Editor::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		{
 			if (!Flags.Check(FEDITOR_DIALOGMEMOEDIT))
 			{
-				CtrlObject->Plugins.CurEditor=HostFileEditor; // this;
+				CtrlObject->Plugins->CurEditor=HostFileEditor; // this;
 				_SYS_EE_REDRAW(SysLog(L"Editor::ProcessMouse[%08d] ProcessEditorEvent(EE_REDRAW)",__LINE__));
 				SortColorLock();
-				CtrlObject->Plugins.ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
+				CtrlObject->Plugins->ProcessEditorEvent(EE_REDRAW,EEREDRAW_ALL,EditorID);
 				SortColorUnlock();
 			}
 			ShowEditor();
@@ -3542,6 +3523,7 @@ void Editor::InsertString()
 					CurLine->ProcessKey(KEY_BS);
 
 				CurLine->SetOvertypeMode(SaveOvertypeMode);
+				Change(ECTYPE_CHANGED,NumLine);
 			}
 
 			CurLine->SetTabCurPos(IndentPos);
@@ -3835,10 +3817,7 @@ BOOL Editor::Search(int Next)
 					CurPos = CurPtr->GetCurPos();
 
 					MenuItemEx Item = {};
-					FormatString str, posstr;
-					posstr << NewNumLine+1 << L':' << CurPos+1;
-					str << fmt::LeftAlign() << fmt::Width(11) << fmt::Precision(11) << fmt::FillChar(L' ') << posstr << BoxSymbols[BS_V1] << CurPtr->GetStringAddr() + CurPos;
-					Item.strName = str;
+					Item.strName = FormatString() << fmt::LeftAlign() << fmt::Width(11) << fmt::Precision(11) << fmt::FillChar(L' ') << (FormatString() << NewNumLine+1 << L':' << CurPos+1) << BoxSymbols[BS_V1] << CurPtr->GetStringAddr() + CurPos;
 					FindCoord coord = {NewNumLine, CurPos};
 					Item.UserData = &coord;
 					Item.UserDataSize = sizeof(coord);
@@ -4092,10 +4071,9 @@ BOOL Editor::Search(int Next)
 
 	if(FindAllReferences && Match)
 	{
+		FindAllList.SetFlags(VMENU_WRAPMODE|VMENU_SHOWAMPERSAND);
 		FindAllList.SetPosition(-1, -1, 0, 0);
-		TemplateString BottomTitle(MSG(MEditSearchStatistics));
-		BottomTitle << FindAllList.GetItemCount() << AllRefLines;
-		FindAllList.SetBottomTitle(BottomTitle);
+		FindAllList.SetBottomTitle(LangString(MEditSearchStatistics) << FindAllList.GetItemCount() << AllRefLines);
 		FindAllList.Show();
 		while (!FindAllList.Done())
 		{
@@ -6995,9 +6973,7 @@ void Editor::EditorShowMsg(const wchar_t *Title,const wchar_t *Msg, const wchar_
 			wmemset(Progress,BoxSymbols[BS_X_DB],CurPos);
 			wmemset(Progress+(CurPos),BoxSymbols[BS_X_B0],Length-CurPos);
 			strProgress.ReleaseBuffer(Length);
-			FormatString strTmp;
-			strTmp<<L" "<<fmt::Width(PercentLength)<<strPercent<<L"%";
-			strProgress+=strTmp;
+			strProgress+=FormatString()<<L" "<<fmt::Width(PercentLength)<<strPercent<<L"%";
 		}
 
 		TBC.SetProgressValue(Percent,100);
@@ -7342,6 +7318,6 @@ void Editor::Change(EDITOR_CHANGETYPE Type,int StrNum)
 		StrNum=NumLine;
 	EditorChange ec={sizeof(EditorChange),Type,StrNum};
 	++EditorControlLock;
-	CtrlObject->Plugins.ProcessEditorEvent(EE_CHANGE,&ec,EditorID);
+	CtrlObject->Plugins->ProcessEditorEvent(EE_CHANGE,&ec,EditorID);
 	--EditorControlLock;
 }

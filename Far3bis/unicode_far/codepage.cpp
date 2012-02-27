@@ -35,7 +35,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma hdrstop
 
 #include "codepage.hpp"
-#include "lang.hpp"
 #include "vmenu.hpp"
 #include "keys.hpp"
 #include "language.hpp"
@@ -222,10 +221,8 @@ void AddStandardCodePage(const wchar_t *codePageName, UINT codePage, int positio
 
 	if (selectedCodePages && codePage!=CP_AUTODETECT)
 	{
-		FormatString strCodePageName;
-		strCodePageName<<codePage;
 		int selectType = 0;
-		GeneralCfg->GetValue(FavoriteCodePagesKey, strCodePageName, &selectType, 0);
+		GeneralCfg->GetValue(FavoriteCodePagesKey, FormatString() << codePage, &selectType, 0);
 
 		if (selectType & CPST_FIND)
 			checked = true;
@@ -324,7 +321,7 @@ bool GetCodePageInfo(UINT CodePage, CPINFOEX &CodePageInfoEx)
 }
 
 // Callback-функция получения таблиц символов
-BOOL __stdcall EnumCodePagesProc(const wchar_t *lpwszCodePage)
+BOOL WINAPI EnumCodePagesProc(const wchar_t *lpwszCodePage)
 {
 	UINT codePage = _wtoi(lpwszCodePage);
 

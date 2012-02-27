@@ -798,7 +798,7 @@ BOOL apiSetCurrentDirectory(const string& PathName, bool Validate)
 
 #ifndef NO_WRAPPER
 	// try to synchronize far cur dir with process cur dir
-	if(CtrlObject && CtrlObject->Plugins.GetOemPluginsCount())
+	if(CtrlObject && CtrlObject->Plugins->GetOemPluginsCount())
 	{
 		SetCurrentDirectory(strCurrentDirectory());
 	}
@@ -842,9 +842,28 @@ DWORD apiGetModuleFileNameEx(HANDLE hProcess, HMODULE hModule, string &strFileNa
 	{
 		dwBufferSize <<= 1;
 		lpwszFileName = (wchar_t*)xf_realloc_nomove(lpwszFileName, dwBufferSize*sizeof(wchar_t));
-		dwSize = hProcess? GetModuleFileNameEx(hProcess, hModule, lpwszFileName, dwBufferSize) : GetModuleFileName(hModule, lpwszFileName, dwBufferSize);
+		if (hProcess)
+		{
+			if (ifn.QueryFullProcessImageNamePresent() && !hModule)
+			{
+				DWORD sz = dwBufferSize;
+				dwSize = 0;
+				if (ifn.QueryFullProcessImageName(hProcess, 0, lpwszFileName, &sz))
+				{
+					dwSize = sz;
+				}
+			}
+			else
+			{
+				dwSize = GetModuleFileNameEx(hProcess, hModule, lpwszFileName, dwBufferSize);
+			}
+		}
+		else
+		{
+			dwSize = GetModuleFileName(hModule, lpwszFileName, dwBufferSize);
+		}
 	}
-	while (dwSize && (dwSize >= dwBufferSize));
+	while ((dwSize >= dwBufferSize) || (!dwSize && GetLastError() == ERROR_INSUFFICIENT_BUFFER));
 
 	if (dwSize)
 		strFileName.Copy(lpwszFileName, dwSize);

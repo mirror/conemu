@@ -249,6 +249,7 @@ BOOL Clipboard::IsFormatAvailable(UINT Format)
 // Перед вставкой производится очистка буфера
 bool Clipboard::Copy(const wchar_t *Data)
 {
+	Empty();
 	if (Data && *Data)
 	{
 		HGLOBAL hData;
@@ -261,7 +262,6 @@ bool Clipboard::Copy(const wchar_t *Data)
 			{
 				memcpy(GData,Data,BufferSize);
 				GlobalUnlock(hData);
-				Empty();
 				if (!SetData(CF_UNICODETEXT,(HANDLE)hData))
 					GlobalFree(hData);
 			}
@@ -503,7 +503,7 @@ wchar_t *Clipboard::PasteFormat(const wchar_t *Format)
 }
 
 /* ------------------------------------------------------------ */
-int WINAPI CopyToClipboard(const wchar_t *Data)
+int CopyToClipboard(const wchar_t *Data)
 {
 	Clipboard clip;
 
@@ -531,7 +531,7 @@ int CopyFormatToClipboard(const wchar_t *Format,const wchar_t *Data)
 	return ret;
 }
 
-wchar_t * WINAPI PasteFromClipboard()
+wchar_t * PasteFromClipboard()
 {
 	Clipboard clip;
 

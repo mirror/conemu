@@ -33,7 +33,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "language.hpp"
 #include "bitflags.hpp"
 #include "plugin.hpp"
 #include "plclass.hpp"
@@ -295,7 +294,6 @@ class PluginManager
 		int CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret=nullptr);
 		#endif
 		Plugin *FindPlugin(const GUID& SysID);
-		INT_PTR PluginGuidToPluginNumber(const GUID& PluginId);
 		static const GUID& GetGUID(HANDLE hPlugin);
 
 		void RefreshPluginsList();

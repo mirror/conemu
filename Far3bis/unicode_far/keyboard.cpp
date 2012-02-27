@@ -37,7 +37,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "keyboard.hpp"
 #include "keys.hpp"
 #include "farqueue.hpp"
-#include "lang.hpp"
 #include "ctrlobj.hpp"
 #include "filepanels.hpp"
 #include "panel.hpp"
@@ -473,7 +472,7 @@ int SetFLockState(UINT vkKey, int State)
 	return (int)(WORD)oldState;
 }
 
-int WINAPI InputRecordToKey(const INPUT_RECORD *r)
+int InputRecordToKey(const INPUT_RECORD *r)
 {
 	if (r)
 	{
@@ -487,7 +486,7 @@ int WINAPI InputRecordToKey(const INPUT_RECORD *r)
 }
 
 
-int WINAPI KeyToInputRecord(int Key, INPUT_RECORD *Rec)
+int KeyToInputRecord(int Key, INPUT_RECORD *Rec)
 {
   int VirtKey, ControlState;
   return TranslateKeyToVK(Key, VirtKey, ControlState, Rec);
@@ -650,11 +649,11 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			//Maximus: не нужны эти события в ProcessConsoleInput?
 			if (Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS)
 			{
-				if (CtrlObject->Plugins.ProcessConsoleInput(&Info))
+				if (CtrlObject->Plugins->ProcessConsoleInput(&Info))
 					Key=KEY_NONE;
 			}
 			#else
-			if (CtrlObject->Plugins.ProcessConsoleInput(&Info))
+			if (CtrlObject->Plugins->ProcessConsoleInput(&Info))
 				Key=KEY_NONE;
 			#endif
 		}
@@ -785,7 +784,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 	{
 		if (!(LoopCount & 15))
 		{
-			if(CtrlObject->Plugins.GetPluginsCount())
+			if(CtrlObject->Plugins->GetPluginsCount())
 			{
 				SetFarConsoleMode();
 			}
@@ -1775,7 +1774,7 @@ static string &GetShiftKeyName(string &strName, DWORD Key,int& Len)
    5. "Oem" и 5 десятичных цифр (с ведущими нулями)
    6. только модификаторы (Alt/RAlt/Ctrl/RCtrl/Shift)
 */
-int WINAPI KeyNameToKey(const wchar_t *Name)
+int KeyNameToKey(const wchar_t *Name)
 {
 	if (!Name || !*Name)
 		return -1;
@@ -1893,7 +1892,7 @@ int WINAPI KeyNameToKey(const wchar_t *Name)
 	return (!Key || Pos < Len)? -1: (int)Key;
 }
 
-BOOL WINAPI KeyToText(int Key0, string &strKeyText0)
+BOOL KeyToText(int Key0, string &strKeyText0)
 {
 	string strKeyText;
 	int I, Len;

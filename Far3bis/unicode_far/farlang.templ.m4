@@ -6814,6 +6814,15 @@ upd:"StrmSz"
 upd:"StrmSz"
 "StrmSz"
 
+MColumnUnknown
+"???"
+"???"
+"???"
+"???"
+"???"
+"???"
+"???"
+
 MListUp
 l:
 "Вверх"
@@ -9894,6 +9903,15 @@ upd:"Administrator"
 upd:"Administrator"
 upd:"Administrator"
 
+MInfoUserAccessLevelUnknown
+"Неизвестно"
+"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+
 MInfoDiskTitle
 " Диск "
 " Disk "
@@ -10010,6 +10028,15 @@ upd:"Virtual"
 upd:"Virtual"
 upd:"Virtual"
 upd:"Virtual"
+
+MInfoUnknown
+"Неизвестный"
+"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+upd:"Unknown"
+upd:"Unknown"
 
 MInfoDisk
 "диск"
@@ -11044,6 +11071,15 @@ upd:"Inf&oPanel settings"
 upd:"Inf&oPanel settings"
 "Opciones de panel de inf&ormación"
 
+MMenuMaskGroups
+"Группы масок файлов"
+"Groups of file masks"
+upd:"Groups of file masks"
+upd:"Groups of file masks"
+upd:"Groups of file masks"
+upd:"Groups of file masks"
+upd:"Groups of file masks"
+
 MMenuConfirmation
 "&Подтверждения"
 "Co&nfirmations"
@@ -11396,6 +11432,51 @@ MMenuSortUseCaseSensitive
 "Nagy/kisbetű érzékeny rendezés"
 "Sortuj uwzględniając wielkość liter"
 "Usar orden sensible a min/mayúsc."
+
+MMaskGroupBottom
+"Редактирование: Ins, Del, F4, Ctrl-R"
+"Edit: Ins, Del, F4, Ctrl-R"
+"Edit: Ins, Del, F4, Ctrl-R"
+"Tasten: Einf, Entf, F4, StrgR"
+"Szerk.: Ins, Del, F4, Ctrl-R"
+"Edycja: Ins, Del, F4, Ctrl-R"
+"Editar: Ins, Del, F4, Ctrl-R"
+
+MMaskGroupName
+"&Имя:"
+"&Name:"
+"Jmé&no:"
+"&Name:"
+"&Neve:"
+"&Nazwa:"
+"&Nombre:"
+
+MMaskGroupMasks
+"Одна или несколько &масок файлов:"
+"A file &mask or several file masks:"
+"&Maska nebo masky souborů:"
+"Datei&maske (mehrere getrennt mit Komma):"
+"F&ájlmaszk(ok, vesszővel elválasztva):"
+"&Maska pliku lub kilka masek oddzielonych przecinkami:"
+"&Máscara de archivo o múltiples máscaras de archivos:"
+
+MMaskGroupAskDelete
+"Вы хотите удалить"
+"Do you wish to delete"
+"Přejete si smazat"
+"Wollen Sie folgendes Objekt löschen"
+"Törölni akar"
+"Czy chcesz usunąć"
+"Desea borrar"
+
+MMaskGroupRestore
+"Вы хотите восстановить наборы масок по умолчанию?"
+"Do you wish to restore default mask sets?"
+upd:"Do you wish to restore default mask sets?"
+upd:"Do you wish to restore default mask sets?"
+upd:"Do you wish to restore default mask sets?"
+upd:"Do you wish to restore default mask sets?"
+upd:"Do you wish to restore default mask sets?"
 
 MChangeDriveTitle
 l:
@@ -20165,6 +20246,15 @@ upd:"Files"
 upd:"Files"
 upd:"Files"
 upd:"Files"
+
+MObjectLockedByProcesses
+"Объект заблокирован следующими процессами:"
+"Object is locked by following processes:"
+upd:"Object is locked by following processes:"
+upd:"Object is locked by following processes:"
+upd:"Object is locked by following processes:"
+upd:"Object is locked by following processes:"
+upd:"Object is locked by following processes:"
 
 
 #Must be the last

@@ -1284,8 +1284,6 @@ struct FarMacroFunction
 {
 	unsigned __int64 Flags;
 	const wchar_t *Name;
-	int nParam;
-	int oParam;
 	const wchar_t *Syntax;
 	const wchar_t *Description;
 };
@@ -1294,9 +1292,9 @@ struct ProcessMacroFuncInfo
 {
 	size_t StructSize;
 	const wchar_t *Name;
-	const struct FarMacroValue *Params;
+	const struct FarMacroValue *Params; // mem: Far
 	int nParams;
-	struct FarMacroValue *Results;
+	struct FarMacroValue *Results; // mem: plugin
 	int nResults;
 };
 
@@ -1312,6 +1310,14 @@ struct ProcessMacroInfo
 	enum FAR_MACROINFOTYPE Type;
 	union {
 		struct ProcessMacroFuncInfo Func;
+		struct __Info {
+			int MacroFunctionNumber;
+			const struct FarMacroFunction *Func;
+		}
+#ifndef __cplusplus
+		Info
+#endif
+		;
 	}
 #ifndef __cplusplus
 	Value
@@ -1914,6 +1920,9 @@ enum FARSETTINGSTYPES
 
 enum FARSETTINGS_SUBFOLDERS
 {
+#ifdef FAR_USE_INTERNALS
+	FSSF_PRIVATE                    =  0,
+#endif // END FAR_USE_INTERNALS
 	FSSF_ROOT                       =  0,
 	FSSF_HISTORY_CMD                =  1,
 	FSSF_HISTORY_FOLDER             =  2,
@@ -1931,6 +1940,9 @@ enum FARSETTINGS_SUBFOLDERS
 	FSSF_FOLDERSHORTCUT_8           = 14,
 	FSSF_FOLDERSHORTCUT_9           = 15,
 	FSSF_CONFIRMATIONS              = 16,
+	FSSF_SYSTEM                     = 17,
+	FSSF_PANEL                      = 18,
+	FSSF_EDITOR                     = 19,
 #ifdef FAR_USE_INTERNALS
 	FSSF_COUNT
 #endif // END FAR_USE_INTERNALS
@@ -2360,8 +2372,7 @@ struct PluginInfo
 	struct PluginMenuItem PluginMenu;
 	struct PluginMenuItem PluginConfig;
 	const wchar_t *CommandPrefix;
-	int MacroFunctionNumber;
-	const struct FarMacroFunction *MacroFunctions;
+	const wchar_t *MacroFunctions;
 };
 
 struct FarGetPluginInformation
@@ -2442,6 +2453,7 @@ static const OPERATION_MODES
 	OPM_DESCR      =0x0000000000000020ULL,
 	OPM_QUICKVIEW  =0x0000000000000040ULL,
 	OPM_PGDN       =0x0000000000000080ULL,
+	OPM_COMMANDS   =0x0000000000000100ULL,
 	OPM_NONE       =0;
 
 struct OpenPanelInfo
@@ -2474,6 +2486,13 @@ struct AnalyseInfo
 	void           *Buffer;
 	size_t          BufferSize;
 	OPERATION_MODES OpMode;
+};
+
+struct OpenAnalyseInfo
+{
+	size_t StructSize;
+	struct AnalyseInfo* Info;
+	HANDLE Handle;
 };
 
 struct OpenMacroInfo
@@ -2709,6 +2728,12 @@ struct ClosePanelInfo
 	HANDLE hPanel;
 };
 
+struct CloseAnalyseInfo
+{
+	size_t StructSize;
+	HANDLE Handle;
+};
+
 struct ConfigureInfo
 {
 	size_t StructSize;
@@ -2721,7 +2746,8 @@ extern "C"
 #endif
 // Exported Functions
 
-	int    WINAPI AnalyseW(const struct AnalyseInfo *Info);
+	HANDLE WINAPI AnalyseW(const struct AnalyseInfo *Info);
+	void   WINAPI CloseAnalyseW(const struct CloseAnalyseInfo *Info);
 	void   WINAPI ClosePanelW(const struct ClosePanelInfo *Info);
 	int    WINAPI CompareW(const struct CompareInfo *Info);
 	int    WINAPI ConfigureW(const struct ConfigureInfo *Info);
@@ -2743,7 +2769,7 @@ extern "C"
 	int    WINAPI ProcessPanelEventW(const struct ProcessPanelEventInfo *Info);
 	int    WINAPI ProcessHostFileW(const struct ProcessHostFileInfo *Info);
 	int    WINAPI ProcessPanelInputW(const struct ProcessPanelInputInfo *Info);
-	int    WINAPI ProcessMacroW(const struct ProcessMacroInfo *Info);
+	int    WINAPI ProcessMacroW(struct ProcessMacroInfo *Info);
 	int    WINAPI ProcessConsoleInputW(struct ProcessConsoleInputInfo *Info);
 	int    WINAPI ProcessSynchroEventW(const struct ProcessSynchroEventInfo *Info);
 	int    WINAPI ProcessViewerEventW(const struct ProcessViewerEventInfo *Info);
