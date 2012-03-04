@@ -56,6 +56,10 @@ protected:
 public:
 	ImageInfo Info;
 	DecodeParams Params;
+
+#ifdef _DEBUG
+	CUnicodeFileName FileName;
+#endif
 	
 public:
 	CDecoderHandle(LPCSTR asFrom, CImage* apImage);
@@ -65,6 +69,7 @@ public:
 	LPVOID Context();
 	CModuleInfo* Decoder();
 	bool IsReady();
+	void RequestRelease();
 protected:
 	virtual ~CDecoderHandle();
 };

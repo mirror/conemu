@@ -67,7 +67,8 @@ CDecodeItem::~CDecodeItem()
 	//	pImage->mp_Draw = pDraw;
 	//	pImage->mp_Draw->AddRef();
 	//}
-	SafeRelease(pDraw,szPVDManager);
+	//SafeRelease(pDraw,szPVDManager);
+	g_Manager.CloseDisplay(this);
 	
 	//if (pImage && pFile && (pFile != pImage->mp_File))
 	//{
@@ -77,7 +78,8 @@ CDecodeItem::~CDecodeItem()
 	//	pImage->mp_File = pFile;
 	//	pImage->mp_File->AddRef();
 	//}
-	SafeRelease(pFile,szPVDManager);
+	//SafeRelease(pFile,szPVDManager);
+	g_Manager.CloseDecoder(this);
 	
 	SafeRelease(pImage,szDecodeItem);
 

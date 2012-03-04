@@ -258,7 +258,12 @@ void TemplatePrint(bool bDecoding, wchar_t *pTitleText, UINT nBufLen, const wcha
 					}
 					break;
 				}
-				case 'T': if (bDecoding || !pImage) *pd++ = '?'; else PrintNumber(pImage->Info.lOpenTime); break;
+				case 'T':
+					if (bDecoding || !pImage)
+						*pd++ = '?';
+					else
+						PrintNumber(pImage->Info.lOpenTime);
+					break;
 				case 'E':
 				{
 					if (bDecoding || !pImage) *pd++ = '?'; else {

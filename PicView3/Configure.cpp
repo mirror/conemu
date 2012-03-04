@@ -48,9 +48,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class CPicViewConfig;
 CPicViewConfig* gpCurConfig = NULL;
 
+#define MAX_PAGE_HOTKEY '6'
+
 
 CPicViewConfig::CPicViewConfig()
-	: MPicViewDlg(g_Plugin.pszPluginTitle, 55, 17, L"Settings")
+	: MPicViewDlg(g_Plugin.pszPluginTitle, 59, 17, L"Settings")
 {
 	//gpCurConfig = this;
 	
@@ -61,7 +63,7 @@ CPicViewConfig::CPicViewConfig()
 	iCachingRP = 0; iCachingVP = 0; iTrayDisable = 0; iFullScreenStartup = 0;
 	iLoopJump = 0; iMarkBySpace = 0; iAutoPaging = 0; iAutoPagingVK = 0; iAutoPagingSet = 0;
 	iFreePosition = 0; iFullDirectDrawInit = 0; memset(&PagingKeys, 0, sizeof(PagingKeys));
-	iOk = 0; iCancel = 0; iMain = 0; iDecoders = 0; iAdvanced = 0; iOSD = 0; iLOG = 0; iLastTabBtn = 0;
+	iOk = iCancel = iMain = iDecoders = iAdvanced = iOSD = iCACHE = iLOG = iLastTabBtn = 0;
 	iTitleTemplReset = iQTempl1 = iQTempl1Reset = iQTempl2 = iQTempl2Reset = iQTempl3 = iQTempl3Reset = 0;
 	bDecoderPriorityChanged = false;
 	nCornerCount = 0;
@@ -132,6 +134,9 @@ void CPicViewConfig::ActivateAdvanced(HANDLE hDlg)
 {
 }
 void CPicViewConfig::ActivateOSD(HANDLE hDlg)
+{
+}
+void CPicViewConfig::ActivateCACHE(HANDLE hDlg)
 {
 }
 void CPicViewConfig::ActivateLOG(HANDLE hDlg)
@@ -263,6 +268,8 @@ LONG_PTR CPicViewConfig::ConfigDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PT
         	ActivateAdvanced(hDlg);
         else if (Param1 == iOSD)
         	ActivateOSD(hDlg);
+        else if (Param1 == iCACHE)
+        	ActivateCACHE(hDlg);
         else if (Param1 == iLOG)
         	ActivateLOG(hDlg);
 
@@ -478,7 +485,7 @@ LONG_PTR CPicViewConfig::ConfigDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PT
 				Msg == DN_KEY
 			#endif
 			&& ((Key3 & (KEY_ALT|KEY_RALT))==(Key3 & KEY_CTRLMASK))
-			&& ((Key3&KEY_END_SKEY)>=(DWORD)'1') && ((Key3&KEY_END_SKEY)<=(DWORD)'5')
+			&& ((Key3&KEY_END_SKEY)>=(DWORD)'1') && ((Key3&KEY_END_SKEY)<=(DWORD)MAX_PAGE_HOTKEY)
 		   )
 		{
 			// Вывести фокус из контрола, иначе хоткеи не отрабатывают
@@ -498,7 +505,7 @@ LONG_PTR CPicViewConfig::ConfigDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PT
 				Msg == DN_KEY
 			#endif
 			&& ((Key3 & (KEY_ALT|KEY_RALT))==(Key3 & KEY_CTRLMASK))
-			&& ((Key3&KEY_END_SKEY)>=(DWORD)'1') && ((Key3&KEY_END_SKEY)<=(DWORD)'5')
+			&& ((Key3&KEY_END_SKEY)>=(DWORD)'1') && ((Key3&KEY_END_SKEY)<=(DWORD)MAX_PAGE_HOTKEY)
 		   )
 		{
 			// Вывести фокус из контрола, иначе хоткеи не отрабатывают
@@ -817,7 +824,20 @@ int CPicViewConfig::InitOSD() // Page4
 	return Y;
 };
 
-int CPicViewConfig::InitLOG() // Page5
+int CPicViewConfig::InitCACHE() // Page5
+{
+	int Y = 2;
+	
+	Y+=2;
+	
+	// Шаблон заголовка
+	addFarDialogItem(DI_TEXT, 5, Y++, 0, 0, 0, 0, DIF_BOXCOLOR | DIF_SEPARATOR, 0, L"Cache (TODO)");
+	Y++;
+
+	return Y;
+};
+
+int CPicViewConfig::InitLOG() // Page6
 {
 	int Y = 2;
 	
@@ -889,6 +909,11 @@ void CPicViewConfig::Init()
 	pgY = InitOSD();
 	if (pgY > Y) Y = pgY;
 	
+	// CACHE
+	nPageStart[nNextPage++] = NextId();
+	pgY = InitCACHE();
+	if (pgY > Y) Y = pgY;
+
 	// LOG
 	nPageStart[nNextPage++] = NextId();
 	pgY = InitLOG();
@@ -902,7 +927,8 @@ void CPicViewConfig::Init()
 	bPageActivated[nActivePage] = TRUE;
 	//for (int i=nPageStart[1]; i<nPageStart[nNextPage]; i++)
 	//	DialogItems[i].Flags |= DIF_HIDDEN;
-	for (int j=0; j<nNextPage; j++) {
+	for (int j=0; j<nNextPage; j++)
+	{
 		if (j == nActivePage) continue;
     	for (int i=nPageStart[j]; i<nPageStart[j+1]; i++)
 			DialogItems[i].Flags |= DIF_HIDDEN;
@@ -921,6 +947,8 @@ void CPicViewConfig::Init()
 		DI_BUTTON, 0, Y, 0, 0, 0, 0, DIF_CENTERGROUP, 0, GetMsg(MIAdvanced));
 	iOSD = addFarDialogItem(
 		DI_BUTTON, 0, Y, 0, 0, 0, 0, DIF_CENTERGROUP, 0, GetMsg(MIOSD));
+	iCACHE = addFarDialogItem(
+		DI_BUTTON, 0, Y, 0, 0, 0, 0, DIF_CENTERGROUP, 0, GetMsg(MICACHE));
 	iLOG = addFarDialogItem(
 		DI_BUTTON, 0, Y, 0, 0, 0, 0, DIF_CENTERGROUP, 0, GetMsg(MILOG));
 	iLastTabBtn = iLOG;
@@ -993,19 +1021,26 @@ BOOL CPicViewConfig::ApplyMain()
 BOOL CPicViewConfig::ApplyDecoders()
 {
 	int n = nModulesCount * 16;
-	for (int i=0; i<nModulesCount; i++, n-=16) {
+	for (int i=0; i<nModulesCount; i++, n-=16)
+	{
 		pModules[i]->pData->SetPriority(n);
 	}
 	
-	if (nDisplayCount>0) {
+	if (nDisplayCount>0)
+	{
 		LONG_PTR i, pos = g_StartupInfo.SendDlgMessage(mh_Dlg, DM_LISTGETCURPOS, iPvdDisplay, 0);
-		if (pos >= 0 && pos < nDisplayCount) {
+		if (pos >= 0 && pos < nDisplayCount)
+		{
 			CPVDManager::pDefaultDisplay = NULL;
-			for (i=0; i<nDisplayCount; i++) {
-				if (i == pos) {
+			for (i=0; i<nDisplayCount; i++)
+			{
+				if (i == pos)
+				{
 					ppDisplays[i]->nActiveFlags |= PVD_IP_DISPLAY;
 					CPVDManager::pDefaultDisplay = ppDisplays[i];
-				} else {
+				}
+				else
+				{
 					ppDisplays[i]->nActiveFlags &= ~PVD_IP_DISPLAY;
 				}
 			}
@@ -1013,11 +1048,13 @@ BOOL CPicViewConfig::ApplyDecoders()
 	}
 	CPVDManager::SortPlugins2();
 	
-	for (int i=0; i<nModulesCount; i++) {
+	for (int i=0; i<nModulesCount; i++)
+	{
 		n = pModules[i]->pData->Priority();
 		// Тут расширения вообще не трогать - они сохраняются в самом диалоге настройки декодера персонально
 		HKEY hkey = NULL; DWORD dwDisp = 0;
-		if (!RegCreateKeyEx(HKEY_CURRENT_USER, pModules[i]->pData->pRegPath, 0, 0, 0, KEY_ALL_ACCESS, 0, &hkey, &dwDisp)) {
+		if (!RegCreateKeyEx(HKEY_CURRENT_USER, pModules[i]->pData->pRegPath, 0, 0, 0, KEY_ALL_ACCESS, 0, &hkey, &dwDisp))
+		{
 			DWORD nDataSize = 0;
 			RegSetValueEx(hkey, L"Priority", 0, REG_DWORD, (LPBYTE)&n, sizeof(n));
 			RegSetValueEx(hkey, L"PluginActiveFlags", 0, REG_DWORD, (LPBYTE)&(pModules[i]->pData->nActiveFlags), sizeof(pModules[i]->pData->nActiveFlags));

@@ -34,6 +34,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ShObjIdl.h>
 #include "headers/farcolor.hpp"
 #include "RefKeeper.h"
+#include "GestureEngine.h"
 
 CPluginData g_Plugin;
 
@@ -206,7 +207,8 @@ bool CPluginData::InitHooks()
 
 	// Сформируем наш ключ реестра
 	//_ASSERTE(g_StartupInfo.RootKey && *g_StartupInfo.RootKey);
-	g_RootKey = ConcatPath(L"Software\\Far Manager\\Plugins", L"PictureView2");
+	WARNING("Переделать на Far3 API");
+	g_RootKey = ConcatPath(L"Software\\Far Manager\\Plugins", L"PicView3");
 		
 
 	//ZeroMemory(&g_Plugin, sizeof(g_Plugin));
@@ -268,6 +270,11 @@ bool CPluginData::InitPlugin()
 	if (!gp_RefKeeper)
 	{
 		gp_RefKeeper = new CRefKeeper();
+	}
+	
+	if (!gp_Gestures)
+	{
+		gp_Gestures = new CGestures;
 	}
 	
 	// Минимальная инициализация - только тип активации плагина

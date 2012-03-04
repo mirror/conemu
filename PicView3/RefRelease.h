@@ -42,6 +42,7 @@ public:
 	CRefRelease(LPCSTR asFrom);
 	virtual void AddRef(LPCSTR asFrom);
 	virtual int Release(LPCSTR asFrom);
+	int RefCount();
 protected:
 	virtual ~CRefRelease();
 

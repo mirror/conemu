@@ -70,22 +70,28 @@ CModuleInfo::~CModuleInfo()
 {
 	Unload(); // delete pPlugin;
 	//
-	if (pRegPath) {
+	if (pRegPath)
+	{
 		free(pRegPath); pRegPath = NULL;
 	}
-	if (pModulePath) {
+	if (pModulePath)
+	{
 		free(pModulePath); pModulePath = NULL;
 	}
-	if (pActive) {
+	if (pActive)
+	{
 		free(pActive); pActive = NULL;
 	}
-	if (pInactive) {
+	if (pInactive)
+	{
 		free(pInactive); pInactive = NULL;
 	}
-	if (pForbidden) {
+	if (pForbidden)
+	{
 		free(pForbidden); pForbidden = NULL;
 	}
-	if (hPlugin) { // В большинстве случаев FreeLibrary выполняет pPlugin. А здесь уже NULL.
+	if (hPlugin) // В большинстве случаев FreeLibrary выполняет pPlugin. А здесь уже NULL.
+	{
 		FreeLibrary(hPlugin); hPlugin = NULL;
 	}
 }
@@ -258,12 +264,14 @@ bool CPVDModuleBase::InitPrepare(FILETIME ftRegModified, BOOL abPluginChanged)
 void CPVDModuleBase::SaveFormatsToReg(FILETIME *pftRegModified)
 {
 	HKEY hkey = NULL; DWORD dwDisp = 0;
-	if (!RegCreateKeyEx(HKEY_CURRENT_USER, pRegPath, 0, 0, 0, KEY_ALL_ACCESS, 0, &hkey, &dwDisp)) {
+	if (!RegCreateKeyEx(HKEY_CURRENT_USER, pRegPath, 0, 0, 0, KEY_ALL_ACCESS, 0, &hkey, &dwDisp))
+	{
 		DWORD nDataSize = 0;
 		// Приоритет сохраняем только явно со страницы модулей диалога настроек
 		//RegSetValueEx(hkey, L"Priority", 0, REG_DWORD, (LPBYTE)&iPriority, sizeof(iPriority));
 		// Если мы дошли сюда - значит LoadFormatsFromReg обломался, и расширения нужно записать в реестр
-		if (nCurrentFlags & PVD_IP_DECODE) {
+		if (nCurrentFlags & PVD_IP_DECODE)
+		{
 			if (pDefActive && !pData->pActive)
 				RegSetValueEx(hkey, L"ExtensionActive", 0, REG_SZ, (LPBYTE)pDefActive, (wcslen(pDefActive)+1)*2);
 			if (pDefInactive && !pData->pInactive)
@@ -379,25 +387,29 @@ wchar_t* CPVDModuleBase::LoadRegValue(HKEY hkey, LPCWSTR asName) const
 	return psz;
 }
 
-bool CPVDModuleBase::IsAllowed(const wchar_t* asExt, bool abAllowAsterisk, bool abAllowInactive, bool abAssumeActive/*=false*/)
+bool CPVDModuleBase::IsAllowed(const wchar_t* asExt, bool abAllowAsterisk, bool abAllowInactive, bool abAssumeActive/*=false*/, const void* pFileData, size_t nFileDataSize)
 {
 	// плагин может быть вообще отключен
 	_ASSERTE(pData && pData->pActive && pData->pInactive);
-	if (wcschr(pData->pForbidden,L'*'))
+	//! Это не корректно
+	//if (wcschr(pData->pForbidden,L'*'))
+	if (ExtensionMatch(pData->pForbidden, asExt, pFileData, nFileDataSize))
 		return false;
 
 	// теперь остальные проверки
 	if (!asExt || !*asExt) asExt = L".";
 
-	bool lbActiveMatch = ExtensionMatch(pData->pActive, asExt);
+	bool lbActiveMatch = ExtensionMatch(pData->pActive, asExt, pFileData, nFileDataSize, &abAllowAsterisk);
 	if (lbActiveMatch)
 		return true;
 
-	if (wcschr(pData->pInactive, L'*') || ExtensionMatch(pData->pInactive, asExt)) {
+	if (/*wcschr(pData->pInactive, L'*') ||*/ ExtensionMatch(pData->pInactive, asExt, pFileData, nFileDataSize))
+	{
 		return abAllowInactive;
 	}
 
-	if (abAssumeActive || (abAllowAsterisk && wcschr(pData->pActive,L'*')) || lbActiveMatch)
+	//if (abAssumeActive || (abAllowAsterisk && wcschr(pData->pActive,L'*')) || lbActiveMatch)
+	if (abAssumeActive || abAllowAsterisk)
 		return true;
 
 	return false;
@@ -481,15 +493,19 @@ bool CPVDModuleBase::LoadFormatsFromReg(FILETIME ftRegModified, BOOL abForceWrit
 			bFlagsChanged = true;
 		}
 		
-		if (!pData->nActiveFlags) {
+		if (!pData->nActiveFlags)
+		{
 			if (RegQueryValueEx(hkey, L"PluginActiveFlags", 0, 0, (LPBYTE)&(pData->nActiveFlags), &(nDataSize=sizeof(pData->nActiveFlags))))
 				pData->nActiveFlags = 0;
 				//result = false; -- result не трогаем, т.к. эти флаги получаются НЕ из плагина, а настраиваеются пользователем
-		} else {
+		}
+		else
+		{
 			bActiveFlagsChanged = true;
 		}
 		
-		if (nCurrentFlags & PVD_IP_DECODE) {
+		if (nCurrentFlags & PVD_IP_DECODE)
+		{
 			_ASSERTE(!pDefActive && !pDefInactive && !pDefForbidden);
 			if (!LoadExtensionsFromReg(hkey, L"ExtensionActive", &(pData->pActive)))
 				result = false;
@@ -499,12 +515,17 @@ bool CPVDModuleBase::LoadFormatsFromReg(FILETIME ftRegModified, BOOL abForceWrit
 				result = false;
 		}
 
-		if (RegQueryValueEx(hkey, L"Priority", 0, 0, (LPBYTE)&pData->nPriority, &(nDataSize=sizeof(pData->nPriority)))) {
+		if (RegQueryValueEx(hkey, L"Priority", 0, 0, (LPBYTE)&pData->nPriority, &(nDataSize=sizeof(pData->nPriority))))
+		{
 			result = false; pData->nPriority = 0;
 		}
-		if (RegQueryValueEx(hkey, L"DefaultPriority", 0, 0, (LPBYTE)&nDefPriority, &(nDataSize=sizeof(nDefPriority)))) {
+		
+		if (RegQueryValueEx(hkey, L"DefaultPriority", 0, 0, (LPBYTE)&nDefPriority, &(nDataSize=sizeof(nDefPriority))))
+		{
 			result = false; nDefPriority = 1;
-		} else if (!nDefPriority) {
+		}
+		else if (!nDefPriority)
+		{
 			nDefPriority = 1;
 		}
 		//if (!nPriority)
@@ -742,27 +763,36 @@ lReopen:
 	addFarDialogItem(DI_EDIT,     5, Y++, DialogWidth+4, 0, 0, 0, DIF_READONLY, 0, pszText, 0);
 	*/
 
-	if (LoadItems() > 0) {
+	if (LoadItems() > 0)
+	{
 		//addFarDialogItem(
 		//	DI_TEXT, 5, Y++, 0, 0, 0, 0, DIF_BOXCOLOR | DIF_SEPARATOR, 0, 0/*GetMsg(MIIgnoredExtensions)*/);
 
 		int nMaxHeight = 10;
-		for (int i = 0; nMaxHeight > 0 && i < mn_PvdItems; i++) {
+		for (int i = 0; nMaxHeight > 0 && i < mn_PvdItems; i++)
+		{
 			TODO("Обработка 'hex:00=CMYK:01:FastRGB;Decode CMYK images in'");
-			if (!lstrcmpi(m_PvdItems[i].pszType, L"bool")) {
+			if (!lstrcmpi(m_PvdItems[i].pszType, L"bool"))
+			{
 				m_PvdItems[i].nID = addFarDialogItem(DI_CHECKBOX, 5, Y++, DialogWidth+4, 0, 0, m_PvdItems[i].bData, 0, 0, m_PvdItems[i].pszLabel);
 				nMaxHeight --;
-			} else if (!lstrcmpi(m_PvdItems[i].pszType, L"string")) {
+			}
+			else if (!lstrcmpi(m_PvdItems[i].pszType, L"string"))
+			{
 				addFarDialogItem(DI_TEXT,     5, Y++, 0, 0, 0, 0, 0, 0, m_PvdItems[i].pszLabel);
 				m_PvdItems[i].nID = addFarDialogItem(DI_EDIT,     5, Y++, DialogWidth+4, 0, 0, 0, 0, 0, m_PvdItems[i].pszData);
 				nMaxHeight -= 2;
-			} else if (!lstrcmpi(m_PvdItems[i].pszType, L"long")) {
+			}
+			else if (!lstrcmpi(m_PvdItems[i].pszType, L"long"))
+			{
 				addFarDialogItem(DI_TEXT,     5, Y++, 0, 0, 0, 0, 0, 0, m_PvdItems[i].pszLabel);
 				m_PvdItems[i].pszData = (wchar_t*)calloc(12,sizeof(wchar_t));
 				wsprintf(m_PvdItems[i].pszData, L"%i", (int)m_PvdItems[i].nData);
 				m_PvdItems[i].nID = addFarDialogItem(DI_EDIT,     5, Y++, DialogWidth+4, 0, 0, 0, 0, 0, m_PvdItems[i].pszData);
 				nMaxHeight -= 2;
-			} else if (!lstrcmpi(m_PvdItems[i].pszType, L"dword")) {
+			}
+			else if (!lstrcmpi(m_PvdItems[i].pszType, L"dword"))
+			{
 				addFarDialogItem(DI_TEXT,     5, Y++, 0, 0, 0, 0, 0, 0, m_PvdItems[i].pszLabel);
 				m_PvdItems[i].pszData = (wchar_t*)calloc(12,sizeof(wchar_t));
 				wsprintf(m_PvdItems[i].pszData, L"0x%08X", m_PvdItems[i].nData);
@@ -796,10 +826,12 @@ lReopen:
 
 	
 	int ExitCode = -1;
-	if (DialogInit()) {
+	if (DialogInit())
+	{
 		ExitCode = g_StartupInfo.DialogRun(mh_Dlg);
 		// По кнопкам Unload/Reload тоже сохраняем
-		if (ExitCode == iOk || ExitCode == iReload || ExitCode == iUnload) {
+		if (ExitCode == iOk || ExitCode == iReload || ExitCode == iUnload)
+		{
 			int nLen = 0;
 			if (mp_Config->pData->nCurrentFlags & PVD_IP_DECODE)
 			{
@@ -842,23 +874,30 @@ lReopen:
 			{
 				HKEY hKey = 0, hRoot = 0;
 				// Объект плагина (mp_Config->pData->pPlugin) мог быть не создан, если были ошибки инициализации
-				if (!RegOpenKeyEx(HKEY_CURRENT_USER, mp_Config->pData->pRegPath, 0, KEY_WRITE, &hRoot)) {
-					if (!RegOpenKeyEx(hRoot, L"Settings", 0, KEY_WRITE, &hKey)) {
-						for (int i=0; i<mn_PvdItems; i++) {
+				if (!RegOpenKeyEx(HKEY_CURRENT_USER, mp_Config->pData->pRegPath, 0, KEY_WRITE, &hRoot))
+				{
+					if (!RegOpenKeyEx(hRoot, L"Settings", 0, KEY_WRITE, &hKey))
+					{
+						for (int i=0; i<mn_PvdItems; i++)
+						{
 							if (m_PvdItems[i].nType == REG_SZ || m_PvdItems[i].nType == REG_DWORD
 								|| (m_PvdItems[i].nType == REG_BINARY && m_PvdItems[i].nLen == 4))
 							{
 								nLen = (int)g_StartupInfo.SendDlgMessage(mh_Dlg, DM_GETTEXTPTR, m_PvdItems[i].nID, 0);
-								if (nLen >= lstrlen(m_PvdItems[i].pszData)) {
+								if (nLen >= lstrlen(m_PvdItems[i].pszData))
+								{
 									free(m_PvdItems[i].pszData);
 									if (!(m_PvdItems[i].pszData = (wchar_t*)calloc(nLen+1,sizeof(wchar_t)))) break; // ошибка выделения памяти
 								}
 								g_StartupInfo.SendDlgMessage(mh_Dlg, DM_GETTEXTPTR, m_PvdItems[i].nID, (DLG_LPARAM)m_PvdItems[i].pszData);
 
-								if (m_PvdItems[i].nType == REG_SZ) {
+								if (m_PvdItems[i].nType == REG_SZ)
+								{
 									RegSetValueEx(hKey, m_PvdItems[i].szName, 0, m_PvdItems[i].nType, 
 										(LPBYTE)m_PvdItems[i].pszData, (lstrlen(m_PvdItems[i].pszData)+1)*sizeof(wchar_t));
-								} else {
+								}
+								else
+								{
 									wchar_t* pszEnd = NULL;
 									if (m_PvdItems[i].pszData[0]==L'0' && (m_PvdItems[i].pszData[1]==L'x' || m_PvdItems[i].pszData[1]==L'X'))
 										m_PvdItems[i].nData = wcstoul(m_PvdItems[i].pszData, &pszEnd, 16);
@@ -868,7 +907,9 @@ lReopen:
 										(LPBYTE)&(m_PvdItems[i].nData), 4);
 								}
 
-							} else if (m_PvdItems[i].nType == REG_BINARY && m_PvdItems[i].nLen == 1) {
+							}
+							else if (m_PvdItems[i].nType == REG_BINARY && m_PvdItems[i].nLen == 1)
+							{
 								TODO("Здесь может быть радиокнопка - тогда нужно по другому, с обработкой nCount");
 								m_PvdItems[i].bData = DlgItem_GetCheck(g_StartupInfo, mh_Dlg, m_PvdItems[i].nID);
 								RegSetValueEx(hKey, m_PvdItems[i].szName, 0, m_PvdItems[i].nType, 
@@ -886,7 +927,9 @@ lReopen:
 			}
 			
 			
-		} else {
+		}
+		else
+		{
 			// -- по идее, измениться могли только расширения по умолчанию, а текущие трогаться не должны были
 			#ifdef _DEBUG
 			int nDbg = 1;
@@ -919,7 +962,8 @@ lReopen:
 		
 		mp_Config->pData->Unload();
 		
-		if (bReload) {
+		if (bReload)
+		{
 			mp_Config->pData->Load(true); // force
 
 			memset(m_PvdItems, 0, sizeof(m_PvdItems));
@@ -931,7 +975,9 @@ lReopen:
 			gpCurConfig->UpdateTitleFor(mp_Config);
 
 			goto lReopen;
-		} else {
+		}
+		else
+		{
 			if (mp_Config->pTitle) free(mp_Config->pTitle); mp_Config->pTitle = NULL;
 			mp_Config->CreateTitle();
 			gpCurConfig->UpdateTitleFor(mp_Config);
@@ -944,7 +990,7 @@ lReopen:
 // Загрузить из реестра параметры модуля (каждая строка содержит описание, тип, и значение параметра)
 // Модуль при первой загрузке должен создать в своем подключе реестра параметры по умолчанию
 // Пример.
-// [HKEY_CURRENT_USER\Software\Far2\Plugins\PictureView2\WIC.pvd\Settings\Description]
+// [HKEY_CURRENT_USER\Software\Far2\Plugins\PicView3\WIC.pvd\Settings\Description]
 // "InterpolationMode"="long;Interpolation quality (0..3)"
 // "RotateOnExif"="bool;Rotate on EXIF"
 int CPVDModuleConfigDlg::LoadItems()
@@ -952,8 +998,10 @@ int CPVDModuleConfigDlg::LoadItems()
 	mn_PvdItems = 0;
 	HKEY hKey = 0, hDesc = 0, hPlugin = 0;
 	PvdItem pi = {0};
-	if (!RegOpenKeyEx(HKEY_CURRENT_USER, mp_Config->pData->pRegPath, 0, KEY_READ, &hPlugin)) {
-		if (!RegOpenKeyEx(hPlugin, L"Settings", 0, KEY_READ, &hKey)) {
+	if (!RegOpenKeyEx(HKEY_CURRENT_USER, mp_Config->pData->pRegPath, 0, KEY_READ, &hPlugin))
+	{
+		if (!RegOpenKeyEx(hPlugin, L"Settings", 0, KEY_READ, &hKey))
+		{
 			if (RegOpenKeyEx(hKey, L"Description", 0, KEY_READ, &hDesc)) hDesc = NULL;
 
 			wchar_t szName[MAX_PATH]; DWORD nNameLen, nLen, nType, nDescLen, nDescType;
@@ -962,19 +1010,27 @@ int CPVDModuleConfigDlg::LoadItems()
 				!RegEnumValue(hKey, nIndex++, szName, &(nNameLen = sizeofarray(szName)), 0, &nType, 0, &(nLen=0)))
 			{
 				memset(&pi, 0, sizeof(pi));
-				if (hDesc) {
+				if (hDesc)
+				{
 					if (!(nDescRc = RegQueryValueEx(hDesc, szName, 0, &(nDescType=0), 0, &(nDescLen=0)))
 						&& nDescType == REG_SZ && nDescLen)
 					{
-						if (!(pi.pszType = (wchar_t*)calloc(nDescLen,1))) break;
-						if (!(nDescRc = RegQueryValueEx(hDesc, szName, 0, 0, (LPBYTE)pi.pszType, &nDescLen))) {
+						if (!(pi.pszType = (wchar_t*)calloc(nDescLen,1)))
+							break;
+						if (!(nDescRc = RegQueryValueEx(hDesc, szName, 0, 0, (LPBYTE)pi.pszType, &nDescLen)))
+						{
 							wchar_t* psz = wcschr(pi.pszType, L';');
-							if (!psz) {
+							if (!psz)
+							{
 								nDescRc = -1; free(pi.pszType); pi.pszType = NULL;
-							} else {
+							}
+							else
+							{
 								*psz = 0; pi.pszLabel = psz+1;
 							}
-						} else {
+						}
+						else
+						{
 							free(pi.pszType); pi.pszType = NULL;
 						}
 					}
@@ -983,18 +1039,22 @@ int CPVDModuleConfigDlg::LoadItems()
 				if (nType == REG_SZ)
 				{
 					if (!(pi.pszData = (wchar_t*)calloc(nLen,1))) break;
-					if (RegQueryValueEx(hKey, szName, 0, 0, (LPBYTE)pi.pszData, &nLen)) {
+					if (RegQueryValueEx(hKey, szName, 0, 0, (LPBYTE)pi.pszData, &nLen))
+					{
 						free(pi.pszData); continue;
 					}
 					pi.nLen = nLen; pi.nType = nType;
-					if (!pi.pszType) {
+					if (!pi.pszType)
+					{
 						if (!(pi.pszType = (wchar_t*)calloc(lstrlen(szName)+20,sizeof(wchar_t)))) break;
 						lstrcpy(pi.pszType, L"string"); pi.pszLabel=pi.pszType+lstrlen(pi.pszType)+1; lstrcpy((wchar_t*)pi.pszLabel, szName);
-					} else {
+					}
+					else
+					{
 						if (lstrcmpi(pi.pszType, L"string")) continue;
 					}
-				} else
-				if (nType == REG_DWORD || (nLen == 4 && nType == REG_BINARY))
+				}
+				else if (nType == REG_DWORD || (nLen == 4 && nType == REG_BINARY))
 				{
 					if (RegQueryValueEx(hKey, szName, 0, 0, (LPBYTE)&pi.nData, &(nLen=sizeof(pi.nData))))
 						continue;
@@ -1005,20 +1065,25 @@ int CPVDModuleConfigDlg::LoadItems()
 					} else {
 						if (lstrcmpi(pi.pszType, L"long") && lstrcmpi(pi.pszType, L"dword")) continue;
 					}
-				} else
-				if (nType == REG_BINARY && nLen == 1)
+				}
+				else if (nType == REG_BINARY && nLen == 1)
 				{
 					if (RegQueryValueEx(hKey, szName, 0, 0, (LPBYTE)&pi.bData, &(nLen=sizeof(pi.bData))))
 						continue;
 					pi.nLen = nLen; pi.nType = nType;
-					if (!pi.pszType) {
+					if (!pi.pszType)
+					{
 						if (!(pi.pszType = (wchar_t*)calloc(lstrlen(szName)+20,sizeof(wchar_t)))) break;
 						lstrcpy(pi.pszType, L"bool"); pi.pszLabel=pi.pszType+lstrlen(pi.pszType)+1; lstrcpy((wchar_t*)pi.pszLabel, szName);
-					} else {
+					}
+					else
+					{
 						TODO("Здесь может быть радиокнопка 'hex:00=CMYK:01:FastRGB;Decode CMYK images in'");
 						if (lstrcmpi(pi.pszType, L"bool")) continue;
 					}
-				} else {
+				}
+				else
+				{
 					if (pi.pszType) free(pi.pszType); pi.pszType = NULL;
 					continue;
 				}
@@ -1095,30 +1160,44 @@ void CPVDModuleConfig::CreateTitle()
 	*/
 	lstrcpyn(pTitle, pName, POS1+2);
 	nLen = lstrlen(pTitle);
-	if (nLen>=POS1) { pTitle[POS1-1] = L'…'; nLen = POS1; }
+	if (nLen>=POS1)
+	{
+		pTitle[POS1-1] = L'…'; nLen = POS1;
+	}
 	while (nLen<POS1) pTitle[nLen++] = L' ';
 	pTitle[nLen++] = L'|';
-	if (pData->pPlugin) {
+	if (pData->pPlugin)
+	{
 		MCHKHEAP;
-		if (pData->nCurrentFlags & PVD_IP_DECODE) {
-			if (pForbidden) {
+		if (pData->nCurrentFlags & PVD_IP_DECODE)
+		{
+			if (pForbidden)
+			{
 				lstrcpyn(pTitle+nLen, pForbidden, POS2-POS1+2);
 				nLen = lstrlen(pTitle);
 			}
-			if (nLen>=POS2) { pTitle[POS2-1] = L'…'; nLen = POS2; }
+			if (nLen>=POS2)
+			{
+				pTitle[POS2-1] = L'…'; nLen = POS2;
+			}
 			while (nLen<POS2) pTitle[nLen++] = L' ';
 			pTitle[nLen++] = L'|';
 
-			if (pInactive) {
+			if (pInactive)
+			{
 				lstrcpyn(pTitle+nLen, pInactive, POS3-POS2+2);
 				nLen = lstrlen(pTitle);
 			}
-			if (nLen>=POS3) { pTitle[POS3-1] = L'…'; nLen = POS3; }
+			if (nLen>=POS3)
+			{
+				pTitle[POS3-1] = L'…'; nLen = POS3;
+			}
 			while (nLen<POS3) pTitle[nLen++] = L' ';
 			pTitle[nLen++] = L'|';
 
 			MCHKHEAP;
-			if (pActive) {
+			if (pActive)
+			{
 				lstrcpyn(pTitle+nLen, pActive, POS4-POS3+2);
 				nLen = lstrlen(pTitle);
 			}
@@ -1126,22 +1205,33 @@ void CPVDModuleConfig::CreateTitle()
 
 			MCHKHEAP;
 
-		} else if (pData->nCurrentFlags & PVD_IP_DISPLAY) {
+		}
+		else if (pData->nCurrentFlags & PVD_IP_DISPLAY)
+		{
 			MCHKHEAP;
 			lstrcpyn(pTitle+nLen, GetMsg(MIDisplayModule), POS4-nLen+1);
-		} else if (pData->nCurrentFlags & PVD_IP_PROCESSING) {
+		}
+		else if (pData->nCurrentFlags & PVD_IP_PROCESSING)
+		{
 			MCHKHEAP;
 			lstrcpyn(pTitle+nLen, GetMsg(MIPostprocessingModule), POS4-nLen+1);
-		} else {
+		}
+		else
+		{
 			MCHKHEAP;
 			lstrcpyn(pTitle+nLen, GetMsg(MIUnknownModuleType), POS4-nLen+1);
 		}
-	} else {
+	}
+	else
+	{
 		MCHKHEAP;
 		lstrcpyn(pTitle+nLen, GetMsg(MIModuleWasNotLoaded), POS4-nLen+1);
 	}
 	MCHKHEAP;
-	if (lstrlen(pTitle) >= POS4) { pTitle[POS4-1] = L'…'; pTitle[POS4] = 0; }
+	if (lstrlen(pTitle) >= POS4)
+	{
+		pTitle[POS4-1] = L'…'; pTitle[POS4] = 0;
+	}
 	MCHKHEAP;
 	DBGOUTCFG(L"Done\n");
 }

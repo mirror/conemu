@@ -1,7 +1,7 @@
 ﻿.Language=English,English
 
 // Plugin title
-"Picture View 3"
+"PicView 3"
 " Quick view "
 
 "OK"
@@ -9,10 +9,11 @@
 
 // TABs in main config dialog
 "&1Main"
-"&2Modules"
+"&2Types"
 "&3Misc"
 "&4OSD"
-"&5Log"
+"&5Cache"
+"&6Log"
 
 // Main config TAB
 "Process actions, prefix:"
@@ -121,12 +122,13 @@
 "Palette file bit depth is not 24bpp"
 "Only BGR color model is supported"
 "Memory allocation failed"
-"Decoder: "
+"Macro file not found, paging will not be available"
+"Macro file syntax failed, paging will not be available"
 
 // Error message boxes
-"Picture View 2\nERROR: Cannot display image\nParent window (FAR manager) is invisible\n(Probably FAR was started in ConEmu without ConEmu plugin)"
-"Picture View 2\nOpenImagePlugin raised an exception!"
-"Picture View 2\nNo decoder for this file extension"
-"Picture View 2\nNo decoder can open file\nSee details on [Log] tab of Configuration dialog"
-"Picture View 2\nFirst char of plugin file name must be '0'\nOtherwise paging may be impossible"
-"Picture View 2\nThis version of FAR manager is not supported\nPlease, update FAR 2"
+"PicView 3\nERROR: Cannot display image\nParent window (FAR manager) is invisible\n(Probably FAR was started in ConEmu without ConEmu plugin)"
+"PicView 3\nOpenImagePlugin raised an exception!"
+"PicView 3\nNo decoder for this file extension"
+"PicView 3\nNo decoder can open file\nSee details on [Log] tab of Configuration dialog"
+"PicView 3\nFirst char of plugin file name must be '0'\nOtherwise paging may be impossible"
+"PicView 3\nThis version of FAR manager is not supported\nPlease, update FAR 2"

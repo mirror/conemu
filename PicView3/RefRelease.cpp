@@ -71,6 +71,11 @@ void CRefRelease::AddRef(LPCSTR asFrom)
 	AddFrom(asFrom);
 }
 
+int CRefRelease::RefCount()
+{
+	return mn_RefCount;
+}
+
 int CRefRelease::Release(LPCSTR asFrom)
 {
 	if (!this)

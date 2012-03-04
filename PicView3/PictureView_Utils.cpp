@@ -137,31 +137,152 @@ BOOL CheckConEmu()
 	//}
 	////}
 
-	g_Plugin.hFarWnd = hConWnd;
-	g_Plugin.hConEmuWnd = hConEmu;
+	g_Plugin.hFarWnd = hConEmu ? hConEmu : hConWnd;
+	g_Plugin.hConEmuWnd = hRoot;
 
 	return (g_Plugin.hConEmuWnd!=NULL);
 }
 
-bool ExtensionMatch(LPTSTR asExtList, LPCTSTR asExt)
+bool DataMatch(LPCTSTR asData, const void* apFileData, size_t anFileDataSize)
 {
-	if (!asExtList || !asExt) return false;
-	if (!*asExtList || !*asExt) return false;
-
-	while (*asExtList) {
-		wchar_t* pszNext = wcschr(asExtList, L',');
-		if (pszNext) *pszNext = 0;
-		bool bEqual = lstrcmpi(asExtList, asExt) == 0;
-		if (pszNext) *pszNext = L',';
-
-		if (bEqual) {
-			return true;
-		} else if (!pszNext) {
+	if (!asData || (*asData != L':') || (!*(asData+1)) || !apFileData || !anFileDataSize)
+		return false;
+		
+	asData++; // Сразу пропустить ":"
+	
+	//В обработку расширений (активных/неактивных/запрещенных) добавить наряду
+	//с самими расширениями и сигнатуры файлов. Проверять первые несколько (16) байт.
+	//Пример: djv,djvu,:AT&TFORM
+	//Hex: \FF\FE
+	//Если нужен просто слэш - \\
+	
+	bool lbRc = false;
+	LPBYTE p = (LPBYTE)apFileData;
+	
+	int nLen = lstrlen(asData);
+	char* pszAnsi = (char*)calloc(nLen+1,sizeof(*pszAnsi));
+	if (!pszAnsi)
+	{
+		_ASSERTE(pszAnsi!=NULL);
+		return false;
+	}
+	WideCharToMultiByte(CP_ACP, 0, asData, -1, pszAnsi, nLen+1, 0,0);
+	
+	BYTE* psz = (BYTE*)pszAnsi;
+	char  szHex[3], *pszEnd;
+	int   nHex;
+	
+	lbRc = true;
+	
+	while (*psz && (anFileDataSize--))
+	{
+		if (*psz == '\\')
+		{
+			//Hex: \FF\FE
+			//Если нужен просто слэш - \\
+			//Или предопределенные \r \n \t \s
+			psz++;
+			if (*psz != '\\')
+			{
+				switch (*psz)
+				{
+				case 'r': case 'R':
+					nHex = 0x0D; break;
+				case 'n': case 'N':
+					nHex = 0x0A; break;
+				case 't': case 'T':
+					nHex = 0x09; break;
+				case 's': case 'S':
+					nHex = 0x20; break;
+				default:
+					if (!*psz || !*(psz+1))
+						break;
+					szHex[0] = *(psz++);
+					szHex[1] = *psz;
+					szHex[2] = 0;
+					nHex = strtoul(szHex, &pszEnd, 16);
+				}
+				*psz = (BYTE)nHex;
+			}
+		}
+		
+		if (*psz != *p)
+		{
+			lbRc = false;
 			break;
-		} else {
+		}
+		
+		p++; psz++;
+	}
+	
+	free(pszAnsi);
+	return lbRc;
+}
+
+bool ExtensionMatch(LPTSTR asExtList, LPCTSTR asExt, const void* apFileData/*=NULL*/, size_t anFileDataSize/*=0*/, bool* pbAllowAsterisk/*=NULL*/)
+{
+	if (!asExtList || !asExt)
+		return false;
+	// asExt может быть "", тогда в asExtList нужно проверять "." (т.к. без расширения)
+	if (!*asExtList /*|| !*asExt*/)
+		return false;
+	
+	bool lbAllowAsterisk = (pbAllowAsterisk == NULL) || (*pbAllowAsterisk);
+	if (pbAllowAsterisk)
+		*pbAllowAsterisk = false;
+
+	while (*asExtList)
+	{
+		wchar_t* pszNext = wcschr(asExtList, L',');
+		
+		if (pszNext) *pszNext = 0; // сделать ASCIIZ
+		bool bEqual = false;
+		switch (*asExtList)
+		{
+		case L':':
+			//В обработку расширений (активных/неактивных/запрещенных) добавить наряду
+			//с самими расширениями и сигнатуры файлов. Проверять первые несколько (16) байт.
+			//Пример: djv,djvu,:AT&TFORM
+			//Hex: \FF\FE
+			//Если нужен просто слэш - '\\'
+			if (apFileData && anFileDataSize)
+				bEqual = DataMatch(asExtList, apFileData, anFileDataSize);
+			break;
+		case 0:
+			break;
+		default:
+			WARNING("Переделать наверное на настоящие маски? Хотя слишком длинные строки в настройке получатся...");
+			if ((*asExtList == L'*') && (asExtList[1] == 0))
+			{
+				if (lbAllowAsterisk)
+				{
+					bEqual = true;
+					
+					if (pbAllowAsterisk)
+						*pbAllowAsterisk = true;
+				}
+			}
+			else if ((*asExtList == L'.') && (asExtList[1] == 0) && (*asExt == 0))
+				bEqual = true;
+			else
+				bEqual = (lstrcmpi(asExtList, asExt) == 0);
+		}
+		if (pszNext) *pszNext = L','; // вернуть
+
+		if (bEqual)
+		{
+			return true;
+		}
+		else if (!pszNext)
+		{
+			break;
+		}
+		else
+		{
 			asExtList = pszNext + 1;
 		}
 	}
+	
 	return false;
 }
 
@@ -187,7 +308,7 @@ bool CheckFarMacroText(LPCWSTR apszMacro)
 #ifdef FAR_UNICODE
 	MacroSendMacroText mcr = {sizeof(mcr)};
 	mcr.SequenceText = apszMacro;
-	mcr.Flags = KMFLAGS_SILENTCHECK;
+	mcr.Flags = 0; //KMFLAGS_SILENTCHECK;
 	if (g_StartupInfo.MacroControl(PluginNumber, MCTL_SENDSTRING, MSSC_CHECK, &mcr) == FALSE)
 	{
 		//size_t iRcSize = psi.MacroControl(MCTLARG0, MCTL_GETLASTERROR, 0, NULL);
@@ -202,7 +323,7 @@ bool CheckFarMacroText(LPCWSTR apszMacro)
 #else
 	ActlKeyMacro mcr = {MCMD_CHECKMACRO};
 	mcr.Param.PlainText.SequenceText = apszMacro;
-	//mcr.Param.PlainText.Flags = KSFLAGS_SILENTCHECK;
+	//mcr.Param.PlainText.Flags = 0; //KSFLAGS_SILENTCHECK;
 	g_StartupInfo.AdvControl(psi.ModuleNumber, ACTL_KEYMACRO, &mcr);
 	ErrCode = mcr.Param.MacroResult.ErrCode;
 #endif
@@ -229,7 +350,7 @@ bool PostMacro(LPCWSTR apszMacro, BOOL abDisableRedraw)
 	MacroSendMacroText mcr = {sizeof(mcr)};
 	mcr.SequenceText = apszMacro;
 	mcr.Flags = abDisableRedraw ? KMFLAGS_DISABLEOUTPUT : 0;
-	iRc = g_StartupInfo.MacroControl(PluginNumber, MCTL_SENDSTRING, MSSC_CHECK, &mcr);
+	iRc = g_StartupInfo.MacroControl(PluginNumber, MCTL_SENDSTRING, MSSC_POST, &mcr);
 	
 #else
 
@@ -479,9 +600,12 @@ int MDEBUG_CHK = TRUE;
 WARNING("Проверить эту функцию");
 void ExitViewerEditor(void)
 {
+	_ASSERTE(GetCurrentThreadId() == gnMainThreadId);
+
 	if ((g_Plugin.FlagsWork & FW_VE_HOOK) && !(g_Plugin.FlagsWork & FW_QUICK_VIEW))
 	{
-		PostMacro(L"Esc", TRUE);
+		// Чтобы не мелькал текст Viewer-а - отключаем Redraw
+		PostMacro(L"$if (Editor||Viewer) Esc $end", TRUE);
 		//DWORD Command = KEY_ESC;
 		//KeySequence ks = {KSFLAGS_DISABLEOUTPUT, 1, &Command};
 		//g_StartupInfo.AdvControl(PluginNumber, ACTL_POSTKEYSEQUENCE, &ks);

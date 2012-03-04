@@ -70,7 +70,8 @@ BOOL ExecuteInMainThread(DWORD nCmd, int nPeekMsg)
 		//EscapePressed не катит. Нажатие Esc в субдиалогах настройки и картинка опять показана
 		//if (EscapePressed()) g_Plugin.FlagsWork |= FW_TERMINATE;
 
-		if (g_Plugin.FlagsWork & FW_TERMINATE) {
+		if (g_Plugin.FlagsWork & FW_TERMINATE)
+		{
 			g_Plugin.FlagsWork &= ~nCmd;
 			break;
 		}
@@ -78,27 +79,34 @@ BOOL ExecuteInMainThread(DWORD nCmd, int nPeekMsg)
 		if (nPeekMsg)
 		{
 			MSG  Msg;
+			// Note! PeekMessage не убирает из стека некоторые сообщения, например WM_PAINT
 			while (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE))
 			{
 				// По идее, этого произойти не должно? Разве что идет закрытие фара?
-				if (Msg.message == WM_QUIT || Msg.message == WM_DESTROY) {
-					// вернуть обратно в очередь
-					PostMessage(Msg.hwnd, Msg.message, Msg.wParam, Msg.lParam);
+				if (Msg.message == WM_QUIT || Msg.message == WM_DESTROY)
+				{
+					// -- // вернуть обратно в очередь
+					//PostMessage(Msg.hwnd, Msg.message, Msg.wParam, Msg.lParam);
+
 					// и выйти
 					lbBreak = true; break;
 				}
 
-				__try {
+				__try
+				{
 					if (nPeekMsg == 1)
 						DefWindowProc(Msg.hwnd, Msg.message, Msg.wParam, Msg.lParam);
 					else
 						DispatchMessage(&Msg);
-				}__except(EXCEPTION_EXECUTE_HANDLER){
+				}
+				__except(EXCEPTION_EXECUTE_HANDLER)
+				{
 					CFunctionLogger::FunctionLogger(L"!!! Exception in ExecuteInMainThread.DefWindowProc(%i)",Msg.message);
 				}
 
 				// Если команда завершилась - прекращаем обработку (точнее пропуск) сообщений
-				if (WaitForSingleObject(g_Plugin.hSynchroDone, 0) == WAIT_OBJECT_0) {
+				if (WaitForSingleObject(g_Plugin.hSynchroDone, 0) == WAIT_OBJECT_0)
+				{
 					lbBreak = true;
 					lbResult = (g_Plugin.FlagsWorkResult & nCmd) != 0;
 					break;
@@ -173,20 +181,22 @@ EFlagsMainProcess ProcessMainThread()
 			g_Plugin.FlagsWork &= ~(FW_SHOW_CONFIG|FW_SHOW_MODULES);
 
 		}
-		else if (g_Plugin.FlagsWork & (FW_MARK_FILE | FW_UNMARK_FILE))
+		else if (g_Plugin.FlagsWork & (FW_MARK_FILE | FW_UNMARK_FILE | FW_TOGGLEMARK_FILE))
 		{
-			CFunctionLogger flog(L"FW_MARK_FILE | FW_UNMARK_FILE");
+			CFunctionLogger flog(L"FW_MARK_FILE | FW_UNMARK_FILE | FW_TOGGLEMARK_FILE");
 
 			//g_Plugin.Image[0]->bSelected = (g_Plugin.FlagsWork & FW_MARK_FILE) == FW_MARK_FILE;
 			g_Plugin.SelectionChanged = true; // чтобы при выходе из плагина можно было обновить панель, показав выделенные вверху
 			//g_StartupInfo.PanelControl(INVALID_HANDLE_VALUE, FCTL_SETSELECTION, g_Plugin.Image[0]->PanelItemRaw(), g_Plugin.Image[0]->bSelected);
 			//g_StartupInfo.PanelControl(INVALID_HANDLE_VALUE, FCTL_REDRAWPANEL, 0, 0);
-			g_Panel.MarkUnmarkFile( ((g_Plugin.FlagsWork & FW_MARK_FILE) == FW_MARK_FILE)
-				? CPicViewPanel::ema_Mark : CPicViewPanel::ema_Unmark);
+			g_Panel.MarkUnmarkFile(
+				(g_Plugin.FlagsWork & FW_TOGGLEMARK_FILE) ? CPicViewPanel::ema_Switch :
+				(g_Plugin.FlagsWork & FW_MARK_FILE) ? CPicViewPanel::ema_Mark
+				: CPicViewPanel::ema_Unmark);
 			TitleRepaint();
 			SetEvent(g_Plugin.hSynchroDone);
-			g_Plugin.FlagsWorkResult |= (g_Plugin.FlagsWork & (FW_MARK_FILE | FW_UNMARK_FILE));
-			g_Plugin.FlagsWork &= ~(FW_MARK_FILE | FW_UNMARK_FILE);
+			g_Plugin.FlagsWorkResult |= (g_Plugin.FlagsWork & (FW_MARK_FILE | FW_UNMARK_FILE | FW_TOGGLEMARK_FILE));
+			g_Plugin.FlagsWork &= ~(FW_MARK_FILE | FW_UNMARK_FILE | FW_TOGGLEMARK_FILE);
 
 		}
 		else if (g_Plugin.FlagsWork & (FW_TITLEREPAINT | FW_TITLEREPAINTD))
@@ -216,6 +226,8 @@ EFlagsMainProcess ProcessMainThread()
 			// Отдать управление в FAR чтобы извлечь файл из архива
 			bool lbMacroOk = g_Panel.StartItemExtraction();
 
+			if (lbMacroOk)
+				g_Plugin.FlagsWorkResult |= FW_RETRIEVE_FILE;
 			SetEvent(g_Plugin.hSynchroDone);
 
 			g_Plugin.FlagsWork &= ~FW_RETRIEVE_FILE;
@@ -268,7 +280,7 @@ EFlagsResult EntryPoint(int OpenFrom, LPCWSTR asFile)
 	EFlagsResult result = FE_PROCEEDED;
 	EFlagsMainProcess r = FEM_EXIT_PLUGIN;
 	DecodeParams parms;
-	BOOL lbNeedCache;
+	//BOOL lbNeedCache;
 	CImage *pImage = NULL;
 
 	_ASSERTE(g_Plugin.hWnd == NULL);
@@ -303,6 +315,7 @@ EFlagsResult EntryPoint(int OpenFrom, LPCWSTR asFile)
 	}
 
 	// Инициализация списка файлов
+	WARNING("На больших списках файлов это делается медленно, имеет смысл оптимизировать?");
 	if (!g_Panel.Initialize(OpenFrom, asFile))
 	{
 		result = FE_OTHER_ERROR;
@@ -395,6 +408,8 @@ EFlagsResult EntryPoint(int OpenFrom, LPCWSTR asFile)
 	}
 	
 	// Сразу поставить в очередь на декодирование следующий фрейм (Priority = eCurrentImageNextPage)!
+	g_Manager.RequestPreCache(&parms);
+#if 0
 	if ((pImage->Info.nPages > 1) && ((pImage->Info.nPage + 1) < pImage->Info.nPages))
 	{
 		WARNING("Поставить в очередь на декодирование следующий фрейм!");
@@ -431,6 +446,7 @@ EFlagsResult EntryPoint(int OpenFrom, LPCWSTR asFile)
 		if ((next.nRawIndex != -1) && (next.nRawIndex != parms.nRawIndex) && (next.nRawIndex != nNext))
 			g_Manager.RequestDecodedImage(&next);
 	}
+#endif
 
 	MCHKHEAP;
 
@@ -438,8 +454,8 @@ EFlagsResult EntryPoint(int OpenFrom, LPCWSTR asFile)
 
 	if (r == FEM_RETRIEVE_FILE)
 	{
-		WARNING("нужно запустить на выполнение макрос?");
-		_ASSERTE(r != FEM_RETRIEVE_FILE);
+		// Запущен на выполнение макрос?
+		_ASSERTE((r != FEM_RETRIEVE_FILE) || (g_Plugin.FlagsWork & FW_IN_RETRIEVE));
 		result = FE_RETRIEVE_FILE;
 	}
 	else
@@ -453,7 +469,7 @@ wrap:
 
 		if (!(g_Plugin.FlagsWork & FW_TERMINATE))
 		{
-			_ASSERTE(g_Plugin.FlagsWork & FW_TERMINATE);
+			_ASSERTE((g_Plugin.FlagsWork & FW_TERMINATE) || !(g_Plugin.FlagsWork & (FW_TERMINATE|FW_IN_RETRIEVE)));
 			g_Plugin.FlagsWork |= FW_TERMINATE;
 		}
 	}

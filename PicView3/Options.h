@@ -39,8 +39,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TODO(s) 
 #define WARNING(s) 
 #else
-#define TODO(s) __pragma(message (FILE_LINE "TODO: " s))
-#define WARNING(s) __pragma(message (FILE_LINE "warning: " s))
+#define TODO(s) __pragma(message (FILE_LINE "warning: TODO: " s))
+#define WARNING(s) __pragma(message (FILE_LINE "warning: WARN: " s))
 #endif
 #define PRAGMA_ERROR(s) __pragma(message (FILE_LINE "error: " s))
 
@@ -66,17 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef _ASSERT
 #define _ASSERT _ASSERTE
 
-#ifdef _DEBUG
-
-	#include "/VCProject/MLib/MHeap.h"
-
-	#ifdef DEFINE_OPTIONS
-		#include "/VCProject/MLib/MHeap.cpp"
-	#endif
-	
-#endif
-
-#ifdef DEFINE_OPTIONS
+#if defined(DEFINE_OPTIONS) && defined(_DEBUG)
 int MyCrtDbgReportW(int _ReportType, const wchar_t * _Filename, int _LineNumber, const wchar_t * _ModuleName, const wchar_t * _Format)
 {
 	return _CrtDbgReportW(_ReportType, _Filename, _LineNumber, _ModuleName, _Format);

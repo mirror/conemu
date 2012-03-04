@@ -95,7 +95,7 @@ public:
 	void SaveFormatsToReg(FILETIME *pftRegModified=NULL);
 	virtual bool InitPlugin(bool bAllowResort=false) = 0; // Загрузить, инициализировать, получить список форматов
 	wchar_t* LoadRegValue(HKEY hkey, LPCWSTR asName) const;
-	bool IsAllowed(const wchar_t* asExt, bool abAllowAsterisk, bool abAllowInactive, bool abAssumeActive=false);
+	bool IsAllowed(const wchar_t* asExt, bool abAllowAsterisk, bool abAllowInactive, bool abAssumeActive=false, const void* pFileData=NULL, size_t nFileDataSize=0);
 	void SetStatus(LPCWSTR asStatus, BOOL abSaveInReg=FALSE);
 	void SetException(LPCWSTR asFunction);
 public:

@@ -38,7 +38,8 @@ class CPicViewConfig;
 //CPicViewConfig* gpCurConfig = NULL;
 
 
-class CPicViewConfig : public MPicViewDlg {
+class CPicViewConfig : public MPicViewDlg
+{
 public:
 	int nPageStart[MAX_PAGE_COUNT];
 	BOOL bPageActivated[MAX_PAGE_COUNT];
@@ -56,7 +57,7 @@ public:
 	int iTitleTemplReset;
 	int iQTempl1, iQTempl1Reset, iQTempl2, iQTempl2Reset, iQTempl3, iQTempl3Reset;
 	int iOk, iCancel;
-	int iMain, iDecoders, iAdvanced, iOSD, iLOG, iLastTabBtn;
+	int iMain, iDecoders, iAdvanced, iOSD, iCACHE, iLOG, iLastTabBtn;
 	bool bDecoderPriorityChanged;
 	
 	wchar_t tbuf[0x800], *pbuf;
@@ -86,6 +87,7 @@ protected:
 	void ActivateDecoders(HANDLE hDlg);
 	void ActivateAdvanced(HANDLE hDlg);
 	void ActivateOSD(HANDLE hDlg);
+	void ActivateCACHE(HANDLE hDlg);
 	void ActivateLOG(HANDLE hDlg);
 
 	virtual LONG_PTR ConfigDlgProc(HANDLE hDlg, int Msg, int Param1, LONG_PTR Param2);
@@ -106,7 +108,10 @@ protected:
 	int InitOSD() // Page4
 	;
 	
-	int InitLOG() // Page5
+	int InitCACHE() // Page5
+	;
+
+	int InitLOG() // Page6
 	;
 	
 

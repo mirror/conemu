@@ -142,28 +142,87 @@ void __stdcall wrapMessageLog(void *pCallbackContext, const wchar_t* asMessage, 
 // asExtList может содержать '*' (тогда всегда TRUE) или '.' (TRUE если asExt пусто). Сравнение регистронезависимое
 BOOL __stdcall wrapExtensionMatch(wchar_t* asExtList, const wchar_t* asExt)
 {
-	if (!asExtList || !asExt) return FALSE;
-	if (!*asExtList) return FALSE;
+	if (!asExtList || !asExt)
+		return false;
+	// asExt может быть "", тогда в asExtList нужно проверять "." (т.к. без расширения)
+	if (!*asExtList /*|| !*asExt*/)
+		return false;
 
-	if (!asExt || !*asExt) asExt = L".";
-	if (wcschr(asExtList,L'*'))
-		return TRUE;
-
-	while (*asExtList) {
+	while (*asExtList)
+	{
 		wchar_t* pszNext = wcschr(asExtList, L',');
-		if (pszNext) *pszNext = 0;
-		bool bEqual = lstrcmpi(asExtList, asExt) == 0;
-		if (pszNext) *pszNext = L',';
-
-		if (bEqual) {
-			return TRUE;
-		} else if (!pszNext) {
+		
+		if (pszNext) *pszNext = 0; // сделать ASCIIZ
+		bool bEqual = false;
+		switch (*asExtList)
+		{
+		case L':':
+			//-- во враппере не поддерживается
+			////В обработку расширений (активных/неактивных/запрещенных) добавить наряду
+			////с самими расширениями и сигнатуры файлов. Проверять первые несколько (16) байт.
+			////Пример: djv,djvu,:AT&TFORM
+			////Hex: \FF\FE
+			////Если нужен просто слэш - \\
+			//if (apFileData && anFileDataSize)
+			//	bEqual = DataMatch(asExtList, apFileData, anFileDataSize);
 			break;
-		} else {
+		case 0:
+			break;
+		default:
+			// Переделать наверное на настоящие маски? Хотя слишком длинные строки в настройке получатся...
+			if ((*asExtList == L'*') && (asExtList[1] == 0))
+				bEqual = true;
+			else if ((*asExtList == L'.') && (asExtList[1] == 0) && (*asExt == 0))
+				bEqual = true;
+			else
+				bEqual = (lstrcmpi(asExtList, asExt) == 0);
+		}
+		if (pszNext) *pszNext = L','; // вернуть
+
+		if (bEqual)
+		{
+			return true;
+		}
+		else if (!pszNext)
+		{
+			break;
+		}
+		else
+		{
 			asExtList = pszNext + 1;
 		}
 	}
-	return FALSE;
+	
+	return false;
+
+	//if (!asExtList || !asExt) return FALSE;
+	//if (!*asExtList) return FALSE;
+
+	//if (!asExt || !*asExt) asExt = L".";
+	//if (wcschr(asExtList,L'*'))
+	//	return TRUE;
+
+	//while (*asExtList)
+	//{
+	//	wchar_t* pszNext = wcschr(asExtList, L',');
+	//	if (pszNext) *pszNext = 0;
+	//	bool bEqual = lstrcmpi(asExtList, asExt) == 0;
+	//	if (pszNext) *pszNext = L',';
+
+	//	if (bEqual)
+	//	{
+	//		return TRUE;
+	//	}
+	//	else if (!pszNext)
+	//	{
+	//		break;
+	//	}
+	//	else
+	//	{
+	//		asExtList = pszNext + 1;
+	//	}
+	//}
+	//return FALSE;
 }
 
 BOOL __stdcall wrapCallSehed(pvdCallSehedProc2 CalledProc, LONG_PTR Param1, LONG_PTR Param2, LONG_PTR* Result)

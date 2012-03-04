@@ -169,6 +169,7 @@ bool CImagePages::GetDrawHandle(CDisplayHandlePtr& rDraw, uint anPage, DecodePar
 				bFound = true;
 				(*i)->nLastAccess = GetTickCount();
 				rDraw.Assign((*i)->pDraw);
+				break;
 			}
 		}
 	}

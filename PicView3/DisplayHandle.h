@@ -56,6 +56,10 @@ public:
 	ImageInfo Info;
 	DecodeParams Params;
 
+#ifdef _DEBUG
+	CUnicodeFileName FileName;
+#endif
+
 public:
 	CDisplayHandle(LPCSTR asFrom, CImage* apImage/*, CDecoderHandle* apDecoderHandle*/);
 	void MoveTo(CDisplayHandle *apDst);

@@ -1,14 +1,14 @@
 @echo off
 
 set BUILD_RC=ERROR
-set CONF="Release|Win32"
+set CONF="ReleaseW3|Win32"
 call :do_build /build _PicView3.sln %CONF% x86
 if not %BUILD_RC% == OK echo Build failed, code: %BUILD_RC% & goto fin1
 
-set BUILD_RC=ERROR
-set CONF="Release|x64"
-call :do_build /build _PicView3.sln %CONF% x64
-if not %BUILD_RC% == OK echo Build failed, code: %BUILD_RC% & goto fin1
+rem set BUILD_RC=ERROR
+rem set CONF="Release|x64"
+rem call :do_build /build _PicView3.sln %CONF% x64
+rem if not %BUILD_RC% == OK echo Build failed, code: %BUILD_RC% & goto fin1
 
 echo Build succeeded
 
@@ -59,15 +59,19 @@ cd
 if exist !Errors.log del !Errors.log
 
 set DEVEXE=.
-if exist "%VS90COMNTOOLS%..\IDE\VCExpress.exe" set DEVEXE="%VS90COMNTOOLS%..\IDE\VCExpress.exe"
-if exist "%VS90COMNTOOLS%..\IDE\devenv.com" set DEVEXE="%VS90COMNTOOLS%..\IDE\devenv.com"
+set log=
+rem if exist "%VS90COMNTOOLS%..\IDE\VCExpress.exe" set DEVEXE="%VS90COMNTOOLS%..\IDE\VCExpress.exe"
+if exist "%VS90COMNTOOLS%..\IDE\devenv.com" (
+  set DEVEXE="%VS90COMNTOOLS%..\IDE\devenv.com"
+  set log=/Out !Errors.log
+)
 if %DEVEXE%==. goto nostudio
 
 echo #pragma once > "%~dp0PVDInterface\usetodo.hpp"
 echo #define HIDE_TODO >> "%~dp0PVDInterface\usetodo.hpp"
 
 echo Building config: %3
-%DEVEXE% %2 %1 %3 /Out !Errors.log
+%DEVEXE% %2 %1 %3 %log%
 if errorlevel 1 goto e1
 set BUILD_RC=OK
 

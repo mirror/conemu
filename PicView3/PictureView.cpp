@@ -201,7 +201,7 @@ GUID guid_MsgBox = { /* 30648cc6-daa7-49af-b60f-b116392ece52 */
 //	}
 //
 //	OutputDebugString(L"Invalidating in SwitchImages\n");
-//	InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+//	Invalidate(g_Plugin.hWnd);
 //	return result;
 //}
 
@@ -483,6 +483,15 @@ AnalyseRet WINAPI AnalyseW(const struct AnalyseInfo *Info)
 		return (AnalyseRet)FALSE;
 	}
 
+	// Поскольку расширени НЕ указано в игнорируемых (глобально) по плагину,
+	// то нужно выполнить инициализацию, для получения расширений для модулей
+	g_Plugin.InitPlugin();
+
+	if (!CPVDManager::IsSupportedExtension(Info->FileName))
+	{
+		return (AnalyseRet)FALSE;
+	}
+
 	// Запомнить
 	g_LastAnalyse = *Info;
 	g_LastAnalyse.Buffer = NULL;
@@ -740,7 +749,7 @@ HANDLE WINAPI OpenFilePluginW(const wchar_t *pFileName, const unsigned char *buf
 //	{
 //		TitleRepaint();
 //		if (g_Plugin.hWnd)
-//			InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+//			Invalidate(g_Plugin.hWnd);
 //	}
 //
 //	MCHKHEAP;
@@ -1243,17 +1252,26 @@ HANDLE WINAPI OpenPluginW(
 	if ((OpenFrom & OPEN_FROM_MASK) == OPEN_ANALYSE)
 	{
 		#if FARMANAGERVERSION_BUILD>=2462
-		OpenAnalyseInfo* p = (OpenAnalyseInfo*)Info->Data;
-		_ASSERTE(p && p->StructSize>=sizeof(*p));
-		g_LastAnalyse = *(p->Info);
+			OpenAnalyseInfo* p = (OpenAnalyseInfo*)Info->Data;
+			_ASSERTE(p && p->StructSize>=sizeof(*p));
+			g_LastAnalyse = *(p->Info);
 		#endif
 		
 		EFlagsResult eprc = EntryPoint(OPEN_BY_USER, g_LastAnalyse.FileName);
-		//if (eprc == FE_PROCEEDED || eprc == FE_RETRIEVE_FILE)
-		//{
-		//	//TODO: ?
-		//}
-		return INVALID_HANDLE_VALUE;
+		HANDLE hResult = INVALID_HANDLE_VALUE;
+		switch (eprc)
+		{
+		case FE_PROCEEDED:
+			hResult = (HANDLE)-2;
+			break;
+		case FE_RETRIEVE_FILE:
+			//TODO?
+			_ASSERTE(eprc!=FE_RETRIEVE_FILE);
+			break;
+		default:
+			break;
+		}
+		return hResult;
 	}
 	#endif
 
@@ -1444,13 +1462,50 @@ int WINAPI ProcessEditorEventW(
 			}
 		}
 
-		//EditorInfo ei;
-		//if (g_StartupInfo.EditorControl(ECTL_GETINFO, &ei))
-		//{
-		//	wchar_t* pszFileName = NULL;
-		//	int nLen = g_StartupInfo.EditorControl(ECTL_GETFILENAME, NULL);
-		//	if (nLen>0 && (pszFileName = (wchar_t*)calloc(nLen+1,2))!=NULL) {
-		//		g_StartupInfo.EditorControl(ECTL_GETFILENAME, pszFileName);
+		EFlagsResult rc;
+		EditorInfo ei = {};
+		#ifdef FAR_UNICODE
+		//ei.StructSize = sizeof(ei); -- нету его пока
+		#endif
+		INT_PTR iRc;
+		#ifdef FAR_UNICODE
+		// Info->EditorID использовать нельзя, фрейм еще не создан?
+		iRc = g_StartupInfo.EditorControl(-1, ECTL_GETINFO, 0, &ei);
+		#else
+		iRc = g_StartupInfo.EditorControl(ECTL_GETINFO, &ei);
+		#endif
+		if (iRc)
+		{
+			wchar_t* pszFileName = NULL;
+			INT_PTR nLen;
+			#ifdef FAR_UNICODE
+			nLen = g_StartupInfo.EditorControl(-1, ECTL_GETFILENAME, 0, NULL);
+			#else
+			nLen = g_StartupInfo.EditorControl(ECTL_GETFILENAME, NULL);
+			#endif
+			if ((nLen > 0) && (pszFileName = (wchar_t*)calloc(nLen+1,2))!=NULL)
+			{
+				#ifdef FAR_UNICODE
+				nLen = g_StartupInfo.EditorControl(-1, ECTL_GETFILENAME, 0, pszFileName);
+				#else
+				nLen = g_StartupInfo.EditorControl(ECTL_GETFILENAME, pszFileName);
+				#endif
+			
+				if (nLen > 0)
+				{
+					g_Plugin.FlagsWork |= FW_VE_HOOK;
+					g_Plugin.FlagsWork &= ~FW_QUICK_VIEW;
+
+					rc = EntryPoint(OPEN_EDITOR, pszFileName);
+					if ((rc == FE_PROCEEDED) && (g_Plugin.FlagsWork & FW_VE_HOOK))
+					{
+						ExitViewerEditor();
+					}
+				}
+				
+				free(pszFileName);
+			}
+		}
 		//		
 		//		if (!g_Plugin.IsExtensionIgnored(pszFileName)
 		//			&& g_Panel.Initialize(pszFileName))
@@ -1510,6 +1565,8 @@ int WINAPI ProcessViewerEventW(
 	
 	g_Plugin.InitHooks();
 
+	// Warning! Т.к. ниже может быть "FW_IN_RETRIEVE", то пока работаем
+	// не смотря на g_Plugin.bHookQuickView и g_Plugin.bHookView. Они - потом.
 	if (Event == VE_READ)
 	{
 		if (g_Plugin.FlagsWork & FW_IN_RETRIEVE)
@@ -1535,24 +1592,67 @@ int WINAPI ProcessViewerEventW(
 		}
 		else if (g_Plugin.bHookQuickView || g_Plugin.bHookView)
 		{
+			WARNING("Заменить на проверку в ProcessConsoleInput");
 			// Не перехватывать CtrlShiftF3
 			BOOL lbCtrlShiftPressed = (IsKeyPressed(VK_SHIFT) && IsKeyPressed(VK_CONTROL));
 			//if ( /*&& (GetKeyState(VK_F3) & 0x8000)*/) {
 			//	return 0;
 			//}
 			TCHAR szValue[128];
-			if (GetEnvironmentVariable(_T("FarPicViewMode"), szValue, 128)) {
+			if (GetEnvironmentVariable(_T("FarPicViewMode"), szValue, 128))
+			{
 				szValue[9] = 0;
-				if (lstrcmp(szValue, PICVIEW_ENVVAL) != 0) {
+				if (lstrcmp(szValue, PICVIEW_ENVVAL) != 0)
+				{
 					// значит просмотр уже начат другим плагином
 					return 0;
 				}
 			}
-		}
+
+			EFlagsResult rc;
+			ViewerInfo vi = {};
+			#ifdef FAR_UNICODE
+			vi.StructSize = sizeof(vi);
+			#endif
+			INT_PTR iRc;
+			#ifdef FAR_UNICODE
+			// Info->ViewerID использовать нельзя, фрейм еще не создан?
+			iRc = g_StartupInfo.ViewerControl(-1, VCTL_GETINFO, 0, &vi);
+			#else
+			iRc = g_StartupInfo.ViewerControl(VCTL_GETINFO, &vi);
+			#endif
+			if (iRc && vi.FileName)
+			{
+				g_Plugin.FlagsWork |= FW_VE_HOOK;
+				g_Plugin.FlagsWork &= ~(FW_TERMINATE|FW_QUICK_VIEW);
+
+				PanelInfo ppi[2];
+				// Для определения наличия QView (он может быть как на пассивной, так и на активной панели!
+				if (g_StartupInfo.PanelControl(PANEL_ACTIVE, FCTL_GETPANELINFO, 0, (FAR_PARAM)ppi)
+					&& g_StartupInfo.PanelControl(PANEL_PASSIVE, FCTL_GETPANELINFO, 0, (FAR_PARAM)(ppi + 1)))
+				{
+					for (uint i = 2; i--;)
+					{
+						if (ppi[i].PanelType == PTYPE_QVIEWPANEL && ppi[i].PanelRect.right - ppi[i].PanelRect.left - 1 == vi.WindowSizeX)
+						{
+							g_Plugin.FlagsWork |= FW_QUICK_VIEW;
+							g_Plugin.FlagsWork &= ~FW_VE_HOOK;
+							WARNING("В режиме Far/w панель может быть и не видна!");
+							g_Plugin.ViewPanelT = ppi[i].PanelRect;
+							WARNING("В принципе, размер фара или панелей может меняться, нужно будет обновить ViewPanelT");
+						}
+					}
+				}
+
+				rc = EntryPoint(OPEN_VIEWER, vi.FileName);
+				if ((rc == FE_PROCEEDED) && (g_Plugin.FlagsWork & FW_VE_HOOK))
+				{
+					ExitViewerEditor();
+				}
+			}
+
+		} // else if (g_Plugin.bHookQuickView || g_Plugin.bHookView)
 	
-		//ViewerInfo vi = {0};
-		//vi.StructSize = sizeof(vi);
-		//if (g_StartupInfo.ViewerControl(VCTL_GETINFO, &vi))
 		//{
 		//	g_Plugin.FlagsWork |= FW_VE_HOOK;
 		//	// Сначала - сбросим QView! Иначе он может ошибочно остаться от предыдущего QView при отрытии обычного View
@@ -1784,7 +1884,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *xInfo)
 	{
 		g_StartupInfo.Message(PluginNumberMsg, FMSG_ALLINONE|FMSG_MB_OK,
 			NULL,
-			(const wchar_t * const *)GetMsg(MIFarBuildError), // L"PictureView2\nThis version of FAR manager is not supported\nPlease update FAR",
+			(const wchar_t * const *)GetMsg(MIFarBuildError), // L"PicView3\nThis version of FAR manager is not supported\nPlease update FAR",
 			0, 0);
 		return;
 	}

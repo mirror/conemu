@@ -127,7 +127,8 @@ public:
 	void FreeAllItems();
 	
 public:
-	enum MarkAction {
+	enum MarkAction
+	{
 		ema_Mark = 1,
 		ema_Unmark = 2,
 		ema_Switch = 3,
@@ -182,7 +183,7 @@ public:
 	int GetNextItemRawIdx(int anStep = 1, int aiFromRawIndex = -1);
 	int GetReadyItemsCount();
 	
-	void ShowError(const wchar_t* pszMsg);
+	void ShowError(const wchar_t* pszMsg, const wchar_t* pszMsg2=NULL, bool bSysError=false);
 
 	void FreeUnusedDisplayData(int anForceLevel = 0);
 	

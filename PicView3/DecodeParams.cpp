@@ -32,6 +32,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "PVDModuleBase.h"
 #include "DecodeParams.h"
 #include "DecodeItem.h"
+#include "PVDManager.h"
 	
 	
 //  онструктор, оператор присваивани€, методы
@@ -68,25 +69,33 @@ DecodeParams& DecodeParams::operator=(DecodeParams& a)
 
 void DecodeParams::OnItemReady()
 {
+	DecodeParams* pParamsCopy = NULL;
+
 	if (!pDecodeItem)
 	{
-		_ASSERTE(pDecodeItem!=NULL);
-		return;
+		_ASSERTE(g_Manager.IsImageReady(this));
 	}
-	
-	_ASSERTE(pDecodeItem->Params.nRawIndex == nRawIndex);
-	_ASSERTE(pDecodeItem->Params.Compare(this));
+	else
+	{
+		_ASSERTE(pDecodeItem->Params.nRawIndex == nRawIndex);
+		_ASSERTE(pDecodeItem->Params.Compare(this));
+	}
 
-	PostMessage(g_Plugin.hWnd, DMSG_IMAGEREADY, nRawIndex, (LPARAM)pDecodeItem);
+	pParamsCopy = new DecodeParams;
+	*pParamsCopy = *this;
+
+	PostMessage(g_Plugin.hWnd, DMSG_IMAGEREADY, (WPARAM)pParamsCopy, (LPARAM)pDecodeItem);
 	pDecodeItem = NULL;
 }
 
 bool DecodeParams::Compare(DecodeParams* pOther)
 {
-	if (((pOther->Flags & (eRenderRelativeIndex|eRenderFirstAvailable)) 
+	_ASSERTE(pOther->nRawIndex!=-1 && nRawIndex!=-1);
+	if (/*((pOther->Flags & (eRenderRelativeIndex|eRenderFirstAvailable)) 
 			!= (Flags & (eRenderRelativeIndex|eRenderFirstAvailable)))
-		|| pOther->nRawIndex != nRawIndex || pOther->nPage != nPage
-		|| ((Flags & eRenderRelativeIndex) && pOther->iDirection != iDirection))
+		||*/
+		pOther->nRawIndex != nRawIndex || pOther->nPage != nPage
+		/*|| ((Flags & eRenderRelativeIndex) && pOther->iDirection != iDirection)*/)
 	{
 		return false;
 	}

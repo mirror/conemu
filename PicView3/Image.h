@@ -116,6 +116,8 @@ public:
 
 	WARNING("Сделать Private");
 	CDecoderHandle* mp_File; // активный, используется(!) в данный момент в нити дисплея
+	void DecoderHandleReleased(CDecoderHandle* apFile);
+
 	WARNING("Сделать Private");
 	//CDisplayHandle* mp_Draw; // активный, используется(!) в данный момент в нити дисплея
 

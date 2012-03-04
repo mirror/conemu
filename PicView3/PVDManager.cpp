@@ -42,6 +42,8 @@ FD_REFRESH
 */
 
 
+#define PICVIEWDUMP
+
 
 #include "PVDManager.h"
 #include "Image.h"
@@ -260,15 +262,19 @@ bool CPVDManager::CreateVersion1(CModuleInfo* plug, bool lbForceWriteReg)
 
 	plug->pPlugin = new CPVDModuleVer1(plug);
 
-	if (!plug->pPlugin) {
+	if (!plug->pPlugin)
+	{
 		_ASSERTE(plug->pPlugin!=NULL);
-	} else {
+	}
+	else
+	{
 		plug->nPriority = plug->pPlugin->nDefPriority = 0;
 		//_ASSERTE(!plug->pActive && !plug->pInactive && !plug->pForbidden);
 		// Расширения могли остаться от предыдущего раза (unload:, reload:)
 		SafeFree(plug->pActive); SafeFree(plug->pInactive); SafeFree(plug->pForbidden);
 
-		if (plug->pPlugin->InitPrepare(plug->ftModified, lbForceWriteReg)) {
+		if (plug->pPlugin->InitPrepare(plug->ftModified, lbForceWriteReg))
+		{
 			_ASSERTE(plug->pPlugin->nFlags == PVD_IP_DECODE);
 			_ASSERTE(plug->nCurrentFlags == PVD_IP_DECODE);
 			_ASSERTE(plug->pPlugin->nDefPriority > 0);
@@ -284,7 +290,9 @@ bool CPVDManager::CreateVersion1(CModuleInfo* plug, bool lbForceWriteReg)
 			//plug->nFlags = plug->pPlugin->nFlags;
 			//plug->iPriority = plug->pPlugin->iPriority;
 			plug->bPrepared = TRUE; // OK
-		} else {
+		}
+		else
+		{
 			delete plug->pPlugin;
 			plug->pPlugin = NULL;
 		}
@@ -337,7 +345,7 @@ bool CPVDManager::CreateVersion2(CModuleInfo* plug, bool lbForceWriteReg)
 	return plug->bPrepared;
 }
 
-bool CPVDManager::IsSupportedExtension(const wchar_t *pFileName)
+bool CPVDManager::IsSupportedExtension(const wchar_t *pFileName, LPVOID pFileData, size_t nFileDataSize)
 {
 	WARNING("Добавить обработку папок! Их тоже можно 'смотреть' через Shell например");
 
@@ -352,23 +360,56 @@ bool CPVDManager::IsSupportedExtension(const wchar_t *pFileName)
 	else
 		pExt = NULL;
 
+	// Проверим, может данные файла не передали, а в "масках" указаны сигнатуры
+	BYTE Data[128]; DWORD nDataRead = 0;
+	bool bFileFailed = false;
 	
 	for (UINT i = 0; i < nCount; i++)
 	{
 		p = Decoders[i];
-		if (p->pPlugin == NULL) continue; // Если на этом шаге субплагин не был создан - значит декодирование будет невозможно
+		if (p->pPlugin == NULL)
+			continue; // Если на этом шаге субплагин не был создан - значит декодирование будет невозможно
+
+		if (!pFileData && !bFileFailed && wcschr(pFileName, L'\\'))
+		{
+			if ((p->pPlugin->pData->pForbidden && wcschr(p->pPlugin->pData->pForbidden, L':'))
+				|| (p->pPlugin->pData->pActive && wcschr(p->pPlugin->pData->pActive, L':'))
+				|| (p->pPlugin->pData->pInactive && wcschr(p->pPlugin->pData->pInactive, L':')))
+			{
+				CUnicodeFileName FileName;
+				FileName.Assign(pFileName); // Сконвертить к UNC формату
+				HANDLE hFile = CreateFileW((LPCWSTR)FileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+				if (hFile == INVALID_HANDLE_VALUE)
+				{
+					bFileFailed = true;
+				}
+				else
+				{
+					if (!ReadFile(hFile, Data, sizeof(Data), &nDataRead, NULL) || !nDataRead)
+					{
+						bFileFailed = true;
+					}
+					else
+					{
+						pFileData = Data;
+						nFileDataSize = nDataRead;
+					}
+					CloseHandle(hFile);
+				}
+			}
+		}
 
 		// Запрещенные - запрещены всегда
-		_ASSERTE(p->pForbidden);
-		if (wcschr(p->pForbidden,L'*'))
-			continue; // за исключением '*'
-
-		// На шаге 3 если по расширению подобрать плагин не получилось - 
-		// пробуем всеми подряд (активными и НЕ активными)
+		_ASSERTE(p->pForbidden && p->pPlugin->pData->pForbidden && (lstrcmp(p->pPlugin->pData->pForbidden,p->pForbidden)==0));
+		//-- То же самое делается в IsAllowed
+		//if (wcschr(p->pForbidden,L'*'))
+		//	continue; // за исключением '*'
 
 		// Интересует принципиальная возможность открытия этого файла
 		// 2009-12-13 было false/*abAllowAsterisk*/
-		if (p->pPlugin->IsAllowed(pExt, true/*abAllowAsterisk*/, true/*abAllowInactive*/))
+		if (p->pPlugin->IsAllowed(pExt, true/*abAllowAsterisk*/, true/*abAllowInactive*/,
+				false/*default for abAssumeActive*/,
+				pFileData, nFileDataSize)) // буфер может быть NULL
 		{
 			return true;
 		}
@@ -481,10 +522,14 @@ void CPVDManager::SortPlugins2()
 			}
 		} 
 
-		if (!bKnown) {
-			OutputDebugString(L"Unknown module type: ");
-			OutputDebugString(tmp->pModulePath);
-			OutputDebugString(L"\n");
+		if (!bKnown)
+		{
+			#ifdef PICVIEWDUMP
+			wchar_t* pszDbg = (wchar_t*)malloc(sizeof(wchar_t)*(lstrlenW(tmp->pModulePath)+64));
+			wsprintfW(pszDbg, L"Unknown module type: %s\n", tmp->pModulePath);
+			OutputDebugString(pszDbg);
+			free(pszDbg);
+			#endif
 		}
 	}
 
@@ -634,7 +679,11 @@ bool CPVDManager::OpenWith(
 		const u8 *pBuffer, uint lBuffer)
 		// pvdInfoPage2 &InfoPage теперь в CImage
 {
-	if (!pDecoder->pPlugin) {
+	// Должен выполняться в потоке декодера
+	_ASSERTE(GetCurrentThreadId() == gnDecoderThreadId);
+
+	if (!pDecoder->pPlugin)
+	{
 		_ASSERTE(pDecoder->pPlugin);
 		return false;
 	}
@@ -648,10 +697,17 @@ bool CPVDManager::OpenWith(
 	if (!*ppFile)
 	{
 		*ppFile = new CDecoderHandle(szPVDManager, apImage);
+
+		#ifdef _DEBUG
+		// Для информации
+		(*ppFile)->FileName = (LPCWSTR)apImage->FileName;
+		#endif
 	}
 	else
 	{
-		_ASSERTE((*ppFile)->Context() == NULL);
+		// Раз мы дошли сюда, значит файл открывается новым декодером (или заново открывается тем же)
+		// А раз так, то старый дескриптор декодера должен быть закрыт!
+		_ASSERTE((*ppFile)->IsReady()==FALSE);
 		(*ppFile)->Close();
 	}
 
@@ -662,6 +718,7 @@ bool CPVDManager::OpenWith(
 	
 	MCHKHEAP;
 
+#ifdef PICVIEWDUMP
 	wchar_t szDbg[MAX_PATH*3], *pNamePart;
 	int nCur = 0, nSize = sizeofarray(szDbg);
 	lstrcpyn(szDbg+nCur, pDecoder->pPlugin->pName, 128); nCur += lstrlen(szDbg+nCur);
@@ -672,6 +729,7 @@ bool CPVDManager::OpenWith(
 	lstrcpy(szDbg+nCur, L"\"… ");
 	//wnsprintf(szDbg, sizeofarray(szDbg), L"%s: Opening image %s...", pDecoder->pPlugin->pName, pFileName ? pFileName : L"<NULL>");
 	OutputDebugString(szDbg);
+#endif
 
 	//IN_APL такого не пережил
 	//if (lFileSize == (int)lBuffer)
@@ -690,7 +748,9 @@ bool CPVDManager::OpenWith(
 		//ExecuteInMainThread(FW_TITLEREPAINTD,0);
 		WARNING("Иногда нити пересекаются, и в заголовке отрисовывается старый файл, а не тот, который уже на экране!");
 		g_Plugin.FlagsWork |= FW_TITLEREPAINTD;
-	} else {
+	}
+	else
+	{
 		TODO("OSD для декодируемого изображения");
 	}
 		
@@ -723,6 +783,7 @@ bool CPVDManager::OpenWith(
 		if (pDecoder->pPlugin->PageInfo2(InfoImage.pImageContext, &InfoPage))
 		{
 			MCHKHEAP;
+			WARNING("!!! Переделать, тут должен быть CDecodeItem!");
 			pInfo->Assign(InfoPage);
 			
 			(*ppFile)->Info.Assign(InfoPage);
@@ -752,20 +813,27 @@ bool CPVDManager::OpenWith(
 	
 	MCHKHEAP;
 
+	#ifdef PICVIEWDUMP
 	OutputDebugString(result ? L"Succeeded\n" : L"Failed!!!\n");
+	#endif
 	if (!result)
 	{
-		if (pDecoder->pPlugin->szLastError[0]) {
+		if (pDecoder->pPlugin->szLastError[0])
+		{
 			int nLen = lstrlen(szDbg);
-			if ((nLen+10) < sizeofarray(szDbg)) {
+			if ((nLen+10) < sizeofarray(szDbg))
+			{
 				lstrcpyn(szDbg+nLen, pDecoder->pPlugin->szLastError, sizeofarray(szDbg)-nLen-1);
 			}
-		} else {
+		}
+		else
+		{
 			lstrcat(szDbg, L"Failed!!! ");
 		}
 		pDecoder->pPlugin->SetStatus(szDbg);
 		#ifdef _DEBUG
-		if ((GetKeyState(VK_CAPITAL) & 1) == 1) {
+		if ((GetKeyState(VK_CAPITAL) & 1) == 1)
+		{
 			Sleep(1000);
 		}
 		#endif
@@ -927,7 +995,7 @@ bool CPVDManager::Open(
 			//if ((s == 3) && wcschr(p->pPlugin->pIgnored,L'*')) // за исключением '*'
 			_ASSERTE(p->pForbidden);
 			// Теперь - всегда (запрещенные расширения)
-			if (wcschr(p->pForbidden, L'*') || ExtensionMatch(p->pForbidden, pExt))
+			if (/*wcschr(p->pForbidden, L'*') ||*/ ExtensionMatch(p->pForbidden, pExt, pBuffer, lBuffer))
 			{
 				// Это расширение строго запрещено для этого декодера
 				apImage->SetDecoderFailed(p); // чтобы повторно не обрабатывать
@@ -938,7 +1006,8 @@ bool CPVDManager::Open(
 			// проверка активных/неактивных расширений
 			if (p->pPlugin->IsAllowed(
 					pExt, true/*abAllowAsterisk*/, (s >= 3)/*abAllowInactive*/, 
-					(s == 4)/*abAssumeActive*/))
+					(s == 4)/*abAssumeActive*/,
+					pBuffer, lBuffer))
 			{
 				//if (i < apImage->mn_ProcessedSize)
 				//	apImage->mpb_Processed[i] = true; // чтобы повторно не обрабатывать
@@ -1071,15 +1140,24 @@ void CPVDManager::CloseDecoder(CDecodeItem* apItem)
 		_ASSERTE(apItem!=NULL);
 		return;
 	}
+	if (!apItem->pFile)
+	{
+		return; // пуст
+	}
 	
 	if (!gnDecoderThreadId || GetCurrentThreadId() == gnDecoderThreadId)
 	{
 		// Заодно выполнит Close()
-		SafeRelease(apItem->pFile,NULL); // Кто тут должен быть?
+		SafeRelease(apItem->pFile,szPVDManager);
 	}
 	else
 	{
-		_ASSERTE(gnDecoderThreadId && GetCurrentThreadId() == gnDecoderThreadId);
+		//_ASSERTE(gnDecoderThreadId && GetCurrentThreadId() == gnDecoderThreadId);
+		EnterCriticalSection(&csDecoderQueue);
+		apItem->pFile->RequestRelease();
+		m_DecoderRelease.push_back(apItem->pFile);
+		LeaveCriticalSection(&csDecoderQueue);
+		apItem->pFile = NULL;
 	}
 	//ResetProcessed(); -- низя. иначе циклится при ошибках вывода например
 	// возможен вариант, когда результат декодирования не смог показать ни один модуль дисплея,
@@ -1100,7 +1178,7 @@ void CPVDManager::CloseDisplay(CDecodeItem* apItem)
 	if (!gnDisplayThreadId || GetCurrentThreadId() == gnDisplayThreadId)
 	{
 		// Заодно выполнит Close()
-		SafeRelease(apItem->pDraw,NULL); // Кто тут должен быть?
+		SafeRelease(apItem->pDraw,szPVDManager);
 	}
 	else
 	{
@@ -1134,13 +1212,17 @@ bool CPVDManager::DecodePixels(CDecodeItem* apItem, bool abResetTick)
 	if (!apItem->pImage)
 	{
 		_ASSERTE(apItem->pImage!=NULL);
+		#ifdef PICVIEWDUMP
 		OutputDebugString(L"CPVDManager::DecodePixels==> apItem->pImage was not created!\n");
+		#endif
 		return false;
 	}
 	if (!apItem->pFile)
 	{
 		_ASSERTE(apItem->pFile!=NULL);
+		#ifdef PICVIEWDUMP
 		OutputDebugString(L"CPVDManager::DecodePixels==> apItem->pFile was not created!\n");
+		#endif
 		return false;
 	}
 	_ASSERTE(apItem->pFile && apItem->pFile->Decoder() && apItem->pFile->Decoder()->pPlugin);
@@ -1154,6 +1236,7 @@ bool CPVDManager::DecodePixels(CDecodeItem* apItem, bool abResetTick)
 	DWORD t0 = apItem->pImage->Info.lStartOpenTime;
 	DWORD t1 = timeGetTime(), t2=t1, t3=t1, t4=t1, t6=t1; //, t5=t1, t6=t1;
 
+#ifdef PICVIEWDUMP
 	wchar_t szLastError[128]; szLastError[0] = 0;
 	wchar_t szDbg[MAX_PATH*3], *pNamePart;
 	int nCur = 0, nSize = sizeofarray(szDbg);
@@ -1167,6 +1250,7 @@ bool CPVDManager::DecodePixels(CDecodeItem* apItem, bool abResetTick)
 	//wnsprintf(szDbg, sizeofarray(szDbg), L"%s: Decoding page %i of image %s...",
 	//	pDecoder->pPlugin->pName, apItem->pImage->nPage, (const wchar_t*)apItem->pImage->FileName);
 	OutputDebugString(szDbg);
+#endif
 
 	// Сбросим
 	apItem->pFile->Decoder()->pPlugin->szLastError[0] = 0;
@@ -1515,8 +1599,10 @@ bool CPVDManager::DecodePixels(CDecodeItem* apItem, bool abResetTick)
 	apItem->pImage->Info.lOpenTime = t6-apItem->pImage->Info.lStartOpenTime;
 	//}CATCH{}
 
-	MCHKHEAP
+	MCHKHEAP;
+	#ifdef PICVIEWDUMP
 	OutputDebugString(result ? L"Succeeded\n" : L"Failed!!!\n");
+	#endif
 	if (result)
 	{
 		WARNING("Дернуть нить дисплея");
@@ -1557,14 +1643,18 @@ bool CPVDManager::PixelsToDisplay(CDecodeItem* apItem)
 	if (!apItem || !apItem->pImage || !apItem->pFile)
 	{
 		_ASSERTE(apItem && apItem->pImage && apItem->pFile);
+		#ifdef PICVIEWDUMP
 		OutputDebugString(L"CPVDManager::PixelsToDisplay==> (!apItem || !apItem->pImage || !apItem->pFile)\n");
+		#endif
 		return false;
 	}
 
 	if (!CPVDManager::pDefaultDisplay || !CPVDManager::pDefaultDisplay->pPlugin)
 	{
 		_ASSERTE(CPVDManager::pDefaultDisplay && CPVDManager::pDefaultDisplay->pPlugin);
+		#ifdef PICVIEWDUMP
 		OutputDebugString(L"CPVDManager::PixelsToDisplay==> PVDManager::pDefaultDisplay->pPlugin was not created!\n");
+		#endif
 		return false;
 	}
 
@@ -1577,7 +1667,7 @@ bool CPVDManager::PixelsToDisplay(CDecodeItem* apItem)
 		_ASSERTE(apItem->pDraw->Context() == NULL);
 		apItem->pDraw->Close(); // закрыть старый контекст дисплея
 	}
-	
+
 	MCHKHEAP
 	
 	DWORD t4 = timeGetTime(), t5=t4, t6=t4;
@@ -1695,6 +1785,17 @@ bool CPVDManager::PixelsToDisplay(CDecodeItem* apItem)
 	{
 		apItem->pDraw->Assign(lpDisplay, DsCreate.pDisplayContext);
 		//*ppDrawContext = DsCreate.pDisplayContext;
+
+		// Сразу запомним, что можно...
+		apItem->pDraw->Params = apItem->Params;
+
+		// Переделать, а то оно сейчас в pFile
+		//_ASSERTE(apItem->Info.bPageInfoLoaded);
+	}
+	else
+	{
+		_ASSERTE("result==false" && 0);
+		SafeRelease(apItem->pDraw,szPVDManager);
 	}
 	
 	t5 = timeGetTime();
@@ -2160,10 +2261,12 @@ void CPVDManager::DisplayExit()
 	// Закрыть дескрипторы дисплея для всех элементов
 	g_Panel.CloseDisplayHandles();
 
-	for (i=Displays.begin(); i!=Displays.end(); i++) {
+	for (i=Displays.begin(); i!=Displays.end(); i++)
+	{
 		tmp = *i;
 		if (!tmp->pPlugin) continue;
-		if (tmp->pPlugin->bDisplayInitialized) {
+		if (tmp->pPlugin->bDisplayInitialized)
+		{
 			tmp->pPlugin->DisplayExit2();
 		}
 	}
@@ -2179,7 +2282,9 @@ void CPVDManager::DisplayErase()
 {
 	if (g_Plugin.hConEmuWnd || (g_Plugin.FlagsWork & FW_QUICK_VIEW))
 		return;
-	if (g_Plugin.hWnd && IsWindow(g_Plugin.hWnd) && IsWindowVisible(g_Plugin.hWnd)) {
+
+	if (g_Plugin.hWnd && IsWindow(g_Plugin.hWnd) && IsWindowVisible(g_Plugin.hWnd))
+	{
 		HDC hdc = GetDC(g_Plugin.hWnd);
 		RECT rc; GetClientRect(g_Plugin.hWnd, &rc);
 		FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
@@ -2446,7 +2551,8 @@ bool CPVDManager::IsImageReady(DecodeParams *apParams)
 			if (pImage->GetDrawHandle(rDraw, apParams))
 			{
 				WARNING("При смене параметров/декодера/Refresh и т.п. нужно выполнить повторное декодирование");
-				_ASSERTE(pImage->mp_File->Params.Compare(apParams));
+				//_ASSERTE(pImage->mp_File->Params.Compare(apParams));
+				_ASSERTE(rDraw->Params.Compare(apParams));
 
 				lbReady = true;
 			}
@@ -2458,6 +2564,11 @@ bool CPVDManager::IsImageReady(DecodeParams *apParams)
 
 CImage* CPVDManager::GetImageFromParam(DecodeParams *apParams)
 {
+	if (!apParams)
+	{
+		return NULL;
+	}
+
 	CImage* pImage = NULL;
 
 	// Если запрос по абсолютному индексу
@@ -2506,17 +2617,20 @@ BOOL CPVDManager::RequestDecodedImage(DecodeParams *apParams)
 		
 	if ((apParams->Flags & eRenderRelativeIndex))
 	{
-		_ASSERTE(apParams->nRawIndex >= -1);
-		_ASSERTE(apParams->nFromRawIndex == -1 || apParams->nFromRawIndex == 0);
+		_ASSERTE(apParams->nRawIndex == -1);
+		_ASSERTE(apParams->nFromRawIndex >= 0);
 		if (apParams->iDirection == 0)
 		{
 			_ASSERTE(apParams->iDirection == -1 || apParams->iDirection == 1);
 			RequestTerminate();
 			return FALSE;
 		}
+		if (apParams->nFromRawIndex == -1)
+			apParams->nFromRawIndex = g_Panel.GetActiveRawIdx();
 		if (apParams->nRawIndex == -1)
-			apParams->nRawIndex = g_Panel.GetActiveRawIdx();
-		apParams->nFromRawIndex = apParams->nRawIndex;
+			apParams->nRawIndex = g_Panel.GetNextItemRawIdx(apParams->iDirection, apParams->nFromRawIndex);
+			//apParams->nRawIndex = g_Panel.GetActiveRawIdx();
+		//apParams->nFromRawIndex = apParams->nRawIndex;
 	}
 	else if ((apParams->Flags & eRenderFirstAvailable))
 	{
@@ -2534,6 +2648,18 @@ BOOL CPVDManager::RequestDecodedImage(DecodeParams *apParams)
 
 	// ЭТА функция не должна извлекать файлы из архива!
 	CImage* pImage = GetImageFromParam(apParams);
+	if (!pImage && (apParams->Flags & eRenderFirstAvailable) && apParams->iDirection)
+	{
+		_ASSERTE(apParams->iDirection==-1 || apParams->iDirection==1);
+		int iNext;
+		while ((iNext = g_Panel.GetNextItemRawIdx(apParams->iDirection, apParams->nRawIndex)) != -1)
+		{
+			apParams->nRawIndex = iNext;
+			pImage = GetImageFromParam(apParams);
+			if (pImage)
+				break;
+		}
+	}
 	if (!pImage)
 	{
 		//_ASSERTE(pImage != NULL);
@@ -2541,6 +2667,20 @@ BOOL CPVDManager::RequestDecodedImage(DecodeParams *apParams)
 		return FALSE;
 	}
 	
+
+#ifdef PICVIEWDUMP
+	wchar_t szDbg[MAX_PATH*3], *pNamePart;
+	int nCur = 0, nSize = sizeofarray(szDbg);
+	lstrcpy(szDbg+nCur, L"Image page requested: \""); nCur += lstrlen(szDbg+nCur);
+	const wchar_t* pFileName = (const wchar_t*)pImage->FileName;
+	pNamePart = pFileName ? wcsrchr(pFileName, L'\\') : L"<NULL>";
+	pNamePart = pNamePart ? (pNamePart+1) : (pFileName ? pFileName : L"<NULL>");
+	lstrcpyn(szDbg+nCur, pNamePart, MAX_PATH+1); nCur += lstrlen(szDbg+nCur);
+	wsprintfW(szDbg+nCur, L"\" Page=%u, RawIdx=%u\n", apParams->nPage, apParams->nRawIndex);
+	//wnsprintf(szDbg, sizeofarray(szDbg), L"%s: Opening image %s...", pDecoder->pPlugin->pName, pFileName ? pFileName : L"<NULL>");
+	OutputDebugString(szDbg);
+#endif
+
 		
 	// Возможно, что изображение уже декодировано с требуемыми параметрами
 	if (IsImageReady(apParams))
@@ -2595,6 +2735,94 @@ BOOL CPVDManager::RequestDecodedImage(DecodeParams *apParams)
 	return lbRc;
 }
 
+void CPVDManager::RequestPreCache(DecodeParams *apParams)
+{
+	if (!apParams)
+	{
+		_ASSERTE(apParams!=NULL);
+		return;
+	}
+
+	if (!CheckDecodingThread())
+	{
+		// RequestTerminate() уже вызван
+		return;
+	}
+
+	CImage* pImage = GetImageFromParam(apParams);
+
+	// Сразу поставить в очередь на декодирование следующий фрейм (Priority = eCurrentImageNextPage)!
+	if (pImage)
+	{
+		// Ну, хотя бы одна страница должна быть. Проверяем переменные...
+		_ASSERTE(pImage->Info.nPages > 0);
+
+		TODO("Тут бы тоже направление листания страниц запоминать, как с файлами");
+
+		if (pImage->Info.nPages > 1)
+		{
+			// Поставить в очередь на декодирование следующий фрейм
+			if ((apParams->nPage + 1) < pImage->Info.nPages)
+			{
+				DecodeParams next;
+				next.Priority = eCurrentImageNextPage;
+				next.nPage = apParams->nPage + 1; // следующий фрейм
+				next.nRawIndex = apParams->nRawIndex;
+				
+				// RequestDecodedImage - помещает запрос в очередь декодирования,
+				// GetDecodedImage - дожидается результата декодирования
+				g_Manager.RequestDecodedImage(&next);
+			}
+
+			// ... и предыдущий фрейм
+			if (apParams->nPage > 0)
+			{
+				DecodeParams next;
+				next.Priority = eCurrentImageNextPage;
+				next.nPage = apParams->nPage - 1; // предыдущий фрейм (может быть уже загружен, но если листаем наоборот вверх - может и нет)
+				next.nRawIndex = apParams->nRawIndex;
+				
+				// RequestDecodedImage - помещает запрос в очередь декодирования,
+				// GetDecodedImage - дожидается результата декодирования
+				g_Manager.RequestDecodedImage(&next);
+			}
+
+			TODO("Хорошо бы реализовать двухуровневый кеш, не +1 как сейчас, а +2");
+		}
+	}
+	
+	// 
+	bool lbNeedCache = (g_Panel.IsRealNames()) ? g_Plugin.bCachingRP : g_Plugin.bCachingVP;
+	if (lbNeedCache)
+	{
+		// Next (или по предыдущему направлению)
+		{
+			DecodeParams next;
+			next.Priority = eDecodeNextImage; // приоритет низкий, НЕ текущее изображение
+			next.nPage = 0; // первый фрейм
+			next.nRawIndex = -1; // relative
+			next.nFromRawIndex = apParams->nRawIndex;
+			next.Flags = eRenderRelativeIndex;
+			next.iDirection = (apParams->iDirection ? apParams->iDirection : 1);
+			g_Manager.RequestDecodedImage(&next);
+		}
+
+		// Prev (или против предыдущего направления)
+		{
+			DecodeParams next;
+			next.Priority = eDecodeNextImage; // приоритет низкий, НЕ текущее изображение
+			next.nPage = 0; // первый фрейм
+			next.nRawIndex = -1; // relative
+			next.nFromRawIndex = apParams->nRawIndex;
+			next.Flags = eRenderRelativeIndex;
+			next.iDirection = -(apParams->iDirection ? apParams->iDirection : 1);
+			g_Manager.RequestDecodedImage(&next);
+		}
+
+		TODO("Хорошо бы реализовать двухуровневый кеш, не +1 как сейчас, а +2");
+	}
+}
+
 DWORD CPVDManager::DecodingThread(LPVOID)
 {
 	int iRc = 0;
@@ -2625,7 +2853,7 @@ DWORD CPVDManager::DecodingThread(LPVOID)
 			iRc = 100;
 			CFunctionLogger::FunctionLogger(L"!!! Exception in CPVDManager::DecodingThread");
 			RequestTerminate();
-			MessageBox(NULL, L"!!! Exception in CPVDManager::DecodingThread\nPlease, restart FAR", L"PictureView2", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND|MB_SYSTEMMODAL);
+			MessageBox(NULL, L"!!! Exception in CPVDManager::DecodingThread\nPlease, restart FAR", L"PicView3", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND|MB_SYSTEMMODAL);
 			break;
 		}
 
@@ -2652,6 +2880,17 @@ BOOL CPVDManager::DecodingThreadStep()
 	EnterCriticalSection(&g_Manager.csDecoderQueue);
 	
 	int iActiveRawIndex = g_Panel.GetActiveRawIdx();
+
+
+	// Освободить неиспользуемые дескрипторы
+	std::vector<CDecoderHandle*>::iterator f = m_DecoderRelease.begin();
+	while (f != m_DecoderRelease.end())
+	{
+		CDecoderHandle* p = *f;
+		SafeRelease(p,szPVDManager);
+		f = m_DecoderRelease.erase(f);
+	}
+
 
 	for (int p = eCurrentImageCurrentPage; (idx == -1) && (p <= eDecodeAny); p++)
 	{
@@ -2745,7 +2984,7 @@ lTryAgain:
 		}
 		else
 		{
-			SafeRelease(m_DecoderQueue[idx].Params.pDecodeItem,NULL); // Кто тут должен быть?
+			SafeRelease(m_DecoderQueue[idx].Params.pDecodeItem,szPVDManager);
 		}
 		
 		if (m_DecoderQueue[idx].Params.pResult && !(g_Plugin.FlagsWork & FW_TERMINATE))
@@ -2932,12 +3171,14 @@ bool CPVDManager::OnItemReady(CDecodeItem* apItem)
 		return false;
 	}
 
+	_ASSERTE(IsImageReady(&apItem->Params));
+
 	if ((apItem->Params.Flags & eRenderFirstImage))
 	{
 		if (!IsWindowVisible(g_Plugin.hWnd))
 			ShowWindow(g_Plugin.hWnd, SW_SHOWNORMAL);
 		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-		InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+		Invalidate(g_Plugin.hWnd);
 	}
 
 	return true;

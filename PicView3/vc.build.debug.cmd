@@ -6,7 +6,7 @@ set CONF="Debug3|Win32"
 rem if %COMPUTERNAME%==MAX set CONF="Debug|Win32"
 rem if %COMPUTERNAME%==MAXPC set CONF="DebugEEE|Win32"
 
-call "%~dp0build.cmd" /build 0PictureView.vcproj %CONF% x86
+call "%~dp0build.cmd" /build 0PicView.vcproj %CONF% x86
 
 if %BUILD_RC% == OK echo Build succeeded & goto gcc
 

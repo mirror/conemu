@@ -95,6 +95,11 @@ CDisplayHandle::CDisplayHandle(LPCSTR asFrom, CImage* apImage/*, CDecoderHandle*
 	mp_Image = apImage;
 	mp_Image->AddRef(szDisplayHandle);
 	
+	#ifdef _DEBUG
+	// Для информации
+	FileName = (LPCWSTR)apImage->FileName;
+	#endif
+
 	//mp_DecoderHandle = apDecoderHandle;
 	//mp_DecoderHandle->AddRef();
 	

@@ -41,3 +41,12 @@ public:
 };
 
 extern CDisplay g_Display;
+
+// (wParam & 0x80000000) - NextPage, иначе - PrevPage
+LRESULT OnNextPage(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
+
+// (wParam & 0x80000000) - NextFile, иначе - PrevFile
+LRESULT OnNextFile(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
+
+// Аргументы не используются
+LRESULT OnAutoZoom(HWND hWnd, bool abTap);

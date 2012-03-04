@@ -431,7 +431,7 @@ BOOL CPVDModuleVer2::apiExtensionMatch(wchar_t* asExtList, const wchar_t* asExt)
 	if (!*asExtList) return FALSE;
 
 	if (!asExt || !*asExt) asExt = L".";
-	if (wcschr(asExtList,L'*') || ExtensionMatch(asExtList, asExt))
+	if (/*wcschr(asExtList,L'*') ||*/ ExtensionMatch(asExtList, asExt))
 		return TRUE;
 	return FALSE;
 }
@@ -468,7 +468,8 @@ int CPVDModuleVer2::apiSortExtensions(wchar_t* pszExtensions)
 	DWORD nMaxLen = lstrlen(pszExtensions);
 	wchar_t wch, *pszExt = pszExtensions, *pszCom, *pszEnd = pszExtensions+nMaxLen;
 
-	while (pszExt < pszEnd) {
+	while (pszExt < pszEnd)
+	{
 		pszCom = pszExt;
 		while ((wch = *pszCom) && wch != L',' && wch != L';') pszCom++;
 		*pszCom = 0;
@@ -485,18 +486,22 @@ int CPVDModuleVer2::apiSortExtensions(wchar_t* pszExtensions)
 		pszExt = pszCom + 1;
 	}
 	
-	if (lExts.empty()) {
+	if (lExts.empty())
+	{
 		*pszExtensions = 0;
 		return 0;
 	}
 		
-	for (i=lExts.begin(); i!=lExts.end() && (i+1)!=lExts.end(); i++) {
+	for (i=lExts.begin(); i!=lExts.end() && (i+1)!=lExts.end(); i++)
+	{
 		liMin = i;
-		for (j=i+1; j!=lExts.end(); j++) {
+		for (j=i+1; j!=lExts.end(); j++)
+		{
 			if (lstrcmpW(liMin->s, j->s) > 0)
 				liMin = j;
 		}
-		if (liMin!=i) {
+		if (liMin!=i)
+		{
 			WC8 t;
 			t = *liMin;
 			*liMin = *i;
@@ -512,14 +517,16 @@ int CPVDModuleVer2::apiSortExtensions(wchar_t* pszExtensions)
 	szExt[0] = 0;
 	while (i!=lExts.end())
 	{
-		if (szExt[0] && !lstrcmpW(szExt, i->s)) {
+		if (szExt[0] && !lstrcmpW(szExt, i->s))
+		{
 			i++; continue; // дубли пропускаем
 		}
 		lstrcpy(szExt, i->s);
 		nLen = i->nLen;
 		i++;
 
-		if (nMaxLen >= (nAllLen + nLen)) {
+		if (nMaxLen >= (nAllLen + nLen))
+		{
 			wmemmove(pszExtensions+nAllLen, szExt, nLen);
 			nAllLen += nLen;
 			pszExtensions[nAllLen++] = L',';
@@ -527,7 +534,8 @@ int CPVDModuleVer2::apiSortExtensions(wchar_t* pszExtensions)
 		}
 	}
 
-	if (!nAllLen || !nCount) {
+	if (!nAllLen || !nCount)
+	{
 		*pszExtensions = 0;
 		return 0;
 	}

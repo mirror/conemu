@@ -32,6 +32,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "PictureView.h"
 #include "PVDInterface/PictureViewPlugin.h"
 #include <vector>
+#include <map>
 #include "PictureView_Dlg.h"
 
 #include "PVDModuleBase.h"
@@ -90,6 +91,15 @@ struct DecodeQueueItem
 #endif
 
 
+struct PVDHandleInfo
+{
+	BOOL   Used;
+	DWORD  LastUsed;
+	size_t MemoryUsed;
+	CRefRelease* Handle;
+};
+
+
 // Общий класс, через который идут обращения к СУБдекодерам
 // Экземпляр класса создается в каждом CImage, поэтому все контексты и параметры храним здесь
 // В static переменных - данные относящиеся к модулям в общем
@@ -117,7 +127,7 @@ public:
 	static void UnloadPlugins2();
 	static bool CreateVersion1(CModuleInfo* plug, bool lbForceWriteReg);
 	static bool CreateVersion2(CModuleInfo* plug, bool lbForceWriteReg);
-	static bool IsSupportedExtension(const wchar_t *pFileName);
+	static bool IsSupportedExtension(const wchar_t *pFileName, LPVOID pFileData=NULL, size_t nFileDataSize=0);
 	
 	static bool DisplayAttach();
 	static bool DisplayDetach(BOOL abErase=TRUE);
@@ -152,6 +162,7 @@ protected:
 	// предыдущее изображение (первый фрейм)
 	// + если декодированный фрейм из анимированной картинки - в очередь будет помещен следующий фрейм
 	DecodeQueueItem m_DecoderQueue[DECODER_QUEUE_SIZE];
+	std::vector<CDecoderHandle*> m_DecoderRelease;
 	CRITICAL_SECTION csDecoderQueue;
 	
 public:
@@ -163,6 +174,11 @@ public:
 	
 	// Поместить в очередь декодирования
 	BOOL RequestDecodedImage(DecodeParams *apParams);
+
+	// Поместить в очередь на декодирование
+	// а) следующий/предыдущий фрейм текущего изображения и
+	// б) следующую/предыдущую картинку
+	void RequestPreCache(DecodeParams *apParams);
 	
 	// Остановить декодирование изображения и (или) удалить его из очереди
 	// Это например когда был запрошен рендер с улучшением (после зума), но 
@@ -179,6 +195,27 @@ public:
 	// 2) Если нужно - передернуть окно отрисовки
 	bool OnItemReady(CDecodeItem* apItem);
 	
+	void CloseDecoder(CDecodeItem* apItem);
+	void CloseDisplay(CDecodeItem* apItem);
+	
+public:
+	PVDHandleInfo* OnDecoderHandleCreated(CRefRelease* pHandle);
+	PVDHandleInfo* OnDisplayHandleCreated(CRefRelease* pHandle);
+	void OnDecoderHandleClosed(CRefRelease* pHandle);
+	void OnDisplayHandleClosed(CRefRelease* pHandle);
+	
+	// Вызывается из любого потока для освобождения старых хэндлов
+	// nRequiredMem указывается необходимый размер освобождаемой памяти
+	void ReleaseUnusedHandles(size_t nRequiredMem = 0);
+	
+	// Вернуть примерный объем занимаемой памяти различными хэндлами
+	size_t TotalMemoryAmountDecoder();
+	size_t TotalMemoryAmountDisplay();
+	
+protected:
+	CRITICAL_SECTION mcs_HandleManager;
+	std::map<CRefRelease*,PVDHandleInfo*> m_HandleManager;
+
 protected:
 	// Если очередь заполнена - нужно убрать из очереди элемент с наименьшим приоритетом
 	// Блокируется через csDecoderQueue. Возвращает индекс в m_DecoderQueue.
@@ -192,8 +229,6 @@ protected:
 	bool Open(CImage* apImage, CDecoderHandle** ppFile, const wchar_t *pFileName, i64 lFileSize, const u8 *pBuffer, uint lBuffer, DecodeParams *apParams);
 	bool OpenWith(CImage* apImage, CDecoderHandle** ppFile, CModuleInfo *pDecoder, const wchar_t *pFileName, i64 lFileSize, const u8 *pBuffer, uint lBuffer);
 	void CloseData(CDecodeItem* apItem);
-	void CloseDecoder(CDecodeItem* apItem);
-	void CloseDisplay(CDecodeItem* apItem);
 	//bool Decode(CImage *apImage, CDecoderHandle* pFile, CDisplayHandle** ppDraw, bool abResetTick);
 	bool DecodePixels(CDecodeItem* apItem, bool abResetTick);
 	bool PixelsToDisplay(CDecodeItem* apItem);

@@ -44,8 +44,8 @@ hhead:
 
 MIPluginName=0
 l:// Plugin title
-"Picture View 3"
-"Picture View 3"
+"PicView 3"
+"PicView 3"
 
 MIQViewPanelTitle
 " Быстрый просмотр "
@@ -67,12 +67,12 @@ MICancel
 MIMain
 l:
 l:// TABs in main config dialog
-"&1Главн"
+"&1Главн."
 "&1Main"
 
 MIDecoders
-"&2Модули"
-"&2Modules"
+"&2Типы"
+"&2Types"
 
 MIAdvanced
 "&3Доп"
@@ -82,9 +82,13 @@ MIOSD
 "&4OSD"
 "&4OSD"
 
+MICACHE
+"&5Кэш"
+"&5Cache"
+
 MILOG
-"&5Отчёт"
-"&5Log"
+"&6Отчёт"
+"&6Log"
 
 
 
@@ -511,36 +515,46 @@ MIMemoryAllocationFailed
 "Ошибка выделения памяти"
 "Memory allocation failed"
 
-MIDecoderColon
-"Декодер: "
-"Decoder: "
+MIExtractMacroNotFound
+"Не найден файл макроса, листание будет не доступно"
+"Macro file not found, paging will not be available"
 
-
-
+MIExtractMacroInvalid
+"Ошибка разбора файла макроса, листание будет не доступно"
+"Macro file syntax failed, paging will not be available"
 
 
 MIConEmuPluginWarning
 l:
 l:// Error message boxes
-"Picture View 3\nОШИБКА: Отображение картинки невозможно\nРодительское окно (FAR Manager'а) невидимое\nВозможно, FAR запущен в ConEmu без плагина ConEmu"
-"Picture View 3\nERROR: Cannot display image\nParent window (FAR manager) is invisible\n(Probably FAR was started in ConEmu without ConEmu plugin)"
+"PicView 3\nОШИБКА: Отображение картинки невозможно\nРодительское окно (FAR Manager'а) невидимое\nВозможно, FAR запущен в ConEmu без плагина ConEmu"
+"PicView 3\nERROR: Cannot display image\nParent window (FAR manager) is invisible\n(Probably FAR was started in ConEmu without ConEmu plugin)"
 
 MIOpenImgPlugException
-"Picture View 3\nИсключение при OpenImagePlugin!"
-"Picture View 3\nOpenImagePlugin raised an exception!"
+"PicView 3\nИсключение при OpenImagePlugin!"
+"PicView 3\nOpenImagePlugin raised an exception!"
 
 MIOpenUnknownExtension
-"Picture View 3\nРасширение файла не подходит ни одному декодеру."
-"Picture View 3\nNo decoder for this file extension"
+"PicView 3\nРасширение файла не подходит ни одному декодеру."
+"PicView 3\nNo decoder for this file extension"
 
 MIOpenFailedMsg
-"Picture View 3\nНи один декодер не смог открыть файл.\nБолее подробную информацию смотрите\nна вкладке [Отчёт] диалога настроек плагина."
-"Picture View 3\nNo decoder can open file\nSee details on [Log] tab of Configuration dialog"
+"PicView 3\nНи один декодер не смог открыть файл.\nБолее подробную информацию смотрите\nна вкладке [Отчёт] диалога настроек плагина."
+"PicView 3\nNo decoder can open file\nSee details on [Log] tab of Configuration dialog"
 
 MIPluginNameError
-"Picture View 3\nИмя файл плагина должно начинаться с '0'.\nВ противном случае возможны проблемы с листанием."
-"Picture View 3\nFirst char of plugin file name must be '0'\nOtherwise paging may be impossible"
+"PicView 3\nИмя файл плагина должно начинаться с '0'.\nВ противном случае возможны проблемы с листанием."
+"PicView 3\nFirst char of plugin file name must be '0'\nOtherwise paging may be impossible"
 
 MIFarBuildError
-"Picture View 3\nЭта версия FAR 2 не поддерживается.\nОбновите FAR 2."
-"Picture View 3\nThis version of FAR manager is not supported\nPlease, update FAR 2"
+"PicView 3\nЭта версия FAR 2 не поддерживается.\nОбновите FAR 2."
+"PicView 3\nThis version of FAR manager is not supported\nPlease, update FAR 2"
+
+
+
+
+
+
+#MIDecoderColon
+#"Декодер: "
+#"Decoder: "

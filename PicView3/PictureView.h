@@ -30,6 +30,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **************************************************************************/
 
 #define _FAR_NO_NAMELESS_UNIONS
+#define WINVER 0x0601
 
 #if FAR_UNICODE>=2000
 	#include "headers/pluginW3.hpp"
@@ -97,9 +98,7 @@ extern GUID guid_MsgBox;
 #include "PVDInterface/PictureViewPlugin.h"
 
 
-
 #include "options.h"
-
 
 #pragma warning(disable: 4800) // forcing value to bool 'true' or 'false'
 
@@ -162,25 +161,26 @@ enum EFlagsDisplay
 enum EFlagsWork
 {
 	//FW_JUMP_DISABLED = 1, // disable jumping and selection change
-	FW_PLUGIN_CALL   = 2, // Плагин должен поймать (Ctrl-PgDn) - извлечение файла с плагиновой панели
-	FW_VE_HOOK       = 4, // exit from opened viewer/editor on success open
-	FW_QUICK_VIEW    = 8, // quick view mode
-	FW_TERMINATE     = 0x10,   // Завершение декодирования, закрытие плагина
+	FW_PLUGIN_CALL     = 2, // Плагин должен поймать (Ctrl-PgDn) - извлечение файла с плагиновой панели
+	FW_VE_HOOK         = 4, // exit from opened viewer/editor on success open
+	FW_QUICK_VIEW      = 8, // quick view mode
+	FW_TERMINATE       = 0x10,   // Завершение декодирования, закрытие плагина
 	//FW_FIRSTIMAGE    = 0x20,   // Первый файл серии
-	FW_SHOW_HELP     = 0x40,   // Показать Help в основной нити
-	FW_SHOW_CONFIG   = 0x80,   // Показать окно конфига в основной нити
-	FW_SHOW_MODULES  = 0x100,  // Показать вкладку модулей в основной нити
+	FW_SHOW_HELP       = 0x40,   // Показать Help в основной нити
+	FW_SHOW_CONFIG     = 0x80,   // Показать окно конфига в основной нити
+	FW_SHOW_MODULES    = 0x100,  // Показать вкладку модулей в основной нити
 	//FW_PREVDECODER   = 0x200, --> eRenderPrevDecoder
 	//FW_NEXTDECODER   = 0x400, --> eRenderNextDecoder
 	//FW_FORCE_DECODE  = 0x800, --> eRenderForceDecoder // Усиленный подбор декодера (явный вызов на первом файле серии, если это НЕ перехват первого входа в архив)
-	FW_MARK_FILE     = 0x1000,
-	FW_UNMARK_FILE   = 0x2000,
-	FW_TITLEREPAINT  = 0x4000,   // Обновить заголовок консоли
-	FW_TITLEREPAINTD = 0x8000,   // Обновить заголовок консоли (идет декодирование)
-	FW_QVIEWREPAINT  = 0x10000,
+	FW_MARK_FILE       = 0x1000,
+	FW_UNMARK_FILE     = 0x2000,
+	FW_TOGGLEMARK_FILE = 0x4000,
+	FW_TITLEREPAINT    = 0x8000,   // Обновить заголовок консоли
+	FW_TITLEREPAINTD   = 0x10000,   // Обновить заголовок консоли (идет декодирование)
+	FW_QVIEWREPAINT    = 0x20000,
 	//FW_FIRST_CALL    = 0x20000,  // Явный вызов на первом файле серии
-	FW_RETRIEVE_FILE = 0x40000,  // Извлечь файл из плагина
-	FW_IN_RETRIEVE   = 0x80000,  // был запущен макрос извлечения файла
+	FW_RETRIEVE_FILE   = 0x40000,  // Извлечь файл из плагина
+	FW_IN_RETRIEVE     = 0x80000,  // был запущен макрос извлечения файла
 };
 enum EFlagsResult
 {
@@ -211,8 +211,9 @@ enum EZoomAutoFlags
 #include "FunctionLogger.h"
 #include "Panel.h"
 
-template <class T> const T& Min(const T &a, const T &b) {return a < b ? a : b;}
-template <class T> const T& Max(const T &a, const T &b) {return a > b ? a : b;}
+template <class T> const T Min(const T &a, const T &b) {return a < b ? a : b;}
+template <class T> const T Max(const T &a, const T &b) {return a > b ? a : b;}
+template <class T> const T Abs(const T &a) {return a > 0 ? a : -a;}
 template <class T> void Swap(T &a, T &b) {const T t = a; a = b; b = t;}
 
 extern const wchar_t g_WndClassName[];
@@ -244,6 +245,7 @@ void RegKeyRead(HKEY RegKey, const wchar_t* const Name, bool *const Param, const
 void RegKeyRead(HKEY RegKey, const wchar_t* const Name, u32 *const Param, const u32 Default = 0);
 LONG RegKeyWrite(HKEY RegKey, const wchar_t* const Name, const u32 Param);
 
+void Invalidate(HWND ahWnd);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 DWORD WINAPI DisplayThreadProc(void *pParameter = NULL);
 void TitleRepaint(bool bDecoding = false);
@@ -263,7 +265,7 @@ EFlagsResult EntryPoint(int OpenFrom, LPCWSTR asFile);
 EFlagsMainProcess ProcessMainThread();
 
 wchar_t* ConcatPath(const wchar_t* Dir, const wchar_t* Name, bool abReverseName=false);
-bool ExtensionMatch(LPTSTR asExtList, LPCTSTR asExt);
+bool ExtensionMatch(LPTSTR asExtList, LPCTSTR asExt, const void* apFileData=NULL, size_t anFileDataSize=0, bool* pbAllowAsterisk=NULL);
 const wchar_t* GetExtension(const wchar_t* pFileName);
 bool PutFilePathName(CUnicodeFileName* pFullName, const wchar_t* pFileName, bool abIsFolder);
 
@@ -282,7 +284,10 @@ BOOL CheckConEmu();
 
 // Синхронизация
 BOOL ExecuteInMainThread(DWORD nCmd, int nPeekMsg);
+BOOL ExecuteInMainThread(DWORD nCmd, BOOL bRestoreCursor, BOOL bChangeParent);
 //BOOL ExecuteInDecoderThread(DWORD nCmd, int nPeekMsg);
+
+void ExitViewerEditor(void);
 
 #define DEFAULT_INGORED_EXT L"7z,aif,aifc,aiff,ape,arj,asf,au,avi,bat,bbs,bz2,bzip2,cab,cmd,deb,dll,dmg,exe,flv,gz,gzip,hfs,ion,iso,iso,jar,lha,lnk,lzh,lzma,lzma86,m1v,m2v,mid,midi,mkv,mp2,mp3,mp4,mpe,mpeg,mpeg4,mpg,msi,ogg,rmi,rpm,snd,swm,tar,taz,tbz,tbz2,tgz,tpz,txt,vob,wav,wim,wm,wma,wmd,wmv,wv,xar,z,zip"
 

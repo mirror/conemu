@@ -138,6 +138,12 @@ void CImage::Close()
 	}
 }
 
+void CImage::DecoderHandleReleased(CDecoderHandle* apFile)
+{
+	if (mp_File == apFile)
+		mp_File = NULL;
+}
+
 void CImage::CloseImage()
 {
 	SafeRelease(mp_File,szPVDManager);
@@ -317,7 +323,7 @@ int CImage::PanelItemRaw()
 //		{
 //			// Иначе в GDI что-то не перерисовывается
 //			TODO("Не помогло. тут (this != g_Plugin.Image[0])");
-//			InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+//			Invalidate(g_Plugin.hWnd);
 //		}
 //
 //		//if (g_Plugin.FlagsWork & FW_JUMP_DISABLED) {

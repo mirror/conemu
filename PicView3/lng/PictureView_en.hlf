@@ -2,7 +2,7 @@
 .PluginContents=PictureView
 
 @Contents
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
  This plugin allows to view or QView pictures of miscellaneous formats directly in
  the #FAR Manager# window. Plugin works with pictures via subplugins (decoders).
  
@@ -24,7 +24,7 @@ $^#PictureView 2.0 (ConEmu mod24 ##1017)#
 
 @Controls
 $^#Keyboard and mouse#
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
 
     #Control commands#
 
@@ -95,7 +95,7 @@ Notes:
 
 @Settings
 $^#Main plugin settings#
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
 
 #Using decoder interfaces#
  PictureView plugin can handle pictures via PVD interface only. Read ~here~@Modules@ about tuning.
@@ -172,7 +172,7 @@ This method is used by most of decoders (GFL, AcdSee, and so on).
 
 @AdvSettings
 $^#Extended settings#
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
 
 #Autosize:#
 
@@ -229,7 +229,7 @@ $^#PictureView 2.0 (ConEmu mod24 ##1017)#
 
 @OSD
 $^#OSD#
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
 
 #Шаблон заголовка#
  Задаёт формат заголовка окна Far'а во время работы плагина. Пустая строка означает возврат к стандартной.
@@ -292,7 +292,7 @@ $^#PictureView 2.0 (ConEmu mod24 ##1017)#
 
 @LOG
 $^#LOG#
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
 
  You can see here all messages and errors from decoders and displays modules.
 
@@ -301,7 +301,7 @@ $^#PictureView 2.0 (ConEmu mod24 ##1017)#
 
 @Modules
 $^#Subplugins (modules)#
-$^#PictureView 2.0 (ConEmu mod24 ##1017)#
+$^#PicView 3.0#
 
  #Начиная с mod13, плагин не имеет встроенных декодеров и работает с изображениями только через интерфейс PVD#
 

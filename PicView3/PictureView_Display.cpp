@@ -27,6 +27,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **************************************************************************/
 
+// Чтобы не замусоривать DebugLog сообщениями "Processing console input.1" и "Processing console input.2"
+//#define PICVIEW_FORCEALLINPUTSHOW
+#undef PICVIEW_FORCEALLINPUTSHOW
+
 #define _WIN32_WINNT 0x0500
 #include "PictureView.h"
 #include <wchar.h>
@@ -44,6 +48,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ConEmuSupport.h"
 #include "PictureView_Lang.h"
 #include "PictureView_Display.h"
+#include "GestureEngine.h"
 
 LPCSTR szPictureViewDisplay = "PictureViewDisplay";
 
@@ -176,7 +181,7 @@ static bool gbLockInputProcessing = false;
 #define EX_STYLE_FULLSCREEN    (WS_EX_PALETTEWINDOW | WS_EX_TOPMOST)
 //#define EX_STYLE_NOFULLSCREEN  (WS_EX_TOOLWINDOW | WS_EX_TOPMOST) // WS_EX_PALETTEWINDOW
 #define EX_STYLE_NOFULLSCREEN  (WS_EX_PALETTEWINDOW | WS_EX_NOACTIVATE)
-#define STYLE_FULLSCREEN       (WS_POPUP | WS_VISIBLE)
+#define STYLE_FULLSCREEN       (WS_POPUP /*| WS_VISIBLE*/)
 //#define STYLE_NOFULLSCREEN     (WS_POPUP | WS_VISIBLE)
 #define STYLE_NOFULLSCREEN     (WS_CHILDWINDOW | WS_CLIPSIBLINGS /*| WS_VISIBLE*/) // WS_CHILD не проходит. начинает глючить вывод через GDI+
 
@@ -242,6 +247,59 @@ public:
 	}
 };
 
+
+class CZoom
+{
+protected:
+	u32   OldZoom, OldAbsoluteZoom, OldZoomAuto;
+	bool  OldZoomAutoManual;
+	HWND  hWnd;
+	POINT MPos, MPosLocal;
+	RECT  ImgRect;
+	int   dx, dy;
+public:
+	CZoom(HWND ahWnd)
+		: hWnd(ahWnd)
+	{
+		OldZoom = g_Plugin.Zoom;
+		OldAbsoluteZoom = g_Plugin.AbsoluteZoom;
+		OldZoomAuto = g_Plugin.ZoomAuto;
+		OldZoomAutoManual = g_Plugin.ZoomAutoManual;
+
+		::GetCursorPos(&MPos);
+		MPosLocal = MPos;
+		::MapWindowPoints(NULL, hWnd, &MPosLocal, 1);
+		::GetClientRect(hWnd, &ImgRect);
+		dx = (ImgRect.right - ImgRect.left)/2 - MPosLocal.x;
+		dy = (ImgRect.bottom - ImgRect.top)/2 - MPosLocal.y;
+	};
+	~CZoom()
+	{
+	};
+public:
+	void PostZoom()
+	{
+		g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x + dx, g_Plugin.Zoom, OldZoom);
+		g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y + dy, g_Plugin.Zoom, OldZoom);
+		if (g_Plugin.MouseZoomMode == 1)
+		{
+			g_Plugin.DragBase.x += dx;
+			g_Plugin.DragBase.y += dy;
+			SetCursorPos(MPos.x + dx, MPos.y + dy);
+		}
+		else
+		{
+			g_Plugin.ViewCenter.x -= dx;
+			g_Plugin.ViewCenter.y -= dy;
+		}
+		g_Plugin.ZoomAuto = ZA_NONE;
+		g_Plugin.bCorrectMousePos = true;
+		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
+		Invalidate(hWnd);
+	};
+};
+
+
 void RequestTerminate(int nState /*= 0*/)
 {
 	g_Plugin.FlagsWork |= FW_TERMINATE;
@@ -293,6 +351,7 @@ bool InitImageDisplay(bool bResetViewPos = true)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return false;
 	}
@@ -314,6 +373,7 @@ bool InitImageDisplay(bool bResetViewPos = true)
 			if (!pImage)
 			{
 				WARNING("Что делать в таком случае?");
+				_ASSERTE("(!pImage)" && 0);
 				RequestTerminate();
 				return false;
 			}
@@ -348,7 +408,7 @@ bool InitImageDisplay(bool bResetViewPos = true)
 	gnGotoPageNo = 0;
 
 	// Это делаем в кноце
-	InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+	Invalidate(g_Plugin.hWnd);
 	g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
 
 	return true;
@@ -462,7 +522,7 @@ BOOL ExecuteInMainThread(DWORD nCmd, BOOL bRestoreCursor, BOOL bChangeParent)
 		CFunctionLogger::FunctionLogger(L"SetParent done");
 		ShowWindow(g_Plugin.hWnd, SW_SHOW);
 		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-		InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+		Invalidate(g_Plugin.hWnd);
 	}
 	
 	CFunctionLogger::FunctionLogger(L"~ExecuteInMainThread(%i)", nCmd);
@@ -492,7 +552,7 @@ void AutoHideConsoleCursor(void)
 	if (cci_cur.bVisible || cci_cur.dwSize > 1) {
 		HideConsoleCursor();
 		if (g_Plugin.hWnd && IsWindow(g_Plugin.hWnd))
-			InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+			Invalidate(g_Plugin.hWnd);
 	}
 }
 
@@ -543,6 +603,43 @@ void TrayRestore()
 	const HWND hTrayWnd = FindWindowW(L"Shell_TrayWnd", NULL);
 	ShowWindow(hTrayWnd, SW_SHOWNA);
 	g_Plugin.bTrayOnTopDisabled = false;
+}
+
+u32  GetNextZoomLevel(bool abZoomIn /*увеличить*/)
+{
+	u32 NewZoom = g_Plugin.Zoom;
+	if (!abZoomIn)
+	{
+		for (uint i = sizeofarray(ZoomLevel); i--;)
+		{
+			if (ZoomLevel[i] < g_Plugin.Zoom)
+			{
+				NewZoom = ZoomLevel[i];
+				#ifdef _DEBUG
+				wchar_t szNewZoom[64]; wsprintf(szNewZoom, L"New zoom by wheel is: %i\n", g_Plugin.Zoom);
+				OutputDebugString(szNewZoom);
+				#endif
+				break;
+			}
+		}
+	}
+	else
+	{
+		for (uint i = 0; i < sizeofarray(ZoomLevel); i++)
+		{
+			if (ZoomLevel[i] > g_Plugin.Zoom)
+			{
+				NewZoom = ZoomLevel[i];
+				#ifdef _DEBUG
+				wchar_t szNewZoom[64]; wsprintf(szNewZoom, L"New zoom by wheel is: %i\n", g_Plugin.Zoom);
+				OutputDebugString(szNewZoom);
+				#endif
+				break;
+			}
+		}
+	}
+
+	return NewZoom;
 }
 
 // g_Plugin.Zoom - считается относительно декодированных размеров, прикинем абсолютный зум
@@ -647,7 +744,7 @@ LRESULT OnZoom100(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	//	g_Plugin.ZoomAuto = 0;
 	//}
 	g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-	InvalidateRect(hWnd, NULL, FALSE);
+	Invalidate(g_Plugin.hWnd);
 	return TRUE;
 }
 
@@ -686,7 +783,7 @@ LRESULT OnConfig(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	//	TrayDisable();
 	//SetParent(hWnd, g_Plugin.hParentWnd);
 	//ShowWindow(hWnd, SW_SHOW);
-	//InvalidateRect(hWnd, NULL, FALSE);
+	//Invalidate(g_Plugin.hWnd);
 	///WndProc(hWnd, WM_PAINT, 0, 0);
 	//SetEvent(g_Plugin.hDisplayEvent);
 	//return TRUE;
@@ -697,6 +794,7 @@ LRESULT OnRefresh(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return FALSE;
 	}
@@ -716,7 +814,7 @@ LRESULT OnRefresh(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	CDisplayHandlePtr rDraw;
 	if (!Image->GetDrawHandle(rDraw))
 	{
-		_ASSERTE(rDraw.IsValid());
+		_ASSERTE("(!Image->GetDrawHandle(rDraw))" && 0);
 		//PostMessage(hWnd, WM_DESTROY, 0, 0);
 		RequestTerminate();
 		return TRUE;
@@ -730,22 +828,56 @@ LRESULT OnRefresh(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	return TRUE;
 }
 
-LRESULT OnSharpZoomIn(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
+LRESULT OnSharpZoom(HWND hWnd, bool abZoomIn)
 {
-	for (uint i = 0; i < sizeofarray(ZoomLevel); i++)
-		if (g_Plugin.Zoom < ZoomLevel[i])
-		{
-			g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x, ZoomLevel[i], g_Plugin.Zoom);
-			g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y, ZoomLevel[i], g_Plugin.Zoom);
-			g_Plugin.Zoom = ZoomLevel[i];
-			g_Plugin.ZoomAuto = ZA_NONE;
-			g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-			InvalidateRect(hWnd, NULL, FALSE);
-			break;
-		}
+	const u32 OldZoom = g_Plugin.Zoom;
+	u32 NewZoom = GetNextZoomLevel(abZoomIn);
+	if (NewZoom != OldZoom)
+	{
+		g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x, NewZoom, g_Plugin.Zoom);
+		g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y, NewZoom, g_Plugin.Zoom);
+		g_Plugin.Zoom = NewZoom;
+		g_Plugin.ZoomAuto = ZA_NONE;
+		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
+		Invalidate(g_Plugin.hWnd);
+	}
+	//for (uint i = sizeofarray(ZoomLevel); i--;)
+	//{
+	//	if (g_Plugin.Zoom > ZoomLevel[i])
+	//	{
+	//		g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x, ZoomLevel[i], g_Plugin.Zoom);
+	//		g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y, ZoomLevel[i], g_Plugin.Zoom);
+	//		g_Plugin.Zoom = ZoomLevel[i];
+	//		g_Plugin.ZoomAuto = ZA_NONE;
+	//		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
+	//		Invalidate(g_Plugin.hWnd);
+	//		break;
+	//	}
+	//}
 	// g_Plugin.Zoom - считается относительно декодированных размеров, прикинем абсолютный зум
 	CheckAbsoluteZoom();
 	return TRUE;
+}
+
+LRESULT OnSharpZoomIn(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
+{
+	return OnSharpZoom(hWnd, true);
+	//for (uint i = 0; i < sizeofarray(ZoomLevel); i++)
+	//{
+	//	if (g_Plugin.Zoom < ZoomLevel[i])
+	//	{
+	//		g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x, ZoomLevel[i], g_Plugin.Zoom);
+	//		g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y, ZoomLevel[i], g_Plugin.Zoom);
+	//		g_Plugin.Zoom = ZoomLevel[i];
+	//		g_Plugin.ZoomAuto = ZA_NONE;
+	//		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
+	//		Invalidate(g_Plugin.hWnd);
+	//		break;
+	//	}
+	//}
+	//// g_Plugin.Zoom - считается относительно декодированных размеров, прикинем абсолютный зум
+	//CheckAbsoluteZoom();
+	//return TRUE;
 }
 
 LRESULT OnZoomIn(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
@@ -759,20 +891,23 @@ LRESULT OnZoomIn(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 
 LRESULT OnSharpZoomOut(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
-	for (uint i = sizeofarray(ZoomLevel); i--;)
-		if (g_Plugin.Zoom > ZoomLevel[i])
-		{
-			g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x, ZoomLevel[i], g_Plugin.Zoom);
-			g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y, ZoomLevel[i], g_Plugin.Zoom);
-			g_Plugin.Zoom = ZoomLevel[i];
-			g_Plugin.ZoomAuto = ZA_NONE;
-			g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-			InvalidateRect(hWnd, NULL, FALSE);
-			break;
-		}
-	// g_Plugin.Zoom - считается относительно декодированных размеров, прикинем абсолютный зум
-	CheckAbsoluteZoom();
-	return TRUE;
+	return OnSharpZoom(hWnd, false);
+	//for (uint i = sizeofarray(ZoomLevel); i--;)
+	//{
+	//	if (g_Plugin.Zoom > ZoomLevel[i])
+	//	{
+	//		g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x, ZoomLevel[i], g_Plugin.Zoom);
+	//		g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y, ZoomLevel[i], g_Plugin.Zoom);
+	//		g_Plugin.Zoom = ZoomLevel[i];
+	//		g_Plugin.ZoomAuto = ZA_NONE;
+	//		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
+	//		Invalidate(g_Plugin.hWnd);
+	//		break;
+	//	}
+	//}
+	//// g_Plugin.Zoom - считается относительно декодированных размеров, прикинем абсолютный зум
+	//CheckAbsoluteZoom();
+	//return TRUE;
 }
 
 LRESULT OnZoomOut(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
@@ -784,13 +919,17 @@ LRESULT OnZoomOut(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	return TRUE;
 }
 
-LRESULT OnAutoZoom(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
+LRESULT OnAutoZoom(HWND hWnd, bool abTap)
 {
+	CZoom zoom(hWnd);
+
 	// Переключение: автомасштабирование / масштаб 100%
 	g_Plugin.ViewCenter.x = 0;
 	g_Plugin.ViewCenter.y = 0;
 	if (!g_Plugin.ZoomAuto)
+	{
 		g_Plugin.ZoomAuto = ZA_FIT;
+	}
 	else
 	{
 		WARNING("0x10000 сработает только на декодированный размер, а не на 'реальный'. Поправить!");
@@ -798,9 +937,12 @@ LRESULT OnAutoZoom(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		g_Plugin.ZoomAuto = ZA_NONE;
 		// По абсолютному зуму получить относительный g_Plugin.Zoom, который считается для декодированных размеров
 		CheckRelativeZoom();
+
+		if (abTap)
+			zoom.PostZoom();
 	}
 	g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-	InvalidateRect(hWnd, NULL, FALSE);
+	Invalidate(hWnd);
 	return TRUE;
 }
 
@@ -808,76 +950,59 @@ LRESULT OnZoomByWheel(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
 	if (!g_Plugin.MouseZoomMode)
 	{
-		if (wParam & 0x80000000) {
+		if (wParam & 0x80000000)
+		{
 			OnSharpZoomOut(hWnd, messg, wParam, lParam);
 			return TRUE;
-		} else {
+		}
+		else
+		{
 			OnSharpZoomIn(hWnd, messg, wParam, lParam);
 			return TRUE;
 		}
 	}
 	else
 	{
-		POINT MPos;
-		GetCursorPos(&MPos);
-		POINT MPosLocal = MPos;
-		MapWindowPoints(NULL, hWnd, &MPosLocal, 1);
-		RECT ImgRect;
-		GetClientRect(hWnd, &ImgRect);
-		const int dx = (ImgRect.right - ImgRect.left)/2 - MPosLocal.x;
-		const int dy = (ImgRect.bottom - ImgRect.top)/2 - MPosLocal.y;
+		CZoom zoom(hWnd);
 
 		const u32 OldZoom = g_Plugin.Zoom;
-		if (wParam & 0x80000000)
-		{
-			for (uint i = sizeofarray(ZoomLevel); i--;)
-				if (g_Plugin.Zoom > ZoomLevel[i])
-				{
-					g_Plugin.Zoom = ZoomLevel[i];
-					#ifdef _DEBUG
-					wchar_t szNewZoom[64]; wsprintf(szNewZoom, L"New zoom by wheel is: %i\n", g_Plugin.Zoom);
-					OutputDebugString(szNewZoom);
-					#endif
-					break;
-				}
-		}
-		else
-		{
-			for (uint i = 0; i < sizeofarray(ZoomLevel); i++)
-				if (g_Plugin.Zoom < ZoomLevel[i])
-				{
-					g_Plugin.Zoom = ZoomLevel[i];
-					#ifdef _DEBUG
-					wchar_t szNewZoom[64]; wsprintf(szNewZoom, L"New zoom by wheel is: %i\n", g_Plugin.Zoom);
-					OutputDebugString(szNewZoom);
-					#endif
-					break;
-				}
-		}
+		g_Plugin.Zoom = GetNextZoomLevel((wParam & 0x80000000)==0);
+		//if (wParam & 0x80000000)
+		//{
+		//	for (uint i = sizeofarray(ZoomLevel); i--;)
+		//	{
+		//		if (ZoomLevel[i] < g_Plugin.Zoom)
+		//		{
+		//			g_Plugin.Zoom = ZoomLevel[i];
+		//			#ifdef _DEBUG
+		//			wchar_t szNewZoom[64]; wsprintf(szNewZoom, L"New zoom by wheel is: %i\n", g_Plugin.Zoom);
+		//			OutputDebugString(szNewZoom);
+		//			#endif
+		//			break;
+		//		}
+		//	}
+		//}
+		//else
+		//{
+		//	for (uint i = 0; i < sizeofarray(ZoomLevel); i++)
+		//	{
+		//		if (ZoomLevel[i] > g_Plugin.Zoom)
+		//		{
+		//			g_Plugin.Zoom = ZoomLevel[i];
+		//			#ifdef _DEBUG
+		//			wchar_t szNewZoom[64]; wsprintf(szNewZoom, L"New zoom by wheel is: %i\n", g_Plugin.Zoom);
+		//			OutputDebugString(szNewZoom);
+		//			#endif
+		//			break;
+		//		}
+		//	}
+		//}
 		
 		// g_Plugin.Zoom - считается относительно декодированных размеров, прикинем абсолютный зум
 		CheckAbsoluteZoom();
 		
 		if (OldZoom != g_Plugin.Zoom)
-		{
-			g_Plugin.ViewCenter.x = MulDivIU32R(g_Plugin.ViewCenter.x + dx, g_Plugin.Zoom, OldZoom);
-			g_Plugin.ViewCenter.y = MulDivIU32R(g_Plugin.ViewCenter.y + dy, g_Plugin.Zoom, OldZoom);
-			if (g_Plugin.MouseZoomMode == 1)
-			{
-				g_Plugin.DragBase.x += dx;
-				g_Plugin.DragBase.y += dy;
-				SetCursorPos(MPos.x + dx, MPos.y + dy);
-			}
-			else
-			{
-				g_Plugin.ViewCenter.x -= dx;
-				g_Plugin.ViewCenter.y -= dy;
-			}
-			g_Plugin.ZoomAuto = ZA_NONE;
-			g_Plugin.bCorrectMousePos = true;
-			g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-			InvalidateRect(hWnd, NULL, FALSE);
-		}
+			zoom.PostZoom();
 	}
 	return TRUE;
 }
@@ -897,15 +1022,21 @@ LRESULT RequestNextImage(bool abNext, bool abHomeEnd = false, bool abActivate = 
 			 	: g_Panel.GetFirstItemRawIndex();
 		// В какую сторону мотать, если не удастся обработать желаемый элемент
 		parms.iDirection = abNext ? -1 : 1;
-	} else {
+	}
+	else
+	{
 		parms.Flags |= eRenderRelativeIndex;
 		parms.nRawIndex = -1;
+		parms.nFromRawIndex = g_Panel.GetActiveRawIdx();
 		parms.iDirection = abNext ? 1 : -1;
 	}
+
+	parms.Flags |= eRenderActivateOnReady;
 
 	return g_Manager.RequestDecodedImage(&parms);
 }
 
+// (wParam & 0x80000000) - NextFile, иначе - PrevFile
 LRESULT OnNextFile(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
 	//if (g_Plugin.FlagsWork & FW_JUMP_DISABLED)
@@ -928,6 +1059,7 @@ LRESULT OnGotoPage(UINT nNewPage, BOOL abForward)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return FALSE;
 	}
@@ -936,6 +1068,7 @@ LRESULT OnGotoPage(UINT nNewPage, BOOL abForward)
 	{
 		DecodeParams next;
 		next.Priority = eCurrentImageCurrentPage; // наивысший приоритет
+		next.Flags = eRenderActivateOnReady;
 		next.nPage = nNewPage;
 		next.nRawIndex = Image->PanelItemRaw();
 		
@@ -952,7 +1085,7 @@ LRESULT OnGotoPage(UINT nNewPage, BOOL abForward)
 		//if (abForward && !Image->Info.Animation)
 		//	g_Plugin.ViewCenter.x = g_Plugin.ViewCenter.y = RESET_VIEW_POS/*0x7FFFFFFF*/;
 		//g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-		//InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+		//Invalidate(g_Plugin.hWnd);
 
 		return 1;
 	}
@@ -966,6 +1099,7 @@ LRESULT OnGotoPageAddNumber(UINT nAddNo)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return 0;
 	}
@@ -1000,11 +1134,13 @@ LRESULT OnGotoPageAddNumber(UINT nAddNo)
 
 	return 1;
 }
+// (wParam & 0x80000000) - NextPage, иначе - PrevPage
 LRESULT OnNextPage(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return FALSE;
 	}
@@ -1029,7 +1165,7 @@ LRESULT OnNextPage(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		//	if (!Image->Info.Animation)
 		//		g_Plugin.ViewCenter.x = g_Plugin.ViewCenter.y = RESET_VIEW_POS/*0x7FFFFFFF*/;
 		//	g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-		//	InvalidateRect(hWnd, NULL, FALSE);
+		//	Invalidate(g_Plugin.hWnd);
 		//}
 	}
 	else
@@ -1041,7 +1177,7 @@ LRESULT OnNextPage(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		//	Image->Info.nPage--;
 		//	g_Manager.Decode(Image, &Image->mp_Draw, true, Image->InfoPage);
 		//	g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-		//	InvalidateRect(hWnd, NULL, FALSE);
+		//	Invalidate(g_Plugin.hWnd);
 		//}
 	}
 	return TRUE;
@@ -1080,7 +1216,7 @@ LRESULT OnScroll(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 					g_Plugin.ViewCenter.y += dy;
 			}
 			if (bRight ^ bLeft || bUp ^ bDown)
-				InvalidateRect(hWnd, NULL, FALSE);
+				Invalidate(hWnd);
 		}
 	}
 	return TRUE;
@@ -1095,6 +1231,7 @@ LRESULT OnChangeDecoder(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return FALSE;
 	}
@@ -1152,9 +1289,12 @@ LRESULT OnMark(BOOL abNewSelected)
 
 LRESULT OnFullScreen(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
-	if (g_Plugin.FlagsWork & FW_QUICK_VIEW) {
+	DWORD_PTR nWasVisible = (GetWindowLongPtr(hWnd, GWL_STYLE) & WS_VISIBLE);
+
+	if (g_Plugin.FlagsWork & FW_QUICK_VIEW)
+	{
 		WARNING("А в quickview глючить не будет?");
-		g_Plugin.hParentWnd = g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd : g_Plugin.hFarWnd;
+		g_Plugin.hParentWnd = /*g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd :*/ g_Plugin.hFarWnd;
 		return FALSE;
 	}
 
@@ -1174,12 +1314,14 @@ LRESULT OnFullScreen(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	{
 		OutputDebugString(L"FullScreen -> OFF\n");
 		TrayRestore();
-		g_Plugin.hParentWnd = g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd : g_Plugin.hFarWnd;
+		g_Plugin.hParentWnd = /*g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd :*/ g_Plugin.hFarWnd;
 		g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
 	}
 
 	if (g_Plugin.bFullScreen)
-		SetWindowLongPtr(hWnd, GWL_STYLE, STYLE_FULLSCREEN);
+	{
+		SetWindowLongPtr(hWnd, GWL_STYLE, STYLE_FULLSCREEN|nWasVisible);
+	}
 	//if (g_Plugin.bFullScreen) {
 	//	SetWindowLongPtr(hWnd, GWL_STYLE, STYLE_FULLSCREEN);
 	//} else {
@@ -1190,8 +1332,10 @@ LRESULT OnFullScreen(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	SetParent(hWnd, g_Plugin.hParentWnd);
 	CFunctionLogger::FunctionLogger(L"SetParent done");
 
-	if (g_Plugin.bFullScreen) {
-		if (g_Plugin.pTaskBar) {
+	if (g_Plugin.bFullScreen)
+	{
+		if (g_Plugin.pTaskBar)
+		{
 			// Уведомим, что окошко должно быть поверх TaskBar'а
 			g_Plugin.pTaskBar->MarkFullscreenWindow(g_Plugin.hWnd, TRUE);
 			// Удалим кнопку на всякий случай
@@ -1200,20 +1344,24 @@ LRESULT OnFullScreen(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 
 		//SetWindowLongPtr(hWnd, GWL_EXSTYLE, EX_STYLE_FULLSCREEN);
 		SetWindowPos(hWnd, HWND_TOP, 0,0,0,0, SWP_NOMOVE|SWP_NOSIZE);
-	} else {
-		SetWindowLongPtr(hWnd, GWL_STYLE, STYLE_NOFULLSCREEN);
+	}
+	else
+	{
+		// Оставить видимым, если было видимо до этого
+		SetWindowLongPtr(hWnd, GWL_STYLE, STYLE_NOFULLSCREEN|nWasVisible);
 	}
 
-	InvalidateRect(hWnd, NULL, FALSE);
+	Invalidate(hWnd);
 	//WndProc(hWnd, WM_PAINT, 0, 0); // ибо _try
 
-	if (!g_Plugin.bFullScreen && messg != DMSG_KEYBOARD) {
+	if (!g_Plugin.bFullScreen && messg != DMSG_KEYBOARD)
+	{
 		//SetCapture(hWnd);
 		//FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE)/*g_Plugin.hInput*/);
 		//Sleep(100); // с секундой вроде бы нормально, но это долго...
 		// На Flush может виснуть!
 		//FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE)/*g_Plugin.hInput*/);
-		//InvalidateRect(hWnd, NULL, FALSE);
+		//Invalidate(g_Plugin.hWnd);
 		//WndProc(hWnd, WM_PAINT, 0, 0); // ибо _try
 		//PostMessage(hWnd, WM_PAINT, 0, 0);
 	}
@@ -1235,7 +1383,73 @@ RECT GetDisplayRect()
 	RECT ParentRect = {0, 0, 1280, 960};
 	if (g_Plugin.FlagsWork & FW_QUICK_VIEW)
 	{
-		ParentRect = g_Plugin.ViewPanelG;
+		RECT FarRect;
+		GetClientRect(g_Plugin.hFarWnd, &FarRect);
+
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+		if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE)/*g_Plugin.hOutput*/, &csbi))
+		{
+			ParentRect = FarRect;
+		}
+		else
+		{
+			RECT r = g_Plugin.ViewPanelT;
+			_ASSERTE(!(r.left >= csbi.srWindow.Right || r.right <= csbi.srWindow.Left || r.top >= csbi.srWindow.Bottom || r.bottom - 2 <= csbi.srWindow.Top));
+			//if (r.left >= csbi.srWindow.Right || r.right <= csbi.srWindow.Left || r.top >= csbi.srWindow.Bottom || r.bottom - 2 <= csbi.srWindow.Top)
+			//{g_Plugin.FlagsWork &= ~FW_VE_HOOK; break;}
+
+			uint wdx = 0, wdy = 0; // задел на обработку черной окантовки вокруг консоли, если окно развернуто
+			uint dx = 0, dy = 0;
+
+			//if (!g_Plugin.hConEmuWnd)
+			{
+				typedef COORD (WINAPI *GetConsoleFontSize_t)(HANDLE hConsoleOutput,DWORD nFont);
+				typedef BOOL (WINAPI *GetCurrentConsoleFont_t)(HANDLE hConsoleOutput,BOOL bMaximumWindow,PCONSOLE_FONT_INFO lpConsoleCurrentFont);
+
+				// Эти функции есть в XP и выше
+				GetCurrentConsoleFont_t fGetCurrentConsoleFont = (GetCurrentConsoleFont_t)GetProcAddress(GetModuleHandle(_T("kernel32.dll")),"GetCurrentConsoleFont");
+				GetConsoleFontSize_t fGetConsoleFontSize = (GetConsoleFontSize_t)GetProcAddress(GetModuleHandle(_T("kernel32.dll")),"GetConsoleFontSize");
+				if (fGetCurrentConsoleFont)
+				{
+					CONSOLE_FONT_INFO cfi = {0};
+					BOOL bMaximized = IsZoomed(g_Plugin.hFarWnd);
+					BOOL bFontRC = fGetCurrentConsoleFont(GetStdHandle(STD_OUTPUT_HANDLE),bMaximized,&cfi);
+					if (bFontRC)
+					{
+						COORD cr = fGetConsoleFontSize(GetStdHandle(STD_OUTPUT_HANDLE), cfi.nFont);
+						if (cr.X && cr.Y)
+						{
+							int nDeltaX = (FarRect.right - FarRect.left) - cr.X * (csbi.srWindow.Right - csbi.srWindow.Left + 1);
+							int nDeltaY = (FarRect.bottom - FarRect.top) - cr.Y * (csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+							if ((Abs(nDeltaX) <= cr.Y) && (Abs(nDeltaY) < cr.Y))
+							{
+								dx = cr.X;
+								dy = cr.Y;
+							}
+						}
+					}
+				}
+			}
+
+			if (!dx || !dy)
+			{
+				uint dx0 = (csbi.srWindow.Right - csbi.srWindow.Left + 1);
+				// Когда FAR Maximized - в консоли часть символов может не влезать
+				dx = (FarRect.right - FarRect.left + dx0/2) / dx0;
+				uint dy0 = (csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+				dy = (FarRect.bottom - FarRect.top + dy0/2) / dy0;
+			}
+
+			WARNING("BUGBUG. Тут потенциально можно нарваться. Если панель будет вообще не видна из-за прокрутки");
+			g_Plugin.ViewPanelG.left   = wdx + (r.left + 1 - csbi.srWindow.Left) * dx;
+			g_Plugin.ViewPanelG.right  = wdx + (r.right - csbi.srWindow.Left) * dx;
+			g_Plugin.ViewPanelG.top    = wdy + (r.top + 1 - csbi.srWindow.Top) * dy;
+			g_Plugin.ViewPanelG.bottom = wdy + (r.bottom - 2 - csbi.srWindow.Top) * dy;
+			//if (g_Plugin.hConEmuWnd)
+			//	MapWindowPoints(g_Plugin.hFarWnd, g_Plugin.hConEmuWnd, (LPPOINT)&g_Plugin.ViewPanelG, 2);
+
+			ParentRect = g_Plugin.ViewPanelG;
+		}
 	}
 	else
 	{
@@ -1260,12 +1474,22 @@ RECT GetDisplayRect()
 					ParentRect = mi.rcMonitor;
 			}
 		}
-		else if (g_Plugin.hConEmuWnd)
-		{
-			MapWindowPoints(g_Plugin.hFarWnd, g_Plugin.hConEmuWnd, (LPPOINT)&ParentRect, 2);
-		}
+		// - g_Plugin.hFarWnd уже содержит дескриптор окна отрисовки
+		//else if (g_Plugin.hConEmuWnd)
+		//{
+		//	MapWindowPoints(g_Plugin.hFarWnd, g_Plugin.hConEmuWnd, (LPPOINT)&ParentRect, 2);
+		//}
 	}
+
 	return ParentRect;
+}
+
+void Invalidate(HWND ahWnd)
+{
+	if (!ahWnd || !IsWindowVisible(ahWnd))
+		return;
+
+	::InvalidateRect(ahWnd, NULL, FALSE);
 }
 
 LRESULT OnPaint(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
@@ -1278,6 +1502,7 @@ LRESULT OnPaint(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return 0;
 	}
@@ -1358,6 +1583,18 @@ LRESULT OnPaint(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	u32 Zoom;
 	if (g_Plugin.ZoomAuto || g_Plugin.FlagsWork & FW_QUICK_VIEW)
 	{
+		if (!Image->Info.lWidth || !Image->Info.lHeight)
+		{
+			WARNING("При выскакивании Assert во время перехода к следующей картинке");
+			#ifdef _DEBUG
+			if (!IsDebuggerPresent())
+			{
+				_ASSERTE(Image->Info.lWidth && Image->Info.lHeight);
+			}
+			#endif
+			return 0;
+		}
+
 		//const вызывает инициализацию переменных ДО входа в функцию (по возможности). что нам не подходит - хочется видеть последовательность действий!
 		u32 ZoomW = MulDivU32(lScreenWidth, 0x10000, Image->Info.lWidth /*dds->m_lWorkWidth*/);
 		u32 ZoomH = MulDivU32(lScreenHeight, 0x10000, Image->Info.lHeight /*dds->m_lWorkHeight*/);
@@ -1493,6 +1730,7 @@ LRESULT OnPaint(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 				g_Plugin.DragBase.y += dy;
 				POINT MPos;
 				GetCursorPos(&MPos);
+				TODO("При использовании тачскрина это смысла не имеет");
 				SetCursorPos(MPos.x + dx, MPos.y + dy);
 			}
 		}
@@ -1750,6 +1988,7 @@ LRESULT OnTimer(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 				CImagePtr Image;
 				if (!Image.IsValid())
 				{
+					_ASSERTE("(!Image.IsValid())" && 0);
 					RequestTerminate();
 					return FALSE;
 				}
@@ -1758,7 +1997,7 @@ LRESULT OnTimer(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 				{
 					KillTimer(hWnd, TIMER_ANIMATION);
 
-					int nNextPage = Image->Info.nPage + 1;
+					UINT nNextPage = Image->Info.nPage + 1;
 					if (nNextPage >= Image->Info.nPages)
 						Image->Info.nPage = 0;
 					const uint lOldFrameTime = Image->Info.lFrameTime;
@@ -1801,7 +2040,7 @@ LRESULT OnTimer(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 
 					SetTimer(hWnd, TIMER_ANIMATION, lNewFrameTime, NULL);
 
-					InvalidateRect(hWnd, NULL, FALSE);
+					Invalidate(hWnd);
 				}
 				else
 				{
@@ -1822,7 +2061,7 @@ LRESULT OnTimer(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+				Invalidate(g_Plugin.hWnd);
 				WndProc(g_Plugin.hWnd, WM_PAINT, 0,0); // ибо _try
 			}
 			return TRUE;
@@ -1844,6 +2083,7 @@ LRESULT OnWallpaper(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	CImagePtr Image;
 	if (!Image.IsValid())
 	{
+		_ASSERTE("(!Image.IsValid())" && 0);
 		RequestTerminate();
 		return FALSE;
 	}
@@ -1941,7 +2181,7 @@ LRESULT OnHelp(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 //		TrayDisable();
 //	ShowWindow(hWnd, SW_SHOW);
 //	g_Plugin.FlagsDisplay |= FD_TITLE_REPAINT;
-//	InvalidateRect(hWnd, NULL, FALSE);
+//	Invalidate(g_Plugin.hWnd);
 //	return TRUE;
 }
 
@@ -2002,8 +2242,10 @@ LRESULT OnMouseMove(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		{
 			g_Plugin.ViewCenter.x += dx;
 			g_Plugin.ViewCenter.y += dy;
-			InvalidateRect(hWnd, NULL, FALSE);
-		} else {
+			Invalidate(hWnd);
+		}
+		else
+		{
 			//OutputDebugString(L"dx==dy==0\n");
 		}
 	}
@@ -2042,22 +2284,42 @@ BOOL IsScrollingPages(LPARAM lParam)
 	return bScrollPages;
 }
 
-BOOL OnImageReady(HWND hWnd, UINT messg, WPARAM wParam, CDecodeItem* pReady)
+BOOL OnImageReady(HWND hWnd, UINT messg, DecodeParams* pParams, CDecodeItem* pReady)
 {
-	//CDecodeItem* pReady = (CDecodeItem*)lParam;
-	if (!pReady)
+	if (!pParams)
 	{
-		_ASSERTE(pReady!=NULL);
+		_ASSERTE(pParams!=NULL);
+		SafeRelease(pReady,szPVDManager);
 		RequestTerminate();
 		return FALSE;
 	}
 
-	bool bActivate = ((pReady->Params.Flags & eRenderActivateOnReady) == eRenderActivateOnReady);
+	//CDecodeItem* pReady = (CDecodeItem*)lParam;
+	if (!pReady)
+	{
+		//_ASSERTE(pReady!=NULL);
+		//RequestTerminate();
+		//return FALSE;
+		_ASSERTE(g_Manager.IsImageReady(pParams));
+	}
 
-	// Важно, чтобы это выполнялось в потоке дисплея
-	// Выполнить перенос данных в контекст дисплея
-	if (!g_Manager.OnItemReady(pReady))
-		bActivate = false;
+	//bool bActivate = ((pReady->Params.Flags & eRenderActivateOnReady) == eRenderActivateOnReady);
+	bool bActivate = ((pParams->Flags & eRenderActivateOnReady) == eRenderActivateOnReady);
+
+	if (bActivate)
+	{
+		// Сразу создать запрос на декодирование следующих фреймов и файлов
+		g_Manager.RequestPreCache(pParams);
+	}
+
+	// Если NULL - значит картинка была в кеше
+	if (pReady)
+	{
+		// Важно, чтобы это выполнялось в потоке дисплея
+		// Выполнить перенос данных в контекст дисплея
+		if (!g_Manager.OnItemReady(pReady))
+			bActivate = false;
+	}
 
 	if (bActivate)
 	{
@@ -2071,6 +2333,7 @@ BOOL OnImageReady(HWND hWnd, UINT messg, WPARAM wParam, CDecodeItem* pReady)
 			{
 				_ASSERTE(OldImage.IsValid());
 				SafeRelease(pReady,szPVDManager);
+				delete pParams;
 				RequestTerminate();
 				return FALSE;
 			}
@@ -2080,33 +2343,38 @@ BOOL OnImageReady(HWND hWnd, UINT messg, WPARAM wParam, CDecodeItem* pReady)
 			TODO("Зум, смещение?");
 		}
 
-		g_Panel.SetActiveRawIndex((int)wParam);
+		g_Panel.SetActiveRawIndex(pParams->nRawIndex);
 	
 		// Активировали файл, проверим что получилось
 		CImagePtr Image;
-		if (!Image.IsValid() || (Image->PanelItemRaw() != wParam))
+		if (!Image.IsValid() || (Image->PanelItemRaw() != pParams->nRawIndex))
 		{
-			_ASSERTE(Image->PanelItemRaw() == wParam);
+			_ASSERTE(Image->PanelItemRaw() == pParams->nRawIndex);
 			SafeRelease(pReady,szPVDManager);
+			delete pParams;
 			RequestTerminate();
 			return FALSE;
 		}
 
 		//Image->Info.nPage = (uint)lParam;
-		Image->Info = pReady->Info;
+		WARNING("!!! Переделать, тут должен быть CDecodeItem! И когда будет - сменить данные.");
+		//Image->Info = pReady->Info;
 
-		// Заменить дескриптор декодера
-		pReady->pFile->MoveTo(Image->mp_File);
-		//WARNING("TODO: Выполнить перенос данных в контекст дисплея");
+		if (pReady)
+		{
+			// Заменить дескриптор декодера
+			pReady->pFile->MoveTo(Image->mp_File);
+			//WARNING("TODO: Выполнить перенос данных в контекст дисплея");
 
-		//pReady->pDraw->MoveTo(Image->mp_Draw);
-		// Освободить память под pReady
-		SafeRelease(pReady,szPVDManager);
-
+			//pReady->pDraw->MoveTo(Image->mp_Draw);
+			// Освободить память под pReady
+			SafeRelease(pReady,szPVDManager);
+		}
 		
 		if (!InitImageDisplay(!g_Plugin.bKeepZoomAndPosBetweenFiles))
 		{
 			SafeRelease(pReady,szPVDManager);
+			delete pParams;
 			return FALSE; // уже вызван RequestTerminate
 		}
 
@@ -2153,19 +2421,25 @@ BOOL OnImageReady(HWND hWnd, UINT messg, WPARAM wParam, CDecodeItem* pReady)
 	}
 
 	SafeRelease(pReady,szPVDManager);
+	delete pParams;
 	return TRUE;
 }
 
 LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
 	LRESULT result = 0;
+	
+	// Gestures and touch input
+	if (gp_Gestures && gp_Gestures->ProcessGestureMessage(hWnd, messg, wParam, lParam, result))
+	{
+		return result;
+	}
+	
 	switch (messg)
 	{
 	case WM_PAINT:
-	{
 		OnPaint(hWnd, messg, wParam, lParam);
 		break;
-	}
 	case WM_ERASEBKGND:
 		result = 1;
 		break;
@@ -2349,7 +2623,7 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		case VK_DIVIDE: // Gray/ 
 		case VK_OEM_2:  // '/?' for US - кнопка рядом с правым шифтом
 			// Переключение: автомасштабирование / масштаб 100%
-			OnAutoZoom(hWnd, messg, wParam, lParam);
+			OnAutoZoom(hWnd, false);
 			break;
 		case VK_RIGHT:
 		case VK_LEFT:
@@ -2376,16 +2650,20 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		case VK_NUMPAD3:
 		case 'N':
 		case VK_OEM_6: //']':
-			if (wParam == VK_SPACE && g_Plugin.bMarkBySpace) {
+			if (wParam == VK_SPACE && g_Plugin.bMarkBySpace)
+			{
 				BOOL bScrollPages = IsScrollingPages(lParam);
 				if (!bScrollPages)
 					OnMark(TRUE/*abNewSelected*/);
 			}
 				
-			if (wParam == VK_NEXT || wParam == VK_SPACE || wParam == VK_NUMPAD3 || wParam == 'N' || wParam == VK_OEM_6/*']'*/) {
+			if (wParam == VK_NEXT || wParam == VK_SPACE || wParam == VK_NUMPAD3 || wParam == 'N' || wParam == VK_OEM_6/*']'*/)
+			{
 				OutputDebugString(L"PgDn pressed, switching to next file\n");
 				PostMessage(hWnd, DMSG_NEXTFILEPAGE, 0x80000000, lParam);
-			} else {
+			}
+			else
+			{
 				OutputDebugString(L"PgDn pressed, switching to prev file\n");
 				PostMessage(hWnd, DMSG_NEXTFILEPAGE, 0, lParam);
 			}
@@ -2407,9 +2685,12 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		case 'R':
 			{
 				BOOL bScrollPages = IsScrollingPages(lParam);
-				if (bScrollPages) {
+				if (bScrollPages)
+				{
 					OnGotoPage(0, TRUE);
-				} else {
+				}
+				else
+				{
 					//if (g_Plugin.FlagsWork & FW_JUMP_DISABLED)
 					//	break;
 					//g_Plugin.FlagsDisplay |= FD_JUMP_NEXT | FD_HOME_END;
@@ -2426,14 +2707,18 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 				CImagePtr Image;
 				if (!Image.IsValid())
 				{
+					_ASSERTE("(!Image.IsValid())" && 0);
 					RequestTerminate();
 					return FALSE;
 				}
 
 				BOOL bScrollPages = IsScrollingPages(lParam);
-				if (bScrollPages) {
+				if (bScrollPages)
+				{
 					OnGotoPage(Image->Info.nPages-1, TRUE);
-				} else {
+				}
+				else
+				{
 					//if (g_Plugin.FlagsWork & FW_JUMP_DISABLED)
 					//	break;
 					//g_Plugin.FlagsDisplay = g_Plugin.FlagsDisplay & ~FD_JUMP_NEXT | FD_HOME_END;
@@ -2445,10 +2730,14 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 			}
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7': case '8': case '9':
-			if (!(lParam & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED|LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED|SHIFT_PRESSED))) {
+			if (!(lParam & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED|LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED|SHIFT_PRESSED)))
+			{
 				OnGotoPageAddNumber(((UINT)wParam) - ((UINT)'0'));
-			} else if (SHIFT_PRESSED == (lParam & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED|LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED|SHIFT_PRESSED))) {
-				switch (wParam) {
+			}
+			else if (SHIFT_PRESSED == (lParam & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED|LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED|SHIFT_PRESSED)))
+			{
+				switch (wParam)
+				{
 					case '8': // '*' - аналог Gray*, но в флаге нужно сбросить Shift
 						// Масштаб 100% / Автомасштабирование по ширине / по высоте
 						OnZoom100(hWnd, messg, wParam, (lParam & ~SHIFT_PRESSED));
@@ -2457,13 +2746,15 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		case 'W':
-			if ((lParam & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))) {
+			if ((lParam & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)))
+			{
 				OnWallpaper(hWnd, messg, wParam, lParam);
 			}
 			break;
 		#ifdef _DEBUG
 		default:
-			if (wParam != VK_SHIFT && wParam != VK_CONTROL && wParam != VK_MENU) {
+			if (wParam != VK_SHIFT && wParam != VK_CONTROL && wParam != VK_MENU)
+			{
 				wParam = wParam;
 			}
 		#endif
@@ -2499,7 +2790,7 @@ LRESULT WndProcSEH(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		OnRefresh(hWnd, messg, wParam, lParam);
 		break;
 	case DMSG_IMAGEREADY:
-		OnImageReady(hWnd, messg, wParam, (CDecodeItem*)lParam);
+		OnImageReady(hWnd, messg, (DecodeParams*)wParam, (CDecodeItem*)lParam);
 		break;
 	//case DMSG_SHOWWINDOW /*WM_APP + 6*/:
 	//	result = 0;
@@ -2543,7 +2834,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 		wchar_t szInfo[1024];
 		wsprintfW(szInfo, L"!!! Exception in WndProcSEH\nMsg=%u, wParam=0x%08X, lParam=0x%08X\nPlease, restart FAR",
 			messg, (DWORD)wParam, (DWORD)lParam);
-		MessageBox(NULL, szInfo, L"PictureView2", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND|MB_SYSTEMMODAL);
+		MessageBox(NULL, szInfo, L"PicView3", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND|MB_SYSTEMMODAL);
 	}
 
 	return lRc;
@@ -2562,12 +2853,16 @@ UINT ProcessConsoleInputs()
 
 	// gbLockInputProcessing ?
 
+	#ifdef PICVIEW_FORCEALLINPUTSHOW
 	CFunctionLogger::FunctionLogger(L"Processing console input.1");
+	#endif
 	u32 nEvents = 0;
 	HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
 
 	GetNumberOfConsoleInputEvents(hInput, &nEvents);
+	#ifdef PICVIEW_FORCEALLINPUTSHOW
 	CFunctionLogger::FunctionLogger(L"Processing console input.2");
+	#endif
 	if (!(g_Plugin.FlagsWork & FW_QUICK_VIEW))
 	{
 		if (nEvents)
@@ -2600,7 +2895,7 @@ UINT ProcessConsoleInputs()
 						SetForegroundWindow(g_Plugin.hWnd);
 					}
 				//	//Sleep(100); // Консоль будет пытаться отрисоваться
-				//	InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+				//	Invalidate(g_Plugin.hWnd);
 				//	OnPaint(g_Plugin.hWnd, WM_PAINT, 0,0);
 				//	gnRedrawConTimerStart = GetTickCount();
 				//	SetTimer(g_Plugin.hWnd, TIMER_REDRAWCON, 500, 0);
@@ -2622,12 +2917,14 @@ UINT ProcessConsoleInputs()
 				(ir.EventType == MOUSE_EVENT && ir.Event.MouseEvent.dwEventFlags & ~MOUSE_MOVED)
 				))
 			{
-				if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE) {
+				if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE)
+				{
 					// Просто закрыть PicView, но панели не гасить. Достало.
 					CFunctionLogger::FunctionLogger(L"Processing console input.Esc.clear");
 					// Убрать из буфера Esc Press/release
 					ReadConsoleInput(hInput, &ir, 1, &t);
-					while (PeekConsoleInput(hInput, &ir, 1, &t) && t>0) {
+					while (PeekConsoleInput(hInput, &ir, 1, &t) && t>0)
+					{
 						ReadConsoleInput(hInput, &ir, 1, &t);
 						if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE)
 							break;
@@ -2646,7 +2943,7 @@ UINT ProcessConsoleInputs()
 				ReadConsoleInput(hInput, &ir, 1, &t);
 				CFunctionLogger::FunctionLogger(L"Processing console input.8");
 				/*if (ir.EventType == FOCUS_EVENT && ir.Event.FocusEvent.bSetFocus) { -- это у нас не крутится..
-				InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+				Invalidate(g_Plugin.hWnd);
 				}*/
 			}
 		}
@@ -2672,7 +2969,7 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 	//if (result)
 	//{
 	_ASSERTE(g_Plugin.hFarWnd && g_Plugin.hParentWnd);
-	_ASSERTE(g_Plugin.hConEmuWnd==NULL || g_Plugin.hParentWnd!=g_Plugin.hFarWnd);
+	//_ASSERTE(g_Plugin.hConEmuWnd==NULL || g_Plugin.hParentWnd!=g_Plugin.hFarWnd);
 
 	HWND hParent = g_Plugin.hParentWnd;
 
@@ -2734,7 +3031,7 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 		CFunctionLogger::FunctionLogger(L"DisplayThreadProc.FlushConsoleInputBuffer");
 		FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE)/*g_Plugin.hInput*/);
 		CFunctionLogger::FunctionLogger(L"DisplayThreadProc.SetParent(%s)", g_Plugin.hConEmuWnd ? L"ConEmuWnd" : L"FarWnd");
-		SetParent(g_Plugin.hWnd, g_Plugin.hParentWnd = g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd : g_Plugin.hFarWnd);
+		SetParent(g_Plugin.hWnd, g_Plugin.hParentWnd = /*g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd :*/ g_Plugin.hFarWnd);
 		CFunctionLogger::FunctionLogger(L"DisplayThreadProc.SetForegroundWindow");
 		SetForegroundWindow(g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd : g_Plugin.hFarWnd);
 	}
@@ -2760,7 +3057,7 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 			HWND h = GetForegroundWindow();
 			if (h == g_Plugin.hFarWnd && hLastForeground != h) {
 				CFunctionLogger fl2(L"Invalidating on FAR got focus was started");
-				InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+				Invalidate(g_Plugin.hWnd);
 				WndProc(g_Plugin.hWnd, WM_PAINT, 0,0); // ибо _try
 				gnRedrawConTimerStart = GetTickCount();
 				SetTimer(g_Plugin.hWnd, TIMER_REDRAWCON, 500, 0);
@@ -2781,7 +3078,7 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 					{
 						TrayRestore();
 						CFunctionLogger::FunctionLogger(L"DisplayThreadProc.SetParent(%s)", g_Plugin.hConEmuWnd ? L"ConEmuWnd" : L"FarWnd");
-						SetParent(g_Plugin.hWnd, g_Plugin.hParentWnd = g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd : g_Plugin.hFarWnd);
+						SetParent(g_Plugin.hWnd, g_Plugin.hParentWnd = /*g_Plugin.hConEmuWnd ? g_Plugin.hConEmuWnd :*/ g_Plugin.hFarWnd);
 						CFunctionLogger::FunctionLogger(L"SetParent done");
 						if (g_Plugin.bMouseHided)
 						{
@@ -2798,7 +3095,7 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 						CFunctionLogger::FunctionLogger(L"DisplayThreadProc.SetParent(DesktopWnd)");
 						SetParent(g_Plugin.hWnd, g_Plugin.hParentWnd = g_Plugin.hDesktopWnd);
 						CFunctionLogger::FunctionLogger(L"SetParent done");
-						InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+						Invalidate(g_Plugin.hWnd);
 						if (!g_Plugin.bMouseHided)
 						{
 							ShowCursor(FALSE);
@@ -2813,10 +3110,28 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 		const uint Time = GetTickCount();
 		for (MSG Msg; PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE);)
 		{
+			#ifdef _DEBUG
+			DWORD dwStatus = GetQueueStatus(QS_ALLINPUT);
+			#endif
+
 			if (Msg.message == WM_QUIT)
 			{
 				goto lExit;
 			}
+			else if (Msg.message == WM_PAINT)
+			{
+				// Если в стек падает WM_PAINT, а окно НЕ видимо, то
+				// получается зацикливание. PeekMessage НЕ убирает из
+				// очереди это сообщение, а обработки не происходит...
+				if (!IsWindowVisible(g_Plugin.hWnd))
+				{
+					bool bForceShow = true;
+					_ASSERTE(IsWindowVisible(g_Plugin.hWnd) && Msg.hwnd);
+					if (bForceShow)
+						ShowWindow(g_Plugin.hWnd, SW_SHOWNORMAL);
+				}
+			}
+
 			DispatchMessage(&Msg);
 			if (GetTickCount() - Time > 50)
 			{
@@ -2838,10 +3153,11 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 			const bool bUp    = GetAsyncKeyState(VK_UP)    < 0 || GetAsyncKeyState(VK_NUMPAD8) < 0;
 			const bool bDown  = GetAsyncKeyState(VK_DOWN)  < 0 || GetAsyncKeyState(VK_NUMPAD2) < 0;
 
-			if (!bLeft && !bRight && !bUp && !bDown) {
+			if (!bLeft && !bRight && !bUp && !bDown)
+			{
 				g_Plugin.bScrolling = false;
 				// передернуть, чтобы картинка могла отобразиться с антиалиасингом
-				InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+				Invalidate(g_Plugin.hWnd);
 			}
 			else
 			{
@@ -2883,11 +3199,14 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 			const bool bZoomIn  = GetAsyncKeyState(vkAdd)  < 0;
 			const bool bZoomOut = GetAsyncKeyState(vkSubtract) < 0;
 
-			if (!bZoomIn && !bZoomOut) {
+			if (!bZoomIn && !bZoomOut)
+			{
 				g_Plugin.bZoomming = false;
 				// передернуть, чтобы картинка могла отобразиться с антиалиасингом
-				InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
-			} else {
+				Invalidate(g_Plugin.hWnd);
+			}
+			else
+			{
 				// Если не обе кнопки (Gray+ и Gray-) нажаты
 				if (bZoomIn ^ bZoomOut)
 				{
@@ -2911,7 +3230,7 @@ DWORD WINAPI DisplayThreadProcSEH(void *pParameter)
 		}
 		if (bRepaint)
 		{
-			InvalidateRect(g_Plugin.hWnd, NULL, FALSE);
+			Invalidate(g_Plugin.hWnd);
 			WndProc(g_Plugin.hWnd, WM_PAINT, 0, 0); // ибо _try
 			//OnPaint(g_Plugin.hWnd, WM_PAINT, 0, 0);
 			continue;
@@ -2942,10 +3261,14 @@ lExit:
 	//if (g_Plugin.hWnd && IsWindow(g_Plugin.hWnd))
 	//	DestroyWindow(g_Plugin.hWnd);
 
+	// Смысл?
+#if 0
 	// Очистка очереди, если там что-то осталось...
 	// подстрахуемся от зависания (max 255 msgs)
 	MSG Msg;
-	for (int i = 255; i-->0 && PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE););
+	// PeekMessage не убирает из стека некоторые сообщения, например WM_PAINT
+	for (int i = 255; i>0 && PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE); --i);
+#endif
 
 	//if (g_Plugin.hDisplayThread)
 	//{
@@ -2966,7 +3289,7 @@ DWORD WINAPI DisplayThreadProc(void *pParameter)
 
 	if (nRc == (DWORD)-1){
 		CFunctionLogger::FunctionLogger(L"!!! Exception in DisplayThreadProcSEH");
-		MessageBox(NULL, L"!!! Exception in DisplayThreadProcSEH\nPlease, restart FAR", L"PictureView2", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND|MB_SYSTEMMODAL);
+		MessageBox(NULL, L"!!! Exception in DisplayThreadProcSEH\nPlease, restart FAR", L"PicView3", MB_OK|MB_ICONSTOP|MB_SETFOREGROUND|MB_SYSTEMMODAL);
 	}
 
 	// Флаг того, что нить нормально завершилась

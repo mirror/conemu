@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DecoderHandle.h"
 #include "Image.h"
 #include "PVDModuleBase.h"
+#include "PVDManager.h"
 
 LPCSTR szDecoderHandle = "CDecoderHandle";
 
@@ -67,7 +68,7 @@ void CDecoderHandle::MoveTo(CDecoderHandle *apDst)
 	}
 	if (apDst == this)
 	{
-		this->Release(szFromConstructor); // удалить вторую ссылку
+		//-- this->Release(szPVDManager); // удалить вторую ссылку
 		return; // больше ничего делать не нужно
 	}
 		
@@ -114,17 +115,16 @@ void CDecoderHandle::Assign(CModuleInfo *apDecoder, LPVOID apFileContext, pvdInf
 
 void CDecoderHandle::Close()
 {
-	// Хорошо бы проверять, что это выполняется в нити декодера!
-	if (gnDecoderThreadId && GetCurrentThreadId() != gnDecoderThreadId)
-	{
-		_ASSERTE(GetCurrentThreadId() == gnDecoderThreadId);
-		RequestTerminate();
-		return;
-	}
-	
-	
 	if (mb_FileOpened)
 	{
+		// Выполнять в потоке декодера!
+		if (gnDecoderThreadId && GetCurrentThreadId() != gnDecoderThreadId)
+		{
+			_ASSERTE(GetCurrentThreadId() == gnDecoderThreadId);
+			RequestTerminate();
+			return;
+		}
+
 		LPVOID pContext = mp_FileContext; mp_FileContext = NULL;
 		mb_FileOpened = false;
 		
@@ -140,7 +140,9 @@ void CDecoderHandle::Close()
 			mp_DecoderModule->Release(szDecoderHandle);
 			mp_DecoderModule = NULL;
 			
-		} else {
+		}
+		else
+		{
 			_ASSERTE(mp_DecoderModule && mp_DecoderModule->pPlugin);
 		}
 	}
@@ -175,4 +177,13 @@ bool CDecoderHandle::IsReady()
 {
 	if (!this) return false;
 	return mb_FileOpened;
+}
+
+void CDecoderHandle::RequestRelease()
+{
+	if ((RefCount() <= 1) && mp_Image)
+	{
+		mp_Image->DecoderHandleReleased(this);
+		SafeRelease(mp_Image,szDecoderHandle);
+	}
 }

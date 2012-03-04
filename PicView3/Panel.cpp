@@ -137,20 +137,25 @@ CPicViewPanel::~CPicViewPanel()
 	FreeAllItems();
 }
 
-void CPicViewPanel::ShowError(const wchar_t* pszMsg)
+void CPicViewPanel::ShowError(const wchar_t* pszMsg, const wchar_t* pszMsg2, bool bSysError)
 {
 	_ASSERTE(pszMsg!=NULL);
 	if (!pszMsg) pszMsg = L"";
 	
 	if (GetCurrentThreadId() == gnMainThreadId)
 	{
-		const wchar_t* szLines[3];
-		szLines[0] = g_Plugin.pszPluginTitle;
-		szLines[1] = pszMsg;
-		szLines[2] = L"Source: CPicViewPanel";
-		g_StartupInfo.Message(PluginNumberMsg, FMSG_WARNING|FMSG_MB_OK,
-			NULL, szLines, 3, 0);
-	} else {
+		int nLines = 0;
+		const wchar_t* szLines[4];
+		szLines[nLines++] = g_Plugin.pszPluginTitle;
+		szLines[nLines++] = pszMsg;
+		if (pszMsg2)
+			szLines[nLines++] = pszMsg2;
+		szLines[nLines++] = L"Source: CPicViewPanel";
+		g_StartupInfo.Message(PluginNumberMsg, FMSG_WARNING|FMSG_MB_OK|(bSysError?FMSG_ERRORTYPE:0),
+			NULL, szLines, nLines, 0);
+	}
+	else
+	{
 		MessageBox(NULL, pszMsg, g_Plugin.pszPluginTitle, MB_SETFOREGROUND|MB_SYSTEMMODAL|MB_OK|MB_ICONSTOP);
 	}
 }
@@ -242,14 +247,14 @@ bool CPicViewPanel::Initialize(int OpenFrom, LPCWSTR asFile)
 		m_Panel.StructSize = sizeof(m_Panel);
 		#endif
 
-		if (!g_StartupInfo.PanelControl(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, 0, (DLG_LPARAM)&m_Panel))
+		if (!g_StartupInfo.PanelControl(INVALID_HANDLE_VALUE, FCTL_GETPANELINFO, 0, (FAR_PARAM)&m_Panel))
 		{
 			ShowError(L"FCTL_GETPANELINFO failed");
 			return false;
 		}
 
 		mb_PluginMode = IsPluginPanel(m_Panel);
-		mb_RealFilesMode = IsPluginPanel(m_Panel) || IsRealFileNames(m_Panel);
+		mb_RealFilesMode = !IsPluginPanel(m_Panel) || IsRealFileNames(m_Panel);
 		iCurrent = m_Panel.CurrentItem; // сразу запомнить
 		
 		if (m_Panel.ItemsNumber > 0)
@@ -509,7 +514,7 @@ bool CPicViewPanel::Initialize(int OpenFrom, LPCWSTR asFile)
 		if (!InitExtractMacro())
 		{
 			// Ошибка в макросе. Уже показана.
-			return false;
+			//return false;
 		}
 		// Если не удалось загрузить текст макроса (ms_ExtractMacroText == NULL)
 		// блокируем возможность листания - это ниже, в RescanSupported
@@ -920,7 +925,7 @@ bool CPicViewPanel::MarkUnmarkFile(enum CPicViewPanel::MarkAction action)
 		TODO("Это наверное не здесь нужно выполнять, а там, откуда фукнция вызывается?");
 		if (g_Plugin.hSynchroDone)
 			SetEvent(g_Plugin.hSynchroDone);
-		g_Plugin.FlagsWork &= ~(FW_MARK_FILE | FW_UNMARK_FILE);
+		g_Plugin.FlagsWork &= ~(FW_MARK_FILE | FW_UNMARK_FILE | FW_TOGGLEMARK_FILE);
 		return true;
 		
 	}
@@ -1213,7 +1218,9 @@ void CPicViewPanel::RescanSupported()
 			// Этот элемент может быть удастся открыть (подошло расширение, или это точка входа)
 			mpvi_Items[i].nDisplayItemIndex = ++mn_ReadyItemsCount;
 			_ASSERTE(mpvi_Items[i].bPicDisabled == FALSE);
-		} else {
+		}
+		else
+		{
 			_ASSERTE(mpvi_Items[i].bPicDisabled == TRUE);
 			mpvi_Items[i].bPicDisabled = TRUE;
 		}
@@ -1518,17 +1525,16 @@ bool CPicViewPanel::StartItemExtraction()
 		return false;
 	}
 
-	wchar_t sIndex[32]; wsprintf(sIndex, L"%u", mn_LoadItemFromPlugin+1); // 1-based!
-	SetEnvironmentVariable(L"PicViewAction", L"RETRIEVE");
-	SetEnvironmentVariable(L"PicViewArgument", sIndex);
-
-
 	if (!ms_ExtractMacroText || !*ms_ExtractMacroText)
 	{
 		_ASSERTE(ms_ExtractMacroText && *ms_ExtractMacroText);
 		mn_LoadItemFromPlugin = -1;
 		return false;
 	}
+
+	wchar_t sIndex[32]; wsprintf(sIndex, L"%u", mn_LoadItemFromPlugin+1); // 1-based!
+	SetEnvironmentVariable(L"PicViewAction", L"RETRIEVE");
+	SetEnvironmentVariable(L"PicViewArgument", sIndex);
 
 	// Сложный макрос по позиционированию на файл и открытию его во вьювере
 	// Макрос хранится в файле "Extract.macro" в каталоге плагина
@@ -1847,9 +1853,10 @@ void CPicViewPanel::SetItemDisabled(int aiRawIndex)
 	}
 }
 
+// Проверить валидность макроса
 bool CPicViewPanel::InitExtractMacro()
 {
-	bool lbRc = true; // false возвращает ТОЛЬКО при ошибках в макросе!
+	bool lbRc = false;
 	
 	SafeFree(ms_ExtractMacroText);
 	//ms_ExtractMacroText
@@ -1860,7 +1867,11 @@ bool CPicViewPanel::InitExtractMacro()
 	if (pszSlash) pszSlash++; else pszSlash = pszMacroFile;
 	lstrcpy(pszSlash, L"Extract.macro");
 	HANDLE hFile = CreateFile(pszMacroFile, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-	if (hFile != INVALID_HANDLE_VALUE)
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		ShowError(GetMsg(MIExtractMacroNotFound), pszMacroFile, true);
+	}
+	else
 	{
 		DWORD nDataSize = GetFileSize(hFile, NULL);
 		if (nDataSize && nDataSize != INVALID_FILE_SIZE)
@@ -1875,16 +1886,19 @@ bool CPicViewPanel::InitExtractMacro()
 					memmove(ms_ExtractMacroText, ptrData+2, nDataSize);
 					
 					// Можно сразу проверить текст макроса
-					if (!CheckFarMacroText(ms_ExtractMacroText))
+					lbRc = CheckFarMacroText(ms_ExtractMacroText);
+					if (!lbRc)
 					{
 						SafeFree(ms_ExtractMacroText);
-						lbRc = false;
 					}
 				}
 			}
 			SafeFree(ptrData);
 		}
 		CloseHandle(hFile);
+
+		if (!lbRc)
+			ShowError(GetMsg(MIExtractMacroInvalid), pszMacroFile);
 	}
 	
 	return lbRc;
