@@ -43,9 +43,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#undef USE_MINIDUMP
 	//#define FORCE_TEXT_COMMIT
 	#undef FORCE_TEXT_COMMIT
+	#define SHOWLOADLIBRARY
 #else
 	#undef USE_MINIDUMP
 	#undef FORCE_TEXT_COMMIT
+	#undef SHOWLOADLIBRARY
 #endif
 
 #ifdef USE_MINIDUMP
@@ -669,6 +671,7 @@ struct WrapPluginInfo
 
 void dbgLoadLibrary(LPCWSTR asFormat, LPCWSTR asModule)
 {
+#ifdef SHOWLOADLIBRARY
 	if (!asFormat)
 	{
 		_ASSERTE(asFormat!=NULL);
@@ -687,10 +690,12 @@ void dbgLoadLibrary(LPCWSTR asFormat, LPCWSTR asModule)
 		OutputDebugString(pszOut);
 		free(pszOut);
 	}
+#endif
 }
 
 void dbgFreeLibrary(LPCWSTR asFrom, HMODULE hLib, LPCWSTR asModule)
 {
+#ifdef SHOWLOADLIBRARY
 	LPCWSTR pszFormat = 
 		#ifdef _WIN64
 			L"Far3Wrap.FreeLibrary.%s(x%08X%08X, %s)\n"
@@ -711,6 +716,7 @@ void dbgFreeLibrary(LPCWSTR asFrom, HMODULE hLib, LPCWSTR asModule)
 		OutputDebugString(pszOut);
 		free(pszOut);
 	}
+#endif
 }
 
 std::map<DWORD,WrapPluginInfo*> *gpMapSysID = NULL;
