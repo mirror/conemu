@@ -5823,8 +5823,19 @@ int WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 		}
 		break;
 	case Far2::VCTL_SELECT:
-		ASSERTSTRUCT(ViewerSelect);
-		nRc = psi3.ViewerControl(-1, VCTL_SELECT, 0, (void*)Param);
+		{
+			//ASSERTSTRUCT(ViewerSelect);
+			ViewerSelect vs3 = {};
+			_ASSERTE(sizeof(vs3)==16 && sizeof(vs3.BlockStartPos)==8 && sizeof(vs3.BlockLen)==4);
+			if (Param)
+			{
+				Far2::ViewerSelect* pvs2 = (Far2::ViewerSelect*)Param;
+				vs3.BlockStartPos = pvs2->BlockStartPos;
+				vs3.BlockLen = pvs2->BlockLen;
+				Param = &vs3;
+			}
+			nRc = psi3.ViewerControl(-1, VCTL_SELECT, 0, (void*)Param);
+		}
 		break;
 	case Far2::VCTL_SETMODE:
 		{
@@ -6781,7 +6792,7 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 			// то в p3->Handle уже готовый хэндл. А вот после AnalyseW,
 			// плагин еще нужно открыть
 			_ASSERTE(h || AnalyseW);
-			if ((h == NULL) && AnalyseW && OpenPluginW)
+			if ((h == NULL || h == (HANDLE)TRUE) && AnalyseW && OpenPluginW)
 			{
 				Far2::AnalyseData fad2 = {sizeof(fad2), p3->Info->FileName, (const unsigned char *)p3->Info->Buffer, p3->Info->BufferSize, OpMode_3_2(p3->Info->OpMode)};
 				h = OpenPluginW(Far2::OPEN_ANALYSE, (INT_PTR)&fad2);
@@ -6901,7 +6912,7 @@ HANDLE    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 		if (!lb2)
 			return INVALID_HANDLE_VALUE; // Плагин отказался
 		else
-			return NULL; // В "OpenW" плагин нужно будет "открыть"
+			return (HANDLE)TRUE; // В "OpenW" плагин нужно будет "открыть"
 		#else
 		return AnalyseW(&fad2);
 		#endif
