@@ -7030,8 +7030,19 @@ void    WrapPluginInfo::CloseAnalyseW3(const CloseAnalyseInfo *Info)
 	LOG_CMD(L"CloseAnalyseW",0,0,0);
 	if (ClosePluginW && Info && (Info->StructSize >= sizeof(*Info)))
 	{
-		if (Info->Handle && (Info->Handle != INVALID_HANDLE_VALUE) && (((INT_PTR)Info->Handle) != -2))
-			ClosePluginW(Info->Handle);
+		#if MVV_3>=2462
+		_ASSERTE((Info->Handle == NULL || Info->Handle == (HANDLE)TRUE) || (AnalyseW==NULL));
+		// Если в Far2 плагине есть экспорт AnalyseW, то хэндл панели не создавался!
+		if ((Info->Handle == NULL || Info->Handle == (HANDLE)TRUE) && AnalyseW)
+		{
+			return;
+		}
+		else
+		#endif
+		{
+			if (Info->Handle && (Info->Handle != INVALID_HANDLE_VALUE) && (((INT_PTR)Info->Handle) != -2))
+				ClosePluginW(Info->Handle);
+		}
 	}
 	if (mp_Analyze)
 	{
