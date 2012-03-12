@@ -18,6 +18,9 @@ FarPol.lng Polish "Polish (Polski)"
 #id:6 language file name, language name, language description
 FarSpa.lng Spanish "Spanish (Español)"
 
+#enum name
+enum:LNGID:int
+
 #head of the hpp file
 #hhead:
 #hhead:
@@ -11434,13 +11437,13 @@ MMenuSortUseCaseSensitive
 "Usar orden sensible a min/mayúsc."
 
 MMaskGroupBottom
-"Редактирование: Ins, Del, F4, Ctrl-R"
-"Edit: Ins, Del, F4, Ctrl-R"
-"Edit: Ins, Del, F4, Ctrl-R"
-"Tasten: Einf, Entf, F4, StrgR"
-"Szerk.: Ins, Del, F4, Ctrl-R"
-"Edycja: Ins, Del, F4, Ctrl-R"
-"Editar: Ins, Del, F4, Ctrl-R"
+"Редактирование: Ins, Del, F4, F7, Ctrl-R"
+"Edit: Ins, Del, F4, F7, Ctrl-R"
+"Edit: Ins, Del, F4, F7, Ctrl-R"
+"Tasten: Einf, Entf, F4, F7, StrgR"
+"Szerk.: Ins, Del, F4, F7, Ctrl-R"
+"Edycja: Ins, Del, F4, F7, Ctrl-R"
+"Editar: Ins, Del, F4, F7, Ctrl-R"
 
 MMaskGroupName
 "&Имя:"
@@ -11477,6 +11480,24 @@ upd:"Do you wish to restore default mask sets?"
 upd:"Do you wish to restore default mask sets?"
 upd:"Do you wish to restore default mask sets?"
 upd:"Do you wish to restore default mask sets?"
+
+MMaskGroupFindMask
+"&Маска:"
+"&Mask:"
+"&Maska"
+"&Maske:"
+"&Maszk:"
+"&Maska:"
+"&Máscara:"
+
+MMaskGroupTotal
+"Всего: %1"
+"Total: %1"
+"Celkem: %1"
+"Gesamt: %1"
+"Összesen: %1"
+"Razem: %1"
+"Total: %1"
 
 MChangeDriveTitle
 l:
@@ -20247,15 +20268,77 @@ upd:"Files"
 upd:"Files"
 upd:"Files"
 
-MObjectLockedByProcesses
-"Объект заблокирован следующими процессами:"
-"Object is locked by following processes:"
-upd:"Object is locked by following processes:"
-upd:"Object is locked by following processes:"
-upd:"Object is locked by following processes:"
-upd:"Object is locked by following processes:"
-upd:"Object is locked by following processes:"
+MObjectLockedReason
+"Объект %1 в:"
+"Object is being %1 in:"
+upd:"Object is being %1 in:"
+upd:"Object is being %1 in:"
+upd:"Object is being %1 in:"
+upd:"Object is being %1 in:"
+upd:"Object is being %1 in:"
 
+MObjectLockedReasonPlayed
+"воспроизводится"
+"played"
+upd:"played"
+upd:"played"
+upd:"played"
+upd:"played"
+upd:"played"
+
+MObjectLockedReasonEdited
+"редактируется"
+"edited"
+upd:"edited"
+upd:"edited"
+upd:"edited"
+upd:"edited"
+upd:"edited"
+
+MObjectLockedReasonOpened
+"открыт"
+"opened"
+upd:"opened"
+upd:"opened"
+upd:"opened"
+upd:"opened"
+upd:"opened"
+
+MObjectLockedSwitchTo
+"Переключиться"
+"Switch to:"
+upd:"Switch to"
+upd:"Switch to"
+upd:"Switch to"
+upd:"Switch to"
+upd:"Switch to"
+
+MObjectLockedClose
+"Закрыть файл"
+"Close file"
+upd:"Close file"
+upd:"Close file"
+upd:"Close file"
+upd:"Close file"
+upd:"Close file"
+
+MProblemDb
+"Проблемы с БД настроек"
+"Problem configuration DB"
+upd:"Problem configuration DB"
+upd:"Problem configuration DB"
+upd:"Problem configuration DB"
+upd:"Problem configuration DB"
+upd:"Problem configuration DB"
+
+MShowConfigFolders
+"Показать каталоги настроек"
+"Show configuration folders"
+upd:"Show configuration folders"
+upd:"Show configuration folders"
+upd:"Show configuration folders"
+upd:"Show configuration folders"
+upd:"Show configuration folders"
 
 #Must be the last
 MNewFileName

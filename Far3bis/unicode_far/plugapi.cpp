@@ -353,6 +353,7 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 			|| Command == ACTL_GETDESCSETTINGS
 			|| Command == ACTL_GETFARRECT
 			|| Command == ACTL_SETPROGRESSSTATE || Command == ACTL_SETPROGRESSVALUE
+			|| Command == ACTL_SYNCHRO
 			)
 		{
 			lbSafe = TRUE;
@@ -2011,15 +2012,23 @@ INT_PTR WINAPI apiEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, i
 	}
 	else
 	{
-		int idx=0;
-		Frame *frame;
-		while((frame=FrameManager->Manager::operator[](idx++)) != nullptr)
+		typedef Frame* (Manager::*ItemFn)(size_t index)const;
+		typedef int (Manager::*CountFn)(void)const;
+		ItemFn getitem[]={&Manager::operator[],&Manager::GetModalFrame};
+		CountFn getcount[]={&Manager::GetFrameCount,&Manager::GetModalStackCount};
+		for(size_t ii=0;ii<ARRAYSIZE(getitem);++ii)
 		{
-			if (frame->GetType() == MODALTYPE_EDITOR)
+			Frame *frame;
+			int count=(FrameManager->*getcount[ii])();
+			for(int jj=0;jj<count;++jj)
 			{
-				if (((FileEditor*)frame)->GetId() == EditorID)
+				frame=(FrameManager->*getitem[ii])(jj);
+				if (frame->GetType() == MODALTYPE_EDITOR)
 				{
-					return ((FileEditor*)frame)->EditorControl(Command,(void *)Param2);
+					if (((FileEditor*)frame)->GetId() == EditorID)
+					{
+						return ((FileEditor*)frame)->EditorControl(Command,(void *)Param2);
+					}
 				}
 			}
 		}
@@ -2383,9 +2392,10 @@ INT_PTR WINAPI apiMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 			//Param1=size of buffer, Param2 - MacroParseResult*
 			case MCTL_GETLASTERROR:
 			{
-				DWORD ErrCode;
-				COORD ErrPos;
+				DWORD ErrCode=MPEC_SUCCESS;
+				COORD ErrPos={};
 				string ErrSrc;
+
 				Macro.GetMacroParseError(&ErrCode,&ErrPos,&ErrSrc);
 
 				int Size = ALIGN(sizeof(MacroParseResult));
@@ -2400,7 +2410,7 @@ INT_PTR WINAPI apiMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 					Result->ErrCode = ErrCode;
 					Result->ErrPos = ErrPos;
 					Result->ErrSrc = (const wchar_t *)((char*)Param2+stringOffset);
- 					wmemcpy((wchar_t*)Result->ErrSrc,ErrSrc,ErrSrc.GetLength()+1);
+					wmemcpy((wchar_t*)Result->ErrSrc,ErrSrc,ErrSrc.GetLength()+1);
 				}
 
 				return Size;
@@ -2482,7 +2492,7 @@ INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 				#if 1
 				//Maximus: Проблема bis-сборки. Размер структуры Info->PInfo ожидается большего размера
 				else if (Info
-					&& Info->StructSize == (sizeof(*Info) - sizeof(Info->PInfo.MacroFunctions))
+					&& Info->StructSize == (sizeof(*Info) - (((((char*)&Info->GInfo) - (char*)&Info->PInfo)) - ((((char*)&Info->PInfo.MacroFunctions) - (char*)&Info->PInfo))))
 					&& static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation))
 				{
 					Plugin* plugin = reinterpret_cast<Plugin*>(Handle);
@@ -2807,40 +2817,55 @@ size_t WINAPI apiMkTemp(wchar_t *Dest, size_t DestSize, const wchar_t *Prefix)
 
 size_t WINAPI apiProcessName(const wchar_t *param1, wchar_t *param2, size_t size, PROCESSNAME_FLAGS flags)
 {
-	bool skippath = (flags&PN_SKIPPATH)!=0;
+	//             0xFFFF - length
+	//           0xFF0000 - mode
+	// 0xFFFFFFFFFF000000 - flags
 
-	flags &= ~PN_SKIPPATH;
+	PROCESSNAME_FLAGS Flags = flags&0xFFFFFFFFFF000000;
+	PROCESSNAME_FLAGS Mode = flags&0xFF0000;
+	int Length = flags&0xFFFF;
 
-	if (flags == PN_CMPNAME)
-		return CmpName(param1, param2, skippath);
-
-	if (flags == PN_CMPNAMELIST)
+	switch(Mode)
 	{
-		int Found=FALSE;
-		string strFileMask;
-		const wchar_t *MaskPtr;
-		MaskPtr=param1;
-
-		while ((MaskPtr=GetCommaWord(MaskPtr,strFileMask)))
+	case PN_CMPNAME:
 		{
-			if (CmpName(strFileMask,param2,skippath))
-			{
-				Found=TRUE;
-				break;
-			}
+			return CmpName(param1, param2, (Flags&PN_SKIPPATH)!=0);
 		}
 
-		return Found;
-	}
+	case PN_CMPNAMELIST:
+	case PN_CHECKMASK:
+		{
+			static CFileMask Masks;
+			static string PrevMask;
+			static bool ValidMask = false;
+			if(PrevMask != param1)
+			{
+				ValidMask = Masks.Set(param1, FMF_SILENT);
+				PrevMask = param1;
+			}
+			BOOL Result = FALSE;
+			if(ValidMask)
+			{
+				Result = (Mode == PN_CHECKMASK)? TRUE : Masks.Compare((Flags&PN_SKIPPATH)? PointToName(param2) : param2);
+			}
+			else
+			{
+				if(Flags&PN_SHOWERRORMESSAGE)
+				{
+					Masks.ErrorMessage();
+				}
+			}
+			return Result;
+		}
 
-	if (flags&PN_GENERATENAME)
-	{
-		string strResult = param2;
-		int nResult = ConvertWildcards(param1, strResult, (flags&0xFFFF)|(skippath?PN_SKIPPATH:0));
-		xwcsncpy(param2, strResult, size);
-		return nResult;
+	case PN_GENERATENAME:
+		{
+			string strResult = param2;
+			int nResult = ConvertWildcards(param1, strResult, Length);
+			xwcsncpy(param2, strResult, size);
+			return nResult;
+		}
 	}
-
 	return FALSE;
 }
 

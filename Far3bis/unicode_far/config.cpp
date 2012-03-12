@@ -340,7 +340,7 @@ void FillMasksMenu(VMenu& MasksMenu, int SelPos = 0)
 		Item.UserDataSize = (Name.GetLength()+1)*sizeof(wchar_t);
 		MasksMenu.AddItem(&Item);
 	}
-	MasksMenu.SetSelectPos(0, SelPos);
+	MasksMenu.SetSelectPos(SelPos, 0);
 }
 
 void MaskGroupsSettings()
@@ -372,6 +372,8 @@ void MaskGroupsSettings()
 		case KEY_NUMPAD0:
 		case KEY_INS:
 			Item = nullptr;
+		case KEY_ENTER:
+		case KEY_NUMENTER:
 		case KEY_F4:
 			{
 				string Name(Item), Value;
@@ -410,6 +412,51 @@ void MaskGroupsSettings()
 				}
 			}
 			break;
+
+		case KEY_F7:
+			{
+				string Value;
+				DialogBuilder Builder(MFileFilterTitle, nullptr);
+				Builder.AddText(MMaskGroupFindMask);
+				Builder.AddEditField(&Value, 60, L"MaskGroupsFindMask");
+				Builder.AddOKCancel();
+				if(Builder.ShowDialog())
+				{
+					for (int i=0; i < MasksMenu.GetItemCount(); ++i)
+					{
+						string CurrentMasks;
+						GeneralCfg->GetValue(L"Masks", static_cast<const wchar_t*>(MasksMenu.GetUserData(nullptr, 0, i)), CurrentMasks, L"");
+						CFileMask Masks;
+						Masks.Set(CurrentMasks, 0);
+						if(!Masks.Compare(Value))
+						{
+							MasksMenu.UpdateItemFlags(i, MasksMenu.GetItemPtr(i)->Flags|MIF_HIDDEN);
+						}
+					}
+					MasksMenu.SetPosition(-1, -1, -1, -1);
+					MasksMenu.SetTitle(Value);
+					MasksMenu.SetBottomTitle(LangString(MMaskGroupTotal) << MasksMenu.GetShowItemCount());
+					MasksMenu.Show();
+					while (!MasksMenu.Done())
+					{
+						DWORD Key=MasksMenu.ReadInput();
+						if(Key == KEY_ESC || Key == KEY_F10 || Key == KEY_ENTER || Key == KEY_NUMENTER)
+							break;
+						else
+							MasksMenu.ProcessKey(Key);
+					}
+					for (int i = 0; i < MasksMenu.GetItemCount(); ++i)
+					{
+						MasksMenu.UpdateItemFlags(i, MasksMenu.GetItemPtr(i)->Flags&~MIF_HIDDEN);
+					}
+					MasksMenu.SetPosition(-1, -1, -1, -1);
+					MasksMenu.SetTitle(MSG(MMenuMaskGroups));
+					MasksMenu.SetBottomTitle(MSG(MMaskGroupBottom));
+					MasksMenu.Show();
+				}
+			}
+			break;
+
 
 		default:
 			MasksMenu.ProcessInput();
@@ -822,7 +869,7 @@ static struct FARConfig
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"CreateUppercaseFolders",&Opt.CreateUppercaseFolders,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"DriveMenuMode",&Opt.ChangeDriveMode,DRIVE_SHOW_TYPE|DRIVE_SHOW_PLUGINS|DRIVE_SHOW_SIZE_FLOAT|DRIVE_SHOW_CDROM, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"DriveDisconnetMode",&Opt.ChangeDriveDisconnetMode,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"DriveDisconnectMode",&Opt.ChangeDriveDisconnectMode,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"AutoUpdateRemoteDrive",&Opt.AutoUpdateRemoteDrive,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FileSearchMode",&Opt.FindOpt.FileSearchMode,FINDAREA_FROM_CURRENT, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"CollectFiles",&Opt.FindOpt.CollectFiles, 1, 0},
@@ -872,11 +919,13 @@ static struct FARConfig
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemNowell,L"MoveRO",&Opt.Nowell.MoveRO,1, 0},
 
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"RestoreCP",&Opt.RestoreCPAfterExecute,1, 0},
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"UseAppPath",&Opt.ExecuteUseAppPath,1, 0},
-	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemExecutor,L"BatchType",&Opt.strExecuteBatchType,0,constBatchExt},
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"FullTitle",&Opt.ExecuteFullTitle,0, 0},
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"SilentExternal",&Opt.ExecuteSilentExternal,0, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"RestoreCP",&Opt.Exec.RestoreCPAfterExecute,1, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"UseAppPath",&Opt.Exec.ExecuteUseAppPath,1, 0},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemExecutor,L"BatchType",&Opt.Exec.strExecuteBatchType,0,constBatchExt},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"FullTitle",&Opt.Exec.ExecuteFullTitle,0, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"SilentExternal",&Opt.Exec.ExecuteSilentExternal,0, 0},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemExecutor,L"ExcludeCmds",&Opt.Exec.strExcludeCmds,0,L""},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemExecutor,L"~",&Opt.Exec.strHomeDir,0,L""},
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"MinTreeCount",&Opt.Tree.MinTreeCount, 4, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"TreeFileAttr",&Opt.Tree.TreeFileAttr, FILE_ATTRIBUTE_HIDDEN, 0},
@@ -979,7 +1028,6 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyKeyMacros,L"MacroReuseRules",&Opt.Macro.MacroReuseRules,0, 0},
 	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyKeyMacros,L"DateFormat",&Opt.Macro.strDateFormat, 0, L"%a %b %d %H:%M:%S %Z %Y"},
 	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyKeyMacros,L"CONVFMT",&Opt.Macro.strMacroCONVFMT, 0, L"%.6g"},
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyKeyMacros,L"CallPluginRules",&Opt.Macro.CallPluginRules,0, 0},
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPolicies,L"ShowHiddenDrives",&Opt.Policies.ShowHiddenDrives,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPolicies,L"DisabledOptions",&Opt.Policies.DisabledOptions,0, 0},
@@ -1167,8 +1215,11 @@ void ReadConfig()
 	Opt.Policies.DisabledOptions|=OptPolicies_DisabledOptions;
 	*/
 
-	if (Opt.strExecuteBatchType.IsEmpty()) // предохраняемся
-		Opt.strExecuteBatchType=constBatchExt;
+	if (Opt.Exec.strExecuteBatchType.IsEmpty()) // предохраняемся
+		Opt.Exec.strExecuteBatchType=constBatchExt;
+
+	if (Opt.Exec.strHomeDir.IsEmpty())
+		Opt.Exec.strHomeDir = g_strFarPath;
 
 	// Инициализация XLat для русской раскладки qwerty<->йцукен
 	if (Opt.XLat.Table[0].IsEmpty())

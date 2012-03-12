@@ -2758,6 +2758,8 @@ void DoPrepareFileList(HANDLE hDlg)
 {
 	string strRoot;
 	CtrlObject->CmdLine->GetCurDir(strRoot);
+	if (strRoot.Contains(L';'))
+		InsertQuote(strRoot);
 
 	UserDefinedList List(L';',L';',ULF_UNIQUE);
 

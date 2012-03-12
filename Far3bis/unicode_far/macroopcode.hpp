@@ -222,15 +222,12 @@ enum MACRO_OP_CODE
 	MCODE_F_KEYBAR_SHOW,              // N=KeyBar.Show([N])
 	MCODE_F_HISTIORY_DISABLE,         // N=History.Disable([State])
 	MCODE_F_FMATCH,                   // N=FMatch(S,Mask)
-	MCODE_F_PLUGIN_LOAD,              // N=Plugin.Load(DllPath[,ForceLoad])
-	MCODE_F_PLUGIN_UNLOAD,            // N=Plugin.UnLoad(DllPath)
-	#if 1
-	//Maximus: plugin.call è ò.ï.
 	MCODE_F_PLUGIN_CALL,              // N=Plugin.Call(Guid,MenuGuid)
 	MCODE_F_PLUGIN_CONFIG,            // N=Plugin.Config(Guid[,MenuGuid])
-	MCODE_F_PLUGIN_PREFIX,            // N=Plugin.Prefix(Guid,Command)
 	MCODE_F_PLUGIN_INT,               // N=Plugin.Int(Guid,Item)
-	#endif
+	MCODE_F_PLUGIN_LOAD,              // N=Plugin.Load(DllPath[,ForceLoad])
+	MCODE_F_PLUGIN_PREFIX,            // N=Plugin.Prefix(Guid,Command)
+	MCODE_F_PLUGIN_UNLOAD,            // N=Plugin.UnLoad(DllPath)
 	MCODE_F_MENU_FILTER,              // N=Menu.Filter(Action[,Mode])
 	MCODE_F_MENU_FILTERSTR,           // S=Menu.FilterStr([Action[,S]])
 	MCODE_F_DLG_SETFOCUS,             // N=Dlg.SetFocus([ID])

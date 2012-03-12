@@ -71,6 +71,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "constitle.hpp"
 #include "wakeful.hpp"
 #include "DlgGuid.hpp"
+#include "stddlg.hpp"
 
 enum enumOpenEditor
 {
@@ -611,7 +612,7 @@ void FileEditor::Init(
 	if (Flags.Check(FFILEEDIT_LOCKED))
 		m_editor->Flags.Set(FEDITOR_LOCKMODE);
 
-	if (!LoadFile(strFullFileName,UserBreak))
+	while (!LoadFile(strFullFileName,UserBreak))
 	{
 		if (BlankFileName)
 		{
@@ -624,8 +625,10 @@ void FileEditor::Init(
 			if (UserBreak!=1)
 			{
 				SetLastError(SysErrorCode);
-				Message(MSG_WARNING|MSG_ERRORTYPE,1,MSG(MEditTitle),MSG(MEditCannotOpen),strFileName,MSG(MOk));
-				ExitCode=XC_OPEN_ERROR;
+				if(!OperationFailed(strFullFileName, MEditTitle, MSG(MEditCannotOpen), false))
+					continue;
+				else
+					ExitCode=XC_OPEN_ERROR;
 			}
 			else
 			{
@@ -647,6 +650,8 @@ void FileEditor::Init(
 			m_codepage=Opt.EdOpt.AnsiCodePageForNewFile?GetACP():GetOEMCP();
 
 		m_editor->SetCodePage(m_codepage);
+		Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
+		break;
 	}
 
 	CtrlObject->Plugins->CurEditor=this;//&FEdit;
@@ -1096,8 +1101,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 					{
 						SetLastError(SysErrorCode);
 
-						if (Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MEditTitle),MSG(MEditCannotSave),
-						            strFileName,MSG(MRetry),MSG(MCancel)))
+						if (OperationFailed(strFullFileName, MEditTitle, MSG(MEditCannotSave), false))
 						{
 							Done=TRUE;
 							break;
@@ -1420,8 +1424,7 @@ int FileEditor::ProcessQuitKey(int FirstSave,BOOL NeedQuestion)
 
 		SetLastError(SysErrorCode);
 
-		if (Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MEditTitle),MSG(MEditCannotSave),
-		            strFileName,MSG(MRetry),MSG(MCancel)))
+		if (OperationFailed(strFullFileName, MEditTitle, MSG(MEditCannotSave), false))
 			break;
 
 		FirstSave=0;
@@ -2226,9 +2229,6 @@ BOOL FileEditor::SetFileName(const string& NewFileName)
 
 	if (StrCmp(strFileName,MSG(MNewFileName)))
 	{
-		if (wcspbrk(strFileName, ReservedFilenameSymbols))
-			return FALSE;
-
 		ConvertNameToFull(strFileName, strFullFileName);
 		string strFilePath=strFullFileName;
 
@@ -2558,29 +2558,29 @@ int FileEditor::EditorControl(int Command, void *Param)
 
 			return FALSE;
 		}
-		case ECTL_ADDSTACKBOOKMARK:
+		case ECTL_ADDSESSIONBOOKMARK:
 		{
-			return m_editor->AddStackBookmark();
+			return m_editor->AddSessionBookmark();
 		}
-		case ECTL_PREVSTACKBOOKMARK:
+		case ECTL_PREVSESSIONBOOKMARK:
 		{
-			return m_editor->PrevStackBookmark();
+			return m_editor->PrevSessionBookmark();
 		}
-		case ECTL_NEXTSTACKBOOKMARK:
+		case ECTL_NEXTSESSIONBOOKMARK:
 		{
-			return m_editor->NextStackBookmark();
+			return m_editor->NextSessionBookmark();
 		}
-		case ECTL_CLEARSTACKBOOKMARKS:
+		case ECTL_CLEARSESSIONBOOKMARKS:
 		{
-			return m_editor->ClearStackBookmarks();
+			return m_editor->ClearSessionBookmarks();
 		}
-		case ECTL_DELETESTACKBOOKMARK:
+		case ECTL_DELETESESSIONBOOKMARK:
 		{
-			return m_editor->DeleteStackBookmark(m_editor->PointerToStackBookmark((int)(INT_PTR)Param));
+			return m_editor->DeleteSessionBookmark(m_editor->PointerToSessionBookmark((int)(INT_PTR)Param));
 		}
-		case ECTL_GETSTACKBOOKMARKS:
+		case ECTL_GETSESSIONBOOKMARKS:
 		{
-			return m_editor->GetStackBookmarks((EditorBookMarks *)Param);
+			return m_editor->GetSessionBookmarks((EditorBookMarks *)Param);
 		}
 		case ECTL_SETTITLE:
 		{

@@ -90,8 +90,8 @@ Editor::Editor(ScreenObject *pOwner,bool DialogUsed):
 	m_codepage(CP_AUTODETECT),
 	StartLine(-1),
 	StartChar(-1),
-	StackPos(0),
-	NewStackPos(FALSE),
+	SessionPos(0),
+	NewSessionPos(FALSE),
 	EditorID(::EditorID++),
 	HostFileEditor(nullptr),
 	SortColorLockCount(0),
@@ -149,7 +149,7 @@ void Editor::FreeAllocatedData(bool FreeUndo)
 	UndoSavePos=nullptr;
 	UndoPos=nullptr;
 	UndoSkipLevel=0;
-	ClearStackBookmarks();
+	ClearSessionBookmarks();
 	TopList=EndList=CurLine=nullptr;
 	NumLastLine = 0;
 }
@@ -562,32 +562,32 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			return (__int64)NumLastLine;
 			// работа со стековыми закладками
 		case MCODE_F_BM_ADD:
-			return AddStackBookmark();
+			return AddSessionBookmark();
 		case MCODE_F_BM_CLEAR:
-			return ClearStackBookmarks();
+			return ClearSessionBookmarks();
 		case MCODE_F_BM_NEXT:
-			return NextStackBookmark();
+			return NextSessionBookmark();
 		case MCODE_F_BM_PREV:
-			return PrevStackBookmark();
+			return PrevSessionBookmark();
 		case MCODE_F_BM_BACK:
-			return BackStackBookmark();
+			return BackSessionBookmark();
 		case MCODE_F_BM_STAT:
 		{
 			switch (iParam)
 			{
 				case 0: // BM.Stat(0) возвращает количество
-					return GetStackBookmarks(nullptr);
+					return GetSessionBookmarks(nullptr);
 				case 1: // индекс текущей закладки (0 если закладок нет)
-					return CurrentStackBookmarkIdx()+1;
+					return CurrentSessionBookmarkIdx()+1;
 			}
 			return 0;
 		}
 		case MCODE_F_BM_PUSH:             // N=BM.push() - сохранить текущую позицию в виде закладки в конце стека
-			return PushStackBookMark();
+			return PushSessionBookMark();
 		case MCODE_F_BM_POP:              // N=BM.pop() - восстановить текущую позицию из закладки в конце стека и удалить закладку
-			return PopStackBookMark();
+			return PopSessionBookMark();
 		case MCODE_F_BM_GOTO:             // N=BM.goto([n]) - переход на закладку с указанным индексом (0 --> текущую)
-			return GotoStackBookmark((int)iParam-1);
+			return GotoSessionBookmark((int)iParam-1);
 		case MCODE_F_BM_GET:                   // N=BM.Get(Idx,M) - возвращает координаты строки (M==0) или колонки (M==1) закладки с индексом (Idx=1...)
 		{
 			__int64 Ret=-1;
@@ -604,13 +604,13 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 				default: iMode=-1; break;
 			}
 
-			if (iMode >= 0 && GetStackBookmark((int)iParam-1,&ebm))
+			if (iMode >= 0 && GetSessionBookmark((int)iParam-1,&ebm))
 				Ret=(__int64)((DWORD)Val[0]+1);
 
 			return Ret;
 		}
 		case MCODE_F_BM_DEL:                   // N=BM.Del(Idx) - удаляет закладку с указанным индексом (x=1...), 0 - удаляет текущую закладку
-			return DeleteStackBookmark(PointerToStackBookmark((int)iParam-1));
+			return DeleteSessionBookmark(PointerToSessionBookmark((int)iParam-1));
 
 		case MCODE_F_EDITOR_SEL:
 		{
@@ -674,7 +674,7 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 								GoToLine(iLine);
 								CurLine->SetCurPos(CurLine->TabPosToReal(iPos));
 
-								if (!EdOpt.CursorBeyondEOL && CurLine->GetCurPos() >= CurLine->GetLength())
+								if (!EdOpt.CursorBeyondEOL && CurLine->GetCurPos() > CurLine->GetLength())
 								{
 									GoToLine(_NumLine);
 									CurLine->SetCurPos(CurLine->TabPosToReal(_CurPos));
@@ -711,7 +711,11 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 								eSel.BlockStartPos=MBlockStartX;
 								eSel.BlockWidth=CurLine->GetCurPos()-MBlockStartX;
 
-								if (eSel.BlockWidth || (Action == 2 && MBlockStart != CurLine))
+								if (!eSel.BlockWidth && MBlockStart == CurLine)
+								{
+									UnmarkBlock();
+								}
+								else
 								{
 									int bl=CalcDistance(TopList,MBlockStart,-1);
 									int el=CalcDistance(TopList,CurLine,-1);
@@ -734,10 +738,6 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 									}
 
 									Ret=EditorControl(ECTL_SELECT,&eSel);
-								}
-								else if (!eSel.BlockWidth && MBlockStart == CurLine)
-								{
-									UnmarkBlock();
 								}
 							}
 
@@ -1517,8 +1517,16 @@ int Editor::ProcessKey(int Key)
 					CurLine->GetSelection(SelStart,SelEnd);
 				else
 				{
-					SelStart=VBlockX;
-					SelEnd=SelStart+VBlockSizeX-1;
+					if (NumLine<VBlockY||NumLine>=(VBlockY+VBlockSizeY))
+					{
+						SelStart=-1;
+						SelEnd=-1;
+					}
+					else
+					{
+						SelStart=CurLine->TabPosToReal(VBlockX);
+						SelEnd=CurLine->TabPosToReal(VBlockX+VBlockSizeX);
+					}
 				}
 
 				Pasting++;
@@ -2370,7 +2378,7 @@ int Editor::ProcessKey(int Key)
 			if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
 				BeginVBlockMarking();
 
-			if (!EdOpt.CursorBeyondEOL && VBlockX>=CurLine->m_prev->GetLength())
+			if (!EdOpt.CursorBeyondEOL && VBlockX>=CurLine->m_prev->RealPosToTab(CurLine->m_prev->GetLength()))
 				return TRUE;
 
 			Pasting++;
@@ -3151,9 +3159,9 @@ void Editor::DeleteString(Edit *DelPtr, int LineNumber, int DeleteLast,int UndoL
 		if (SavePos.Line[I]!=POS_NONE && UndoLine<static_cast<int>(SavePos.Line[I]))
 			SavePos.Line[I]--;
 
-	if (StackPos)
+	if (SessionPos)
 	{
-		InternalEditorStackBookMark *sb_temp = StackPos, *sb_new;
+		InternalEditorSessionBookMark *sb_temp = SessionPos, *sb_new;
 
 		while (sb_temp->prev)
 			sb_temp=sb_temp->prev;
@@ -3167,7 +3175,7 @@ void Editor::DeleteString(Edit *DelPtr, int LineNumber, int DeleteLast,int UndoL
 			else
 			{
 				if (UndoLine == static_cast<int>(sb_temp->Line))
-					DeleteStackBookmark(sb_temp);
+					DeleteSessionBookmark(sb_temp);
 			}
 
 			sb_temp = sb_new;
@@ -3299,9 +3307,9 @@ void Editor::InsertString()
 		        (NumLine<(int)SavePos.Line[I] || (NumLine==(int)SavePos.Line[I] && !CurPos)))
 			SavePos.Line[I]++;
 
-	if (StackPos)
+	if (SessionPos)
 	{
-		InternalEditorStackBookMark *sb_temp = StackPos;
+		InternalEditorSessionBookMark *sb_temp = SessionPos;
 
 		while (sb_temp->prev)
 			sb_temp=sb_temp->prev;
@@ -6283,37 +6291,37 @@ int Editor::GotoBookmark(int Pos)
 	return FALSE;
 }
 
-int Editor::ClearStackBookmarks()
+int Editor::ClearSessionBookmarks()
 {
-	NewStackPos = FALSE;
+	NewSessionPos = FALSE;
 
-	if (StackPos)
+	if (SessionPos)
 	{
-		InternalEditorStackBookMark *sb_prev = StackPos->prev, *sb_next;
+		InternalEditorSessionBookMark *sb_prev = SessionPos->prev, *sb_next;
 
-		while (StackPos)
+		while (SessionPos)
 		{
-			sb_next = StackPos->next;
-			xf_free(StackPos);
-			StackPos = sb_next;
+			sb_next = SessionPos->next;
+			xf_free(SessionPos);
+			SessionPos = sb_next;
 		}
 
-		StackPos = sb_prev;
+		SessionPos = sb_prev;
 
-		while (StackPos)
+		while (SessionPos)
 		{
-			sb_prev = StackPos->prev;
-			xf_free(StackPos);
-			StackPos = sb_prev;
+			sb_prev = SessionPos->prev;
+			xf_free(SessionPos);
+			SessionPos = sb_prev;
 		}
 	}
 
 	return TRUE;
 }
 
-int Editor::DeleteStackBookmark(InternalEditorStackBookMark *sb_delete)
+int Editor::DeleteSessionBookmark(InternalEditorSessionBookMark *sb_delete)
 {
-	NewStackPos=FALSE;
+	NewSessionPos=FALSE;
 
 	if (sb_delete)
 	{
@@ -6323,8 +6331,8 @@ int Editor::DeleteStackBookmark(InternalEditorStackBookMark *sb_delete)
 		if (sb_delete->prev)
 			sb_delete->prev->next=sb_delete->next;
 
-		if (StackPos==sb_delete)
-			StackPos=(sb_delete->next)?sb_delete->next:sb_delete->prev;
+		if (SessionPos==sb_delete)
+			SessionPos=(sb_delete->next)?sb_delete->next:sb_delete->prev;
 
 		xf_free(sb_delete);
 		return TRUE;
@@ -6333,18 +6341,18 @@ int Editor::DeleteStackBookmark(InternalEditorStackBookMark *sb_delete)
 	return FALSE;
 }
 
-int Editor::RestoreStackBookmark()
+int Editor::RestoreSessionBookmark()
 {
-	NewStackPos=FALSE;
+	NewSessionPos=FALSE;
 
-	if (StackPos && ((int)StackPos->Line!=NumLine || (int)StackPos->Cursor!=CurLine->GetCurPos()))
+	if (SessionPos && ((int)SessionPos->Line!=NumLine || (int)SessionPos->Cursor!=CurLine->GetCurPos()))
 	{
-		GoToLine(StackPos->Line);
-		CurLine->SetCurPos(StackPos->Cursor);
-		CurLine->SetLeftPos(StackPos->LeftPos);
+		GoToLine(SessionPos->Line);
+		CurLine->SetCurPos(SessionPos->Cursor);
+		CurLine->SetLeftPos(SessionPos->LeftPos);
 		TopScreen=CurLine;
 
-		for (DWORD I=0; I<StackPos->ScreenLine && TopScreen->m_prev; I++)
+		for (DWORD I=0; I<SessionPos->ScreenLine && TopScreen->m_prev; I++)
 			TopScreen=TopScreen->m_prev;
 
 		if (!EdOpt.PersistentBlocks)
@@ -6357,43 +6365,43 @@ int Editor::RestoreStackBookmark()
 	return FALSE;
 }
 
-int Editor::AddStackBookmark(BOOL blNewPos)
+int Editor::AddSessionBookmark(BOOL blNewPos)
 {
-	InternalEditorStackBookMark *sb_old=StackPos;
+	InternalEditorSessionBookMark *sb_old=SessionPos;
 
-	if (StackPos && StackPos->next)
+	if (SessionPos && SessionPos->next)
 	{
-		StackPos=StackPos->next;
-		StackPos->prev=0;
-		ClearStackBookmarks();
-		StackPos=sb_old;
-		StackPos->next=0;
+		SessionPos=SessionPos->next;
+		SessionPos->prev=0;
+		ClearSessionBookmarks();
+		SessionPos=sb_old;
+		SessionPos->next=0;
 	}
 
-	InternalEditorStackBookMark *sb_new=(InternalEditorStackBookMark*)xf_malloc(sizeof(InternalEditorStackBookMark));
+	InternalEditorSessionBookMark *sb_new=(InternalEditorSessionBookMark*)xf_malloc(sizeof(InternalEditorSessionBookMark));
 
 	if (sb_new)
 	{
-		if (StackPos)
-			StackPos->next=sb_new;
+		if (SessionPos)
+			SessionPos->next=sb_new;
 
-		StackPos=sb_new;
-		StackPos->prev=sb_old;
-		StackPos->next=0;
-		StackPos->Line=NumLine;
-		StackPos->Cursor=CurLine->GetCurPos();
-		StackPos->LeftPos=CurLine->GetLeftPos();
-		StackPos->ScreenLine=CalcDistance(TopScreen,CurLine,-1);
-		NewStackPos=blNewPos; // We had to save current position, if we will go to previous bookmark (by default)
+		SessionPos=sb_new;
+		SessionPos->prev=sb_old;
+		SessionPos->next=0;
+		SessionPos->Line=NumLine;
+		SessionPos->Cursor=CurLine->GetCurPos();
+		SessionPos->LeftPos=CurLine->GetLeftPos();
+		SessionPos->ScreenLine=CalcDistance(TopScreen,CurLine,-1);
+		NewSessionPos=blNewPos; // We had to save current position, if we will go to previous bookmark (by default)
 		return TRUE;
 	}
 
 	return FALSE;
 }
 
-InternalEditorStackBookMark* Editor::PointerToFirstStackBookmark(int *piCount)
+InternalEditorSessionBookMark* Editor::PointerToFirstSessionBookmark(int *piCount)
 {
-	InternalEditorStackBookMark *sb_temp=StackPos;
+	InternalEditorSessionBookMark *sb_temp=SessionPos;
 	int iCount=0;
 
 	if (sb_temp)
@@ -6408,9 +6416,9 @@ InternalEditorStackBookMark* Editor::PointerToFirstStackBookmark(int *piCount)
 	return sb_temp;
 }
 
-InternalEditorStackBookMark* Editor::PointerToLastStackBookmark(int *piCount)
+InternalEditorSessionBookMark* Editor::PointerToLastSessionBookmark(int *piCount)
 {
-	InternalEditorStackBookMark *sb_temp=StackPos;
+	InternalEditorSessionBookMark *sb_temp=SessionPos;
 	int iCount=0;
 
 	if (sb_temp)
@@ -6426,9 +6434,9 @@ InternalEditorStackBookMark* Editor::PointerToLastStackBookmark(int *piCount)
 	return sb_temp;
 }
 
-InternalEditorStackBookMark* Editor::PointerToStackBookmark(int iIdx) // Returns null_ptr if failed!
+InternalEditorSessionBookMark* Editor::PointerToSessionBookmark(int iIdx) // Returns null_ptr if failed!
 {
-	InternalEditorStackBookMark *sb_temp=StackPos;
+	InternalEditorSessionBookMark *sb_temp=SessionPos;
 
 	if (iIdx!=-1 && sb_temp) // -1 == current
 	{
@@ -6442,103 +6450,103 @@ InternalEditorStackBookMark* Editor::PointerToStackBookmark(int iIdx) // Returns
 	return sb_temp;
 }
 
-int Editor::BackStackBookmark()
+int Editor::BackSessionBookmark()
 {
-	if (StackPos)
+	if (SessionPos)
 	{
-		if (NewStackPos) // If we had to save current position ...
+		if (NewSessionPos) // If we had to save current position ...
 		{
-			NewStackPos=FALSE;
+			NewSessionPos=FALSE;
 			// ... if current bookmark is last and current_position != bookmark_position
 			// save current position as new bookmark
-			if (!StackPos->next && ((int)StackPos->Line!=NumLine || (int)StackPos->Cursor!=CurLine->GetCurPos()))
-				AddStackBookmark(FALSE);
+			if (!SessionPos->next && ((int)SessionPos->Line!=NumLine || (int)SessionPos->Cursor!=CurLine->GetCurPos()))
+				AddSessionBookmark(FALSE);
 		}
 
-		return PrevStackBookmark();
+		return PrevSessionBookmark();
 	}
 
 	return FALSE;
 }
 
-int Editor::PrevStackBookmark()
+int Editor::PrevSessionBookmark()
 {
-	if (StackPos)
+	if (SessionPos)
 	{
-		if (StackPos->prev) // If not first bookmark - go
+		if (SessionPos->prev) // If not first bookmark - go
 		{
-			StackPos=StackPos->prev;
+			SessionPos=SessionPos->prev;
 		}
 
-		return RestoreStackBookmark();
+		return RestoreSessionBookmark();
 	}
 
 	return FALSE;
 }
 
-int Editor::NextStackBookmark()
+int Editor::NextSessionBookmark()
 {
-	if (StackPos)
+	if (SessionPos)
 	{
-		if (StackPos->next) // If not last bookmark - go
+		if (SessionPos->next) // If not last bookmark - go
 		{
-			StackPos=StackPos->next;
+			SessionPos=SessionPos->next;
 		}
 
-		return RestoreStackBookmark();
+		return RestoreSessionBookmark();
 	}
 
 	return FALSE;
 }
 
-int Editor::LastStackBookmark()
+int Editor::LastSessionBookmark()
 {
-	if (StackPos)
+	if (SessionPos)
 	{
-		StackPos=PointerToLastStackBookmark();
-		return RestoreStackBookmark();
+		SessionPos=PointerToLastSessionBookmark();
+		return RestoreSessionBookmark();
 	}
 
 	return FALSE;
 }
 
-int Editor::GotoStackBookmark(int iIdx)
+int Editor::GotoSessionBookmark(int iIdx)
 {
-	if (StackPos)
+	if (SessionPos)
 	{
-		InternalEditorStackBookMark *sb_temp = PointerToStackBookmark(iIdx);
+		InternalEditorSessionBookMark *sb_temp = PointerToSessionBookmark(iIdx);
 		if (sb_temp)
 		{
-			StackPos=sb_temp;
-			return RestoreStackBookmark();
+			SessionPos=sb_temp;
+			return RestoreSessionBookmark();
 		}
 	}
 
 	return FALSE;
 }
 
-int Editor::PushStackBookMark()
+int Editor::PushSessionBookMark()
 {
-	StackPos=PointerToLastStackBookmark();
-	return AddStackBookmark(FALSE);
+	SessionPos=PointerToLastSessionBookmark();
+	return AddSessionBookmark(FALSE);
 }
 
-int Editor::PopStackBookMark()
+int Editor::PopSessionBookMark()
 {
-	return (LastStackBookmark() && DeleteStackBookmark(StackPos));
+	return (LastSessionBookmark() && DeleteSessionBookmark(SessionPos));
 }
 
-int Editor::CurrentStackBookmarkIdx()
+int Editor::CurrentSessionBookmarkIdx()
 {
 	int iIdx;
-	if (PointerToFirstStackBookmark(&iIdx))
+	if (PointerToFirstSessionBookmark(&iIdx))
 		return iIdx;
 	return -1;
 }
 
-int Editor::GetStackBookmark(int iIdx,EditorBookMarks *Param)
+int Editor::GetSessionBookmark(int iIdx,EditorBookMarks *Param)
 {
-	InternalEditorStackBookMark *sb_temp = PointerToStackBookmark(iIdx);
+	InternalEditorSessionBookMark *sb_temp = PointerToSessionBookmark(iIdx);
 
 	if (sb_temp && Param)
 	{
@@ -6553,14 +6561,14 @@ int Editor::GetStackBookmark(int iIdx,EditorBookMarks *Param)
 	return FALSE;
 }
 
-int Editor::GetStackBookmarks(EditorBookMarks *Param)
+int Editor::GetSessionBookmarks(EditorBookMarks *Param)
 {
 	int iCount=0;
 
-	if (StackPos)
+	if (SessionPos)
 	{
-		InternalEditorStackBookMark *sb_temp = PointerToFirstStackBookmark(&iCount);
-		PointerToLastStackBookmark(&iCount);
+		InternalEditorSessionBookMark *sb_temp = PointerToFirstSessionBookmark(&iCount);
+		PointerToLastSessionBookmark(&iCount);
 
 		if (Param)
 		{
@@ -6957,14 +6965,16 @@ void Editor::SetSavePosMode(int SavePos, int SaveShortPos)
 void Editor::EditorShowMsg(const wchar_t *Title,const wchar_t *Msg, const wchar_t* Name,int Percent)
 {
 	string strProgress;
-
+	string strMsg(Msg);
+	strMsg.Append(L" ").Append(Name);
 	if (Percent!=-1)
 	{
 		FormatString strPercent;
 		strPercent<<Percent;
 
 		size_t PercentLength=Max(strPercent.GetLength(),(size_t)3);
-		size_t Length=Max(Min(static_cast<int>(MAX_WIDTH_MESSAGE-2),StrLength(Name)),40)-PercentLength-2;
+		size_t Length=Max(Min(ScrX-1-10,static_cast<int>(strMsg.GetLength())),40)-PercentLength-2;
+
 		wchar_t *Progress=strProgress.GetBuffer(Length);
 
 		if (Progress)
@@ -6979,7 +6989,7 @@ void Editor::EditorShowMsg(const wchar_t *Title,const wchar_t *Msg, const wchar_
 		TBC.SetProgressValue(Percent,100);
 	}
 
-	Message(0,0,Title,Msg,Name,strProgress.IsEmpty()?nullptr:strProgress.CPtr());
+	Message(MSG_LEFTALIGN,0,Title,strMsg,strProgress.IsEmpty()?nullptr:strProgress.CPtr());
 	PreRedrawItem preRedrawItem=PreRedraw.Peek();
 	preRedrawItem.Param.Param1=(void *)Title;
 	preRedrawItem.Param.Param2=(void *)Msg;

@@ -2330,7 +2330,7 @@ void VMenu::DisplayObject()
 	ChangePriority ChPriority(THREAD_PRIORITY_NORMAL);
 
 	ClearFlags(VMENU_UPDATEREQUIRED);
-	Modal::ExitCode = -1;
+	//Modal::ExitCode = -1; // Mantis#0002041 (build 2520)
 
 	if (CheckFlags(VMENU_REFILTERREQUIRED)!=0)
 	{
@@ -2566,6 +2566,11 @@ void VMenu::ShowMenu(bool IsParent)
 
 		if (VisualTopPos<0)
 			VisualTopPos=0;
+	}
+
+	if (VisualTopPos > GetShowItemCount() - (Y2-Y1-1-((BoxType==NO_BOX)?2:0)))
+	{
+		VisualTopPos = 0;
 	}
 
 	if (VisualSelectPos > VisualTopPos+((BoxType!=NO_BOX)?Y2-Y1-2:Y2-Y1))

@@ -1285,7 +1285,7 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 					InsertQuote(strCopyDlgValue);
 				}
 
-				if (DestList.Set(strCopyDlgValue) && !wcspbrk(strCopyDlgValue,ReservedFilenameSymbols))
+				if (DestList.Set(strCopyDlgValue))
 				{
 					// Запомнить признак использования фильтра. KM
 					UseFilter=CopyDlg[ID_SC_USEFILTER].Selected;
@@ -1778,24 +1778,27 @@ COPY_CODES ShellCopy::CopyFileTree(const string& Dest)
 		DestAttr = apiGetFileAttributes(strDest);
 
 		// получим данные о месте назначения
-		if (strDestDriveRoot.IsEmpty())
-		{
-			GetPathRoot(strDest,strDestDriveRoot);
-			DestDriveType=FAR_GetDriveType(wcschr(strDest,L'\\') ? strDestDriveRoot.CPtr():nullptr);
-		}
+		GetPathRoot(strDest,strDestDriveRoot);
+		DestDriveType=FAR_GetDriveType(wcschr(strDest,L'\\') ? strDestDriveRoot.CPtr():nullptr);
 
 		if ( INVALID_FILE_ATTRIBUTES == DestAttr )
 		{
 			DWORD rattr1 = apiGetFileAttributes(strDestDriveRoot);
 			DWORD rattr2 = rattr1;
-			while ( INVALID_FILE_ATTRIBUTES == rattr2 )
+			while ( INVALID_FILE_ATTRIBUTES == rattr2 && SkipMode != 2)
 			{
-				int mr = Message(MSG_WARNING|MSG_ERRORTYPE, 2, MSG(MError),
-					strDestDriveRoot,
-					MSG(MRetry), MSG(MCancel)
-				);
-				if ( mr )
+				int ret = OperationFailed(strDestDriveRoot, MError, L"");
+				if(ret < 0 || ret == 4)
 					return COPY_CANCEL;
+				else if(ret == 1)
+				{
+					return COPY_NEXT;
+				}
+				else if(ret == 2)
+				{
+					SkipMode = 2;
+					return COPY_NEXT;
+				}
 
 				rattr2 = apiGetFileAttributes(strDestDriveRoot);
 			}
@@ -2854,6 +2857,8 @@ COPY_CODES ShellCopy::CheckStreams(const string& Src,const string& DestPath)
 
 int ShellCopy::DeleteAfterMove(const string& Name,DWORD Attr)
 {
+	string FullName;
+	ConvertNameToFull(Name, FullName);
 	if (Attr & FILE_ATTRIBUTE_READONLY)
 	{
 		int MsgCode;
@@ -2865,7 +2870,7 @@ int ShellCopy::DeleteAfterMove(const string& Name,DWORD Attr)
 			MsgCode=ReadOnlyDelMode;
 		else
 			MsgCode=Message(MSG_WARNING,5,MSG(MWarning),
-			                MSG(MCopyFileRO),Name,MSG(MCopyAskDelete),
+			                MSG(MCopyFileRO),FullName,MSG(MCopyAskDelete),
 			                MSG(MCopyDeleteRO),MSG(MCopyDeleteAllRO),
 			                MSG(MCopySkipRO),MSG(MCopySkipAllRO),MSG(MCopyCancelRO));
 
@@ -2885,18 +2890,17 @@ int ShellCopy::DeleteAfterMove(const string& Name,DWORD Attr)
 				return(COPY_CANCEL);
 		}
 
-		apiSetFileAttributes(Name,FILE_ATTRIBUTE_NORMAL);
+		apiSetFileAttributes(FullName,FILE_ATTRIBUTE_NORMAL);
 	}
 
-	while ((Attr&FILE_ATTRIBUTE_DIRECTORY)?!apiRemoveDirectory(Name):!apiDeleteFile(Name))
+	while ((Attr&FILE_ATTRIBUTE_DIRECTORY)?!apiRemoveDirectory(FullName):!apiDeleteFile(FullName))
 	{
 		int MsgCode;
 
 		if (SkipDeleteMode!=-1)
 			MsgCode=SkipDeleteMode;
 		else
-			MsgCode=Message(MSG_WARNING|MSG_ERRORTYPE,4,MSG(MError),MSG(MCannotDeleteFile),Name,
-			                MSG(MDeleteRetry),MSG(MDeleteSkip),MSG(MDeleteSkipAll),MSG(MDeleteCancel));
+			MsgCode=OperationFailed(FullName, MError, MSG(MCannotDeleteFile));
 
 		switch (MsgCode)
 		{

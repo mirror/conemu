@@ -404,12 +404,12 @@ static bool windowscrollFunc(const TMacroFunction*);
 static bool xlatFunc(const TMacroFunction*);
 static bool pluginloadFunc(const TMacroFunction*);
 static bool pluginunloadFunc(const TMacroFunction*);
-#if 1
+#if 0
 //Maximus: plugin.call и т.п.
 static bool plugincallFunc(const TMacroFunction*);
 static bool pluginconfigFunc(const TMacroFunction*);
 static bool pluginprefixFunc(const TMacroFunction*);
-static bool plugininternalFunc(const TMacroFunction*);
+//static bool plugininternalFunc(const TMacroFunction*);
 #endif
 
 static TMacroFunction intMacroFunction[]=
@@ -431,12 +431,7 @@ static TMacroFunction intMacroFunction[]=
 	{L"BM.BACK",          nullptr, L"N=BM.Back()",                                               usersFunc,          nullptr, 0, 0,                                      MCODE_F_BM_BACK,         },
 	{L"BM.PUSH",          nullptr, L"N=BM.Push()",                                               usersFunc,          nullptr, 0, 0,                                      MCODE_F_BM_PUSH,         },
 	{L"BM.STAT",          nullptr, L"N=BM.Stat([N])",                                            usersFunc,          nullptr, 0, 0,                                      MCODE_F_BM_STAT,         },
-	#if 1
-	//Maximus: замена на plugininternalFunc
-	{L"CALLPLUGIN",       nullptr, L"V=CallPlugin(SysID[,param])",                               plugininternalFunc, nullptr, 0, 0,                                      MCODE_F_CALLPLUGIN,      },
-	#else
-	{L"CALLPLUGIN",       nullptr, L"V=CallPlugin(SysID[,param])",                               callpluginFunc,     nullptr, 0, 0,                                      MCODE_F_CALLPLUGIN,      },
-	#endif
+	{L"CALLPLUGIN",       nullptr, L"V=CallPlugin(SysID[,param])",                               usersFunc,          nullptr, 0, 0,                                      MCODE_F_CALLPLUGIN,      },
 	{L"CHECKHOTKEY",      nullptr, L"N=CheckHotkey(S[,N])",                                      usersFunc,          nullptr, 0, 0,                                      MCODE_F_MENU_CHECKHOTKEY,},
 	{L"CHR",              nullptr, L"S=Chr(N)",                                                  chrFunc,            nullptr, 0, 0,                                      MCODE_F_CHR,             },
 	{L"CLIP",             nullptr, L"V=Clip(N[,V])",                                             clipFunc,           nullptr, 0, 0,                                      MCODE_F_CLIP,            },
@@ -489,15 +484,12 @@ static TMacroFunction intMacroFunction[]=
 	{L"PANEL.SETPOS",     nullptr, L"N=panel.SetPos(panelType,fileName)",                        panelsetposFunc,    nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPOS,    },
 	{L"PANEL.SETPOSIDX",  nullptr, L"N=Panel.SetPosIdx(panelType,Idx[,InSelection])",            panelsetposidxFunc, nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPOSIDX, },
 	{L"PANELITEM",        nullptr, L"V=PanelItem(Panel,Index,TypeInfo)",                         panelitemFunc,      nullptr, 0, 0,                                      MCODE_F_PANELITEM,       },
+	{L"PLUGIN.CALL",      nullptr, L"N=Plugin.Call(Guid[,MenuGuid])",                            usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,     },
+	{L"PLUGIN.CONFIG",    nullptr, L"N=Plugin.Config(Guid[,MenuGuid])",                          usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CONFIG,   },
+	{L"PLUGIN.INT",       nullptr, L"N=Plugin.Int(Guid,Item)",                                   usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_INT,      },
 	{L"PLUGIN.LOAD",      nullptr, L"N=Plugin.Load(DllPath[,ForceLoad])",                        pluginloadFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_LOAD,     },
+	{L"PLUGIN.PREFIX",    nullptr, L"N=Plugin.Prefix(Guid,Command)",                             usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_PREFIX,   },
 	{L"PLUGIN.UNLOAD",    nullptr, L"N=Plugin.UnLoad(DllPath)",                                  pluginunloadFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_UNLOAD,   },
-	#if 1
-	//Maximus: plugin.call и т.п.
-	{L"PLUGIN.CALL",      nullptr, L"N=Plugin.Call(Guid[,MenuGuid])",                            plugincallFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,     },
-	{L"PLUGIN.CONFIG",    nullptr, L"N=Plugin.Config(Guid[,MenuGuid])",                          pluginconfigFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_CONFIG,   },
-	{L"PLUGIN.PREFIX",    nullptr, L"N=Plugin.Prefix(Guid,Command)",                             pluginprefixFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_PREFIX,   },
-	{L"PLUGIN.INT",       nullptr, L"N=Plugin.Int(Guid,Item)",                                   plugininternalFunc, nullptr, 0, 0,                                      MCODE_F_PLUGIN_INT,      },
-	#endif
 	{L"PRINT",            nullptr, L"N=Print(Str)",                                              usersFunc,          nullptr, 0, 0,                                      MCODE_F_PRINT,           },
 	{L"PROMPT",           nullptr, L"S=Prompt([Title[,Prompt[,flags[,Src[,History]]]]])",        promptFunc,         nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PROMPT,          },
 	{L"REPLACE",          nullptr, L"S=Replace(Str,Find,Replace[,Cnt[,Mode]])",                  replaceFunc,        nullptr, 0, 0,                                      MCODE_F_REPLACE,         },
@@ -3822,20 +3814,16 @@ static bool clipFunc(const TMacroFunction*)
 		case 3: // Copy Win to internal, "S" - ignore
 		case 4: // Copy internal to Win, "S" - ignore
 		{
-			bool OldUseInternalClipboard=Clipboard::SetUseInternalClipboardState((cmdType-3)?true:false);
-			TVar varClip(L"");
-			wchar_t *ClipText=PasteFromClipboard();
+			Clipboard clip;
 
-			if (ClipText)
+			Ret=FALSE;
+
+			if (clip.Open())
 			{
-				varClip=ClipText;
-				xf_free(ClipText);
+				Ret=clip.InternalCopy((cmdType-3)?true:false)?1:0;
+				clip.Close();
 			}
 
-			Clipboard::SetUseInternalClipboardState(!Clipboard::GetUseInternalClipboardState());
-			Ret=CopyToClipboard(varClip.s());
-
-			Clipboard::SetUseInternalClipboardState(OldUseInternalClipboard);
 			VMStack.Push(TVar((__int64)Ret)); // 0!  ???
 			return Ret?true:false;
 		}
@@ -4571,7 +4559,7 @@ static bool pluginunloadFunc(const TMacroFunction*)
 	return Ret.i()!=0;
 }
 
-#if 1
+#if 0
 //Maximus: функции plugin.call и т.п.
 
 // N=Plugin.Call(Guid[,MenuGuid])
@@ -4588,7 +4576,9 @@ static bool plugincallFunc(const TMacroFunction*)
 	{
 		if (!MenuGuid.isUnknown())
 			Data.ItemGuid=&menuGuid;
+		//CtrlObject->Macro.PushState(true);
 		Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
+		//CtrlObject->Macro.PopState();
 	}
 
 	return Ret.i()!=0;
@@ -4608,7 +4598,9 @@ static bool pluginconfigFunc(const TMacroFunction*)
 	{
 		if (!MenuGuid.isUnknown())
 			Data.ItemGuid=&menuGuid;
+		//CtrlObject->Macro.PushState(true);
 		Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
+		//CtrlObject->Macro.PopState();
 	}
 
 	return Ret.i()!=0;
@@ -4627,7 +4619,9 @@ static bool pluginprefixFunc(const TMacroFunction*)
 	if (StrToGuid(Guid.s(),guid) && Command.isString())
 	{
 		Data.Command=Command.s();
+		//CtrlObject->Macro.PushState(true);
 		Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
+		//CtrlObject->Macro.PopState();
 	}
 
 	return Ret.i()!=0;
@@ -4654,121 +4648,13 @@ static void VarToFarMacroValue(const TVar& From,FarMacroValue& To)
 	}
 }
 
-// V=callplugin(SysID[,param])
 #if 0
-static bool callpluginFunc(const TMacroFunction*)
-{
-/*
-Если в OpenPlugin встретился флаг OPEN_FROMMACRO - он приоритетный, говорит о том, что вызов плагина был из макросов.
-OPEN_FROMMACROSTRING уточняющий флаг - переметр Data содержит строку, если этот флаг не указан, то Data содержит число.
-Прочие значения для OpenFrom - рекомендательные... могут отличаться от...
-*/
-
-	__int64 Ret=0;
-	TVar Param; VMStack.Pop(Param);
-	TVar SysID; VMStack.Pop(SysID);
-
-	if (CtrlObject->Plugins->FindPlugin((DWORD)SysID.i()))
-	{
-		int OpenFrom = -1;
-		Frame* frame = FrameManager->GetCurrentFrame();
-
-		if (frame)
-			switch (frame->GetType())
-			{
-	/*
-OPEN_DISKMENU 	Открыт из меню дисков
-OPEN_PLUGINSMENU 	Открыт из меню плагинов (F11)
-OPEN_FINDLIST 	Открыт из диалога "поиска файлов" Этот идентификатор плагин получит только в том случае, если он экспортирует функцию SetFindListW. Последующий вызов функции SetFindListW произойдёт только в том случае, если функция OpenPluginW вернёт значение отличное от nullptr.
-OPEN_SHORTCUT 	Открыт через ссылку на папку (Меню Commands|Folder shortcuts)
-OPEN_COMMANDLINE 	Был открыт из командной строки. Этот параметр может использоваться, только если плагин определил вызывающий префикс в функции GetPluginInfoW и этот префикс, с двоеточием после него, был указан в командной строке.
-OPEN_EDITOR 	Открыт из редактора
-OPEN_VIEWER 	Открыт из встроенной программы просмотра
-OPEN_FILEPANEL 	Открыт из панелей
-OPEN_DIALOG 	Открыт из диалога
-OPEN_ANALYSE 	Открыт из ???
-OPEN_FROMMACRO 	Открыт из макрокоманды
-
-
-# Для OPEN_FINDLIST Item всегда 0.
-# Для OPEN_SHORTCUT Item содержит адрес строки, которая была передана
-	в элемент ShortcutData структуры OpenPanelInfo в момент сохранения горячей клавиши.
-	Плагин может использовать это поле для сохранения дополнительной информации о текущем состоянии.
-	Не обязательно сохранять в нём информацию о текущей директории, так как этим занимается сам FAR.
-
-	OPEN_DISKMENU
-	OPEN_PLUGINSMENU
-	OPEN_FINDLIST
-	OPEN_SHORTCUT
-	OPEN_FILEPANEL
-	OPEN_ANALYSE
-    */
-
-				/*
-					Для параметров OPEN_DISKMENU, OPEN_PLUGINSMENU, OPEN_EDITOR и OPEN_VIEWER Item - это номер выбранного
-					пункта в меню из зарегистрированных плагином пунктов. Если плагин экспортирует только один элемент,
-					этот параметр всегда равен нулю.
-				*/
-				case MODALTYPE_EDITOR:
-					OpenFrom = OPEN_EDITOR      | OPEN_FROMMACRO;
-					break;
-				case MODALTYPE_VIEWER:
-					OpenFrom = OPEN_VIEWER      | OPEN_FROMMACRO;
-					break;
-				// Для OPEN_COMMANDLINE Item содержит адрес введённого пользователем в командной строке выражения.
-				case MODALTYPE_PANELS:
-					OpenFrom = OPEN_COMMANDLINE | OPEN_FROMMACRO;
-					break;
-				case MODALTYPE_DIALOG:
-					// Для OPEN_DIALOG Item содержит адрес структуры OpenDlgPluginData.
-					OpenFrom = OPEN_DIALOG      | OPEN_FROMMACRO;
-                    /*
-struct OpenDlgPluginData
-{
-	int ItemNumber;
-	HANDLE hDlg;
-};
-                    */
-					break;
-
-				/*
-				*/
-				case MODALTYPE_VMENU:
-				case MODALTYPE_COMBOBOX:
-
-				case MODALTYPE_VIRTUAL:
-				case MODALTYPE_HELP:
-				case MODALTYPE_FINDFOLDER:
-				case MODALTYPE_USER:
-				default:
-					break;
-			}
-
-		if (OpenFrom != -1)
-		{
-			if( Opt.Macro.CallPluginRules )
-				CtrlObject->Macro.PushState(true);
-
-			OpenFrom |= Param.isString() ? OPEN_FROMMACROSTRING : 0;
-
-			Ret=CtrlObject->Plugins->CallPlugin((DWORD)SysID.i(),OpenFrom,
-			                                   Param.isString() ? (void*)Param.s() :
-			                                   (void*)(size_t)Param.i());
-
-			if( Opt.Macro.CallPluginRules )
-				CtrlObject->Macro.PopState();
-		}
-	}
-
-	VMStack.Push(Ret);
-	return Ret?true:false;
-}
-#else
 #if 1
 //Maximus: замена callpluginFunc на plugininternalFunc
-// N=Plugin.Int(Guid,Item)
+// V=Plugin.Int(Guid,Item)
 static bool plugininternalFunc(const TMacroFunction*)
 #else
+// V=callplugin(SysID[,param])
 static bool callpluginFunc(const TMacroFunction*)
 #endif
 {
@@ -4797,7 +4683,9 @@ static bool callpluginFunc(const TMacroFunction*)
 		{
 			OpenMacroInfo info={sizeof(OpenMacroInfo),count,vParams};
 
-			if( Opt.Macro.CallPluginRules )
+			int CallPluginRules=CtrlObject->Macro.GetCurrentCallPluginMode();
+
+			if( CallPluginRules == 1)
 				CtrlObject->Macro.PushState(true);
 
 			int ResultCallPlugin=0;
@@ -4805,7 +4693,7 @@ static bool callpluginFunc(const TMacroFunction*)
 			if (CtrlObject->Plugins->CallPlugin(guid,OPEN_FROMMACRO,&info,&ResultCallPlugin))
 				Ret=(__int64)ResultCallPlugin;
 
-			if( Opt.Macro.CallPluginRules )
+			if( CallPluginRules == 1)
 				CtrlObject->Macro.PopState();
 
 		}
@@ -5092,11 +4980,13 @@ begin:
 	#ifdef _DEBUG
 	//Maximus: для отладки
 	dbgBeginLoops++;
+	CHECKMR(); //Maximus: для отладки
 	#endif
 
 	if (Work.ExecLIBPos>=MR->BufferSize || !MR->Buffer)
 	{
 done:
+		CHECKMR(); //Maximus: для отладки
 
 		/*$ 10.08.2000 skv
 			If we are in editor mode, and CurEditor defined,
@@ -5121,11 +5011,14 @@ done:
 
 		if (CurPCStack < 0 && (Work.MacroWORKCount-1) <= 0) // mantis#351
 		{
+			CHECKMR(); //Maximus: для отладки
+
 			if (LockScr) delete LockScr;
 			LockScr=nullptr;
-			MR->Flags&=~MFLAGS_DISABLEOUTPUT; // ????
 
 			CHECKMR(); //Maximus: для отладки
+
+			MR->Flags&=~MFLAGS_DISABLEOUTPUT; // ????
 		}
 
 		Clipboard::SetUseInternalClipboardState(false); //??
@@ -5208,20 +5101,24 @@ done:
 	switch (Key)
 	{
 		case MCODE_OP_CONTINUE:
+			CHECKMR(); //Maximus: для отладки
 			goto begin; // следом идет Jump
 
 		case MCODE_OP_NOP:
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		case MCODE_OP_KEYS:                    // за этим кодом следуют ФАРовы коды клавиш
 		{
 			_KEYMACRO(SysLog(L"MCODE_OP_KEYS"));
 			Work.KeyProcess++;
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_ENDKEYS:                 // ФАРовы коды закончились.
 		{
 			_KEYMACRO(SysLog(L"MCODE_OP_ENDKEYS"));
 			Work.KeyProcess--;
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case KEY_ALTINS:
@@ -5311,6 +5208,7 @@ done:
 				tmpVar.toString();
 			}
 			VMStack.Push(tmpVar);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -5325,6 +5223,7 @@ done:
 				Work.HistoryDisable=(DWORD)State.getInteger();
 
 			VMStack.Push((__int64)oldHistoryDisable);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -5351,6 +5250,7 @@ done:
 			SetOpCode(MR,Work.ExecLIBPos+1,Counter.u.HighPart);
 			SetOpCode(MR,Work.ExecLIBPos+2,Counter.u.LowPart);
 			SetMacroConst(constRCounter,Counter.QuadPart);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_REP:
@@ -5364,10 +5264,12 @@ done:
 			Counter.QuadPart--;
 			SetOpCode(MR,Work.ExecLIBPos++,Counter.u.HighPart);
 			SetOpCode(MR,Work.ExecLIBPos++,Counter.u.LowPart);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_END:
 			// просто пропустим этот рудимент синтаксиса :)
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		case MCODE_OP_SAVE:
 		{
@@ -5381,6 +5283,7 @@ done:
 				varInsert(*t, value)->value = Val0;
 			}
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -5434,6 +5337,30 @@ done:
 					break;
 				}
 
+				case 3: // CallPlugin Rules
+				{
+					Result=MR->Flags&MFLAGS_CALLPLUGINENABLEMACRO?1:0;
+
+					if (nValue == 2) // изменяет режим
+					{
+						if (MR->Flags&MFLAGS_CALLPLUGINENABLEMACRO)
+							nValue=0;
+						else
+							nValue=1;
+					}
+
+					switch (nValue)
+					{
+						case 0: // блокировать макросы при вызове плагина функцией CallPlugin
+							MR->Flags&=~MFLAGS_CALLPLUGINENABLEMACRO;
+							break;
+						case 1: // разрешить макросы
+							MR->Flags|=MFLAGS_CALLPLUGINENABLEMACRO;
+							break;
+					}
+
+					break;
+				}
 			}
 
 			VMStack.Push(Result);
@@ -5443,6 +5370,7 @@ done:
 		case MCODE_OP_DUP:        // продублировать верхнее значение в стеке
 			tmpVar=VMStack.Peek();
 			VMStack.Push(tmpVar);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 
 		case MCODE_OP_SWAP:
@@ -5452,11 +5380,13 @@ done:
 			VMStack.Pop(tmpVar);
 			VMStack.Push(Val0);
 			VMStack.Push(tmpVar);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
 		case MCODE_OP_DISCARD:    // убрать значение с вершины стека
 			VMStack.Pop();
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 
 		case MCODE_OP_POP:        // 0: pop 1: varname -> присвоить значение переменной и убрать из вершины стека
@@ -5469,6 +5399,7 @@ done:
 			if (tmpVarSet)
 				tmpVarSet->value=tmpVar;
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		/*                               Вместо
@@ -5496,6 +5427,7 @@ done:
 			if (tmpVarSet)
 				tmpVar=tmpVarSet->value;
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_PUSHFLOAT:
@@ -5503,6 +5435,7 @@ done:
 			union { struct { DWORD l, h; }; double d; } u = {GetOpCode(MR,Work.ExecLIBPos+1), GetOpCode(MR,Work.ExecLIBPos)};
 			Work.ExecLIBPos+=2;
 			VMStack.Push(u.d);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_PUSHUNKNOWN:
@@ -5513,6 +5446,7 @@ done:
 			TVar *ptrVar=VMStack.Push(i64.QuadPart);
 			if (Key == MCODE_OP_PUSHUNKNOWN)
 				ptrVar->SetType(vtUnknown);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_PUSHCONST:  // Положить на стек константу.
@@ -5525,6 +5459,7 @@ done:
 			else
 				VMStack.Push(0ll);
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_PUSHVAR: // Положить на стек переменную.
@@ -5539,17 +5474,20 @@ done:
 			else
 				VMStack.Push(0ll);
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_PUSHSTR: // Положить на стек строку-константу.
 		{
 			GetPlainText(value);
 			VMStack.Push(TVar(value.CPtr()));
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		// переходы
 		case MCODE_OP_JMP:
 			Work.ExecLIBPos=GetOpCode(MR,Work.ExecLIBPos);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 
 		case MCODE_OP_JZ:
@@ -5563,6 +5501,7 @@ done:
 			else
 				Work.ExecLIBPos++;
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 
 			// операции
@@ -5805,6 +5744,7 @@ done:
 			}
 			else
 				VMStack.Push(-1);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -5840,6 +5780,7 @@ done:
 				Result=f->VMProcess(Key,ToPtr(p2.i()),p1.i());
 
 			VMStack.Push(Result);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -5910,6 +5851,7 @@ done:
 				tmpVar=L"";
 
 			VMStack.Push(tmpVar);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -5957,6 +5899,7 @@ done:
 			}
 
 			VMStack.Push(Result);
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
@@ -6020,12 +5963,176 @@ done:
 			}
 
 			VMStack.Push(tmpVar);
+			CHECKMR(); //Maximus: для отладки
+			goto begin;
+		}
+
+		case MCODE_F_CALLPLUGIN: // V=callplugin(SysID[,param])
+		#if 1
+		//Maximus: Алиас CallPlugin, для общности
+		case MCODE_F_PLUGIN_INT: // V=Plugin.Int(SysID[,param])
+		#endif
+		{
+			__int64 Ret=0;
+			int count=VMStack.Pop().getInteger();
+			if(count-->0)
+			{
+				FarMacroValue *vParams=nullptr;
+				if(count>0)
+				{
+					vParams=new FarMacroValue[count];
+					memset(vParams,0,sizeof(FarMacroValue)*count);
+					TVar value;
+					for(int ii=count-1;ii>=0;--ii)
+					{
+						VMStack.Pop(value);
+						VarToFarMacroValue(value,*(vParams+ii));
+					}
+				}
+
+				TVar SysID; VMStack.Pop(SysID);
+				GUID guid;
+
+				if (StrToGuid(SysID.s(),guid) && CtrlObject->Plugins->FindPlugin(guid))
+				{
+					OpenMacroInfo info={sizeof(OpenMacroInfo),count,vParams};
+
+					int CallPluginRules=GetCurrentCallPluginMode();
+
+					if( CallPluginRules == 1)
+						PushState(true);
+					else
+						InternalInput++;
+
+					int ResultCallPlugin=0;
+
+					if (CtrlObject->Plugins->CallPlugin(guid,OPEN_FROMMACRO,&info,&ResultCallPlugin))
+						Ret=(__int64)ResultCallPlugin;
+
+					if( CallPluginRules == 1 )
+						PopState();
+					else
+						InternalInput--;
+				}
+
+				if(vParams)
+				{
+					for(int ii=0;ii<count;++ii)
+					{
+						if(vParams[ii].Type == FMVT_STRING && vParams[ii].String)
+							xf_free((void*)vParams[ii].String);
+					}
+				}
+
+				if (Work.Executing == MACROMODE_NOMACRO)
+					goto return_func;
+			}
+
+			VMStack.Push(Ret);
+			CHECKMR(); //Maximus: для отладки
+			goto begin;
+		}
+
+		case MCODE_F_PLUGIN_CALL:   // N=Plugin.Call(Guid[,MenuGuid])
+		case MCODE_F_PLUGIN_CONFIG: // N=Plugin.Config(Guid[,MenuGuid])
+		case MCODE_F_PLUGIN_PREFIX: // N=Plugin.Prefix(Guid,Command)
+		{
+			__int64 Ret=0;
+			parseParams(2,Params);
+			TVar& Arg = (Params[1]);
+			TVar& Guid = (Params[0]);
+			GUID guid, menuGuid;
+			CallPluginInfo Data={CPT_CHECKONLY};
+			wchar_t EmptyStr[1]={};
+			bool ItemFailed=false;
+
+
+			switch (Key)
+			{
+			case MCODE_F_PLUGIN_CALL:
+				Data.CallFlags |= CPT_CALL;
+				if (!Arg.isUnknown())
+				{
+					if (StrToGuid(Arg.s(),menuGuid))
+						Data.ItemGuid=&menuGuid;
+					else
+						ItemFailed=true;
+				}
+				break;
+			case MCODE_F_PLUGIN_CONFIG:
+				Data.CallFlags |= CPT_CONFIGURE;
+				if (!Arg.isUnknown())
+				{
+					if (StrToGuid(Arg.s(),menuGuid))
+						Data.ItemGuid=&menuGuid;
+					else
+						ItemFailed=true;
+				}
+				break;
+			case MCODE_F_PLUGIN_PREFIX:
+				Data.CallFlags |= CPT_PREFIX;
+				if (Arg.isString())
+					Data.Command=Arg.s();
+				else
+					Data.Command=EmptyStr;
+				break;
+            }
+
+			if (!ItemFailed && StrToGuid(Guid.s(),guid) && CtrlObject->Plugins->FindPlugin(guid))
+			{
+				int CallPluginRules=1; //GetCurrentCallPluginMode();
+
+				if( CallPluginRules == 1)
+				{
+					PushState(true);
+				}
+				else
+				{
+					InternalInput++;
+				}
+
+				int ResultCallPlugin=0;
+
+				// Чтобы вернуть результат "выполнения" нужно проверить наличие плагина/пункта
+				Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
+				VMStack.Push(Ret);
+
+				if (Ret)
+				{
+					// Если нашли успешно - то теперь выполнение
+					Data.CallFlags&=~CPT_CHECKONLY;
+					Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
+				}
+
+				if( CallPluginRules == 1 )
+				{
+					PopState();
+				}
+				else
+				{
+					InternalInput--;
+				}
+			}
+			else
+			{
+				VMStack.Push(Ret);
+			}
+
+			// По аналогии с KEY_F11
+			FrameManager->RefreshFrame();
+
+			if (Work.Executing == MACROMODE_NOMACRO)
+				goto return_func;
+
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
 		default:
 		{
 			size_t J;
+
+			CHECKMR(); //Maximus: для отладки
 
 			for (J=0; J < CMacroFunction; ++J)
 			{
@@ -6034,6 +6141,7 @@ done:
 				//Maximus: для отладки
 				jj = J;
 				ff = *MFunc;
+				CHECKMR(); //Maximus: для отладки
 				#endif
 				if (MFunc->Code == (TMacroOpCode)Key && MFunc->Func)
 				{
@@ -6043,37 +6151,56 @@ done:
 					{
 						if (Flags&MFLAGS_DISABLEOUTPUT) // если был - удалим
 						{
+							CHECKMR(); //Maximus: для отладки
+
 							if (LockScr) delete LockScr;
+
+							CHECKMR(); //Maximus: для отладки
 
 							LockScr=nullptr;
 						}
 					}
 
-					if (MFunc->IntFlags&IMFF_DISABLEINTINPUT)
+					if ((MFunc->IntFlags&IMFF_DISABLEINTINPUT))
 						InternalInput++;
+
+					CHECKMR(); //Maximus: для отладки
 
 					MFunc->Func(MFunc);
 
-					if (MFunc->IntFlags&IMFF_DISABLEINTINPUT)
+					CHECKMR(); //Maximus: для отладки
+
+					if ((MFunc->IntFlags&IMFF_DISABLEINTINPUT))
 						InternalInput--;
 
 					if (MFunc->IntFlags&IMFF_UNLOCKSCREEN)
 					{
 						if (Flags&MFLAGS_DISABLEOUTPUT) // если стал - залочим
 						{
+							CHECKMR(); //Maximus: для отладки
+
 							if (LockScr) delete LockScr;
 
+							CHECKMR(); //Maximus: для отладки
+
 							LockScr=new LockScreen;
+
+							CHECKMR(); //Maximus: для отладки
 						}
 					}
+
 					break;
 				}
 			}
+
+			CHECKMR(); //Maximus: для отладки
 
 			if (J >= CMacroFunction)
 			{
 				DWORD Err=0;
 				tmpVar=FARPseudoVariable(MR->Flags, Key, Err);
+
+				CHECKMR(); //Maximus: для отладки
 
 				if (!Err)
 					VMStack.Push(tmpVar);
@@ -6082,12 +6209,14 @@ done:
 					if (Key >= KEY_MACRO_BASE && Key <= KEY_MACRO_ENDBASE)
 					{
 						// это не клавиша, а неопознанный OpCode, прерываем исполнение макроса
+						CHECKMR(); //Maximus: для отладки
 						goto done;
 					}
 					break; // клавиши будем возвращать
 				}
 			}
 
+			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		} // END default
 	} // END: switch(Key)
@@ -6564,15 +6693,7 @@ void KeyMacro::RegisterMacroIntFunction()
 	if (!InitedInternalFuncs)
 	{
 		for(size_t I=0; intMacroFunction[I].Name; ++I)
-		{
-			if (intMacroFunction[I].Code == MCODE_F_CALLPLUGIN)
-			{
-				if(!Opt.Macro.CallPluginRules)
-					intMacroFunction[I].IntFlags |= IMFF_DISABLEINTINPUT;
-			}
-
 			KeyMacro::RegisterMacroFunction(intMacroFunction+I);
-		}
 
 		InitedInternalFuncs=true;
 	}
@@ -8304,4 +8425,15 @@ void KeyMacro::DelMacro(size_t Index)
 	memcpy(MacroLIB+Index,MacroLIB+Index+1,(MacroLIBCount-Index-1)*sizeof(MacroLIB[0]));
 	--MacroLIBCount;
 	KeyMacro::Sort();
+}
+
+int KeyMacro::GetCurrentCallPluginMode()
+{
+	int Ret=-1;
+	MacroRecord *MR=Work.MacroWORK;
+	if (MR)
+	{
+		Ret=MR->Flags&MFLAGS_CALLPLUGINENABLEMACRO?1:0;
+	}
+	return Ret;
 }

@@ -190,10 +190,6 @@ struct CodeXLAT
 	string Table[2]; // [0] non-english буквы, [1] english буквы
 	string strWordDivForXlat;
 	DWORD Flags;       // дополнительные флаги
-
-	/* $ 25.11.2000 IS
-	   Разграничитель слов из реестра для функции Xlat
-	*/
 	int CurrentLayout;
 };
 
@@ -452,7 +448,6 @@ struct MacroOptions
 	DWORD DisableMacro; // параметры /m или /ma или /m....
 	DWORD KeyMacroCtrlDot, KeyMacroRCtrlDot; // аля KEY_CTRLDOT/KEY_RCTRLDOT
 	DWORD KeyMacroCtrlShiftDot, KeyMacroRCtrlShiftDot; // аля KEY_CTRLSHIFTDOT/KEY_RCTRLSHIFTDOT
-	int CallPluginRules; // 0 - блокировать макросы при вызове плагина, 1 - разрешить макросы (ахтунг!)
 	string strMacroCONVFMT; // формат преобразования double в строку
 	string strDateFormat; // Для $Date
 };
@@ -461,6 +456,17 @@ struct KnownModulesIDs
 {
 	GUID Network;
 	GUID Emenu;
+};
+
+struct ExecuteOptions
+{
+	int RestoreCPAfterExecute;
+	int ExecuteUseAppPath;
+	int ExecuteFullTitle;
+	int ExecuteSilentExternal;
+	string strExecuteBatchType;
+	string strExcludeCmds;
+	string strHomeDir; // cd ~
 };
 
 struct Options
@@ -516,7 +522,7 @@ struct Options
 	int AutoSaveSetup;
 	int SetupArgv; // количество каталогов в комюстроке ФАРа
 	int ChangeDriveMode;
-	int ChangeDriveDisconnetMode;
+	int ChangeDriveDisconnectMode;
 	#if 1
 	//Maximus: расширенное меню плагинов
 	int ChangePlugMenuMode;
@@ -658,11 +664,7 @@ struct Options
 	int CloseCDGate;       // автомонтирование CD
 	int UpdateEnvironment;
 
-	int RestoreCPAfterExecute;
-	int ExecuteUseAppPath;
-	int ExecuteFullTitle;
-	int ExecuteSilentExternal;
-	string strExecuteBatchType;
+	ExecuteOptions Exec;
 
 	DWORD PluginMaxReadData;
 	int ScanJunction;

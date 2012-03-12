@@ -194,17 +194,20 @@ inline void ClearArray(T (&a)[N]) { memset(a, 0, sizeof(a[0])*N); }
 #define SIGN_UTF8       0xBFBBEF
 
 #ifdef __GNUC__
-#if _GCC_VER < GCC_VER_(4,6,1)
-#define nullptr NULL
-#endif //__GNUC__
+# if _GCC_VER < GCC_VER_(4,6,1)
+#  define nullptr NULL
+#  include "lang.hpp"
+# else
+   enum LNGID:int;
+# endif
+#endif
+
+#if defined(_MSC_VER) && _MSC_VER>1600
+enum LNGID:int;
 #endif
 
 #if defined(_MSC_VER) && _MSC_VER<1600
 #define nullptr NULL
-#endif
-
-#ifdef __GNUC__
-enum LNGID:DWORD;
 #endif
 
 template <typename T>

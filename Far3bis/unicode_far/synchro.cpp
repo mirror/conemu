@@ -62,10 +62,10 @@ bool PluginSynchro::Process(void)
 {
 	#if 1
 	//Maximus: Нехорошо вызывать плагины до тех пор, пока фар не прошел полную инициализацию
-	if (!CtrlObject || !CtrlObject->Plugins->IsPluginsLoaded())
+	if (!CtrlObject /*|| !CtrlObject->Plugins->IsPluginsLoaded()*/)
 	{
 		//Это тема для багрепорта на Mantis?
-		_ASSERTE(CtrlObject && CtrlObject->Plugins->IsPluginsLoaded());
+		_ASSERTE(CtrlObject /*&& CtrlObject->Plugins->IsPluginsLoaded()*/);
 		return false;
 	}
 	#endif

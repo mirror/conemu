@@ -136,25 +136,27 @@ enum OPENFILEPLUGINTYPE
 };
 
 //Maximus: параметры вызова макрофункций plugin.call и т.п.
-enum CALLPLUGINTYPE
-{
-	CPT_CALL,
-	CPT_CONFIGURE,
-	CPT_PREFIX,
-	CPT_INTERNAL,
-};
+typedef unsigned int CALLPLUGINFLAGS;
+static const CALLPLUGINFLAGS
+	CPT_CALL        = 0x00000001L,
+	CPT_CONFIGURE   = 0x00000002L,
+	CPT_PREFIX      = 0x00000004L,
+	CPT_INTERNAL    = 0x00000008L,
+	CPT_MASK        = 0x0000000FL,
+	CPT_CHECKONLY   = 0x10000000L;
 
-//Maximus: параметры вызова макрофункций plugin.call и т.п.
 struct CallPluginInfo
 {
-	CALLPLUGINTYPE CallType;
+	CALLPLUGINFLAGS CallFlags;
 	int OpenFrom;
 	union
 	{
 		GUID *ItemGuid;
 		const wchar_t *Command;
-		__int64 Item;
 	};
+	// Используется в функции CallPluginItem для внутренних нужд
+	Plugin *pPlugin;
+	GUID FoundGuid;
 };
 
 struct PluginHandle

@@ -79,6 +79,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "palette.hpp"
 #include "FarGuid.hpp"
 #include "elevation.hpp"
+#include "stddlg.hpp"
 
 static int DragX,DragY,DragMove;
 static Panel *SrcDragPanel;
@@ -958,8 +959,8 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 			GetErrorString(strError);
 			int Len1=static_cast<int>(strError.GetLength());
 			int Len2=StrLength(MSG(MChangeDriveCannotReadDisk));
-			int MaxMsg=Min(Max(Len1,Len2), static_cast<int>(MAX_WIDTH_MESSAGE));
-			const int DX=Max(MaxMsg+13,40),DY=8;
+			
+			const int DX=Min(Max(Len1,Len2 + 3)+11, ScrX-1), DY=8;
 			const FarDialogItem ChDiskData[]=
 			{
 				{DI_DOUBLEBOX,3,1,DX-4,DY-2,0,nullptr,nullptr,0,MSG(MError)},
@@ -1079,10 +1080,8 @@ int Panel::DisconnectDrive(PanelMenuItem *item, VMenu &ChDisk)
 
 					// ... и выведем месаг о...
 					SetLastError(ERROR_DRIVE_LOCKED); // ...о "The disk is in use or locked by another process."
-					DoneEject = Message(MSG_WARNING|MSG_ERRORTYPE, 2,
-					                MSG(MError),
-					                LangString(MChangeCouldNotEjectMedia) << item->cDrive,
-					                MSG(MRetry),MSG(MCancel));
+					wchar_t Drive[] = {item->cDrive, L':', L'\\', 0};
+					DoneEject = OperationFailed(Drive, MError, LangString(MChangeCouldNotEjectMedia) << item->cDrive, false);
 				}
 				else
 					DoneEject=TRUE;
@@ -1212,6 +1211,7 @@ int Panel::ProcessDelDisk(wchar_t Drive, int DriveType,VMenu *ChDiskMenu)
 		break;
 
 	case DRIVE_REMOTE:
+	case DRIVE_REMOTE_NOT_CONNECTED:
 		{
 			int UpdateProfile=CONNECT_UPDATE_PROFILE;
 			if (MessageRemoveConnection(Drive,UpdateProfile))
@@ -2554,7 +2554,7 @@ static int MessageRemoveConnection(wchar_t Letter, int &UpdateProfile)
 			RegCloseKey(hKey);
 		}
 		else
-			DCDlg[5].Selected=Opt.ChangeDriveDisconnetMode;
+			DCDlg[5].Selected=Opt.ChangeDriveDisconnectMode;
 	}
 	// скорректируем размеры диалога - дл€ дизайн”
 	DCDlg[0].X2=DCDlg[0].X1+static_cast<int>(Len1)+3;
@@ -2573,7 +2573,7 @@ static int MessageRemoveConnection(wchar_t Letter, int &UpdateProfile)
 	UpdateProfile=DCDlg[5].Selected?0:CONNECT_UPDATE_PROFILE;
 
 	if (IsPersistent)
-		Opt.ChangeDriveDisconnetMode=DCDlg[5].Selected;
+		Opt.ChangeDriveDisconnectMode=DCDlg[5].Selected;
 
 	return ExitCode == 7;
 }

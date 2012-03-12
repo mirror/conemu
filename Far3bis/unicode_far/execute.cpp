@@ -512,10 +512,8 @@ static bool FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 		// нулевой проход - смотрим исключени€
 		// Ѕерем "исключени€" из реестра, которые должны исполн€тьс€ директом,
 		// например, некоторые внутренние команды ком. процессора.
-		string strExcludeCmds;
-		GeneralCfg->GetValue(strSystemExecutor,L"ExcludeCmds",strExcludeCmds,L"");
 		UserDefinedList ExcludeCmdsList;
-		ExcludeCmdsList.Set(strExcludeCmds);
+		ExcludeCmdsList.Set(Opt.Exec.strExcludeCmds);
 
 		while (!ExcludeCmdsList.IsEmpty())
 		{
@@ -621,7 +619,7 @@ static bool FindModule(const wchar_t *Module, string &strDest,DWORD &ImageSubsys
 				}
 
 				// третий проход - лезем в реестр в "App Paths"
-				if (!Result && Opt.ExecuteUseAppPath && !strFullName.Contains(L'\\'))
+				if (!Result && Opt.Exec.ExecuteUseAppPath && !strFullName.Contains(L'\\'))
 				{
 					static const WCHAR RegPath[] = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\";
 					// ¬ строке Module заменить исполн€емый модуль на полный путь, который
@@ -745,7 +743,7 @@ int PartCmdLine(const string& CmdStr, string &strNewCmdStr, string &strNewCmdPar
 
 		if (!quoted && *CmdPtr == L'^' && CmdPtr[1] > L' ') // "^>" и иже с ним
 		{
-			Escaped = 1; // 
+			Escaped = 1; //
 			CmdPtr++;    // ??? может быть '^' надо удалить...
 		}
 		else if (!quoted && CmdPtr != NewCmdStr)
@@ -836,7 +834,7 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 
 	if (SeparateWindow)
 	{
-		if(Opt.ExecuteSilentExternal)
+		if(Opt.Exec.ExecuteSilentExternal)
 		{
 			Silent = true;
 		}
@@ -902,7 +900,7 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 
 		if (dwSubSystem == IMAGE_SUBSYSTEM_WINDOWS_GUI)
 		{
-			if(DirectRun && Opt.ExecuteSilentExternal)
+			if(DirectRun && Opt.Exec.ExecuteSilentExternal)
 			{
 				Silent = true;
 			}
@@ -971,7 +969,7 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 	string strFarTitle;
 	if(!Silent)
 	{
-		if (Opt.ExecuteFullTitle)
+		if (Opt.Exec.ExecuteFullTitle)
 		{
 			strFarTitle += strNewCmdStr;
 			if (!strNewCmdPar.IsEmpty())
@@ -1026,6 +1024,8 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 	}
 
 	seInfo.fMask = SEE_MASK_FLAG_NO_UI|SEE_MASK_NOASYNC|SEE_MASK_NOCLOSEPROCESS|(SeparateWindow?0:SEE_MASK_NO_CONSOLE);
+	if (WinVer >= _WIN32_WINNT_VISTA)         // ShexxExecuteEx error, see
+		seInfo.fMask |= SEE_MASK_INVOKEIDLIST; // http://us.generation-nt.com/answer/shellexecuteex-does-not-allow-openas-verb-windows-7-help-31497352.html
 
 	if(!Silent)
 	{
@@ -1245,7 +1245,7 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 		ChangeVideoMode(ConSize.Y, ConSize.X);
 	}
 
-	if (Opt.RestoreCPAfterExecute)
+	if (Opt.Exec.RestoreCPAfterExecute)
 	{
 		// восстановим CP-консоли после исполнени€ проги
 		Console.SetInputCodepage(ConsoleCP);
@@ -1840,8 +1840,7 @@ bool CommandLine::IntChDir(const string& CmdLine,int ClosePanel,bool Selent)
 
 	if (SetPanel->GetMode()!=PLUGIN_PANEL && strExpandedDir.At(0) == L'~' && ((!strExpandedDir.At(1) && apiGetFileAttributes(strExpandedDir) == INVALID_FILE_ATTRIBUTES) || IsSlash(strExpandedDir.At(1))))
 	{
-		string strTemp;
-		GeneralCfg->GetValue(strSystemExecutor,L"~",strTemp,g_strFarPath);
+		string strTemp=Opt.Exec.strHomeDir;
 
 		if (strExpandedDir.At(1))
 		{
@@ -1930,7 +1929,7 @@ bool CommandLine::IntChDir(const string& CmdLine,int ClosePanel,bool Selent)
 bool IsBatchExtType(const string& ExtPtr)
 {
 	UserDefinedList BatchExtList;
-	BatchExtList.Set(Opt.strExecuteBatchType);
+	BatchExtList.Set(Opt.Exec.strExecuteBatchType);
 
 	while (!BatchExtList.IsEmpty())
 	{
