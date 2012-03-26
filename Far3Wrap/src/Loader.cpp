@@ -69,6 +69,10 @@ namespace Far2
 	#include "pluginW3#2457.hpp"
 #elif MVV_3<=2461
 	#include "pluginW3#2461.hpp"
+#elif MVV_3<=2540
+	#include "pluginW3#2540.hpp"
+#elif MVV_3<=2566
+	#include "pluginW3#2566.hpp"
 #else
 	#include "pluginW3.hpp"
 #endif
@@ -817,6 +821,22 @@ DWORD WINAPI FarGetCurrentDirectory(DWORD Size,wchar_t* Buffer)
 		return fwf.FarGetCurrentDirectoryWrap(fwf.wpi, Size,Buffer);
 	return 0;
 }
+void WINAPI FarStdQSort(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *))
+{
+	if (fwf.FarStdQSortWrap)
+		fwf.FarStdQSortWrap(fwf.wpi, base, nelem, width, fcmp);
+}
+void WINAPI FarStdQSortEx(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam)
+{
+	if (fwf.FarStdQSortExWrap)
+		fwf.FarStdQSortExWrap(fwf.wpi, base, nelem, width, fcmp, userparam);
+}
+void* WINAPI FarStdBSearch(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *))
+{
+	if (fwf.FarStdBSearchWrap)
+		return fwf.FarStdBSearchWrap(fwf.wpi, key, base, nelem, width, fcmp);
+	return NULL;
+}
 
 
 
@@ -879,6 +899,9 @@ BOOL LoadWrapper(LPCWSTR asModule)
 	fwf.FarConvertPath = FarConvertPath;
 	fwf.FarGetReparsePointInfo = FarGetReparsePointInfo;
 	fwf.FarGetCurrentDirectory = FarGetCurrentDirectory;
+	fwf.FarStdQSort = FarStdQSort;
+	fwf.FarStdQSortEx = FarStdQSortEx;
+	fwf.FarStdBSearch = FarStdBSearch;
 
 
 	// GO!

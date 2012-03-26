@@ -76,6 +76,9 @@ typedef int (WINAPI* _FarStdMkLinkWrap)(WrapPluginInfo* wpi, const wchar_t *Src,
 typedef int (WINAPI* _FarConvertPathWrap)(WrapPluginInfo* wpi, enum Far2::CONVERTPATHMODES Mode, const wchar_t *Src, wchar_t *Dest, int DestSize);
 typedef int (WINAPI* _FarGetReparsePointInfoWrap)(WrapPluginInfo* wpi, const wchar_t *Src, wchar_t *Dest,int DestSize);
 typedef DWORD (WINAPI* _FarGetCurrentDirectoryWrap)(WrapPluginInfo* wpi, DWORD Size,wchar_t* Buffer);
+typedef void (WINAPI* _FarStdQSort)(WrapPluginInfo* wpi, void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
+typedef void (WINAPI* _FarStdQSortEx)(WrapPluginInfo* wpi, void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam);
+typedef void* (WINAPI* _FarStdBSearch)(WrapPluginInfo* wpi, const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
 
 
 struct Far3WrapFunctions
@@ -135,6 +138,9 @@ struct Far3WrapFunctions
 	Far2::FARSTDGETNUMBEROFLINKS GetNumberOfLinks;
 	Far2::FARSTDRECURSIVESEARCH FarStdRecursiveSearch;
 	Far2::FARSTDXLAT FarStdXlat;
+	Far2::FARSTDQSORT FarStdQSort;
+	Far2::FARSTDQSORTEX FarStdQSortEx;
+	Far2::FARSTDBSEARCH FarStdBSearch;
 
 	// [Out] Wrapper exported functions 
 	_GetProcAddressWrap GetProcAddressWrap;
@@ -210,6 +216,9 @@ struct Far3WrapFunctions
 	_FarConvertPathWrap FarConvertPathWrap;
 	_FarGetReparsePointInfoWrap FarGetReparsePointInfoWrap;
 	_FarGetCurrentDirectoryWrap FarGetCurrentDirectoryWrap;
+	_FarStdQSort FarStdQSortWrap;
+	_FarStdQSortEx FarStdQSortExWrap;
+	_FarStdBSearch FarStdBSearchWrap;
 };
 
 // Returns 0 on success
