@@ -7276,10 +7276,6 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 				h = OpenPluginW(Far2::OPEN_ANALYSE, (INT_PTR)&fad2);
 			}
 		}
-		#if MVV_3>=2472
-		else
-			h = NULL;
-		#endif
 		goto trap;
 		#else
 		if (AnalyseW)
@@ -7295,7 +7291,7 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		if (mn_AnalyzeReturn == -2)
 		{
 			_ASSERTE(mp_Analyze == NULL);
-			h = PANEL_STOP;
+			h = (HANDLE)-2;
 			// Раз мы дошли сюда, значит юзер выбрал в меню этот плагин (который вернул TRUE в AnalyseW)
 			if (gpsz_LastAnalyzeFile)
 			{
@@ -7360,6 +7356,17 @@ trap:
 		free(mp_Analyze);
 		mp_Analyze = NULL;
 	}
+
+	#if MVV_3>=2472
+	if ((h == INVALID_HANDLE_VALUE) || (h == (HANDLE)-2))
+	{
+		if ((h == (HANDLE)-2) && ((Info->OpenFrom & OPEN_FROM_MASK) == OPEN_ANALYSE))
+			h = PANEL_STOP;
+		else
+			h = NULL;
+	}
+	#endif
+
 	return h;
 }
 
