@@ -492,7 +492,11 @@ HANDLE WINAPI OpenPluginW(
 		if ((pa == NULL) || (pa->StructSize < sizeof(*pa)))
 		{
 			InvalidOp();
+			#if (FARMANAGERVERSION_BUILD>=2572)
+			return NULL;
+			#else
 			return INVALID_HANDLE_VALUE;
+			#endif
 		}
 		p = pa->Info;
 		#endif
@@ -504,7 +508,13 @@ HANDLE WINAPI OpenPluginW(
 		#endif
 		
 		if (hPlugin == (HANDLE)-2)
+		{
+			#if (FARMANAGERVERSION_BUILD>=2572)
+			hPlugin = PANEL_STOP;
+			#else
 			hPlugin = INVALID_HANDLE_VALUE;
+			#endif
+		}
 		return hPlugin;
 	}
 	#if defined(_UNICODE) && (FARMANAGERVERSION_BUILD<2462)
@@ -523,10 +533,34 @@ HANDLE WINAPI OpenPluginW(
 	CPluginActivator a((HANDLE)pPlugin,0);
 	
 	bool lbDirSet = false;
-	if (((OpenFrom & 0xFF) == OPEN_COMMANDLINE) && Item)
-	{
-		LPCTSTR pszCommand = (LPCTSTR)Item;
+	LPCTSTR pszCommand = NULL;
+	LPCTSTR pszHostFile = NULL;
 
+	if (((OpenFrom & OPEN_FROM_MASK) == OPEN_COMMANDLINE) && Item)
+		pszCommand = (LPCTSTR)Item;
+	#if FAR_UNICODE>=1900
+	else if (((OpenFrom & OPEN_FROM_MASK) == OPEN_SHORTCUT) && Item)
+	{
+		OpenShortcutInfo* pInfo = (OpenShortcutInfo*)Item;
+
+		if (pInfo->HostFile && *pInfo->HostFile)
+		{
+			BOOL lbLoadRc = pPlugin->LoadRegFile(pInfo->HostFile, FALSE, FALSE, FALSE);
+			if (!lbLoadRc)
+			{
+				SafeDelete(pPlugin);
+				gpActivePlugin = NULL;
+				InvalidCmd();
+				return INVALID_HANDLE_VALUE;
+			}
+		}
+
+		pszCommand = pInfo->ShortcutData ? pInfo->ShortcutData : L"";
+	}
+	#endif
+
+	if (pszCommand)
+	{
 		OpenPluginArg Args;
 		MCHKHEAP;
 		switch (Args.ParseCommandLine(pszCommand))
@@ -751,7 +785,9 @@ AnalyseRcType WINAPI AnalyseW(const struct AnalyseInfo *pData)
 
 	if (!IsFileSupported(pData->FileName, (const unsigned char *)pData->Buffer, pData->BufferSize, nFormat))
 	{
-		#if (FARMANAGERVERSION_BUILD<2462)
+		#if (FARMANAGERVERSION_BUILD>=2572)
+		return FALSE;
+		#elif (FARMANAGERVERSION_BUILD<2462)
 		return FALSE;
 		#else
 		return INVALID_HANDLE_VALUE;
@@ -1425,17 +1461,23 @@ void WINAPI GetOpenPluginInfoW(
 	_ASSERTE(pPlugin);
 	_ASSERTE(pPlugin->m_Key.mpsz_Dir && pPlugin->m_Key.mpsz_Title);
 	pPlugin->CheckItemsLoaded();
+#if FAR_UNICODE>=1900
+	Info->CurDir = (pPlugin->m_Key.mpsz_Dir && *pPlugin->m_Key.mpsz_Dir) ? pPlugin->m_Key.mpsz_Dir : _T("\\");
+#else
 	Info->CurDir = pPlugin->m_Key.mpsz_Dir ? pPlugin->m_Key.mpsz_Dir : _T("");
+#endif
 	//Info->PanelTitle = pPlugin->m_Key.mpsz_Title ? pPlugin->m_Key.mpsz_Title : _T("");
 	Info->PanelTitle = pPlugin->GetPanelTitle();
 	Info->HostFile = pPlugin->mpsz_HostFile;
 #if FAR_UNICODE>=1900
-	Info->Flags = OPIF_DISABLESORTGROUPS|OPIF_ADDDOTS;
+	Info->Flags = OPIF_DISABLESORTGROUPS|OPIF_ADDDOTS|OPIF_SHORTCUT;
 #else
 	Info->Flags = OPIF_USEFILTER|/*OPIF_USESORTGROUPS|*/OPIF_USEHIGHLIGHTING|OPIF_ADDDOTS;
 #endif
 	Info->Format = cfg->sCommandPrefix;
-	Info->ShortcutData = NULL;
+#if FAR_UNICODE>=1900
+	Info->ShortcutData = Info->CurDir;
+#endif
 	//Info->StartSortMode = 0;
 	// -- перемещено в GetFindDataW
 	//if (pPlugin->mb_SortingSelfDisabled)

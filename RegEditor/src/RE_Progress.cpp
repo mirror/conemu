@@ -72,7 +72,11 @@ REProgress::~REProgress()
 		REPlugin::Message(REM_OperationCancelledByUser);
 	if (bGraphic) {
 		#ifdef _UNICODE
+		#if FARMANAGERVERSION_BUILD>=2570
+		psi.AdvControl(PluginNumber, ACTL_SETPROGRESSSTATE, FADV1988 (void*)TBPS_NOPROGRESS);
+		#else
 		psi.AdvControl(PluginNumber, ACTL_SETPROGRESSSTATE, FADV1988 (void*)PS_NOPROGRESS);
+		#endif
 		#endif
 	}
 	if (psLastTitle) {
@@ -179,7 +183,11 @@ void REProgress::Update(/*LPCTSTR asFileName = NULL*/)
 			#define PROGRESSVALUE ProgressValue
 			#endif
 			PROGRESSVALUE pv = {nCurrent,nAllCount};
+			#if FARMANAGERVERSION_BUILD>=2570
+			psi.AdvControl(PluginNumber, ACTL_SETPROGRESSSTATE, FADV1988 (void*)TBPS_NORMAL);
+			#else
 			psi.AdvControl(PluginNumber, ACTL_SETPROGRESSSTATE, FADV1988 (void*)PS_NORMAL);
+			#endif
 			psi.AdvControl(PluginNumber, ACTL_SETPROGRESSVALUE, FADV1988 (void*)&pv);
 			#endif
 

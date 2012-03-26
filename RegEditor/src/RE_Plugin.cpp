@@ -4016,12 +4016,41 @@ BOOL REPlugin::DeleteItems(struct PluginPanelItem *PanelItem, int ItemsNumber)
 	//	return FALSE;
 	if (Message(REM_WarningDelete, FMSG_WARNING|FMSG_ALLINONE, 2, _T("DeleteItems")) != 0)
 		return FALSE;
-	if ((psi.AdvControl(PluginNumber,ACTL_GETCONFIRMATIONS,FADV1988 NULL)&(FCS_DELETE|FCS_DELETENONEMPTYFOLDERS))!=0)
+	bool bDelConfirm = false;
+	#ifdef _UNICODE
+		#if FARMANAGERVERSION_BUILD>=2541
+			GUID FarGuid = {};
+			FarSettingsCreate sc = {sizeof(FarSettingsCreate), FarGuid, INVALID_HANDLE_VALUE};
+			if (psi.SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc))
+			{
+				FarSettingsItem fsi1 = {FSSF_CONFIRMATIONS, L"Delete"};
+				FarSettingsItem fsi2 = {FSSF_CONFIRMATIONS, L"DeleteFolder"};
+				if (psi.SettingsControl(sc.Handle, SCTL_GET, 0, &fsi1))
+				{
+					_ASSERTE(fsi1.Type == FST_QWORD);
+					bDelConfirm = (fsi1.Number != 0);
+				}
+				if (!bDelConfirm && psi.SettingsControl(sc.Handle, SCTL_GET, 0, &fsi2))
+				{
+					_ASSERTE(fsi2.Type == FST_QWORD);
+					bDelConfirm = (fsi2.Number != 0);
+				}
+				psi.SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+			}
+		#else
+			bDelConfirm = (psi.AdvControl(PluginNumber,ACTL_GETCONFIRMATIONS,FADV1988 NULL)&(FCS_DELETE|FCS_DELETENONEMPTYFOLDERS))!=0;
+		#endif
+	#else
+		bDelConfirm = (psi.AdvControl(PluginNumber,ACTL_GETCONFIRMATIONS,FADV1988 NULL)&(FCS_DELETE|FCS_DELETENONEMPTYFOLDERS))!=0;
+	#endif
+	if (bDelConfirm)
 	{
 		int nKeys = 0, nValues = 0;
-		for (int i = 0; i < ItemsNumber; i++) {
+		for (int i = 0; i < ItemsNumber; i++)
+		{
 			RegItem* pItem = (RegItem*)(PanelItem[i].UserData);
-			if (pItem && pItem->nMagic == REGEDIT_MAGIC) {
+			if (pItem && pItem->nMagic == REGEDIT_MAGIC)
+			{
 				if (pItem->nValueType == REG__KEY)
 					nKeys++;
 				else
