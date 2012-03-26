@@ -7277,7 +7277,8 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 			}
 		}
 		#if MVV_3>=2472
-		h = NULL;
+		else
+			h = NULL;
 		#endif
 		goto trap;
 		#else
