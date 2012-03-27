@@ -3172,6 +3172,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	FarDialogItemColors fdic3;
 	FarColor colors[32];
 	WRAP_FAR_CHAR_INFO pfci = {};
+	FarDialogItemData fdid3;
 
 	//TODO: Сохранять gnMsg_2/gnMsg_3 только если они <DM_USER!
 	if (Msg2 == gnMsg_2 && gnMsg_3 != DM_FIRST
@@ -3203,7 +3204,21 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		case Far2::DM_GETDLGRECT:
 			Msg3 = DM_GETDLGRECT; break;
 		case Far2::DM_GETTEXT:
-			Msg3 = DM_GETTEXT; break;
+			if (!Param2)
+			{
+				Msg3 = DM_GETTEXT;
+			}
+			else
+			{
+				const Far2::FarDialogItemData* p2 = (const Far2::FarDialogItemData*)Param2;
+				ZeroStruct(fdid3);
+				fdid3.StructSize = sizeof(fdid3);
+				fdid3.PtrLength = p2->PtrLength;
+				fdid3.PtrData = p2->PtrData;
+				Param2 = (LONG_PTR)&fdid3;
+				Msg3 = DM_GETTEXT;
+			}
+			break;
 		case Far2::DM_GETTEXTLENGTH:
 			Msg3 = DM_GETTEXTLENGTH; break;
 		case Far2::DM_KEY:
@@ -3228,7 +3243,21 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 			Msg3 = DM_REDRAW; break;
 		//DM_SETREDRAW=DM_REDRAW,
 		case Far2::DM_SETTEXT:
-			Msg3 = DM_SETTEXT; break;
+			if (!Param2)
+			{
+				_ASSERTE(Param2!=NULL);
+			}
+			else
+			{
+				const Far2::FarDialogItemData* p2 = (const Far2::FarDialogItemData*)Param2;
+				ZeroStruct(fdid3);
+				fdid3.StructSize = sizeof(fdid3);
+				fdid3.PtrLength = p2->PtrLength;
+				fdid3.PtrData = p2->PtrData;
+				Param2 = (LONG_PTR)&fdid3;
+				Msg3 = DM_SETTEXT;
+			}
+			break;
 		case Far2::DM_SETMAXTEXTLENGTH:
 			Msg3 = DM_SETMAXTEXTLENGTH; break;
 		//DM_SETTEXTLENGTH=DM_SETMAXTEXTLENGTH,
@@ -4007,7 +4036,21 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 		case DM_REDRAW:
 			Msg2 = Far2::DM_REDRAW; break;
 		case DM_SETTEXT:
-			Msg2 = Far2::DM_SETTEXT; break;
+			if (!Param2)
+			{
+				_ASSERTE(Param2!=NULL);
+			}
+			else
+			{
+				const FarDialogItemData* p3 = (const FarDialogItemData*)Param2;
+				_ASSERTE(p3->StructSize==sizeof(*p3));
+				static Far2::FarDialogItemData p2;
+				p2.PtrLength = p3->PtrLength;
+				p2.PtrData = p3->PtrData;
+				Param2 = &p2;
+				Msg2 = Far2::DM_SETTEXT;
+			}
+			break;
 		case DM_SETMAXTEXTLENGTH:
 			Msg2 = Far2::DM_SETMAXTEXTLENGTH; break;
 		case DM_SHOWDIALOG:
@@ -4046,6 +4089,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 				static Far2::FarListGetItem p2;
 				p2.ItemIndex = p3->ItemIndex;
 				FarListItem_3_2(&p3->Item, &p2.Item);
+				Param2 = &p2;
 				Msg2 = Far2::DM_LISTGETITEM;
 			}
 			break;
@@ -4062,6 +4106,7 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 				static Far2::FarListPos p2;
 				p2.SelectPos = p3->SelectPos;
 				p2.TopPos = p3->TopPos;
+				Param2 = &p2;
 				switch (Msg3)
 				{
 				case DM_LISTGETCURPOS:
@@ -7198,8 +7243,12 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 			}
 			#endif
 			h = OpenPluginW(nOpen2, Item);
+			#ifdef _DEBUG
+			if (h)
+				goto trap2;
+			#endif
 		}
-		goto trap;
+		goto trap2;
 	}
 	
 	int nPluginItemNumber = 0;
@@ -7366,7 +7415,7 @@ trap:
 			h = NULL;
 	}
 	#endif
-
+trap2:
 	return h;
 }
 
