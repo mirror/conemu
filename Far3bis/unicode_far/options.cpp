@@ -148,6 +148,7 @@ enum enumOptionsMenu
 {
 	MENU_OPTIONS_SYSTEMSETTINGS,
 	MENU_OPTIONS_PANELSETTINGS,
+	MENU_OPTIONS_TREESETTINGS,
 	MENU_OPTIONS_INTERFACESETTINGS,
 	MENU_OPTIONS_LANGUAGES,
 	MENU_OPTIONS_PLUGINSCONFIG,
@@ -282,6 +283,7 @@ void ShellOptions(int LastCommand,MOUSE_EVENT_RECORD *MouseEvent)
 	{
 		MSG(MMenuSystemSettings),LIF_SELECTED,0,
 		MSG(MMenuPanelSettings),0,0,
+		MSG(MMenuTreeSettings),0,0,
 		MSG(MMenuInterface),0,0,
 		MSG(MMenuLanguages),0,0,
 		MSG(MMenuPluginsConfig),0,0,
@@ -586,6 +588,9 @@ void ShellOptions(int LastCommand,MOUSE_EVENT_RECORD *MouseEvent)
 				case MENU_OPTIONS_PANELSETTINGS:   // Panel settings
 					PanelSettings();
 					break;
+				case MENU_OPTIONS_TREESETTINGS: // Tree settings
+					TreeSettings();
+					break;
 				case MENU_OPTIONS_INTERFACESETTINGS:   // Interface settings
 					InterfaceSettings();
 					break;
@@ -621,7 +626,7 @@ void ShellOptions(int LastCommand,MOUSE_EVENT_RECORD *MouseEvent)
 				case MENU_OPTIONS_PLUGINSCONFIG:   // Plugins configuration
 					CtrlObject->Plugins->Configure();
 					break;
-				case MENU_OPTIONS_PLUGINSMANAGERSETTINGS:
+				case MENU_OPTIONS_PLUGINSMANAGERSETTINGS: // Plugins manager settings
 					PluginsManagerSettings();
 					break;
 				case MENU_OPTIONS_DIALOGSETTINGS:   // Dialog settings (police=5)
@@ -633,13 +638,13 @@ void ShellOptions(int LastCommand,MOUSE_EVENT_RECORD *MouseEvent)
 				case MENU_OPTIONS_CMDLINESETTINGS:   // Command line settings
 					CmdlineSettings();
 					break;
-				case MENU_OPTIONS_AUTOCOMPLETESETTINGS:
+				case MENU_OPTIONS_AUTOCOMPLETESETTINGS: // AutoComplete settings
 					AutoCompleteSettings();
 					break;
 				case MENU_OPTIONS_INFOPANELSETTINGS: // InfoPanel Settings
 					InfoPanelSettings();
 					break;
-				case MENU_OPTIONS_MASKGROUPS:
+				case MENU_OPTIONS_MASKGROUPS:  // Groups of file masks
 					MaskGroupsSettings();
 					break;
 				case MENU_OPTIONS_CONFIRMATIONS:   // Confirmations

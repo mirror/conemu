@@ -264,6 +264,39 @@ void LocalUpperInit()
 	}
 }
 
+struct QsortexHelper
+{
+	int (__cdecl *fcmp)(const void *, const void *,void *userparam);
+	void* user;
+};
+
+int WINAPI qsortCmp(const void *one, const void *two,void *user)
+{
+	return reinterpret_cast<int(__cdecl*)(const void*,const void*)>(user)(one,two);
+}
+
+int WINAPI qsortexCmp(const void *one, const void *two,void *user)
+{
+	QsortexHelper* helper=static_cast<QsortexHelper*>(user);
+	return helper->fcmp(one,two,helper->user);
+}
+
+void WINAPI qsort(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *))
+{
+	NativeFSF.qsort(base,nelem,width,qsortCmp,reinterpret_cast<void*>(fcmp));
+}
+
+void WINAPI qsortex(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *userparam),void *userparam)
+{
+	QsortexHelper helper={fcmp,userparam};
+	NativeFSF.qsort(base,nelem,width,qsortexCmp,&helper);
+}
+
+void* WINAPI bsearch(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *))
+{
+	return NativeFSF.bsearch(key,base,nelem,width,qsortCmp,reinterpret_cast<void*>(fcmp));
+}
+
 int WINAPI LocalIslower(unsigned Ch)
 {
 	return(Ch<256 && IsUpperOrLower[Ch]==1);
@@ -2581,7 +2614,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 
 			if (item_size)
 			{
-				FarGetDialogItem gdi = {item_size, (FarDialogItem *)xf_malloc(item_size)};
+				FarGetDialogItem gdi = {sizeof(FarGetDialogItem), item_size, (FarDialogItem *)xf_malloc(item_size)};
 
 				if (gdi.Item)
 				{
@@ -2606,7 +2639,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 				didA->PtrLength = static_cast<int>(NativeInfo.SendDlgMessage(hDlg, DM_GETTEXT, Param1, 0));
 			wchar_t* text = (wchar_t*) xf_malloc((didA->PtrLength+1)*sizeof(wchar_t));
 			//BUGBUG: если didA->PtrLength=0, то вернЄтс€ с учЄтом '\0', в Ёнц написано, что без, хз как правильно.
-			FarDialogItemData did = {didA->PtrLength, text};
+			FarDialogItemData did = {sizeof(FarDialogItemData), didA->PtrLength, text};
 			INT_PTR ret = NativeInfo.SendDlgMessage(hDlg, DM_GETTEXT, Param1, &did);
 			didA->PtrLength = (unsigned)did.PtrLength;
 			UnicodeToOEM(text,didA->PtrData,didA->PtrLength+1);
@@ -2668,7 +2701,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 
 			wchar_t* text = AnsiToUnicode(didA->PtrData);
 			//BUGBUG - PtrLength ни на что не вли€ет.
-			FarDialogItemData di = {didA->PtrLength,text};
+			FarDialogItemData di = {sizeof(FarDialogItemData),didA->PtrLength,text};
 			INT_PTR ret = NativeInfo.SendDlgMessage(hDlg, DM_SETTEXT, Param1, &di);
 			xf_free(text);
 			return ret;
@@ -2749,7 +2782,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 			if (!Param2) return FALSE;
 
 			oldfar::FarListGetItem* lgiA = (oldfar::FarListGetItem*)Param2;
-			FarListGetItem lgi = {lgiA->ItemIndex};
+			FarListGetItem lgi = {sizeof(FarListGetItem),lgiA->ItemIndex};
 			INT_PTR ret = NativeInfo.SendDlgMessage(hDlg, DM_LISTGETITEM, Param1, &lgi);
 			UnicodeListItemToAnsi(&lgi.Item, &lgiA->Item);
 			return ret;
@@ -2758,7 +2791,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 
 			if (Param2)
 			{
-				FarListPos lp;
+				FarListPos lp={sizeof(FarListPos)};
 				INT_PTR ret=NativeInfo.SendDlgMessage(hDlg, DM_LISTGETCURPOS, Param1, &lp);
 				oldfar::FarListPos *lpA = (oldfar::FarListPos *)Param2;
 				lpA->SelectPos=lp.SelectPos;
@@ -2772,13 +2805,13 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 			if (!Param2) return FALSE;
 
 			oldfar::FarListPos *lpA = (oldfar::FarListPos *)Param2;
-			FarListPos lp = {lpA->SelectPos,lpA->TopPos};
+			FarListPos lp = {sizeof(FarListPos),lpA->SelectPos,lpA->TopPos};
 			return NativeInfo.SendDlgMessage(hDlg, DM_LISTSETCURPOS, Param1, &lp);
 		}
 		case oldfar::DM_LISTDELETE:
 		{
 			oldfar::FarListDelete *ldA = (oldfar::FarListDelete *)Param2;
-			FarListDelete ld;
+			FarListDelete ld={sizeof(FarListDelete)};
 
 			if (Param2)
 			{
@@ -2838,7 +2871,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTUPDATE:
 		{
-			FarListUpdate newui = {};
+			FarListUpdate newui = {sizeof(FarListUpdate)};
 
 			if (Param2)
 			{
@@ -2855,7 +2888,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTINSERT:
 		{
-			FarListInsert newli = {};
+			FarListInsert newli = {sizeof(FarListInsert)};
 
 			if (Param2)
 			{
@@ -2872,7 +2905,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTFINDSTRING:
 		{
-			FarListFind newlf = {};
+			FarListFind newlf = {sizeof(FarListFind)};
 
 			if (Param2)
 			{
@@ -2893,20 +2926,24 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		{
 			if (!Param2) return FALSE;
 
-			oldfar::FarListInfo *liA = (oldfar::FarListInfo *)Param2;
-			FarListInfo li={0,liA->ItemsNumber,liA->SelectPos,liA->TopPos,liA->MaxHeight,liA->MaxLength};
-
-			if (liA ->Flags&oldfar::LINFO_SHOWNOBOX) li.Flags|=LINFO_SHOWNOBOX;
-
-			if (liA ->Flags&oldfar::LINFO_AUTOHIGHLIGHT) li.Flags|=LINFO_AUTOHIGHLIGHT;
-
-			if (liA ->Flags&oldfar::LINFO_REVERSEHIGHLIGHT) li.Flags|=LINFO_REVERSEHIGHLIGHT;
-
-			if (liA ->Flags&oldfar::LINFO_WRAPMODE) li.Flags|=LINFO_WRAPMODE;
-
-			if (liA ->Flags&oldfar::LINFO_SHOWAMPERSAND) li.Flags|=LINFO_SHOWAMPERSAND;
-
-			return NativeInfo.SendDlgMessage(hDlg, DM_LISTINFO, Param1, Param2);
+			FarListInfo li={sizeof(FarListInfo)};
+			INT_PTR Result=NativeInfo.SendDlgMessage(hDlg, DM_LISTINFO, Param1, &li);
+			if (Result)
+			{
+				oldfar::FarListInfo *liA = (oldfar::FarListInfo *)Param2;
+				liA->Flags=0;
+				if (li.Flags&LINFO_SHOWNOBOX) liA->Flags|=LINFO_SHOWNOBOX;
+				if (li.Flags&LINFO_AUTOHIGHLIGHT) liA->Flags|=LINFO_AUTOHIGHLIGHT;
+				if (li.Flags&LINFO_REVERSEHIGHLIGHT) liA->Flags|=LINFO_REVERSEHIGHLIGHT;
+				if (li.Flags&LINFO_WRAPMODE) liA->Flags|=LINFO_WRAPMODE;
+				if (li.Flags&LINFO_SHOWAMPERSAND) liA->Flags|=LINFO_SHOWAMPERSAND;
+				liA->ItemsNumber=static_cast<int>(li.ItemsNumber);
+				liA->SelectPos=li.SelectPos;
+				liA->TopPos=li.TopPos;
+				liA->MaxHeight=li.MaxHeight;
+				liA->MaxLength=li.MaxLength;
+			}
+			return Result;
 		}
 		case oldfar::DM_LISTGETDATA:
 		{
@@ -2917,7 +2954,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 		}
 		case oldfar::DM_LISTSETDATA:
 		{
-			FarListItemData newlid = {};
+			FarListItemData newlid = {sizeof(FarListItemData)};
 
 			if (Param2)
 			{
@@ -2943,7 +2980,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 			if (!Param2) return FALSE;
 
 			oldfar::FarListTitles *ltA = (oldfar::FarListTitles *)Param2;
-			FarListTitles lt = {0,ltA->Title?AnsiToUnicode(ltA->Title):nullptr,0,ltA->Bottom?AnsiToUnicode(ltA->Bottom):nullptr};
+			FarListTitles lt = {sizeof(FarListTitles),0,ltA->Title?AnsiToUnicode(ltA->Title):nullptr,0,ltA->Bottom?AnsiToUnicode(ltA->Bottom):nullptr};
 			INT_PTR ret = NativeInfo.SendDlgMessage(hDlg, DM_LISTSETTITLES, Param1, &lt);
 
 			if (lt.Bottom) xf_free((wchar_t *)lt.Bottom);
@@ -2957,7 +2994,7 @@ LONG_PTR WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, void* Pa
 			if (Param2)
 			{
 				oldfar::FarListTitles *OldListTitle=(oldfar::FarListTitles *)Param2;
-				FarListTitles ListTitle={};
+				FarListTitles ListTitle={sizeof(FarListTitles)};
 
 				if (OldListTitle->Title)
 				{
@@ -3178,7 +3215,7 @@ int WINAPI FarDialogExA(INT_PTR PluginNumber,int X1,int Y1,int X2,int Y2,const c
 		for (int i=0; i<ItemsNumber; i++)
 		{
 			size_t Size = NativeInfo.SendDlgMessage(hDlg, DM_GETDLGITEM, i, 0);
-			FarGetDialogItem gdi = {Size, static_cast<FarDialogItem*>(xf_malloc(Size))};
+			FarGetDialogItem gdi = {sizeof(FarGetDialogItem), Size, static_cast<FarDialogItem*>(xf_malloc(Size))};
 
 			if (gdi.Item)
 			{
@@ -3768,6 +3805,23 @@ void WINAPI FarFreeDirListA(const oldfar::PluginPanelItem *PanelItem)
 	xf_free(base);
 }
 
+static __int64 GetSetting(FARSETTINGS_SUBFOLDERS Root,const wchar_t* Name)
+{
+	__int64 result=0;
+	FarSettingsCreate settings={sizeof(FarSettingsCreate),FarGuid,INVALID_HANDLE_VALUE};
+	HANDLE Settings=NativeInfo.SettingsControl(INVALID_HANDLE_VALUE,SCTL_CREATE,0,&settings)?settings.Handle:0;
+	if(Settings)
+	{
+		FarSettingsItem item={Root,Name,FST_UNKNOWN,{0}};
+		if(NativeInfo.SettingsControl(Settings,SCTL_GET,0,&item)&&FST_QWORD==item.Type)
+		{
+			result=item.Number;
+		}
+		NativeInfo.SettingsControl(Settings,SCTL_FREE,0,0);
+	}
+	return result;
+}
+
 INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMMANDS Command, void *Param)
 {
 	static char *ErrMsg1 = nullptr;
@@ -3781,15 +3835,6 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			VersionInfo Info;
 			NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETFARMANAGERVERSION, 0, &Info);
 			DWORD FarVer = Info.Major<<8|Info.Minor|Info.Build<<16;
-			int OldFarVer;
-			GeneralCfg->GetValue(L"wrapper",L"version",&OldFarVer,FarVer);
-
-			if (
-			    //не выше текущей версии
-			    (LOWORD(OldFarVer)<LOWORD(FarVer) || ((LOWORD(OldFarVer)==LOWORD(FarVer)) && HIWORD(OldFarVer)<HIWORD(FarVer))) &&
-			    //и не ниже 1.70.1
-			    LOWORD(OldFarVer)>=0x0146 && HIWORD(OldFarVer)>=0x1)
-				FarVer=OldFarVer;
 
 			if (Param)
 				*(DWORD*)Param=FarVer;
@@ -3801,16 +3846,19 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 
 		case oldfar::ACTL_GETSYSWORDDIV:
 		{
-			INT_PTR Length = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETSYSWORDDIV, 0, nullptr);
-
-			if (Param)
+			INT_PTR Length = 0;
+			FarSettingsCreate settings={sizeof(FarSettingsCreate),FarGuid,INVALID_HANDLE_VALUE};
+			HANDLE Settings=NativeInfo.SettingsControl(INVALID_HANDLE_VALUE,SCTL_CREATE,0,&settings)?settings.Handle:0;
+			if(Settings)
 			{
-				wchar_t *SysWordDiv = (wchar_t*)xf_malloc((Length+1)*sizeof(wchar_t));
-				NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETSYSWORDDIV, Length, SysWordDiv);
-				UnicodeToOEM(SysWordDiv,(char*)Param,oldfar::NM);
-				xf_free(SysWordDiv);
+				FarSettingsItem item={FSSF_EDITOR,L"WordDiv",FST_UNKNOWN,{0}};
+				if(NativeInfo.SettingsControl(Settings,SCTL_GET,0,&item)&&FST_STRING==item.Type)
+				{
+					Length=Min(oldfar::NM,StrLength(item.String)+1);
+					if(Param) UnicodeToOEM(item.String,(char*)Param,oldfar::NM);
+				}
+				NativeInfo.SettingsControl(Settings,SCTL_FREE,0,0);
 			}
-
 			return Length;
 		}
 		case oldfar::ACTL_WAITKEY:
@@ -4054,125 +4102,51 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETFARHWND, 0, 0);
 		case oldfar::ACTL_GETSYSTEMSETTINGS:
 		{
-			INT_PTR ss = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETSYSTEMSETTINGS, 0, 0);
 			INT_PTR ret = oldfar::FSS_CLEARROATTRIBUTE;
 
-			if (ss&FSS_DELETETORECYCLEBIN)        ret|=oldfar::FSS_DELETETORECYCLEBIN;
-
-			if (ss&FSS_USESYSTEMCOPYROUTINE)      ret|=oldfar::FSS_USESYSTEMCOPYROUTINE;
-
-			if (ss&FSS_COPYFILESOPENEDFORWRITING) ret|=oldfar::FSS_COPYFILESOPENEDFORWRITING;
-
-			if (ss&FSS_CREATEFOLDERSINUPPERCASE)  ret|=oldfar::FSS_CREATEFOLDERSINUPPERCASE;
-
-			if (ss&FSS_SAVECOMMANDSHISTORY)       ret|=oldfar::FSS_SAVECOMMANDSHISTORY;
-
-			if (ss&FSS_SAVEFOLDERSHISTORY)        ret|=oldfar::FSS_SAVEFOLDERSHISTORY;
-
-			if (ss&FSS_SAVEVIEWANDEDITHISTORY)    ret|=oldfar::FSS_SAVEVIEWANDEDITHISTORY;
-
-			if (ss&FSS_USEWINDOWSREGISTEREDTYPES) ret|=oldfar::FSS_USEWINDOWSREGISTEREDTYPES;
-
-			if (ss&FSS_AUTOSAVESETUP)             ret|=oldfar::FSS_AUTOSAVESETUP;
-
-			if (ss&FSS_SCANSYMLINK)               ret|=oldfar::FSS_SCANSYMLINK;
+			if (GetSetting(FSSF_SYSTEM,L"DeleteToRecycleBin")) ret|=oldfar::FSS_DELETETORECYCLEBIN;
+			if (GetSetting(FSSF_SYSTEM,L"CopyOpened")) ret|=oldfar::FSS_COPYFILESOPENEDFORWRITING;
+			if (GetSetting(FSSF_SYSTEM,L"ScanJunction")) ret|=oldfar::FSS_SCANSYMLINK;
 
 			return ret;
 		}
 		case oldfar::ACTL_GETPANELSETTINGS:
 		{
-			INT_PTR ps = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETPANELSETTINGS, 0, 0);
 			INT_PTR ret = 0;
 
-			if (ps&FPS_SHOWHIDDENANDSYSTEMFILES)    ret|=oldfar::FPS_SHOWHIDDENANDSYSTEMFILES;
-
-			if (ps&FPS_HIGHLIGHTFILES)              ret|=oldfar::FPS_HIGHLIGHTFILES;
-
-			if (ps&FPS_AUTOCHANGEFOLDER)            ret|=oldfar::FPS_AUTOCHANGEFOLDER;
-
-			if (ps&FPS_SELECTFOLDERS)               ret|=oldfar::FPS_SELECTFOLDERS;
-
-			if (ps&FPS_ALLOWREVERSESORTMODES)       ret|=oldfar::FPS_ALLOWREVERSESORTMODES;
-
-			if (ps&FPS_SHOWCOLUMNTITLES)            ret|=oldfar::FPS_SHOWCOLUMNTITLES;
-
-			if (ps&FPS_SHOWSTATUSLINE)              ret|=oldfar::FPS_SHOWSTATUSLINE;
-
-			if (ps&FPS_SHOWFILESTOTALINFORMATION)   ret|=oldfar::FPS_SHOWFILESTOTALINFORMATION;
-
-			if (ps&FPS_SHOWFREESIZE)                ret|=oldfar::FPS_SHOWFREESIZE;
-
-			if (ps&FPS_SHOWSCROLLBAR)               ret|=oldfar::FPS_SHOWSCROLLBAR;
-
-			if (ps&FPS_SHOWBACKGROUNDSCREENSNUMBER) ret|=oldfar::FPS_SHOWBACKGROUNDSCREENSNUMBER;
-
-			if (ps&FPS_SHOWSORTMODELETTER)          ret|=oldfar::FPS_SHOWSORTMODELETTER;
+			if (GetSetting(FSSF_PANEL,L"ShowHidden")) ret|=oldfar::FPS_SHOWHIDDENANDSYSTEMFILES;
+			if (GetSetting(FSSF_PANELLAYOUT,L"ColumnTitles")) ret|=oldfar::FPS_SHOWCOLUMNTITLES;
+			if (GetSetting(FSSF_PANELLAYOUT,L"StatusLine")) ret|=oldfar::FPS_SHOWSTATUSLINE;
+			if (GetSetting(FSSF_PANELLAYOUT,L"SortMode")) ret|=oldfar::FPS_SHOWSORTMODELETTER;
 
 			return ret;
 		}
 		case oldfar::ACTL_GETINTERFACESETTINGS:
 		{
-			INT_PTR is = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETINTERFACESETTINGS, 0, 0);
 			INT_PTR ret = 0;
-
-			if (is&FIS_CLOCKINPANELS)                  ret|=oldfar::FIS_CLOCKINPANELS;
-
-			if (is&FIS_CLOCKINVIEWERANDEDITOR)         ret|=oldfar::FIS_CLOCKINVIEWERANDEDITOR;
-
-			if (is&FIS_MOUSE)                          ret|=oldfar::FIS_MOUSE;
-
-			if (is&FIS_SHOWKEYBAR)                     ret|=oldfar::FIS_SHOWKEYBAR;
-
-			if (is&FIS_ALWAYSSHOWMENUBAR)              ret|=oldfar::FIS_ALWAYSSHOWMENUBAR;
-
-			if (is&FIS_SHOWTOTALCOPYPROGRESSINDICATOR) ret|=oldfar::FIS_SHOWTOTALCOPYPROGRESSINDICATOR;
-
-			if (is&FIS_SHOWCOPYINGTIMEINFO)            ret|=oldfar::FIS_SHOWCOPYINGTIMEINFO;
-
-			if (is&FIS_USECTRLPGUPTOCHANGEDRIVE)       ret|=oldfar::FIS_USECTRLPGUPTOCHANGEDRIVE;
-
+			if (GetSetting(FSSF_SCREEN,L"KeyBar")) ret|=oldfar::FIS_SHOWKEYBAR;
+			if (GetSetting(FSSF_INTERFACE,L"ShowMenuBar")) ret|=oldfar::FIS_ALWAYSSHOWMENUBAR;
 			return ret;
 		}
 		case oldfar::ACTL_GETCONFIRMATIONS:
 		{
-			INT_PTR cs = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETCONFIRMATIONS, 0, 0);
 			INT_PTR ret = 0;
 
-			if (cs&FCS_COPYOVERWRITE)          ret|=oldfar::FCS_COPYOVERWRITE;
-
-			if (cs&FCS_MOVEOVERWRITE)          ret|=oldfar::FCS_MOVEOVERWRITE;
-
-			if (cs&FCS_DRAGANDDROP)            ret|=oldfar::FCS_DRAGANDDROP;
-
-			if (cs&FCS_DELETE)                 ret|=oldfar::FCS_DELETE;
-
-			if (cs&FCS_DELETENONEMPTYFOLDERS)  ret|=oldfar::FCS_DELETENONEMPTYFOLDERS;
-
-			if (cs&FCS_INTERRUPTOPERATION)     ret|=oldfar::FCS_INTERRUPTOPERATION;
-
-			if (cs&FCS_DISCONNECTNETWORKDRIVE) ret|=oldfar::FCS_DISCONNECTNETWORKDRIVE;
-
-			if (cs&FCS_RELOADEDITEDFILE)       ret|=oldfar::FCS_RELOADEDITEDFILE;
-
-			if (cs&FCS_CLEARHISTORYLIST)       ret|=oldfar::FCS_CLEARHISTORYLIST;
-
-			if (cs&FCS_EXIT)                   ret|=oldfar::FCS_EXIT;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"Copy")) ret|=oldfar::FCS_COPYOVERWRITE;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"Move")) ret|=oldfar::FCS_MOVEOVERWRITE;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"Drag")) ret|=oldfar::FCS_DRAGANDDROP;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"Delete")) ret|=oldfar::FCS_DELETE;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"DeleteFolder")) ret|=oldfar::FCS_DELETENONEMPTYFOLDERS;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"Esc")) ret|=oldfar::FCS_INTERRUPTOPERATION;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"RemoveConnection")) ret|=oldfar::FCS_DISCONNECTNETWORKDRIVE;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"HistoryClear")) ret|=oldfar::FCS_CLEARHISTORYLIST;
+			if (GetSetting(FSSF_CONFIRMATIONS,L"Exit")) ret|=oldfar::FCS_EXIT;
 
 			return ret;
 		}
 		case oldfar::ACTL_GETDESCSETTINGS:
 		{
-			INT_PTR ds = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETDESCSETTINGS, 0, 0);
 			INT_PTR ret = 0;
-
-			if (ds&FDS_UPDATEALWAYS)      ret|=oldfar::FDS_UPDATEALWAYS;
-
-			if (ds&FDS_UPDATEIFDISPLAYED) ret|=oldfar::FDS_UPDATEIFDISPLAYED;
-
-			if (ds&FDS_SETHIDDEN)         ret|=oldfar::FDS_SETHIDDEN;
-
-			if (ds&FDS_UPDATEREADONLY)    ret|=oldfar::FDS_UPDATEREADONLY;
-
 			return ret;
 		}
 		case oldfar::ACTL_SETARRAYCOLOR:
@@ -4194,16 +4168,13 @@ INT_PTR WINAPI FarAdvControlA(INT_PTR ModuleNumber,oldfar::ADVANCED_CONTROL_COMM
 		case oldfar::ACTL_GETWCHARMODE:
 			return TRUE;
 		case oldfar::ACTL_GETPLUGINMAXREADDATA:
-			return NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETPLUGINMAXREADDATA, 0, 0);
+			return GetSetting(FSSF_SYSTEM,L"PluginMaxReadData");
 		case oldfar::ACTL_GETDIALOGSETTINGS:
 		{
-			INT_PTR ds = NativeInfo.AdvControl(GetPluginGuid(ModuleNumber), ACTL_GETDIALOGSETTINGS, 0, 0);
 			INT_PTR ret = 0;
 
-			if (ds&FDIS_AUTOCOMPLETEININPUTLINES)       ret|=oldfar::FDIS_AUTOCOMPLETEININPUTLINES;
-			if (ds&FDIS_HISTORYINDIALOGEDITCONTROLS)    ret|=oldfar::FDIS_HISTORYINDIALOGEDITCONTROLS;
-			if (ds&FDIS_PERSISTENTBLOCKSINEDITCONTROLS) ret|=oldfar::FDIS_PERSISTENTBLOCKSINEDITCONTROLS;
-			if (ds&FDIS_BSDELETEUNCHANGEDTEXT)          ret|=oldfar::FDIS_BSDELETEUNCHANGEDTEXT;
+			if (GetSetting(FSSF_DIALOG,L"EditBlock")) ret|=oldfar::FDIS_PERSISTENTBLOCKSINEDITCONTROLS;
+			if (GetSetting(FSSF_DIALOG,L"EULBsClear")) ret|=oldfar::FDIS_BSDELETEUNCHANGEDTEXT;
 
 			return ret;
 		}
@@ -4737,7 +4708,6 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 		case oldfar::ECTL_SELECT:				Command = ECTL_SELECT; break;
 		case oldfar::ECTL_SETPOSITION:	Command = ECTL_SETPOSITION; break;
 		case oldfar::ECTL_TABTOREAL:		Command = ECTL_TABTOREAL; break;
-		case oldfar::ECTL_TURNOFFMARKINGBLOCK:	Command = ECTL_TURNOFFMARKINGBLOCK; break;
 		case oldfar::ECTL_ADDSTACKBOOKMARK:			Command = ECTL_ADDSESSIONBOOKMARK; break;
 		case oldfar::ECTL_PREVSTACKBOOKMARK:		Command = ECTL_PREVSESSIONBOOKMARK; break;
 		case oldfar::ECTL_NEXTSTACKBOOKMARK:		Command = ECTL_NEXTSESSIONBOOKMARK; break;
@@ -5004,9 +4974,9 @@ oldfar::FarStandardFunctions StandardFunctions =
 	wrapper::FarItoa64A,
 	sprintf,
 	sscanf,
-	nullptr, // copy from NativeFSF
-	nullptr, // copy from NativeFSF
-	nullptr, // copy from NativeFSF
+	wrapper::qsort,
+	wrapper::bsearch,
+	wrapper::qsortex,
 	_snprintf,
 	{},
 	wrapper::LocalIslower,
@@ -5086,9 +5056,6 @@ static void CreatePluginStartupInfoA(PluginA *pPlugin, oldfar::PluginStartupInfo
 {
 	StartupInfo.SaveScreen = NativeInfo.SaveScreen;
 	StartupInfo.RestoreScreen = NativeInfo.RestoreScreen;
-	StandardFunctions.qsort = NativeFSF.qsort;
-	StandardFunctions.qsortex = NativeFSF.qsortex;
-	StandardFunctions.bsearch = NativeFSF.bsearch;
 
 	*PSI=StartupInfo;
 	*FSF=StandardFunctions;
@@ -5159,6 +5126,13 @@ bool PluginA::CheckMinFarVersion()
 	return true;
 }
 
+static HANDLE TranslateResult(HANDLE hResult)
+{
+	if(INVALID_HANDLE_VALUE==hResult) return nullptr;
+	if((HANDLE)-2==hResult) return PANEL_STOP;
+	return hResult;
+}
+
 HANDLE PluginA::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 {
 	ChangePriority *ChPriority = new ChangePriority(THREAD_PRIORITY_NORMAL);
@@ -5182,6 +5156,7 @@ HANDLE PluginA::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		es.hDefaultResult = nullptr;
 		es.hResult = nullptr;
 		char *ItemA = nullptr;
+		oldfar::OpenDlgPluginData DlgData;
 
 		if (Item && (OpenFrom == OPEN_COMMANDLINE  || OpenFrom == OPEN_SHORTCUT))
 		{
@@ -5201,12 +5176,17 @@ HANDLE PluginA::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 			OpenFrom = oldfar::OPEN_FROMMACRO|CtrlObject->Macro.GetMode();
 			Item=(INT_PTR)UnicodeToAnsi(((OpenMacroInfo*)Item)->Count?((OpenMacroInfo*)Item)->Values[0].String:L"");
 		}
-
+		if (OpenFrom == OPEN_DIALOG)
+		{
+			DlgData.ItemNumber=Guid.Data1;
+			DlgData.hDlg=reinterpret_cast<OpenDlgPluginData*>(Item)->hDlg;
+			Item=(INT_PTR)&DlgData;
+		}
 		EXECUTE_FUNCTION_EX(FUNCTION(iOpen)(OpenFrom,Item), es);
 
 		if (ItemA) xf_free(ItemA);
 
-		hResult = (es.hResult == INVALID_HANDLE_VALUE)? nullptr : es.hResult;
+		hResult = TranslateResult(es.hResult);
 		//CurPluginItem=nullptr; //BUGBUG
 		/*    CtrlObject->Macro.SetRedrawEditor(TRUE); //BUGBUG
 
@@ -5267,7 +5247,7 @@ HANDLE PluginA::OpenFilePlugin(
 
 		if (NameA) xf_free(NameA);
 
-		hResult = (es.hResult == INVALID_HANDLE_VALUE)? nullptr : es.hResult;
+		hResult = TranslateResult(es.hResult);
 	}
 
 	return hResult;

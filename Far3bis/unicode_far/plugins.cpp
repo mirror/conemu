@@ -457,8 +457,9 @@ Plugin* PluginManager::LoadPlugin(
 	{
 		// Значит плагин почему-то оказался уже загружен
 		// Это может быть, например, если в ключе "/p" указано несколько пересекающихся папок
-		// Не будем ругаться, если регистры различаются, а то достало
-		_ASSERTE(pPlugin==nullptr || pPlugin->GetModuleName()!=lpwszModuleName);
+		// Или плагин был загружен из другого плагина (AdvCmd2->VisComp)
+		//-- Не будем ругаться, если регистры различаются, а то достало
+		_ASSERTE(("Plugin was already loaded!" && 0) || pPlugin->GetModuleName()!=lpwszModuleName);
 		return pPlugin;
 	}
 	#else
@@ -1035,9 +1036,9 @@ HANDLE PluginManager::OpenFilePlugin(
 
 			hPlugin = pPlugin->OpenFilePlugin(Name? Name->CPtr() : nullptr, (BYTE*)Info.Buffer, Info.BufferSize, OpMode);
 
-			if (hPlugin == (HANDLE)-2)   //сразу на выход, плагин решил нагло обработать все сам (Autorun/PictureView)!!!
+			if (hPlugin == PANEL_STOP)   //сразу на выход, плагин решил нагло обработать все сам (Autorun/PictureView)!!!
 			{
-				hResult = (HANDLE)-2;
+				hResult = PANEL_STOP;
 				break;
 			}
 
@@ -1065,7 +1066,7 @@ HANDLE PluginManager::OpenFilePlugin(
 			break;
 	}
 
-	if (items.getCount() && (hResult != (HANDLE)-2))
+	if (items.getCount() && (hResult != PANEL_STOP))
 	{
 		bool OnlyOne = (items.getCount() == 1) && !(Name && Opt.PluginConfirm.OpenFilePlugin && Opt.PluginConfirm.StandardAssociation && Opt.PluginConfirm.EvenIfOnlyOnePlugin);
 
@@ -1104,7 +1105,7 @@ HANDLE PluginManager::OpenFilePlugin(
 			}
 
 			if (menu.GetExitCode() == -1)
-				hResult = (HANDLE)-2;
+				hResult = PANEL_STOP;
 			else
 			{
 				void* pItem = menu.GetUserData(nullptr, 0);
@@ -1125,9 +1126,9 @@ HANDLE PluginManager::OpenFilePlugin(
 			OpenAnalyseInfo oainfo={sizeof(OpenAnalyseInfo),&Info,pResult->Analyse};
 			HANDLE h = pResult->Handle.pPlugin->Open(OPEN_ANALYSE, FarGuid, (INT_PTR)&oainfo);
 
-			if (h == (HANDLE)-2)
+			if (h == PANEL_STOP)
 			{
-				hResult = (HANDLE)-2;
+				hResult = PANEL_STOP;
 				pResult = nullptr;
 			}
 			else if (h)
@@ -2034,7 +2035,7 @@ NEXT:
 						if (item)
 						{
 							bool bUnload = (Key==KEY_DEL
-							                && (item->pPlugin->GetFuncFlags()&PICFF_LOADED)
+							                //&& (item->pPlugin->GetFuncFlags()&PICFF_LOADED) // а я действительно хочу его из списка убрать, пусть даже он в память еще не был загружен
 								              && (Message(0,2,MSG(MPluginUnloadTitle),MSG(MPluginUnloadMsg),MSG(MYes),MSG(MNo))==0))
 								              && (!item->pPlugin->CheckWorkFlags(PIWF_PRELOADED) || Message(MSG_WARNING,2,MSG(MPluginUnloadPreloadTitle),MSG(MPluginUnloadPreloadMsg),MSG(MPluginUnloadPreloadMsg2),MSG(MNo),MSG(MYes))==1)
 								              ;
@@ -2479,7 +2480,7 @@ NEXT:
 	Panel *ActivePanel=CtrlObject->Cp()->ActivePanel;
 	int OpenCode=OPEN_PLUGINSMENU;
 	INT_PTR Item=0;
-	OpenDlgPluginData pd;
+	OpenDlgPluginData pd={sizeof(OpenDlgPluginData)};
 
 	if (Editor)
 	{
@@ -3126,6 +3127,14 @@ void PluginManager::ReadUserBackgound(SaveScreen *SaveScr)
 */
 int PluginManager::CallPlugin(const GUID& SysID,int OpenFrom, void *Data,int *Ret)
 {
+	if (FrameManager->GetCurrentFrame()->GetType() == MODALTYPE_DIALOG)
+	{
+		if (static_cast<Dialog*>(FrameManager->GetCurrentFrame())->CheckDialogMode(DMODE_NOPLUGINS))
+		{
+			return FALSE;
+		}
+	}
+
 	Plugin *pPlugin = FindPlugin(SysID);
 
 	if (pPlugin)
@@ -3165,8 +3174,10 @@ int PluginManager::CallPlugin(const GUID& SysID,int OpenFrom, void *Data,int *Re
 
 			if (Ret)
 			{
+				_ASSERTE(OpenFrom == OPEN_FROMMACRO);
 				PluginHandle *handle=(PluginHandle *)hNewPlugin;
-				*Ret = !hNewPlugin || handle->hPlugin? 1 : 0;
+				*Ret = (hNewPlugin && handle->hPlugin) ? 1 : 0;
+				delete handle;
 			}
 
 			return TRUE;
@@ -3175,8 +3186,7 @@ int PluginManager::CallPlugin(const GUID& SysID,int OpenFrom, void *Data,int *Re
 	return FALSE;
 }
 
-#if 1
-//Maximus: поддержка макрофункций plugin.call, plugin.cmd, plugin.config и т.п
+// поддержка макрофункций plugin.call, plugin.cmd, plugin.config и т.п
 int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret/*=nullptr*/)
 {
 	BOOL Result=FALSE;
@@ -3184,6 +3194,15 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 	if (!ProcessException)
 	{
 		int curType = FrameManager->GetCurrentFrame()->GetType();
+
+		if (curType==MODALTYPE_DIALOG)
+		{
+			if (static_cast<Dialog*>(FrameManager->GetCurrentFrame())->CheckDialogMode(DMODE_NOPLUGINS))
+			{
+				return FALSE;
+			}
+		}
+
 		bool Editor = curType==MODALTYPE_EDITOR;
 		bool Viewer = curType==MODALTYPE_VIEWER;
 		bool Dialog = curType==MODALTYPE_DIALOG;
@@ -3196,36 +3215,34 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 				// Разрешен ли вызов данного типа в текущей области (предварительная проверка)
 				switch ((Data->CallFlags & CPT_MASK))
 				{
-				case CPT_CALL:
-					if (!Data->pPlugin->HasOpenPanel())
-						return FALSE;
-					break;
-				case CPT_CONFIGURE:
-					if (curType!=MODALTYPE_PANELS)
-					{
-						//TODO: Автокомплит не влияет?
-						_ASSERTE(curType==MODALTYPE_PANELS);
-						return FALSE;
-					}
-					if (!Data->pPlugin->HasConfigure())
-						return FALSE;
-					break;
-				case CPT_PREFIX:
-					if (curType!=MODALTYPE_PANELS)
-					{
-						//TODO: Автокомплит не влияет?
-						_ASSERTE(curType==MODALTYPE_PANELS);
-						return FALSE;
-					}
-					//TODO: OpenPanel или OpenFilePlugin?
-					if (!Data->pPlugin->HasOpenPanel())
-						return FALSE;
-					break;
-				case CPT_INTERNAL:
-					//TODO: Уточнить функцию
-					if (!Data->pPlugin->HasOpenPanel())
-						return FALSE;
-					break;
+					case CPT_MENU:
+						if (!Data->pPlugin->HasOpenPanel())
+							return FALSE;
+						break;
+					case CPT_CONFIGURE:
+						if (curType!=MODALTYPE_PANELS)
+						{
+							//TODO: Автокомплит не влияет?
+							return FALSE;
+						}
+						if (!Data->pPlugin->HasConfigure())
+							return FALSE;
+						break;
+					case CPT_CMDLINE:
+						if (curType!=MODALTYPE_PANELS)
+						{
+							//TODO: Автокомплит не влияет?
+							return FALSE;
+						}
+						//TODO: OpenPanel или OpenFilePlugin?
+						if (!Data->pPlugin->HasOpenPanel())
+							return FALSE;
+						break;
+					case CPT_INTERNAL:
+						//TODO: Уточнить функцию
+						if (!Data->pPlugin->HasOpenPanel())
+							return FALSE;
+						break;
 				}
 
 				UINT64 IFlags;
@@ -3240,27 +3257,26 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 				// Разрешен ли вызов данного типа в текущей области
 				switch ((Data->CallFlags & CPT_MASK))
 				{
-				case CPT_CALL:
-					if ((Editor && !(IFlags & PF_EDITOR)) ||
-							(Viewer && !(IFlags & PF_VIEWER)) ||
-							(Dialog && !(IFlags & PF_DIALOG)) ||
-							(!Editor && !Viewer && !Dialog && (IFlags & PF_DISABLEPANELS)))
-						return FALSE;
-					_ASSERTE(curType==MODALTYPE_PANELS || (Editor&&curType==MODALTYPE_EDITOR) || (Viewer&&curType==MODALTYPE_VIEWER) || (Dialog&&curType==MODALTYPE_DIALOG));
-					MenuItems = &Info.PluginMenu;
-					break;
-				case CPT_CONFIGURE:
-					MenuItems = &Info.PluginConfig;
-					break;
-				case CPT_PREFIX:
-					if (!Info.CommandPrefix || !*Info.CommandPrefix)
-						return FALSE;
-					break;
-				case CPT_INTERNAL:
-					break;
+					case CPT_MENU:
+						if ((Editor && !(IFlags & PF_EDITOR)) ||
+								(Viewer && !(IFlags & PF_VIEWER)) ||
+								(Dialog && !(IFlags & PF_DIALOG)) ||
+								(!Editor && !Viewer && !Dialog && (IFlags & PF_DISABLEPANELS)))
+							return FALSE;
+						MenuItems = &Info.PluginMenu;
+						break;
+					case CPT_CONFIGURE:
+						MenuItems = &Info.PluginConfig;
+						break;
+					case CPT_CMDLINE:
+						if (!Info.CommandPrefix || !*Info.CommandPrefix)
+							return FALSE;
+						break;
+					case CPT_INTERNAL:
+						break;
 				}
 
-				if ((Data->CallFlags & CPT_MASK)==CPT_CALL || (Data->CallFlags & CPT_MASK)==CPT_CONFIGURE)
+				if ((Data->CallFlags & CPT_MASK)==CPT_MENU || (Data->CallFlags & CPT_MASK)==CPT_CONFIGURE)
 				{
 					bool ItemFound = false;
 					if (Data->ItemGuid==nullptr)
@@ -3297,17 +3313,17 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 			if (!Data->pPlugin)
 				return FALSE;
 
-			HANDLE hPlugin=INVALID_HANDLE_VALUE;
+			HANDLE hPlugin=nullptr;
 			Panel *ActivePanel=nullptr;
 
 			switch ((Data->CallFlags & CPT_MASK))
 			{
-			case CPT_CALL:
+				case CPT_MENU:
 				{
 					ActivePanel=CtrlObject->Cp()->ActivePanel;
 					int OpenCode=OPEN_PLUGINSMENU;
 					INT_PTR Item=0;
-					OpenDlgPluginData pd;
+					OpenDlgPluginData pd={sizeof(OpenDlgPluginData)};
 
 					if (Editor)
 					{
@@ -3327,33 +3343,32 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 					hPlugin=Open(Data->pPlugin,OpenCode,Data->FoundGuid,Item);
 
 					Result=TRUE;
+					break;
 				}
-				break;
 
-			case CPT_CONFIGURE:
-				CtrlObject->Plugins->ConfigureCurrent(Data->pPlugin,Data->FoundGuid);
-				return TRUE;
+				case CPT_CONFIGURE:
+					CtrlObject->Plugins->ConfigureCurrent(Data->pPlugin,Data->FoundGuid);
+					return TRUE;
 
-			case CPT_PREFIX:
+				case CPT_CMDLINE:
 				{
 					ActivePanel=CtrlObject->Cp()->ActivePanel;
 					string command=Data->Command; // Нужна копия строки
 					hPlugin=Open(Data->pPlugin,OPEN_COMMANDLINE,FarGuid,(INT_PTR)command.CPtr());
 
 					Result=TRUE;
+					break;
 				}
-				break;
-			case CPT_INTERNAL:
-				//TODO: бывший CallPlugin
-				//WARNING: учесть, что он срабатывает без переключения MacroState
-				break;
+				case CPT_INTERNAL:
+					//TODO: бывший CallPlugin
+					//WARNING: учесть, что он срабатывает без переключения MacroState
+					break;
 			}
 
-			_ASSERTE(hPlugin!=INVALID_HANDLE_VALUE && hPlugin!=(HANDLE)-2);
 			if (hPlugin && !Editor && !Viewer && !Dialog)
 			{
 				//BUGBUG: Закрытие панели? Нужно ли оно?
-				//BUGBUG: В ProcessCommandLine зовется перед Open, а в CPT_CALL - после
+				//BUGBUG: В ProcessCommandLine зовется перед Open, а в CPT_MENU - после
 				if (ActivePanel->ProcessPluginEvent(FE_CLOSE,nullptr))
 				{
 					ClosePanel(hPlugin);
@@ -3378,7 +3393,6 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 
 	return Result;
 }
-#endif
 
 Plugin *PluginManager::FindPlugin(const GUID& SysID)
 {

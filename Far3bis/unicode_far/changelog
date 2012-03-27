@@ -1,3 +1,259 @@
+drkns 26.03.2012 13:20:06 +0200 - build 2574
+
+1. Опечатка в 2453.1
+
+zg 25.03.2012 20:59:15 +0200 - build 2573
+
+1. при обработке shift-f2 раньше для первого файла приходил OPM_TOPLEVEL, для всех последующих OPM_TOPLEVEL|OPM_SILENT. 
+   сейчас введено разделение по плагинам. OPM_SILENT добавляется начиная со второго файла обрабатываемого конкретным плагином.
+
+zg 25.03.2012 19:11:55 +0200 - build 2572
+
+1. OpenW возвращает NULL, если панель не создаётся. PANEL_STOP - если панель создаётся но надо прервать дальнейшую обработку. (HANDLE)-2 специально не обрабатывется.
+   все нативные плагины перестали работать.
+
+2. AnalyseW возвращает NULL, если формат не опознан. INVALID_HANDLE_VALUE теперь тоже считается за опознанный формат.
+   все нативные плагины перестали работать.
+
+zg 25.03.2012 17:30:47 +0200 - build 2571
+
+1. FSF::qsort убрана. FSF::qsortex переименована в FSF::qsort и __cdecl изменён на WINAPI.
+   все нативные плагины перестали работать.
+
+2. FSF::bsearch изменена. __cdecl изменён на WINAPI. добавлен параметр user, который передаётся в функцию сравнения.
+   все нативные плагины перестали работать.
+
+3. убран FSF::Reserved.
+   все нативные плагины перестали работать.
+
+zg 25.03.2012 14:58:20 +0200 - build 2570
+
+1. уточнение 2567.
+
+drkns 25.03.2012 14:15:24 +0200 - build 2569
+
+1. warning.
+
+2. api: константа CURRENT_EDITOR == -1 для EditorControl.
+
+zg 25.03.2012 04:17:02 +0200 - build 2568
+
+1. исправлена реализация DM_LISTINFO во враппере.
+
+zg 25.03.2012 02:23:52 +0200 - build 2567
+
+1. поле StructSize добавлено в следующие структуры:
+   FarListUpdate
+   FarListInsert
+   FarListGetItem
+   FarListPos
+   FarListFind
+   FarListDelete
+   FarListInfo
+   FarListItemData
+   FarListTitles
+   FarDialogItemColors
+   FarDialogItemData
+   OpenDlgPluginData
+   FarGetDialogItem
+   все нативные плагины перестали работать.
+
+svs 23.03.2012 17:09:23 +0400 - build 2566
+
+1. Mantis#0000881: Неправильная работа $AKey.
+
+drkns 23.03.2012 13:57:12 +0200 - build 2565
+
+1. Уточнение 2564.
+
+2. Warnings.
+
+svs 22.03.2012 16:08:04 +0400 - build 2564
+
+1. небольшое избавление от дергания GeneralCfg
+
+2. Вызов ReadConfig() перенесен "выше".
+
+3. sqlite 3.7.11
+
+svs 22.03.2012 14:24:38 +0400 - build 2563
+
+1. Mantis#0002053: Работают не все кнопкосочетания <RCtrl + LAlt + клавиша>
+
+svs 22.03.2012 12:35:09 +0400 - build 2562
+
+1. Подготовка к теме о хранение файлов-деревьев - новый диалог "Tree settings".
+
+2. Опция "Auto change folder" перенесена из "Panel settings" в новый диалог "Tree settings".
+
+3. Дерево теперь хранится в файле с именем tree3.far ("структура" пока не поменялась), а кэш - в каталоге tree3.cache.
+
+4. Каталог tree3.cache теперь располагается в LocalProfilePath (раньше был в %FARHOME%)
+
+svs 20.03.2012 13:31:49 +0400 - build 2561
+
+1. Fix for 2557 (в части syslog.cpp)
+
+2. Mantis#0001483: Сделать параметры Dlg.GetValue() опциональными
+
+   Dlg.GetValue()==Dlg.GetValue(-1) 
+
+3. Mantis#0001903: Plugin.Menu(guid,menuGuid)
+
+   <АХТУНГ>
+
+   Plugin.Prefix переименован в Plugin.Cmdline
+   
+   </АХТУНГ>
+
+svs 20.03.2012 11:17:53 +0400 - build 2560
+
+1. Fix for 2557
+
+zg 20.03.2012 03:51:54 +0200 - build 2559
+
+1. ECTL_TURNOFFMARKINGBLOCK убрана. для всех ECTL_* что-то меняющих в редакторе требуемые действия производятся автоматически.
+
+zg 20.03.2012 02:51:44 +0200 - build 2558
+
+1. откат 2551.
+
+2. удалена KMFLAGS_SAVEMACRO.
+
+zg 20.03.2012 02:36:49 +0200 - build 2557
+
+1. поле Private в PluginStartupInfo.
+
+zg 19.03.2012 19:43:07 +0200 - build 2556
+
+1. работа с шоткатами и историей в плагинах переделана.
+   теперь при переходу по шоткату или из истории всегда приходит OpenW(OPEN_SHORTCUT,...). Data указывает на OpenShortcutInfo.
+   для того чтобы папки плагина попадали в историю и шоткаты, необходимо в указать флаг OPIF_SHORTCUT в OpenPanelInfo.Flags.
+   FCTL_GETPANELDIRECTORY для плагиновой панели без флага OPIF_SHORTCUT вернёт 0.
+
+drkns 19.03.2012 14:01:43 +0200 - build 2555
+
+1. Mantis#0002051: Ошибка при копировании на сетевую шару системы с CentOS-5.4.
+
+2. Пара мелочей в копире.
+
+zg 18.03.2012 01:23:01 +0200 - build 2554
+
+1. фар закрывает панель плагина автоматически также если OpenPlanelInfo.CurDir==L"\\".
+
+2. уточнение 2553.
+
+svs 17.03.2012 15:17:38 +0400 - build 2553
+
+1. После Mantis#1840 в базу начали писаться глобальные переменные и константы.
+   Глобальные переменные должны попадать в "хранилище" только в двух случаях:
+    а) через farconfig-файл
+    б) посредством макрофункции msave().
+
+   http://forum.farmanager.com/viewtopic.php?p=89561#p89561 п.1
+
+   Код функции KeyMacro::WriteVarsConsts() пока "спрячем".
+
+svs 17.03.2012 13:43:33 +0400 - build 2552
+
+1. Macro: bug $SelWord
+   macro:post ShiftF4 t e s t Enter t e s t $SelWord msgbox("","Не выделилось") Space Left $SelWord msgbox("","Выделилось")
+
+   http://forum.farmanager.com/viewtopic.php?p=89561#p89561  п.5
+
+zg 16.03.2012 20:06:10 +0200 - build 2551
+
+1. добавлен OPM_SHORTCUT. приходит в AnalyseW при переходе по шоткату или истории.
+
+svs 16.03.2012 10:56:28 +0400 - build 2550
+
+1. Mantis#0001483: Сделать параметры Dlg.GetValue() опциональными
+
+   V=Dlg.GetValue([Pos[,InfoID]])
+
+   Если параметр(ы) не указаны, то подразумевается:
+     Pos - получаем значения из текущего фокусного элемента
+     InfoID - значение элемента (0)
+
+svs 15.03.2012 10:20:11 +0400 - build 2549
+
+1. Far.Cfg.Get("System.KnownIDs", "Network")
+   возвращает ерунду
+   Если поле GeneralConfig::TYPE_BLOB и это не "System.KnownIDs", то Far.Cfg.Get() выставит ошибку (макроконстанта) Far.Cfg.Err в 1
+
+zg 15.03.2012 04:15:06 +0200 - build 2548
+
+1. в 2351 перестал работать переход из истории на плагиновую панель.
+
+zg 15.03.2012 02:17:13 +0200 - build 2547
+
+1. в 2036 перестал роботать переход в ближайшую доступную папку в ссылках на папки.
+
+zg 14.03.2012 23:16:28 +0200 - build 2546
+
+1. плагинам доступны опции: FSSF_INTERFACE/"ShowMenuBar", FSSF_DIALOG/"EditBlock", FSSF_DIALOG/"EULBsClear", FSSF_DIALOG/"DelRemovesBlocks", FSSF_PANELLAYOUT/"ColumnTitles", FSSF_PANELLAYOUT/"StatusLine", FSSF_PANELLAYOUT/"SortMode".
+
+svs 13.03.2012 15:12:25 +0400 - build 2545
+
+1. Немного актуализации хелпа
+
+2. Вернем потерянную опцию (про drag&drop) из диалога подтверждений...
+
+3. Хелп для MaskGroupsSettings
+
+zg 13.03.2012 12:20:04 +0200 - build 2544
+
+1. плагинам доступна опция FSSF_SCREEN/"KeyBar".
+
+svs 13.03.2012 11:16:01 +0400 - build 2543
+
+1. Добавка DMODE_NOPLUGINS в PluginManager::CallPlugin и PluginManager::CallPluginItem
+
+2. Macro: переименование: Plugin.Call -> Plugin.Menu, Plugin.Int -> Plugin.Call 
+
+3. Macro: Добавлена макрофункция N=Plugin.Exist(Guid)
+   Возвращает 0 - нет плагина с индентификатором Guid, 1 - есть такой плагин.
+
+zg 13.03.2012 01:52:57 +0200 - build 2542
+
+1. плагинам доступна опция FSSF_CONFIRMATIONS/"RemoveConnection".
+
+zg 13.03.2012 01:09:42 +0200 - build 2541
+
+1. как было обещано, удалены ACTL_GETSYSWORDDIV, ACTL_GETSYSTEMSETTINGS, ACTL_GETPANELSETTINGS, ACTL_GETINTERFACESETTINGS, ACTL_GETCONFIRMATIONS, ACTL_GETDESCSETTINGS, ACTL_GETPLUGINMAXREADDATA и ACTL_GETDIALOGSETTINGS.
+   плагины, которые вовремя не подготовились, могут работать не совсем корректно.
+
+svs 12.03.2012 21:30:41 +0400 - build 2540
+
+1. Mantis#0001903: Plugin.Menu(guid,menuGuid)
+   (from Maximus)
+
+     N=Plugin.Call(Guid[,MenuGuid])
+       Аналог вызова плагина из меню плагинов по F11 без необходимости задавать 
+       горячие клавиши или искать плагин в списке.
+     N=Plugin.Config(Guid[,MenuGuid])
+       Аналог вызова плагина из меню "Параметры плагинов" без необходимости задавать 
+       горячие клавиши или искать плагин в списке. Работает только в панелях.
+     N=Plugin.Prefix(Guid,Command)
+       Аналог вызова плагина по префиксу из панелей без необходимости 
+       запоминать/очищать/восстанавливать текущее содержимое командной строки.
+     N=Plugin.Int(Guid[,Item])
+       алиас для callplugin
+
+   mmode(3) не влияет на работу этих функций (кроме Plugin.Int)
+
+   <АХТУНГ>
+
+   Вылавливаем блох...
+   
+   </АХТУНГ>
+
+2. mmode(3) по умолчанию включен!
+
+zg 12.03.2012 14:02:00 +0200 - build 2539
+
+1. добавлен новый флаг WIF_MODAL. ACTL_GETWINDOWINFO возвращает иформацию и о модальных окнах. ACTL_GETWINDOWCOUNT - общее число окон.
+
 zg 12.03.2012 05:30:07 +0200 - build 2538
 
 1. EditorControl(RealId,...) не работал для модальных редакторов.

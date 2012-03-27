@@ -100,7 +100,7 @@ INT_PTR WINAPI hndOpenEditor(HANDLE hDlg, int msg, int param1, void* param2)
 		if (param1 == ID_OE_OK)
 		{
 			UINT* param = (UINT*)SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
-			FarListPos pos;
+			FarListPos pos={sizeof(FarListPos)};
 			SendDlgMessage(hDlg, DM_LISTGETCURPOS, ID_OE_CODEPAGE, &pos);
 			*param = *(UINT*)SendDlgMessage(hDlg, DM_LISTGETDATA, ID_OE_CODEPAGE, ToPtr(pos.SelectPos));
 			return TRUE;
@@ -112,15 +112,41 @@ INT_PTR WINAPI hndOpenEditor(HANDLE hDlg, int msg, int param1, void* param2)
 
 bool dlgOpenEditor(string &strFileName, UINT &codepage)
 {
+	#if 1
+	//Maximus: поддержка "узких" дисплеев
+	if (ScrX < 30)
+	{
+		_ASSERTE(ScrX>=30);
+		return false;
+	}
+	int BorderW = (72<(ScrX-1))?72:(ScrX-1);
+	int ElemW = BorderW - 2; // 70
+	#endif
+
 	const wchar_t *HistoryName=L"NewEdit";
 	FarDialogItem EditDlgData[]=
 	{
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_DOUBLEBOX,3,1,BorderW,8,0,nullptr,nullptr,0,MSG(MEditTitle)},
+		#else
 		{DI_DOUBLEBOX,3,1,72,8,0,nullptr,nullptr,0,MSG(MEditTitle)},
+		#endif
 		{DI_TEXT,     5,2, 0,2,0,nullptr,nullptr,0,MSG(MEditOpenCreateLabel)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_EDIT,     5,3,ElemW,3,0,HistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_EDITEXPAND|DIF_EDITPATH,L""},
+		#else
 		{DI_EDIT,     5,3,70,3,0,HistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_EDITEXPAND|DIF_EDITPATH,L""},
+		#endif
 		{DI_TEXT,     3,4, 0,4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_TEXT,     5,5, 0,5,0,nullptr,nullptr,0,MSG(MEditCodePage)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_COMBOBOX,25,5,ElemW,5,0,nullptr,nullptr,DIF_DROPDOWNLIST|DIF_LISTWRAPMODE|DIF_LISTAUTOHIGHLIGHT,L""},
+		#else
 		{DI_COMBOBOX,25,5,70,5,0,nullptr,nullptr,DIF_DROPDOWNLIST|DIF_LISTWRAPMODE|DIF_LISTAUTOHIGHLIGHT,L""},
+		#endif
 		{DI_TEXT,     3,6, 0,6,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_BUTTON,   0,7, 0,7,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MOk)},
 		{DI_BUTTON,   0,7, 0,7,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MCancel)},
@@ -128,7 +154,12 @@ bool dlgOpenEditor(string &strFileName, UINT &codepage)
 	MakeDialogItemsEx(EditDlgData,EditDlg);
 	EditDlg[ID_OE_FILENAME].strData = strFileName;
 	Dialog Dlg(EditDlg, ARRAYSIZE(EditDlg), hndOpenEditor, &codepage);
+	#if 1
+	//Maximus: поддержка "узких" дисплеев
+	Dlg.SetPosition(-1,-1,BorderW+4,10);
+	#else
 	Dlg.SetPosition(-1,-1,76,10);
+	#endif
 	Dlg.SetHelp(L"FileOpenCreate");
 	Dlg.SetId(FileOpenCreateId);
 	Dlg.Process();
@@ -193,7 +224,7 @@ INT_PTR WINAPI hndSaveFileAs(HANDLE hDlg, int msg, int param1, void* param2)
 			if (param1 == ID_SF_OK)
 			{
 				UINT *codepage = (UINT*)SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
-				FarListPos pos;
+				FarListPos pos={sizeof(FarListPos)};
 				SendDlgMessage(hDlg, DM_LISTGETCURPOS, ID_SF_CODEPAGE, &pos);
 				*codepage = *(UINT*)SendDlgMessage(hDlg, DM_LISTGETDATA, ID_SF_CODEPAGE, ToPtr(pos.SelectPos));
 				return TRUE;
@@ -205,7 +236,7 @@ INT_PTR WINAPI hndSaveFileAs(HANDLE hDlg, int msg, int param1, void* param2)
 		{
 			if (param1==ID_SF_CODEPAGE)
 			{
-				FarListPos pos;
+				FarListPos pos={sizeof(FarListPos)};
 				SendDlgMessage(hDlg,DM_LISTGETCURPOS,ID_SF_CODEPAGE,&pos);
 				UINT Cp=*reinterpret_cast<UINT*>(SendDlgMessage(hDlg,DM_LISTGETDATA,ID_SF_CODEPAGE,ToPtr(pos.SelectPos)));
 
@@ -969,7 +1000,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 
 					if (!m_editor->EdOpt.PersistentBlocks && IsBlock)
 					{
-						m_editor->Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+						m_editor->TurnOffMarkingBlock();
 						m_editor->DeleteBlock();
 					}
 
@@ -2564,10 +2595,12 @@ int FileEditor::EditorControl(int Command, void *Param)
 		}
 		case ECTL_PREVSESSIONBOOKMARK:
 		{
+			m_editor->TurnOffMarkingBlock();
 			return m_editor->PrevSessionBookmark();
 		}
 		case ECTL_NEXTSESSIONBOOKMARK:
 		{
+			m_editor->TurnOffMarkingBlock();
 			return m_editor->NextSessionBookmark();
 		}
 		case ECTL_CLEARSESSIONBOOKMARKS:

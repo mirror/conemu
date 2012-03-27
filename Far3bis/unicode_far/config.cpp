@@ -72,6 +72,14 @@ static const wchar_t *WordDivForXlat0=L" \t!#$%^&*()+|=\\/@?";
 
 const wchar_t *constBatchExt=L".BAT;.CMD;";
 
+#if defined(TREEFILE_PROJECT)
+const wchar_t *constLocalDiskTemplate=L"%D.%SN.tree";
+const wchar_t *constNetDiskTemplate=L"%D.%SN.tree";
+const wchar_t *constNetPathTemplate=L"%SR.%SH.tree";
+const wchar_t *constRemovableDiskTemplate=L"%SN.tree";
+const wchar_t *constCDDiskTemplate=L"CD.%L.%SN.tree";
+#endif
+
 string strKeyNameConsoleDetachKey;
 static const wchar_t szCtrlDot[]=L"Ctrl.";
 static const wchar_t szRCtrlDot[]=L"RCtrl.";
@@ -89,6 +97,7 @@ const wchar_t NKeyDialog[]=L"Dialog";
 const wchar_t NKeyEditor[]=L"Editor";
 const wchar_t NKeyXLat[]=L"XLat";
 const wchar_t NKeySystem[]=L"System";
+const wchar_t NKeySystemException[]=L"System.Exception";
 const wchar_t NKeySystemKnownIDs[]=L"System.KnownIDs";
 const wchar_t NKeySystemExecutor[]=L"System.Executor";
 const wchar_t NKeySystemNowell[]=L"System.Nowell";
@@ -115,6 +124,17 @@ const wchar_t NKeyFolderHistory[]=L"History.FolderHistory";
 const wchar_t NKeyDialogHistory[]=L"History.DialogHistory";
 
 const wchar_t NParamHistoryCount[]=L"HistoryCount";
+
+static const WCHAR _BoxSymbols[48] =
+{
+	0x2591, 0x2592, 0x2593, 0x2502, 0x2524, 0x2561, 0x2562, 0x2556,
+	0x2555, 0x2563, 0x2551, 0x2557, 0x255D, 0x255C, 0x255B, 0x2510,
+	0x2514, 0x2534, 0x252C, 0x251C, 0x2500, 0x253C, 0x255E, 0x255F,
+	0x255A, 0x2554, 0x2569, 0x2566, 0x2560, 0x2550, 0x256C, 0x2567,
+	0x2568, 0x2564, 0x2565, 0x2559, 0x2558, 0x2552, 0x2553, 0x256B,
+	0x256A, 0x2518, 0x250C, 0x2588, 0x2584, 0x258C, 0x2590, 0x2580,
+};
+
 
 void SystemSettings()
 {
@@ -157,7 +177,6 @@ void PanelSettings()
 
 	Builder.AddCheckbox(MConfigHidden, &Opt.ShowHidden);
 	Builder.AddCheckbox(MConfigHighlight, &Opt.Highlight);
-	Builder.AddCheckbox(MConfigAutoChange, &Opt.Tree.AutoChangeFolder);
 	Builder.AddCheckbox(MConfigSelectFolders, &Opt.SelectFolders);
 	Builder.AddCheckbox(MConfigSortFolderExt, &Opt.SortFolderExt);
 	Builder.AddCheckbox(MConfigReverseSort, &Opt.ReverseSort);
@@ -188,6 +207,67 @@ void PanelSettings()
 			Opt.AutoUpdateLimit = 0;
 
 	//  FrameManager->RefreshFrame();
+		CtrlObject->Cp()->LeftPanel->Update(UPDATE_KEEP_SELECTION);
+		CtrlObject->Cp()->RightPanel->Update(UPDATE_KEEP_SELECTION);
+		CtrlObject->Cp()->Redraw();
+	}
+}
+
+void TreeSettings()
+{
+	DialogBuilder Builder(MConfigTreeTitle, L"TreeSettings");
+
+	DialogItemEx *TemplateEdit;
+
+	Builder.AddCheckbox(MConfigTreeAutoChange, &Opt.Tree.AutoChangeFolder);
+
+	TemplateEdit = Builder.AddIntEditField((int *) &Opt.Tree.MinTreeCount, 3);
+	Builder.AddTextBefore(TemplateEdit, MConfigTreeLabelMinFolder);
+
+#if defined(TREEFILE_PROJECT)
+	DialogItemEx *Checkbox;
+
+	Builder.AddSeparator(MConfigTreeLabel1);
+
+	Checkbox = Builder.AddCheckbox(MConfigTreeLabelLocalDisk, &Opt.Tree.LocalDisk);
+	TemplateEdit = Builder.AddEditField(&Opt.Tree.strLocalDisk, 36);
+	TemplateEdit->Indent(4);
+	Builder.LinkFlags(Checkbox, TemplateEdit, DIF_DISABLE);
+
+	Checkbox = Builder.AddCheckbox(MConfigTreeLabelNetDisk, &Opt.Tree.NetDisk);
+	TemplateEdit = Builder.AddEditField(&Opt.Tree.strNetDisk, 36);
+	TemplateEdit->Indent(4);
+	Builder.LinkFlags(Checkbox, TemplateEdit, DIF_DISABLE);
+
+	Checkbox = Builder.AddCheckbox(MConfigTreeLabelNetPath, &Opt.Tree.NetPath);
+	TemplateEdit = Builder.AddEditField(&Opt.Tree.strNetPath, 36);
+	TemplateEdit->Indent(4);
+	Builder.LinkFlags(Checkbox, TemplateEdit, DIF_DISABLE);
+
+	Checkbox = Builder.AddCheckbox(MConfigTreeLabelRemovableDisk, &Opt.Tree.RemovableDisk);
+	TemplateEdit = Builder.AddEditField(&Opt.Tree.strRemovableDisk, 36);
+	TemplateEdit->Indent(4);
+	Builder.LinkFlags(Checkbox, TemplateEdit, DIF_DISABLE);
+
+	Checkbox = Builder.AddCheckbox(MConfigTreeLabelCDDisk, &Opt.Tree.CDDisk);
+	TemplateEdit = Builder.AddEditField(&Opt.Tree.strCDDisk, 36);
+	TemplateEdit->Indent(4);
+	Builder.LinkFlags(Checkbox, TemplateEdit, DIF_DISABLE);
+
+	Builder.AddText(MConfigTreeLabelSaveLocalPath);
+	Builder.AddEditField(&Opt.Tree.strSaveLocalPath, 40);
+
+	Builder.AddText(MConfigTreeLabelSaveNetPath);
+	Builder.AddEditField(&Opt.Tree.strSaveNetPath, 40);
+
+	Builder.AddText(MConfigTreeLabelExceptPath);
+	Builder.AddEditField(&Opt.Tree.strExceptPath, 40);
+#endif
+
+	Builder.AddOKCancel();
+
+	if (Builder.ShowDialog())
+	{
 		CtrlObject->Cp()->LeftPanel->Update(UPDATE_KEEP_SELECTION);
 		CtrlObject->Cp()->RightPanel->Update(UPDATE_KEEP_SELECTION);
 		CtrlObject->Cp()->Redraw();
@@ -347,6 +427,7 @@ void MaskGroupsSettings()
 {
 	VMenu MasksMenu(MSG(MMenuMaskGroups), nullptr, 0, 0, VMENU_WRAPMODE|VMENU_SHOWAMPERSAND);
 	MasksMenu.SetBottomTitle(MSG(MMaskGroupBottom));
+	MasksMenu.SetHelp(L"MaskGroupsSettings");
 	FillMasksMenu(MasksMenu);
 	MasksMenu.SetPosition(-1, -1, -1, -1);
 	MasksMenu.Show();
@@ -543,6 +624,7 @@ void SetConfirmations()
 	Builder.AddCheckbox(MSetConfirmCopy, &Opt.Confirm.Copy);
 	Builder.AddCheckbox(MSetConfirmMove, &Opt.Confirm.Move);
 	Builder.AddCheckbox(MSetConfirmRO, &Opt.Confirm.RO);
+	Builder.AddCheckbox(MSetConfirmDrag, &Opt.Confirm.Drag);
 	Builder.AddCheckbox(MSetConfirmDelete, &Opt.Confirm.Delete);
 	Builder.AddCheckbox(MSetConfirmDeleteFolders, &Opt.Confirm.DeleteFolder);
 	Builder.AddCheckbox(MSetConfirmEsc, &Opt.Confirm.Esc);
@@ -714,7 +796,7 @@ void SetFolderInfoFiles()
 	string strFolderInfoFiles;
 
 	if (GetString(MSG(MSetFolderInfoTitle),MSG(MSetFolderInfoNames),L"FolderInfoFiles",
-	              Opt.InfoPanel.strFolderInfoFiles,strFolderInfoFiles,L"OptMenu",FIB_ENABLEEMPTY|FIB_BUTTONS))
+	              Opt.InfoPanel.strFolderInfoFiles,strFolderInfoFiles,L"FolderDiz",FIB_ENABLEEMPTY|FIB_BUTTONS))
 	{
 		Opt.InfoPanel.strFolderInfoFiles = strFolderInfoFiles;
 
@@ -742,7 +824,7 @@ static struct FARConfig
 {
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyScreen, L"Clock", &Opt.Clock, 1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyScreen, L"ViewerEditorClock",&Opt.ViewerEditorClock,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyScreen, L"KeyBar",&Opt.ShowKeyBar,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_SCREEN,            NKeyScreen, L"KeyBar",&Opt.ShowKeyBar,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyScreen, L"ScreenSaver",&Opt.ScreenSaver, 0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyScreen, L"ScreenSaverTime",&Opt.ScreenSaverTime,5, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyScreen, L"DeltaXY", &Opt.ScrSize.DeltaXY, 0, 0},
@@ -756,7 +838,7 @@ static struct FARConfig
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"Mouse",&Opt.Mouse,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"UseVk_oem_x",&Opt.UseVk_oem_x,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"ShowMenuBar",&Opt.ShowMenuBar,0, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_INTERFACE,         NKeyInterface, L"ShowMenuBar",&Opt.ShowMenuBar,0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize1",&Opt.CursorSize[0],15, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize2",&Opt.CursorSize[1],10, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize3",&Opt.CursorSize[2],99, 0},
@@ -798,13 +880,13 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyViewer,L"ZeroChar",&Opt.ViOpt.ZeroChar,0x00B7, 0}, // middle dot
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog, L"EditHistory",&Opt.Dialogs.EditHistory,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog, L"EditBlock",&Opt.Dialogs.EditBlock,0, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_DIALOG,            NKeyDialog, L"EditBlock",&Opt.Dialogs.EditBlock,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog, L"AutoComplete",&Opt.Dialogs.AutoComplete,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog,L"EULBsClear",&Opt.Dialogs.EULBsClear,0, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_DIALOG,            NKeyDialog,L"EULBsClear",&Opt.Dialogs.EULBsClear,0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog,L"SelectFromHistory",&Opt.Dialogs.SelectFromHistory,0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog,L"EditLine",&Opt.Dialogs.EditLine,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog,L"MouseButton",&Opt.Dialogs.MouseButton,0xFFFF, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog,L"DelRemovesBlocks",&Opt.Dialogs.DelRemovesBlocks,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_DIALOG,            NKeyDialog,L"DelRemovesBlocks",&Opt.Dialogs.DelRemovesBlocks,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialog,L"CBoxMaxHeight",&Opt.Dialogs.CBoxMaxHeight,8, 0},
 
 	{1, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyEditor,L"ExternalEditorName",&Opt.strExternalEditor, 0, L""},
@@ -866,6 +948,7 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_SYSTEM,            NKeySystem,L"CopyOpened",&Opt.CMOpt.CopyOpened,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem, L"MultiCopy",&Opt.CMOpt.MultiCopy,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"CopyTimeRule",  &Opt.CMOpt.CopyTimeRule, 3, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"CopyBufferSize",&Opt.CMOpt.BufferSize,0, 0},
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"CreateUppercaseFolders",&Opt.CreateUppercaseFolders,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"DriveMenuMode",&Opt.ChangeDriveMode,DRIVE_SHOW_TYPE|DRIVE_SHOW_PLUGINS|DRIVE_SHOW_SIZE_FLOAT|DRIVE_SHOW_CDROM, 0},
@@ -916,8 +999,13 @@ static struct FARConfig
 	#endif
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"ElevationMode",&Opt.ElevationMode,0x0FFFFFFFU, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"WindowMode",&Opt.WindowMode, 0, 0},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystem,L"BoxSymbols",&Opt.strBoxSymbols, 0, _BoxSymbols},
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemNowell,L"MoveRO",&Opt.Nowell.MoveRO,1, 0},
+
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemException,L"FarEventSvc",&Opt.strExceptEventSvc, 0, L""},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemException,L"Used",&Opt.ExceptUsed, 0, 0},
+
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"RestoreCP",&Opt.Exec.RestoreCPAfterExecute,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystemExecutor,L"UseAppPath",&Opt.Exec.ExecuteUseAppPath,1, 0},
@@ -927,13 +1015,24 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemExecutor,L"ExcludeCmds",&Opt.Exec.strExcludeCmds,0,L""},
 	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystemExecutor,L"~",&Opt.Exec.strHomeDir,0,L""},
 
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"MinTreeCount",&Opt.Tree.MinTreeCount, 4, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"MinTreeCount",&Opt.Tree.MinTreeCount, 4, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"AutoChangeFolder",&Opt.Tree.AutoChangeFolder,0, 0}, // ???
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"TreeFileAttr",&Opt.Tree.TreeFileAttr, FILE_ATTRIBUTE_HIDDEN, 0},
+#if defined(TREEFILE_PROJECT)
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"LocalDisk",&Opt.Tree.LocalDisk, 2, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"NetDisk",&Opt.Tree.NetDisk, 2, 0},
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"RemovableDisk",&Opt.Tree.RemovableDisk, 2, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"NetPath",&Opt.Tree.NetPath, 2, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"AutoChangeFolder",&Opt.Tree.AutoChangeFolder,0, 0}, // ???
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"RemovableDisk",&Opt.Tree.RemovableDisk, 2, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelTree,L"CDDisk",&Opt.Tree.CDDisk, 2, 0},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"LocalDiskTemplate",&Opt.Tree.strLocalDisk,0,constLocalDiskTemplate},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"NetDiskTemplate",&Opt.Tree.strNetDisk,0,constNetDiskTemplate},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"NetPathTemplate",&Opt.Tree.strNetPath,0,constNetPathTemplate},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"RemovableDiskTemplate,",&Opt.Tree.strRemovableDisk,0,constRemovableDiskTemplate},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"CDDiskTemplate,0",&Opt.Tree.strCDDisk,0,constCDDiskTemplate},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"ExceptPath",&Opt.Tree.strExceptPath,0,L""},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"SaveLocalPath",&Opt.Tree.strSaveLocalPath,0,L""},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyPanelTree,L"SaveNetPath",&Opt.Tree.strSaveNetPath,0,L""},
+#endif
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyHelp,L"ActivateURL",&Opt.HelpURLRules,1, 0},
 
@@ -944,7 +1043,7 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_CONFIRMATIONS,     NKeyConfirmations,L"Delete",&Opt.Confirm.Delete,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_CONFIRMATIONS,     NKeyConfirmations,L"DeleteFolder",&Opt.Confirm.DeleteFolder,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_CONFIRMATIONS,     NKeyConfirmations,L"Esc",&Opt.Confirm.Esc,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyConfirmations,L"RemoveConnection",&Opt.Confirm.RemoveConnection,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_CONFIRMATIONS,     NKeyConfirmations,L"RemoveConnection",&Opt.Confirm.RemoveConnection,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyConfirmations,L"RemoveSUBST",&Opt.Confirm.RemoveSUBST,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyConfirmations,L"DetachVHD",&Opt.Confirm.DetachVHD,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyConfirmations,L"RemoveHotPlug",&Opt.Confirm.RemoveHotPlug,1, 0},
@@ -1001,14 +1100,14 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelRight,L"SelectedFirst",&Opt.RightSelectedFirst,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelRight,L"DirectoriesFirst",&Opt.RightPanel.DirectoriesFirst,1,0},
 
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"ColumnTitles",&Opt.ShowColumnTitles,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"StatusLine",&Opt.ShowPanelStatus,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PANELLAYOUT,       NKeyPanelLayout,L"ColumnTitles",&Opt.ShowColumnTitles,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PANELLAYOUT,       NKeyPanelLayout,L"StatusLine",&Opt.ShowPanelStatus,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"TotalInfo",&Opt.ShowPanelTotals,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"FreeInfo",&Opt.ShowPanelFree,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"Scrollbar",&Opt.ShowPanelScrollbar,0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"ScrollbarMenu",&Opt.ShowMenuScrollbar,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"ScreensNumber",&Opt.ShowScreensNumber,1, 0},
-	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"SortMode",&Opt.ShowSortMode,1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PANELLAYOUT,       NKeyPanelLayout,L"SortMode",&Opt.ShowSortMode,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"ColoredGlobalColumnSeparator",&Opt.HighlightColumnSeparator,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"DoubleGlobalColumnSeparator",&Opt.DoubleGlobalColumnSeparator,0, 0},
 
@@ -1070,8 +1169,12 @@ bool GetConfigValue(const wchar_t *Key, const wchar_t *Name, string &strValue)
 					strValue = *(string *)CFG[I].ValPtr;
 					break;
 				case GeneralConfig::TYPE_BLOB:
-					strValue = (char *)CFG[I].ValPtr;
+				{
+					if (StrCmpI(CFG[I].KeyName,NKeySystemKnownIDs))
+						return false;
+					strValue = GuidToStr((const GUID&)(*(const BYTE*)CFG[I].ValPtr));
 					break;
+				}
 			}
 			return true;
 		}

@@ -129,18 +129,17 @@ enum OPENFILEPLUGINTYPE
 	OFP_NORMAL,
 	OFP_ALTERNATIVE,
 	OFP_SEARCH,
-	OFP_SHORTCUT,
 	OFP_CREATE,
 	OFP_EXTRACT,
 	OFP_COMMANDS,
 };
 
-//Maximus: параметры вызова макрофункций plugin.call и т.п.
+// параметры вызова макрофункций plugin.call и т.п.
 typedef unsigned int CALLPLUGINFLAGS;
 static const CALLPLUGINFLAGS
-	CPT_CALL        = 0x00000001L,
+	CPT_MENU        = 0x00000001L,
 	CPT_CONFIGURE   = 0x00000002L,
-	CPT_PREFIX      = 0x00000004L,
+	CPT_CMDLINE     = 0x00000004L,
 	CPT_INTERNAL    = 0x00000008L,
 	CPT_MASK        = 0x0000000FL,
 	CPT_CHECKONLY   = 0x10000000L;
@@ -291,10 +290,7 @@ class PluginManager
 
 		// $ .09.2000 SVS - Функция CallPlugin - найти плагин по ID и запустить OpenFrom = OPEN_*
 		int CallPlugin(const GUID& SysID,int OpenFrom, void *Data, int *Ret=nullptr);
-		#if 1
-		//Maximus: макрофункции plugin.call и т.п.
 		int CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *Ret=nullptr);
-		#endif
 		Plugin *FindPlugin(const GUID& SysID);
 		static const GUID& GetGUID(HANDLE hPlugin);
 

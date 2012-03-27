@@ -1024,6 +1024,10 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 	}
 
 	seInfo.fMask = SEE_MASK_FLAG_NO_UI|SEE_MASK_NOASYNC|SEE_MASK_NOCLOSEPROCESS|(SeparateWindow?0:SEE_MASK_NO_CONSOLE);
+#if 1
+	//Maximus: при запуске exe-шника с панели - фар зависает на 30 сек если ставить SEE_MASK_INVOKEIDLIST
+	if (!seInfo.lpVerb || lstrcmpi(seInfo.lpVerb, L"Open"))
+#endif
 	if (WinVer >= _WIN32_WINNT_VISTA)         // ShexxExecuteEx error, see
 		seInfo.fMask |= SEE_MASK_INVOKEIDLIST; // http://us.generation-nt.com/answer/shellexecuteex-does-not-allow-openas-verb-windows-7-help-31497352.html
 

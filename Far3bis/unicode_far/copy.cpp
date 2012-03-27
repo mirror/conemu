@@ -364,10 +364,15 @@ void CopyProgress::SetNames(const wchar_t *Src,const wchar_t *Dst)
 		CreateBackground();
 	}
 
+	const int NameWidth = Rect.Right-Rect.Left-9;
+	string tmp(Src);
+	TruncPathStr(tmp, NameWidth);
 	strSrc.Clear();
-	strSrc<<fmt::LeftAlign()<<fmt::Width(Rect.Right-Rect.Left-9)<<fmt::Precision(Rect.Right-Rect.Left-9)<<Src;
+	strSrc<<fmt::LeftAlign()<<fmt::Width(NameWidth)<<fmt::Precision(NameWidth)<<tmp;
+	tmp = Dst;
+	TruncPathStr(tmp, NameWidth);
 	strDst.Clear();
-	strDst<<fmt::LeftAlign()<<fmt::Width(Rect.Right-Rect.Left-9)<<fmt::Precision(Rect.Right-Rect.Left-9)<<Dst;
+	strDst<<fmt::LeftAlign()<<fmt::Width(NameWidth)<<fmt::Precision(NameWidth)<<tmp;
 
 	if (Total)
 	{
@@ -630,7 +635,7 @@ INT_PTR WINAPI CopyDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 			break;
 		case DM_SWITCHRO:
 		{
-			FarListGetItem LGI={CM_ASKRO};
+			FarListGetItem LGI={sizeof(FarListGetItem),CM_ASKRO};
 			SendDlgMessage(hDlg,DM_LISTGETITEM,ID_SC_COMBO,&LGI);
 
 			if (LGI.Item.Flags&LIF_CHECKED)
@@ -740,7 +745,7 @@ INT_PTR WINAPI CopyDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 			BOOL MultiCopy=SendDlgMessage(hDlg,DM_GETCHECK,ID_SC_MULTITARGET,0)==BSTATE_CHECKED;
 			string strOldFolder;
 			int nLength;
-			FarDialogItemData Data;
+			FarDialogItemData Data={sizeof(FarDialogItemData)};
 			nLength = (int)SendDlgMessage(hDlg, DM_GETTEXTLENGTH, ID_SC_TARGETEDIT, 0);
 			Data.PtrData = strOldFolder.GetBuffer(nLength+1);
 			Data.PtrLength = nLength;
@@ -813,7 +818,7 @@ INT_PTR WINAPI CopyDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		{
 			if (Param1==ID_SC_BTNCOPY)
 			{
-				FarListGetItem LGI={CM_ASKRO};
+				FarListGetItem LGI={sizeof(FarListGetItem),CM_ASKRO};
 				SendDlgMessage(hDlg,DM_LISTGETITEM,ID_SC_COMBO,&LGI);
 
 				if (LGI.Item.Flags&LIF_CHECKED)
@@ -866,9 +871,8 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 	// $ 26.05.2001 OT Запретить перерисовку панелей во время копирования
 	_tran(SysLog(L"call (*FrameManager)[0]->LockRefresh()"));
 	(*FrameManager)[0]->Lock();
-	// Размер буфера берется из реестра
-	GeneralCfg->GetValue(L"System", L"CopyBufferSize", &CopyBufferSize, 0);
-	CopyBufferSize=Max(CopyBufferSize,(int)COPY_BUFFER_SIZE);
+	CopyBufferSize=Opt.CMOpt.BufferSize;
+	CopyBufferSize=Max(CopyBufferSize,(size_t)COPY_BUFFER_SIZE);
 	CDP.thisClass=this;
 	CDP.AltF10=0;
 	CDP.FolderPresent=false;
@@ -890,11 +894,23 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 	// ***********************************************************************
 	int DLG_HEIGHT=16, DLG_WIDTH=76;
 
+	#if 1
+	//Maximus: поддержка "узких" дисплеев
+	if (DLG_WIDTH >= (ScrX+3))
+		DLG_WIDTH = max((ScrX+3),40);
+	int ElemW = DLG_WIDTH - 6; // 70
+	#endif
+
 	FarDialogItem CopyDlgData[]=
 	{
 		{DI_DOUBLEBOX,   3, 1,DLG_WIDTH-4,DLG_HEIGHT-2,0,nullptr,nullptr,0,MSG(MCopyDlgTitle)},
 		{DI_TEXT,        5, 2, 0, 2,0,nullptr,nullptr,0,MSG(Link?MCMLTargetIN:MCMLTargetTO)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_EDIT,        5, 3,ElemW, 3,0,L"Copy",nullptr,DIF_FOCUS|DIF_HISTORY|DIF_EDITEXPAND|DIF_USELASTHISTORY|DIF_EDITPATH,L""},
+		#else
 		{DI_EDIT,        5, 3,70, 3,0,L"Copy",nullptr,DIF_FOCUS|DIF_HISTORY|DIF_EDITEXPAND|DIF_USELASTHISTORY|DIF_EDITPATH,L""},
+		#endif
 		{DI_TEXT,        3, 4, 0, 4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_TEXT,        5, 5, 0, 5,0,nullptr,nullptr,0,MSG(MCopySecurity)},
 		{DI_RADIOBUTTON, 5, 5, 0, 5,0,nullptr,nullptr,DIF_GROUP,MSG(MCopySecurityLeave)},
@@ -902,7 +918,12 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 		{DI_RADIOBUTTON, 5, 5, 0, 5,0,nullptr,nullptr,0,MSG(MCopySecurityInherit)},
 		{DI_TEXT,        3, 6, 0, 6,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_TEXT,        5, 7, 0, 7,0,nullptr,nullptr,0,MSG(MCopyIfFileExist)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_COMBOBOX,   29, 7,ElemW, 7,0,nullptr,nullptr,DIF_DROPDOWNLIST|DIF_LISTNOAMPERSAND|DIF_LISTWRAPMODE,L""},
+		#else
 		{DI_COMBOBOX,   29, 7,70, 7,0,nullptr,nullptr,DIF_DROPDOWNLIST|DIF_LISTNOAMPERSAND|DIF_LISTWRAPMODE,L""},
+		#endif
 		{DI_CHECKBOX,    5, 8, 0, 8,0,nullptr,nullptr,0,MSG(MCopySymLinkContents)},
 		{DI_CHECKBOX,    5, 9, 0, 9,0,nullptr,nullptr,0,MSG(MCopyMultiActions)},
 		{DI_TEXT,        3,10, 0,10,0,nullptr,nullptr,DIF_SEPARATOR,L""},
@@ -1765,16 +1786,15 @@ COPY_CODES ShellCopy::CopyFileTree(const string& Dest)
 
 	string strDest = Dest;
 	bool UseWildCards = wcspbrk(Dest,L"*?")!=nullptr;
+	SrcPanel->GetSelName(nullptr,FileAttr);
+	SrcPanel->GetSelName(&strSelName,FileAttr,&strSelShortName);
+	SelectedFolderNameLength = (FileAttr & FILE_ATTRIBUTE_DIRECTORY)?(int)strSelName.GetLength():0;
+	if (UseWildCards)
+	{
+		ConvertWildcards(strSelName, strDest, SelectedFolderNameLength);
+	}
 	if (!(Flags&FCOPY_COPYTONUL))
 	{
-		SrcPanel->GetSelName(nullptr,FileAttr);
-		SrcPanel->GetSelName(&strSelName,FileAttr,&strSelShortName);
-		SelectedFolderNameLength = (FileAttr & FILE_ATTRIBUTE_DIRECTORY)?(int)strSelName.GetLength():0;
-		if (UseWildCards)
-		{
-			ConvertWildcards(strSelName, strDest, SelectedFolderNameLength);
-		}
-
 		DestAttr = apiGetFileAttributes(strDest);
 
 		// получим данные о месте назначения
@@ -3196,7 +3216,7 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 				break;
 			}
 
-																																																																																																																																	if (!(Flags&FCOPY_COPYTONUL))
+		if (!(Flags&FCOPY_COPYTONUL))
 		{
 			DestFile.SetPointer(SrcFile.GetChunkOffset() + (Append? AppendPos : 0), nullptr, FILE_BEGIN);
 			while (!DestFile.Write(CopyBuffer,BytesRead,BytesWritten,nullptr))
@@ -3371,12 +3391,12 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 				CP->SetTotalProgressValue(TotalCopiedSize,TotalCopySize);
 			}
 
-			CP->SetNames(SrcData.strFileName,strDestName);
+			CP->SetNames(SrcName,strDestName);
 		}
 	}
 
 	SrcFile.Close();
-	
+
 	if (!(Flags&FCOPY_COPYTONUL))
 	{
 		DestFile.SetTime(nullptr, nullptr, &SrcData.ftLastWriteTime, nullptr);
@@ -3980,7 +4000,7 @@ DWORD WINAPI CopyProgressRoutine(LARGE_INTEGER TotalFileSize,
 		TotalCopySize -= StreamSize.QuadPart;
 		TotalCopySize += TotalFileSize.QuadPart;
 	}
-	
+
 	if (ShowTotalCopySize)
 	{
 		TotalCopiedSize=TotalCopiedSizeEx+CurCopiedSize;

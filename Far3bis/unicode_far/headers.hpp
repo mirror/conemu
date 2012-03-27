@@ -210,8 +210,14 @@ enum LNGID:int;
 #define nullptr NULL
 #endif
 
+#if 1
+//Maxmus: Для отлова ошибок - кидаем ассерты. Пока StructSize на равенство, а там посмотрим
+template <typename T>
+bool CheckStructSize(const T* s) {_ASSERTE(!s || (s->StructSize==sizeof(*s))); return s && (s->StructSize >= sizeof(T));}
+#else
 template <typename T>
 bool CheckStructSize(const T* s) {return s && (s->StructSize >= sizeof(T));}
+#endif
 
 
 #include "noncopyable.hpp"

@@ -418,13 +418,28 @@ struct InfoPanelOptions
 
 struct TreeOptions
 {
-	int LocalDisk;         // Хранить файл структуры папок для локальных дисков
-	int NetDisk;           // Хранить файл структуры папок для сетевых дисков
-	int NetPath;           // Хранить файл структуры папок для сетевых путей
-	int RemovableDisk;     // Хранить файл структуры папок для сменных дисков
-	int MinTreeCount;      // Минимальное количество папок для сохранения дерева в файле.
-	int AutoChangeFolder;  // автосмена папок при перемещении по дереву
-	DWORD TreeFileAttr;    // файловые атрибуты для файлов-деревях
+	int MinTreeCount;         // Минимальное количество папок для сохранения дерева в файле.
+	int AutoChangeFolder;     // Автосмена папок при перемещении по дереву
+	DWORD TreeFileAttr;       // Файловые атрибуты для файлов-деревях
+
+#if defined(TREEFILE_PROJECT)
+	int LocalDisk;            // Хранить файл структуры папок для локальных дисков
+	int NetDisk;              // Хранить файл структуры папок для сетевых дисков
+	int NetPath;              // Хранить файл структуры папок для сетевых путей
+	int RemovableDisk;        // Хранить файл структуры папок для сменных дисков
+	int CDDisk;               // Хранить файл структуры папок для CD/DVD/BD/etc дисков
+
+	string strLocalDisk;      // шаблон имени файла-деревяхи для локальных дисков
+	string strNetDisk;        // шаблон имени файла-деревяхи для сетевых дисков
+	string strNetPath;        // шаблон имени файла-деревяхи для сетевых путей
+	string strRemovableDisk;  // шаблон имени файла-деревяхи для сменных дисков
+	string strCDDisk;         // шаблон имени файла-деревяхи для CD/DVD/BD/etc дисков
+
+	string strExceptPath;     // для перечисленных здесь не хранить
+
+	string strSaveLocalPath;  // сюда сохраняем локальные диски
+	string strSaveNetPath;    // сюда сохраняем сетевые диски
+#endif
 };
 
 struct CopyMoveOptions
@@ -435,6 +450,7 @@ struct CopyMoveOptions
 	int MultiCopy;             // "разрешить мультикопирование/перемещение/создание связей"
 	DWORD CopySecurityOptions; // для операции Move - что делать с опцией "Copy access rights"
 	int CopyTimeRule;          // $ 30.01.2001 VVM  Показывает время копирования,оставшееся время и среднюю скорость
+	size_t BufferSize;
 };
 
 struct DeleteOptions
@@ -605,6 +621,8 @@ struct Options
 	int SetAttrFolderRules; // Правило на счет установки атрибутов на каталоги
 	int ExceptRules; // Правило на счет вызова исключений
 	int ExceptCallDebugger; // вызывать дебаггер при исключении
+	int ExceptUsed;
+	string strExceptEventSvc;
 	/*
 	 + Opt.ShiftsKeyRules - Правило на счет выбора механизма трансляции
 	   Alt-Буква для нелатинским буковок и символов "`-=[]\;',./" с
@@ -711,6 +729,9 @@ struct Options
 	string LocalProfilePath;
 	string GlobalUserMenuDir;
 	KnownModulesIDs KnownIDs;
+
+	string strBoxSymbols;
+
 };
 
 extern Options Opt;
@@ -732,6 +753,7 @@ void SetFolderInfoFiles();
 void InfoPanelSettings();
 void MaskGroupsSettings();
 void AutoCompleteSettings();
+void TreeSettings();
 
 bool GetConfigValue(const wchar_t *Key, const wchar_t *Name, string &Value);
 bool GetConfigValue(size_t Root,const wchar_t* Name,DWORD& Type,void*& Data);

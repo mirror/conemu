@@ -681,6 +681,13 @@ void FileList::PluginToPluginFiles(int Move)
 	}
 }
 
+class PluginsTree: public Tree<Plugin*>
+{
+	public:
+		PluginsTree(){}
+		~PluginsTree(){clear();}
+		long compare(Node<Plugin*>* first,Plugin** second) {return reinterpret_cast<char*>(*first->data)-reinterpret_cast<char*>(*second);}
+};
 
 void FileList::PluginHostGetFiles()
 {
@@ -707,16 +714,21 @@ void FileList::PluginHostGetFiles()
 			strDestPath.SetLength(pos);
 	}
 
-	int OpMode=OPM_TOPLEVEL,ExitLoop=FALSE;
+	int ExitLoop=FALSE;
 	GetSelName(nullptr,FileAttr);
+	PluginsTree tree;
 
 	while (!ExitLoop && GetSelName(&strSelName,FileAttr))
 	{
 		HANDLE hCurPlugin;
 
 		if ((hCurPlugin=OpenPluginForFile(&strSelName,FileAttr, OFP_EXTRACT))!=nullptr &&
-		        hCurPlugin!=(HANDLE)-2)
+		        hCurPlugin!=PANEL_STOP)
 		{
+			PluginHandle *ph = (PluginHandle *)hCurPlugin;
+			int OpMode=OPM_TOPLEVEL;
+			if(tree.query(&ph->pPlugin)) OpMode|=OPM_SILENT;
+
 			PluginPanelItem *ItemList;
 			size_t ItemNumber;
 			_ALGO(SysLog(L"call Plugins.GetFindData()"));
@@ -736,7 +748,7 @@ void FileList::PluginHostGetFiles()
 
 				_ALGO(SysLog(L"call Plugins.FreeFindData()"));
 				CtrlObject->Plugins->FreeFindData(hCurPlugin,ItemList,ItemNumber);
-				OpMode|=OPM_SILENT;
+				tree.insert(new Plugin*(ph->pPlugin));
 			}
 
 			_ALGO(SysLog(L"call Plugins.ClosePanel"));
@@ -758,7 +770,7 @@ void FileList::PluginPutFilesToNew()
 	_ALGO(SysLog(L"call Plugins.OpenFilePlugin(nullptr, 0)"));
 	HANDLE hNewPlugin=CtrlObject->Plugins->OpenFilePlugin(nullptr, 0, OFP_CREATE);
 
-	if (hNewPlugin && hNewPlugin!=(HANDLE)-2)
+	if (hNewPlugin && hNewPlugin!=PANEL_STOP)
 	{
 		_ALGO(SysLog(L"Create: FileList TmpPanel, FileCount=%d",FileCount));
 		FileList TmpPanel;
@@ -975,7 +987,7 @@ int FileList::ProcessOneHostFile(int Idx)
 	_ALGO(SysLog(L"call OpenPluginForFile([Idx=%d] '%s')",Idx,ListData[Idx]->strName.CPtr()));
 	HANDLE hNewPlugin=OpenPluginForFile(&ListData[Idx]->strName,ListData[Idx]->FileAttr, OFP_COMMANDS);
 
-	if (hNewPlugin && hNewPlugin!=(HANDLE)-2)
+	if (hNewPlugin && hNewPlugin!=PANEL_STOP)
 	{
 		PluginPanelItem *ItemList;
 		size_t ItemNumber;

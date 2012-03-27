@@ -266,9 +266,7 @@ FarStandardFunctions NativeFSF =
 	swscanf,
 	pluginapi::apiQsort,
 	pluginapi::apiBsearch,
-	pluginapi::apiQsortEx,
 	pluginapi::apiSnprintf,
-	{}, //Reserved
 	pluginapi::apiIsLower,
 	pluginapi::apiIsUpper,
 	pluginapi::apiIsAlpha,
@@ -344,6 +342,19 @@ PluginStartupInfo NativeInfo =
 	pluginapi::apiRegExpControl,
 	pluginapi::apiMacroControl,
 	pluginapi::apiSettingsControl,
+	nullptr, //Private, dynamic
+};
+
+ArclitePrivateInfo ArcliteInfo =
+{
+	sizeof(ArcliteInfo),
+	pluginapi::apiCreateFile,
+	pluginapi::apiGetFileAttributes,
+	pluginapi::apiSetFileAttributes,
+	pluginapi::apiMoveFileEx,
+	pluginapi::apiDeleteFile,
+	pluginapi::apiRemoveDirectory,
+	pluginapi::apiCreateDirectory
 };
 
 void CreatePluginStartupInfo(const Plugin* pPlugin, PluginStartupInfo *PSI, FarStandardFunctions *FSF)
@@ -355,6 +366,10 @@ void CreatePluginStartupInfo(const Plugin* pPlugin, PluginStartupInfo *PSI, FarS
 	if (pPlugin)
 	{
 		PSI->ModuleName = pPlugin->GetModuleName().CPtr();
+		if(IsEqualGUID(pPlugin->GetGUID(),ArcliteGuid))
+		{
+			PSI->Private = &ArcliteInfo;
+		}
 	}
 }
 
@@ -969,7 +984,7 @@ HANDLE Plugin::Analyse(const AnalyseInfo *Info)
 		es.bDefaultResult = FALSE;
 		es.hResult = nullptr;
 		EXECUTE_FUNCTION_EX(FUNCTION(iAnalyse)(Info), es);
-		return (es.hResult == INVALID_HANDLE_VALUE)? nullptr : es.hResult;
+		return es.hResult;
 	}
 
 	return nullptr;
@@ -1000,7 +1015,7 @@ HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		g_strDirToSet.Clear();
 	}
 
-	HANDLE hResult = INVALID_HANDLE_VALUE;
+	HANDLE hResult = nullptr;
 
 	if (Load() && Exports[iOpen] && !ProcessException)
 	{
@@ -1014,7 +1029,7 @@ HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		Info.Guid = &Guid;
 		Info.Data = Item;
 		EXECUTE_FUNCTION_EX(FUNCTION(iOpen)(&Info), es);
-		hResult = (es.hResult == INVALID_HANDLE_VALUE)? nullptr : es.hResult;
+		hResult = es.hResult;
 		//CurPluginItem=nullptr; //BUGBUG
 		/*    CtrlObject->Macro.SetRedrawEditor(TRUE); //BUGBUG
 

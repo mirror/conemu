@@ -54,9 +54,8 @@ namespace pluginapi
 	__int64  WINAPI apiAtoi64(const wchar_t *s);
 	wchar_t* WINAPI apiItoa64(__int64 value, wchar_t *string, int radix);
 	int      WINAPI apiAtoi(const wchar_t *s);
-	void     WINAPI apiQsort(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
-	void     WINAPI apiQsortEx(void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *,void *),void*);
-	void*    WINAPI apiBsearch(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *));
+	void     WINAPI apiQsort(void *base, size_t nelem, size_t width, int (WINAPI *fcmp)(const void *, const void *,void *),void *user);
+	void*    WINAPI apiBsearch(const void *key, const void *base, size_t nelem, size_t width, int (WINAPI *fcmp)(const void *, const void *, void *),void *user);
 	wchar_t* WINAPI apiQuoteSpace(wchar_t *Str);
 	wchar_t* WINAPI apiInsertQuote(wchar_t *Str);
 	void     WINAPI apiUnquote(wchar_t *Str);
@@ -129,4 +128,12 @@ namespace pluginapi
 	BOOL     WINAPI apiMkLink(const wchar_t *Src,const wchar_t *Dest, LINK_TYPE Type, MKLINK_FLAGS Flags);
 	BOOL     WINAPI apiAddEndSlash(wchar_t *Path);
 	wchar_t* WINAPI apiXlat(wchar_t *Line,int StartPos,int EndPos,XLAT_FLAGS Flags);
+	//arclite
+	HANDLE   WINAPI apiCreateFile(const wchar_t *Object,DWORD DesiredAccess,DWORD ShareMode,LPSECURITY_ATTRIBUTES SecurityAttributes,DWORD CreationDistribution,DWORD FlagsAndAttributes,HANDLE TemplateFile);
+	DWORD    WINAPI apiGetFileAttributes(const wchar_t *FileName);
+	BOOL     WINAPI apiSetFileAttributes(const wchar_t *FileName,DWORD dwFileAttributes);
+	BOOL     WINAPI apiMoveFileEx(const wchar_t *ExistingFileName,const wchar_t *NewFileName,DWORD dwFlags);
+	BOOL     WINAPI apiDeleteFile(const wchar_t *FileName);
+	BOOL     WINAPI apiRemoveDirectory(const wchar_t *DirName);
+	BOOL     WINAPI apiCreateDirectory(const wchar_t *PathName,LPSECURITY_ATTRIBUTES lpSecurityAttributes);
 };

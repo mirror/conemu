@@ -178,24 +178,18 @@ __int64 WINAPI apiAtoi64(const wchar_t *s)
 	return s?_wtoi64(s):0;
 }
 
-void WINAPI apiQsort(void *base, size_t nelem, size_t width,
-                     int (__cdecl *fcmp)(const void *, const void *))
+void WINAPI apiQsort(void *base, size_t nelem, size_t width, int (WINAPI *fcmp)(const void *, const void *,void *),void *user)
 {
 	if (base && fcmp)
-		far_qsort(base,nelem,width,fcmp);
-}
-
-void WINAPI apiQsortEx(void *base, size_t nelem, size_t width,
-                       int (__cdecl *fcmp)(const void *, const void *,void *user),void *user)
-{
-	if (base && fcmp)
+	{
 		qsortex((char*)base,nelem,width,fcmp,user);
+	}
 }
 
-void *WINAPI apiBsearch(const void *key, const void *base, size_t nelem, size_t width, int (__cdecl *fcmp)(const void *, const void *))
+void *WINAPI apiBsearch(const void *key, const void *base, size_t nelem, size_t width, int (WINAPI *fcmp)(const void *, const void *, void *),void *user)
 {
 	if (key && fcmp && base)
-		return bsearch(key,base,nelem,width,fcmp);
+		return bsearchex(key,base,nelem,width,fcmp,user);
 
 	return nullptr;
 }
@@ -341,16 +335,16 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 		BOOL lbSafe = gbInOpenPlugin;
 
 		if (Command == ACTL_GETFARMANAGERVERSION
-			|| Command == ACTL_GETPLUGINMAXREADDATA
+			//|| Command == ACTL_GETPLUGINMAXREADDATA
 			|| Command == ACTL_GETCOLOR
 			|| Command == ACTL_GETARRAYCOLOR
 			|| Command == ACTL_GETFARHWND
-			|| Command == ACTL_GETDIALOGSETTINGS
-			|| Command == ACTL_GETSYSTEMSETTINGS
-			|| Command == ACTL_GETPANELSETTINGS
-			|| Command == ACTL_GETINTERFACESETTINGS
-			|| Command == ACTL_GETCONFIRMATIONS
-			|| Command == ACTL_GETDESCSETTINGS
+			//|| Command == ACTL_GETDIALOGSETTINGS
+			//|| Command == ACTL_GETSYSTEMSETTINGS
+			//|| Command == ACTL_GETPANELSETTINGS
+			//|| Command == ACTL_GETINTERFACESETTINGS
+			//|| Command == ACTL_GETCONFIRMATIONS
+			//|| Command == ACTL_GETDESCSETTINGS
 			|| Command == ACTL_GETFARRECT
 			|| Command == ACTL_SETPROGRESSSTATE || Command == ACTL_SETPROGRESSVALUE
 			|| Command == ACTL_SYNCHRO
@@ -412,16 +406,9 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 	switch (Command)
 	{
 		case ACTL_GETFARMANAGERVERSION:
-		case ACTL_GETSYSWORDDIV:
 		case ACTL_GETCOLOR:
 		case ACTL_GETARRAYCOLOR:
 		case ACTL_GETFARHWND:
-		case ACTL_GETSYSTEMSETTINGS:
-		case ACTL_GETPANELSETTINGS:
-		case ACTL_GETINTERFACESETTINGS:
-		case ACTL_GETCONFIRMATIONS:
-		case ACTL_GETDESCSETTINGS:
-		case ACTL_GETPLUGINMAXREADDATA:
 		case ACTL_SETPROGRESSSTATE:
 		case ACTL_SETPROGRESSVALUE:
 		case ACTL_GETFARRECT:
@@ -443,17 +430,6 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 				*(VersionInfo*)Param2=FAR_VERSION;
 
 			return TRUE;
-		}
-		case ACTL_GETPLUGINMAXREADDATA:
-		{
-			return Opt.PluginMaxReadData;
-		}
-		case ACTL_GETSYSWORDDIV:
-		{
-			if (Param1 && Param2)
-				xwcsncpy((wchar_t *)Param2, Opt.strWordDiv, Param1);
-
-			return Opt.strWordDiv.GetLength()+1;
 		}
 		/* $ 24.08.2000 SVS
 		   ожидать определенную (или любую) клавишу
@@ -571,14 +547,28 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 			if (CheckStructSize(wi))
 			{
 				string strType, strName;
-				Frame *f;
+				Frame *f=nullptr;
+				bool modal=false;
 
 				/* $ 22.12.2001 VVM
 				  + Если Pos == -1 то берем текущий фрейм */
 				if (wi->Pos == -1)
+				{
 					f=FrameManager->GetCurrentFrame();
+					modal=(FrameManager->IndexOfStack(f)>=0);
+				}
 				else
-					f=(*FrameManager)[wi->Pos];
+				{
+					if (wi->Pos>=0&&wi->Pos<FrameManager->GetFrameCount())
+					{
+						f=(*FrameManager)[wi->Pos];
+					}
+					else if(wi->Pos>=FrameManager->GetFrameCount()&&wi->Pos<(FrameManager->GetFrameCount()+FrameManager->GetModalStackCount()))
+					{
+						f=FrameManager->GetModalFrame(wi->Pos-FrameManager->GetFrameCount());
+						modal=true;
+					}
+				}
 
 				if (!f)
 					return FALSE;
@@ -603,13 +593,16 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 					wi->NameSize=static_cast<int>(strName.GetLength()+1);
 				}
 
-				wi->Pos=FrameManager->IndexOf(f);
+				if(-1==wi->Pos) wi->Pos=FrameManager->IndexOf(f);
+				if(-1==wi->Pos) wi->Pos=FrameManager->IndexOfStack(f)+FrameManager->GetFrameCount();
 				wi->Type=ModalType2WType(f->GetType());
 				wi->Flags=0;
 				if (f->IsFileModified())
 					wi->Flags|=WIF_MODIFIED;
 				if (f==FrameManager->GetCurrentFrame())
 					wi->Flags|=WIF_CURRENT;
+				if (modal)
+					wi->Flags|=WIF_MODAL;
 
 				switch (wi->Type)
 				{
@@ -633,7 +626,7 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 		}
 		case ACTL_GETWINDOWCOUNT:
 		{
-			return FrameManager->GetFrameCount();
+			return FrameManager->GetFrameCount()+FrameManager->GetModalStackCount();
 		}
 		case ACTL_SETCURRENTWINDOW:
 		{
@@ -667,140 +660,6 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 		case ACTL_GETFARHWND:
 		{
 			return (INT_PTR)Console.GetWindow();
-		}
-		case ACTL_GETDIALOGSETTINGS:
-		{
-			DWORD Options=0;
-			static Opt2Flags ODlg[]=
-			{
-				{&Opt.Dialogs.EditHistory,FDIS_HISTORYINDIALOGEDITCONTROLS},
-				{&Opt.Dialogs.EditBlock,FDIS_PERSISTENTBLOCKSINEDITCONTROLS},
-				{&Opt.Dialogs.AutoComplete,FDIS_AUTOCOMPLETEININPUTLINES},
-				{&Opt.Dialogs.EULBsClear,FDIS_BSDELETEUNCHANGEDTEXT},
-				{&Opt.Dialogs.DelRemovesBlocks,FDIS_DELREMOVESBLOCKS},
-				{&Opt.Dialogs.MouseButton,FDIS_MOUSECLICKOUTSIDECLOSESDIALOG},
-			};
-
-			for (size_t I=0; I < ARRAYSIZE(ODlg); ++I)
-				if (*ODlg[I].Opt)
-					Options|=ODlg[I].Flags;
-
-			return Options;
-		}
-		/* $ 24.11.2001 IS
-		   Ознакомим с настройками системными, панели, интерфейса, подтверждений
-		*/
-		case ACTL_GETSYSTEMSETTINGS:
-		{
-			DWORD Options=0;
-			static Opt2Flags OSys[]=
-			{
-				{&Opt.DeleteToRecycleBin,FSS_DELETETORECYCLEBIN},
-				{&Opt.CMOpt.UseSystemCopy,FSS_USESYSTEMCOPYROUTINE},
-				{&Opt.CMOpt.CopyOpened,FSS_COPYFILESOPENEDFORWRITING},
-				{&Opt.ScanJunction,FSS_SCANSYMLINK},
-				{&Opt.CreateUppercaseFolders,FSS_CREATEFOLDERSINUPPERCASE},
-				{&Opt.SaveHistory,FSS_SAVECOMMANDSHISTORY},
-				{&Opt.SaveFoldersHistory,FSS_SAVEFOLDERSHISTORY},
-				{&Opt.SaveViewHistory,FSS_SAVEVIEWANDEDITHISTORY},
-				{&Opt.UseRegisteredTypes,FSS_USEWINDOWSREGISTEREDTYPES},
-				{&Opt.AutoSaveSetup,FSS_AUTOSAVESETUP},
-			};
-
-			for (size_t I=0; I < ARRAYSIZE(OSys); ++I)
-				if (*OSys[I].Opt)
-					Options|=OSys[I].Flags;
-
-			return Options;
-		}
-		case ACTL_GETPANELSETTINGS:
-		{
-			DWORD Options=0;
-			static Opt2Flags OSys[]=
-			{
-				{&Opt.ShowHidden,FPS_SHOWHIDDENANDSYSTEMFILES},
-				{&Opt.Highlight,FPS_HIGHLIGHTFILES},
-				{&Opt.Tree.AutoChangeFolder,FPS_AUTOCHANGEFOLDER},
-				{&Opt.SelectFolders,FPS_SELECTFOLDERS},
-				{&Opt.ReverseSort,FPS_ALLOWREVERSESORTMODES},
-				{&Opt.ShowColumnTitles,FPS_SHOWCOLUMNTITLES},
-				{&Opt.ShowPanelStatus,FPS_SHOWSTATUSLINE},
-				{&Opt.ShowPanelTotals,FPS_SHOWFILESTOTALINFORMATION},
-				{&Opt.ShowPanelFree,FPS_SHOWFREESIZE},
-				{&Opt.ShowPanelScrollbar,FPS_SHOWSCROLLBAR},
-				{&Opt.ShowScreensNumber,FPS_SHOWBACKGROUNDSCREENSNUMBER},
-				{&Opt.ShowSortMode,FPS_SHOWSORTMODELETTER},
-			};
-
-			for (size_t I=0; I < ARRAYSIZE(OSys); ++I)
-				if (*OSys[I].Opt)
-					Options|=OSys[I].Flags;
-
-			return Options;
-		}
-		case ACTL_GETINTERFACESETTINGS:
-		{
-			DWORD Options=0;
-			static Opt2Flags OSys[]=
-			{
-				{&Opt.Clock,FIS_CLOCKINPANELS},
-				{&Opt.ViewerEditorClock,FIS_CLOCKINVIEWERANDEDITOR},
-				{&Opt.Mouse,FIS_MOUSE},
-				{&Opt.ShowKeyBar,FIS_SHOWKEYBAR},
-				{&Opt.ShowMenuBar,FIS_ALWAYSSHOWMENUBAR},
-				{&Opt.CMOpt.CopyShowTotal,FIS_SHOWTOTALCOPYPROGRESSINDICATOR},
-				{&Opt.CMOpt.CopyTimeRule,FIS_SHOWCOPYINGTIMEINFO},
-				{&Opt.PgUpChangeDisk,FIS_USECTRLPGUPTOCHANGEDRIVE},
-				{&Opt.DelOpt.DelShowTotal,FIS_SHOWTOTALDELPROGRESSINDICATOR},
-			};
-
-			for (size_t I=0; I < ARRAYSIZE(OSys); ++I)
-				if (*OSys[I].Opt)
-					Options|=OSys[I].Flags;
-
-			return Options;
-		}
-		case ACTL_GETCONFIRMATIONS:
-		{
-			DWORD Options=0;
-			static Opt2Flags OSys[]=
-			{
-				{&Opt.Confirm.Copy,FCS_COPYOVERWRITE},
-				{&Opt.Confirm.Move,FCS_MOVEOVERWRITE},
-				{&Opt.Confirm.RO,FCS_OVERWRITEDELETEROFILES},
-				{&Opt.Confirm.Drag,FCS_DRAGANDDROP},
-				{&Opt.Confirm.Delete,FCS_DELETE},
-				{&Opt.Confirm.DeleteFolder,FCS_DELETENONEMPTYFOLDERS},
-				{&Opt.Confirm.Esc,FCS_INTERRUPTOPERATION},
-				{&Opt.Confirm.RemoveConnection,FCS_DISCONNECTNETWORKDRIVE},
-				{&Opt.Confirm.AllowReedit,FCS_RELOADEDITEDFILE},
-				{&Opt.Confirm.HistoryClear,FCS_CLEARHISTORYLIST},
-				{&Opt.Confirm.Exit,FCS_EXIT},
-			};
-
-			for (size_t I=0; I < ARRAYSIZE(OSys); ++I)
-				if (*OSys[I].Opt)
-					Options|=OSys[I].Flags;
-
-			return Options;
-		}
-		case ACTL_GETDESCSETTINGS:
-		{
-			// опций мало - с массивом не заморачиваемся
-			DWORD Options=0;
-
-			if (Opt.Diz.UpdateMode == DIZ_UPDATE_IF_DISPLAYED)
-				Options |= FDS_UPDATEIFDISPLAYED;
-			else if (Opt.Diz.UpdateMode == DIZ_UPDATE_ALWAYS)
-				Options |= FDS_UPDATEALWAYS;
-
-			if (Opt.Diz.SetHidden)
-				Options |= FDS_SETHIDDEN;
-
-			if (Opt.Diz.ROUpdate)
-				Options |= FDS_UPDATEREADONLY;
-
-			return Options;
 		}
 		case ACTL_REDRAWALL:
 		{
@@ -2364,9 +2223,6 @@ INT_PTR WINAPI apiMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 				MacroAddMacro *Data=(MacroAddMacro*)Param2;
 				MACROFLAGS_MFLAGS Flags=0;
 
-				if (Data->Flags&KMFLAGS_SAVEMACRO)
-					Flags|=MFLAGS_NEEDSAVEMACRO;
-
 				if (Data->Flags&KMFLAGS_DISABLEOUTPUT)
 					Flags|=MFLAGS_DISABLEOUTPUT;
 
@@ -2481,17 +2337,9 @@ INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 		case PCTL_GETPLUGININFORMATION:
 			{
 				FarGetPluginInformation* Info = reinterpret_cast<FarGetPluginInformation*>(Param2);
-				if (!Info || (CheckStructSize(Info) && static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation)))
-				{
-					Plugin* plugin = reinterpret_cast<Plugin*>(Handle);
-					if(plugin)
-					{
-						return CtrlObject->Plugins->GetPluginInformation(plugin, Info, Param1);
-					}
-				}
 				#if 1
 				//Maximus: Проблема bis-сборки. Размер структуры Info->PInfo ожидается большего размера
-				else if (Info
+				if (Info
 					&& Info->StructSize == (sizeof(*Info) - (((((char*)&Info->GInfo) - (char*)&Info->PInfo)) - ((((char*)&Info->PInfo.MacroFunctions) - (char*)&Info->PInfo))))
 					&& static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation))
 				{
@@ -2508,7 +2356,16 @@ INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 					}
 
 				}
+				else
 				#endif
+				if (!Info || (CheckStructSize(Info) && static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation)))
+				{
+					Plugin* plugin = reinterpret_cast<Plugin*>(Handle);
+					if(plugin)
+					{
+						return CtrlObject->Plugins->GetPluginInformation(plugin, Info, Param1);
+					}
+				}
 			}
 			break;
 
@@ -2962,5 +2819,40 @@ BOOL WINAPI apiAddEndSlash(wchar_t *Path)
 wchar_t* WINAPI apiXlat(wchar_t *Line,int StartPos,int EndPos,XLAT_FLAGS Flags)
 {
 	return Xlat(Line, StartPos, EndPos, Flags);
+}
+
+HANDLE WINAPI apiCreateFile(const wchar_t *Object, DWORD DesiredAccess, DWORD ShareMode, LPSECURITY_ATTRIBUTES SecurityAttributes, DWORD CreationDistribution, DWORD FlagsAndAttributes, HANDLE TemplateFile)
+{
+	return ::apiCreateFile(Object,DesiredAccess,ShareMode,SecurityAttributes,CreationDistribution,FlagsAndAttributes,TemplateFile);
+}
+
+DWORD WINAPI apiGetFileAttributes(const wchar_t *FileName)
+{
+	return ::apiGetFileAttributes(FileName);
+}
+
+BOOL WINAPI apiSetFileAttributes(const wchar_t *FileName,DWORD dwFileAttributes)
+{
+	return ::apiSetFileAttributes(FileName,dwFileAttributes);
+}
+
+BOOL WINAPI apiMoveFileEx(const wchar_t *ExistingFileName,const wchar_t *NewFileName,DWORD dwFlags)
+{
+	return ::apiMoveFileEx(ExistingFileName,NewFileName,dwFlags);
+}
+
+BOOL WINAPI apiDeleteFile(const wchar_t *FileName)
+{
+	return ::apiDeleteFile(FileName);
+}
+
+BOOL WINAPI apiRemoveDirectory(const wchar_t *DirName)
+{
+	return ::apiRemoveDirectory(DirName);
+}
+
+BOOL WINAPI apiCreateDirectory(const wchar_t *PathName,LPSECURITY_ATTRIBUTES lpSecurityAttributes)
+{
+	return ::apiCreateDirectory(PathName,lpSecurityAttributes);
 }
 };

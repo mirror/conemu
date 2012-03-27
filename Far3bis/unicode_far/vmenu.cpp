@@ -613,6 +613,8 @@ int VMenu::DeleteItem(int ID, int Count)
 	#if 1
 	//Maximus: расширенный фильтр
 	SetFlags(VMENU_UPDATEREQUIRED|(bFilterEnabled?VMENU_REFILTERREQUIRED:0));
+	#else
+	SetFlags(VMENU_UPDATEREQUIRED);
 	#endif
 
 	return ItemCount;
@@ -700,7 +702,7 @@ void VMenu::RestoreFilteredItems()
 	FilterUpdateHeight();
 
 	// Подровнять, а то в нижней части списка может оставаться куча пустых строк
-	FarListPos pos={SelectPos < 0 ? 0 : SelectPos,-1};
+	FarListPos pos={sizeof(FarListPos),SelectPos < 0 ? 0 : SelectPos,-1};
 	SetSelectPos(&pos);
 }
 
@@ -932,7 +934,7 @@ void VMenu::FilterStringUpdated(bool bLonger)
 	if (GetShowItemCount()>0)
 	{
 		// Подровнять, а то в нижней части списка может оставаться куча пустых строк
-		FarListPos pos={SelectPos,-1};
+		FarListPos pos={sizeof(FarListPos),SelectPos,-1};
 		if (SelectPos<0)
 		{
 			pos.SelectPos = bBottomMode ? ((LowerVisible>0) ? LowerVisible : UpperVisible) : UpperVisible;
@@ -975,9 +977,10 @@ bool VMenu::ShouldSendKeyToFilter(int Key)
 {
 	#if 1
 	//Maximus: расширенный фильтр
-	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM)
+	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF || Key==KEY_CTRLRALTF || Key==KEY_RCTRLALTF
+		|| Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM || Key==KEY_CTRLRALTM || Key==KEY_RCTRLALTM)
 	#else
-	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF)
+	if (Key==KEY_CTRLALTF || Key==KEY_RCTRLRALTF || Key==KEY_CTRLRALTF || Key==KEY_RCTRLALTF)
 	#endif
 		return true;
 
@@ -985,11 +988,13 @@ bool VMenu::ShouldSendKeyToFilter(int Key)
 	{
 		#if 1
 		//Maximus: расширенный фильтр
-		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL || Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM || Key==KEY_CTRLV
-			|| Key==KEY_MULTIPLY || Key==KEY_RCTRLV || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0
-			|| Key==KEY_ADD || Key==KEY_SUBTRACT || Key==KEY_SUBTRACT || Key==KEY_DECIMAL || Key==KEY_DIVIDE)
+		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL || Key==KEY_CTRLRALTL || Key==KEY_RCTRLALTL
+			|| Key==KEY_CTRLALTM || Key==KEY_RCTRLRALTM || Key==KEY_CTRLRALTM || Key==KEY_RCTRLALTM
+			|| Key==KEY_CTRLV || Key==KEY_RCTRLV
+			|| Key==KEY_MULTIPLY || Key==KEY_ADD || Key==KEY_SUBTRACT || Key==KEY_DIVIDE
+			|| Key==KEY_DECIMAL || Key==KEY_SHIFTINS || Key==KEY_SHIFTNUMPAD0)
 		#else
-		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL)
+		if (Key==KEY_CTRLALTL || Key==KEY_RCTRLRALTL || Key==KEY_CTRLRALTL || Key==KEY_RCTRLALTL)
 		#endif
 			return true;
 
@@ -1572,10 +1577,11 @@ int VMenu::ProcessKey(int Key)
 		{
 			#if 1
 			//Maximus: расширенный фильтр
-			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLBS && Key!=KEY_RCTRLBS && Key!=KEY_CTRLDEL && Key!=KEY_RCTRLDEL &&
-				Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF && Key!=KEY_CTRLALTM && Key!=KEY_RCTRLRALTM))
+			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLBS && Key!=KEY_RCTRLBS && Key!=KEY_CTRLDEL && Key!=KEY_RCTRLDEL
+				&& Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF && Key!=KEY_CTRLRALTF && Key!=KEY_RCTRLALTF
+				&& Key!=KEY_CTRLALTM && Key!=KEY_RCTRLRALTM && Key!=KEY_CTRLRALTM && Key!=KEY_RCTRLALTM))
 			#else
-			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF))
+			if (!bFilterEnabled || (bFilterEnabled && Key!=KEY_BS && Key!=KEY_CTRLALTF && Key!=KEY_RCTRLRALTF && Key!=KEY_CTRLRALTF && Key!=KEY_RCTRLALTF))
 			#endif
 			{
 				Modal::ExitCode = -1;
@@ -1636,7 +1642,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_CTRLPGUP:     case KEY_CTRLNUMPAD9:
 		case KEY_RCTRLPGUP:    case KEY_RCTRLNUMPAD9:
 		{
-			FarListPos pos={0,-1};
+			FarListPos pos={sizeof(FarListPos),0,-1};
 			SetSelectPos(&pos);
 			ShowMenu(true);
 			break;
@@ -1750,6 +1756,8 @@ int VMenu::ProcessKey(int Key)
 		}
 		case KEY_CTRLALTF:
 		case KEY_RCTRLRALTF:
+		case KEY_CTRLRALTF:
+		case KEY_RCTRLALTF:
 		{
 			bFilterEnabled=!bFilterEnabled;
 			bFilterLocked=false;
@@ -1799,6 +1807,8 @@ int VMenu::ProcessKey(int Key)
 		}
 		case KEY_CTRLALTL:
 		case KEY_RCTRLRALTL:
+		case KEY_CTRLRALTL:
+		case KEY_RCTRLALTL:
 		{
 			if (bFilterEnabled)
 			{
@@ -1811,6 +1821,8 @@ int VMenu::ProcessKey(int Key)
 		//Maximus: расширенный фильтр from DAtaMan
 		case KEY_CTRLALTM:
 		case KEY_RCTRLRALTM:
+		case KEY_CTRLRALTM:
+		case KEY_RCTRLALTM:
 		{
 			if (bFilterEnabled)
 			{
@@ -3537,7 +3549,7 @@ int VMenu::FindItem(int StartIndex,const wchar_t *Pattern,UINT64 Flags)
 	return -1;
 }
 
-static int __cdecl SortItem(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
+static int WINAPI SortItem(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
 	string strName1((*el1)->strName);
 	string strName2((*el2)->strName);
@@ -3547,7 +3559,7 @@ static int __cdecl SortItem(const MenuItemEx **el1, const MenuItemEx **el2, cons
 	return (Param->Direction?(Res<0?1:(Res>0?-1:0)):Res);
 }
 
-static int __cdecl SortItemDataDWORD(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
+static int WINAPI SortItemDataDWORD(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
 	int Res;
 	DWORD Dw1=(DWORD)(DWORD_PTR)((*el1)->UserData);
@@ -3569,7 +3581,7 @@ void VMenu::SortItems(int Direction, int Offset, BOOL SortForDataDWORD)
 {
 	CriticalSectionLock Lock(CS);
 
-	typedef int (__cdecl *qsortex_fn)(const void*,const void*,void*);
+	typedef int (WINAPI *qsortex_fn)(const void*,const void*,void*);
 
 	SortItemParam Param;
 	Param.Direction=Direction;
@@ -3607,7 +3619,7 @@ void VMenu::SortItems(TMENUITEMEXCMPFUNC user_cmp_func,int Direction,int Offset)
 {
 	CriticalSectionLock Lock(CS);
 
-	typedef int (__cdecl *qsortex_fn)(const void*,const void*,void*);
+	typedef int (WINAPI *qsortex_fn)(const void*,const void*,void*);
 
 	SortItemParam Param;
 	Param.Direction=Direction;

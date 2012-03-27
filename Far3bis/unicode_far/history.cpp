@@ -198,7 +198,7 @@ int History::ProcessMenu(string &strStr, GUID* Guid, string *pstrFile, string *p
 	unsigned __int64 SelectedRecord = 0;
 	string strSelectedRecordName,strSelectedRecordGuid,strSelectedRecordFile,strSelectedRecordData;
 	int SelectedRecordType = 0;
-	FarListPos Pos={};
+	FarListPos Pos={sizeof(FarListPos)};
 	int Code=-1;
 	int RetCode=1;
 	bool Done=false;
@@ -289,7 +289,7 @@ int History::ProcessMenu(string &strStr, GUID* Guid, string *pstrFile, string *p
 
 			if (!SetUpMenuPos && !bSelected && TypeHistory!=HISTORYTYPE_DIALOG)
 			{
-				FarListPos p;
+				FarListPos p={sizeof(FarListPos)};
 				p.SelectPos = HistoryMenu.GetItemCount()-1;
 				p.TopPos = 0;
 				HistoryMenu.SetSelectPos(&p);
@@ -416,15 +416,20 @@ int History::ProcessMenu(string &strStr, GUID* Guid, string *pstrFile, string *p
 				case KEY_SHIFTENTER:
 				case KEY_CTRLALTENTER:
 				case KEY_RCTRLRALTENTER:
+				case KEY_CTRLRALTENTER:
+				case KEY_RCTRLALTENTER:
 				case KEY_CTRLALTNUMENTER:
 				case KEY_RCTRLRALTNUMENTER:
+				case KEY_CTRLRALTNUMENTER:
+				case KEY_RCTRLALTNUMENTER:
 				{
 					if (TypeHistory == HISTORYTYPE_DIALOG)
 						break;
 
 					HistoryMenu.Modal::SetExitCode(Pos.SelectPos);
 					Done=true;
-					RetCode = (Key==KEY_CTRLALTENTER||Key==KEY_RCTRLRALTENTER||Key==KEY_CTRLALTNUMENTER||Key==KEY_RCTRLRALTNUMENTER)?7
+					RetCode = (Key==KEY_CTRLALTENTER||Key==KEY_RCTRLRALTENTER||Key==KEY_CTRLRALTENTER||Key==KEY_RCTRLALTENTER||
+							Key==KEY_CTRLALTNUMENTER||Key==KEY_RCTRLRALTNUMENTER||Key==KEY_CTRLRALTNUMENTER||Key==KEY_RCTRLALTNUMENTER)?7
 						:((Key==KEY_CTRLSHIFTENTER||Key==KEY_RCTRLSHIFTENTER||Key==KEY_CTRLSHIFTNUMENTER||Key==KEY_RCTRLSHIFTNUMENTER)?6
 							:((Key==KEY_SHIFTENTER||Key==KEY_SHIFTNUMENTER)?2:3));
 					break;
@@ -537,7 +542,7 @@ int History::ProcessMenu(string &strStr, GUID* Guid, string *pstrFile, string *p
 
 			//BUGUBUG: eliminate those magic numbers!
 			if (SelectedRecordType != 2 && SelectedRecordType != 3 // ignore external
-				&& RetCode != 3 && ((TypeHistory == HISTORYTYPE_FOLDER && !SelectedRecordType) || TypeHistory == HISTORYTYPE_VIEW) && apiGetFileAttributes(strSelectedRecordName) == INVALID_FILE_ATTRIBUTES)
+				&& RetCode != 3 && ((TypeHistory == HISTORYTYPE_FOLDER && strSelectedRecordGuid.IsEmpty()) || TypeHistory == HISTORYTYPE_VIEW) && apiGetFileAttributes(strSelectedRecordName) == INVALID_FILE_ATTRIBUTES)
 			{
 				SetLastError(ERROR_FILE_NOT_FOUND);
 

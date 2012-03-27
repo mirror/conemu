@@ -807,17 +807,18 @@ int Editor::ProcessKey(int Key)
 		case KEY_CTRLSHIFTUP:   case KEY_CTRLSHIFTNUMPAD8: Key = KEY_SHIFTUP;   break;
 		case KEY_CTRLSHIFTDOWN:	case KEY_CTRLSHIFTNUMPAD2: Key = KEY_SHIFTDOWN; break;
 
-		case KEY_CTRLALTUP:   case KEY_RCTRLRALTUP:   case KEY_RCTRL|KEY_ALT|KEY_UP:   Key = KEY_ALTUP;   break;
-		case KEY_CTRLALTDOWN: case KEY_RCTRLRALTDOWN: case KEY_RCTRL|KEY_ALT|KEY_DOWN: Key = KEY_ALTDOWN; break;
+		case KEY_CTRLALTUP:     case KEY_RCTRLRALTUP:     case KEY_CTRLRALTUP:        case KEY_RCTRLALTUP:     Key = KEY_ALTUP;   break;
+		case KEY_CTRLALTDOWN:   case KEY_RCTRLRALTDOWN:   case KEY_CTRLRALTDOWN:      case KEY_RCTRLALTDOWN:   Key = KEY_ALTDOWN; break;
 
-		case KEY_RCTRL|KEY_ALT|KEY_LEFT:  case KEY_RCTRL|KEY_ALT|KEY_NUMPAD4: Key = KEY_CTRLALTLEFT;  break;
-		case KEY_RCTRL|KEY_ALT|KEY_RIGHT: case KEY_RCTRL|KEY_ALT|KEY_NUMPAD6: Key = KEY_CTRLALTRIGHT; break;
-		case KEY_RCTRL|KEY_ALT|KEY_PGUP:  case KEY_RCTRL|KEY_ALT|KEY_NUMPAD9: Key = KEY_CTRLALTPGUP;  break;
-		case KEY_RCTRL|KEY_ALT|KEY_PGDN:  case KEY_RCTRL|KEY_ALT|KEY_NUMPAD3: Key = KEY_CTRLALTPGDN;  break;
-		case KEY_RCTRL|KEY_ALT|KEY_HOME:  case KEY_RCTRL|KEY_ALT|KEY_NUMPAD7: Key = KEY_CTRLALTHOME;  break;
-		case KEY_RCTRL|KEY_ALT|KEY_END:   case KEY_RCTRL|KEY_ALT|KEY_NUMPAD1: Key = KEY_CTRLALTEND;   break;
-		case KEY_RCTRL|KEY_ALT|KEY_BRACKET:     Key = KEY_CTRLALTBRACKET;     break;
-		case KEY_RCTRL|KEY_ALT|KEY_BACKBRACKET: Key = KEY_CTRLALTBACKBRACKET; break;
+		case KEY_RCTRLALTLEFT:  case KEY_RCTRLALTNUMPAD4: case KEY_CTRLRALTLEFT:  case KEY_CTRLRALTNUMPAD4: case KEY_RCTRLRALTLEFT:  case KEY_RCTRLRALTNUMPAD4: Key = KEY_CTRLALTLEFT;  break;
+		case KEY_RCTRLALTRIGHT: case KEY_RCTRLALTNUMPAD6: case KEY_CTRLRALTRIGHT: case KEY_CTRLRALTNUMPAD6: case KEY_RCTRLRALTRIGHT: case KEY_RCTRLRALTNUMPAD6: Key = KEY_CTRLALTRIGHT; break;
+		case KEY_RCTRLALTPGUP:  case KEY_RCTRLALTNUMPAD9: case KEY_CTRLRALTPGUP:  case KEY_CTRLRALTNUMPAD9: case KEY_RCTRLRALTPGUP:  case KEY_RCTRLRALTNUMPAD9: Key = KEY_CTRLALTPGUP;  break;
+		case KEY_RCTRLALTPGDN:  case KEY_RCTRLALTNUMPAD3: case KEY_CTRLRALTPGDN:  case KEY_CTRLRALTNUMPAD3: case KEY_RCTRLRALTPGDN:  case KEY_RCTRLRALTNUMPAD3: Key = KEY_CTRLALTPGDN;  break;
+		case KEY_RCTRLALTHOME:  case KEY_RCTRLALTNUMPAD7: case KEY_CTRLRALTHOME:  case KEY_CTRLRALTNUMPAD7: case KEY_RCTRLRALTHOME:  case KEY_RCTRLRALTNUMPAD7: Key = KEY_CTRLALTHOME;  break;
+		case KEY_RCTRLALTEND:   case KEY_RCTRLALTNUMPAD1: case KEY_CTRLRALTEND:   case KEY_CTRLRALTNUMPAD1: case KEY_RCTRLRALTEND:   case KEY_RCTRLRALTNUMPAD1: Key = KEY_CTRLALTEND;   break;
+
+		case KEY_RCTRLRALTBRACKET:     case KEY_CTRLRALTBRACKET:     case KEY_RCTRLALTBRACKET:     Key = KEY_CTRLALTBRACKET;     break;
+		case KEY_RCTRLRALTBACKBRACKET: case KEY_CTRLRALTBACKBRACKET: case KEY_RCTRLALTBACKBRACKET: Key = KEY_CTRLALTBACKBRACKET; break;
 	}
 
 	_KEYMACRO(CleverSysLog SL(L"Editor::ProcessKey()"));
@@ -839,13 +840,13 @@ int Editor::ProcessKey(int Key)
 
 		if (BlockStart || VBlockStart)
 		{
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 		}
 
 		if ((BlockStart || VBlockStart) && !EdOpt.PersistentBlocks)
 //    if (BlockStart || VBlockStart && !EdOpt.PersistentBlocks)
 		{
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 
 			if (!EdOpt.PersistentBlocks)
 			{
@@ -934,7 +935,7 @@ int Editor::ProcessKey(int Key)
 				                     (SelEnd!=-1 && (CurPos>SelEnd ||    // ... после выделения
 				                                     (CurPos>SelStart && CurPos<SelEnd)))) &&
 				        CurPos<CurLine->GetLength()) // ... внутри выдления
-					Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+					TurnOffMarkingBlock();
 
 				Flags.Clear(FEDITOR_CURPOSCHANGEDBYPLUGIN);
 			}
@@ -1572,7 +1573,7 @@ int Editor::ProcessKey(int Key)
 			if (Flags.Check(FEDITOR_LOCKMODE))
 				return TRUE;
 
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 			DeleteBlock();
 			Show();
 			return TRUE;
@@ -2073,14 +2074,14 @@ int Editor::ProcessKey(int Key)
 			   Сказано в хелпе "Shift-F7 Продолжить _поиск_"
 			*/
 			//ReplaceMode=FALSE;
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 			Search(TRUE);
 			return TRUE;
 		}
 		case KEY_ALTF7:
 		case KEY_RALTF7:
 		{
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 			int LastSearchReversePrev = LastSearchReverse;
 			LastSearchReverse = !LastSearchReverse;
 			Search(TRUE);
@@ -2284,7 +2285,6 @@ int Editor::ProcessKey(int Key)
 		  + CtrlAltLeft, CtrlAltRight для вертикальный блоков
 		*/
 		case KEY_CTRLALTLEFT:   case KEY_CTRLALTNUMPAD4:
-		case KEY_RCTRLRALTLEFT: case KEY_RCTRLRALTNUMPAD4:
 		{
 			{
 				int SkipSpace=TRUE;
@@ -2329,7 +2329,6 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLALTRIGHT:   case KEY_CTRLALTNUMPAD6:
-		case KEY_RCTRLRALTRIGHT: case KEY_RCTRLRALTNUMPAD6:
 		{
 			{
 				int SkipSpace=TRUE;
@@ -2503,9 +2502,7 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLALTPGUP:   case KEY_CTRLALTNUMPAD9:
-		case KEY_RCTRLRALTPGUP: case KEY_RCTRLRALTNUMPAD9:
 		case KEY_CTRLALTHOME:   case KEY_CTRLALTNUMPAD7:
-		case KEY_RCTRLRALTHOME: case KEY_RCTRLRALTNUMPAD7:
 		{
 			Lock();
 			Pasting++;
@@ -2523,9 +2520,7 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLALTPGDN:   case KEY_CTRLALTNUMPAD3:
-		case KEY_RCTRLRALTPGDN: case KEY_RCTRLRALTNUMPAD3:
 		case KEY_CTRLALTEND:    case KEY_CTRLALTNUMPAD1:
-		case KEY_RCTRLRALTEND:  case KEY_RCTRLRALTNUMPAD1:
 		{
 			Lock();
 			Pasting++;
@@ -2543,9 +2538,7 @@ int Editor::ProcessKey(int Key)
 			return TRUE;
 		}
 		case KEY_CTRLALTBRACKET:       // Вставить сетевое (UNC) путь из левой панели
-		case KEY_RCTRLRALTBRACKET:
 		case KEY_CTRLALTBACKBRACKET:   // Вставить сетевое (UNC) путь из правой панели
-		case KEY_RCTRLRALTBACKBRACKET:
 		case KEY_ALTSHIFTBRACKET:      // Вставить сетевое (UNC) путь из активной панели
 		case KEY_RALTSHIFTBRACKET:
 		case KEY_ALTSHIFTBACKBRACKET:  // Вставить сетевое (UNC) путь из пассивной панели
@@ -2572,7 +2565,7 @@ int Editor::ProcessKey(int Key)
 
 				if (!EdOpt.PersistentBlocks && BlockStart)
 				{
-					Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+					TurnOffMarkingBlock();
 					DeleteBlock();
 				}
 
@@ -2599,7 +2592,7 @@ int Editor::ProcessKey(int Key)
 
 				if (!EdOpt.PersistentBlocks && BlockStart)
 				{
-					Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+					TurnOffMarkingBlock();
 					DeleteBlock();
 				}
 
@@ -2671,7 +2664,7 @@ int Editor::ProcessKey(int Key)
 
 				if (!EdOpt.PersistentBlocks && IsBlock)
 				{
-					Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+					TurnOffMarkingBlock();
 					DeleteBlock();
 				}
 
@@ -2713,7 +2706,7 @@ int Editor::ProcessKey(int Key)
 						  текст с шифтом флаги не сбросятся и следующий
 						  выделенный блок будет глючный.
 						*/
-						Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+						TurnOffMarkingBlock();
 						Show();
 					}
 
@@ -2964,7 +2957,7 @@ int Editor::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 	// $ 28.12.2000 VVM - Щелчок мышкой снимает непостоянный блок всегда
 	if ((MouseEvent->dwButtonState & 3))
 	{
-		Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+		TurnOffMarkingBlock();
 
 		if ((!EdOpt.PersistentBlocks) && (BlockStart || VBlockStart))
 		{
@@ -3022,7 +3015,7 @@ int Editor::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 
 		if (MouseEvent->dwEventFlags==DOUBLE_CLICK)
 		{
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 
 			if (BlockStart || VBlockStart)
 				UnmarkBlock();
@@ -4169,7 +4162,19 @@ void Editor::Paste(const wchar_t *Src)
 				CurLine->Select(StartPos,-1);
 				StartPos=0;
 				EdOpt.AutoIndent=FALSE;
+				#if 1
+				//Maximus: не игнорировать EOL заданный в буфере обмена!
+				Edit *PrevLine=CurLine;
 				ProcessKey(KEY_ENTER);
+				_ASSERTE(PrevLine!=CurLine);
+				//BUGBUG: \r\n\n?
+				wchar_t ClipEol[4] = {ClipText[I]};
+				if (ClipText[I]==L'\r' && ClipText[I+1]==L'\n')
+					ClipEol[1]=L'\n';
+				PrevLine->SetEOL(ClipEol);
+				#else
+				ProcessKey(KEY_ENTER);
+				#endif
 
 				if (ClipText[I]==L'\r' && ClipText[I+1]==L'\n')
 					I++;
@@ -4497,7 +4502,7 @@ void Editor::UnmarkBlock()
 
 	VBlockStart=nullptr;
 	_SVS(SysLog(L"[%d] Editor::UnmarkBlock()",__LINE__));
-	Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+	TurnOffMarkingBlock();
 
 	while (BlockStart)
 	{
@@ -5556,6 +5561,7 @@ int Editor::EditorControl(int Command,void *Param)
 			}
 			else
 			{
+				TurnOffMarkingBlock();
 				int Indent=Param && *(int *)Param!=FALSE;
 
 				if (!Indent)
@@ -5585,6 +5591,7 @@ int Editor::EditorControl(int Command,void *Param)
 			}
 			else
 			{
+				TurnOffMarkingBlock();
 				const wchar_t *Str=(const wchar_t *)Param;
 				Pasting++;
 				Lock();
@@ -5663,6 +5670,7 @@ int Editor::EditorControl(int Command,void *Param)
 					return FALSE;
 				}
 
+				TurnOffMarkingBlock();
 				int DestLine=SetString->StringNumber;
 
 				if (DestLine==-1)
@@ -5689,9 +5697,8 @@ int Editor::EditorControl(int Command,void *Param)
 				return FALSE;
 			}
 
+			TurnOffMarkingBlock();
 			DeleteString(CurLine,NumLine,FALSE,NumLine);
-			if ( !BlockStart )
-				Flags.Clear(FEDITOR_MARKINGBLOCK);
 
 			return TRUE;
 		}
@@ -5703,6 +5710,7 @@ int Editor::EditorControl(int Command,void *Param)
 				return FALSE;
 			}
 
+			TurnOffMarkingBlock();
 			Pasting++;
 			ProcessKey(KEY_DEL);
 			Pasting--;
@@ -5782,6 +5790,7 @@ int Editor::EditorControl(int Command,void *Param)
 			// "Вначале было слово..."
 			if (Param)
 			{
+				TurnOffMarkingBlock();
 				// ...а вот теперь поработаем с тем, что передалаи
 				EditorSetPosition *Pos=(EditorSetPosition *)Param;
 				_ECTLLOG(SysLog(L"EditorSetPosition{"));
@@ -6198,12 +6207,6 @@ int Editor::EditorControl(int Command,void *Param)
 
 			return  FALSE;
 		}
-		// Убрать флаг редактора "осуществляется выделение блока"
-		case ECTL_TURNOFFMARKINGBLOCK:
-		{
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
-			return TRUE;
-		}
 		case ECTL_DELETEBLOCK:
 		{
 			if (Flags.Check(FEDITOR_LOCKMODE) || !(VBlockStart || BlockStart))
@@ -6216,7 +6219,7 @@ int Editor::EditorControl(int Command,void *Param)
 				return FALSE;
 			}
 
-			Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
+			TurnOffMarkingBlock();
 			DeleteBlock();
 			Show();
 			return TRUE;
@@ -7330,4 +7333,9 @@ void Editor::Change(EDITOR_CHANGETYPE Type,int StrNum)
 	++EditorControlLock;
 	CtrlObject->Plugins->ProcessEditorEvent(EE_CHANGE,&ec,EditorID);
 	--EditorControlLock;
+}
+
+void Editor::TurnOffMarkingBlock(void)
+{
+	Flags.Clear(FEDITOR_MARKINGVBLOCK|FEDITOR_MARKINGBLOCK);
 }

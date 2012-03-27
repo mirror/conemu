@@ -341,10 +341,6 @@ static bool absFunc(const TMacroFunction*);
 static bool ascFunc(const TMacroFunction*);
 static bool atoiFunc(const TMacroFunction*);
 static bool beepFunc(const TMacroFunction*);
-#if 0
-//Maximus: замена на plugininternalFunc
-static bool callpluginFunc(const TMacroFunction*);
-#endif
 static bool chrFunc(const TMacroFunction*);
 static bool clipFunc(const TMacroFunction*);
 static bool dateFunc(const TMacroFunction*);
@@ -404,13 +400,7 @@ static bool windowscrollFunc(const TMacroFunction*);
 static bool xlatFunc(const TMacroFunction*);
 static bool pluginloadFunc(const TMacroFunction*);
 static bool pluginunloadFunc(const TMacroFunction*);
-#if 0
-//Maximus: plugin.call и т.п.
-static bool plugincallFunc(const TMacroFunction*);
-static bool pluginconfigFunc(const TMacroFunction*);
-static bool pluginprefixFunc(const TMacroFunction*);
-//static bool plugininternalFunc(const TMacroFunction*);
-#endif
+static bool pluginexistFunc(const TMacroFunction*);
 
 static TMacroFunction intMacroFunction[]=
 {
@@ -436,7 +426,7 @@ static TMacroFunction intMacroFunction[]=
 	{L"CHR",              nullptr, L"S=Chr(N)",                                                  chrFunc,            nullptr, 0, 0,                                      MCODE_F_CHR,             },
 	{L"CLIP",             nullptr, L"V=Clip(N[,V])",                                             clipFunc,           nullptr, 0, 0,                                      MCODE_F_CLIP,            },
 	{L"DATE",             nullptr, L"S=Date([S])",                                               dateFunc,           nullptr, 0, 0,                                      MCODE_F_DATE,            },
-	{L"DLG.GETVALUE",     nullptr, L"V=Dlg.GetValue(ID,N)",                                      dlggetvalueFunc,    nullptr, 0, 0,                                      MCODE_F_DLG_GETVALUE,    },
+	{L"DLG.GETVALUE",     nullptr, L"V=Dlg.GetValue([Pos[,InfoID]])",                            dlggetvalueFunc,    nullptr, 0, 0,                                      MCODE_F_DLG_GETVALUE,    },
 	{L"DLG.SETFOCUS",     nullptr, L"N=Dlg.SetFocus([ID])",                                      dlgsetfocusFunc,    nullptr, 0, 0,                                      MCODE_F_DLG_SETFOCUS,    },
 	{L"EDITOR.POS",       nullptr, L"N=Editor.Pos(Op,What[,Where])",                             editorposFunc,      nullptr, 0, 0,                                      MCODE_F_EDITOR_POS,      },
 	{L"EDITOR.SEL",       nullptr, L"V=Editor.Sel(Action[,Opt])",                                editorselFunc,      nullptr, 0, 0,                                      MCODE_F_EDITOR_SEL,      },
@@ -484,11 +474,12 @@ static TMacroFunction intMacroFunction[]=
 	{L"PANEL.SETPOS",     nullptr, L"N=panel.SetPos(panelType,fileName)",                        panelsetposFunc,    nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPOS,    },
 	{L"PANEL.SETPOSIDX",  nullptr, L"N=Panel.SetPosIdx(panelType,Idx[,InSelection])",            panelsetposidxFunc, nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPOSIDX, },
 	{L"PANELITEM",        nullptr, L"V=PanelItem(Panel,Index,TypeInfo)",                         panelitemFunc,      nullptr, 0, 0,                                      MCODE_F_PANELITEM,       },
-	{L"PLUGIN.CALL",      nullptr, L"N=Plugin.Call(Guid[,MenuGuid])",                            usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,     },
+	{L"PLUGIN.CALL",      nullptr, L"N=Plugin.Call(Guid[,Item])",                                usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,     },
+	{L"PLUGIN.CMDLINE",   nullptr, L"N=Plugin.Cmdline(Guid[,Command])",                          usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CMDLINE,  },
 	{L"PLUGIN.CONFIG",    nullptr, L"N=Plugin.Config(Guid[,MenuGuid])",                          usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CONFIG,   },
-	{L"PLUGIN.INT",       nullptr, L"N=Plugin.Int(Guid,Item)",                                   usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_INT,      },
+	{L"PLUGIN.EXIST",     nullptr, L"N=Plugin.Exist(Guid)",                                      pluginexistFunc,    nullptr, 0, 0,                                      MCODE_F_PLUGIN_EXIST,    },
 	{L"PLUGIN.LOAD",      nullptr, L"N=Plugin.Load(DllPath[,ForceLoad])",                        pluginloadFunc,     nullptr, 0, 0,                                      MCODE_F_PLUGIN_LOAD,     },
-	{L"PLUGIN.PREFIX",    nullptr, L"N=Plugin.Prefix(Guid,Command)",                             usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_PREFIX,   },
+	{L"PLUGIN.MENU",      nullptr, L"N=Plugin.Menu(Guid[,MenuGuid])",                            usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_MENU,     },
 	{L"PLUGIN.UNLOAD",    nullptr, L"N=Plugin.UnLoad(DllPath)",                                  pluginunloadFunc,   nullptr, 0, 0,                                      MCODE_F_PLUGIN_UNLOAD,   },
 	{L"PRINT",            nullptr, L"N=Print(Str)",                                              usersFunc,          nullptr, 0, 0,                                      MCODE_F_PRINT,           },
 	{L"PROMPT",           nullptr, L"S=Prompt([Title[,Prompt[,flags[,Src[,History]]]]])",        promptFunc,         nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PROMPT,          },
@@ -583,6 +574,7 @@ int KeyNameMacroToKey(const wchar_t *Name)
 	return -1;
 }
 
+#if 0
 static bool checkMacroFarIntConst(string &strValueName)
 {
 	return
@@ -594,6 +586,7 @@ static bool checkMacroFarIntConst(string &strValueName)
 		strValueName==constRCounter ||
 		strValueName==constFarCfgErr;
 }
+#endif
 
 static void initMacroFarIntConst()
 {
@@ -870,7 +863,7 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 			FrameManager->GetCurrentFrame()->Lock(); // отменим прорисовку фрейма
 			DWORD MacroKey;
 			// выставляем флаги по умолчанию.
-			UINT64 Flags=MFLAGS_DISABLEOUTPUT; // ???
+			UINT64 Flags=MFLAGS_DISABLEOUTPUT|MFLAGS_CALLPLUGINENABLEMACRO; // ???
 			int AssignRet=AssignMacroKey(MacroKey,Flags);
 			FrameManager->ResetLastInputRecord();
 			FrameManager->GetCurrentFrame()->Unlock(); // теперь можно :-)
@@ -2659,7 +2652,7 @@ static bool msgBoxFunc(const TMacroFunction*)
 }
 
 
-static int __cdecl CompareItems(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
+static int WINAPI CompareItems(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
 	if (((*el1)->Flags & LIF_SEPARATOR) || ((*el2)->Flags & LIF_SEPARATOR))
 		return 0;
@@ -3243,18 +3236,26 @@ bool farcfggetFunc(const TMacroFunction*)
 	return resultGetCfg;
 }
 
-// V=Dlg.GetValue(Index,TypeInf)
+// V=Dlg.GetValue([Pos[,InfoID]])
 static bool dlggetvalueFunc(const TMacroFunction*)
 {
 	parseParams(2,Params);
 	TVar Ret(-1);
-	int TypeInf=(int)Params[1].getInteger();
-	unsigned Index=(unsigned)Params[0].getInteger()-1;
 	Frame* CurFrame=FrameManager->GetCurrentFrame();
 
 	if (CtrlObject->Macro.GetMode()==MACRO_DIALOG && CurFrame && CurFrame->GetType()==MODALTYPE_DIALOG)
 	{
-		FarGetValue fgv={TypeInf,FMVT_UNKNOWN};
+		TVarType typeIndex=Params[0].type();
+		unsigned Index=(unsigned)Params[0].getInteger()-1;
+		if (typeIndex == vtUnknown || (typeIndex == vtInteger && (int)Index < -1))
+			Index=((Dialog*)CurFrame)->GetDlgFocusPos();
+
+		TVarType typeInfoID=Params[1].type();
+		int InfoID=(int)Params[1].getInteger();
+		if (typeInfoID == vtUnknown || (typeInfoID == vtInteger && InfoID < 0))
+			InfoID=0;
+
+		FarGetValue fgv={InfoID,FMVT_UNKNOWN};
 		unsigned DlgItemCount=((Dialog*)CurFrame)->GetAllItemCount();
 		const DialogItemEx **DlgItem=((Dialog*)CurFrame)->GetAllItem();
 		bool CallDialog=true;
@@ -3265,7 +3266,7 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 
 			if (SendDlgMessage((HANDLE)CurFrame,DM_GETDLGRECT,0,&Rect))
 			{
-				switch (TypeInf)
+				switch (InfoID)
 				{
 					case 0: Ret=(__int64)DlgItemCount; break;
 					case 2: Ret=(__int64)Rect.Left; break;
@@ -3283,15 +3284,15 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 			FARDIALOGITEMTYPES ItemType=Item->Type;
 			FARDIALOGITEMFLAGS ItemFlags=Item->Flags;
 
-			if (!TypeInf)
+			if (!InfoID)
 			{
 				if (ItemType == DI_CHECKBOX || ItemType == DI_RADIOBUTTON)
 				{
-					TypeInf=7;
+					InfoID=7;
 				}
 				else if (ItemType == DI_COMBOBOX || ItemType == DI_LISTBOX)
 				{
-					FarListGetItem ListItem;
+					FarListGetItem ListItem={sizeof(FarListGetItem)};
 					ListItem.ItemIndex=Item->ListPtr->GetSelectPos();
 
 					if (SendDlgMessage(CurFrame,DM_LISTGETITEM,Index,&ListItem))
@@ -3303,15 +3304,15 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 						Ret=L"";
 					}
 
-					TypeInf=-1;
+					InfoID=-1;
 				}
 				else
 				{
-					TypeInf=10;
+					InfoID=10;
 				}
 			}
 
-			switch (TypeInf)
+			switch (InfoID)
 			{
 				case 1: Ret=(__int64)ItemType;    break;
 				case 2: Ret=(__int64)Item->X1;    break;
@@ -3372,7 +3373,7 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 		}
 		else if (Index >= DlgItemCount)
 		{
-			Ret=(__int64)TypeInf;
+			Ret=(__int64)InfoID;
 		}
 		else
 			CallDialog=false;
@@ -4528,6 +4529,24 @@ static bool editorsettitleFunc(const TMacroFunction*)
 	return Ret.i()!=0;
 }
 
+
+// N=Plugin.Exist(Guid)
+static bool pluginexistFunc(const TMacroFunction*)
+{
+	parseParams(1,Params);
+	TVar Ret(0ll);
+	TVar& pGuid(Params[0]);
+
+	if (pGuid.s())
+	{
+		GUID guid;
+		Ret=(StrToGuid(pGuid.s(),guid) && CtrlObject->Plugins->FindPlugin(guid))?1:0;
+	}
+
+	VMStack.Push(Ret);
+	return Ret.i()!=0;
+}
+
 // N=Plugin.Load(DllPath[,ForceLoad])
 static bool pluginloadFunc(const TMacroFunction*)
 {
@@ -4553,80 +4572,13 @@ static bool pluginunloadFunc(const TMacroFunction*)
 		if(p)
 		{
 			Ret=(__int64)pluginapi::apiPluginsControl(p, PCTL_UNLOADPLUGIN, 0, nullptr);
-			VMStack.Push(Ret);
 		}
 	}
+
+	VMStack.Push(Ret);
 	return Ret.i()!=0;
 }
 
-#if 0
-//Maximus: функции plugin.call и т.п.
-
-// N=Plugin.Call(Guid[,MenuGuid])
-static bool plugincallFunc(const TMacroFunction*)
-{
-	parseParams(2,Params);
-	TVar Ret(0ll);
-	TVar& MenuGuid = (Params[1]);
-	TVar& Guid = (Params[0]);
-	GUID guid, menuGuid;
-	CallPluginInfo Data={CPT_CALL};
-
-	if (StrToGuid(Guid.s(),guid) && (MenuGuid.isUnknown() || StrToGuid(MenuGuid.s(),menuGuid)))
-	{
-		if (!MenuGuid.isUnknown())
-			Data.ItemGuid=&menuGuid;
-		//CtrlObject->Macro.PushState(true);
-		Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
-		//CtrlObject->Macro.PopState();
-	}
-
-	return Ret.i()!=0;
-}
-
-// N=Plugin.Config(Guid[,MenuGuid])
-static bool pluginconfigFunc(const TMacroFunction*)
-{
-	parseParams(2,Params);
-	TVar Ret(0ll);
-	TVar& MenuGuid = (Params[1]);
-	TVar& Guid = (Params[0]);
-	GUID guid, menuGuid;
-	CallPluginInfo Data={CPT_CONFIGURE};
-
-	if (StrToGuid(Guid.s(),guid) && (MenuGuid.isUnknown() || StrToGuid(MenuGuid.s(),menuGuid)))
-	{
-		if (!MenuGuid.isUnknown())
-			Data.ItemGuid=&menuGuid;
-		//CtrlObject->Macro.PushState(true);
-		Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
-		//CtrlObject->Macro.PopState();
-	}
-
-	return Ret.i()!=0;
-}
-
-// N=Plugin.Prefix(Guid,Command)
-static bool pluginprefixFunc(const TMacroFunction*)
-{
-	parseParams(2,Params);
-	TVar Ret(0ll);
-	TVar& Command = (Params[1]);
-	TVar& Guid = (Params[0]);
-	GUID guid;
-	CallPluginInfo Data={CPT_PREFIX};
-
-	if (StrToGuid(Guid.s(),guid) && Command.isString())
-	{
-		Data.Command=Command.s();
-		//CtrlObject->Macro.PushState(true);
-		Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
-		//CtrlObject->Macro.PopState();
-	}
-
-	return Ret.i()!=0;
-}
-#endif
 
 static void VarToFarMacroValue(const TVar& From,FarMacroValue& To)
 {
@@ -4647,69 +4599,6 @@ static void VarToFarMacroValue(const TVar& From,FarMacroValue& To)
 		//	break;
 	}
 }
-
-#if 0
-#if 1
-//Maximus: замена callpluginFunc на plugininternalFunc
-// V=Plugin.Int(Guid,Item)
-static bool plugininternalFunc(const TMacroFunction*)
-#else
-// V=callplugin(SysID[,param])
-static bool callpluginFunc(const TMacroFunction*)
-#endif
-{
-	//TODO: Заменить на вызов CtrlObject->Plugins->CallPluginItem(guid,&Data)
-	__int64 Ret=0;
-	int count=VMStack.Pop().getInteger();
-	if(count-->0)
-	{
-		FarMacroValue *vParams=nullptr;
-		if(count>0)
-		{
-			vParams=new FarMacroValue[count];
-			memset(vParams,0,sizeof(FarMacroValue)*count);
-			TVar value;
-			for(int ii=count-1;ii>=0;--ii)
-			{
-				VMStack.Pop(value);
-				VarToFarMacroValue(value,*(vParams+ii));
-			}
-		}
-
-		TVar SysID; VMStack.Pop(SysID);
-		GUID guid;
-
-		if (StrToGuid(SysID.s(),guid) && CtrlObject->Plugins->FindPlugin(guid))
-		{
-			OpenMacroInfo info={sizeof(OpenMacroInfo),count,vParams};
-
-			int CallPluginRules=CtrlObject->Macro.GetCurrentCallPluginMode();
-
-			if( CallPluginRules == 1)
-				CtrlObject->Macro.PushState(true);
-
-			int ResultCallPlugin=0;
-
-			if (CtrlObject->Plugins->CallPlugin(guid,OPEN_FROMMACRO,&info,&ResultCallPlugin))
-				Ret=(__int64)ResultCallPlugin;
-
-			if( CallPluginRules == 1)
-				CtrlObject->Macro.PopState();
-
-		}
-		if(vParams)
-		{
-			for(int ii=0;ii<count;++ii)
-			{
-				if(vParams[ii].Type == FMVT_STRING && vParams[ii].String)
-					xf_free((void*)vParams[ii].String);
-			}
-		}
-	}
-	VMStack.Push(Ret);
-	return Ret?true:false;
-}
-#endif
 
 // N=testfolder(S)
 /*
@@ -5040,6 +4929,9 @@ done:
 		//FrameManager->RefreshFrame();
 		//FrameManager->PluginCommit();
 		_KEYMACRO(SysLog(-1); SysLog(L"[%d] **** End Of Execute Macro ****",__LINE__));
+		if (--Work.KeyProcess < 0)
+			Work.KeyProcess=0;
+		_KEYMACRO(SysLog(L"Work.KeyProcess=%d",Work.KeyProcess));
 
 		//CHECKMR(); -- был release //Maximus: для отладки
 
@@ -5092,7 +4984,7 @@ done:
 
 	if (Work.KeyProcess && Key != MCODE_OP_ENDKEYS)
 	{
-		_KEYMACRO(SysLog(L"[%d] IP=%d  %s (Work.KeyProcess && Key != MCODE_OP_ENDKEYS)",__LINE__,Work.ExecLIBPos-1,_FARKEY_ToName(Key)));
+		_KEYMACRO(SysLog(L"[%d] IP=%d  %s (Work.KeyProcess (%d) && Key != MCODE_OP_ENDKEYS)",__LINE__,Work.ExecLIBPos-1,_FARKEY_ToName(Key),Work.KeyProcess));
 		goto return_func;
 	}
 
@@ -5109,14 +5001,14 @@ done:
 			goto begin;
 		case MCODE_OP_KEYS:                    // за этим кодом следуют ФАРовы коды клавиш
 		{
-			_KEYMACRO(SysLog(L"MCODE_OP_KEYS"));
+			_KEYMACRO(SysLog(L"MCODE_OP_KEYS (Work.KeyProcess=%d)",Work.KeyProcess));
 			Work.KeyProcess++;
 			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 		case MCODE_OP_ENDKEYS:                 // ФАРовы коды закончились.
 		{
-			_KEYMACRO(SysLog(L"MCODE_OP_ENDKEYS"));
+			_KEYMACRO(SysLog(L"MCODE_OP_ENDKEYS (Work.KeyProcess=%d)",Work.KeyProcess));
 			Work.KeyProcess--;
 			CHECKMR(); //Maximus: для отладки
 			goto begin;
@@ -5789,7 +5681,7 @@ done:
 		case MCODE_F_MENU_GETHOTKEY:      // S=gethotkey([N])
 		{
 			parseParams(1,Params);
-			_KEYMACRO(CleverSysLog Clev(Key == MCODE_F_MENU_GETHOTKEY?L"MCODE_F_MENU_GETHOTKEY":L"MCODE_F_MENU_GETVALUE"));
+			_KEYMACRO(CleverSysLog Clev(Key == MCODE_F_MENU_GETHOTKEY?L"MCODE_F_MENU_GETHOTKEY":(Key == MCODE_F_MENU_ITEMSTATUS?L"MCODE_F_MENU_ITEMSTATUS":L"MCODE_F_MENU_GETVALUE")));
 			tmpVar=Params[0];
 
 			if (!tmpVar.isInteger())
@@ -5968,10 +5860,8 @@ done:
 		}
 
 		case MCODE_F_CALLPLUGIN: // V=callplugin(SysID[,param])
-		#if 1
-		//Maximus: Алиас CallPlugin, для общности
-		case MCODE_F_PLUGIN_INT: // V=Plugin.Int(SysID[,param])
-		#endif
+		// Алиас CallPlugin, для общности
+		case MCODE_F_PLUGIN_CALL: // V=Plugin.Call(SysID[,param])
 		{
 			__int64 Ret=0;
 			int count=VMStack.Pop().getInteger();
@@ -6000,7 +5890,10 @@ done:
 					int CallPluginRules=GetCurrentCallPluginMode();
 
 					if( CallPluginRules == 1)
+					{
 						PushState(true);
+						VMStack.Push(1);
+					}
 					else
 						InternalInput++;
 
@@ -6012,8 +5905,13 @@ done:
 					if( CallPluginRules == 1 )
 						PopState();
 					else
+					{
+						VMStack.Push(Ret);
 						InternalInput--;
+					}
 				}
+				else
+					VMStack.Push(Ret);
 
 				if(vParams)
 				{
@@ -6027,16 +5925,18 @@ done:
 				if (Work.Executing == MACROMODE_NOMACRO)
 					goto return_func;
 			}
+			else
+				VMStack.Push(Ret);
 
-			VMStack.Push(Ret);
 			CHECKMR(); //Maximus: для отладки
 			goto begin;
 		}
 
-		case MCODE_F_PLUGIN_CALL:   // N=Plugin.Call(Guid[,MenuGuid])
+		case MCODE_F_PLUGIN_MENU:   // N=Plugin.Menu(Guid[,MenuGuid])
 		case MCODE_F_PLUGIN_CONFIG: // N=Plugin.Config(Guid[,MenuGuid])
-		case MCODE_F_PLUGIN_PREFIX: // N=Plugin.Prefix(Guid,Command)
+		case MCODE_F_PLUGIN_CMDLINE: // N=Plugin.Cmdline(Guid[,Command])
 		{
+			_KEYMACRO(CleverSysLog Clev(Key == MCODE_F_PLUGIN_MENU?L"Plugin.Menu()":(Key == MCODE_F_PLUGIN_CONFIG?L"Plugin.Config()":L"Plugin.Cmdline()")));
 			__int64 Ret=0;
 			parseParams(2,Params);
 			TVar& Arg = (Params[1]);
@@ -6049,50 +5949,37 @@ done:
 
 			switch (Key)
 			{
-			case MCODE_F_PLUGIN_CALL:
-				Data.CallFlags |= CPT_CALL;
-				if (!Arg.isUnknown())
-				{
-					if (StrToGuid(Arg.s(),menuGuid))
-						Data.ItemGuid=&menuGuid;
+				case MCODE_F_PLUGIN_MENU:
+					Data.CallFlags |= CPT_MENU;
+					if (!Arg.isUnknown())
+					{
+						if (StrToGuid(Arg.s(),menuGuid))
+							Data.ItemGuid=&menuGuid;
+						else
+							ItemFailed=true;
+					}
+					break;
+				case MCODE_F_PLUGIN_CONFIG:
+					Data.CallFlags |= CPT_CONFIGURE;
+					if (!Arg.isUnknown())
+					{
+						if (StrToGuid(Arg.s(),menuGuid))
+							Data.ItemGuid=&menuGuid;
+						else
+							ItemFailed=true;
+					}
+					break;
+				case MCODE_F_PLUGIN_CMDLINE:
+					Data.CallFlags |= CPT_CMDLINE;
+					if (Arg.isString())
+						Data.Command=Arg.s();
 					else
-						ItemFailed=true;
-				}
-				break;
-			case MCODE_F_PLUGIN_CONFIG:
-				Data.CallFlags |= CPT_CONFIGURE;
-				if (!Arg.isUnknown())
-				{
-					if (StrToGuid(Arg.s(),menuGuid))
-						Data.ItemGuid=&menuGuid;
-					else
-						ItemFailed=true;
-				}
-				break;
-			case MCODE_F_PLUGIN_PREFIX:
-				Data.CallFlags |= CPT_PREFIX;
-				if (Arg.isString())
-					Data.Command=Arg.s();
-				else
-					Data.Command=EmptyStr;
-				break;
-            }
+						Data.Command=EmptyStr;
+					break;
+			}
 
 			if (!ItemFailed && StrToGuid(Guid.s(),guid) && CtrlObject->Plugins->FindPlugin(guid))
 			{
-				int CallPluginRules=1; //GetCurrentCallPluginMode();
-
-				if( CallPluginRules == 1)
-				{
-					PushState(true);
-				}
-				else
-				{
-					InternalInput++;
-				}
-
-				int ResultCallPlugin=0;
-
 				// Чтобы вернуть результат "выполнения" нужно проверить наличие плагина/пункта
 				Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
 				VMStack.Push(Ret);
@@ -6101,16 +5988,12 @@ done:
 				{
 					// Если нашли успешно - то теперь выполнение
 					Data.CallFlags&=~CPT_CHECKONLY;
-					Ret=(__int64)CtrlObject->Plugins->CallPluginItem(guid,&Data);
-				}
-
-				if( CallPluginRules == 1 )
-				{
-					PopState();
-				}
-				else
-				{
-					InternalInput--;
+					CtrlObject->Plugins->CallPluginItem(guid,&Data);
+					#ifdef _DEBUG
+					//Maximus: при выполнении плагина вполне мог вызываться макродвижок. Обновить отладочную переменную.
+					if (!IsBadReadPtr(MR, sizeof(*MR)))
+						MRD = *MR;
+					#endif
 				}
 			}
 			else
@@ -6223,7 +6106,7 @@ done:
 
 return_func:
 
-	if (Work.KeyProcess && (Key&KEY_ALTDIGIT)) // "подтасовка" фактов ;-)
+	if (Work.KeyProcess != 0 && (Key&KEY_ALTDIGIT)) // "подтасовка" фактов ;-)
 	{
 		Key&=~KEY_ALTDIGIT;
 		IntKeyState.ReturnAltValue=1;
@@ -6245,6 +6128,9 @@ return_func:
 	if (MR==Work.MacroWORK && Work.ExecLIBPos>=MR->BufferSize)
 	{
 		_KEYMACRO(SysLog(-1); SysLog(L"[%d] **** End Of Execute Macro ****",__LINE__));
+		if (--Work.KeyProcess < 0)
+			Work.KeyProcess=0;
+		_KEYMACRO(SysLog(L"Work.KeyProcess=%d",Work.KeyProcess));
 		ReleaseWORKBuffer();
 		Work.Executing=MACROMODE_NOMACRO;
 
@@ -6393,8 +6279,12 @@ bool KeyMacro::SaveVarToDB(const wchar_t *Name, TVar Value)
 
 void KeyMacro::WriteVarsConsts()
 {
+#if 0
 	string strValueName;
-	TVarTable *t = &glbConstTable;
+	TVarTable *t;
+
+	// Consts
+	t= &glbConstTable;
 
 	MacroCfg->BeginTransaction();
 	for (int I=0; ; I++)
@@ -6412,6 +6302,7 @@ void KeyMacro::WriteVarsConsts()
 	}
 	MacroCfg->EndTransaction();
 
+	// Vars
 	t = &glbVarTable;
 
 	MacroCfg->BeginTransaction();
@@ -6428,6 +6319,7 @@ void KeyMacro::WriteVarsConsts()
 		MacroCfg->SetVarValue(strValueName, var->value.s(), GetVarTypeName((DWORD)type));
 	}
 	MacroCfg->EndTransaction();
+#endif
 }
 
 void KeyMacro::SavePluginFunctionToDB(const TMacroFunction *MF)
@@ -6494,7 +6386,6 @@ void KeyMacro::WriteMacroRecords()
 // Сохранение ВСЕХ макросов
 void KeyMacro::SaveMacros()
 {
-	WriteVarsConsts();
 	WritePluginFunctions();
 	WriteMacroRecords();
 }
@@ -7046,7 +6937,7 @@ INT_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void*
 		};
 		DWORD PreDefModKey[]=
 		{
-			0,KEY_CTRL,KEY_RCTRL,KEY_SHIFT,KEY_ALT,KEY_RALT,KEY_CTRLSHIFT,KEY_RCTRLSHIFT,KEY_CTRLALT,KEY_RCTRLRALT,KEY_ALTSHIFT,KEY_RALTSHIFT,
+			0,KEY_CTRL,KEY_RCTRL,KEY_SHIFT,KEY_ALT,KEY_RALT,KEY_CTRLSHIFT,KEY_RCTRLSHIFT,KEY_CTRLALT,KEY_RCTRLRALT,KEY_CTRLRALT,KEY_RCTRLALT,KEY_ALTSHIFT,KEY_RALTSHIFT,
 		};
 
 		for (size_t i=0; i<ARRAYSIZE(PreDefKey); i++)
@@ -7620,7 +7511,7 @@ int KeyMacro::PostNewMacro(const wchar_t *PlainText,UINT64 Flags,DWORD AKey,bool
 	Work.MacroWORKCount++;
 
 	//Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
-	if (Work.ExecLIBPos == Work.MacroWORK[0].BufferSize)
+	if (Work.ExecLIBPos > Work.MacroWORK[0].BufferSize)
 		Work.ExecLIBPos=0;
 
 	return TRUE;
@@ -7674,7 +7565,7 @@ int KeyMacro::PostNewMacro(MacroRecord *MRec,BOOL NeedAddSendFlag,bool IsPluginS
 	Work.MacroWORKCount++;
 
 	//Work.Executing=Work.MacroWORK[0].Flags&MFLAGS_NOSENDKEYSTOPLUGINS?MACROMODE_EXECUTING:MACROMODE_EXECUTING_COMMON;
-	if (Work.ExecLIBPos == Work.MacroWORK[0].BufferSize)
+	if (Work.ExecLIBPos > Work.MacroWORK[0].BufferSize)
 		Work.ExecLIBPos=0;
 
 	return TRUE;
@@ -7751,6 +7642,8 @@ void MacroState::Init(TVarTable *tbl)
 
 int KeyMacro::PushState(bool CopyLocalVars)
 {
+	_KEYMACRO(CleverSysLog Clev(L"KeyMacro::PushState()"));
+
 	//Maximus: для отладки
 	_ASSERTE(GetCurrentThreadId()==gnMainThreadId);
 	
@@ -7761,11 +7654,14 @@ int KeyMacro::PushState(bool CopyLocalVars)
 	Work.UseInternalClipboard=Clipboard::GetUseInternalClipboardState();
 	PCStack[CurPCStack]=Work;
 	Work.Init(CopyLocalVars?PCStack[CurPCStack].locVarTable:nullptr);
+	_KEYMACRO(SysLog(L"CurPCStack=%d",CurPCStack));
 	return TRUE;
 }
 
 int KeyMacro::PopState()
 {
+	_KEYMACRO(CleverSysLog Clev(L"KeyMacro::PopState()"));
+
 	//Maximus: для отладки
 	_ASSERTE(GetCurrentThreadId()==gnMainThreadId);
 	
@@ -7775,6 +7671,7 @@ int KeyMacro::PopState()
 	Work=PCStack[CurPCStack];
 	Clipboard::SetUseInternalClipboardState(Work.UseInternalClipboard);
 	CurPCStack--;
+	_KEYMACRO(SysLog(L"CurPCStack=%d",CurPCStack));
 	return TRUE;
 }
 

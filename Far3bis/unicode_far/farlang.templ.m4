@@ -396,7 +396,7 @@ MF9
 "KonfMn"
 "KonfMn"
 "Konfig"
-"BarMnu"
+"BarMnú"
 
 MF10
 "Выход"
@@ -478,7 +478,7 @@ MAltF6
 "LinkEr"
 "ÚjLink"
 "Dowiąż"
-"CrVinc"
+"CrEnlc"
 
 MAltF7
 "Искать"
@@ -578,7 +578,7 @@ upd:"Write"
 upd:"Write"
 upd:"Write"
 upd:"Write"
-upd:"Write"
+"Fecha"
 
 MCtrlF6
 "Размер"
@@ -1401,7 +1401,7 @@ upd:"Automatic update of environment variables"
 upd:"Automatic update of environment variables"
 upd:"Automatic update of environment variables"
 upd:"Automatic update of environment variables"
-upd:"Automatic update of environment variables"
+"Actualización automática de variables de entorno"
 
 MConfigElevation
 "Запрос прав администратора:"
@@ -1410,7 +1410,7 @@ upd:"request administrator rights:"
 upd:"request administrator rights:"
 upd:"request administrator rights:"
 upd:"request administrator rights:"
-upd:"request administrator rights:"
+"Requerir derechos de administrador:"
 
 MConfigElevationModify
 "д&ля изменения"
@@ -1419,7 +1419,7 @@ upd:"for modification"
 upd:"for modification"
 upd:"for modification"
 upd:"for modification"
-upd:"for modification"
+"para modificación"
 
 MConfigElevationRead
 "для &чтения"
@@ -1428,7 +1428,7 @@ upd:"for read"
 upd:"for read"
 upd:"for read"
 upd:"for read"
-upd:"for read"
+"para lectura"
 
 MConfigElevationUsePrivileges
 "исп&ользовать дополнительные привилегии"
@@ -1437,7 +1437,7 @@ upd:"use additional privileges"
 upd:"use additional privileges"
 upd:"use additional privileges"
 upd:"use additional privileges"
-upd:"use additional privileges"
+"usar privilegios adicionales"
 
 MConfigAutoSave
 "Автозапись кон&фигурации"
@@ -1447,6 +1447,115 @@ MConfigAutoSave
 "B&eállítások automatikus mentése"
 "Automatycznie &zapisuj ustawienia"
 "Auto&guardar configuración"
+
+MConfigTreeTitle
+l:
+"Настройки дерева папок"
+"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+
+MConfigTreeAutoChange
+"&Автосмена папки"
+"&Auto change folder"
+"&Automaticky měnit adresář"
+"Ordner &automatisch wechseln (Baumansicht)"
+"&Automatikus mappaváltás"
+"&Automatycznie zmieniaj katalog"
+"&Auto cambiar directorio"
+
+MConfigTreeLabelMinFolder
+"&Минимальное количество папок:"
+upd:"&Minimum number of folders:"
+upd:"&Minimum number of folders:"
+upd:"&Minimum number of folders:"
+upd:"&Minimum number of folders:"
+upd:"&Minimum number of folders:"
+upd:"&Minimum number of folders:"
+
+#MConfigTreeLabel1
+#"Хранить файл структуры папок для:"
+#upd:"Хранить файл структуры папок для:"
+#upd:"Хранить файл структуры папок для:"
+#upd:"Хранить файл структуры папок для:"
+#upd:"Хранить файл структуры папок для:"
+#upd:"Хранить файл структуры папок для:"
+#upd:"Хранить файл структуры папок для:"
+
+#MConfigTreeLabelLocalDisk
+#"локальных дисков"
+#upd:"локальных дисков"
+#upd:"локальных дисков"
+#upd:"локальных дисков"
+#upd:"локальных дисков"
+#upd:"локальных дисков"
+#upd:"локальных дисков"
+
+#MConfigTreeLabelNetDisk
+#"сетевых дисков"
+#upd:"сетевых дисков"
+#upd:"сетевых дисков"
+#upd:"сетевых дисков"
+#upd:"сетевых дисков"
+#upd:"сетевых дисков"
+#upd:"сетевых дисков"
+
+#MConfigTreeLabelNetPath
+#"сетевых путей"
+#upd:"сетевых путей"
+#upd:"сетевых путей"
+#upd:"сетевых путей"
+#upd:"сетевых путей"
+#upd:"сетевых путей"
+#upd:"сетевых путей"
+
+#MConfigTreeLabelRemovableDisk
+#"сменных дисков"
+#upd:"сменных дисков"
+#upd:"сменных дисков"
+#upd:"сменных дисков"
+#upd:"сменных дисков"
+#upd:"сменных дисков"
+#upd:"сменных дисков"
+
+#MConfigTreeLabelCDDisk
+#"CD-дисков"
+#upd:"CD-дисков"
+#upd:"CD-дисков"
+#upd:"CD-дисков"
+#upd:"CD-дисков"
+#upd:"CD-дисков"
+#upd:"CD-дисков"
+
+#MConfigTreeLabelExceptPath
+#"Не создавать файл для следующих дисков:"
+#upd:"Не создавать файл для следующих дисков:"
+#upd:"Не создавать файл для следующих дисков:"
+#upd:"Не создавать файл для следующих дисков:"
+#upd:"Не создавать файл для следующих дисков:"
+#upd:"Не создавать файл для следующих дисков:"
+#upd:"Не создавать файл для следующих дисков:"
+
+#MConfigTreeLabelSaveLocalPath
+#"Путь для локальных дисков:"
+#upd:"Путь для локальных дисков:"
+#upd:"Путь для локальных дисков:"
+#upd:"Путь для локальных дисков:"
+#upd:"Путь для локальных дисков:"
+#upd:"Путь для локальных дисков:"
+#upd:"Путь для локальных дисков:"
+
+#MConfigTreeLabelSaveNetPath
+#"Путь для сетевых дисков и путей:"
+#upd:"Путь для сетевых дисков и путей:"
+#upd:"Путь для сетевых дисков и путей:"
+#upd:"Путь для сетевых дисков и путей:"
+#upd:"Путь для сетевых дисков и путей:"
+#upd:"Путь для сетевых дисков и путей:"
+#upd:"Путь для сетевых дисков и путей:"
 
 MConfigPanelTitle
 l:
@@ -1475,15 +1584,6 @@ MConfigHighlight
 "Fá&jlok kiemelése"
 "W&yróżniaj pliki"
 "Resaltar archivos"
-
-MConfigAutoChange
-"&Автосмена папки"
-"&Auto change folder"
-"&Automaticky měnit adresář"
-"Ordner &automatisch wechseln (Baumansicht)"
-"&Automatikus mappaváltás"
-"&Automatycznie zmieniaj katalog"
-"&Auto cambiar directorio"
 
 MConfigSelectFolders
 "Пометка &папок"
@@ -1609,7 +1709,7 @@ upd:"Highlight column separators"
 upd:"Highlight column separators"
 upd:"Highlight column separators"
 upd:"Highlight column separators"
-upd:"Highlight column separators"
+"Resaltar separador de columnas"
 
 MConfigDoubleGlobalColumnSeparator
 "Удваивать глобальные разделители колонок"
@@ -1618,7 +1718,7 @@ upd:"Double global column separators"
 upd:"Double global column separators"
 upd:"Double global column separators"
 upd:"Double global column separators"
-upd:"Double global column separators"
+"Separador de columna doble"
 
 MConfigInterfaceTitle
 l:
@@ -1819,7 +1919,7 @@ upd:"Menu settings"
 upd:"Menu settings"
 upd:"Menu settings"
 upd:"Menu settings"
-upd:"Menu settings"
+"Opciones de menú"
 
 MConfigVMenuLBtnClick
 "Клик левой кнопки мыши вне меню"
@@ -1828,7 +1928,7 @@ upd:"Left mouse click outside a menu"
 upd:"Left mouse click outside a menu"
 upd:"Left mouse click outside a menu"
 upd:"Left mouse click outside a menu"
-upd:"Left mouse click outside a menu"
+"Click izquierdo de mouse fuera de menú"
 
 MConfigVMenuRBtnClick
 "Клик правой кнопки мыши вне меню"
@@ -1837,7 +1937,7 @@ upd:"Right mouse click outside a menu"
 upd:"Right mouse click outside a menu"
 upd:"Right mouse click outside a menu"
 upd:"Right mouse click outside a menu"
-upd:"Right mouse click outside a menu"
+"Click derecho de mouse fuera de menú"
 
 MConfigVMenuMBtnClick
 "Клик средней кнопки мыши вне меню"
@@ -1846,7 +1946,7 @@ upd:"Middle mouse click outside a menu"
 upd:"Middle mouse click outside a menu"
 upd:"Middle mouse click outside a menu"
 upd:"Middle mouse click outside a menu"
-upd:"Middle mouse click outside a menu"
+"Click medio de mouse fuera de menú"
 
 MConfigVMenuClickCancel
 "Закрыть с отменой"
@@ -1855,7 +1955,7 @@ upd:"Cancel menu"
 upd:"Cancel menu"
 upd:"Cancel menu"
 upd:"Cancel menu"
-upd:"Cancel menu"
+"Cancelar menú"
 
 MConfigVMenuClickApply
 "Выполнить текущий пункт"
@@ -1864,7 +1964,7 @@ upd:"Execute selected item"
 upd:"Execute selected item"
 upd:"Execute selected item"
 upd:"Execute selected item"
-upd:"Execute selected item"
+"Ejecutar ítem seleccionado"
 
 MConfigVMenuClickIgnore
 "Ничего не делать"
@@ -1873,7 +1973,7 @@ upd:"Do nothing"
 upd:"Do nothing"
 upd:"Do nothing"
 upd:"Do nothing"
-upd:"Do nothing"
+"No hacer nada"
 
 MConfigCmdlineTitle
 l:
@@ -2158,7 +2258,7 @@ upd:"Show &power status"
 upd:"Show &power status"
 upd:"Show &power status"
 upd:"Show &power status"
-upd:"Show &power status"
+"Mostrar estado de &encendido"
 
 MMenuInfoShowModeTitle
 l:
@@ -2168,7 +2268,7 @@ upd:"Show Info"
 upd:"Show Info"
 upd:"Show Info"
 upd:"Show Info"
-upd:"Show Info"
+"Mostrar Info"
 
 MMenuInfoShowModeDisk
 "&Диск"
@@ -2177,7 +2277,7 @@ upd:"&Disk"
 upd:"&Disk"
 upd:"&Disk"
 upd:"&Disk"
-upd:"&Disk"
+"&Disco"
 
 MMenuInfoShowModeMemory
 "&Память"
@@ -2186,7 +2286,7 @@ upd:"&Memory"
 upd:"&Memory"
 upd:"&Memory"
 upd:"&Memory"
-upd:"&Memory"
+"&Memoria"
 
 MMenuInfoShowModeDirDiz
 "&Описание папки"
@@ -2195,7 +2295,7 @@ upd:"&Description"
 upd:"&Description"
 upd:"&Description"
 upd:"&Description"
-upd:"&Description"
+"&Descripción"
 
 MMenuInfoShowModePluginDiz
 "Пла&гиновая панель"
@@ -2204,7 +2304,7 @@ upd:"Plu&gin panel"
 upd:"Plu&gin panel"
 upd:"Plu&gin panel"
 upd:"Plu&gin panel"
-upd:"Plu&gin panel"
+"Panel de Plu&gin"
 
 MMenuInfoShowModePower
 "Состояние п&итания"
@@ -2213,7 +2313,7 @@ upd:"&Power status"
 upd:"&Power status"
 upd:"&Power status"
 upd:"&Power status"
-upd:"&Power status"
+"Estado &encendido"
 
 MViewConfigTitle
 l:
@@ -2331,7 +2431,7 @@ upd:"Maximum line width"
 upd:"Maximum line width"
 upd:"Maximum line width"
 upd:"Maximum line width"
-upd:"Maximum line width"
+"Ancho máximo de línea"
 
 MViewConfigVisible0x00
 "Показывать '\\&0'"
@@ -2349,7 +2449,7 @@ upd:"Search dialog auto-focus"
 upd:"Search dialog auto-focus"
 upd:"Search dialog auto-focus"
 upd:"Search dialog auto-focus"
-upd:"Search dialog auto-focus"
+"Auto-enfocar búsqueda en diálogo"
 
 MEditConfigTitle
 l:
@@ -2550,7 +2650,7 @@ upd:"Pick &up the word"
 upd:"Pick &up the word"
 upd:"Pick &up the word"
 upd:"Pick &up the word"
-"Pick &up the word"
+"Tomar la &palabra"
 
 MEditConfigAnsiCodePageAsDefault
 "&Использовать кодовую страницу ANSI по умолчанию"
@@ -2822,7 +2922,7 @@ upd:"Create &link"
 upd:"Create &link"
 upd:"Create &link"
 upd:"Create &link"
-upd:"Create &link"
+"Crear &enlace"
 
 MCopyDlgTotal
 "Всего"
@@ -2895,7 +2995,7 @@ upd:"Create link to"
 upd:"Create link to"
 upd:"Create link to"
 upd:"Create link to"
-upd:"Create link to"
+"Crear enlace a"
 
 MCopyFiles
 "Копировать %1 элемент%2"
@@ -2922,7 +3022,7 @@ upd:"Create links to %1 item%2"
 upd:"Create links to %1 item%2"
 upd:"Create links to %1 item%2"
 upd:"Create links to %1 item%2"
-upd:"Create links to %1 item%2"
+"Crear enlaces a %1 ítem%2"
 
 MCMLTargetTO
 " &в:"
@@ -2940,7 +3040,7 @@ upd:" &in:"
 upd:" &in:"
 upd:" &in:"
 upd:" &in:"
-upd:" &in:"
+" &en:"
 
 MCMLItems0
 ""
@@ -3841,7 +3941,7 @@ upd:"Move"
 upd:"Move"
 upd:"Move"
 upd:"Move"
-upd:"Move"
+"Mover"
 
 MDeleteFileDelete
 "&Удалить"
@@ -4369,7 +4469,7 @@ upd:"&All"
 upd:"&All"
 upd:"&All"
 upd:"&All"
-upd:"&All"
+"&Todo"
 
 MEditSearchCancel
 "Отменить"
@@ -4425,7 +4525,7 @@ upd:"Occurrences: %1, lines: %2"
 upd:"Occurrences: %1, lines: %2"
 upd:"Occurrences: %1, lines: %2"
 upd:"Occurrences: %1, lines: %2"
-upd:"Occurrences: %1, lines: %2"
+"Ocurrencias: %1, líneas: %2"
 
 MEditNotFound
 "Строка не найдена"
@@ -4507,7 +4607,7 @@ upd:"Automatic detection"
 upd:"Automatic detection"
 "&Automatikus felismerés"
 "&Wykryj automatycznie"
-"Deteccion &automática"
+"Detección &automática"
 
 MDefaultCP
 "По умолчанию"
@@ -4581,7 +4681,7 @@ upd:"Title:"
 upd:"Title:"
 upd:"Title:"
 upd:"Title:"
-upd:"Title:"
+"Título:"
 
 MFSShortcutPath
 "Путь:"
@@ -4590,7 +4690,7 @@ upd:"Path:"
 upd:"Path:"
 upd:"Path:"
 upd:"Path:"
-upd:"Path:"
+"Ruta:"
 
 MNeedNearPath
 "Перейти в ближайшую доступную папку?"
@@ -6598,7 +6698,7 @@ upd:"Continue?"
 upd:"Continue?"
 upd:"Continue?"
 upd:"Continue?"
-upd:"Continue?"
+"Continuar?"
 
 MEditDataLostWarn
 "Во время редактирования файла некоторые данные были утеряны."
@@ -6689,7 +6789,7 @@ upd:"Extension"
 upd:"Extension"
 upd:"Extension"
 upd:"Extension"
-upd:"Extension"
+"Extensión"
 
 MColumnSize
 "Размер"
@@ -6707,7 +6807,7 @@ upd:"Allocated"
 upd:"Allocated"
 upd:"Allocated"
 upd:"Allocated"
-upd:"Allocated"
+"Comprs"
 
 MColumnDate
 "Дата"
@@ -6734,7 +6834,7 @@ upd:"Write"
 upd:"Write"
 upd:"Write"
 upd:"Write"
-upd:"Write"
+"Escrit"
 
 MColumnCreated
 "Создание"
@@ -6761,7 +6861,7 @@ upd:"Change"
 upd:"Change"
 upd:"Change"
 upd:"Change"
-upd:"Change"
+"Cambio"
 
 MColumnAttr
 "Атриб"
@@ -6843,7 +6943,7 @@ MListFolder
 "Ordner"
 " Mappa "
 "Folder"
-" DIR  "
+"SUB-DIR"
 
 MListSymLink
 "Ссылка"
@@ -7330,7 +7430,7 @@ upd:"View mode"
 upd:"View mode"
 upd:"View mode"
 upd:"View mode"
-upd:"View mode"
+"Modo de vista"
 
 MViewF8DOS
 "OEM"
@@ -7377,7 +7477,7 @@ upd:"Mode"
 upd:"Mode"
 upd:"Mode"
 upd:"Mode"
-upd:"Mode"
+"Modo"
 
 MViewShiftF5
 ""
@@ -9494,7 +9594,7 @@ upd:"&Output format:"
 upd:"&Output format:"
 upd:"&Output format:"
 upd:"&Output format:"
-upd:"&Output format:"
+"F&ormato de salida:"
 
 MFindAlternateStreams
 "Обрабатывать &альтернативные потоки данных"
@@ -9850,7 +9950,7 @@ upd:"Computer description"
 upd:"Computer description"
 upd:"Computer description"
 upd:"Computer description"
-upd:"Computer description"
+"Descripción de computadora"
 
 MInfoUserName
 "Имя пользователя"
@@ -9868,7 +9968,7 @@ upd:"User description"
 upd:"User description"
 upd:"User description"
 upd:"User description"
-upd:"User description"
+"Descripción de usuario"
 
 MInfoUserAccessLevel
 "Уровень доступа"
@@ -9877,7 +9977,7 @@ upd:"Access level"
 upd:"Access level"
 upd:"Access level"
 upd:"Access level"
-upd:"Access level"
+"Nivel de acceso"
 
 MInfoUserAccessLevelGuest
 "Гость"
@@ -9886,7 +9986,7 @@ upd:"Guest"
 upd:"Guest"
 upd:"Guest"
 upd:"Guest"
-upd:"Guest"
+"Invitado"
 
 MInfoUserAccessLevelUser
 "Пользователь"
@@ -9895,7 +9995,7 @@ upd:"User"
 upd:"User"
 upd:"User"
 upd:"User"
-upd:"User"
+"Usuario"
 
 MInfoUserAccessLevelAdministrator
 "Администратор"
@@ -9904,7 +10004,7 @@ upd:"Administrator"
 upd:"Administrator"
 upd:"Administrator"
 upd:"Administrator"
-upd:"Administrator"
+"Administrador"
 
 MInfoUserAccessLevelUnknown
 "Неизвестно"
@@ -9913,7 +10013,7 @@ upd:"Unknown"
 upd:"Unknown"
 upd:"Unknown"
 upd:"Unknown"
-upd:"Unknown"
+"Desconocido"
 
 MInfoDiskTitle
 " Диск "
@@ -10015,11 +10115,11 @@ MInfoRAM
 "RAM"
 
 MInfoSUBST
-"SUBST"
 "Subst"
-"SUBST"
 "Subst"
-"Virtuális"
+"Subst"
+"Subst"
+"Subst"
 "Subst"
 "Subst"
 
@@ -10039,7 +10139,7 @@ upd:"Unknown"
 upd:"Unknown"
 upd:"Unknown"
 upd:"Unknown"
-upd:"Unknown"
+"Desconocido"
 
 MInfoDisk
 "диск"
@@ -10201,7 +10301,7 @@ upd:" Power Status"
 upd:" Power Status"
 upd:" Power Status"
 upd:" Power Status"
-upd:" Power Status"
+" Estado de encendido"
 
 MInfoPowerStatusAC
 "Подключения к сети"
@@ -10210,7 +10310,7 @@ upd:"AC power status"
 upd:"AC power status"
 upd:"AC power status"
 upd:"AC power status"
-upd:"AC power status"
+"Estado encendido AC"
 
 MInfoPowerStatusACOffline
 "Отсутствует"
@@ -10391,7 +10491,7 @@ upd:"Cannot invoke command interpreter"
 upd:"Cannot invoke command interpreter"
 upd:"Cannot invoke command interpreter"
 upd:"Cannot invoke command interpreter"
-upd:"Cannot invoke command interpreter"
+"No se puede invocar intérprete de comando"
 
 MCheckComspecVar
 "Проверьте переменную окружения COMSPEC"
@@ -10400,7 +10500,7 @@ upd:"Check COMSPEC environment variable"
 upd:"Check COMSPEC environment variable"
 upd:"Check COMSPEC environment variable"
 upd:"Check COMSPEC environment variable"
-upd:"Check COMSPEC environment variable"
+"Compruebe variable de entorno COMSPEC"
 
 MScanningFolder
 "Просмотр папки"
@@ -10446,7 +10546,7 @@ upd:"None"
 upd:"None"
 upd:"None"
 upd:"None"
-upd:"None"
+"Nada"
 
 MMakeFolderLinkJunction
 "связь каталогов"
@@ -10473,7 +10573,7 @@ upd:"Target:"
 upd:"Target:"
 upd:"Target:"
 upd:"Target:"
-upd:"Target:"
+"Objetivo:"
 
 MMultiMakeDir
 "Обрабатыват&ь несколько имён папок"
@@ -10818,7 +10918,7 @@ MMenuRestoreSelection
 "Auswahl wiederher&st. Strg-M"
 "Jel&ölést visszatesz  Ctrl-M"
 "Odtwórz zaznaczen&ie       Ctrl-M"
-"Re&staurar selec.      Ctrl-M"
+"Re&staurar selección   Ctrl-M"
 
 MMenuFindFile
 l:
@@ -10993,6 +11093,15 @@ MMenuPanelSettings
 "Ustawienia &panelu"
 "&Paneles      "
 
+MMenuTreeSettings
+"Настройки д&ерева папок"
+"&Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+upd:"Tree settings"
+
 MMenuInterface
 "Настройки &интерфейса"
 "&Interface settings"
@@ -11027,7 +11136,7 @@ upd:"Plugins manager settings"
 upd:"Plugins manager settings"
 upd:"Plugins manager settings"
 upd:"Plugins manager settings"
-upd:"Plugins manager settings"
+"Opciones explorador de plugins"
 
 MMenuDialogSettings
 "Настройки &диалогов"
@@ -11045,7 +11154,7 @@ upd:"Menu settings"
 upd:"Menu settings"
 upd:"Menu settings"
 upd:"Menu settings"
-upd:"Menu settings"
+"Opciones de menú"
 
 MMenuCmdlineSettings
 "Настройки &командной строки"
@@ -11081,7 +11190,7 @@ upd:"Groups of file masks"
 upd:"Groups of file masks"
 upd:"Groups of file masks"
 upd:"Groups of file masks"
-upd:"Groups of file masks"
+"Grupos de máscara de archivos"
 
 MMenuConfirmation
 "&Подтверждения"
@@ -11317,7 +11426,7 @@ upd:"Change time"
 upd:"Change time"
 upd:"Change time"
 upd:"Change time"
-upd:"Change time"
+"Cambiar hora"
 
 MMenuSortByDiz
 "&Описания                         Ctrl-F10"
@@ -11344,7 +11453,7 @@ upd:"Allocated size"
 upd:"Allocated size"
 upd:"Allocated size"
 upd:"Allocated size"
-upd:"Allocated size"
+"Tamaño de com&presión"
 
 MMenuSortByNumLinks
 "Ко&личество ссылок"
@@ -11470,7 +11579,7 @@ MMaskGroupAskDelete
 "Wollen Sie folgendes Objekt löschen"
 "Törölni akar"
 "Czy chcesz usunąć"
-"Desea borrar"
+"Quiere borrar"
 
 MMaskGroupRestore
 "Вы хотите восстановить наборы масок по умолчанию?"
@@ -11479,7 +11588,7 @@ upd:"Do you wish to restore default mask sets?"
 upd:"Do you wish to restore default mask sets?"
 upd:"Do you wish to restore default mask sets?"
 upd:"Do you wish to restore default mask sets?"
-upd:"Do you wish to restore default mask sets?"
+"Quiere restablecer por defecto máscaras?"
 
 MMaskGroupFindMask
 "&Маска:"
@@ -11734,7 +11843,7 @@ upd:"Virtual disk detaching"
 upd:"Virtual disk detaching"
 upd:"Virtual disk detaching"
 upd:"Virtual disk detaching"
-upd:"Virtual disk detaching"
+"Desconexión de disco virtual"
 
 MChangeVHDDisconnectDriveQuestion
 "Отсоединить виртуальный диск %1?"
@@ -11743,7 +11852,7 @@ upd:"Detach virtual disk %1?"
 upd:"Detach virtual disk %1?"
 upd:"Detach virtual disk %1?"
 upd:"Detach virtual disk %1?"
-upd:"Detach virtual disk %1?"
+"Desconectar disco virtual %1?"
 
 MChangeHotPlugDisconnectDriveTitle
 l:
@@ -11917,7 +12026,7 @@ upd:"Show &network name/SUBST path/VHD name"
 upd:"Show &network name/SUBST path/VHD name"
 upd:"Show &network name/SUBST path/VHD name"
 upd:"Show &network name/SUBST path/VHD name"
-upd:"Show &network name/SUBST path/VHD name"
+"Mostrar nombre/SUBST ruta/VHD de nombre de &red"
 
 MChangeDriveShowLabel
 "Показывать &метку диска"
@@ -11980,7 +12089,7 @@ upd:"Sort plugins by hotkey"
 upd:"Sort plugins by hotkey"
 upd:"Sort plugins by hotkey"
 upd:"Sort plugins by hotkey"
-upd:"Sort plugins by hotkey"
+"Ordenar plugins por tecla de atajo"
 
 MChangeDriveShowCD
 "Показывать параметры &компакт-дисков"
@@ -12236,7 +12345,7 @@ upd:"Allocated size   "
 upd:"Allocated size   "
 upd:"Allocated size   "
 upd:"Allocated size   "
-upd:"Allocated size   "
+"Tamaño alojado   "
 
 MQuickViewCluster
 "Размер кластера     "
@@ -12480,7 +12589,7 @@ upd:"Last &write time:"
 upd:"Last &write time:"
 upd:"Last &write time:"
 upd:"Last &write time:"
-upd:"Last &write time:"
+"Ultima hora &escritura:"
 
 MSetAttrCreation
 "Время со&здания:"
@@ -12507,7 +12616,7 @@ upd:"Change time:"
 upd:"Change time:"
 upd:"Change time:"
 upd:"Change time:"
-upd:"Change time:"
+"Cambiar hora:"
 
 MSetAttrOriginal
 "Исход&ное"
@@ -14045,7 +14154,7 @@ upd:"User"
 upd:"User"
 upd:"User"
 upd:"User"
-upd:"User"
+"Usuario"
 
 MMainMenuGlobal
 "Глобальное"
@@ -15083,7 +15192,7 @@ upd:"Change"
 upd:"Change"
 upd:"Change"
 upd:"Change"
-upd:"Change"
+"Cambiar?"
 
 MMacroSettingsTitle
 l:
@@ -15475,7 +15584,7 @@ upd:"Plugin information"
 upd:"Plugin information"
 upd:"Plugin information"
 upd:"Plugin information"
-upd:"Plugin information"
+"Información de plugin"
 
 MPluginModuleTitle
 "&Название:"
@@ -15484,7 +15593,7 @@ upd:"&Title:"
 upd:"&Title:"
 upd:"&Title:"
 upd:"&Title:"
-upd:"&Title:"
+"&Título:"
 
 MPluginDescription
 "&Описание:"
@@ -15493,7 +15602,7 @@ upd:"&Description:"
 upd:"&Description:"
 upd:"&Description:"
 upd:"&Description:"
-upd:"&Description:"
+"&Descripción:"
 
 MPluginAuthor
 "&Автор:"
@@ -15502,7 +15611,7 @@ upd:"&Author:"
 upd:"&Author:"
 upd:"&Author:"
 upd:"&Author:"
-upd:"&Author:"
+"&Autor:"
 
 MPluginVersion
 "&Версия:"
@@ -15511,7 +15620,7 @@ upd:"&Version:"
 upd:"&Version:"
 upd:"&Version:"
 upd:"&Version:"
-upd:"&Version:"
+"&Versión:"
 
 MPluginModulePath
 "&Файл плагина:"
@@ -15520,7 +15629,7 @@ upd:"&Module path:"
 upd:"&Module path:"
 upd:"&Module path:"
 upd:"&Module path:"
-upd:"&Module path:"
+"Ruta de &Modulo:"
 
 MPluginGUID
 "&GUID плагина:"
@@ -15529,7 +15638,7 @@ upd:"Plugin &GUID:"
 upd:"Plugin &GUID:"
 upd:"Plugin &GUID:"
 upd:"Plugin &GUID:"
-upd:"Plugin &GUID:"
+"&GUID plugin:"
 
 MPluginItemGUID
 "GU&ID пункта:"
@@ -15538,7 +15647,7 @@ upd:"Plugin &item GUID:"
 upd:"Plugin &item GUID:"
 upd:"Plugin &item GUID:"
 upd:"Plugin &item GUID:"
-upd:"Plugin &item GUID:"
+"&Item GUID plugin:"
 
 MPluginPrefix
 "&Префикс плагина:"
@@ -15547,7 +15656,7 @@ upd:"Plugin &prefix:"
 upd:"Plugin &prefix:"
 upd:"Plugin &prefix:"
 upd:"Plugin &prefix:"
-upd:"Plugin &prefix:"
+"&Prefijo plugin:"
 
 MPluginHotKeyBottom
 "F4 - задать горячую клавишу, F3 - информация"
@@ -15556,7 +15665,7 @@ upd:"F4 - nastavení horké klávesy, F3 - information"
 upd:"Kurztaste setzen: F4, information: F3"
 upd:"F4 - gyorsbillentyű hozzárendelés, F3 - information"
 upd:"F4 - ustaw klawisz skrótu, F3 - information"
-upd:"F4 - asignar tecla rápida, F3 - information"
+"F4 - asignar tecla rápida, F3 - información"
 
 MPluginHotKeyBottomCfg
 "F4,F3,Ctrl-R,Ctrl-PgUp,Del,Ctrl-1"
@@ -17060,7 +17169,7 @@ MInfoF9
 "KonfMn"
 "KonfMn"
 "ConfMn"
-"BarMnu"
+"BarMnú"
 
 MInfoF10
 "Выход"
@@ -17940,7 +18049,7 @@ MQViewF9
 "KonfMn"
 "KonfMn"
 "ConfMn"
-"BarMnu"
+"BarMnú"
 
 MQViewF10
 "Выход"
@@ -18820,7 +18929,7 @@ MKBTreeF9
 "KonfMn"
 "KonfMn"
 "KonfMenu"
-"BarMnu"
+"BarMnú"
 
 MKBTreeF10
 "Выход"
@@ -19815,7 +19924,7 @@ upd:"Has more than one hardlink"
 upd:"Has more than one hardlink"
 upd:"Has more than one hardlink"
 upd:"Has more than one hardlink"
-upd:"Has more than one hardlink"
+"Tiene mas de un enlace rígido"
 
 MFileFilterDate
 "&Дата/Время:"
@@ -19860,7 +19969,7 @@ upd:"c&hange"
 upd:"c&hange"
 upd:"c&hange"
 upd:"c&hange"
-upd:"c&hange"
+"c&ambio"
 
 MFileFilterDateRelative
 "Относительна&я"
@@ -20221,7 +20330,7 @@ upd:"to encrypt this object:"
 upd:"to encrypt this object:"
 upd:"to encrypt this object:"
 upd:"to encrypt this object:"
-upd:"to encrypt this object:"
+"para cifrar este objeto:"
 
 MElevationRequiredDecryptFile
 "для расшифрования этого объекта:"
@@ -20230,7 +20339,7 @@ upd:"to decrypt this object:"
 upd:"to decrypt this object:"
 upd:"to decrypt this object:"
 upd:"to decrypt this object:"
-upd:"to decrypt this object:"
+"para descifrar este objeto:"
 
 MElevationDoForAll
 "Выполнить это действие для &всех текущих объектов"
@@ -20275,7 +20384,7 @@ upd:"Object is being %1 in:"
 upd:"Object is being %1 in:"
 upd:"Object is being %1 in:"
 upd:"Object is being %1 in:"
-upd:"Object is being %1 in:"
+"Objecto comienza %1 en:"
 
 MObjectLockedReasonPlayed
 "воспроизводится"
@@ -20284,7 +20393,7 @@ upd:"played"
 upd:"played"
 upd:"played"
 upd:"played"
-upd:"played"
+"reproducido"
 
 MObjectLockedReasonEdited
 "редактируется"
@@ -20293,7 +20402,7 @@ upd:"edited"
 upd:"edited"
 upd:"edited"
 upd:"edited"
-upd:"edited"
+"editado"
 
 MObjectLockedReasonOpened
 "открыт"
@@ -20302,7 +20411,7 @@ upd:"opened"
 upd:"opened"
 upd:"opened"
 upd:"opened"
-upd:"opened"
+"abierto"
 
 MObjectLockedSwitchTo
 "Переключиться"
@@ -20311,7 +20420,7 @@ upd:"Switch to"
 upd:"Switch to"
 upd:"Switch to"
 upd:"Switch to"
-upd:"Switch to"
+"Cambiar a"
 
 MObjectLockedClose
 "Закрыть файл"
@@ -20320,7 +20429,7 @@ upd:"Close file"
 upd:"Close file"
 upd:"Close file"
 upd:"Close file"
-upd:"Close file"
+"Cerrar archivo"
 
 MProblemDb
 "Проблемы с БД настроек"
@@ -20329,7 +20438,7 @@ upd:"Problem configuration DB"
 upd:"Problem configuration DB"
 upd:"Problem configuration DB"
 upd:"Problem configuration DB"
-upd:"Problem configuration DB"
+"Problema de configuración DB"
 
 MShowConfigFolders
 "Показать каталоги настроек"
@@ -20338,7 +20447,7 @@ upd:"Show configuration folders"
 upd:"Show configuration folders"
 upd:"Show configuration folders"
 upd:"Show configuration folders"
-upd:"Show configuration folders"
+"Mostrar carpetas de configuración"
 
 #Must be the last
 MNewFileName

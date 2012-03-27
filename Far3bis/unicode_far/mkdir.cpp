@@ -49,6 +49,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DlgGuid.hpp"
 #include "flink.hpp"
 #include "stddlg.hpp"
+#if 1
+//Maximus: поддержка "узких" дисплеев
+#include "interf.hpp"
+#endif
 
 enum
 {
@@ -130,16 +134,47 @@ void ShellMakeDir(Panel *SrcPanel)
 	ComboList.Items[2].Text=MSG(MMakeFolderLinkSymlink);
 	ComboList.Items[0].Flags|=LIF_SELECTED;
 
+	#if 1
+	//Maximus: поддержка "узких" дисплеев
+	if (ScrX < 10)
+	{
+		_ASSERTE(ScrX>=10);
+		return;
+	}
+	int BorderW = (72<(ScrX-1))?72:(ScrX-1); // 72
+	int ElemW = BorderW - 2; // 70
+	#endif
+
 	FarDialogItem MkDirDlgData[]=
 	{
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_DOUBLEBOX,3,1,BorderW,10,0,nullptr,nullptr,0,MSG(MMakeFolderTitle)},
+		#else
 		{DI_DOUBLEBOX,3,1,72,10,0,nullptr,nullptr,0,MSG(MMakeFolderTitle)},
+		#endif
 		{DI_TEXT,     5,2, 0,2,0,nullptr,nullptr,0,MSG(MCreateFolder)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_EDIT,     5,3,ElemW,3,0,L"NewFolder",nullptr,DIF_FOCUS|DIF_EDITEXPAND|DIF_HISTORY|DIF_USELASTHISTORY|DIF_EDITPATH,L""},
+		#else
 		{DI_EDIT,     5,3,70,3,0,L"NewFolder",nullptr,DIF_FOCUS|DIF_EDITEXPAND|DIF_HISTORY|DIF_USELASTHISTORY|DIF_EDITPATH,L""},
+		#endif
 		{DI_TEXT,     0,4, 0,4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_TEXT,     5,5, 0,5,0,nullptr,nullptr,0,MSG(MMakeFolderLinkType)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_COMBOBOX,20,5,ElemW,5,0,nullptr,nullptr,DIF_DROPDOWNLIST|DIF_LISTNOAMPERSAND|DIF_LISTWRAPMODE,L""},
+		#else
 		{DI_COMBOBOX,20,5,70,5,0,nullptr,nullptr,DIF_DROPDOWNLIST|DIF_LISTNOAMPERSAND|DIF_LISTWRAPMODE,L""},
+		#endif
 		{DI_TEXT,     5,6, 0,6,0,nullptr,nullptr,0,MSG(MMakeFolderLinkTarget)},
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		{DI_EDIT,    20,6,ElemW,6,0,L"NewFolderLinkTarget",nullptr,DIF_DISABLE|DIF_EDITEXPAND|DIF_HISTORY|DIF_USELASTHISTORY|DIF_EDITPATH,L""},
+		#else
 		{DI_EDIT,    20,6,70,6,0,L"NewFolderLinkTarget",nullptr,DIF_DISABLE|DIF_EDITEXPAND|DIF_HISTORY|DIF_USELASTHISTORY|DIF_EDITPATH,L""},
+		#endif
 		{DI_CHECKBOX, 5,7, 0,7,Opt.MultiMakeDir,nullptr,nullptr,0,MSG(MMultiMakeDir)},
 		{DI_TEXT,     0,8, 0,8,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_BUTTON,   0,9, 0,9,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MOk)},
@@ -149,7 +184,12 @@ void ShellMakeDir(Panel *SrcPanel)
 	MkDirDlg[MKDIR_COMBOBOX_LINKTYPE].ListItems=&ComboList;
 	UserDefinedList DirList(0,0,ULF_UNIQUE);
 	Dialog Dlg(MkDirDlg,ARRAYSIZE(MkDirDlg),MkDirDlgProc,&DirList);
+	#if 1
+	//Maximus: поддержка "узких" дисплеев
+	Dlg.SetPosition(-1,-1,BorderW+4,12);
+	#else
 	Dlg.SetPosition(-1,-1,76,12);
+	#endif
 	Dlg.SetHelp(L"MakeFolder");
 	Dlg.SetId(MakeFolderId);
 	Dlg.Process();

@@ -165,7 +165,7 @@ class Panel:public ScreenObject
 			string PluginData;
 			GUID PluginGuid;
 		};
-		void GetShortcutInfo(ShortcutInfo& Info);
+		bool GetShortcutInfo(ShortcutInfo& Info);
 
 	protected:
 		void FastFind(int FirstKey);
