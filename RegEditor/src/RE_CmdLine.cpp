@@ -190,7 +190,7 @@ int OpenPluginArg::ParseCommandLine(LPCTSTR asCmdLine)
 		asCmdLine++;
 
 	// ≈сли ком-строка пуста€ - сразу выходим с aBrowseLocal
-	if(!asCmdLine || !*asCmdLine)
+	if (!asCmdLine || !*asCmdLine || (asCmdLine[0] == L'\\' && asCmdLine[1] == 0))
 	{
 		MCHKHEAP;
 		return (eAction = aBrowseLocal);

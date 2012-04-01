@@ -461,6 +461,7 @@ fin:
 HANDLE WINAPI OpenFilePluginW(const TCHAR *Name,const unsigned char *Data,int DataSize,u64 OpMode);
 #endif
 
+// Ёкспортируетс€ как OpenW дл€ Far3
 HANDLE WINAPI OpenPluginW(
 #if FAR_UNICODE>=1900
 	const OpenInfo *Info
@@ -479,6 +480,15 @@ HANDLE WINAPI OpenPluginW(
 	if (bDump) xf_dump();
 #endif
 
+	#if (FARMANAGERVERSION_BUILD>=2572)
+	const HANDLE PanelStop = PANEL_STOP;
+	const HANDLE PanelNone = NULL;
+	#else
+	const HANDLE PanelStop = (HANDLE)-2;
+	const HANDLE PanelNone = INVALID_HANDLE_VALUE;
+	#endif
+	
+
 	#ifdef _UNICODE
 	// ѕосле AnalyseW вызываетс€ OpenPluginW, а не OpenFilePluginW
 	if (OpenFrom == OPEN_ANALYSE)
@@ -492,11 +502,7 @@ HANDLE WINAPI OpenPluginW(
 		if ((pa == NULL) || (pa->StructSize < sizeof(*pa)))
 		{
 			InvalidOp();
-			#if (FARMANAGERVERSION_BUILD>=2572)
-			return NULL;
-			#else
-			return INVALID_HANDLE_VALUE;
-			#endif
+			return PanelNone;
 		}
 		p = pa->Info;
 		#endif
@@ -509,11 +515,11 @@ HANDLE WINAPI OpenPluginW(
 		
 		if (hPlugin == (HANDLE)-2)
 		{
-			#if (FARMANAGERVERSION_BUILD>=2572)
-			hPlugin = PANEL_STOP;
-			#else
-			hPlugin = INVALID_HANDLE_VALUE;
-			#endif
+			hPlugin = PanelStop;
+		}
+		else if (hPlugin == INVALID_HANDLE_VALUE)
+		{
+			hPlugin = PanelNone;
 		}
 		return hPlugin;
 	}
@@ -528,7 +534,8 @@ HANDLE WINAPI OpenPluginW(
 	MCHKHEAP;
 
 	pPlugin = new REPlugin();
-	if (!pPlugin) return INVALID_HANDLE_VALUE;
+	if (!pPlugin)
+		return PanelNone;
 	
 	CPluginActivator a((HANDLE)pPlugin,0);
 	
@@ -551,7 +558,7 @@ HANDLE WINAPI OpenPluginW(
 				SafeDelete(pPlugin);
 				gpActivePlugin = NULL;
 				InvalidCmd();
-				return INVALID_HANDLE_VALUE;
+				return PanelNone;
 			}
 		}
 
@@ -581,7 +588,7 @@ HANDLE WINAPI OpenPluginW(
 					SafeDelete(pPlugin);
 					gpActivePlugin = NULL;
 					InvalidCmd();
-					return INVALID_HANDLE_VALUE;
+					return PanelNone;
 				}
 				if (Args.wsBrowseRemoteKey && *Args.wsBrowseRemoteKey)
 				{
@@ -600,7 +607,7 @@ HANDLE WINAPI OpenPluginW(
 					SafeDelete(pPlugin);
 					gpActivePlugin = NULL;
 					InvalidCmd();
-					return INVALID_HANDLE_VALUE;
+					return PanelNone;
 				}
 				lbDirSet = true;
 			} break;
@@ -612,7 +619,7 @@ HANDLE WINAPI OpenPluginW(
 					SafeDelete(pPlugin);
 					gpActivePlugin = NULL;
 					InvalidCmd();
-					return INVALID_HANDLE_VALUE;
+					return PanelNone;
 				}
 				lbDirSet = true;
 			} break;
@@ -623,7 +630,7 @@ HANDLE WINAPI OpenPluginW(
 				InvalidOp();
 				SafeDelete(pPlugin);
 				gpActivePlugin = NULL;
-				return INVALID_HANDLE_VALUE;
+				return PanelNone;
 			} break;
 		case aImportRegFile:
 			{
@@ -632,7 +639,7 @@ HANDLE WINAPI OpenPluginW(
 				{
 					int nConfirm = REPlugin::MessageFmt(REM_ImportConfirm, Args.pszSourceFile, 0, _T("ImportKey"), FMSG_MB_YESNO, 0);
 					if (nConfirm != 0)
-						return INVALID_HANDLE_VALUE;
+						return PanelNone;
 				}
 
 				MFileReg fileReg(cfg->getWow64on32());
@@ -654,7 +661,7 @@ HANDLE WINAPI OpenPluginW(
 				// ¬ любом случае, панель - не открываем
 				SafeDelete(pPlugin);
 				gpActivePlugin = NULL;
-				return INVALID_HANDLE_VALUE;
+				return PanelNone;
 			} break;
 		case aMountHive:
 			{
@@ -664,7 +671,7 @@ HANDLE WINAPI OpenPluginW(
 				// ¬ любом случае, панель - не открываем
 				SafeDelete(pPlugin);
 				gpActivePlugin = NULL;
-				return INVALID_HANDLE_VALUE;
+				return PanelNone;
 			} break;
 		case aUnmountHive:
 			{
@@ -677,14 +684,14 @@ HANDLE WINAPI OpenPluginW(
 				// ¬ любом случае, панель - не открываем
 				SafeDelete(pPlugin);
 				gpActivePlugin = NULL;
-				return INVALID_HANDLE_VALUE;
+				return PanelNone;
 			} break;
 		default:
 			// ќшибка разбора уже должна быть показана
 			SafeDelete(pPlugin);
 			gpActivePlugin = NULL;
 			InvalidCmd();
-			return INVALID_HANDLE_VALUE;
+			return PanelNone;
 		}
 
 		////TODO: —делать нормальный разбор ком.строки
@@ -1442,7 +1449,8 @@ void WINAPI FreeFindDataW(HANDLE hPlugin,struct PluginPanelItem *PanelItem,int I
 #endif
 
 
-void WINAPI GetOpenPluginInfoW(
+void WINAPI 
+GetOpenPluginInfoW(
 		#if FAR_UNICODE>=1900
 		struct OpenPanelInfo *Info
 		#else
@@ -1588,14 +1596,21 @@ void WINAPI ClosePluginW(
 	#if FAR_UNICODE>=1900
 	HANDLE hPlugin = Info->hPanel;
 	#endif
-	//CPluginActivator a(hPlugin,0); -- не надо, а то деструктор активатора пытаетс€ в pPlugin смотреть
-	REPlugin* pPlugin = (REPlugin*)hPlugin;
-	gpActivePlugin = pPlugin;
-	pPlugin->PreClosePlugin(); // предложить сохранить .reg файл
-	MCHKHEAP;
-	SafeDelete(pPlugin);
-	MCHKHEAP;
-	gpActivePlugin = NULL;
+	if (hPlugin != INVALID_HANDLE_VALUE)
+	{
+		//CPluginActivator a(hPlugin,0); -- не надо, а то деструктор активатора пытаетс€ в pPlugin смотреть
+		REPlugin* pPlugin = (REPlugin*)hPlugin;
+		gpActivePlugin = pPlugin;
+		pPlugin->PreClosePlugin(); // предложить сохранить .reg файл
+		MCHKHEAP;
+		SafeDelete(pPlugin);
+		MCHKHEAP;
+		gpActivePlugin = NULL;
+	}
+	else
+	{
+		_ASSERTE(hPlugin != INVALID_HANDLE_VALUE);
+	}
 }
 
 

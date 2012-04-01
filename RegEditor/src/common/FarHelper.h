@@ -40,7 +40,7 @@ extern GUID guid_PluginGuid;
 		#define FADV1988 0,
 	    #define _GetCheck(i) (int)psi.SendDlgMessage(hDlg,DM_GETCHECK,i,0)
 	    #define GetDataPtr(i) ((const TCHAR *)psi.SendDlgMessage(hDlg,DM_GETCONSTTEXTPTR,i,0))
-	    #define SETTEXT(itm,txt) itm.PtrData = txt
+	    #define SETTEXT(itm,txt) itm.Data = txt
 	    #define SETTEXTPRINT(itm,fmt,arg) wsprintf(pszBuf, fmt, arg); SETTEXT(itm,pszBuf); pszBuf+=lstrlen(pszBuf)+2;
 		#define FILENAMEPTR PanelItemFileNamePtr
 	#else
