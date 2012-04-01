@@ -224,13 +224,16 @@ struct DirInfo
 		static char  DirID[]="<DIR>";
 		static char  JunID[]="<JUNCTION>";
 		//char* Buf = (char*)malloc(4096);
-		bool First=false;
+		bool First=false, FormatOk=false;
+		size_t nLines=0;
 
 		//if (isBtanch) nSkipLen=0;
 		while (GetS(Buf,ARRAYSIZE(Buf)-2))
 		{
+			nLines++;
 			if ((First = Compare(Buf, LabelHeader[0], true)) || Compare(Buf, LabelHeader[1]))
 			{
+				FormatOk = true;
 				isRus = First;
 				//if (isRus && strncmp(Buf, LabelHeader[0], lstrlenA(LabelHeader[0])))
 				//{
@@ -277,6 +280,7 @@ struct DirInfo
 			}
 			if (Compare(Buf, SerialHeader[0]) || Compare(Buf, SerialHeader[1]))
 			{
+				FormatOk = true;
 				/* // 26.11.2008 Maks - Volume Serial - не интересно
 				char temp[80];
 				lstrcpy(temp, Descrip);
@@ -287,6 +291,7 @@ struct DirInfo
 			}
 			if (Compare(Buf, DirHeader[0]) || Compare(Buf, DirHeader[1]))
 			{
+				FormatOk = true;
 				if (!nSkipLen)
 					nSkipLen = nStrLen;
 				else
@@ -301,6 +306,16 @@ struct DirInfo
 				}
 				continue;
 			}
+
+			if (!FormatOk)
+			{
+				// Если поля заголовка не нашли в первых 128 строках - выходим
+				if (nLines > 128)
+					break;
+				else
+					continue;
+			}
+
 			if ( (nStrLen==NAME_DISP+1 && *(Buf+NAME_DISP)=='.') ||
 				(nStrLen==NAME_DISP+2 && *(Buf+NAME_DISP+1)=='.') )
 				continue;

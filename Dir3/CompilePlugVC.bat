@@ -10,8 +10,8 @@ if exist "%VS90COMNTOOLS%..\..\VC\BIN\vcvars32.bat" call "%VS90COMNTOOLS%..\..\V
 rem  ======================== Set name and version ... =========================
 
 @set PlugName=Dir
-@set fileversion=3,0,0,3
-@set fileversion_str=3.0 build 3
+@set fileversion=3,0,0,4
+@set fileversion_str=3.0 build 4
 @set comments=Current developer: ConEmu.Maximus5@gmail.com
 @set filedescription=DIR XP/2003/Vista/7 parse for FAR Manager
 @set legalcopyright=© Alexander Arefiev 2001, @ Maximus5 2012
