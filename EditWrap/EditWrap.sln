@@ -1,0 +1,32 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EditWrap", "EditWrap.vcproj", "{E056A098-D110-411A-9DFA-0EA623F11BED}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		DebugA|Win32 = DebugA|Win32
+		DebugW2|Win32 = DebugW2|Win32
+		DebugW3|Win32 = DebugW3|Win32
+		ReleaseA|Win32 = ReleaseA|Win32
+		ReleaseW2|Win32 = ReleaseW2|Win32
+		ReleaseW3|Win32 = ReleaseW3|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.DebugA|Win32.ActiveCfg = DebugA|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.DebugA|Win32.Build.0 = DebugA|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.DebugW2|Win32.ActiveCfg = DebugW2|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.DebugW2|Win32.Build.0 = DebugW2|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.DebugW3|Win32.ActiveCfg = DebugW3|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.DebugW3|Win32.Build.0 = DebugW3|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.ReleaseA|Win32.ActiveCfg = DebugA|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.ReleaseA|Win32.Build.0 = DebugA|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.ReleaseW2|Win32.ActiveCfg = ReleaseW2|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.ReleaseW2|Win32.Build.0 = ReleaseW2|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.ReleaseW3|Win32.ActiveCfg = ReleaseW3|Win32
+		{E056A098-D110-411A-9DFA-0EA623F11BED}.ReleaseW3|Win32.Build.0 = ReleaseW3|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

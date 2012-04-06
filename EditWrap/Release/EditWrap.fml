@@ -1,0 +1,13 @@
+
+macro
+  Area="Editor"
+  Key="ShiftF3"
+  Descr="Wrap/unwrap lines virtually"
+{{
+  // Toggle word wrap.
+  callplugin("580F7F4F-7E64-4367-84C1-5A6EB66DAB1F",2)
+  
+  // Command ID (2) is the same as hotkey in the plugin menu
+  
+  // You may use callplugin(0x45644664,2) in Far Manager v2.1 bis21
+}}
