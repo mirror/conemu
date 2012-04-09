@@ -1280,7 +1280,7 @@ string __MCODE_ToName(DWORD OpCode)
 		DEF_MCODE_(F_PLUGIN_CONFIG),            // N=Plugin.Config(Guid[,MenuGuid])
 		DEF_MCODE_(F_PLUGIN_CALL),              // N=Plugin.Call(Guid[,Item])
 		DEF_MCODE_(F_PLUGIN_LOAD),              // N=Plugin.Load(DllPath[,ForceLoad])
-		DEF_MCODE_(F_PLUGIN_CMDLINE),           // N=Plugin.Cmdline(Guid[,Command])
+		DEF_MCODE_(F_PLUGIN_COMMAND),           // N=Plugin.Command(Guid[,Command])
 		DEF_MCODE_(F_PLUGIN_UNLOAD),            // N=Plugin.UnLoad(DllPath)
 		DEF_MCODE_(F_PLUGIN_EXIST),             // N=Plugin.Exist(Guid)
 		DEF_MCODE_(F_MENU_FILTER),              // N=Menu.Filter(Action[,Mode])
@@ -1289,7 +1289,11 @@ string __MCODE_ToName(DWORD OpCode)
 		DEF_MCODE_(F_FAR_CFG_GET),              // V=Far.Cfg.Get(Key,Name)
 		DEF_MCODE_(F_SIZE2STR),                 // S=Size2Str(N,Flags[,Width])
 		DEF_MCODE_(F_STRWRAP),                  // S=StrWrap(Text,Width[,Break[,Flags]])
-		DEF_MCODE_(C_AREA_OTHER),// Режим копирования текста с экрана, вертикальные меню
+		DEF_MCODE_(F_MACRO_KEYWORD),            // S=Macro.Keyword(Index[,Type])
+		DEF_MCODE_(F_MACRO_FUNC),               // S=Macro.Func(Index[,Type])
+		DEF_MCODE_(F_MACRO_VAR),                // S=Macro.Var(Index[,Type])
+		DEF_MCODE_(F_MACRO_CONST),              // S=Macro.Const(Index[,Type])
+		DEF_MCODE_(C_AREA_OTHER),               // Режим копирования текста с экрана, вертикальные меню
 		DEF_MCODE_(C_AREA_SHELL),               // Файловые панели
 		DEF_MCODE_(C_AREA_VIEWER),              // Внутренняя программа просмотра
 		DEF_MCODE_(C_AREA_EDITOR),              // Редактор
@@ -1346,7 +1350,7 @@ string __MCODE_ToName(DWORD OpCode)
 		DEF_MCODE_(V_FAR_TITLE),                // Far.Title - текущий заголовок консольного окна
 		DEF_MCODE_(V_FAR_UPTIME),               // Far.UpTime - время работы Far в миллисекундах
 		DEF_MCODE_(V_FAR_PID),                  // Far.PID - содержит ИД текущей запущенной копии Far Manager
-		DEF_MCODE_(V_MACROAREA),                // MacroArea - имя текущей макрос области
+		DEF_MCODE_(V_MACRO_AREA),               // Macro.Area - имя текущей макрос области
 		DEF_MCODE_(V_APANEL_CURRENT),           // APanel.Current - имя файла на активной панели
 		DEF_MCODE_(V_PPANEL_CURRENT),           // PPanel.Current - имя файла на пассивной панели
 		DEF_MCODE_(V_APANEL_SELCOUNT),          // APanel.SelCount - активная панель:  число выделенных элементов

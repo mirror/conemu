@@ -135,6 +135,10 @@ class Panel:public ScreenObject
 		int SortGroups;
 		int PrevViewMode,ViewMode;
 		int CurTopFile;
+		#if 1
+		//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+		int LastBottomFile;
+		#endif
 		int CurFile;
 		int ShowShortNames;
 		int NumericSort;
@@ -156,6 +160,12 @@ class Panel:public ScreenObject
 		void FastFindShow(int FindX,int FindY);
 		void FastFindProcessName(Edit *FindEdit,const wchar_t *Src,string &strLastName, string &strName);
 		void DragMessage(int X,int Y,int Move);
+
+	#if 1
+	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+	protected:
+		void SetTopFile(int NewTopFile) { LastBottomFile=-1; CurTopFile=NewTopFile; };
+	#endif
 
 	private:
 		struct ShortcutInfo

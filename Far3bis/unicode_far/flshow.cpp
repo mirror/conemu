@@ -1031,6 +1031,11 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	#endif
 
 	#if 1
+	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+	int lastVisible = -1;
+	#endif
+
+	#if 1
 	//Maximus: многострочна€ статусна€ область
 	for (int I=Y1+1+Opt.ShowColumnTitles,J=CurTopFile; I<Y2-StatusHeight; I++,J++)
 	#else
@@ -1038,6 +1043,10 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	#endif
 	{
 		int CurColumn=StartColumn;
+		#if 1
+		//Maximus:
+		int PosX = 0, PosY = 0; // 1-based, relative to Far workspace, 0 means 'not visible now'
+		#endif
 
 		if (ShowStatus)
 		{
@@ -1052,7 +1061,13 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 		else
 		{
 			SetShowColor(J);
+			#if 1
+			//Maximus:
+			GotoXY(PosX=(X1+1),PosY=I);
+			PosX++; PosY++;
+			#else
 			GotoXY(X1+1,I);
+			#endif
 		}
 
 		int StatusLine=FALSE;
@@ -1103,6 +1118,18 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 			if (ListPos<FileCount)
 			{
+				#if 1
+				//Maximus: Check
+				_ASSERTE(!ShowStatus || ListPos>=CurTopFile);
+				//Maximus: Update coord
+				if (!ShowStatus)
+				{
+					ListData[ListPos]->PosX = PosX;
+					ListData[ListPos]->PosY = PosY;
+					lastVisible = ListPos;
+				}
+				#endif
+
 				if (!ShowStatus && !StatusShown && CurFile==ListPos && Opt.ShowPanelStatus)
 				{
 					#if 1
@@ -1652,6 +1679,12 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			FS<<fmt::Width(X2-WhereX())<<L"";
 		}
 	}
+
+	#if 1
+	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+	if (!ShowStatus)
+		LastBottomFile = lastVisible;
+	#endif
 
 	if (!ShowStatus && !StatusShown && Opt.ShowPanelStatus)
 	{

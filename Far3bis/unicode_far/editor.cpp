@@ -931,10 +931,21 @@ int Editor::ProcessKey(int Key)
 
 			if (Flags.Check(FEDITOR_CURPOSCHANGEDBYPLUGIN))
 			{
-				if (SelStart!=-1 && (CurPos<SelStart || // если курсор до выделения
-				                     (SelEnd!=-1 && (CurPos>SelEnd ||    // ... после выделения
-				                                     (CurPos>SelStart && CurPos<SelEnd)))) &&
-				        CurPos<CurLine->GetLength()) // ... внутри выдления
+				bool IsLastSelectionLine=SelStart>=0;
+				if (CurLine->m_next)
+				{
+					int NextSelStart=-1,NextSelEnd=0;
+					CurLine->m_next->GetRealSelection(NextSelStart,NextSelEnd);
+					IsLastSelectionLine=IsLastSelectionLine&&(NextSelStart<0);
+				}
+				bool IsSpecialCase=false;
+				if (CurLine->m_prev)
+				{
+					int PrevSelStart=-1,PrevSelEnd=0;
+					CurLine->m_prev->GetRealSelection(PrevSelStart,PrevSelEnd);
+					IsSpecialCase=SelStart<0&&PrevSelStart==0&&PrevSelEnd<0;
+				}
+				if(!((CurLine==BlockStart&&CurPos==SelStart)||(IsLastSelectionLine&&CurPos==SelEnd)||(IsSpecialCase&&0==CurPos)))
 					TurnOffMarkingBlock();
 
 				Flags.Clear(FEDITOR_CURPOSCHANGEDBYPLUGIN);
@@ -1000,18 +1011,6 @@ int Editor::ProcessKey(int Key)
 			{
 				ProcessKey(KEY_SHIFTPGDN);
 			}
-
-			/* $ 06.02.2002 IS
-			   Принудительно сбросим флаг того, что позиция изменена плагином.
-			   Для чего:
-			     при выполнении "ProcessKey(KEY_SHIFTPGDN)" (см. чуть выше)
-			     позиция плагины (в моем случае - колорер) могут дергать
-			     ECTL_SETPOSITION, в результате чего выставляется флаг
-			     FEDITOR_CURPOSCHANGEDBYPLUGIN. А при обработке KEY_SHIFTEND
-			     выделение в подобном случае начинается с нуля, что сводит на нет
-			     предыдущее выполнение KEY_SHIFTPGDN.
-			*/
-			Flags.Clear(FEDITOR_CURPOSCHANGEDBYPLUGIN);
 
 			if (Key == KEY_CTRLSHIFTEND || Key == KEY_CTRLSHIFTNUMPAD1 || Key == KEY_RCTRLSHIFTEND || Key == KEY_RCTRLSHIFTNUMPAD1)
 				ProcessKey(KEY_SHIFTEND);
@@ -2195,8 +2194,7 @@ int Editor::ProcessKey(int Key)
 			if (!CurPos)
 				return TRUE;
 
-			if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
-				BeginVBlockMarking();
+			ProcessVBlockMarking();
 
 			Pasting++;
 			{
@@ -2238,8 +2236,7 @@ int Editor::ProcessKey(int Key)
 			if (!EdOpt.CursorBeyondEOL && CurLine->GetCurPos()>=CurLine->GetLength())
 				return TRUE;
 
-			if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
-				BeginVBlockMarking();
+			ProcessVBlockMarking();
 
 			//_D(SysLog(L"---------------- KEY_ALTRIGHT, getLineCurPos=%i",GetLineCurPos()));
 			Pasting++;
@@ -2374,8 +2371,7 @@ int Editor::ProcessKey(int Key)
 			if (!CurLine->m_prev)
 				return TRUE;
 
-			if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
-				BeginVBlockMarking();
+			ProcessVBlockMarking();
 
 			if (!EdOpt.CursorBeyondEOL && VBlockX>=CurLine->m_prev->RealPosToTab(CurLine->m_prev->GetLength()))
 				return TRUE;
@@ -2407,8 +2403,7 @@ int Editor::ProcessKey(int Key)
 			if (!CurLine->m_next)
 				return TRUE;
 
-			if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
-				BeginVBlockMarking();
+			ProcessVBlockMarking();
 
 			if (!EdOpt.CursorBeyondEOL && VBlockX>=CurLine->m_next->RealPosToTab(CurLine->m_next->GetLength()))
 				return TRUE;
@@ -3819,7 +3814,7 @@ BOOL Editor::Search(int Next)
 
 					MenuItemEx Item = {};
 					Item.strName = FormatString() << fmt::LeftAlign() << fmt::Width(11) << fmt::Precision(11) << fmt::FillChar(L' ') << (FormatString() << NewNumLine+1 << L':' << CurPos+1) << BoxSymbols[BS_V1] << CurPtr->GetStringAddr() + CurPos;
-					FindCoord coord = {NewNumLine, CurPos};
+					FindCoord coord = {(UINT)NewNumLine, (UINT)CurPos};
 					Item.UserData = &coord;
 					Item.UserDataSize = sizeof(coord);
 					FindAllList.AddItem(&Item);
@@ -4269,6 +4264,10 @@ wchar_t *Editor::Block2Text(wchar_t *ptrInitData)
 
 	size_t TotalChars = DataSize;
 	int StartSel, EndSel;
+	#if 1
+	//Maximus: не игнорировать EOL
+	const wchar_t* Eol;
+	#endif
 	for (Edit *Ptr = BlockStart; Ptr; Ptr = Ptr->m_next)
 	{
 		Ptr->GetSelection(StartSel, EndSel);
@@ -4277,7 +4276,13 @@ wchar_t *Editor::Block2Text(wchar_t *ptrInitData)
 		if (EndSel == -1)
 		{
 			TotalChars += Ptr->GetLength() - StartSel;
+			#if 1
+			//Maximus: не игнорировать EOL
+			Eol = Ptr->GetEOL();
+			TotalChars += wcslen(Eol); // CRLF/CRCRLF/...
+			#else
 			TotalChars += 2; // CRLF
+			#endif
 		}
 		else
 			TotalChars += EndSel - StartSel;
@@ -4322,8 +4327,18 @@ wchar_t *Editor::Block2Text(wchar_t *ptrInitData)
 
 		if (EndSel == -1)
 		{
+			#if 1
+			//Maximus: не игнорировать EOL
+			Eol = Ptr->GetEOL();
+			if (*Eol)
+			{
+				wcscpy(CopyData + DataSize, Eol);
+				DataSize += wcslen(Eol);
+			}
+			#else
 			wcscpy(CopyData + DataSize, DOS_EOL_fmt);
 			DataSize += 2;
+			#endif
 		}
 	}
 
@@ -4497,6 +4512,7 @@ void Editor::DeleteBlock()
 
 void Editor::UnmarkBlock()
 {
+	Flags.Clear(FEDITOR_CURPOSCHANGEDBYPLUGIN);
 	if (!BlockStart && !VBlockStart)
 		return;
 
@@ -5670,7 +5686,7 @@ int Editor::EditorControl(int Command,void *Param)
 					return FALSE;
 				}
 
-				TurnOffMarkingBlock();
+				Flags.Set(FEDITOR_CURPOSCHANGEDBYPLUGIN);
 				int DestLine=SetString->StringNumber;
 
 				if (DestLine==-1)
@@ -5763,13 +5779,8 @@ int Editor::EditorControl(int Command,void *Param)
 				if (EdOpt.ShowWhiteSpace)
 				{
 					Info->Options|=EOPT_SHOWWHITESPACE;
-					#if 1
-					// far version
+
 					if (EdOpt.ShowWhiteSpace==1)
-					#else
-					// my version
-					if (EdOpt.ShowWhiteSpace==2)
-					#endif
 						Info->Options|=EOPT_SHOWLINEBREAK;
 				}
 
@@ -5790,7 +5801,6 @@ int Editor::EditorControl(int Command,void *Param)
 			// "Вначале было слово..."
 			if (Param)
 			{
-				TurnOffMarkingBlock();
 				// ...а вот теперь поработаем с тем, что передалаи
 				EditorSetPosition *Pos=(EditorSetPosition *)Param;
 				_ECTLLOG(SysLog(L"EditorSetPosition{"));
@@ -5802,12 +5812,9 @@ int Editor::EditorControl(int Command,void *Param)
 				_ECTLLOG(SysLog(L"  Overtype      = %d",Pos->Overtype));
 				_ECTLLOG(SysLog(L"}"));
 				Lock();
-				int CurPos=CurLine->GetCurPos();
 
-				// выставим флаг об изменении поз (если надо)
-				if ((Pos->CurLine >= 0 || Pos->CurPos >= 0)&&
-				        (Pos->CurLine!=NumLine || Pos->CurPos!=CurPos))
-					Flags.Set(FEDITOR_CURPOSCHANGEDBYPLUGIN);
+				// выставим флаг об изменении поз
+				Flags.Set(FEDITOR_CURPOSCHANGEDBYPLUGIN);
 
 				if (Pos->CurLine >= 0) // поменяем строку
 				{
@@ -5835,6 +5842,9 @@ int Editor::EditorControl(int Command,void *Param)
 
 				if (Pos->LeftPos >= 0)
 					CurLine->SetLeftPos(Pos->LeftPos);
+
+				CurLine->ObjWidth=XX2-X1+1; //BUGBUG: вообще-то должно быть корректное значение.
+				CurLine->FixLeftPos();
 
 				/* $ 30.08.2001 IS
 				   Изменение режима нужно выставлять сразу, в противном случае приходят
@@ -5888,6 +5898,8 @@ int Editor::EditorControl(int Command,void *Param)
 				}
 
 				UnmarkBlock();
+
+				Flags.Set(FEDITOR_CURPOSCHANGEDBYPLUGIN);
 
 				if (Sel->BlockType==BTYPE_STREAM)
 				{
@@ -6248,6 +6260,11 @@ int Editor::EditorControl(int Command,void *Param)
 			}
 
 			return FALSE;
+		}
+		case ECTL_DROPMODIFEDFLAG:
+		{
+			Flags.Clear(FEDITOR_MODIFIED);
+			return TRUE;
 		}
 	}
 
@@ -6664,6 +6681,19 @@ void Editor::SetReplaceMode(bool Mode)
 int Editor::GetLineCurPos()
 {
 	return CurLine->GetTabCurPos();
+}
+
+void Editor::ProcessVBlockMarking(void)
+{
+	if (Flags.Check(FEDITOR_CURPOSCHANGEDBYPLUGIN))
+	{
+		int CurPos=CurLine->GetTabCurPos();
+		if(!((NumLine==VBlockY||NumLine==VBlockY+VBlockSizeY-1)&&(CurPos==VBlockX||CurPos==VBlockX+VBlockSizeX)))
+			TurnOffMarkingBlock();
+		Flags.Clear(FEDITOR_CURPOSCHANGEDBYPLUGIN);
+	}
+	if (!Flags.Check(FEDITOR_MARKINGVBLOCK))
+		BeginVBlockMarking();
 }
 
 void Editor::BeginVBlockMarking()

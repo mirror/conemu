@@ -160,7 +160,12 @@ FileList::FileList():
 	Type=FILE_PANEL;
 	apiGetCurrentDirectory(strCurDir);
 	strOriginalCurDir = strCurDir;
+	#if 1
+	//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+	SetTopFile(CurFile=0);
+	#else
 	CurTopFile=CurFile=0;
+	#endif
 	ShowShortNames=0;
 	SortMode=BY_NAME;
 	SortOrder=1;
@@ -254,14 +259,28 @@ void FileList::Scroll(int Count)
 
 void FileList::CorrectPosition()
 {
+	#if 1
+	//Maximus: функция SetTopFile зовется чтобы сбрасывать LastBottomFile
+	#endif
+
 	if (!FileCount)
 	{
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(CurFile=0);
+		#else
 		CurFile=CurTopFile=0;
+		#endif
 		return;
 	}
 
 	if (CurTopFile+Columns*Height>FileCount)
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(FileCount-Columns*Height);
+		#else
 		CurTopFile=FileCount-Columns*Height;
+		#endif
 
 	if (CurFile<0)
 		CurFile=0;
@@ -270,16 +289,36 @@ void FileList::CorrectPosition()
 		CurFile=FileCount-1;
 
 	if (CurTopFile<0)
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(0);
+		#else
 		CurTopFile=0;
+		#endif
 
 	if (CurTopFile > FileCount-1)
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(FileCount-1);
+		#else
 		CurTopFile=FileCount-1;
+		#endif
 
 	if (CurFile<CurTopFile)
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(CurFile);
+		#else
 		CurTopFile=CurFile;
+		#endif
 
 	if (CurFile>CurTopFile+Columns*Height-1)
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(CurFile-Columns*Height+1);
+		#else
 		CurTopFile=CurFile-Columns*Height+1;
+		#endif
 }
 
 
@@ -2565,6 +2604,9 @@ BOOL FileList::SetCurDir(const string& NewDir,int ClosePanel,BOOL IsUpdated)
 	if (ClosePanel && PanelMode==PLUGIN_PANEL)
 	{
 		CheckFullScreen=IsFullScreen();
+		OpenPanelInfo Info;
+		CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
+		string strInfoHostFile=Info.HostFile;
 
 		for (;;)
 		{
@@ -2573,6 +2615,13 @@ BOOL FileList::SetCurDir(const string& NewDir,int ClosePanel,BOOL IsUpdated)
 
 			if (!PopPlugin(TRUE))
 				break;
+
+			if (NewDir.IsEmpty())
+			{
+				Update(0);
+				PopPrevData(strInfoHostFile,true,true,true,true);
+				break;
+			}
 		}
 
 		CtrlObject->Cp()->RedrawKeyBar();
@@ -2583,7 +2632,7 @@ BOOL FileList::SetCurDir(const string& NewDir,int ClosePanel,BOOL IsUpdated)
 		}
 	}
 
-	if ((NewDir) && (*NewDir))
+	if (!NewDir.IsEmpty())
 	{
 		return ChangeDir(NewDir,IsUpdated);
 	}
@@ -2601,22 +2650,15 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 	strSetDir = NewDir;
 	bool dot2Present = !StrCmp(strSetDir, L"..");
 
+	bool RootPath = false;
 	if (PanelMode!=PLUGIN_PANEL)
 	{
-		/* $ 28.08.2007 YJH
-		+ У форточек сносит крышу на GetFileAttributes("..") при нахождении в
-		корне UNC пути. Приходится обходить в ручную */
-		if (dot2Present &&
-		        !StrCmpN(strCurDir, L"\\\\?\\", 4) && strCurDir.At(4) &&
-		        !StrCmpN(&strCurDir[5], L":\\",2))
+		if (dot2Present)
 		{
-			if (!strCurDir.At(7))
+			RootPath = IsLocalRootPath(strCurDir) || IsLocalPrefixRootPath(strCurDir) || IsLocalVolumeRootPath(strCurDir) || IsNetworkRootPath(strCurDir);
+			strSetDir = strCurDir;
+			if (!RootPath)
 			{
-				strSetDir = strCurDir.CPtr()+4;
-			}
-			else
-			{
-				strSetDir = strCurDir;
 				CutToSlash(strSetDir);
 			}
 		}
@@ -2633,7 +2675,7 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 	if (SelFileCount>0)
 		ClearSelection();
 
-	int PluginClosed=FALSE,GoToPanelFile=FALSE;
+	bool PluginClosed=false,GoToPanelFile=false;
 
 	if (PanelMode==PLUGIN_PANEL)
 	{
@@ -2649,20 +2691,20 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 		/* $ 25.04.01 DJ
 		   при неудаче SetDirectory не сбрасываем выделение
 		*/
-		BOOL SetDirectorySuccess = TRUE;
+		bool SetDirectorySuccess = true;
 
 		if (dot2Present && (strInfoCurDir.IsEmpty() || !StrCmp(strInfoCurDir,L"\\")))
 		{
 			if (ProcessPluginEvent(FE_CLOSE,nullptr))
 				return TRUE;
 
-			PluginClosed=TRUE;
+			PluginClosed=true;
 			strFindDir = strInfoHostFile;
 
 			if (strFindDir.IsEmpty() && (Info.Flags & OPIF_REALNAMES) && CurFile<FileCount)
 			{
 				strFindDir = ListData[CurFile]->strName;
-				GoToPanelFile=TRUE;
+				GoToPanelFile=true;
 			}
 
 			PopPlugin(TRUE);
@@ -2674,7 +2716,7 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 		else
 		{
 			strFindDir = strInfoCurDir;
-			SetDirectorySuccess=CtrlObject->Plugins->SetDirectory(hPlugin,strSetDir,0);
+			SetDirectorySuccess=CtrlObject->Plugins->SetDirectory(hPlugin,strSetDir,0) != FALSE;
 		}
 
 		ProcessPluginCommand();
@@ -2688,46 +2730,7 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 		else
 			Update(UPDATE_KEEP_SELECTION);
 
-		if (PluginClosed && !PrevDataList.Empty())
-		{
-			PrevDataItem* Item=*PrevDataList.Last();
-			PrevDataList.Delete(PrevDataList.Last());
-			if (Item->PrevFileCount>0)
-			{
-				MoveSelection(ListData,FileCount,Item->PrevListData,Item->PrevFileCount);
-				UpperFolderTopFile = Item->PrevTopFile;
-
-				if (!GoToPanelFile)
-					strFindDir = Item->strPrevName;
-
-				DeleteListData(Item->PrevListData,Item->PrevFileCount);
-				delete Item;
-
-				if (SelectedFirst)
-					SortFileList(FALSE);
-				else if (FileCount>0)
-					SortFileList(TRUE);
-			}
-		}
-
-		if (dot2Present)
-		{
-			long Pos=FindFile(PointToName(strFindDir));
-
-			if (Pos!=-1)
-				CurFile=Pos;
-			else
-				GoToFile(strFindDir);
-
-			CurTopFile=UpperFolderTopFile;
-			UpperFolderTopFile=0;
-			CorrectPosition();
-		}
-		/* $ 26.04.2001 DJ
-		   доделка про несброс выделения при неудаче SetDirectory
-		*/
-		else if (SetDirectorySuccess)
-			CurFile=CurTopFile=0;
+		PopPrevData(strFindDir,PluginClosed,!GoToPanelFile,dot2Present,SetDirectorySuccess);
 
 		return SetDirectorySuccess;
 	}
@@ -2743,41 +2746,21 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 
 		if (dot2Present)
 		{
-			string strRootDir, strTempDir;
-			strTempDir = strCurDir;
-			AddEndSlash(strTempDir);
-			GetPathRoot(strTempDir, strRootDir);
-
-			if ((strCurDir.At(0) == L'\\' && strCurDir.At(1) == L'\\' && !StrCmpI(strTempDir,strRootDir)) || IsLocalRootPath(strCurDir))
+			if (RootPath)
 			{
-				string strDirName;
-				strDirName = strCurDir;
-				AddEndSlash(strDirName);
-
-				if (Opt.PgUpChangeDisk && (FAR_GetDriveType(strDirName) != DRIVE_REMOTE
-					|| !CtrlObject->Plugins->FindPlugin(Opt.KnownIDs.Network)
-					))
+				if (IsNetworkRootPath(strCurDir))
 				{
-					CtrlObject->Cp()->ActivePanel->ChangeDisk();
-					return TRUE;
-				}
-
-				string strNewCurDir;
-				strNewCurDir = strCurDir;
-
-				if (strNewCurDir.At(1) == L':')
-				{
-					wchar_t Letter=strNewCurDir.At(0);
-					DriveLocalToRemoteName(DRIVE_REMOTE,Letter,strNewCurDir);
-				}
-
-				if (!strNewCurDir.IsEmpty())  // проверим - может не удалось определить RemoteName
-				{
-					const wchar_t *PtrS1=FirstSlash(strNewCurDir.CPtr()+2);
-					if (PtrS1 && !FirstSlash(PtrS1+1))
+					if (CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Network,OPEN_FILEPANEL,(void*)strCurDir.CPtr())) // NetWork Plugin :-)
 					{
-						if (CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Network,OPEN_FILEPANEL,(void*)strNewCurDir.CPtr())) // NetWork Plugin :-)
-							return FALSE;
+						return FALSE;
+					}
+				}
+				else
+				{
+					if (Opt.PgUpChangeDisk)
+					{
+						CtrlObject->Cp()->ActivePanel->ChangeDisk();
+						return TRUE;
 					}
 				}
 			}
@@ -2839,12 +2822,22 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 	if (dot2Present)
 	{
 		GoToFile(strFindDir);
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(UpperFolderTopFile);
+		#else
 		CurTopFile=UpperFolderTopFile;
+		#endif
 		UpperFolderTopFile=0;
 		CorrectPosition();
 	}
 	else if (UpdateFlags != UPDATE_KEEP_SELECTION)
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(CurFile=0);
+		#else
 		CurFile=CurTopFile=0;
+		#endif
 
 	if (GetFocus())
 	{
@@ -3385,7 +3378,12 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				if (!DirFind || (ListData[I]->FileAttr & FILE_ATTRIBUTE_DIRECTORY))
 				{
 					CurFile=I;
+					#if 1
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					SetTopFile(CurFile-(Y2-Y1)/2);
+					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
+					#endif
 					ShowFileList(TRUE);
 					return TRUE;
 				}
@@ -3402,7 +3400,12 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				if (!DirFind || (ListData[I]->FileAttr & FILE_ATTRIBUTE_DIRECTORY))
 				{
 					CurFile=I;
+					#if 1
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					SetTopFile(CurFile-(Y2-Y1)/2);
+					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
+					#endif
 					ShowFileList(TRUE);
 					return TRUE;
 				}
@@ -3448,7 +3451,12 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				if (!DirFind || (ListData[I]->FileAttr & FILE_ATTRIBUTE_DIRECTORY))
 				{
 					CurFile=I;
+					#if 1
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					SetTopFile(CurFile-(Y2-Y1)/2);
+					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
+					#endif
 					ShowFileList(TRUE);
 					return TRUE;
 				}
@@ -3465,7 +3473,12 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				if (!DirFind || (ListData[I]->FileAttr & FILE_ATTRIBUTE_DIRECTORY))
 				{
 					CurFile=I;
+					#if 1
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					SetTopFile(CurFile-(Y2-Y1)/2);
+					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
+					#endif
 					ShowFileList(TRUE);
 					return TRUE;
 				}

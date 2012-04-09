@@ -159,6 +159,60 @@ int FileList::PopPlugin(int EnableRestoreViewMode)
 	return TRUE;
 }
 
+/*
+	DefaultName - имя элемента на которое позиционируемся.
+	Closed - панель закрывается, если в PrevDataList что-то есть - восстанавливаемчся оттуда.
+	UsePrev - если востанавливаемся из PrevDataList, элемент для позиционирования брать оттуда же.
+	Position - надо ли вообще устанавливать текущий элемент.
+*/
+void FileList::PopPrevData(const string& DefaultName,bool Closed,bool UsePrev,bool Position,bool SetDirectorySuccess)
+{
+    string strName(DefaultName);
+	if (Closed && !PrevDataList.Empty())
+	{
+		PrevDataItem* Item=*PrevDataList.Last();
+		PrevDataList.Delete(PrevDataList.Last());
+		if (Item->PrevFileCount>0)
+		{
+			MoveSelection(ListData,FileCount,Item->PrevListData,Item->PrevFileCount);
+			UpperFolderTopFile = Item->PrevTopFile;
+
+			if (UsePrev)
+				strName = Item->strPrevName;
+
+			DeleteListData(Item->PrevListData,Item->PrevFileCount);
+			delete Item;
+
+			if (SelectedFirst)
+				SortFileList(FALSE);
+			else if (FileCount>0)
+				SortFileList(TRUE);
+		}
+	}
+	if (Position)
+	{
+		long Pos=FindFile(PointToName(strName));
+
+		if (Pos!=-1)
+			CurFile=Pos;
+		else
+			GoToFile(strName);
+
+		#if 1
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		SetTopFile(UpperFolderTopFile);
+		#else
+		CurTopFile=UpperFolderTopFile;
+		#endif
+		UpperFolderTopFile=0;
+		CorrectPosition();
+	}
+	/* $ 26.04.2001 DJ
+	   доделка про несброс выделения при неудаче SetDirectory
+	*/
+	else if (SetDirectorySuccess)
+		CurFile=CurTopFile=0;
+}
 
 int FileList::FileNameToPluginItem(const string& Name,PluginPanelItem *pi)
 {
@@ -1068,6 +1122,36 @@ size_t FileList::PluginGetPanelItem(int ItemNumber,FarGetPluginPanelItem *Item)
 
 	return result;
 }
+
+#if 1
+//Maximus: FCTL_GETPANELITEMINFO
+size_t FileList::PluginGetPanelItemInfo(int ItemNumber,FarGetPluginPanelItemInfo *Item)
+{
+	size_t result=0;
+
+	if (ListData && ItemNumber<FileCount)
+	{
+		//result=FileListToPluginItem2(ListData[ItemNumber],Item);
+		if (Item && CheckStructSize(Item))
+		{
+			Item->Color=this->GetShowColor(ItemNumber, HIGHLIGHTCOLORTYPE_FILE);
+			if (ItemNumber>=CurTopFile && ItemNumber<=LastBottomFile)
+			{
+				Item->PosX=ListData[ItemNumber]->PosX;
+				Item->PosY=ListData[ItemNumber]->PosY;
+			}
+			else
+			{
+				Item->PosX=0;
+				Item->PosY=0;
+			}
+			result = sizeof(*Item);
+		}
+	}
+
+	return result;
+}
+#endif
 
 size_t FileList::PluginGetSelectedPanelItem(int ItemNumber,FarGetPluginPanelItem *Item)
 {

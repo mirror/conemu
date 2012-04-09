@@ -86,6 +86,9 @@ struct FileListItem
 	//Maximus: оптимизация колонки C0
 	bool CustomDataLoaded;
 
+	//Maximus: координаты последней отрисовки
+	int PosX, PosY;
+
 	void ClearCustomData()
 	{
 		strCustomData.Clear();
@@ -126,6 +129,8 @@ struct FileListItem
 		#if 1
 		//Maximus: оптимизация колонки C0
 		ClearCustomData();
+		//Maximus: координаты последней отрисовки
+		PosX = PosY = 0;
 		#else
 		strCustomData.Clear();
 		#endif
@@ -291,6 +296,7 @@ class FileList:public Panel
 
 		void PushPlugin(HANDLE hPlugin,const wchar_t *HostFile);
 		int PopPlugin(int EnableRestoreViewMode);
+		void PopPrevData(const string& DefaultName,bool Closed,bool UsePrev,bool Position,bool SetDirectorySuccess);
 		void CopyFiles();
 		void CopyNames(bool FillPathName, bool UNC);
 		void SelectSortMode();
@@ -409,6 +415,11 @@ class FileList:public Panel
 		size_t PluginGetPanelItem(int ItemNumber,FarGetPluginPanelItem *Item);
 		size_t PluginGetSelectedPanelItem(int ItemNumber,FarGetPluginPanelItem *Item);
 		void PluginGetColumnTypesAndWidths(string& strColumnTypes,string& strColumnWidths);
+
+		#if 1
+		//Maximus: FCTL_GETPANELITEMINFO
+		size_t PluginGetPanelItemInfo(int ItemNumber,FarGetPluginPanelItemInfo *Item);
+		#endif
 
 		void PluginBeginSelection();
 		void PluginSetSelection(int ItemNumber,bool Selection);

@@ -132,11 +132,11 @@ namespace pluginapi
 {
 inline Plugin* GuidToPlugin(const GUID* Id) {return (Id && CtrlObject)? CtrlObject->Plugins->FindPlugin(*Id) : nullptr;}
 
-int WINAPIV apiSprintf(wchar_t* Dest, const wchar_t* Format, ...)
+int WINAPIV apiSprintf(wchar_t* Dest, const wchar_t* Format, ...) //?deprecated
 {
 	va_list argptr;
 	va_start(argptr, Format);
-	int Result = vswprintf(Dest, Format, argptr);
+	int Result = _vsnwprintf(Dest, 32000, Format, argptr); //vswprintf(Det,L"%s",(const char *)str) -- MinGW gcc >= 4.6
 	va_end(argptr);
 	return Result;
 }
@@ -428,6 +428,11 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 		{
 			if (Param2)
 				*(VersionInfo*)Param2=FAR_VERSION;
+			#if 1
+			//Maximus: Bis Version
+			if (Param2)
+				((VersionInfo*)Param2)->Stage=VS_BIS;
+			#endif
 
 			return TRUE;
 		}
@@ -1251,6 +1256,10 @@ INT_PTR WINAPI apiPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int 
 			g_strDirToSet = (wchar_t *)Param2;
 		case FCTL_GETPANELINFO:
 		case FCTL_GETPANELITEM:
+		#if 1
+		//Maximus: цвет и позиция
+		case FCTL_GETPANELITEMINFO:
+		#endif
 		case FCTL_GETSELECTEDPANELITEM:
 		case FCTL_GETCURRENTPANELITEM:
 		case FCTL_GETPANELDIRECTORY:

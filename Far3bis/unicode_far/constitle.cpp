@@ -64,7 +64,12 @@ static const string& GetFarTitleAddons()
 	{
 		bFirstRun = false;
 		strVer<<FAR_VERSION.Major<<L"."<<FAR_VERSION.Minor;
+		#if 1
+		//Maximus: Bis build
+		strBuild<<FAR_VERSION.Build<<L"bis";
+		#else
 		strBuild<<FAR_VERSION.Build;
+		#endif
 		strPID<<GetCurrentProcessId();
 	}
 

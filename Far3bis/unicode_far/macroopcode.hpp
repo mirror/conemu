@@ -226,7 +226,7 @@ enum MACRO_OP_CODE
 	MCODE_F_PLUGIN_CONFIG,            // N=Plugin.Config(Guid[,MenuGuid])
 	MCODE_F_PLUGIN_CALL,              // N=Plugin.Call(Guid[,Item])
 	MCODE_F_PLUGIN_LOAD,              // N=Plugin.Load(DllPath[,ForceLoad])
-	MCODE_F_PLUGIN_CMDLINE,           // N=Plugin.Cmdline(Guid[,Command])
+	MCODE_F_PLUGIN_COMMAND,           // N=Plugin.Command(Guid[,Command])
 	MCODE_F_PLUGIN_UNLOAD,            // N=Plugin.UnLoad(DllPath)
 	MCODE_F_PLUGIN_EXIST,             // N=Plugin.Exist(Guid)
 	MCODE_F_MENU_FILTER,              // N=Menu.Filter(Action[,Mode])
@@ -235,6 +235,10 @@ enum MACRO_OP_CODE
 	MCODE_F_FAR_CFG_GET,              // V=Far.Cfg.Get(Key,Name)
 	MCODE_F_SIZE2STR,                 // S=Size2Str(N,Flags[,Width])
 	MCODE_F_STRWRAP,                  // S=StrWrap(Text,Width[,Break[,Flags]])
+	MCODE_F_MACRO_KEYWORD,            // S=Macro.Keyword(Index[,Type])
+	MCODE_F_MACRO_FUNC,               // S=Macro.Func(Index[,Type])
+	MCODE_F_MACRO_VAR,                // S=Macro.Var(Index[,Type])
+	MCODE_F_MACRO_CONST,              // S=Macro.Const(Index[,Type])
 
 	/* ************************************************************************* */
 	// булевые переменные - различные состояния
@@ -301,7 +305,7 @@ enum MACRO_OP_CODE
 	MCODE_V_FAR_TITLE,                // Far.Title - текущий заголовок консольного окна
 	MCODE_V_FAR_UPTIME,               // Far.UpTime - время работы Far в миллисекундах
 	MCODE_V_FAR_PID,                  // Far.PID - содержит ИД текущей запущенной копии Far Manager
-	MCODE_V_MACROAREA,                // MacroArea - имя текущей макрос области
+	MCODE_V_MACRO_AREA,               // MacroArea - имя текущей макрос области
 
 	MCODE_V_APANEL_CURRENT,           // APanel.Current - имя файла на активной панели
 	MCODE_V_PPANEL_CURRENT,           // PPanel.Current - имя файла на пассивной панели

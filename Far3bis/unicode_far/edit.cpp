@@ -65,11 +65,12 @@ static int Recurse=0;
 enum {EOL_NONE,EOL_CR,EOL_LF,EOL_CRLF,EOL_CRCRLF};
 static const wchar_t *EOL_TYPE_CHARS[]={L"",L"\r",L"\n",L"\r\n",L"\r\r\n"};
 
-#define EDMASK_ANY   L'X' // позволяет вводить в строку ввода любой символ;
-#define EDMASK_DSS   L'#' // позволяет вводить в строку ввода цифры, пробел и знак минуса;
-#define EDMASK_DIGIT L'9' // позволяет вводить в строку ввода только цифры;
-#define EDMASK_ALPHA L'A' // позволяет вводить в строку ввода только буквы.
-#define EDMASK_HEX   L'H' // позволяет вводить в строку ввода шестнадцатиричные символы.
+#define EDMASK_ANY    L'X' // позволяет вводить в строку ввода любой символ;
+#define EDMASK_DSS    L'#' // позволяет вводить в строку ввода цифры, пробел и знак минуса;
+#define EDMASK_DIGIT  L'9' // позволяет вводить в строку ввода только цифры;
+#define EDMASK_DIGITS L'N' // позволяет вводить в строку ввода только цифры и пробелы;
+#define EDMASK_ALPHA  L'A' // позволяет вводить в строку ввода только буквы.
+#define EDMASK_HEX    L'H' // позволяет вводить в строку ввода шестнадцатиричные символы.
 
 Edit::Edit(ScreenObject *pOwner, bool bAllocateData):
 	Str(bAllocateData ? static_cast<wchar_t*>(xf_malloc(sizeof(wchar_t))) : nullptr),
@@ -103,10 +104,7 @@ Edit::Edit(ScreenObject *pOwner, bool bAllocateData):
 	TabExpandMode = EXPAND_NOTABS;
 	Flags.Change(FEDITLINE_DELREMOVESBLOCKS,Opt.EdOpt.DelRemovesBlocks);
 	Flags.Change(FEDITLINE_PERSISTENTBLOCKS,Opt.EdOpt.PersistentBlocks);
-#pragma message("edit.cpp(107): warning: Check Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace)")
-	// far
 	Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace);
-	//Flags.Change(FEDITLINE_SHOWWHITESPACE,Opt.EdOpt.ShowWhiteSpace!=0); //my
 	Flags.Change(FEDITLINE_SHOWLINEBREAK,Opt.EdOpt.ShowWhiteSpace==1);
 	m_codepage = 0; //BUGBUG
 }
@@ -298,7 +296,7 @@ int Edit::GetNextCursorPos(int Position,int Where)
 
 void Edit::FastShow()
 {
-	int EditLength=ObjWidth;
+	const int EditLength=ObjWidth;
 
 	if (!Flags.Check(FEDITLINE_EDITBEYONDEND) && CurPos>StrSize && StrSize>=0)
 		CurPos=StrSize;
@@ -324,11 +322,7 @@ void Edit::FastShow()
 	int UnfixedLeftPos = LeftPos;
 	if (!Flags.Check(FEDITLINE_DROPDOWNBOX))
 	{
-		if (TabCurPos-LeftPos>EditLength-1)
-			LeftPos=TabCurPos-EditLength+1;
-
-		if (TabCurPos<LeftPos)
-			LeftPos=TabCurPos;
+		FixLeftPos(TabCurPos);
 	}
 
 	GotoXY(X1,Y1);
@@ -2225,34 +2219,59 @@ int Edit::Search(const string& Str,string& ReplaceStr,int Position,int Case,int 
 
 	if ((Position<StrSize || (!Position && !StrSize)) && !Str.IsEmpty())
 	{
-		if (!Reverse && Regexp)
+		if (Regexp)
 		{
-			RegExp re;
 			string strSlash(Str);
 			InsertRegexpQuote(strSlash);
-
+			RegExp re;
 			// Q: что важнее: опция диалога или опция RegExp`а?
-			if (re.Compile(strSlash, OP_PERLSTYLE|OP_OPTIMIZE|(!Case?OP_IGNORECASE:0)))
+			if (!re.Compile(strSlash, OP_PERLSTYLE|OP_OPTIMIZE|(!Case?OP_IGNORECASE:0)))
+				return FALSE;
+
+			SMatch m[10*2], *pm = m;
+			int n = re.GetBracketsCount();
+			if (n > static_cast<int>(ARRAYSIZE(m)/2))
 			{
-				int n = re.GetBracketsCount();
-				SMatch *m = (SMatch *)xf_malloc(n*sizeof(SMatch));
-
-				if (!m)
+				pm = (SMatch *)xf_malloc(2*n*sizeof(SMatch));
+				if (!pm)
 					return FALSE;
-
-				if (re.SearchEx(this->Str,this->Str+Position,this->Str+StrSize,m,n))
-				{
-					*SearchLength = m[0].end - m[0].start;
-					CurPos = m[0].start;
-					ReplaceStr=ReplaceBrackets(this->Str,ReplaceStr,m,n);
-					xf_free(m);
-					return TRUE;
-				}
-
-				xf_free(m);
 			}
 
-			return FALSE;
+			int found = FALSE;
+			int pos, half = 0;
+
+			if (!Reverse)
+			{
+				if (re.SearchEx(this->Str,this->Str+Position,this->Str+StrSize,pm,n))
+					found = TRUE;
+			}
+			else
+			{
+				pos = 0;
+				for (;;)
+				{
+					if (!re.SearchEx(this->Str,this->Str+pos,this->Str+StrSize,pm+half,n))
+						break;
+					pos = static_cast<int>(pm[half].start);
+					if (pos > Position)
+						break;
+
+					found = TRUE;
+					++pos;
+					half = n - half;
+				}
+				half = n - half;
+			}
+			if (found)
+			{
+				*SearchLength = pm[half].end - pm[half].start;
+				CurPos = pm[half].start;
+				ReplaceStr=ReplaceBrackets(this->Str,ReplaceStr,pm+half,n);
+			}
+			if (pm != m)
+				xf_free(pm);
+
+			return found;
 		}
 
 		if (Position==StrSize) return FALSE;
@@ -2812,7 +2831,7 @@ void Edit::ApplyColor()
 	{
 		EditorInfo ei={};
 		CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETINFO, &ei);
-		XPos = ei.CurTabPos;
+		XPos = ei.CurTabPos - ei.LeftPos;
 	}
 
 	// Обрабатываем элементы ракраски
@@ -3039,6 +3058,8 @@ int Edit::KeyMatchedMask(int Key)
 		Inserted=TRUE;
 	else if (Mask[CurPos]==EDMASK_DSS && (iswdigit(Key) || Key==L' ' || Key==L'-'))
 		Inserted=TRUE;
+	else if (Mask[CurPos]==EDMASK_DIGITS && (iswdigit(Key) || Key==L' '))
+		Inserted=TRUE;
 	else if (Mask[CurPos]==EDMASK_DIGIT && (iswdigit(Key)))
 		Inserted=TRUE;
 	else if (Mask[CurPos]==EDMASK_ALPHA && IsAlpha(Key))
@@ -3051,7 +3072,7 @@ int Edit::KeyMatchedMask(int Key)
 
 int Edit::CheckCharMask(wchar_t Chr)
 {
-	return (Chr==EDMASK_ANY || Chr==EDMASK_DIGIT || Chr==EDMASK_DSS || Chr==EDMASK_ALPHA || Chr==EDMASK_HEX)?TRUE:FALSE;
+	return (Chr==EDMASK_ANY || Chr==EDMASK_DIGIT || Chr==EDMASK_DIGITS || Chr==EDMASK_DSS || Chr==EDMASK_ALPHA || Chr==EDMASK_HEX)?TRUE:FALSE;
 }
 
 void Edit::SetDialogParent(DWORD Sets)
@@ -3069,6 +3090,16 @@ void Edit::SetDialogParent(DWORD Sets)
 		Flags.Clear(FEDITLINE_PARENT_SINGLELINE);
 		Flags.Set(FEDITLINE_PARENT_MULTILINE);
 	}
+}
+
+void Edit::FixLeftPos(int TabCurPos)
+{
+	if (TabCurPos<0) TabCurPos=GetTabCurPos(); //оптимизация, чтобы два раза не дёргать
+	if (TabCurPos-LeftPos>ObjWidth-1)
+		LeftPos=TabCurPos-ObjWidth+1;
+
+	if (TabCurPos<LeftPos)
+		LeftPos=TabCurPos;
 }
 
 EditControl::EditControl(ScreenObject *pOwner,Callback* aCallback,bool bAllocateData,History* iHistory,FarList* iList,DWORD iFlags):Edit(pOwner,bAllocateData)
@@ -3552,7 +3583,7 @@ void EditControl::AutoComplete(bool Manual,bool DelBlock)
 		// BUGBUG, hack
 		int Wait=WaitInMainLoop;
 		WaitInMainLoop=1;
-		struct FAR_INPUT_RECORD irec={Key,*FrameManager->GetLastInputRecord()};
+		struct FAR_INPUT_RECORD irec={(DWORD)Key,*FrameManager->GetLastInputRecord()};
 		if(!CtrlObject->Macro.ProcessEvent(&irec))
 			pOwner->ProcessKey(Key);
 		WaitInMainLoop=Wait;
