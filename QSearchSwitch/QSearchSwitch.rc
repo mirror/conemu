@@ -1,0 +1,31 @@
+#define VERSIONINFO_1   1                                 
+                                                          
+VERSIONINFO_1  VERSIONINFO                                
+FILEVERSION    1,0,2,0                              
+PRODUCTVERSION 3,0,0,0                                    
+FILEFLAGSMASK  0x0                                        
+FILEFLAGS      0x0                                        
+FILEOS         0x4                                        
+FILETYPE       0x2                                        
+FILESUBTYPE    0x0                                        
+{                                                         
+  BLOCK "StringFileInfo"                                  
+  {                                                       
+    BLOCK "000004E4"                                      
+    {                                                     
+      VALUE "CompanyName",      "\0"         
+      VALUE "FileDescription",  "QSearch switch for Far Manager\0"     
+      VALUE "FileVersion",      "1.0 build 2\0"     
+      VALUE "InternalName",     "QSearchSwitch\0"            
+      VALUE "LegalCopyright",   "© Maximus5 2012\0"      
+      VALUE "OriginalFilename", "QSearchSwitch.dll\0"        
+      VALUE "ProductName",      "FAR Manager\0"           
+      VALUE "ProductVersion",   "3.0\0"                   
+      VALUE "Comments",         "ConEmu.Maximus5@gmail.com\0"            
+    }                                                     
+  }                                                       
+  BLOCK "VarFileInfo"                                     
+  {                                                       
+    VALUE "Translation", 0, 0x4e4                         
+  }                                                       
+}                                                         
