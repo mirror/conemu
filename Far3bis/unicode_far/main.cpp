@@ -153,7 +153,7 @@ static int MainProcess(
 
 			if (*ename)
 			{
-				FileEditor *ShellEditor=new FileEditor(ename,CP_AUTODETECT,FFILEEDIT_CANNEWFILE|FFILEEDIT_ENABLEF6,StartLine,StartChar);
+				FileEditor *ShellEditor=new FileEditor(ename,CP_DEFAULT,FFILEEDIT_CANNEWFILE|FFILEEDIT_ENABLEF6,StartLine,StartChar);
 				_tran(SysLog(L"make shelleditor %p",ShellEditor));
 
 				if (!ShellEditor->GetExitCode())  // ????????????
@@ -194,8 +194,12 @@ static int MainProcess(
 				CutToNameUNC(strPath);
 				DeleteEndSlash(strPath); //BUGBUG!! если конечный слешь не убрать - получаем забавный эффект - отсутствует ".."
 
-				if ((strPath.At(1)==L':' && !strPath.At(2)) || (HasPathPrefix(strPath) && strPath.At(5)==L':' && !strPath.At(6)))
+				bool Root = false;
+				PATH_TYPE Type = ParsePath(strPath, nullptr, &Root);
+				if(Root && (Type == PATH_DRIVELETTER || Type == PATH_DRIVELETTERUNC || Type == PATH_VOLUMEGUID))
+				{
 					AddEndSlash(strPath);
+				}
 
 				// Та панель, которая имеет фокус - активна (начнем по традиции с Левой Панели ;-)
 				if (Opt.LeftPanel.Focus)
@@ -218,8 +222,12 @@ static int MainProcess(
 					CutToNameUNC(strPath);
 					DeleteEndSlash(strPath); //BUGBUG!! если конечный слешь не убрать - получаем забавный эффект - отсутствует ".."
 
-					if ((strPath.At(1)==L':' && !strPath.At(2)) || (HasPathPrefix(strPath) && strPath.At(5)==L':' && !strPath.At(6)))
+					bool Root = false;
+					PATH_TYPE Type = ParsePath(strPath, nullptr, &Root);
+					if(Root && (Type == PATH_DRIVELETTER || Type == PATH_DRIVELETTERUNC || Type == PATH_VOLUMEGUID))
+					{
 						AddEndSlash(strPath);
+					}
 
 					// а здесь наоборот - обрабатываем пассивную панель
 					if (Opt.LeftPanel.Focus)

@@ -129,6 +129,19 @@ __int64 HMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		case MCODE_F_MENU_GETHOTKEY:
 		case MCODE_F_MENU_GETVALUE: // S=Menu.GetValue([N])
 		{
+			if ((OpCode == MCODE_F_MENU_GETVALUE) && (iParam == -2))
+			{
+				//TODO: Информация по самому меню !!!
+				_ASSERTE(iParam!=-2);
+				__int64 iType=((TVar *)vParam)->getInteger();
+				switch (iType)
+				{
+				case 1:
+					break;
+				}
+				return 0;
+			}
+
 			if (iParam == -1)
 				iParam=SelectPos;
 
@@ -136,7 +149,11 @@ __int64 HMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			{
 				if (OpCode == MCODE_F_MENU_GETVALUE)
 				{
+					#if 1
+					*(TVar *)vParam = TVar(Item[(int)iParam].Name);
+					#else
 					*(string *)vParam=Item[(int)iParam].Name;
+					#endif
 					return 1;
 				}
 				else

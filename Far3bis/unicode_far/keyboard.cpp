@@ -658,6 +658,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			#endif
 		}
 	}
+	if (Key==KEY_NONE)
+		KeyToInputRecord(Key, rec);
 	return Key;
 }
 

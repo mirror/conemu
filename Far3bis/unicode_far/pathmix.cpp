@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "imports.hpp"
 #include "vmenu.hpp"
+#include "RegExp.hpp"
 
 void NTPath::Transform()
 {
@@ -51,7 +52,7 @@ void NTPath::Transform()
 			if (!HasPathPrefix(Data))
 			{
 				ReplaceSlashToBSlash(Data);
-				string Prefix(IsLocalPath(Data)? L"\\\\?\\" : L"\\\\?\\UNC");
+				string Prefix(ParsePath(Data) == PATH_DRIVELETTER? L"\\\\?\\" : L"\\\\?\\UNC");
 				while(ReplaceStrings(Data,L"\\\\",L"\\"));
 				Data=Prefix+Data;
 			}
@@ -65,58 +66,73 @@ void NTPath::Transform()
 	}
 }
 
+PATH_TYPE ParsePath(const wchar_t* path, const wchar_t** DirPtr, bool* Root)
+{
+	PATH_TYPE Result = PATH_UNKNOWN;
+
+	static struct
+	{
+		PATH_TYPE Type;
+		const wchar_t* REStr;
+		RegExp re;
+		bool Compiled;
+	}
+	PathTypes[] =
+	{
+		// x:<whatever>
+		{PATH_DRIVELETTER, L"/(^.\\:)/"},
+		// \\?\x: or \\?\x:\ or \\?\x:\<whatever>
+		{PATH_DRIVELETTERUNC, L"/(^\\\\{2}[\\?\\.]\\\\.\\:)(?:[\\\\\\/]|$)/"},
+		// \\server\share or \\server\share\ or \\server\share<whatever>
+		{PATH_REMOTE, L"/(^\\\\{2}[^ \\\\\\/\\?\\.][^ \\\\\\/\\?]+?\\\\[^ \\\\\\/]+?)(?:[\\\\\\/]|$)/"},
+		// \\?\unc\server\share or \\?\unc\server\share\ or \\?\unc\server\share<whatever>
+		{PATH_REMOTEUNC, L"/(^\\\\{2}[\\?\\.]\\\\unc\\\\[^ \\\\\\/]+?\\\\[^ \\\\\\/]+?)(?:[\\\\\\/]|$)/"},
+		// \\?\Volume{GUID} or \\?\Volume{GUID}\ or \\?\Volume{GUID}<whatever>
+		{PATH_VOLUMEGUID, L"/(^\\\\{2}[\\?\\.]\\\\volume\\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\\})(?:[\\\\\\/]|$)/"},
+		// \\?\pipe\ or \\?\pipe
+		{PATH_PIPE, L"/(^\\\\{2}[\\?\\.]\\\\pipe)(?:[\\\\\\/]|$)/"},
+	};
+	static bool REInit = false;
+	if(!REInit)
+	{
+		for(size_t i = 0; i < ARRAYSIZE(PathTypes); ++i)
+		{
+			PathTypes[i].Compiled = PathTypes[i].re.Compile(PathTypes[i].REStr, OP_PERLSTYLE|OP_OPTIMIZE|OP_IGNORECASE) != 0;
+			assert(PathTypes[i].Compiled);
+		}
+		REInit = true;
+	}
+
+	SMatch m[3];
+
+	for(size_t i = 0; i < ARRAYSIZE(PathTypes); ++i)
+	{
+		if(PathTypes[i].Compiled)
+		{
+			int n = PathTypes[i].re.GetBracketsCount();
+			if(PathTypes[i].re.Search(path, m, n))
+			{
+				if(DirPtr)
+				{
+					*DirPtr = path+m[1].end;
+				}
+				if(Root)
+				{
+					*Root = !path[m[1].end] || (IsSlash(path[m[1].end]) && !path[m[1].end+1]);
+				}
+				Result = PathTypes[i].Type;
+				break;
+			}
+		}
+	}
+
+	return Result;
+}
+
 bool IsAbsolutePath(const wchar_t *Path)
 {
-	return Path && (HasPathPrefix(Path) || IsLocalPath(Path) || IsNetworkPath(Path));
-}
-
-bool IsNetworkPath(const wchar_t *Path)
-{
-	return Path && ((Path[0] == L'\\' && Path[1] == L'\\' && !HasPathPrefix(Path))||(HasPathPrefix(Path) && !StrCmpNI(Path+4,L"UNC\\",4)));
-}
-
-bool IsNetworkRootPath(const wchar_t *Path)
-{
-	bool Result=false;
-	if(IsNetworkPath(Path))
-	{
-		LPCWSTR SharePtr=wcspbrk(HasPathPrefix(Path)?Path+8:Path+2,L"\\/");
-		if (SharePtr)
-		{
-			LPCWSTR PathPtr=wcspbrk(SharePtr+1,L"\\/");
-			if(!PathPtr || (PathPtr && !PathPtr[1]))
-				Result = true;
-		}
-	}
-	return Result;
-}
-
-bool IsNetworkServerPath(const wchar_t *Path)
-{
-/*
-	"\\server\share\" is valid windows path.
-	"\\server\" is not.
-*/
-	bool Result=false;
-	if(IsNetworkPath(Path))
-	{
-		LPCWSTR SharePtr=wcspbrk(HasPathPrefix(Path)?Path+8:Path+2,L"\\/");
-		if(!SharePtr || !SharePtr[1] || IsSlash(SharePtr[1]))
-		{
-			Result=true;
-		}
-	}
-	return Result;
-}
-
-bool IsLocalPath(const wchar_t *Path)
-{
-	return (Path && *Path && Path[1]==L':');
-}
-
-bool IsLocalRootPath(const wchar_t *Path)
-{
-	return (Path && *Path && Path[1]==L':' && IsSlash(Path[2]) && !Path[3]);
+	PATH_TYPE Type = ParsePath(Path);
+	return Type == PATH_DRIVELETTERUNC || Type == PATH_REMOTE || Type == PATH_REMOTEUNC || Type == PATH_VOLUMEGUID || (Type == PATH_DRIVELETTER && (IsSlash(Path[2]) || !Path[2]));
 }
 
 bool HasPathPrefix(const wchar_t *Path)
@@ -129,45 +145,9 @@ bool HasPathPrefix(const wchar_t *Path)
 	return Path && Path[0] == L'\\' && (Path[1] == L'\\' || Path[1] == L'?') && (Path[2] == L'?' || Path[2] == L'.') && Path[3] == L'\\';
 }
 
-bool IsLocalPrefixPath(const wchar_t *Path)
-{
-	return HasPathPrefix(Path) && Path[4] && Path[5] == L':' && Path[6] == L'\\';
-}
-
-bool IsLocalPrefixRootPath(const wchar_t *Path)
-{
-	return IsLocalPrefixPath(Path) && !Path[7];
-}
-
-bool IsLocalVolumePath(const wchar_t *Path)
-{
-	return HasPathPrefix(Path) && !_wcsnicmp(&Path[4],L"Volume{",7) && Path[47] == L'}';
-}
-
-bool IsLocalVolumeRootPath(const wchar_t *Path)
-{
-	return IsLocalVolumePath(Path) && (!Path[48] || (IsSlash(Path[48]) && !Path[49]));
-}
-
 bool PathCanHoldRegularFile(const wchar_t *Path)
 {
-	if (!IsNetworkPath(Path))
-		return true;
-
-	/* \\ */
-	unsigned offset = 2;
-
-	/* \\?\UNC\ */
-	if (Path[2] == L'?')
-		offset = 8;
-
-	const wchar_t *p = FirstSlash(Path + offset);
-
-	/* server || server\ */
-	if (!p || !*(p+1))
-		return false;
-
-	return true;
+	return ParsePath(Path) != PATH_UNKNOWN;
 }
 
 bool IsPluginPrefixPath(const wchar_t *Path) //Max:
@@ -630,37 +610,9 @@ bool FindLastSlash(size_t &Pos, const string &Str)
 // find path root component (drive letter / volume name / server share) and calculate its length
 size_t GetPathRootLength(const string &Path)
 {
-	unsigned PrefixLen = 0;
-	bool IsUNC = false;
-
-	if (Path.IsSubStrAt(0,8,L"\\\\?\\UNC\\",8))
-	{
-		PrefixLen = 8;
-		IsUNC = true;
-	}
-	else if (Path.IsSubStrAt(0,4,L"\\\\?\\",4) || Path.IsSubStrAt(0,4,L"\\??\\",4) || Path.IsSubStrAt(0,4,L"\\\\.\\",4))
-	{
-		PrefixLen = 4;
-	}
-	else if (Path.IsSubStrAt(0,2,L"\\\\",2))
-	{
-		PrefixLen = 2;
-		IsUNC = true;
-	}
-
-	if (!PrefixLen && !Path.IsSubStrAt(1, L':'))
-		return 0;
-
-	size_t p;
-
-	if (!FindSlash(p, Path, PrefixLen))
-		p = Path.GetLength();
-
-	if (IsUNC)
-		if (!FindSlash(p, Path, p + 1))
-			p = Path.GetLength();
-
-	return p;
+	const wchar_t* PathPtr = Path;
+	const wchar_t* DirPtr;
+	return (ParsePath(PathPtr, &DirPtr) == PATH_UNKNOWN)? 0 : DirPtr-PathPtr;
 }
 
 string ExtractPathRoot(const string &Path)

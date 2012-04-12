@@ -1692,14 +1692,16 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 						GetPathRoot(strFileName, strFileName);
 						UINT DriveType=FAR_GetDriveType(strFileName,nullptr,0);
 
-						if (IsLocalPath(strFileName))
+						// BUGBUG: useless, GetPathRoot expands subst itself
+
+						/*if (ParsePath(strFileName) == PATH_DRIVELETTER)
 						{
 							string strRemoteName;
 							strFileName.SetLength(2);
 
 							if (GetSubstName(DriveType,strFileName,strRemoteName))
 								DriveType=DRIVE_SUBSTITUTE;
-						}
+						}*/
 
 						Cond=TVar((__int64)DriveType);
 					}
@@ -4932,6 +4934,7 @@ int KeyMacro::GetKey()
 	//Maximus: для отладки
 	MacroRecord MRD = {};
 	int dbgCurPCStack0 = CurPCStack, dbgCurPCStack = -99, dbgInitialLoops = -1, dbgBeginLoops = -1, dbgRunLoops = -1;
+	UNREFERENCED_PARAMETER(dbgCurPCStack0);
 #endif
 	TVar tmpVar;
 	TVarSet *tmpVarSet=nullptr;
@@ -5849,12 +5852,8 @@ done:
 		case MCODE_F_MENU_GETVALUE:       // S=Menu.GetValue([N])
 		case MCODE_F_MENU_GETHOTKEY:      // S=gethotkey([N])
 		{
-			parseParams(1,Params);
+			parseParams(2,Params);
 			_KEYMACRO(CleverSysLog Clev(Key == MCODE_F_MENU_GETHOTKEY?L"MCODE_F_MENU_GETHOTKEY":(Key == MCODE_F_MENU_ITEMSTATUS?L"MCODE_F_MENU_ITEMSTATUS":L"MCODE_F_MENU_GETVALUE")));
-			tmpVar=Params[0];
-
-			if (!tmpVar.isInteger())
-				tmpVar=0ll;
 
 			int CurMMode=CtrlObject->Macro.GetMode();
 
@@ -5872,13 +5871,19 @@ done:
 				if (!f)
 					f=fo;
 
-				__int64 Result;
+				// Undefined or "-1" - current item, "0" - menu itself
+				TVarType typeIndex=Params[0].type();
+				__int64 MenuItemPos=Params[0].getInteger()-1;
+				if (typeIndex == vtInteger && MenuItemPos == -1)
+					MenuItemPos=-2;
+				else if (typeIndex == vtUnknown || (typeIndex == vtInteger && MenuItemPos < -2))
+					MenuItemPos=-1;
 
 				if (f)
 				{
-					__int64 MenuItemPos=tmpVar.i()-1;
 					if (Key == MCODE_F_MENU_GETHOTKEY)
 					{
+						__int64 Result;
 						if ((Result=f->VMProcess(Key,nullptr,MenuItemPos)) )
 						{
 
@@ -5890,12 +5895,21 @@ done:
 					}
 					else if (Key == MCODE_F_MENU_GETVALUE)
 					{
-						string NewStr;
-						if (f->VMProcess(Key,&NewStr,MenuItemPos))
+						if (Params[1].isUnknown())
+							tmpVar=Params[1]; //TODO:
+						else
+							tmpVar=Params[1];
+						if (f->VMProcess(Key,&tmpVar,MenuItemPos))
 						{
-							HiText2Str(NewStr, NewStr);
-							RemoveExternalSpaces(NewStr);
-							tmpVar=NewStr.CPtr();
+							if (tmpVar.isString())
+							{
+								string NewStr;
+								HiText2Str(NewStr, tmpVar.toString());
+								RemoveExternalSpaces(NewStr);
+								tmpVar=NewStr.CPtr();
+							}
+							else if (tmpVar.isUnknown())
+								tmpVar=L"";
 						}
 						else
 							tmpVar=L"";

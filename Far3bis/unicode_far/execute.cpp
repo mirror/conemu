@@ -1012,15 +1012,11 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 		{
 			seInfo.lpParameters = strNewCmdPar;
 		}
-		#if 1
 		//Maximus: рушилась dwSubSystem
 		DWORD dwSubSystem2 = IMAGE_SUBSYSTEM_UNKNOWN;
 		seInfo.lpVerb = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr&FILE_ATTRIBUTE_DIRECTORY)?nullptr:lpVerb?lpVerb:GetShellAction(strNewCmdStr, dwSubSystem2, dwError);
 		if (dwSubSystem2!=IMAGE_SUBSYSTEM_UNKNOWN && dwSubSystem==IMAGE_SUBSYSTEM_UNKNOWN)
 			dwSubSystem=dwSubSystem2;
-		#else
-		seInfo.lpVerb = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr&FILE_ATTRIBUTE_DIRECTORY)?nullptr:lpVerb?lpVerb:GetShellAction(strNewCmdStr, dwSubSystem, dwError);
-		#endif
 	}
 	else
 	{
@@ -1052,13 +1048,9 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 	}
 
 	seInfo.fMask = SEE_MASK_FLAG_NO_UI|SEE_MASK_NOASYNC|SEE_MASK_NOCLOSEPROCESS|(SeparateWindow?0:SEE_MASK_NO_CONSOLE);
-#if 1
-	//Maximus: при запуске exe-шника с панели - фар зависает на 30 сек если ставить SEE_MASK_INVOKEIDLIST
-	//if (!seInfo.lpVerb || lstrcmpi(seInfo.lpVerb, L"Open"))
-	if (dwSubSystem==IMAGE_SUBSYSTEM_UNKNOWN)
-#endif
-	if (WinVer >= _WIN32_WINNT_VISTA)         // ShexxExecuteEx error, see
-		seInfo.fMask |= SEE_MASK_INVOKEIDLIST; // http://us.generation-nt.com/answer/shellexecuteex-does-not-allow-openas-verb-windows-7-help-31497352.html
+	if (dwSubSystem == IMAGE_SUBSYSTEM_UNKNOWN)  // дл€ .exe Ќ≈ включать - бывают проблемы с запуском
+		if (WinVer >= _WIN32_WINNT_VISTA)         // ShexxExecuteEx error, see
+			seInfo.fMask |= SEE_MASK_INVOKEIDLIST; // http://us.generation-nt.com/answer/shellexecuteex-does-not-allow-openas-verb-windows-7-help-31497352.html
 
 	if(!Silent)
 	{
@@ -1278,6 +1270,27 @@ int Execute(const string& CmdStr,  //  ом.строка дл€ исполнени€
 		ChangeVideoMode(ConSize.Y, ConSize.X);
 	}
 
+	#if 0
+						int PScrX=ScrX;
+						int PScrY=ScrY;
+						Sleep(1);
+						GetVideoMode(CurSize);
+
+						if (PScrX+1 == CurSize.X && PScrY+1 == CurSize.Y)
+						{
+							//_MANAGER(SysLog(-1,"GetInputRecord(WINDOW_BUFFER_SIZE_EVENT); return KEY_NONE"));
+							return TRUE;
+						}
+						else
+						{
+							PrevScrX=PScrX;
+							PrevScrY=PScrY;
+							//_MANAGER(SysLog(-1,"GetInputRecord(WINDOW_BUFFER_SIZE_EVENT); return KEY_CONSOLE_BUFFER_RESIZE"));
+							Sleep(1);
+							return ProcessKey(KEY_CONSOLE_BUFFER_RESIZE);
+						}
+	#endif
+
 	if (Opt.Exec.RestoreCPAfterExecute)
 	{
 		// восстановим CP-консоли после исполнени€ проги
@@ -1490,7 +1503,9 @@ const wchar_t *PrepareOSIfExist(const string& CmdLine)
 					strFullPath += strExpandedStr;
 					DWORD FileAttr=INVALID_FILE_ATTRIBUTES;
 
-					if (wcspbrk(strExpandedStr.CPtr()+(HasPathPrefix(strExpandedStr)?4:0), L"*?")) // это маска?
+					const wchar_t* DirPtr = strExpandedStr;
+					ParsePath(strExpandedStr, &DirPtr);
+					if (wcspbrk(DirPtr, L"*?")) // это маска?
 					{
 						FAR_FIND_DATA_EX wfd;
 
@@ -1885,7 +1900,9 @@ bool CommandLine::IntChDir(const string& CmdLine,int ClosePanel,bool Selent)
 		strExpandedDir=strTemp;
 	}
 
-	if (wcspbrk(&strExpandedDir[HasPathPrefix(strExpandedDir)?4:0],L"?*")) // это маска?
+	const wchar_t* DirPtr = strExpandedDir;
+	ParsePath(strExpandedDir, &DirPtr);
+	if (wcspbrk(DirPtr, L"?*")) // это маска?
 	{
 		FAR_FIND_DATA_EX wfd;
 

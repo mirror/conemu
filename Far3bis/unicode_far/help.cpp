@@ -1204,22 +1204,20 @@ int Help::ProcessKey(int Key)
 		case(KEY_MSWHEEL_UP | KEY_ALT):
 		case(KEY_MSWHEEL_UP | KEY_RALT):
 		{
-			if (StackData.TopStr>0)
-			{
-				StackData.TopStr-=Key&(KEY_ALT|KEY_RALT)?1:Opt.MsWheelDeltaHelp;
-				FastShow();
-			}
+			int n = (Key == KEY_MSWHEEL_UP ? Opt.MsWheelDeltaHelp : 1);
+			while (n-- > 0)
+				ProcessKey(KEY_UP);
+
 			return TRUE;
 		}
 		case KEY_MSWHEEL_DOWN:
 		case(KEY_MSWHEEL_DOWN | KEY_ALT):
 		case(KEY_MSWHEEL_DOWN | KEY_RALT):
 		{
-			if (StackData.TopStr<StrCount-FixCount-(Y2-Y1-1-FixSize))
-			{
-				StackData.TopStr+=Key&(KEY_ALT|KEY_RALT)?1:Opt.MsWheelDeltaHelp;
-				FastShow();
-			}
+			int n = (Key == KEY_MSWHEEL_DOWN ? Opt.MsWheelDeltaHelp : 1);
+			while (n-- > 0)
+				ProcessKey(KEY_DOWN);
+
 			return TRUE;
 		}
 		case KEY_PGUP:      case KEY_NUMPAD9:
@@ -1638,23 +1636,36 @@ int Help::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 
 	/* $ 26.11.2001 VVM
 	  + Запомнить нажатие клавиши мышки и только в этом случае реагировать при отпускании */
-	if (!MouseEvent->dwEventFlags &&
-	        (MouseEvent->dwButtonState & (FROM_LEFT_1ST_BUTTON_PRESSED|RIGHTMOST_BUTTON_PRESSED)))
-		MouseDown = TRUE;
-
-	if (!MouseEvent->dwEventFlags &&
-	        !(MouseEvent->dwButtonState & (FROM_LEFT_1ST_BUTTON_PRESSED|RIGHTMOST_BUTTON_PRESSED)) &&
-	        MouseDown &&
-	        !StackData.strSelTopic.IsEmpty())
+	if (!MouseEvent->dwEventFlags
+	 && (MouseEvent->dwButtonState & (FROM_LEFT_1ST_BUTTON_PRESSED|RIGHTMOST_BUTTON_PRESSED)))
 	{
-		MouseDown = FALSE;
-		ProcessKey(KEY_ENTER);
+		BeforeMouseDownX = StackData.CurX;
+		BeforeMouseDownY = StackData.CurY;
+		strBeforeMouseDownSelTopic = StackData.strSelTopic;
+		StackData.CurX = MouseDownX = MsX-X1-1;
+		StackData.CurY = MouseDownY = MsY-Y1-1-FixSize;
+		MouseDown = TRUE;
 	}
 
-	if(StackData.CurX != MsX-X1-1 || StackData.CurY!=MsY-Y1-1-FixSize)
+	if (!MouseEvent->dwEventFlags
+	 && !(MouseEvent->dwButtonState & (FROM_LEFT_1ST_BUTTON_PRESSED|RIGHTMOST_BUTTON_PRESSED))
+	 && MouseDown)
 	{
-		StackData.CurX=MsX-X1-1;
-		StackData.CurY=MsY-Y1-1-FixSize;
+		MouseDown = FALSE;
+		if (!StackData.strSelTopic.IsEmpty())
+		{
+			if (StackData.CurX == MouseDownX && StackData.CurY == MouseDownY)
+				ProcessKey(KEY_ENTER);
+		}
+		else
+		{
+			if (StackData.CurX == MouseDownX && StackData.CurY == MouseDownY)
+			{
+				StackData.CurX = BeforeMouseDownX;
+				StackData.CurY = BeforeMouseDownY;
+				StackData.strSelTopic = strBeforeMouseDownSelTopic;
+			}
+		}
 	}
 
 	FastShow();

@@ -41,7 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "vmenu.hpp"
 #include "keyboard.hpp"
 #include "keys.hpp"
-#include "macroopcode.hpp"
+#include "macro.hpp"
 #include "colors.hpp"
 #include "chgprior.hpp"
 #include "dialog.hpp"
@@ -1132,6 +1132,32 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		case MCODE_F_MENU_GETHOTKEY:
 		case MCODE_F_MENU_GETVALUE: // S=Menu.GetValue([N])
 		{
+			if ((OpCode == MCODE_F_MENU_GETVALUE) && (iParam == -2))
+			{
+				//TODO: Информация по самому меню !!!
+				__int64 iType=((TVar *)vParam)->getInteger(), iResult=0;
+				switch (iType)
+				{
+				case 1:
+					iResult=GetVisualPos(TopPos)+1;
+					break;
+				case 2:
+					iResult=X1;
+					break;
+				case 3:
+					iResult=Y1;
+					break;
+				case 4:
+					iResult=X2;
+					break;
+				case 5:
+					iResult=Y2;
+					break;
+				}
+				*(TVar *)vParam = TVar(iResult);
+				return 1;
+			}
+
 			int Param = (int)iParam;
 
 			if (Param == -1)
@@ -1146,7 +1172,7 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 				{
 					if (OpCode == MCODE_F_MENU_GETVALUE)
 					{
-						*(string *)vParam = menuEx->strName;
+						*(TVar *)vParam = TVar(menuEx->strName.CPtr());
 						return 1;
 					}
 					else
@@ -1738,7 +1764,27 @@ int VMenu::ProcessKey(int Key)
 
 			break;
 		}
-		case KEY_MSWHEEL_UP: // $ 27.04.2001 VVM - Обработка KEY_MSWHEEL_XXXX
+		case KEY_MSWHEEL_UP:
+		{
+			if(SelectPos)
+			{
+				FarListPos Pos = {sizeof(Pos), SelectPos-1, TopPos-1};
+				SetSelectPos(&Pos);
+				ShowMenu(true);
+			}
+			break;
+		}
+		case KEY_MSWHEEL_DOWN:
+		{
+			if(SelectPos < ItemCount-1)
+			{
+				FarListPos Pos = {sizeof(Pos), SelectPos+1, TopPos+1};
+				SetSelectPos(&Pos);
+				ShowMenu(true);
+			}
+			break;
+		}
+
 		case KEY_LEFT:         case KEY_NUMPAD4:
 		case KEY_UP:           case KEY_NUMPAD8:
 		{
@@ -1746,7 +1792,7 @@ int VMenu::ProcessKey(int Key)
 			ShowMenu(true);
 			break;
 		}
-		case KEY_MSWHEEL_DOWN: // $ 27.04.2001 VVM + Обработка KEY_MSWHEEL_XXXX
+
 		case KEY_RIGHT:        case KEY_NUMPAD6:
 		case KEY_DOWN:         case KEY_NUMPAD2:
 		{
@@ -1754,6 +1800,7 @@ int VMenu::ProcessKey(int Key)
 			ShowMenu(true);
 			break;
 		}
+
 		case KEY_CTRLALTF:
 		case KEY_RCTRLRALTF:
 		case KEY_CTRLRALTF:
@@ -2580,10 +2627,7 @@ void VMenu::ShowMenu(bool IsParent)
 			VisualTopPos=0;
 	}
 
-	if (VisualTopPos > GetShowItemCount() - (Y2-Y1-1-((BoxType==NO_BOX)?2:0)))
-	{
-		VisualTopPos = 0;
-	}
+	VisualTopPos = Min(VisualTopPos, GetShowItemCount() - (Y2-Y1-1-((BoxType==NO_BOX)?2:0)));
 
 	if (VisualSelectPos > VisualTopPos+((BoxType!=NO_BOX)?Y2-Y1-2:Y2-Y1))
 	{

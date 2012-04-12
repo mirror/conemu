@@ -686,7 +686,7 @@ __int64 FileList::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			}
 			else
 			{
-				if (!IsLocalRootPath(strCurDir))
+				if (!IsRootPath(strCurDir))
 				{
 					string strDriveRoot;
 					GetPathRoot(strCurDir, strDriveRoot);
@@ -1551,7 +1551,7 @@ int FileList::ProcessKey(int Key)
 				if (!PluginMode)
 					strPluginData.Clear();
 
-				UINT codepage = CP_AUTODETECT;
+				UINT codepage = CP_DEFAULT;
 
 				if (Key==KEY_SHIFTF4)
 				{
@@ -2651,13 +2651,18 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 	bool dot2Present = !StrCmp(strSetDir, L"..");
 
 	bool RootPath = false;
+	bool NetPath = false;
 	if (PanelMode!=PLUGIN_PANEL)
 	{
 		if (dot2Present)
 		{
-			RootPath = IsLocalRootPath(strCurDir) || IsLocalPrefixRootPath(strCurDir) || IsLocalVolumeRootPath(strCurDir) || IsNetworkRootPath(strCurDir);
 			strSetDir = strCurDir;
-			if (!RootPath)
+			PATH_TYPE Type = ParsePath(strCurDir, nullptr, &RootPath);
+			if(Type == PATH_REMOTE || Type == PATH_REMOTEUNC)
+			{
+				NetPath = true;
+			}
+			if(!RootPath)
 			{
 				CutToSlash(strSetDir);
 			}
@@ -2748,7 +2753,7 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 		{
 			if (RootPath)
 			{
-				if (IsNetworkRootPath(strCurDir))
+				if (NetPath)
 				{
 					if (CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Network,OPEN_FILEPANEL,(void*)strCurDir.CPtr())) // NetWork Plugin :-)
 					{

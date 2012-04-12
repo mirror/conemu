@@ -476,7 +476,7 @@ void FileEditor::Init(
 
 	m_codepage = codepage;
 	m_editor->SetOwner(this);
-	m_editor->SetCodePage(m_codepage);
+	m_editor->SetCodePage(m_codepage, false);
 	*AttrStr=0;
 	CurrentEditor=this;
 	FileAttributes=INVALID_FILE_ATTRIBUTES;
@@ -677,10 +677,10 @@ void FileEditor::Init(
 			return;
 		}
 
-		if (m_codepage==CP_AUTODETECT || m_codepage == CP_REDETECT)
+		if (m_codepage==CP_DEFAULT || m_codepage == CP_REDETECT)
 			m_codepage=Opt.EdOpt.AnsiCodePageForNewFile?GetACP():GetOEMCP();
 
-		m_editor->SetCodePage(m_codepage);
+		m_editor->SetCodePage(m_codepage, false);
 		Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 		break;
 	}
@@ -1055,7 +1055,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						lpwszPtr[pos+1]=0;
 
 						// В корне?
-						if (!IsLocalRootPath(lpwszPtr))
+						if(IsRootPath(lpwszPtr))
 						{
 							// а дальше? каталог существует?
 							if ((FNAttr=apiGetFileAttributes(lpwszPtr)) == INVALID_FILE_ATTRIBUTES ||
@@ -1148,14 +1148,14 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 							{
 								m_editor->FreeAllocatedData();
 								m_editor->InsertString(nullptr, 0);
+								m_codepage = codepage;
 							}
 
 							SetFileName(strFullSaveAsName);
-							SetCodePage(codepage);  //
 
 							if (!bInPlace)
 							{
-								Message(MSG_WARNING, 1, L"WARNING!", L"Editor will be reopened with new file!", MSG(MOk));
+								//Message(MSG_WARNING, 1, L"WARNING!", L"Editor will be reopened with new file!", MSG(MOk));
 								int UserBreak;
 								LoadFile(strFullSaveAsName, UserBreak);
 								// TODO: возможно подобный ниже код здесь нужен (copy/paste из FileEditor::Init()). оформить его нужно по иному
@@ -1324,19 +1324,16 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 			{
 				if (!IsUnicodeCodePage(m_codepage))
 				{
-					if(SetCodePage(m_codepage==GetOEMCP()?GetACP():GetOEMCP()))
+					if (SetCodePage(m_codepage==GetACP()?GetOEMCP():GetACP()))
 					{
 						Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 						ChangeEditKeyBar();
 					}
 				}
-				#if 1
-				//Maximus: из патча w17 не вошедшего в trunk
 				else
 				{
 					Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorSwitchUnicodeCPDisabled),MSG(MEditorTryReloadFile),MSG(MOk));
 				}
-				#endif
 
 				return TRUE;
 			}
@@ -1345,19 +1342,35 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 				if (!IsUnicodeCodePage(m_codepage))
 				{
 					UINT codepage = SelectCodePage(m_codepage, false, true, false, true);
-					if ( codepage == (CP_AUTODETECT & 0xffff) )
+					if ( codepage == (CP_DEFAULT & 0xffff) )
 					{
 						File edit_file;
 						bool detect = false, sig_found = false;
+						wchar_t ss[256];
 
 						if (edit_file.Open(strFileName, FILE_READ_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, nullptr, OPEN_EXISTING))
 						{
-							detect = GetFileFormat(edit_file,codepage,&sig_found,true) && IsCodePageSupported(codepage);
+							detect = GetFileFormat(edit_file,codepage,&sig_found,true);
 							edit_file.Close();
 						}
-
-						if (!detect)
-							codepage = Opt.EdOpt.AnsiCodePageAsDefault ? GetACP() : GetOEMCP();
+						if ( !detect )
+						{
+							Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorCPNotDetected),MSG(MOk));
+						}
+						else if ( IsUnicodeCodePage(codepage) )
+						{
+							detect = false;
+							_snwprintf(ss, ARRAYSIZE(ss), MSG(MEditorSwitchToUnicodeCPDisabled), static_cast<int>(codepage));
+							Message(MSG_WARNING,1,MSG(MEditTitle),ss,MSG(MEditorTryReloadFile),MSG(MOk));
+						}
+						else if ( !IsCodePageSupported(codepage) )
+						{
+							detect = false;
+							_snwprintf(ss, ARRAYSIZE(ss), MSG(MEditorCPNotSupported), static_cast<int>(codepage));
+							Message(MSG_WARNING,1,MSG(MEditTitle),ss,MSG(MOk));
+						}
+						if ( !detect )
+							codepage = static_cast<UINT>(-1);
 					}
 
 					if (codepage != static_cast<UINT>(-1))
@@ -1366,13 +1379,10 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 						Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 					}
 				}
-				#if 1
-				//Maximus: из патча w17 не вошедшего в trunk
 				else
 				{
 					Message(MSG_WARNING,1,MSG(MEditTitle),MSG(MEditorSwitchUnicodeCPDisabled),MSG(MEditorTryReloadFile),MSG(MOk));
 				}
-				#endif
 
 				return TRUE;
 			}
@@ -1560,27 +1570,27 @@ int FileEditor::LoadFile(const string& Name,int &UserBreak)
 	UINT dwCP=0;
 	bool Detect=false;
 
-	bool ignore_cached_cp = (m_codepage == CP_REDETECT);
-	if (ignore_cached_cp)
-		m_codepage = CP_AUTODETECT;
+	bool redetect = (m_codepage == CP_REDETECT);
+	if (redetect)
+		m_codepage = CP_DEFAULT;
 
-	if (m_codepage == CP_AUTODETECT || IsUnicodeOrUtfCodePage(m_codepage))
+	if (m_codepage == CP_DEFAULT || IsUnicodeOrUtfCodePage(m_codepage))
 	{
-		Detect=GetFileFormat(EditFile,dwCP,&m_bAddSignature,Opt.EdOpt.AutoDetectCodePage!=0);
+		Detect=GetFileFormat(EditFile,dwCP,&m_bAddSignature,redetect || Opt.EdOpt.AutoDetectCodePage!=0);
 
 		// Проверяем поддерживается или нет задетектировання кодовая страница
 		if (Detect)
 			Detect = IsCodePageSupported(dwCP);
 	}
 
-	if (m_codepage == CP_AUTODETECT)
+	if (m_codepage == CP_DEFAULT)
 	{
 		if (Detect)
 		{
 			m_codepage=dwCP;
 		}
 
-		if (!ignore_cached_cp && bCached)
+		if (!redetect && bCached)
 		{
 			if (pc.CodePage)
 			{
@@ -1589,7 +1599,7 @@ int FileEditor::LoadFile(const string& Name,int &UserBreak)
 			}
 		}
 
-		if (m_codepage==CP_AUTODETECT)
+		if (m_codepage==CP_DEFAULT)
 			m_codepage=Opt.EdOpt.AnsiCodePageAsDefault?GetACP():GetOEMCP();
 	}
 	else
@@ -1597,7 +1607,7 @@ int FileEditor::LoadFile(const string& Name,int &UserBreak)
 		Flags.Set(FFILEEDIT_CODEPAGECHANGEDBYUSER);
 	}
 
-	m_editor->SetCodePage(m_codepage);  //BUGBUG
+	m_editor->SetCodePage(m_codepage, false);  //BUGBUG
 
 	if (!IsUnicodeOrUtfCodePage(m_codepage))
 	{
@@ -2851,26 +2861,19 @@ void FileEditor::SaveToCache()
 
 bool FileEditor::SetCodePage(UINT codepage)
 {
-	bool Result = false;
-	if (codepage != m_codepage)
+	if (codepage == m_codepage || !m_editor)
+		return false;
+
+	if (!m_editor->SetCodePage(codepage, true))
 	{
-		if (m_editor)
-		{
-			BadConversion = !m_editor->SetCodePage(codepage, false);
-			bool Process = true;
-			if (BadConversion)
-			{
-				Process = !Message(MSG_WARNING, 2, MSG(MWarning), MSG(MEditorSwitchCPWarn1), MSG(MEditorSwitchCPWarn2), MSG(MEditorSwitchCPConfirm), MSG(MOk), MSG(MCancel));
-			}
-			if (Process)
-			{
-				m_codepage = codepage;
-				BadConversion = !m_editor->SetCodePage(m_codepage);
-				Result = true;
-			}
-		}
+		if (Message(MSG_WARNING, 2, MSG(MWarning),
+			MSG(MEditorSwitchCPWarn1), MSG(MEditorSwitchCPWarn2), MSG(MEditorSwitchCPConfirm),
+			MSG(MOk), MSG(MCancel)
+		)) return false; // return if not confirmed
 	}
-	return Result;
+	m_codepage = codepage;
+	BadConversion = !m_editor->SetCodePage(m_codepage, false);
+	return true;
 }
 
 bool FileEditor::AskOverwrite(const string& FileName)

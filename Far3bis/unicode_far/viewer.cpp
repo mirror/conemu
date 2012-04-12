@@ -247,7 +247,7 @@ void Viewer::KeepInitParameters()
 int Viewer::OpenFile(const wchar_t *Name,int warning)
 {
 	VM.CodePage=DefCodePage;
-	DefCodePage=CP_AUTODETECT;
+	DefCodePage=CP_DEFAULT;
 	OpenFailed=false;
 
 	ViewFile.Close();
@@ -353,7 +353,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 		bool Detect=false;
 		UINT CodePage=0;
 
-		if (VM.CodePage == CP_AUTODETECT || IsUnicodeOrUtfCodePage(VM.CodePage))
+		if (VM.CodePage == CP_DEFAULT || IsUnicodeOrUtfCodePage(VM.CodePage))
 		{
 			Detect=GetFileFormat(ViewFile,CodePage,&Signature,Opt.ViOpt.AutoDetectCodePage!=0);
 
@@ -362,7 +362,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 				Detect = IsCodePageSupported(CodePage);
 		}
 
-		if (VM.CodePage==CP_AUTODETECT)
+		if (VM.CodePage==CP_DEFAULT)
 		{
 			if (Detect)
 			{
@@ -376,7 +376,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 				CodePageChangedByUser=TRUE;
 			}
 
-			if (VM.CodePage==CP_AUTODETECT)
+			if (VM.CodePage==CP_DEFAULT)
 				VM.CodePage=Opt.ViOpt.AnsiCodePageAsDefault?GetACP():GetOEMCP();
 		}
 		else
@@ -1632,7 +1632,7 @@ int Viewer::ProcessKey(int Key)
 		}
 		case KEY_F8:
 		{
-			VM.CodePage = VM.CodePage==GetOEMCP() ? GetACP() : GetOEMCP();
+			VM.CodePage = VM.CodePage==GetACP() ? GetOEMCP() : GetACP();
 			lcache_ready = false;
 			AdjustFilePos();
 			ChangeViewKeyBar();
@@ -1645,7 +1645,7 @@ int Viewer::ProcessKey(int Key)
 			UINT nCodePage = SelectCodePage(VM.CodePage, true, true, false, true);
 			if (nCodePage != static_cast<UINT>(-1))
 			{
-				if (nCodePage == (CP_AUTODETECT & 0xffff))
+				if (nCodePage == (CP_DEFAULT & 0xffff))
 				{
 					__int64 fpos = vtell();
 					bool detect = GetFileFormat(ViewFile,nCodePage,&Signature,true) && IsCodePageSupported(nCodePage);

@@ -62,6 +62,7 @@ int PlCacheCfgEnum = 0;
 #endif
 PluginsHotkeysConfig *PlHotkeyCfg;
 HistoryConfig *HistoryCfg;
+HistoryConfig *HistoryCfgMem;
 MacroConfig *MacroCfg;
 
 int IntToHex(int h)
@@ -2502,6 +2503,14 @@ public:
 
 };
 
+class HistoryConfigMemoryDb: public HistoryConfigDb {
+public:
+	HistoryConfigMemoryDb()
+	{
+		Initialize(L":memory:", true);
+	}
+};
+
 class MacroConfigDb: public MacroConfig, public SQLiteDb {
 	SQLiteStmt stmtConstsEnum;
 	SQLiteStmt stmtGetConstValue;
@@ -2544,7 +2553,7 @@ public:
 				"CREATE TABLE IF NOT EXISTS key_macros(area TEXT NOT NULL, key TEXT NOT NULL, flags TEXT, sequence TEXT, description TEXT, PRIMARY KEY (area, key));"
 			)
 		) return false;
-		
+
 		if (
 			InitStmt(stmtConstsEnum, L"SELECT name, value, type FROM constants ORDER BY name;") &&
 			InitStmt(stmtGetConstValue, L"SELECT value, type FROM constants WHERE name=?1;") &&
@@ -3018,7 +3027,7 @@ static void check_db( SQLiteDb *pDb, bool err_report )
 	const wchar_t* pname = nullptr;
 	int rc = pDb->InitStatus(pname, err_report);
 	if ( rc > 0 )
-	{ 
+	{
 		if ( err_report )
 		{
 			Console.Write(L"problem\r\n  ", 11);
@@ -3043,6 +3052,7 @@ void InitDb( bool err_report )
 	NEW_DB(PlCacheCfg, PluginsCacheConfigDb)
 	NEW_DB(PlHotkeyCfg, PluginsHotkeysConfigDb)
 	NEW_DB(HistoryCfg, HistoryConfigDb)
+	NEW_DB(HistoryCfgMem, HistoryConfigMemoryDb)
 	NEW_DB(MacroCfg, MacroConfigDb)
 }
 
@@ -3050,6 +3060,7 @@ void ReleaseDb()
 {
 	nProblem = 0;
 	delete MacroCfg;
+	delete HistoryCfgMem;
 	delete HistoryCfg;
 	delete PlHotkeyCfg;
 	delete PlCacheCfg;

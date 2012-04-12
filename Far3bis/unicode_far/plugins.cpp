@@ -68,6 +68,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarGuid.hpp"
 #include "configdb.hpp"
 #include "FarDlgBuilder.hpp"
+#include "DlgGuid.hpp"
 
 static const wchar_t *PluginsFolderName=L"Plugins";
 
@@ -1634,7 +1635,7 @@ void PluginManager::GetOpenPanelInfo(
 	if (!Info->CurDir)  //υμμ...
 		Info->CurDir = L"";
 
-	if ((Info->Flags & OPIF_REALNAMES) && (CtrlObject->Cp()->ActivePanel->GetPluginHandle() == hPlugin) && *Info->CurDir && !IsNetworkServerPath(Info->CurDir))
+	if ((Info->Flags & OPIF_REALNAMES) && (CtrlObject->Cp()->ActivePanel->GetPluginHandle() == hPlugin) && *Info->CurDir && ParsePath(Info->CurDir)!=PATH_UNKNOWN)
 		apiSetCurrentDirectory(Info->CurDir, false);
 }
 
@@ -1778,6 +1779,7 @@ void PluginManager::Configure(int StartPos)
 		VMenu PluginList(MSG(MPluginConfigTitle),nullptr,0,ScrY-4);
 		PluginList.SetFlags(VMENU_WRAPMODE);
 		PluginList.SetHelp(L"PluginsConfig");
+		PluginList.SetId(PluginConfigId);
 
 		for (;;)
 		{
@@ -2248,6 +2250,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 		VMenu PluginList(MSG(MPluginCommandsMenuTitle),nullptr,0,ScrY-4);
 		PluginList.SetFlags(VMENU_WRAPMODE);
 		PluginList.SetHelp(L"PluginCommands");
+		PluginList.SetId(PluginMenuId);
 		bool NeedUpdateItems = true;
 		bool Done = false;
 
