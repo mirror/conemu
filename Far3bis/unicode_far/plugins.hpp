@@ -245,6 +245,7 @@ class PluginManager
 		HANDLE LoadPluginExternal(const string& lpwszModuleName, bool LoadToMem);
 		#endif
 		int UnloadPluginExternal(HANDLE hPlugin);
+		bool IsPluginUnloaded(Plugin* pPlugin);
 
 		#if 1
 		//Maximus: расширенное меню плагинов

@@ -46,6 +46,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>Windows7.1SDK</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <CharacterSet>Unicode</CharacterSet>
@@ -84,9 +85,9 @@
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">Release.IA64.vc\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">$(OutDir)obj\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">false</LinkIncremental>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Debug.32.vc\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">\Far3\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)obj\</IntDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Debug.64.vc\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">\Far3\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)obj\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">Debug.IA64.vc\</OutDir>
@@ -138,13 +139,11 @@ if not exist Include mkdir Include
 if not exist bootstrap mkdir bootstrap</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalOptions>/MP /J %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
       <Optimization>MaxSpeed</Optimization>
-      <PreprocessorDefinitions>NDEBUG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ExceptionHandling>
-      </ExceptionHandling>
+      <PreprocessorDefinitions>NDEBUG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions);MANTIS_0001687;MANTIS_0000466</PreprocessorDefinitions>
+      <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -152,30 +151,28 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <ProgramDataBaseFileName>$(OutDir)far.pdb</ProgramDataBaseFileName>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <StringPooling>true</StringPooling>
-      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4917</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4480;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4836;4917;4986</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>mpr.lib;psapi.lib;secur32.lib;version.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>version.lib;netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)Far.exe</OutputFile>
       <GenerateManifest>false</GenerateManifest>
-      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
-      <ProgramDatabaseFile>$(OutDir)far.pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
-      <MapFileName>$(OutDir)far.map</MapFileName>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <LargeAddressAware>true</LargeAddressAware>
       <MinimumRequiredVersion>5.0</MinimumRequiredVersion>
+      <Profile>false</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -186,14 +183,12 @@ if not exist Include mkdir Include
 if not exist bootstrap mkdir bootstrap</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalOptions>/MP /J %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
       <Optimization>MaxSpeed</Optimization>
-      <PreprocessorDefinitions>NDEBUG;_WIN64;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WIN64;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions);MANTIS_0001687;MANTIS_0000466</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
-      <ExceptionHandling>
-      </ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -201,27 +196,26 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4917</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4480;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4836;4917;4986</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>mpr.lib;psapi.lib;secur32.lib;version.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>version.lib;netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)Far.exe</OutputFile>
       <GenerateManifest>false</GenerateManifest>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
-      <ProgramDatabaseFile>$(OutDir)far.pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
-      <MapFileName>$(OutDir)far.map</MapFileName>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <LargeAddressAware>true</LargeAddressAware>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">
@@ -232,14 +226,12 @@ if not exist Include mkdir Include
 if not exist bootstrap mkdir bootstrap</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalOptions>/MP /J %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
       <Optimization>MaxSpeed</Optimization>
       <PreprocessorDefinitions>NDEBUG;_WIN64;_M_IA64;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
-      <ExceptionHandling>
-      </ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -247,27 +239,26 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4917</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4480;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4836;4917;4986</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>mpr.lib;psapi.lib;secur32.lib;version.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>version.lib;netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)Far.exe</OutputFile>
       <GenerateManifest>false</GenerateManifest>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
-      <ProgramDatabaseFile>$(OutDir)far.pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
-      <MapFileName>$(OutDir)far.map</MapFileName>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <LargeAddressAware>true</LargeAddressAware>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -278,11 +269,10 @@ if not exist Include mkdir Include
 if not exist bootstrap mkdir bootstrap</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalOptions>/MP /J %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;FAR_ALPHA_VERSION;SYSLOG_FARSYSLOG;SYSLOG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ExceptionHandling>
-      </ExceptionHandling>
+      <PreprocessorDefinitions>_DEBUG;FAR_ALPHA_VERSION;SYSLOG_FARSYSLOG;SYSLOG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions);MANTIS_0001687;MANTIS_0000466</PreprocessorDefinitions>
+      <ExceptionHandling>false</ExceptionHandling>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -292,30 +282,31 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <ProgramDataBaseFileName>$(OutDir)far.pdb</ProgramDataBaseFileName>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <StringPooling>true</StringPooling>
-      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4917</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4480;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4836;4917;4986</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>mpr.lib;psapi.lib;secur32.lib;version.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>version.lib;netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)Far.exe</OutputFile>
       <GenerateManifest>false</GenerateManifest>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>$(OutDir)far.pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
-      <MapFileName>$(OutDir)far.map</MapFileName>
       <SubSystem>Console</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
       <MinimumRequiredVersion>5.0</MinimumRequiredVersion>
     </Link>
+    <PostBuildEvent>
+      <Command>rem $(TargetDir)Update..Far3.cmd</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PreBuildEvent>
@@ -325,12 +316,11 @@ if not exist Include mkdir Include
 if not exist bootstrap mkdir bootstrap</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalOptions>/MP /J %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_WIN64;FAR_ALPHA_VERSION;SYSLOG_FARSYSLOG;SYSLOG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WIN64;FAR_ALPHA_VERSION;SYSLOG_FARSYSLOG;SYSLOG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions);MANTIS_0001687;MANTIS_0000466</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
-      <ExceptionHandling>
-      </ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
@@ -339,26 +329,24 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4917</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4480;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4836;4917;4986</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>mpr.lib;psapi.lib;secur32.lib;version.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>$(OutDir)Far.exe</OutputFile>
+      <AdditionalDependencies>version.lib;netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)Far64.exe</OutputFile>
       <GenerateManifest>false</GenerateManifest>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>$(OutDir)far.pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
-      <MapFileName>$(OutDir)far.map</MapFileName>
       <SubSystem>Console</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
@@ -371,12 +359,11 @@ if not exist Include mkdir Include
 if not exist bootstrap mkdir bootstrap</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalOptions>/MP /J %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_WIN64;_M_IA64;FAR_ALPHA_VERSION;SYSLOG_FARSYSLOG;SYSLOG;_CRT_SECURE_NO_WARNINGS;_CRT_NON_CONFORMING_SWPRINTFS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
-      <ExceptionHandling>
-      </ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -386,30 +373,84 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4917</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4054;4061;4100;4127;4191;4242;4244;4245;4255;4365;4480;4512;4514;4625;4626;4640;4668;4706;4710;4711;4738;4820;4836;4917;4986</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>mpr.lib;psapi.lib;secur32.lib;version.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>version.lib;netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)Far.exe</OutputFile>
       <GenerateManifest>false</GenerateManifest>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>$(OutDir)far.pdb</ProgramDatabaseFile>
       <GenerateMapFile>true</GenerateMapFile>
-      <MapFileName>$(OutDir)far.map</MapFileName>
       <SubSystem>Console</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CustomBuild Include="api_test.c">
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">echo testing C plugin API
+cl /nologo  /c /Fo"$(IntDir)%(Filename)_c.testobj" /TC api_test.c
+echo testing C++ plugin API
+cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
+</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">echo testing C plugin API
+cl /nologo  /c /Fo"$(IntDir)%(Filename)_c.testobj" /TC api_test.c
+echo testing C++ plugin API
+cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
+</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">echo testing C plugin API
+cl /nologo  /c /Fo"$(IntDir)%(Filename)_c.testobj" /TC api_test.c
+echo testing C++ plugin API
+cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
+</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">echo testing C plugin API
+cl /nologo  /c /Fo"$(IntDir)%(Filename)_c.testobj" /TC api_test.c
+echo testing C++ plugin API
+cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
+</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">echo testing C plugin API
+cl /nologo  /c /Fo"$(IntDir)%(Filename)_c.testobj" /TC api_test.c
+echo testing C++ plugin API
+cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
+</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">echo testing C plugin API
+cl /nologo  /c /Fo"$(IntDir)%(Filename)_c.testobj" /TC api_test.c
+echo testing C++ plugin API
+cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
+</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">Include/plugin.hpp;Include/farcolor.hpp;Include/DlgBuilder.hpp</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">Include/plugin.hpp;Include/farcolor.hpp;Include/DlgBuilder.hpp</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Include/plugin.hpp;Include/farcolor.hpp;Include/DlgBuilder.hpp</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Include/plugin.hpp;Include/farcolor.hpp;Include/DlgBuilder.hpp</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Include/plugin.hpp;Include/farcolor.hpp;Include/DlgBuilder.hpp</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Include/plugin.hpp;Include/farcolor.hpp;Include/DlgBuilder.hpp</AdditionalInputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">
+      </Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">$(IntDir)%(Filename)_c.testobj;$(IntDir)%(Filename)_c++.testobj</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">
+      </Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">$(IntDir)%(Filename)_c.testobj;$(IntDir)%(Filename)_c++.testobj</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename)_c.testobj;$(IntDir)%(Filename)_c++.testobj</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename)_c.testobj;$(IntDir)%(Filename)_c++.testobj</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename)_c.testobj;$(IntDir)%(Filename)_c++.testobj</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename)_c.testobj;$(IntDir)%(Filename)_c++.testobj</Outputs>
+    </CustomBuild>
     <ClCompile Include="configdb.cpp" />
     <ClCompile Include="elevation.cpp" />
     <ClCompile Include="cache.cpp" />
@@ -435,7 +476,6 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClCompile Include="dizlist.cpp" />
     <ClCompile Include="DlgBuilder.cpp" />
     <ClCompile Include="dlgedit.cpp" />
-    <ClCompile Include="DlgGuid.cpp" />
     <ClCompile Include="DList.cpp" />
     <ClCompile Include="drivemix.cpp" />
     <ClCompile Include="edit.cpp" />
@@ -443,7 +483,6 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClCompile Include="eject.cpp" />
     <ClCompile Include="execute.cpp" />
     <ClCompile Include="farexcpt.cpp" />
-    <ClCompile Include="FarGuid.cpp" />
     <ClCompile Include="farqueue.cpp" />
     <ClCompile Include="farrtl.cpp" />
     <ClCompile Include="farversion.cpp" />
@@ -499,15 +538,23 @@ if not exist bootstrap mkdir bootstrap</Command>
     </ClCompile>
     <ClCompile Include="hotplug.cpp" />
     <ClCompile Include="imports.cpp" />
+    <ClCompile Include="initguid.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="infolist.cpp" />
     <ClCompile Include="interf.cpp" />
     <ClCompile Include="keybar.cpp" />
     <ClCompile Include="keyboard.cpp" />
     <ClCompile Include="language.cpp" />
     <ClCompile Include="local.cpp" />
-    <ClCompile Include="localOEM.cpp" />
     <ClCompile Include="lockscrn.cpp" />
     <ClCompile Include="macro.cpp" />
+    <ClCompile Include="macrocompiler.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="manager.cpp" />
     <ClCompile Include="menubar.cpp" />
@@ -536,7 +583,6 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClCompile Include="rdrwdsk.cpp" />
     <ClCompile Include="RefreshFrameManager.cpp" />
     <ClCompile Include="RegExp.cpp" />
-    <ClCompile Include="registry.cpp" />
     <ClCompile Include="savescr.cpp" />
     <ClCompile Include="scantree.cpp" />
     <ClCompile Include="scrbuf.cpp" />
@@ -552,6 +598,7 @@ if not exist bootstrap mkdir bootstrap</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="sqlitedb.cpp" />
     <ClCompile Include="sqlite\sqlite3.c">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">true</ExcludedFromBuild>
@@ -563,7 +610,6 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClCompile Include="stddlg.cpp" />
     <ClCompile Include="strmix.cpp" />
     <ClCompile Include="synchro.cpp" />
-    <ClCompile Include="macrocompiler.cpp" />
     <ClCompile Include="syslog.cpp" />
     <ClCompile Include="TaskBar.cpp" />
     <ClCompile Include="tinyxml.cpp" />
@@ -605,6 +651,12 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClCompile Include="udlist.cpp" />
     <ClCompile Include="UnicodeString.cpp" />
     <ClCompile Include="usermenu.cpp" />
+    <ClCompile Include="vc10wrapper.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="viewer.cpp" />
     <ClCompile Include="vmenu.cpp" />
     <ClCompile Include="window.cpp" />
@@ -872,7 +924,32 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="dirinfo.hpp" />
     <ClInclude Include="dirmix.hpp" />
     <ClInclude Include="dizlist.hpp" />
-    <ClInclude Include="DlgBuilder.hpp" />
+    <CustomBuild Include="DlgBuilder.hpp">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">Transforming %(Identity) to redistributable form...</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">tools\m4 -P -DFARBIT=IA64 -DINPUT=%(Identity) headers.m4 &gt; Include\DlgBuilder.hpp</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">Include\pluDlgBuildergin.hpp;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Transforming %(Identity) to redistributable form...</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">tools\m4 -P -DFARBIT=32 -DINPUT=%(Identity) headers.m4 &gt; Include\DlgBuilder.hpp</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Include\DlgBuilder.hpp;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Transforming %(Identity) to redistributable form...</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">tools\m4 -P -DFARBIT=64 -DINPUT=%(Identity) headers.m4 &gt; Include\DlgBuilder.hpp</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Include\DlgBuilder.hpp;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">Transforming %(Identity) to redistributable form...</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">tools\m4 -P -DFARBIT=IA64 -DINPUT=%(Identity) headers.m4 &gt; Include\DlgBuilder.hpp</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">Include\DlgBuilder.hpp;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Transforming %(Identity) to redistributable form...</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">tools\m4 -P -DFARBIT=32 -DINPUT=%(Identity) headers.m4 &gt; Include\DlgBuilder.hpp</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Include\DlgBuilder.hpp;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Transforming %(Identity) to redistributable form...</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">tools\m4 -P -DFARBIT=64 -DINPUT=%(Identity) headers.m4 &gt; Include\DlgBuilder.hpp</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Include\DlgBuilder.hpp;%(Outputs)</Outputs>
+    </CustomBuild>
     <ClInclude Include="dlgedit.hpp" />
     <ClInclude Include="DlgGuid.hpp" />
     <ClInclude Include="DList.hpp" />
@@ -891,6 +968,7 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="farversion.hpp" />
     <ClInclude Include="farwinapi.hpp" />
     <ClInclude Include="nsUniversalDetectorEx.hpp" />
+    <ClInclude Include="panelctype.hpp" />
     <ClInclude Include="shortcuts.hpp" />
     <ClInclude Include="fileattr.hpp" />
     <ClInclude Include="fileedit.hpp" />
@@ -923,38 +1001,13 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="interf.hpp" />
     <ClInclude Include="keybar.hpp" />
     <ClInclude Include="keyboard.hpp" />
-    <CustomBuild Include="keys.hpp">
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">Transforming %(Identity) to redistributable form...</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">tools\m4 -P -DFARBIT=IA64 -DINPUT=%(Identity) headers.m4 &gt; Include\farkeys.hpp</Command>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">Include\farkeys.hpp;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Transforming %(Identity) to redistributable form...</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">tools\m4 -P -DFARBIT=32 -DINPUT=%(Identity) headers.m4 &gt; Include\farkeys.hpp</Command>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Include\farkeys.hpp;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Transforming %(Identity) to redistributable form...</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">tools\m4 -P -DFARBIT=64 -DINPUT=%(Identity) headers.m4 &gt; Include\farkeys.hpp</Command>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Include\farkeys.hpp;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">Transforming %(Identity) to redistributable form...</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">tools\m4 -P -DFARBIT=IA64 -DINPUT=%(Identity) headers.m4 &gt; Include\farkeys.hpp</Command>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">Include\farkeys.hpp;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Transforming %(Identity) to redistributable form...</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">tools\m4 -P -DFARBIT=32 -DINPUT=%(Identity) headers.m4 &gt; Include\farkeys.hpp</Command>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Include\farkeys.hpp;%(Outputs)</Outputs>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Transforming %(Identity) to redistributable form...</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">tools\m4 -P -DFARBIT=64 -DINPUT=%(Identity) headers.m4 &gt; Include\farkeys.hpp</Command>
-      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Include\farkeys.hpp;%(Outputs)</Outputs>
-    </CustomBuild>
+    <ClInclude Include="keys.hpp" />
     <ClInclude Include="language.hpp" />
     <ClInclude Include="lasterror.hpp" />
     <ClInclude Include="local.hpp" />
-    <ClInclude Include="localOEM.hpp" />
     <ClInclude Include="lockscrn.hpp" />
     <ClInclude Include="macro.hpp" />
+    <ClInclude Include="macrocompiler.hpp" />
     <ClInclude Include="macroopcode.hpp" />
     <ClInclude Include="manager.hpp" />
     <ClInclude Include="menubar.hpp" />
@@ -1012,7 +1065,6 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="rdrwdsk.hpp" />
     <ClInclude Include="RefreshFrameManager.hpp" />
     <ClInclude Include="RegExp.hpp" />
-    <ClInclude Include="registry.hpp" />
     <ClInclude Include="res.hpp" />
     <ClInclude Include="savescr.hpp" />
     <ClInclude Include="scantree.hpp" />
@@ -1022,6 +1074,7 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="setattr.hpp" />
     <ClInclude Include="setcolor.hpp" />
     <ClInclude Include="sqlite.h" />
+    <ClInclude Include="sqlitedb.hpp" />
     <ClInclude Include="sqlite\sqlite3.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Itanium'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Itanium'">true</ExcludedFromBuild>
@@ -1033,7 +1086,6 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="stddlg.hpp" />
     <ClInclude Include="strmix.hpp" />
     <ClInclude Include="synchro.hpp" />
-    <ClInclude Include="macrocompiler.hpp" />
     <ClInclude Include="syslog.hpp" />
     <ClInclude Include="TaskBar.hpp" />
     <ClInclude Include="tinyxml.hpp" />
@@ -1239,13 +1291,15 @@ if not exist bootstrap mkdir bootstrap</Command>
     <ClInclude Include="sdk\sdk.common.h" />
     <ClInclude Include="sdk\sdk.vc.h" />
     <ClInclude Include="Include\farcolor.hpp" />
-    <ClInclude Include="Include\farkeys.hpp" />
     <ClInclude Include="lang.hpp" />
     <ClInclude Include="Include\plugin.hpp" />
+    <ClInclude Include="Include\DlgBuilder.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\!.txt" />
+    <None Include="bis_changelog" />
     <None Include="bootstrap\lang.inc" />
-    <CustomBuild Include="Far.exe.ini">
+    <CustomBuild Include="Far.exe.example.ini">
       <FileType>Document</FileType>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">copy /y %(Identity) $(OutDir) &gt; nul</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compiling %(Identity)...</Message>

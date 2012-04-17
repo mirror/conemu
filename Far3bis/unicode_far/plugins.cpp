@@ -674,6 +674,18 @@ int PluginManager::UnloadPlugin(Plugin *pPlugin, DWORD dwException)
 	return nResult;
 }
 
+bool PluginManager::IsPluginUnloaded(Plugin* pPlugin)
+{
+	for(Plugin** p  = UnloadedPlugins.First(); p; p = UnloadedPlugins.Next(p))
+	{
+		if(*p == pPlugin)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 int PluginManager::UnloadPluginExternal(HANDLE hPlugin)
 {
 	//BUGBUG нужны проверки на легальность выгрузки
@@ -687,16 +699,7 @@ int PluginManager::UnloadPluginExternal(HANDLE hPlugin)
 	{
 		nResult = pPlugin->Unload(true);
 	}
-	bool Added = false;
-	for(Plugin** p  = UnloadedPlugins.First(); p; p = UnloadedPlugins.Next(p))
-	{
-		if(*p == pPlugin)
-		{
-			Added = true;
-			break;
-		}
-	}
-	if(!Added)
+	if(!IsPluginUnloaded(pPlugin))
 	{
 		UnloadedPlugins.Push(&pPlugin);
 	}
@@ -2694,6 +2697,7 @@ void ItemsToBuf(PluginMenuItem& Menu, TArray<string>& NamesArray, TArray<string>
 
 size_t PluginManager::GetPluginInformation(Plugin *pPlugin, FarGetPluginInformation *pInfo, size_t BufferSize)
 {
+	if(IsPluginUnloaded(pPlugin)) return 0;
 	string Prefix;
 #if defined(MANTIS_0000466)
 	string MacroFunc;

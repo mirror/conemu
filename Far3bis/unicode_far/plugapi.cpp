@@ -2334,6 +2334,7 @@ INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 					break;
 				}
 			}
+			if(plugin&&CtrlObject->Plugins->IsPluginUnloaded(plugin)) plugin=nullptr;
 			return reinterpret_cast<INT_PTR>(plugin);
 		}
 

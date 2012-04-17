@@ -2037,7 +2037,7 @@ public:
 	}
 };
 
-class HistoryConfigDb: public HistoryConfig, public SQLiteDb {
+class HistoryConfigCustom: public HistoryConfig, public SQLiteDb {
 	SQLiteStmt stmtEnum;
 	SQLiteStmt stmtEnumDesc;
 	SQLiteStmt stmtDel;
@@ -2073,11 +2073,6 @@ class HistoryConfigDb: public HistoryConfig, public SQLiteDb {
 	}
 
 public:
-
-	HistoryConfigDb()
-	{
-		Initialize(L"history.db", true);
-	}
 
 	bool BeginTransaction() { return SQLiteDb::BeginTransaction(); }
 	bool EndTransaction() { return SQLiteDb::EndTransaction(); }
@@ -2220,7 +2215,7 @@ public:
 		return false;
 	}
 
-	virtual ~HistoryConfigDb() {}
+	virtual ~HistoryConfigCustom() {}
 
 	bool Enum(DWORD index, DWORD TypeHistory, const wchar_t *HistoryName, unsigned __int64 *id, string &strName, int *Type, bool *Lock, unsigned __int64 *Time, string &strGuid, string &strFile, string &strData, bool Reverse=false)
 	{
@@ -2503,9 +2498,17 @@ public:
 
 };
 
-class HistoryConfigMemoryDb: public HistoryConfigDb {
+class HistoryConfigDb: public HistoryConfigCustom {
 public:
-	HistoryConfigMemoryDb()
+	HistoryConfigDb()
+	{
+		Initialize(L"history.db", true);
+	}
+};
+
+class HistoryConfigMemory: public HistoryConfigCustom {
+public:
+	HistoryConfigMemory()
 	{
 		Initialize(L":memory:", true);
 	}
@@ -3052,7 +3055,7 @@ void InitDb( bool err_report )
 	NEW_DB(PlCacheCfg, PluginsCacheConfigDb)
 	NEW_DB(PlHotkeyCfg, PluginsHotkeysConfigDb)
 	NEW_DB(HistoryCfg, HistoryConfigDb)
-	NEW_DB(HistoryCfgMem, HistoryConfigMemoryDb)
+	NEW_DB(HistoryCfgMem, HistoryConfigMemory)
 	NEW_DB(MacroCfg, MacroConfigDb)
 }
 

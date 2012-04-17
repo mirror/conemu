@@ -636,6 +636,9 @@ static DWORD __GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMo
 DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool AllowSynchro)
 {
 	DWORD Key = __GetInputRecord(rec,ExcludeMacro,ProcessMouse,AllowSynchro);
+#if 1
+	bool Halt=false;
+#endif
 
 	if (Key)
 	{
@@ -645,21 +648,40 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			//Info.hPanel
 			if (WaitInMainLoop)
 				Info.Flags|=PCIF_FROMMAIN;
-			#if 1
+			#if 0
+			//Maximus: "if 0", ибо FOCUS_EVENT
 			//Maximus: не нужны эти события в ProcessConsoleInput?
 			if (Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS)
 			{
 				if (CtrlObject->Plugins->ProcessConsoleInput(&Info))
+					#if 1
+					Halt=true;
+					#else
 					Key=KEY_NONE;
+					#endif
 			}
+			#ifdef _DEBUG
+			else
+			{
+				Key=Key;
+			}
+			#endif
 			#else
+			_ASSERTE((Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS) || (Info.Rec->EventType==FOCUS_EVENT));
 			if (CtrlObject->Plugins->ProcessConsoleInput(&Info))
+				#if 1
+				Halt=true;
+				#else
 				Key=KEY_NONE;
+				#endif
 			#endif
 		}
 	}
-	if (Key==KEY_NONE)
+	if (Halt)
+	{
+		Key=KEY_NONE;
 		KeyToInputRecord(Key, rec);
+	}
 	return Key;
 }
 
@@ -793,7 +815,7 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 		if (!(LoopCount & 15))
 		{
-			if(CtrlObject->Plugins->GetPluginsCount())
+			if(CtrlObject && CtrlObject->Plugins->GetPluginsCount())
 			{
 				SetFarConsoleMode();
 			}
@@ -981,8 +1003,11 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		PressedLastTime=0;
 		Console.ReadInput(rec, 1, ReadCount);
 		CalcKey=rec->Event.FocusEvent.bSetFocus?KEY_GOTFOCUS:KEY_KILLFOCUS;
+		#if 0
+		//Maximus: не нужно, ибо ProcessConsoleInputW
 		ClearStruct(*rec);
 		rec->EventType=KEY_EVENT;
+		#endif
 		//чтоб решить баг винды приводящий к появлению скролов и т.п. после потери фокуса
 		if (CalcKey == KEY_GOTFOCUS)
 			RestoreConsoleWindowRect();
