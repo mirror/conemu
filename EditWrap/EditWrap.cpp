@@ -345,9 +345,13 @@ void DoWrap(BOOL abWordWrap, EditorInfo &ei, int iMaxWidth)
 		while (iFrom < iEnd)
 		{
 			//iTo = min(iEnd,(iFrom+iMaxWidth));
-			iTo = FindExceed(pszCopy, i, iFrom, min(iEnd+1,(iFrom+iMaxWidth)), iMaxWidth, ei.TabSize);
+			iTo = FindExceed(pszCopy, i, iFrom, min(iEnd/*+1*/,(iFrom+iMaxWidth)), iMaxWidth, ei.TabSize);
 			iFind = iTo;
-			if (abWordWrap 
+			if (iFind >= iEnd)
+			{
+				iFind = iTo = iEnd;
+			}
+			else if (abWordWrap
 				/*&& (((egs.StringLength - iFrom) > iMaxWidth) || IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize))*/
 				)
 			{
