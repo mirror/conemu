@@ -1,3 +1,13 @@
+1.6
+% Last word fix.
+
+1.5
++ Tabs was not taken in account while simple Wrap (not Word Wrap).
++ Tabs optimization.
+
+1.4
+% Tabs related fix.
+
 1.3
 + Renewal related.
 

@@ -252,24 +252,26 @@ FoldWorkMode ChooseWorkMode()
 	return fwm_None;
 }
 
-bool IsExceed(wchar_t* pszCopy, INT_PTR iLine, INT_PTR iFrom, INT_PTR iFind, int iMaxWidth, int TabSize)
+INT_PTR FindExceed(wchar_t* pszCopy, INT_PTR iLine, INT_PTR iFrom, INT_PTR iFind, int iMaxWidth, int TabSize)
 {
-	bool bExceed = false;
+	INT_PTR nExceed = 0;
 
-	// ≈сли есть табы - нужно учитывать их ширину
-	//EditorConvertPos ecp = {};
-	//wchar_t ch = pszCopy[iFind-1];
-	//pszCopy[iFind-1] = 0;
-	if (wcschr(pszCopy+iFrom, L'\t'))
+	// ¬ строке могут быть '\0', так что проверки типа wcschr надежны только в положительном варианте
+	wchar_t* pszTab = wcschr(pszCopy+iFrom, L'\t');
+	if (pszTab && (pszTab > (pszCopy + iFrom + iMaxWidth)))
+	{
+		nExceed = iFind;
+	}
+	else
 	{
 		INT_PTR TabPos = 1;
 
 		// ѕроходим по всем символам до позиции поиска, если она ещЄ в пределах строки,
 		// либо до конца строки, если позици€ поиска за пределами строки
-		for (INT_PTR Index = iFrom; Index < iFind; Index++)
+		for (nExceed = iFrom; (nExceed < iFind) && (TabPos <= iMaxWidth); nExceed++)
 		{
 			// ќбрабатываем табы
-			if (pszCopy[Index] == L'\t')
+			if (pszCopy[nExceed] == L'\t')
 			{
 				// –асчитываем длину таба с учЄтом настроек и текущей позиции в строке
 				TabPos += TabSize-(TabPos%TabSize);
@@ -278,17 +280,15 @@ bool IsExceed(wchar_t* pszCopy, INT_PTR iLine, INT_PTR iFrom, INT_PTR iFind, int
 				TabPos++;
 		}
 
-		//ecp.StringNumber = iLine;
-		//ecp.SrcPos = iFind;
-		////EditCtrl(ECTL_REALTOTAB, &ecp);
-		//if (ecp.DestPos > (iMaxWidth + iFrom))
+		if ((TabPos > iMaxWidth) && (nExceed > iFrom) && (pszCopy[nExceed-1] == L'\t'))
+		{
+			nExceed--; // чтобы "конец" таба за экран не вылезал
+		}
 		//	bExceed = true;
-		if (TabPos > iMaxWidth)
-			bExceed = true;
 	}
-	//pszCopy[iFind-1] = ch;
 
-	return bExceed;
+	//return bExceed;
+	return nExceed;
 }
 
 void DoWrap(BOOL abWordWrap, EditorInfo &ei, int iMaxWidth)
@@ -344,21 +344,25 @@ void DoWrap(BOOL abWordWrap, EditorInfo &ei, int iMaxWidth)
 		iFrom = 0; iEnd = egs.StringLength;
 		while (iFrom < iEnd)
 		{
-			iTo = min(iEnd,(iFrom+iMaxWidth));
+			//iTo = min(iEnd,(iFrom+iMaxWidth));
+			iTo = FindExceed(pszCopy, i, iFrom, min(iEnd+1,(iFrom+iMaxWidth)), iMaxWidth, ei.TabSize);
 			iFind = iTo;
-			if (abWordWrap && ((egs.StringLength - iFrom) > iMaxWidth))
+			if (abWordWrap 
+				/*&& (((egs.StringLength - iFrom) > iMaxWidth) || IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize))*/
+				)
 			{
 				while (iFind > iFrom)
 				{
 					if (IsSpaceOrNull(pszCopy[iFind-1]))
-					{
-						// ≈сли есть табы - нужно учитывать их ширину
-						//TODO: Optimize, по хорошему, если есть табы, нужно оптимизировать расчет экранной позиции
-						bool bExceed = IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize);
+						break;
+					//{
+					//	// ≈сли есть табы - нужно учитывать их ширину
+					//	//TODO: Optimize, по хорошему, если есть табы, нужно оптимизировать расчет экранной позиции
+					//	bool bExceed = IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize);
 
-						if (!bExceed)
-							break;
-					}
+					//	if (!bExceed)
+					//		break;
+					//}
 					iFind--;
 				}
 				// ≈сли по пробелам порезать не удалось, попробуем по другим знакам?
@@ -368,14 +372,15 @@ void DoWrap(BOOL abWordWrap, EditorInfo &ei, int iMaxWidth)
 					while (iFind > iFrom)
 					{
 						if (_tcschr(gsPuctuators, pszCopy[iFind]) && !_tcschr(gsWordDiv, pszCopy[iFind-1]))
-						{
-							// ≈сли есть табы - нужно учитывать их ширину
-							//TODO: Optimize, по хорошему, если есть табы, нужно оптимизировать расчет экранной позиции
-							bool bExceed = IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize);
+							break;
+						//{
+						//	// ≈сли есть табы - нужно учитывать их ширину
+						//	//TODO: Optimize, по хорошему, если есть табы, нужно оптимизировать расчет экранной позиции
+						//	bool bExceed = IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize);
 
-							if (!bExceed)
-								break;
-						}
+						//	if (!bExceed)
+						//		break;
+						//}
 						iFind--;
 					}
 					if (iFind == iFrom)
@@ -384,14 +389,15 @@ void DoWrap(BOOL abWordWrap, EditorInfo &ei, int iMaxWidth)
 						while (iFind > iFrom)
 						{
 							if (_tcschr(gsWordDiv, pszCopy[iFind]) && !_tcschr(gsWordDiv, pszCopy[iFind-1]))
-							{
-								// ≈сли есть табы - нужно учитывать их ширину
-								//TODO: Optimize, по хорошему, если есть табы, нужно оптимизировать расчет экранной позиции
-								bool bExceed = IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize);
+								break;
+							//{
+							//	// ≈сли есть табы - нужно учитывать их ширину
+							//	//TODO: Optimize, по хорошему, если есть табы, нужно оптимизировать расчет экранной позиции
+							//	bool bExceed = IsExceed(pszCopy, i, iFrom, iFind, iMaxWidth, ei.TabSize);
 
-								if (!bExceed)
-									break;
-							}
+							//	if (!bExceed)
+							//		break;
+							//}
 							iFind--;
 						}
 					}
