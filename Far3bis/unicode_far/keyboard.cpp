@@ -636,9 +636,7 @@ static DWORD __GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMo
 DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool AllowSynchro)
 {
 	DWORD Key = __GetInputRecord(rec,ExcludeMacro,ProcessMouse,AllowSynchro);
-#if 1
 	bool Halt=false;
-#endif
 
 	if (Key)
 	{
@@ -648,33 +646,8 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 			//Info.hPanel
 			if (WaitInMainLoop)
 				Info.Flags|=PCIF_FROMMAIN;
-			#if 0
-			//Maximus: "if 0", ибо FOCUS_EVENT
-			//Maximus: не нужны эти события в ProcessConsoleInput?
-			if (Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS)
-			{
-				if (CtrlObject->Plugins->ProcessConsoleInput(&Info))
-					#if 1
-					Halt=true;
-					#else
-					Key=KEY_NONE;
-					#endif
-			}
-			#ifdef _DEBUG
-			else
-			{
-				Key=Key;
-			}
-			#endif
-			#else
-			_ASSERTE((Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS) || (Info.Rec->EventType==FOCUS_EVENT));
 			if (CtrlObject->Plugins->ProcessConsoleInput(&Info))
-				#if 1
 				Halt=true;
-				#else
-				Key=KEY_NONE;
-				#endif
-			#endif
 		}
 	}
 	if (Halt)
@@ -3112,9 +3085,10 @@ DWORD CalcKeyCode(INPUT_RECORD *rec,int RealKey,int *NotMacros,bool ProcessCtrlC
 
 		if (KeyCode>='0' && KeyCode<='9')
 		{
+			string strKey;
 			if (WaitInFastFind > 0 &&
 			        CtrlObject->Macro.GetCurRecord(nullptr,nullptr) < MACROMODE_RECORDING &&
-			        CtrlObject->Macro.GetIndex(KEY_ALTSHIFT0+KeyCode-'0',-1) == -1)
+			        CtrlObject->Macro.GetIndex(KEY_ALTSHIFT0+KeyCode-'0',strKey,-1) == -1)
 			{
 				return Modif|Char;
 			}

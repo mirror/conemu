@@ -761,6 +761,9 @@ void KeyMacro::ReleaseWORKBuffer(BOOL All)
 				if (Work.MacroWORK[I].Src)
 					xf_free(Work.MacroWORK[I].Src);
 
+				if (Work.MacroWORK[I].Name)
+					xf_free(Work.MacroWORK[I].Name);
+
 				if (Work.MacroWORK[I].Description)
 					xf_free(Work.MacroWORK[I].Description);
 			}
@@ -785,6 +788,9 @@ void KeyMacro::ReleaseWORKBuffer(BOOL All)
 
 			if (Work.MacroWORK[0].Src)
 				xf_free(Work.MacroWORK[0].Src);
+
+			if (Work.MacroWORK[0].Name)
+				xf_free(Work.MacroWORK[0].Name);
 
 			if (Work.MacroWORK[0].Description)
 				xf_free(Work.MacroWORK[0].Description);
@@ -857,6 +863,7 @@ int KeyMacro::LoadMacros(BOOL InitedRAM,BOOL LoadAll)
 
 int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 {
+	string strKey;
 	int Key=Rec->IntKey;
 
 	if (InternalInput || Key==KEY_IDLE || Key==KEY_NONE || !FrameManager->GetCurrentFrame())
@@ -905,7 +912,7 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 			else
 			{
 				// в области common будем искать только при удалении
-				int Pos=GetIndex(MacroKey,StartMode,!(RecBuffer && RecBufferSize),true);
+				int Pos=GetIndex(MacroKey,strKey,StartMode,!(RecBuffer && RecBufferSize),true);
 
 				if (Pos == -1)
 				{
@@ -933,11 +940,15 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 					if (MacroLIB[Pos].Src)
 						xf_free(MacroLIB[Pos].Src);
 
+					if (MacroLIB[Pos].Name)
+						xf_free(MacroLIB[Pos].Name);
+
 					if (MacroLIB[Pos].Description)
 						xf_free(MacroLIB[Pos].Description);
 
 					MacroLIB[Pos].Buffer=nullptr;
 					MacroLIB[Pos].Src=nullptr;
+					MacroLIB[Pos].Name=nullptr;
 					MacroLIB[Pos].Callback=nullptr;
 					MacroLIB[Pos].Description=nullptr;
 				}
@@ -970,6 +981,12 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 					Macro.Guid=FarGuid;
 					Macro.Id=nullptr;
 					Macro.Callback=nullptr;
+
+					string strKeyText;
+					if (KeyToText(MacroKey, strKeyText))
+						Macro.Name=xf_wcsdup(strKeyText);
+					else
+						Macro.Name=nullptr;
 
 					MacroLIB[Pos]=Macro;
 				}
@@ -1072,7 +1089,7 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 
 			}
 
-			int I=GetIndex(Key,(Mode==MACRO_SHELL && !WaitInMainLoop) ? MACRO_OTHER:Mode);
+			int I=GetIndex(Key,strKey,(Mode==MACRO_SHELL && !WaitInMainLoop) ? MACRO_OTHER:Mode);
 
 			if (I != -1 && !((CurFlags=MacroLIB[I].Flags)&MFLAGS_DISABLEMACRO) && CtrlObject)
 			{
@@ -5746,6 +5763,7 @@ done:
 						*/
 						int _Mode;
 						bool UseCommon=true;
+						string strKeyName;
 						string strVal=Val.toString();
 						strVal=RemoveExternalSpaces(strVal);
 
@@ -5770,10 +5788,12 @@ done:
 							_Mode=GetMode();
 						}
 
+						strKeyName=(const wchar_t*)p;
 						DWORD KeyCode = KeyNameToKey(p);
 						strVal.ReleaseBuffer();
 
-						int I=GetIndex(KeyCode,_Mode,UseCommon);
+						int I=GetIndex(KeyCode,strKeyName,_Mode,UseCommon);
+
 						if (I != -1 && !(MacroLIB[I].Flags&MFLAGS_DISABLEMACRO)) // && CtrlObject)
 						{
 							PushState(true);
@@ -6527,7 +6547,11 @@ void KeyMacro::SaveMacroRecordToDB(const MacroRecord *MR)
 	Area=Flags & MFLAGS_MODEMASK;
 	Flags &= ~(MFLAGS_MODEMASK|MFLAGS_NEEDSAVEMACRO);
 	string strKeyName;
-	KeyToText(MR->Key, strKeyName);
+	if (MR->Key != -1)
+		KeyToText(MR->Key, strKeyName);
+	else
+		strKeyName=(const wchar_t*)MR->Name;
+
 	MacroCfg->SetKeyMacro(GetAreaName(Area), strKeyName, FlagsToString(Flags), MR->Src, MR->Description);
 }
 
@@ -6539,7 +6563,12 @@ void KeyMacro::WriteMacroRecords()
 		if (!MacroLIB[I].BufferSize || !MacroLIB[I].Src)
 		{
 			string strKeyName;
-			KeyToText(MacroLIB[I].Key, strKeyName);
+
+			if (MacroLIB[I].Key != -1)
+				KeyToText(MacroLIB[I].Key, strKeyName);
+			else
+				strKeyName=(const wchar_t*)MacroLIB[I].Name;
+
 			MacroCfg->DeleteKeyMacro(GetAreaName(MacroLIB[I].Flags & MFLAGS_MODEMASK), strKeyName);
 			continue;
 		}
@@ -6872,9 +6901,10 @@ int KeyMacro::ReadKeyMacro(int Area)
 
 	while(MacroCfg->EnumKeyMacros(strArea, strKey, strMFlags, strSequence, strDescription))
 	{
+		RemoveExternalSpaces(strKey);
 		Key=KeyNameToKey(strKey);
-		if (Key==-1)
-			continue;
+		//if (Key==-1)
+		//	continue;
 
 		RemoveExternalSpaces(strSequence);
 		RemoveExternalSpaces(strDescription);
@@ -6928,6 +6958,7 @@ int KeyMacro::ReadKeyMacro(int Area)
 		{
 			CurMacro.Description=xf_wcsdup(strDescription);
 		}
+		CurMacro.Name=xf_wcsdup(strKey);
 
 		GUID Guid=FarGuid;
 		// BUGBUG!
@@ -7205,9 +7236,10 @@ M1:
 		_SVS(SysLog(L"[%d] Assign ==> Param2='%s',LastKey='%s'",__LINE__,_FARKEY_ToName((DWORD)key),LastKey?_FARKEY_ToName(LastKey):L""));
 		KMParam->Key=(DWORD)key;
 		KeyToText((int)key,strKeyText);
+		string strKey;
 
 		// если УЖЕ есть такой макрос...
-		if ((Index=MacroDlg->GetIndex((int)key,KMParam->Mode,true,true)) != -1)
+		if ((Index=MacroDlg->GetIndex((int)key,strKey,KMParam->Mode,true,true)) != -1)
 		{
 			MacroRecord *Mac=MacroDlg->MacroLIB+Index;
 
@@ -7694,6 +7726,7 @@ int KeyMacro::PostNewMacro(MacroRecord *MRec,BOOL NeedAddSendFlag,bool IsPluginS
 
 	MacroRecord NewMacroWORK2=*MRec;
 	NewMacroWORK2.Src=nullptr;
+	NewMacroWORK2.Name=nullptr; //???
 	NewMacroWORK2.Description=nullptr;
 	//if(MRec->BufferSize > 1)
 	{
@@ -7849,7 +7882,7 @@ int KeyMacro::PopState()
 // Ret=-1 - не найден таковой.
 // если CheckMode=-1 - значит пофигу в каком режиме, т.е. первый попавшийся
 // StrictKeys=true - не пытаться подменить Левый Ctrl/Alt Правым (если Левый не нашли)
-int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
+int KeyMacro::GetIndex(int Key, string& strKey, int CheckMode, bool UseCommon, bool StrictKeys)
 {
 	if (MacroLIB)
 	{
@@ -7881,43 +7914,64 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
 
 			if (Len)
 			{
-				int ctrl = (!StrictKeys && (Key&(KEY_RCTRL|KEY_RALT)) && !(Key&(KEY_CTRL|KEY_ALT))) ? 0 : 1;
+				int ctrl = 0;
+				if (Key != -1)
+					ctrl =(!StrictKeys && (Key&(KEY_RCTRL|KEY_RALT)) && !(Key&(KEY_CTRL|KEY_ALT))) ? 0 : 1;
 				MacroRecord *MPtrSave=MPtr;
 
 				for (; ctrl < 2; ctrl++)
 				{
 					for (Pos=0; Pos < Len; ++Pos, ++MPtr)
 					{
-						if (!((MPtr->Key ^ Key) & ~0xFFFF) &&
-						        (Upper(static_cast<WCHAR>(MPtr->Key))==Upper(static_cast<WCHAR>(Key))) &&
-						        (MPtr->BufferSize > 0))
+						if (Key != -1)
 						{
-							//        && (CheckMode == -1 || (MPtr->Flags&MFLAGS_MODEMASK) == CheckMode))
-							//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
-							if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
+							if (!((MPtr->Key ^ Key) & ~0xFFFF) &&
+							        (Upper(static_cast<WCHAR>(MPtr->Key))==Upper(static_cast<WCHAR>(Key))) &&
+							        (MPtr->BufferSize > 0))
 							{
-								//Maximus: для отладки
-								_ASSERTE((((DWORD_PTR)MPtr->Callback)&0xFFFFFFFF)!=0xCDCDCDCD);
-							    if(!MPtr->Callback||MPtr->Callback(MPtr->Id,AKMFLAGS_NONE))
-							    	return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
+								//        && (CheckMode == -1 || (MPtr->Flags&MFLAGS_MODEMASK) == CheckMode))
+								//_SVS(SysLog(L"GetIndex: Pos=%d MPtr->Key=0x%08X", Pos,MPtr->Key));
+								if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
+								{
+									//Maximus: для отладки
+									_ASSERTE((((DWORD_PTR)MPtr->Callback)&0xFFFFFFFF)!=0xCDCDCDCD);
+								    if(!MPtr->Callback||MPtr->Callback(MPtr->Id,AKMFLAGS_NONE))
+								    	return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
+								}
+							}
+						}
+						else if (!strKey.IsEmpty() && !StrCmpI(strKey,MPtr->Name))
+						{
+							if (MPtr->BufferSize > 0)
+							{
+								if (!(MPtr->Flags&MFLAGS_DISABLEMACRO))
+								{
+								    if(!MPtr->Callback||MPtr->Callback(MPtr->Id,AKMFLAGS_NONE))
+								    	return Pos+((CheckMode >= 0)?IndexMode[CheckMode][0]:0);
+								}
 							}
 						}
 					}
 
-					if (!ctrl)
+					if (Key != -1)
 					{
-						if (Key & KEY_RCTRL)
+						if (!ctrl)
 						{
-							Key &= ~KEY_RCTRL;
-							Key |= KEY_CTRL;
+							if (Key & KEY_RCTRL)
+							{
+								Key &= ~KEY_RCTRL;
+								Key |= KEY_CTRL;
+							}
+							if (Key & KEY_RALT)
+							{
+								Key &= ~KEY_RALT;
+								Key |= KEY_ALT;
+							}
+							MPtr = MPtrSave;
 						}
-						if (Key & KEY_RALT)
-						{
-							Key &= ~KEY_RALT;
-							Key |= KEY_ALT;
-						}
-						MPtr = MPtrSave;
 					}
+					else
+						MPtr = MPtrSave;
 				}
 			}
 
@@ -7939,7 +7993,8 @@ int KeyMacro::GetIndex(int Key, int CheckMode, bool UseCommon, bool StrictKeys)
 int KeyMacro::GetRecordSize(int Key, int CheckMode)
 {
 	//BUGBUG: StrictKeys?
-	int Pos=GetIndex(Key,CheckMode);
+	string strKey;
+	int Pos=GetIndex(Key,strKey,CheckMode);
 
 	if (Pos == -1)
 		return 0;
@@ -8439,6 +8494,11 @@ int KeyMacro::AddMacro(const wchar_t *PlainText,const wchar_t *Description,enum 
 	CurMacro.Flags=Area;
 	CurMacro.Flags|=Flags;
 	CurMacro.Key=InputRecordToKey(&AKey);
+	string strKeyText;
+	if (KeyToText(CurMacro.Key, strKeyText))
+		CurMacro.Name=xf_wcsdup(strKeyText);
+	else
+		CurMacro.Name=nullptr;
 	CurMacro.Src=xf_wcsdup(PlainText);
 	CurMacro.Description=xf_wcsdup(Description);
 	CurMacro.Guid=PluginId;
@@ -8487,6 +8547,8 @@ void KeyMacro::DelMacro(size_t Index)
 		xf_free(MacroLIB[Index].Buffer);
 	if (MacroLIB[Index].Src)
 		xf_free(MacroLIB[Index].Src);
+	if (MacroLIB[Index].Name)
+		xf_free(MacroLIB[Index].Name);
 	if (MacroLIB[Index].Description)
 		xf_free(MacroLIB[Index].Description);
 	memcpy(MacroLIB+Index,MacroLIB+Index+1,(MacroLIBCount-Index-1)*sizeof(MacroLIB[0]));

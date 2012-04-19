@@ -4668,7 +4668,12 @@ int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand,void* Pa
 				newss.StringNumber=oldss->StringNumber;
 				UINT CodePage=GetEditorCodePageA();
 				newss.StringText=(oldss->StringText)?AnsiToUnicodeBin(oldss->StringText, oldss->StringLength,CodePage):nullptr;
+				#if 1
+				//Maxmius: для "совместимости", чтобы глючные плагины (которые работали "раньше") не рушили EOL
+				newss.StringEOL=(oldss->StringEOL && *oldss->StringEOL)?AnsiToUnicode(oldss->StringEOL,CodePage):nullptr;
+				#else
 				newss.StringEOL=(oldss->StringEOL)?AnsiToUnicode(oldss->StringEOL,CodePage):nullptr;
+				#endif
 				newss.StringLength=oldss->StringLength;
 			}
 
