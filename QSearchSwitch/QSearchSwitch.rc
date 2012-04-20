@@ -1,31 +1,34 @@
-#define VERSIONINFO_1   1                                 
-                                                          
-VERSIONINFO_1  VERSIONINFO                                
-FILEVERSION    1,0,2,0                              
-PRODUCTVERSION 3,0,0,0                                    
-FILEFLAGSMASK  0x0                                        
-FILEFLAGS      0x0                                        
-FILEOS         0x4                                        
-FILETYPE       0x2                                        
-FILESUBTYPE    0x0                                        
-{                                                         
+
+#include "version.h"
+
+#define VERSIONINFO_1   1
+
+VERSIONINFO_1  VERSIONINFO
+ FILEVERSION QSEARCHVERN
+ PRODUCTVERSION QSEARCHVERN
+ FILEFLAGSMASK 0x17L
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
   BLOCK "StringFileInfo"                                  
-  {                                                       
-    BLOCK "000004E4"                                      
-    {                                                     
-      VALUE "CompanyName",      "\0"         
-      VALUE "FileDescription",  "QSearch switch for Far Manager\0"     
-      VALUE "FileVersion",      "1.0 build 2\0"     
-      VALUE "InternalName",     "QSearchSwitch\0"            
-      VALUE "LegalCopyright",   "© Maximus5 2012\0"      
-      VALUE "OriginalFilename", "QSearchSwitch.dll\0"        
-      VALUE "ProductName",      "FAR Manager\0"           
-      VALUE "ProductVersion",   "3.0\0"                   
-      VALUE "Comments",         "ConEmu.Maximus5@gmail.com\0"            
-    }                                                     
-  }                                                       
+  BEGIN
+        BLOCK "000004b0"
+    BEGIN
+      VALUE "Comments",         "ConEmu.Maximus5@gmail.com"
+      VALUE "CompanyName",      "Maximus5, http://code.google.com/p/conemu-maximus5/wiki/QSearchSwitch"
+      VALUE "FileDescription",  "QSearch switch" QSEARCHPLTFRM
+      VALUE "FileVersion",      QSEARCHVERS
+      VALUE "InternalName",     "QSearchSwitch"
+      VALUE "LegalCopyright",   "© Maximus5 2012"
+      VALUE "OriginalFilename", "QSearchSwitch.dll"        
+      VALUE "ProductName",      "QSearch switch"
+      VALUE "ProductVersion",   QSEARCHVERS
+    END
+  END
   BLOCK "VarFileInfo"                                     
-  {                                                       
-    VALUE "Translation", 0, 0x4e4                         
-  }                                                       
-}                                                         
+  BEGIN
+        VALUE "Translation", 0x0, 1200
+  END
+END
