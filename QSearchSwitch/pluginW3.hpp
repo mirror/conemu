@@ -5,7 +5,7 @@
 /*
   plugin.hpp
 
-  Plugin API for Far Manager 3.0 build 2591
+  Plugin API for Far Manager 3.0 build 2628
 */
 
 /*
@@ -43,8 +43,8 @@ other possible license with no implications from the above license on them.
 #define FARMANAGERVERSION_MAJOR 3
 #define FARMANAGERVERSION_MINOR 0
 #define FARMANAGERVERSION_REVISION 0
-#define FARMANAGERVERSION_BUILD 2591
-#define FARMANAGERVERSION_STAGE VS_RELEASE
+#define FARMANAGERVERSION_BUILD 2628
+#define FARMANAGERVERSION_STAGE VS_BIS
 
 #ifndef RC_INVOKED
 
@@ -55,9 +55,9 @@ other possible license with no implications from the above license on them.
 #define FARMACRO_KEY_EVENT  (KEY_EVENT|0x8000)
 
 
-#define CP_UNICODE 1200
+#define CP_UNICODE    1200
 #define CP_REVERSEBOM 1201
-#define CP_AUTODETECT ((UINT)-1)
+#define CP_DEFAULT    ((UINT)-1)
 #define CP_REDETECT   ((UINT)-2)
 
 typedef unsigned __int64 FARCOLORFLAGS;
@@ -2507,7 +2507,7 @@ struct ProcessConsoleInputInfo
 {
 	size_t StructSize;
 	PROCESSCONSOLEINPUT_FLAGS Flags;
-	const INPUT_RECORD *Rec;
+	INPUT_RECORD Rec;
 	HANDLE hPanel;
 };
 
