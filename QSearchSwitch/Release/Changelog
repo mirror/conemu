@@ -1,0 +1,10 @@
+1.5
+* Far 3 build 2630 bis.
+* Plugin appears in 'Plugins configuration' (help will be displayed).
+
+1.4
+* Updated to new Far API (Far 3 build 2628 bis).
+* Enable/disable temporarily/permanently via macro, see example in EnableDisable.farconfig.
+
+1.0
+* Initial version

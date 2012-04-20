@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!--
+Use Plugin.Call("9d5d070e-42f3-4a10-82e3-b3c74830705b",Cmd) to control plugin
+Where Cmd is bitmask
+  0x01 - switch (enable/disable)
+  0x02 - enable
+  0x04 - disable
+  0x10 - save pluin settings
+-->
+
+<farconfig version="3.0.2627">
+    <macros>
+        <keymacros>
+            <macro area="Shell" key="RCtrlShiftQ" flags="DisableOutput" description="QSearchSwitch: permanently enable/disable">
+                <text>
+                    <![CDATA[Plugin.Call("9d5d070e-42f3-4a10-82e3-b3c74830705b",0x11)]]>
+</text>
+            </macro>
+        </keymacros>
+    </macros>
+</farconfig>
