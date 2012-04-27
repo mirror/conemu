@@ -471,7 +471,9 @@ struct MacroOptions
 struct KnownModulesIDs
 {
 	GUID Network;
+	string NetworkGuidStr;
 	GUID Emenu;
+	string EmenuGuidStr;
 };
 
 struct ExecuteOptions
@@ -482,6 +484,7 @@ struct ExecuteOptions
 	int ExecuteSilentExternal;
 	string strExecuteBatchType;
 	string strExcludeCmds;
+	int    UseHomeDir; // cd ~
 	string strHomeDir; // cd ~
 };
 
@@ -560,6 +563,8 @@ struct Options
 	int ShowPanelStatus;
 	int ShowPanelTotals;
 	int ShowPanelFree;
+	int PanelDetailedJunction;
+	int ShowUnknownReparsePoint;
 	int HighlightColumnSeparator;
 	int DoubleGlobalColumnSeparator;
 
@@ -640,7 +645,6 @@ struct Options
 	int HelpTabSize;
 
 	int HelpURLRules; // =0 отключить возможность запуска URL-приложений
-	int HelpFollowMouse; // 1=выделять ссылки при перемещении мышки (default), 0=нет
 
 	// запоминать логические диски и не опрашивать каждый раз. Для предотвращения "просыпания" "зеленых" винтов.
 	int RememberLogicalDrives;
@@ -759,3 +763,5 @@ void TreeSettings();
 
 bool GetConfigValue(const wchar_t *Key, const wchar_t *Name, string &Value);
 bool GetConfigValue(size_t Root,const wchar_t* Name,DWORD& Type,void*& Data);
+
+bool AdvancedConfig();

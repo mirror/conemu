@@ -394,6 +394,7 @@ static bool size2strFunc(const TMacroFunction*);
 static bool sleepFunc(const TMacroFunction*);
 static bool stringFunc(const TMacroFunction*);
 static bool strwrapFunc(const TMacroFunction*);
+static bool strpadFunc(const TMacroFunction*);
 static bool substrFunc(const TMacroFunction*);
 static bool testfolderFunc(const TMacroFunction*);
 static bool trimFunc(const TMacroFunction*);
@@ -496,6 +497,7 @@ static TMacroFunction intMacroFunction[]=
  	{L"Size2Str",         nullptr, L"S=Size2Str(N,Flags[,Width])",                               size2strFunc,       nullptr, 0, 0,                                      MCODE_F_SIZE2STR,        },
 	{L"Sleep",            nullptr, L"N=Sleep(N)",                                                sleepFunc,          nullptr, 0, 0,                                      MCODE_F_SLEEP,           },
 	{L"String",           nullptr, L"S=String(V)",                                               stringFunc,         nullptr, 0, 0,                                      MCODE_F_STRING,          },
+	{L"StrPad",           nullptr, L"S=StrPad(Src,Cnt[,Fill[,Op]])",                             strpadFunc,         nullptr, 0, 0,                                      MCODE_F_STRPAD,          },
 	{L"StrWrap",          nullptr, L"S=StrWrap(Text,Width[,Break[,Flags]])",                     strwrapFunc,        nullptr, 0, 0,                                      MCODE_F_STRWRAP,         },
 	{L"SubStr",           nullptr, L"S=SubStr(S,start[,length])",                                substrFunc,         nullptr, 0, 0,                                      MCODE_F_SUBSTR,          },
 	{L"TestFolder",       nullptr, L"N=TestFolder(S)",                                           testfolderFunc,     nullptr, 0, 0,                                      MCODE_F_TESTFOLDER,      },
@@ -4328,6 +4330,11 @@ static bool panelitemFunc(const TMacroFunction*)
 				#endif
 				Ret=TVar(filelistItem.strCustomData);
 				break;
+			case 23:  // ReparseTag
+			{
+				Ret=TVar((__int64)filelistItem.ReparseTag);
+				break;
+			}
 		}
 	}
 
@@ -4367,6 +4374,76 @@ static bool stringFunc(const TMacroFunction*)
 	TVar& Val(Params[0]);
 	Val.toString();
 	VMStack.Push(Val);
+	return true;
+}
+
+// S=StrPad(Src,Cnt[,Fill[,Op]])
+static bool strpadFunc(const TMacroFunction*)
+{
+	string strDest;
+	parseParams(4,Params);
+	TVar& Src(Params[0]);
+	if (Src.isUnknown())
+	{
+		Src=L"";
+		Src.toString();
+	}
+	int Cnt=(int)Params[1].getInteger();
+	TVar& Fill(Params[2]);
+	if (Fill.isUnknown())
+		Fill=L" ";
+	DWORD Op=(DWORD)Params[3].getInteger();
+
+	strDest=Src.s();
+	int LengthFill = StrLength(Fill.s());
+	if (Cnt > 0 && LengthFill > 0)
+	{
+		int LengthSrc  = StrLength(Src.s());
+		int FineLength = Cnt-LengthSrc;
+
+		if (FineLength > 0)
+		{
+			wchar_t *NewFill=new wchar_t[FineLength+1];
+			if (NewFill)
+			{
+				const wchar_t *pFill=Fill.s();
+
+				for (int I=0; I < FineLength; ++I)
+					NewFill[I]=pFill[I%LengthFill];
+				NewFill[FineLength]=0;
+
+				int CntL=0, CntR=0;
+				switch (Op)
+				{
+					case 0: // right
+						CntR=FineLength;
+						break;
+					case 1: // left
+						CntL=FineLength;
+						break;
+					case 2: // center
+						if (LengthSrc > 0)
+						{
+							CntL=FineLength / 2;
+							CntR=FineLength-CntL;
+						}
+						else
+							CntL=FineLength;
+						break;
+				}
+
+				string strPad=NewFill;
+				strPad.SetLength(CntL);
+				strPad+=strDest;
+				strPad.Append(NewFill, CntR);
+				strDest=strPad;
+
+				delete[] NewFill;
+			}
+		}
+	}
+
+	VMStack.Push(strDest.CPtr());
 	return true;
 }
 
@@ -5044,7 +5121,7 @@ initial:
 	//Maximus: для отладки
 	MRD = *MR;
 	dbgCurPCStack = CurPCStack;
-	#define CHECKMR() _ASSERTE(MRD.Buffer==MR->Buffer && MRD.BufferSize==MR->BufferSize)
+	#define CHECKMR() _ASSERTE(MRD.Buffer==MR->Buffer && MRD.BufferSize==MR->BufferSize && ((&Work)==(&CtrlObject->Macro.Work)))
 #else
 	#define CHECKMR()
 #endif
@@ -8050,7 +8127,10 @@ int KeyMacro::GetMacroKeyInfo(bool FromDB, int Mode, int Pos, string &strKeyName
 				if (Len && Pos < Len)
 				{
 					MacroRecord *MPtr=CtrlObject->Macro.MacroLIB+CtrlObject->Macro.IndexMode[Mode][0]+Pos;
-					::KeyToText(MPtr->Key,strKeyName);
+					if (MPtr->Key != -1)
+						::KeyToText(MPtr->Key,strKeyName);
+					else
+						strKeyName=MPtr->Name;
 					strDescription=NullToEmpty(MPtr->Description);
 					return Pos+1;
 				}

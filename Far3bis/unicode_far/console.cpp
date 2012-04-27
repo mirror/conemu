@@ -97,8 +97,8 @@ virtual bool GetSize(COORD& Size) const
 	CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
 #ifdef _DEBUG
 	//Maximus: для отладки
-	HANDLE hOut=GetOutputHandle();
-	DWORD dwErr=GetLastError(), dwErr2=0;
+	HANDLE hOut=GetOutputHandle(); UNREFERENCED_PARAMETER(hOut);
+	DWORD dwErr=GetLastError(), dwErr2=0; UNREFERENCED_PARAMETER(dwErr);
 #endif
 	if(GetConsoleScreenBufferInfo(GetOutputHandle(), &ConsoleScreenBufferInfo))
 	{

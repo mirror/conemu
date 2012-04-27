@@ -2335,7 +2335,7 @@ int FileList::ProcessKey(int Key)
 		case KEY_CTRLPGUP:     case KEY_CTRLNUMPAD9:
 		case KEY_RCTRLPGUP:    case KEY_RCTRLNUMPAD9:
 		{
-			if (Opt.PgUpChangeDisk || !IsRootPath(strCurDir))
+			if (Opt.PgUpChangeDisk || PanelMode==PLUGIN_PANEL || !IsRootPath(strCurDir))
 			{
 				//"this" может быть удалён в ChangeDir
 				bool CheckFullScreen=IsFullScreen();
@@ -3584,7 +3584,8 @@ bool FileList::GetPlainString(string& Dest,int ListPos)
 							ListData[ListPos]->ReparseTag,
 							ColumnType,
 							ColumnTypes[K],
-							ColumnWidth));
+							ColumnWidth,
+							strCurDir.CPtr()));
 						break;
 					}
 

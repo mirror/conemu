@@ -1312,6 +1312,13 @@ int CommandLine::ExecString(const string& CmdLine, bool AlwaysWaitFinish, bool S
 
 	LastCmdPartLength=-1;
 
+	if(CmdLine == L"far:config")
+	{
+		SetString(L"", false);
+		Show();
+		return AdvancedConfig();
+	}
+
 	if (!SeparateWindow && CtrlObject->Plugins->ProcessCommandLine(CmdLine))
 	{
 		/* $ 12.05.2001 DJ - рисуемся только если остались верхним фреймом */
@@ -1892,16 +1899,20 @@ bool CommandLine::IntChDir(const string& CmdLine,int ClosePanel,bool Selent)
 
 	if (SetPanel->GetMode()!=PLUGIN_PANEL && strExpandedDir.At(0) == L'~' && ((!strExpandedDir.At(1) && apiGetFileAttributes(strExpandedDir) == INVALID_FILE_ATTRIBUTES) || IsSlash(strExpandedDir.At(1))))
 	{
-		string strTemp=Opt.Exec.strHomeDir;
-
-		if (strExpandedDir.At(1))
+		if (Opt.Exec.UseHomeDir && !Opt.Exec.strHomeDir.IsEmpty())
 		{
-			AddEndSlash(strTemp);
-			strTemp += strExpandedDir.CPtr()+2;
-		}
+			string strTemp=Opt.Exec.strHomeDir;
 
-		DeleteEndSlash(strTemp);
-		strExpandedDir=strTemp;
+			if (strExpandedDir.At(1))
+			{
+				AddEndSlash(strTemp);
+				strTemp += strExpandedDir.CPtr()+2;
+			}
+
+			DeleteEndSlash(strTemp);
+			strExpandedDir=strTemp;
+			apiExpandEnvironmentStrings(strExpandedDir,strExpandedDir);
+		}
 	}
 
 	const wchar_t* DirPtr = strExpandedDir;

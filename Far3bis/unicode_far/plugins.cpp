@@ -1401,8 +1401,16 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 			//-- //BUGBUG: происходит изменение PluginsData
 			_ASSERTE(pPlugin == PluginsData[i]);
 			//-- //BUGBUG: MacroLib.dll, загруженный при "/co" не перехватывает клаву до первого вызова его по F11
-			if ((nResult = pPlugin->ProcessConsoleInput(Info)) != 0)
+			int n = pPlugin->ProcessConsoleInput(Info);
+			if (n == 1)
+			{
+				nResult = 1;
 				break;
+			}
+			else if (n == 2)
+			{
+				nResult = 2;
+			}
 		}
 	}
 

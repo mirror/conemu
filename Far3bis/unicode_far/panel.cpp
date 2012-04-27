@@ -166,7 +166,7 @@ void Panel::ChangeDisk()
 
 	if (!strCurDir.IsEmpty() && strCurDir.At(1)==L':')
 	{
-		Pos=Upper(strCurDir.At(0))-L'A';
+		Pos=Max(0, Upper(strCurDir.At(0))-L'A');
 	}
 
 	while (Pos!=-1)
@@ -349,7 +349,7 @@ static size_t AddPluginItems(VMenu &ChDisk, int Pos, int DiskCount, bool SetSele
 
 static void ConfigureChangeDriveMode()
 {
-	DialogBuilder Builder(MChangeDriveConfigure, L"");
+	DialogBuilder Builder(MChangeDriveConfigure, L"ChangeDriveMode");
 	Builder.AddCheckbox(MChangeDriveShowDiskType, &Opt.ChangeDriveMode, DRIVE_SHOW_TYPE);
 	Builder.AddCheckbox(MChangeDriveShowNetworkName, &Opt.ChangeDriveMode, DRIVE_SHOW_NETNAME);
 	Builder.AddCheckbox(MChangeDriveShowLabel, &Opt.ChangeDriveMode, DRIVE_SHOW_LABEL);

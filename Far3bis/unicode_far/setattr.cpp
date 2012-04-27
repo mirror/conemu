@@ -824,7 +824,9 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 			{
 				if (!DlgParam.Plugin)
 				{
-					FileAttr=apiGetFileAttributes(strSelName);
+					DWORD AddFileAttr=apiGetFileAttributes(strSelName);
+					if (AddFileAttr != INVALID_FILE_ATTRIBUTES)
+						FileAttr|=AddFileAttr;
 				}
 
 				//_SVS(SysLog(L"SelName=%s  FileAttr=0x%08X",SelName,FileAttr));
@@ -874,7 +876,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 			}
 
 			// обработка случая, если ЭТО SymLink
-			if (FileAttr!=INVALID_FILE_ATTRIBUTES && FileAttr&FILE_ATTRIBUTE_REPARSE_POINT)
+			if (FileAttr!=INVALID_FILE_ATTRIBUTES && (FileAttr&FILE_ATTRIBUTE_REPARSE_POINT))
 			{
 				DWORD ReparseTag=0;
 				DWORD LenJunction=DlgParam.Plugin?0:GetReparsePointInfo(strSelName, strLinkName,&ReparseTag);
@@ -907,10 +909,14 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 					}
 				}
 
+				if (!LenJunction)
+					strLinkName=MSG(MSetAttrUnknownJunction);
+
 				AttrDlg[SA_TEXT_SYMLINK].Flags&=~DIF_HIDDEN;
 				AttrDlg[SA_TEXT_SYMLINK].strData=MSG(ID_Msg);
 				AttrDlg[SA_EDIT_SYMLINK].Flags&=~DIF_HIDDEN;
-				AttrDlg[SA_EDIT_SYMLINK].strData=LenJunction?strLinkName.CPtr():MSG(MSetAttrUnknownJunction);
+				AttrDlg[SA_EDIT_SYMLINK].strData=strLinkName.CPtr();
+
 				DlgParam.FileSystemFlags=0;
 				string strRoot;
 				GetPathRoot(strSelName,strRoot);
