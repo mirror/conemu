@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <TlHelp32.h>
 #include "version.h"
 #include "Memory.h"
+#include "SetHook.h"
 
 #ifdef _DEBUG
 	//#define USE_MINIDUMP
@@ -266,6 +267,14 @@ static const LoaderFunctions3
 
 //#define IsFarColorValid(c) ( ((c).Flags & (FCF_FG_4BIT|FCF_BG_4BIT)) == (FCF_FG_4BIT|FCF_BG_4BIT) && ((c).Flags & ~0xFF) == 0 )
 
+#define WRAPLISTDATAMAGIC 0x93FB2E5C
+struct WrapListItemData
+{
+	size_t nMagic;
+	size_t nSize;
+	DWORD  Data;
+};
+
 struct WrapPluginInfo
 {
 	// Instance variables
@@ -449,6 +458,8 @@ struct WrapPluginInfo
 
 	static FARPROC WINAPI GetProcAddressWrap(struct WrapPluginInfo* wpi, HMODULE hModule, LPCSTR lpProcName);
 	       FARPROC        GetProcAddressW3  (HMODULE hModule, LPCSTR lpProcName);
+	static FARPROC WINAPI GetOldProcAddressWrap(struct WrapPluginInfo* wpi, HMODULE hModule, LPCSTR lpProcName);
+	       FARPROC        GetOldProcAddressW3  (HMODULE hModule, LPCSTR lpProcName);
 	       
 /* ******************************** */
 
@@ -460,6 +471,7 @@ struct WrapPluginInfo
 	       void          GetPluginInfoW3  (PluginInfo *Info);
 	static HANDLE WINAPI OpenWrap(struct WrapPluginInfo* wpi, const OpenInfo *Info);
 	       HANDLE        OpenW3  (const OpenInfo *Info);
+		   HANDLE        OpenFilePluginHelper(LPCWSTR asFile);
 	static HANDLE WINAPI AnalyseWrap(struct WrapPluginInfo* wpi, const AnalyseInfo *Info);
 	       HANDLE        AnalyseW3  (const AnalyseInfo *Info);
 	static void   WINAPI CloseAnalyseWrap(struct WrapPluginInfo* wpi, const CloseAnalyseInfo *Info);
@@ -1571,6 +1583,11 @@ BOOL WrapPluginInfo::LoadPlugin(BOOL abSilent)
 		DebugDump(L"LoadPlugin failed (mh_Dll)!", ms_File);
 	}
 	#endif
+
+	if (mh_Dll != NULL)
+	{
+		SetHook(ms_File, mh_Dll, TRUE);
+	}
 	
 	return (mh_Dll != NULL);
 }
@@ -1878,6 +1895,8 @@ OPENPANELINFO_FLAGS WrapPluginInfo::OpenPanelInfoFlags_2_3(DWORD Flags2)
 	if ((Flags2 & Far2::OPIF_EXTERNALDELETE)) Flags3 |= OPIF_EXTERNALDELETE;
 	if ((Flags2 & Far2::OPIF_EXTERNALMKDIR)) Flags3 |= OPIF_EXTERNALMKDIR;
 	if ((Flags2 & Far2::OPIF_USEATTRHIGHLIGHTING)) Flags3 |= OPIF_USEATTRHIGHLIGHTING;
+
+	Flags3 |= OPIF_SHORTCUT;
 	
 	return Flags3;
 }
@@ -3173,6 +3192,7 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	FarColor colors[32];
 	WRAP_FAR_CHAR_INFO pfci = {};
 	FarDialogItemData fdid3;
+	WrapListItemData* pwlid2 = NULL;
 
 	//TODO: Сохранять gnMsg_2/gnMsg_3 только если они <DM_USER!
 	if (Msg2 == gnMsg_2 && gnMsg_3 != DM_FIRST
@@ -3486,8 +3506,20 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 				ZeroStruct(flItemData3);
 				flItemData3.StructSize = sizeof(flItemData3);
 				flItemData3.Index = p2->Index;
-				flItemData3.DataSize = p2->DataSize;
-				flItemData3.Data = p2->Data;
+				size_t nOurSize = sizeof(WrapListItemData)+p2->DataSize;
+				pwlid2 = (WrapListItemData*)malloc(nOurSize);
+				pwlid2->nMagic = WRAPLISTDATAMAGIC;
+				pwlid2->nSize = p2->DataSize;
+				if (p2->DataSize <= sizeof(DWORD))
+				{
+					memmove(&pwlid2->Data, &p2->Data, p2->DataSize);
+				}
+				else
+				{
+					memmove(&pwlid2->Data, p2->Data, p2->DataSize);
+				}
+				flItemData3.DataSize = nOurSize;
+				flItemData3.Data = pwlid2;
 				flItemData3.Reserved = p2->Reserved;
 				Param2 = (LONG_PTR)&flItemData3;
 				Msg3 = DM_LISTSETDATA;
@@ -3825,7 +3857,18 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	else
 	{
 		lRc = DlgProc3(hDlg3, Msg3, Param1, (void*)Param2);
-		if (Param2 && OrgParam2 && Param2 != OrgParam2)
+		if (Msg3 == DM_LISTGETDATA)
+		{
+			WrapListItemData* pd2 = (WrapListItemData*)lRc;
+			if (pd2 && (pd2->nMagic == WRAPLISTDATAMAGIC))
+			{
+				if (pd2->nSize <= sizeof(DWORD))
+					lRc = pd2->Data;
+				else
+					lRc = (LONG_PTR)&pd2->Data;
+			}
+		}
+		else if (Param2 && OrgParam2 && Param2 != OrgParam2)
 		{
 			//FarMessageParam_3_2(hDlg3, Msg, Param1, Param2, OrgParam2, lRc);
 			switch (Msg3)
@@ -3935,6 +3978,8 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 
 	if (pfci.p != NULL)
 		free(pfci.p);
+	if (pwlid2)
+		free(pwlid2);
 	return lRc;
 }
 
@@ -7073,7 +7118,19 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
     //memset(Info, 0, sizeof(PluginInfo)); -- Размер выделенной памяти может быть меньше, чем ожидает плагин, memset низя
 	//Info->StructSize = sizeof(*Info);
 	//_ASSERTE(Info->StructSize>0 && (Info->StructSize >= (size_t)(((LPBYTE)&Info->MacroFunctionNumber) - (LPBYTE)Info)));
-	_ASSERTE(Info->StructSize>=sizeof(*Info));
+
+	_ASSERTE(Info && Info->StructSize>=sizeof(*Info));
+
+	//Yac, блин.
+	if (Info && !Info->StructSize)
+	{
+		//if (!IsBadWritePtr(Info, sizeof(Far2::PluginInfo)))
+		//{
+		//	GetPluginInfoInternal();
+		//	memmove(Info, &m_Info, sizeof(m_Info));
+		//}
+		return;
+	}
 
 	//_ASSERTE(lbPsi2 && lbPsi3);
 	if (!lbPsi3)
@@ -7199,6 +7256,28 @@ void WrapPluginInfo::GetPluginInfoW3(PluginInfo *Info)
     }
 }
 
+HANDLE WrapPluginInfo::OpenFilePluginHelper(LPCWSTR asFile)
+{
+	unsigned char Buffer[8192];
+	DWORD nRead = 0;
+	// Поскольку функция ожидает буфер - нужно считать заголовок файла
+	// И предварительно, сконвертить путь в \\UNC формат
+	size_t nLen = FSF3.ConvertPath(CPM_NATIVE, asFile, NULL, 0);
+	wchar_t* pszUnc = (wchar_t*)malloc(nLen*sizeof(wchar_t));
+	FSF3.ConvertPath(CPM_NATIVE, asFile, pszUnc, nLen);
+	HANDLE hFile = CreateFile(pszUnc, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		if (!ReadFile(hFile, Buffer, sizeof(Buffer), &nRead, NULL))
+			nRead = 0;
+		CloseHandle(hFile);
+	}
+	free(pszUnc);
+	
+	HANDLE h = OpenFilePluginW(asFile, Buffer, nRead, 0);
+	return h;
+}
+
 HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 {
 	LOG_CMD(L"OpenW(0x%08X)", (DWORD)Info->OpenFrom,0,0);
@@ -7283,23 +7362,7 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		&& (ms_ForcePrefix[0] && (!m_Info.CommandPrefix || !*m_Info.CommandPrefix) && OpenFilePluginW))
 	{
 		// Сюда мы попадаем только если архивный плагин экспортит OpenFilePluginW, но не удосужился объявить префикс
-		unsigned char Buffer[8192];
-		DWORD nRead = 0;
-		// Поскольку функция ожидает буфер - нужно считать заголовок файла
-		// И предварительно, сконвертить путь в \\UNC формат
-		size_t nLen = FSF3.ConvertPath(CPM_NATIVE, (LPCWSTR)Info->Data, NULL, 0);
-		wchar_t* pszUnc = (wchar_t*)malloc(nLen*sizeof(wchar_t));
-		FSF3.ConvertPath(CPM_NATIVE, (LPCWSTR)Info->Data, pszUnc, nLen);
-		HANDLE hFile = CreateFile(pszUnc, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-		if (hFile != INVALID_HANDLE_VALUE)
-		{
-			if (!ReadFile(hFile, Buffer, sizeof(Buffer), &nRead, NULL))
-				nRead = 0;
-			CloseHandle(hFile);
-		}
-		free(pszUnc);
-		
-		h = OpenFilePluginW((LPCWSTR)Info->Data, Buffer, nRead, 0);
+		h = OpenFilePluginHelper((LPCWSTR)Info->Data);
 		goto trap;
 	}
 
@@ -7373,7 +7436,29 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		case OPEN_FINDLIST:
 			h = SetFindListW ? OpenPluginW(Far2::OPEN_FINDLIST, Info->Data) : INVALID_HANDLE_VALUE; break;
 		case OPEN_SHORTCUT:
-			h = OpenPluginW(Far2::OPEN_SHORTCUT, Info->Data); break;
+			// Far3 build 
+			{
+				INT_PTR Item = Info->Data;
+				#if MVV_3>=2556
+				OpenShortcutInfo* pOSI = (OpenShortcutInfo*)Info->Data;
+				Item = (INT_PTR)pOSI->ShortcutData;
+				#endif
+				// Скорее всего, плагин не поддерживает OPEN_SHORTCUT (не помню таких)
+				if (OpenFilePluginW)
+				{
+					if (pOSI->HostFile)
+						h = OpenFilePluginHelper(pOSI->HostFile);
+					else if (m_Info.PluginMenuStringsNumber == 1)
+						h = OpenPluginW(Far2::OPEN_PLUGINSMENU, 0);
+					else
+						h = OpenPluginW(Far2::OPEN_COMMANDLINE, (INT_PTR)L"");
+				}
+				else
+				{
+					h = OpenPluginW(Far2::OPEN_SHORTCUT, Item);
+				}
+			}
+			break;
 		case OPEN_COMMANDLINE:
 			h = OpenPluginW(Far2::OPEN_COMMANDLINE, Info->Data); break;
 		case OPEN_EDITOR:
@@ -8056,6 +8141,17 @@ FARPROC WrapPluginInfo::GetProcAddressW3(HMODULE hModule, LPCSTR lpProcName)
 	
 	// OK, можно
 	return GetProcAddress(hModule, lpProcName);
+}
+/* *** */
+FARPROC WrapPluginInfo::GetOldProcAddressWrap(struct WrapPluginInfo* wpi, HMODULE hModule, LPCSTR lpProcName)
+{
+	return wpi->GetOldProcAddressW3(hModule, lpProcName);
+}
+FARPROC WrapPluginInfo::GetOldProcAddressW3(HMODULE hModule, LPCSTR lpProcName)
+{
+	if (hModule != mh_Loader)
+		return NULL;
+	return GetProcAddress(mh_Dll, lpProcName);
 }
 /* *** */
 void WrapPluginInfo::SetStartupInfoWrap(struct WrapPluginInfo* wpi, PluginStartupInfo *Info)
@@ -9244,6 +9340,7 @@ int WINAPI InitPlugin(struct Far3WrapFunctions *pInfo2)
 	#undef SET_FN
 	#define SET_FN(n) pInfo2->n = WrapPluginInfo::n;
 	SET_FN(GetProcAddressWrap);
+	SET_FN(GetOldProcAddressWrap);
 	SET_FN(SetStartupInfoWrap);
 	SET_FN(GetGlobalInfoWrap);
 	SET_FN(GetPluginInfoWrap);

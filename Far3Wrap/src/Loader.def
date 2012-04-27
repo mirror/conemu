@@ -1,5 +1,6 @@
 EXPORTS
 	FarWrapGetProcAddress
+	FarWrapGetOldProcAddress
 ;; А это, чтобы не запустился в Far2
 	GetMinFarVersionW
 

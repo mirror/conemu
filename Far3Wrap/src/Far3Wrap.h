@@ -144,6 +144,7 @@ struct Far3WrapFunctions
 
 	// [Out] Wrapper exported functions 
 	_GetProcAddressWrap GetProcAddressWrap;
+	_GetProcAddressWrap GetOldProcAddressWrap;
 	_SetStartupInfoWrap SetStartupInfoWrap;
 	_GetGlobalInfoWrap GetGlobalInfoWrap;
 	_GetPluginInfoWrap GetPluginInfoWrap;

@@ -279,6 +279,15 @@ FARPROC WINAPI FarWrapGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	return GetProcAddress(hModule, lpProcName);
 }
 
+FARPROC WINAPI FarWrapGetOldProcAddress(HMODULE hModule, LPCSTR lpProcName)
+{
+	if (!gbLoadWrapperCalled)
+		LoadWrapper(gszWrapper);
+	if (fwf.GetOldProcAddressWrap)
+		return fwf.GetOldProcAddressWrap(fwf.wpi, hModule, lpProcName);
+	return NULL;
+}
+
 int WINAPI GetMinFarVersionW(void)
 {
 	if (!gbLoadWrapperCalled)
