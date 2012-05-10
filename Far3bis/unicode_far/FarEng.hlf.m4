@@ -1136,6 +1136,16 @@ $ #Режимы отображения информационной панели
 
 @InfoPanelSettings
 $ #Настройка информационной панели#
+  #Показывать состояние питания#
+
+    Если опция включена, то в ~информационной панели~@InfoPanel@ будет выводится
+секция, описывающая состояние системы питания.
+
+  #Показывать параметры компакт-дисков#
+
+    Если опция включена, то Far будет пытаться определить тип CD-привода. 
+Различаются следующие приводы: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW и DVD-RAM. 
+
   #Формат вывода имени компьютера#
 
   Задает формат вывода имени компьютера. Может быть одним из:
@@ -1194,11 +1204,6 @@ $ #Настройка информационной панели#
       engineering.widget.com\JohnDoe
 
     Формат вывода зависит от наличия доменной структуры.
-
-  #Показывать состояние питания#
-
-    Если опция включена, то в ~информационной панели~@InfoPanel@ будет выводится
-секция, описывающая состояние системы питания.
 
 @QViewPanel
 $ #Panels: quick view panel#
@@ -2445,10 +2450,9 @@ This may require some additional time before starting deleting
 to calculate the total files count.
 
   #Use Ctrl-PgUp to change drive#
-  Pressing #Ctrl-PgUp# in the root directory:
-  - for local drives - shows the drive selection menu;
-  - for network drives - activates the Network plugin (if it is available)
-or the drive selection menu (if the Network plugin is not available).
+  Pressing #Ctrl-PgUp# in the root directory shows the drive selection menu.
+  If Network plugin is installed, for network folders (and network drives, if switch
+is in the third state) a list of server shared resources  will be shown.
 
   #ClearType friendly redraw#
   Redraw the window in such a way that ClearType related artifacts do not appear.
@@ -2518,7 +2522,7 @@ but this block.
 
   #AutoComplete#
   Allows to use the AutoComplete function in command line. When the option is
-disabled, you may use the #Ctrl-Shift-End# key to autocomplete a line. The autocomplete
+disabled, you may use the #Ctrl-Space# key to autocomplete a line. The autocomplete
 feature is disabled while a macro is being recorded or executed.
 
   #Set command line prompt format#
@@ -3349,6 +3353,10 @@ $ #Settings dialog: editor#
   #Tab size#                Number of spaces in a tab character.
 
   #Show scrollbar#          Show scrollbar.
+
+  #Show white space#        Показать пробельные символы (пробелы, 
+                          табуляции, переводы строк и возвраты 
+                          кареток).
 
   #Pick up the word#        При вызове диалога поиска/замены в строку
                           поиска будет подставляться слово, на

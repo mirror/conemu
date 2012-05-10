@@ -767,6 +767,67 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 
 			break;
 		}
+		case MCODE_F_EDITOR_DELLINE:  // N=Editor.DelLine([Line])
+		case MCODE_F_EDITOR_GETSTR:   // S=Editor.GetStr([Line])
+		case MCODE_F_EDITOR_INSSTR:   // N=Editor.InsStr([S[,Line]])
+		case MCODE_F_EDITOR_SETSTR:   // N=Editor.SetStr([S[,Line]])
+		{
+			if (Flags.Check(FEDITOR_LOCKMODE) && (OpCode!=MCODE_F_EDITOR_GETSTR))
+			{
+				_ECTLLOG(SysLog(L"FEDITOR_LOCKMODE!"));
+				return 0;
+			}
+
+			int DestLine=iParam;
+
+			if (DestLine<0)
+				DestLine=NumLine;
+
+			Edit *EditPtr=GetStringByNumber(DestLine);
+
+			if (!EditPtr)
+			{
+				_ECTLLOG(SysLog(L"VMProcess(MCODE_F_EDITOR_*,...) => GetStringByNumber(%d) return nullptr",DestLine));
+				return 0;
+			}
+
+			//TurnOffMarkingBlock();
+
+			switch (OpCode)
+			{
+				case MCODE_F_EDITOR_DELLINE:  // N=Editor.DelLine([Line])
+				{
+					DeleteString(EditPtr,DestLine,TRUE,DestLine);
+					return 1;
+				}
+				case MCODE_F_EDITOR_GETSTR:  // S=Editor.GetStr([Line])
+				{
+					EditPtr->GetString(*(string *)vParam);
+					return 1;
+				}
+				case MCODE_F_EDITOR_INSSTR:  // N=Editor.InsStr([S[,Line]])
+				{
+					Edit *NewEditPtr=InsertString((const wchar_t *)vParam, StrLength((const wchar_t *)vParam), EditPtr, DestLine);
+					NewEditPtr->SetEOL(EditPtr->GetEOL());
+					AddUndoData(UNDO_INSSTR,NewEditPtr->GetStringAddr(),EditPtr->GetEOL(),DestLine,0,NewEditPtr->GetLength());
+					Change(ECTYPE_ADDED,DestLine+1);
+					TextChanged(1);
+					return 1;
+				}
+				case MCODE_F_EDITOR_SETSTR:  // N=Editor.SetStr([S[,Line]])
+				{
+					string strEOL=EditPtr->GetEOL();
+					int CurPos=EditPtr->GetCurPos();
+					AddUndoData(UNDO_EDIT,EditPtr->GetStringAddr(),strEOL.CPtr(),DestLine,CurPos,EditPtr->GetLength());
+					EditPtr->SetString((const wchar_t *)vParam,-1);
+					EditPtr->SetEOL(strEOL.CPtr());
+					EditPtr->SetCurPos(CurPos);
+					Change(ECTYPE_CHANGED,DestLine);
+					TextChanged(1);
+					return 1;
+				}
+			}
+		}
 		case MCODE_V_EDITORSELVALUE: // Editor.SelValue
 		{
 			string strText;
@@ -1662,10 +1723,7 @@ int Editor::ProcessKey(int Key)
 							CurLine->GetSelection(SelStart,SelEnd);
 							CurLine->m_next->GetSelection(NextSelStart,NextSelEnd);
 							const wchar_t *Str;
-							#if 1
-							//Maximus: softbreaks
 							const wchar_t *NextEOL = CurLine->m_next->GetEOL();
-							#endif
 							int NextLength;
 							CurLine->m_next->GetBinaryString(&Str,nullptr,NextLength);
 							CurLine->InsertBinaryString(Str,NextLength);
@@ -1673,14 +1731,7 @@ int Editor::ProcessKey(int Key)
 							CurLine->SetCurPos(CurPos);
 							DeleteString(CurLine->m_next,NumLine+1,TRUE,NumLine+1);
 
-							#if 1
-							//Maximus: softbreaks
 							CurLine->SetEOL(NextEOL);
-							#else
-							if (!NextLength)
-								CurLine->SetEOL(L"");
-							#endif
-
 
 							if (NextSelStart!=-1)
 							{
@@ -3280,15 +3331,6 @@ void Editor::InsertString()
 	const wchar_t *EndSeq;
 	CurLine->GetBinaryString(&CurLineStr,&EndSeq,Length);
 
-	/* $ 13.01.2002 IS
-	   Если не был определен тип конца строки, то считаем что конец строки
-	   у нас равен DOS_EOL_fmt и установим его явно.
-	*/
-	#if 0
-	//Maximus: для softbreaks этот код не нужен
-	if (!*EndSeq)
-		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
-	#endif
 
 	CurPos=CurLine->GetCurPos();
 	CurLine->GetSelection(SelStart,SelEnd);
@@ -3369,12 +3411,7 @@ void Editor::InsertString()
 		AddUndoData(UNDO_BEGIN);
 		AddUndoData(UNDO_EDIT,CurLine->GetStringAddr(),CurLine->GetEOL(),NumLine,
 		            CurLine->GetCurPos(),CurLine->GetLength());
-		#if 1
-		//Maximus: softbreaks
 		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0);
-		#else
-		AddUndoData(UNDO_INSSTR,nullptr,EndList==CurLine?L"":GlobalEOL,NumLine+1,0); // EOL? - CurLine->GetEOL()  GlobalEOL   ""
-		#endif
 		AddUndoData(UNDO_END);
 		wchar_t *NewCurLineStr = (wchar_t *) xf_malloc((CurPos+1)*sizeof(wchar_t));
 
@@ -3392,10 +3429,6 @@ void Editor::InsertString()
 		}
 
 		CurLine->SetBinaryString(NewCurLineStr,StrSize);
-		//Maximus: для softbreaks этот код не нужен
-		#if 0
-		CurLine->SetEOL(EndSeq);
-		#endif
 		xf_free(NewCurLineStr);
 		//Maximus: BUGBUG: softbreaks: нужно проверить
 		Change(ECTYPE_CHANGED,NumLine);
@@ -3403,16 +3436,9 @@ void Editor::InsertString()
 	else
 	{
 		NewString->SetString(L"");
-		#if 1
-		//Maximus: softbreaks
 		AddUndoData(UNDO_INSSTR,nullptr,CurLine->GetEOL(),NumLine+1,0);
-		#else
-		AddUndoData(UNDO_INSSTR,nullptr,L"",NumLine+1,0);// EOL? - CurLine->GetEOL()  GlobalEOL   ""
-		#endif
 	}
 
-	#if 1
-	//Maximus: softbreaks
 	if (EndSeq && *EndSeq)
 	{
 		CurLine->SetEOL(EndSeq);
@@ -3422,7 +3448,6 @@ void Editor::InsertString()
 		CurLine->SetEOL(*GlobalEOL?GlobalEOL:DOS_EOL_fmt);
 		NewString->SetEOL(EndSeq);
 	}
-	#endif
 
 	//Maximus: BUGBUG: softbreaks: нужно проверить
 	Change(ECTYPE_CHANGED,NumLine+1);
@@ -4160,22 +4185,24 @@ void Editor::Paste(const wchar_t *Src)
 				CurLine->Select(StartPos,-1);
 				StartPos=0;
 				EdOpt.AutoIndent=FALSE;
-				#if 1
-				//Maximus: не игнорировать EOL заданный в буфере обмена!
 				Edit *PrevLine=CurLine;
 				ProcessKey(KEY_ENTER);
 				_ASSERTE(PrevLine!=CurLine);
-				//BUGBUG: \r\n\n?
 				wchar_t ClipEol[4] = {ClipText[I]};
 				if (ClipText[I]==L'\r' && ClipText[I+1]==L'\n')
+				{
 					ClipEol[1]=L'\n';
+					if (ClipText[I+2]==L'\n')
+						ClipEol[2]=L'\n'; // \r\n\n
+				}
 				PrevLine->SetEOL(ClipEol);
-				#else
-				ProcessKey(KEY_ENTER);
-				#endif
 
 				if (ClipText[I]==L'\r' && ClipText[I+1]==L'\n')
+				{
 					I++;
+					if (ClipText[I+1]==L'\n')
+						I++; // \r\n\n
+				}
 
 				I++;
 			}
@@ -4267,10 +4294,7 @@ wchar_t *Editor::Block2Text(wchar_t *ptrInitData)
 
 	size_t TotalChars = DataSize;
 	int StartSel, EndSel;
-	#if 1
-	//Maximus: не игнорировать EOL
 	const wchar_t* Eol;
-	#endif
 	for (Edit *Ptr = BlockStart; Ptr; Ptr = Ptr->m_next)
 	{
 		Ptr->GetSelection(StartSel, EndSel);
@@ -4279,13 +4303,9 @@ wchar_t *Editor::Block2Text(wchar_t *ptrInitData)
 		if (EndSel == -1)
 		{
 			TotalChars += Ptr->GetLength() - StartSel;
-			#if 1
-			//Maximus: не игнорировать EOL
 			Eol = Ptr->GetEOL();
 			TotalChars += wcslen(Eol); // CRLF/CRCRLF/...
-			#else
-			TotalChars += 2; // CRLF
-			#endif
+
 		}
 		else
 			TotalChars += EndSel - StartSel;
@@ -4330,18 +4350,13 @@ wchar_t *Editor::Block2Text(wchar_t *ptrInitData)
 
 		if (EndSel == -1)
 		{
-			#if 1
-			//Maximus: не игнорировать EOL
 			Eol = Ptr->GetEOL();
 			if (*Eol)
 			{
 				wcscpy(CopyData + DataSize, Eol);
 				DataSize += wcslen(Eol);
 			}
-			#else
-			wcscpy(CopyData + DataSize, DOS_EOL_fmt);
-			DataSize += 2;
-			#endif
+
 		}
 	}
 
@@ -6633,11 +6648,29 @@ Edit * Editor::GetStringByNumber(int DestLine)
 	if (DestLine>NumLastLine)
 		return nullptr;
 
+	if(DestLine==0 || DestLine==NumLastLine)
+	{
+		if(DestLine==0)
+		{
+			LastGetLine = TopList;
+		}
+		else
+		{
+			LastGetLine = EndList;
+		}
+
+		LastGetLineNumber = DestLine;
+		return LastGetLine;
+	}
 	Edit *CurPtr = CurLine;
 	int StartLine = NumLine;
 
 	if(LastGetLine)
 	{
+		if(DestLine==LastGetLineNumber)
+		{
+			return LastGetLine;
+		}
 		CurPtr = LastGetLine;
 		StartLine = LastGetLineNumber;
 	}
@@ -6661,16 +6694,33 @@ Edit * Editor::GetStringByNumber(int DestLine)
 		}
 	}
 
-	for (int Line=StartLine; Line!=DestLine; Forward?Line++:Line--)
+	if(Forward)
 	{
-		CurPtr=(Forward?CurPtr->m_next:CurPtr->m_prev);
-		if (!CurPtr)
+		for (int Line=StartLine; Line!=DestLine; Line++)
 		{
-			LastGetLine = Forward?TopList:EndList;
-			LastGetLineNumber = Forward?0:NumLastLine-1;
-			return nullptr;
+			CurPtr=CurPtr->m_next;
+			if (!CurPtr)
+			{
+				LastGetLine = TopList;
+				LastGetLineNumber = 0;
+				return nullptr;
+			}
 		}
 	}
+	else
+	{
+		for (int Line=StartLine; Line!=DestLine; Line--)
+		{
+			CurPtr=CurPtr->m_prev;
+			if (!CurPtr)
+			{
+				LastGetLine = EndList;
+				LastGetLineNumber = NumLastLine-1;
+				return nullptr;
+			}
+		}
+	}
+
 	LastGetLine = CurPtr;
 	LastGetLineNumber = DestLine;
 	return CurPtr;

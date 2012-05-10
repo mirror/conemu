@@ -757,7 +757,8 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 			LngMsg = L"\nError: cannot load language data.\n\nPress any key to exit...";
 			break;
 		}
-		Console.Write(LngMsg,StrLength(LngMsg));
+		Console.Write(LngMsg);
+		Console.Commit();
 		Console.FlushInputBuffer();
 		WaitKey(); // А стоит ли ожидать клавишу??? Стоит
 		return 1;

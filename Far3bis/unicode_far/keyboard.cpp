@@ -639,6 +639,26 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 
 	if (Key)
 	{
+		#ifdef _DEBUG
+		//Maximus: ловим бага
+		static DWORD nIdle;
+		static bool bIdle;
+		if (Key && Key!=KEY_IDLE && Key!=KEY_NONE && Key!=KEY_GOTFOCUS && Key!=KEY_KILLFOCUS
+			&& rec->EventType == KEY_EVENT)
+		{
+			if (!bIdle && (GetTickCount() - nIdle) > 3000)
+			{
+				OutputDebugString(L"================= Idle ===================\n");
+				bIdle = true;
+			}
+			wchar_t szInfo[128];
+			wsprintf(szInfo, L"GetInputRecord = %s\n", _FARKEY_ToName(Key));
+			OutputDebugString(szInfo);
+			bIdle = false;
+			nIdle = GetTickCount();
+		}
+		#endif
+
 		if (CtrlObject)
 		{
 			ProcessConsoleInputInfo Info={sizeof(Info),PCIF_NONE,*rec};
@@ -684,6 +704,16 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse,bool 
 		int VirtKey,ControlState;
 		CtrlObject->Macro.RunStartMacro();
 		int MacroKey=CtrlObject->Macro.GetKey();
+
+		#ifdef _DEBUG
+		//Maximus: ловим бага
+		if (MacroKey && MacroKey!=KEY_IDLE && MacroKey!=KEY_NONE && MacroKey!=KEY_GOTFOCUS && MacroKey!=KEY_KILLFOCUS)
+		{
+			wchar_t szInfo[128];
+			wsprintf(szInfo, L"Macro.GetKey = 0x%08X\n", MacroKey);
+			OutputDebugString(szInfo);
+		}
+		#endif
 
 		if (MacroKey)
 		{

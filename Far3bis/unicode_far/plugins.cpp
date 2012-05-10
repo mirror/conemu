@@ -1388,6 +1388,10 @@ int PluginManager::ProcessMacro(const GUID& guid,ProcessMacroInfo *Info)
 #if defined(MANTIS_0001687)
 int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 {
+	//Maximus: Наверное нефиг плагинам ковыряться, когда клавиша на макрос назначается
+	if (IsProcessAssignMacroKey)
+		return 0;
+
 	int nResult = 0;
 
 	for (size_t i=0; i<PluginsCount; i++)
@@ -1405,11 +1409,19 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 			if (n == 1)
 			{
 				nResult = 1;
+				#ifdef _DEBUG
+				//Maximus: ловим бага
+				OutputDebugString(L"  -- Input dropped\n");
+				#endif
 				break;
 			}
 			else if (n == 2)
 			{
 				nResult = 2;
+				#ifdef _DEBUG
+				//Maximus: ловим бага
+				OutputDebugString(L"  -- Input changed\n");
+				#endif
 			}
 		}
 	}
@@ -1883,6 +1895,7 @@ NEXT:
 								strName=PointToName(pPlugin->GetTitle());
 								if (strName.IsEmpty()) // если Title пуст - покажем в меню имя dll-ки.
 									strName=PointToName(pPlugin->GetModuleName());
+								guid=FarGuid;
 							}
 							else break;
 						}

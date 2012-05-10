@@ -199,7 +199,7 @@ void FileList::PopPrevData(const string& DefaultName,bool Closed,bool UsePrev,bo
 			GoToFile(strName);
 
 		#if 1
-		//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели), дл€ возврата координат в API
 		SetTopFile(UpperFolderTopFile);
 		#else
 		CurTopFile=UpperFolderTopFile;

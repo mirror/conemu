@@ -136,7 +136,7 @@ class Panel:public ScreenObject
 		int PrevViewMode,ViewMode;
 		int CurTopFile;
 		#if 1
-		//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели), дл€ возврата координат в API
 		int LastBottomFile;
 		#endif
 		int CurFile;
@@ -162,7 +162,7 @@ class Panel:public ScreenObject
 		void DragMessage(int X,int Y,int Move);
 
 	#if 1
-	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели), дл€ возврата координат в API
 	protected:
 		void SetTopFile(int NewTopFile) { LastBottomFile=-1; CurTopFile=NewTopFile; };
 	#endif
@@ -227,7 +227,8 @@ class Panel:public ScreenObject
 		*/
 		virtual void UpdateIfRequired() {}
 
-		virtual void CloseChangeNotification() {}
+		virtual void StartFSWatcher() {}
+		virtual void StopFSWatcher() {}
 		virtual int FindPartName(const wchar_t *Name,int Next,int Direct=1,int ExcludeSets=0) {return FALSE;}
 		virtual bool GetPlainString(string& Dest,int ListPos){return false;}
 

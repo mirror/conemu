@@ -346,9 +346,13 @@ static bool clipFunc(const TMacroFunction*);
 static bool dateFunc(const TMacroFunction*);
 static bool dlggetvalueFunc(const TMacroFunction*);
 static bool dlgsetfocusFunc(const TMacroFunction*);
+static bool editordellineFunc(const TMacroFunction*);
+static bool editorgetstrFunc(const TMacroFunction*);
+static bool editorinsstrFunc(const TMacroFunction*);
 static bool editorposFunc(const TMacroFunction*);
 static bool editorselFunc(const TMacroFunction*);
 static bool editorsetFunc(const TMacroFunction*);
+static bool editorsetstrFunc(const TMacroFunction*);
 static bool editorsettitleFunc(const TMacroFunction*);
 static bool editorundoFunc(const TMacroFunction*);
 static bool environFunc(const TMacroFunction*);
@@ -433,9 +437,13 @@ static TMacroFunction intMacroFunction[]=
 	{L"Date",             nullptr, L"S=Date([S])",                                               dateFunc,           nullptr, 0, 0,                                      MCODE_F_DATE,            },
 	{L"Dlg.GetValue",     nullptr, L"V=Dlg.GetValue([Pos[,InfoID]])",                            dlggetvalueFunc,    nullptr, 0, 0,                                      MCODE_F_DLG_GETVALUE,    },
 	{L"Dlg.SetFocus",     nullptr, L"N=Dlg.SetFocus([ID])",                                      dlgsetfocusFunc,    nullptr, 0, 0,                                      MCODE_F_DLG_SETFOCUS,    },
+	{L"Editor.DelLine",   nullptr, L"N=Editor.DelLine([Line])",                                  editordellineFunc,  nullptr, 0, 0,                                      MCODE_F_EDITOR_DELLINE,  },
+	{L"Editor.GetStr",    nullptr, L"S=Editor.GetStr([Line])",                                   editorgetstrFunc,   nullptr, 0, 0,                                      MCODE_F_EDITOR_GETSTR,   },
+	{L"Editor.InsStr",    nullptr, L"N=Editor.InsStr([S[,Line]])",                               editorinsstrFunc,   nullptr, 0, 0,                                      MCODE_F_EDITOR_INSSTR,   },
 	{L"Editor.Pos",       nullptr, L"N=Editor.Pos(Op,What[,Where])",                             editorposFunc,      nullptr, 0, 0,                                      MCODE_F_EDITOR_POS,      },
 	{L"Editor.Sel",       nullptr, L"V=Editor.Sel(Action[,Opt])",                                editorselFunc,      nullptr, 0, 0,                                      MCODE_F_EDITOR_SEL,      },
 	{L"Editor.Set",       nullptr, L"N=Editor.Set(N,Var)",                                       editorsetFunc,      nullptr, 0, 0,                                      MCODE_F_EDITOR_SET,      },
+	{L"Editor.SetStr",    nullptr, L"N=Editor.SetStr([S[,Line]])",                               editorsetstrFunc,   nullptr, 0, 0,                                      MCODE_F_EDITOR_SETSTR,   },
 	{L"Editor.Settitle",  nullptr, L"N=Editor.SetTitle([Title])",                                editorsettitleFunc, nullptr, 0, 0,                                      MCODE_F_EDITOR_SETTITLE, },
 	{L"Editor.Undo",      nullptr, L"V=Editor.Undo(N)",                                          editorundoFunc,     nullptr, 0, 0,                                      MCODE_F_EDITOR_UNDO,     },
 	{L"Env",              nullptr, L"S=Env(S[,Mode[,Value]])",                                   environFunc,        nullptr, 0, 0,                                      MCODE_F_ENVIRON,         },
@@ -2628,8 +2636,8 @@ static bool promptFunc(const TMacroFunction*)
 
 	DWORD oldHistoryDisable=CtrlObject->Macro.GetHistoryDisableMask();
 
-	if (history && *history) // Mantis#0001743: Возможность отключения истории
-		CtrlObject->Macro.SetHistoryDisableMask(8); // если указан history, то принудительно выставляем историю для ЭТОГО prompt()
+	if (!(history && *history)) // Mantis#0001743: Возможность отключения истории
+		CtrlObject->Macro.SetHistoryDisableMask(8); // если не указан history, то принудительно отключаем историю для ЭТОГО prompt()
 
 	if (GetString(title,prompt,history,src,strDest,nullptr,(Flags&~FIB_CHECKBOX)|FIB_ENABLEEMPTY,nullptr,nullptr))
 	{
@@ -4636,6 +4644,98 @@ static bool editorsettitleFunc(const TMacroFunction*)
 	return Ret.i()!=0;
 }
 
+// N=Editor.DelLine([Line])
+static bool editordellineFunc(const TMacroFunction*)
+{
+	parseParams(1,Params);
+	TVar Ret(0ll);
+	TVar& Line(Params[0]);
+
+	if (CtrlObject->Macro.GetMode()==MACRO_EDITOR && CtrlObject->Plugins->CurEditor && CtrlObject->Plugins->CurEditor->IsVisible())
+	{
+		if (Line.isNumber())
+		{
+			Ret=(__int64)CtrlObject->Plugins->CurEditor->VMProcess(MCODE_F_EDITOR_DELLINE, nullptr, Line.getInteger()-1);
+		}
+	}
+
+	VMStack.Push(Ret);
+	return Ret.i()!=0;
+}
+
+// S=Editor.GetStr([Line])
+static bool editorgetstrFunc(const TMacroFunction*)
+{
+	parseParams(1,Params);
+	__int64 Ret=0;
+	TVar Res(L"");
+	TVar& Line(Params[0]);
+
+	if (CtrlObject->Macro.GetMode()==MACRO_EDITOR && CtrlObject->Plugins->CurEditor && CtrlObject->Plugins->CurEditor->IsVisible())
+	{
+		if (Line.isNumber())
+		{
+			string strRes;
+			Ret=(__int64)CtrlObject->Plugins->CurEditor->VMProcess(MCODE_F_EDITOR_GETSTR, &strRes, Line.getInteger()-1);
+			Res=strRes.CPtr();
+		}
+	}
+
+	VMStack.Push(Res);
+	return Ret!=0;
+}
+
+// N=Editor.InsStr([S[,Line]])
+static bool editorinsstrFunc(const TMacroFunction*)
+{
+	parseParams(2,Params);
+	TVar Ret(0ll);
+	TVar& S(Params[0]);
+	TVar& Line(Params[1]);
+
+	if (CtrlObject->Macro.GetMode()==MACRO_EDITOR && CtrlObject->Plugins->CurEditor && CtrlObject->Plugins->CurEditor->IsVisible())
+	{
+		if (Line.isNumber())
+		{
+			if (S.isUnknown())
+			{
+				S=L"";
+				S.toString();
+			}
+
+			Ret=(__int64)CtrlObject->Plugins->CurEditor->VMProcess(MCODE_F_EDITOR_INSSTR, (wchar_t *)S.s(), Line.getInteger()-1);
+		}
+	}
+
+	VMStack.Push(Ret);
+	return Ret.i()!=0;
+}
+
+// N=Editor.SetStr([S[,Line]])
+static bool editorsetstrFunc(const TMacroFunction*)
+{
+	parseParams(2,Params);
+	TVar Ret(0ll);
+	TVar& S(Params[0]);
+	TVar& Line(Params[1]);
+
+	if (CtrlObject->Macro.GetMode()==MACRO_EDITOR && CtrlObject->Plugins->CurEditor && CtrlObject->Plugins->CurEditor->IsVisible())
+	{
+		if (Line.isNumber())
+		{
+			if (S.isUnknown())
+			{
+				S=L"";
+				S.toString();
+			}
+
+			Ret=(__int64)CtrlObject->Plugins->CurEditor->VMProcess(MCODE_F_EDITOR_SETSTR, (wchar_t *)S.s(), Line.getInteger()-1);
+		}
+	}
+
+	VMStack.Push(Ret);
+	return Ret.i()!=0;
+}
 
 // N=Plugin.Exist(Guid)
 static bool pluginexistFunc(const TMacroFunction*)
@@ -5141,7 +5241,7 @@ begin:
 	CHECKMR(); //Maximus: для отладки
 	#endif
 
-	if (Work.ExecLIBPos>=MR->BufferSize || !MR->Buffer)
+	if (!MR || Work.ExecLIBPos>=MR->BufferSize || !MR->Buffer)
 	{
 done:
 		CHECKMR(); //Maximus: для отладки
@@ -5176,7 +5276,8 @@ done:
 
 			CHECKMR(); //Maximus: для отладки
 
-			MR->Flags&=~MFLAGS_DISABLEOUTPUT; // ????
+			if (MR)
+				MR->Flags&=~MFLAGS_DISABLEOUTPUT; // ????
 		}
 
 		Clipboard::SetUseInternalClipboardState(false); //??
@@ -6169,6 +6270,9 @@ done:
 					if (CtrlObject->Plugins->CallPlugin(guid,OPEN_FROMMACRO,&info,&ResultCallPlugin))
 						Ret=(__int64)ResultCallPlugin;
 
+					if (MR != Work.MacroWORK) // ??? Mantis#0002094 ???
+						MR=Work.MacroWORK;
+
 					if( CallPluginRules == 1 )
 						PopState();
 					else
@@ -6256,6 +6360,8 @@ done:
 					// Если нашли успешно - то теперь выполнение
 					Data.CallFlags&=~CPT_CHECKONLY;
 					CtrlObject->Plugins->CallPluginItem(guid,&Data);
+					if (MR != Work.MacroWORK)
+						MR=Work.MacroWORK;
 					#ifdef _DEBUG
 					//Maximus: при выполнении плагина вполне мог вызываться макродвижок. Обновить отладочную переменную.
 					if (!IsBadReadPtr(MR, sizeof(*MR)))
@@ -6392,7 +6498,7 @@ return_func:
 
 #else
 
-	if (MR==Work.MacroWORK && Work.ExecLIBPos>=MR->BufferSize)
+	if (MR && MR==Work.MacroWORK && Work.ExecLIBPos>=MR->BufferSize)
 	{
 		_KEYMACRO(SysLog(-1); SysLog(L"[%d] **** End Of Execute Macro ****",__LINE__));
 		if (--Work.KeyProcess < 0)
@@ -7744,6 +7850,17 @@ int KeyMacro::GetMacroSettings(int Key,UINT64 &Flags,const wchar_t *Src,const wc
 
 int KeyMacro::PostNewMacro(const wchar_t *PlainText,UINT64 Flags,DWORD AKey,bool onlyCheck)
 {
+#ifdef _DEBUG
+	//Maximus: Ловим бага
+	wchar_t szDbgInfo[255], *pch;
+	lstrcpy(szDbgInfo, L"KeyMacro::PostNewMacro: ");
+	lstrcpyn(szDbgInfo+lstrlen(szDbgInfo), PlainText, 128);
+	while ((pch = wcspbrk(szDbgInfo, L"\r\n\t"))!=NULL)
+		*pch = L' ';
+	lstrcat(szDbgInfo, L"\n");
+	OutputDebugString(szDbgInfo);
+#endif
+
 	MacroRecord NewMacroWORK2={};
 	wchar_t *Buffer=(wchar_t *)PlainText;
 	bool allocBuffer=false;

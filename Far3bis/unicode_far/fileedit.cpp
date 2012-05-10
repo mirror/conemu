@@ -2017,12 +2017,7 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, int TextForma
 
 			CurPtr->GetBinaryString(&SaveStr,&EndSeq,Length);
 
-			#if 1
-			//Maximus5: Если плагин сказал - EOL не нужен - зачем фар его пишет?
 			if (!*EndSeq && CurPtr->m_next && (*CurPtr->GetEOL()))
-			#else
-			if (!*EndSeq && CurPtr->m_next)
-			#endif
 				EndSeq=*m_editor->GlobalEOL ? m_editor->GlobalEOL:DOS_EOL_fmt;
 
 			if (TextFormat && *EndSeq)
@@ -2182,7 +2177,10 @@ int FileEditor::GetTypeAndName(string &strType, string &strName)
 
 void FileEditor::ShowConsoleTitle()
 {
-	ConsoleTitle::SetFarTitle(LangString(MInEditor) << PointToName(strFileName));
+	string strEditorTitleFormat=Opt.strEditorTitleFormat;
+	ReplaceStrings(strEditorTitleFormat,L"%Lng",MSG(MInEditor),-1,true);
+	ReplaceStrings(strEditorTitleFormat,L"%File",PointToName(strFileName),-1,true);
+	ConsoleTitle::SetFarTitle(strEditorTitleFormat);
 	Flags.Clear(FFILEEDIT_REDRAWTITLE);
 }
 
@@ -2193,10 +2191,6 @@ void FileEditor::SetScreenPosition()
 		SetPosition(0,0,ScrX,ScrY);
 	}
 }
-
-/* $ 10.05.2001 DJ
-   добавление в view/edit history
-*/
 
 void FileEditor::OnDestroy()
 {

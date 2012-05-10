@@ -117,7 +117,6 @@ FileList::FileList():
 	ListData(nullptr),
 	FileCount(0),
 	hPlugin(nullptr),
-	hListChange(INVALID_HANDLE_VALUE),
 	UpperFolderTopFile(0),
 	LastCurFile(-1),
 	ReturnCurrentFile(FALSE),
@@ -161,7 +160,7 @@ FileList::FileList():
 	apiGetCurrentDirectory(strCurDir);
 	strOriginalCurDir = strCurDir;
 	#if 1
-	//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+	//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 	SetTopFile(CurFile=0);
 	#else
 	CurTopFile=CurFile=0;
@@ -183,7 +182,7 @@ FileList::FileList():
 FileList::~FileList()
 {
 	_OT(SysLog(L"[%p] FileList::~FileList()", this));
-	CloseChangeNotification();
+	StopFSWatcher();
 
 	ClearAllItem();
 
@@ -266,7 +265,7 @@ void FileList::CorrectPosition()
 	if (!FileCount)
 	{
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile=0);
 		#else
 		CurFile=CurTopFile=0;
@@ -276,7 +275,7 @@ void FileList::CorrectPosition()
 
 	if (CurTopFile+Columns*Height>FileCount)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(FileCount-Columns*Height);
 		#else
 		CurTopFile=FileCount-Columns*Height;
@@ -290,7 +289,7 @@ void FileList::CorrectPosition()
 
 	if (CurTopFile<0)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(0);
 		#else
 		CurTopFile=0;
@@ -298,7 +297,7 @@ void FileList::CorrectPosition()
 
 	if (CurTopFile > FileCount-1)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(FileCount-1);
 		#else
 		CurTopFile=FileCount-1;
@@ -306,7 +305,7 @@ void FileList::CorrectPosition()
 
 	if (CurFile<CurTopFile)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile);
 		#else
 		CurTopFile=CurFile;
@@ -314,7 +313,7 @@ void FileList::CorrectPosition()
 
 	if (CurFile>CurTopFile+Columns*Height-1)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile-Columns*Height+1);
 		#else
 		CurTopFile=CurFile-Columns*Height+1;
@@ -956,7 +955,6 @@ int FileList::ProcessKey(int Key)
 			case KEY_RALTSHIFTBRACKET:
 			case KEY_ALTSHIFTBACKBRACKET:
 			case KEY_RALTSHIFTBACKBRACKET:
-				break;
 			case KEY_CTRLG:
 			case KEY_RCTRLG:
 			case KEY_SHIFTF4:
@@ -967,6 +965,8 @@ int FileList::ProcessKey(int Key)
 			case KEY_RALTSHIFTF9:
 			case KEY_CTRLN:
 			case KEY_RCTRLN:
+			case KEY_GOTFOCUS:
+			case KEY_KILLFOCUS:
 				break;
 				// эти спорные, хотя, если Ctrl-F работает, то и эти должны :-)
 				/*
@@ -1033,6 +1033,17 @@ int FileList::ProcessKey(int Key)
 
 	switch (Key)
 	{
+		case KEY_GOTFOCUS:
+			StartFSWatcher();
+			CtrlObject->Cp()->GetAnotherPanel(this)->StartFSWatcher();
+
+			break;
+
+		case KEY_KILLFOCUS:
+			StopFSWatcher();
+			CtrlObject->Cp()->GetAnotherPanel(this)->StopFSWatcher();
+			break;
+
 		case KEY_F1:
 		{
 			_ALGO(CleverSysLog clv(L"F1"));
@@ -2655,6 +2666,8 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 
 	bool RootPath = false;
 	bool NetPath = false;
+	bool DrivePath = false;
+
 	if (PanelMode!=PLUGIN_PANEL)
 	{
 		if (dot2Present)
@@ -2665,6 +2678,11 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 			{
 				NetPath = true;
 			}
+			else if(Type == PATH_DRIVELETTER)
+			{
+				DrivePath = true;
+			}
+
 			if(!RootPath)
 			{
 				CutToSlash(strSetDir);
@@ -2763,7 +2781,17 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 						return FALSE;
 					}
 				}
-
+				if(DrivePath && Opt.PgUpChangeDisk == 2)
+				{
+					string RemoteName;
+					if(DriveLocalToRemoteName(DRIVE_REMOTE, strCurDir.At(0), RemoteName))
+					{
+						if (CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Network,OPEN_FILEPANEL,(void*)RemoteName.CPtr())) // NetWork Plugin :-)
+						{
+							return FALSE;
+						}
+					}
+				}
 				CtrlObject->Cp()->ActivePanel->ChangeDisk();
 				return TRUE;
 			}
@@ -2826,7 +2854,7 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 	{
 		GoToFile(strFindDir);
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(UpperFolderTopFile);
 		#else
 		CurTopFile=UpperFolderTopFile;
@@ -2836,7 +2864,7 @@ BOOL FileList::ChangeDir(const wchar_t *NewDir,BOOL IsUpdated)
 	}
 	else if (UpdateFlags != UPDATE_KEEP_SELECTION)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile=0);
 		#else
 		CurFile=CurTopFile=0;
@@ -3382,7 +3410,7 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				{
 					CurFile=I;
 					#if 1
-					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 					SetTopFile(CurFile-(Y2-Y1)/2);
 					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
@@ -3404,7 +3432,7 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				{
 					CurFile=I;
 					#if 1
-					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 					SetTopFile(CurFile-(Y2-Y1)/2);
 					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
@@ -3455,7 +3483,7 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				{
 					CurFile=I;
 					#if 1
-					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 					SetTopFile(CurFile-(Y2-Y1)/2);
 					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
@@ -3477,7 +3505,7 @@ int FileList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 				{
 					CurFile=I;
 					#if 1
-					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+					//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 					SetTopFile(CurFile-(Y2-Y1)/2);
 					#else
 					CurTopFile=CurFile-(Y2-Y1)/2;
@@ -4916,7 +4944,7 @@ bool FileList::ApplyCommand()
 	string strCommand;
 	bool isSilent=false;
 
-	if (!GetString(MSG(MAskApplyCommandTitle),MSG(MAskApplyCommand),L"ApplyCmd",strPrevCommand,strCommand,L"ApplyCmd",FIB_BUTTONS|FIB_EDITPATH) || !SetCurPath())
+	if (!GetString(MSG(MAskApplyCommandTitle),MSG(MAskApplyCommand),L"ApplyCmd",strPrevCommand,strCommand,L"ApplyCmd",FIB_BUTTONS|FIB_EDITPATH|FIB_EDITPATHEXEC) || !SetCurPath())
 		return false;
 
 	strPrevCommand = strCommand;
@@ -5108,7 +5136,7 @@ void FileList::CountDirSize(UINT64 PluginFlags)
 	SortFileList(TRUE);
 	ShowFileList(TRUE);
 	CtrlObject->Cp()->Redraw();
-	CreateChangeNotification(TRUE);
+	InitFSWatcher(true);
 }
 
 

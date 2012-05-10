@@ -177,7 +177,7 @@ TreeList::TreeList(int IsPanel):
 {
 	Type=TREE_PANEL;
 	#if 1
-	//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+	//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 	SetTopFile(CurFile=0);
 	#else
 	CurFile=CurTopFile=0;
@@ -1272,7 +1272,7 @@ void TreeList::CorrectPosition()
 	if (!TreeCount)
 	{
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile=0);
 		#else
 		CurFile=CurTopFile=0;
@@ -1284,7 +1284,7 @@ void TreeList::CorrectPosition()
 
 	if (CurTopFile+Height>TreeCount)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(TreeCount-Height);
 		#else
 		CurTopFile=TreeCount-Height;
@@ -1298,7 +1298,7 @@ void TreeList::CorrectPosition()
 
 	if (CurTopFile<0)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(0);
 		#else
 		CurTopFile=0;
@@ -1306,7 +1306,7 @@ void TreeList::CorrectPosition()
 
 	if (CurTopFile > TreeCount-1)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(TreeCount-1);
 		#else
 		CurTopFile=TreeCount-1;
@@ -1314,7 +1314,7 @@ void TreeList::CorrectPosition()
 
 	if (CurFile<CurTopFile)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile);
 		#else
 		CurTopFile=CurFile;
@@ -1322,7 +1322,7 @@ void TreeList::CorrectPosition()
 
 	if (CurFile>CurTopFile+Height-1)
 		#if 1
-		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+		//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 		SetTopFile(CurFile-(Height-1));
 		#else
 		CurTopFile=CurFile-(Height-1);
@@ -1359,7 +1359,7 @@ int TreeList::SetDirPosition(const wchar_t *NewDir)
 		{
 			WorkDir=CurFile=I;
 			#if 1
-			//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+			//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 			SetTopFile(CurFile-(Y2-Y1-1)/2);
 			#else
 			CurTopFile=CurFile-(Y2-Y1-1)/2;
@@ -1671,7 +1671,7 @@ int TreeList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 		{
 			CurFile=i;
 			#if 1
-			//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+			//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 			SetTopFile(CurFile-(Y2-Y1-1)/2);
 			#else
 			CurTopFile=CurFile-(Y2-Y1-1)/2;
@@ -1687,7 +1687,7 @@ int TreeList::FindPartName(const wchar_t *Name,int Next,int Direct,int ExcludeSe
 		{
 			CurFile=i;
 			#if 1
-			//Maximus: Последний видимый на панели элемент (при последней отрисовке панели)
+			//Maximus: Последний видимый на панели элемент (при последней отрисовке панели), для возврата координат в API
 			SetTopFile(CurFile-(Y2-Y1-1)/2);
 			#else
 			CurTopFile=CurFile-(Y2-Y1-1)/2;

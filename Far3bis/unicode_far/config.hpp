@@ -414,6 +414,7 @@ struct InfoPanelOptions
 	int ShowPowerStatus;
 	string strShowStatusInfo;
 	string strFolderInfoFiles;
+	int ShowCDInfo;
 };
 
 struct TreeOptions
@@ -683,6 +684,10 @@ struct Options
 	int ClearType;
 
 	int PgUpChangeDisk;
+	#if 1
+	//Maximus: Connect to remote server
+	int RemoteAutoLogin;
+	#endif
 	int ShowDotsInRoot;
 	int ShowCheckingFile;
 	int CloseCDGate;       // автомонтирование CD
@@ -725,6 +730,8 @@ struct Options
 
 	bool IsUserAdmin;
 	string strTitleAddons;
+	string strEditorTitleFormat;
+	string strViewerTitleFormat;
 
 	int ElevationMode;
 	int CurrentElevationMode;

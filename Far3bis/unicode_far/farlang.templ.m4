@@ -2028,6 +2028,16 @@ MConfigPgUpChangeDisk
 "Usar Ctrl-Pg&Up para cambiar unidad"
 "Použiť Ctrl-Pg&Up na zmenu disku"
 
+MConfigRemoteAutoLogin
+"Диалог подключения к удаленному серверу"
+"Remote server login dialog"
+upd:"&Remote server login dialog"
+upd:"Remote server login dialog"
+upd:"Remote server login dialog"
+upd:"Remote server login dialog"
+upd:"Remote server login dialog"
+upd:"Remote server login dialog"
+
 MConfigClearType
 "Уч&итывать состояние ClearType"
 "Cl&earType friendly redraw (can be slow)"
@@ -2317,14 +2327,14 @@ upd:"InfoPanel settings"
 "Nastavenia InfoPanela"
 
 MConfigInfoPanelCNTitle
-"Формат вывода имени &компьютера"
-upd:"&ComputerName format"
-upd:"&ComputerName format"
-upd:"&ComputerName format"
-upd:"&ComputerName format"
-upd:"&ComputerName format"
-"Formato nombre &computadora"
-"&ComputerName format"
+"Форма&т вывода имени компьютера"
+upd:"Computer&Name format"
+upd:"Computer&Name format"
+upd:"Computer&Name format"
+upd:"Computer&Name format"
+upd:"Computer&Name format"
+"Forma&to nombre computadora"
+"Computer&Name format"
 
 MConfigInfoPanelCNPhysicalNetBIOS
 upd:"Physical NetBIOS"
@@ -2515,6 +2525,16 @@ upd:"Show &power status"
 upd:"Show &power status"
 "Mostrar estado de &encendido"
 "Zobraziť stav na&pájania"
+
+MConfigInfoPanelShowCDInfo
+"Показывать параметры &компакт-дисков"
+"Show &CD drive parameters"
+upd:"Show &CD drive parameters"
+upd:"Show &CD drive parameters"
+upd:"Show &CD drive parameters"
+upd:"Show &CD drive parameters"
+"Mostrar parámetros unidad de &CD"
+"Zobraziť parametre jwednotky &CD"
 
 MMenuInfoShowModeTitle
 l:
@@ -10217,24 +10237,24 @@ le://end of functional keys (Single Viewer)
 ""
 
 MInViewer
-"просмотр %1"
-"view %1"
-"prohlížení %1"
-"Betrachte %1"
-"%1 megnézése"
-"podgląd %1"
-"ver %1"
-"zobraziť %1"
+"просмотр"
+"view"
+"prohlížení"
+"Betrachte"
+"megnézése"
+"podgląd"
+"ver"
+"zobraziť"
 
 MInEditor
-"редактирование %1"
-"edit %1"
-"editace %1"
-"Bearbeite %1"
-"%1 szerkesztése"
-"edycja %1"
-"editar %1"
-"upraviť %1"
+"редактирование"
+"edit"
+"editace"
+"Bearbeite"
+"szerkesztése"
+"edycja"
+"editar"
+"upraviť"
 
 MFilterTitle
 l:

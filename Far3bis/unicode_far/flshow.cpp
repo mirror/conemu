@@ -1031,7 +1031,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	#endif
 
 	#if 1
-	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели), дл€ возврата координат в API
 	int lastVisible = -1;
 	#endif
 
@@ -1682,7 +1682,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	}
 
 	#if 1
-	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели)
+	//Maximus: ѕоследний видимый на панели элемент (при последней отрисовке панели), дл€ возврата координат в API
 	if (!ShowStatus)
 		LastBottomFile = lastVisible;
 	#endif

@@ -1312,7 +1312,7 @@ int CommandLine::ExecString(const string& CmdLine, bool AlwaysWaitFinish, bool S
 
 	LastCmdPartLength=-1;
 
-	if(CmdLine == L"far:config")
+	if(!StrCmpI(CmdLine,L"far:config"))
 	{
 		SetString(L"", false);
 		Show();
@@ -1660,7 +1660,7 @@ int CommandLine::ProcessOSCommands(const string& CmdLine, bool SeparateWindow, b
 			}
 			FreeEnvironmentStrings(Environment);
 			strOut.Append(L"\n\n", Opt.ShowKeyBar?2:1);
-			Console.Write(strOut, strOut.GetLength());
+			Console.Write(strOut);
 			Console.Commit();
 			ScrBuf.FillBuf();
 			SaveBackground();

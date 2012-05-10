@@ -301,7 +301,8 @@ void InterfaceSettings()
 	Builder.AddCheckbox(MConfigCopyTotal, &Opt.CMOpt.CopyShowTotal);
 	Builder.AddCheckbox(MConfigCopyTimeRule, &Opt.CMOpt.CopyTimeRule);
 	Builder.AddCheckbox(MConfigDeleteTotal, &Opt.DelOpt.DelShowTotal);
-	Builder.AddCheckbox(MConfigPgUpChangeDisk, &Opt.PgUpChangeDisk);
+	Builder.AddCheckbox(MConfigPgUpChangeDisk, &Opt.PgUpChangeDisk, 0, true);
+	Builder.AddCheckbox(MConfigRemoteAutoLogin, &Opt.RemoteAutoLogin);
 	Builder.AddCheckbox(MConfigClearType, &Opt.ClearType);
 	Builder.AddText(MConfigTitleAddons);
 	Builder.AddEditField(&Opt.strTitleAddons, 47);
@@ -360,11 +361,12 @@ void InfoPanelSettings()
 	};
 
 	DialogBuilder Builder(MConfigInfoPanelTitle, L"InfoPanelSettings");
+	Builder.AddCheckbox(MConfigInfoPanelShowPowerStatus, &Opt.InfoPanel.ShowPowerStatus);
+	Builder.AddCheckbox(MConfigInfoPanelShowCDInfo, &Opt.InfoPanel.ShowCDInfo);
 	Builder.AddText(MConfigInfoPanelCNTitle);
 	Builder.AddComboBox((int *) &Opt.InfoPanel.ComputerNameFormat, 50, CNListItems, ARRAYSIZE(CNListItems), DIF_DROPDOWNLIST|DIF_LISTAUTOHIGHLIGHT|DIF_LISTWRAPMODE);
 	Builder.AddText(MConfigInfoPanelUNTitle);
 	Builder.AddComboBox((int *) &Opt.InfoPanel.UserNameFormat, 50, UNListItems, ARRAYSIZE(UNListItems), DIF_DROPDOWNLIST|DIF_LISTAUTOHIGHLIGHT|DIF_LISTWRAPMODE);
-	Builder.AddCheckbox(MConfigInfoPanelShowPowerStatus, &Opt.InfoPanel.ShowPowerStatus);
 	Builder.AddOKCancel();
 
 	if (Builder.ShowDialog())
@@ -703,7 +705,7 @@ void ViewerConfig(ViewerOptions &ViOpt,bool Local)
 	{
 		Builder.AddCheckbox(MViewConfigExternalF3, &Opt.ViOpt.UseExternalViewer);
 		Builder.AddText(MViewConfigExternalCommand);
-		Builder.AddEditField(&Opt.strExternalViewer, 64, L"ExternalViewer", DIF_EDITPATH);
+		Builder.AddEditField(&Opt.strExternalViewer, 64, L"ExternalViewer", DIF_EDITPATH|DIF_EDITPATHEXEC);
 		Builder.AddSeparator(MViewConfigInternal);
 	}
 
@@ -751,7 +753,7 @@ void EditorConfig(EditorOptions &EdOpt,bool Local)
 	{
 		Builder.AddCheckbox(MEditConfigEditorF4, &Opt.EdOpt.UseExternalEditor);
 		Builder.AddText(MEditConfigEditorCommand);
-		Builder.AddEditField(&Opt.strExternalEditor, 64, L"ExternalEditor", DIF_EDITPATH);
+		Builder.AddEditField(&Opt.strExternalEditor, 64, L"ExternalEditor", DIF_EDITPATH|DIF_EDITPATHEXEC);
 		Builder.AddSeparator(MEditConfigInternal);
 	}
 
@@ -918,10 +920,12 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"ClearType",&Opt.ClearType, 1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CopyShowTotal",&Opt.CMOpt.CopyShowTotal,1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CtrlPgUp",&Opt.PgUpChangeDisk, 1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"RemoteAutoLogin",&Opt.RemoteAutoLogin, 0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize1",&Opt.CursorSize[0],15, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize2",&Opt.CursorSize[1],10, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize3",&Opt.CursorSize[2],99, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"CursorSize4",&Opt.CursorSize[3],99, 0},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyInterface, L"EditorTitleFormat",&Opt.strEditorTitleFormat, 0, L"%Lng %File"},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"FormatNumberSeparators",&Opt.FormatNumberSeparators, 0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"Mouse",&Opt.Mouse,1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"ShiftsKeyRules",&Opt.ShiftsKeyRules,1, 0},
@@ -931,6 +935,7 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"ShowTimeoutDelFiles",&Opt.ShowTimeoutDelFiles, 50, 0},
 	{1, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyInterface, L"TitleAddons",&Opt.strTitleAddons, 0, L"%Ver.%Build %Platform %Admin"},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface, L"UseVk_oem_x",&Opt.UseVk_oem_x,1, 0},
+	{0, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeyInterface, L"ViewerTitleFormat",&Opt.strViewerTitleFormat, 0, L"%Lng %File"},
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"Append",&Opt.AutoComplete.AppendCompletion, 0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"ModalList",&Opt.AutoComplete.ModalList, 0, 0},
@@ -959,6 +964,7 @@ static struct FARConfig
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelInfo,L"InfoComputerNameFormat",&Opt.InfoPanel.ComputerNameFormat, ComputerNamePhysicalNetBIOS, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelInfo,L"InfoUserNameFormat",&Opt.InfoPanel.UserNameFormat, NameUserPrincipal, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelInfo,L"ShowCDInfo",&Opt.InfoPanel.ShowCDInfo, 1, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelInfo,L"ShowPowerStatus",&Opt.InfoPanel.ShowPowerStatus, 0, 0},
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyPanelLayout,L"ColoredGlobalColumnSeparator",&Opt.HighlightColumnSeparator,1, 0},
@@ -1063,6 +1069,8 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FileSearchMode",&Opt.FindOpt.FileSearchMode,FINDAREA_FROM_CURRENT, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FindAlternateStreams",&Opt.FindOpt.FindAlternateStreams,0,0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FindCodePage",&Opt.FindCodePage, CP_DEFAULT, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FindFolders",&Opt.FindOpt.FindFolders, 1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FindSymLinks",&Opt.FindOpt.FindSymLinks, 1, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"FlagPosixSemantics", &Opt.FlagPosixSemantics, 1, 0},
 	{1, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystem,L"FolderInfo",&Opt.InfoPanel.strFolderInfoFiles, 0, L"DirInfo,File_Id.diz,Descript.ion,ReadMe.*,Read.Me"},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"MaxPositionCache",&Opt.MaxPositionCache, 512/*MAX_POSITIONS*/, 0}, //BUGBUG
@@ -1556,9 +1564,9 @@ INT_PTR WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Par
 
 	case DN_RESIZECONSOLE:
 		{
-			COORD Size = {Max(ScrX-4, 60), Max(ScrY-2, 20)};
+			COORD Size = {(SHORT)Max(ScrX-4, 60), (SHORT)Max(ScrY-2, 20)};
 			SendDlgMessage(hDlg, DM_RESIZEDIALOG, 0, &Size);
-			SMALL_RECT ListPos = {3, 1, Size.X-4, Size.Y-2};
+			SMALL_RECT ListPos = {3, 1, (SHORT)(Size.X-4), (SHORT)(Size.Y-2)};
 			SendDlgMessage(hDlg, DM_SETITEMPOSITION, 0, &ListPos);
 		}
 		break;

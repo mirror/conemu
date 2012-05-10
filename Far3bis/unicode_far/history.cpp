@@ -48,6 +48,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "configdb.hpp"
 #include "datetime.hpp"
 #include "FarGuid.hpp"
+#include "elevation.hpp"
+#include "pathmix.hpp"
 
 History::History(enumHISTORYTYPE TypeHistory, const wchar_t *HistoryName, size_t HistoryCount, const int *EnableSave, bool SaveType):
 	strHistoryName(HistoryName),
@@ -90,6 +92,7 @@ void History::CompactHistory()
 */
 void History::AddToHistory(const wchar_t *Str, int Type, const GUID* Guid, const wchar_t *File, const wchar_t *Data, bool SaveForbid)
 {
+	_ASSERTE(this!=NULL);
 	if (!EnableAdd || SaveForbid)
 		return;
 
@@ -103,7 +106,21 @@ void History::AddToHistory(const wchar_t *Str, int Type, const GUID* Guid, const
 	string strName(Str),strGuid,strFile(File),strData(Data);
 	if(Guid) strGuid=GuidToStr(*Guid);
 
-	HistoryCfgRef()->BeginTransaction();
+	/*
+		баг:
+		должны быть включены история папок и комманд:
+		Запускаем первую копию фара, в ней чистим историю команд (AltF8 Del Enter) в командной строке набираем последовательно:
+		cmd1 Enter
+		cmd2 Enter
+		Запускаем вторую копию фара, возвращаемся в первую, там:
+		с CtrlEnd Enter (выполнили команду cmd2)
+		Закрываем вторую копию, в первой:
+		c CtrlEnd CtrlEnd Enter (выполнили команду cmd1)
+		c CtrlEnd тут ожидается, что в командной строке появится cmd1, на самом деле появляется cmd2. А следующая введенная команда в историю вообще не попадет.
+
+		проблема связана с WAL. убирание транзакции лечит.
+	*/
+	//HistoryCfgRef()->BeginTransaction();
 
 	if (RemoveDups) // удалять дубликаты?
 	{
@@ -133,11 +150,12 @@ void History::AddToHistory(const wchar_t *Str, int Type, const GUID* Guid, const
 
 	ResetPosition();
 
-	HistoryCfgRef()->EndTransaction();
+	//HistoryCfgRef()->EndTransaction();
 }
 
 bool History::ReadLastItem(const wchar_t *HistoryName, string &strStr)
 {
+	_ASSERTE(this!=NULL);
 	strStr.Clear();
 	return HistoryCfgRef()->GetNewest(HISTORYTYPE_DIALOG, HistoryName, strStr);
 }
@@ -541,8 +559,39 @@ int History::ProcessMenu(string &strStr, GUID* Guid, string *pstrFile, string *p
 				return -1;
 
 			//BUGUBUG: eliminate those magic numbers!
+			#if 1
+			//Maximus: для сетевых ресурсов - танцы с бубном
+			if (Opt.RemoteAutoLogin
+				&& SelectedRecordType != 2 && SelectedRecordType != 3 // ignore external
+				&& RetCode != 3 && ((TypeHistory == HISTORYTYPE_FOLDER && strSelectedRecordGuid.IsEmpty()) || TypeHistory == HISTORYTYPE_VIEW))
+			{
+				wchar_t *DirPtr=nullptr;
+				string strCopy=strSelectedRecordName.CPtr();
+				PATH_TYPE Type = ParsePath(strCopy,(const wchar_t**)&DirPtr);
+				if(Type == PATH_REMOTE /*|| Type == PATH_REMOTEUNC*/)
+				{
+					DisableElevation de;
+					if (apiGetFileAttributes(strSelectedRecordName) == INVALID_FILE_ATTRIBUTES)
+					{
+						FarMacroValue vParams[2]={{FMVT_STRING},{FMVT_STRING}};
+						vParams[0].String=L"connect";
+						if (DirPtr)
+							*DirPtr=0;
+						vParams[1].String=strCopy.CPtr();
+						OpenMacroInfo info={sizeof(OpenMacroInfo),2,vParams};
+						int CallResult=0; //we must pass (&CallResult) to avoid memory leak
+						CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Network,OPEN_FROMMACRO,&info,&CallResult);
+						//CallResult==1 on succeess?
+					}
+				}
+			}
+			//Maximus: поплясали - теперь как обычно
 			if (SelectedRecordType != 2 && SelectedRecordType != 3 // ignore external
 				&& RetCode != 3 && ((TypeHistory == HISTORYTYPE_FOLDER && strSelectedRecordGuid.IsEmpty()) || TypeHistory == HISTORYTYPE_VIEW) && apiGetFileAttributes(strSelectedRecordName) == INVALID_FILE_ATTRIBUTES)
+			#else
+			if (SelectedRecordType != 2 && SelectedRecordType != 3 // ignore external
+				&& RetCode != 3 && ((TypeHistory == HISTORYTYPE_FOLDER && strSelectedRecordGuid.IsEmpty()) || TypeHistory == HISTORYTYPE_VIEW) && apiGetFileAttributes(strSelectedRecordName) == INVALID_FILE_ATTRIBUTES)
+			#endif
 			{
 				SetLastError(ERROR_FILE_NOT_FOUND);
 

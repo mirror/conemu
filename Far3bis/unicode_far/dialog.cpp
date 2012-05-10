@@ -994,7 +994,11 @@ void Dialog::ProcessLastHistory(DialogItemEx *CurItem, int MsgIndex)
 
 		if ((EditPtr = (DlgEdit *)(CurItem->ObjPtr)) )
 		{
-			EditPtr->GetHistory()->ReadLastItem(CurItem->strHistory, strData);
+			History *DlgHistory = EditPtr->GetHistory();
+			if(DlgHistory)
+			{
+				DlgHistory->ReadLastItem(CurItem->strHistory, strData);
+			}
 
 			if (MsgIndex != -1)
 			{
@@ -2775,6 +2779,7 @@ int Dialog::ProcessKey(int Key)
 			break;
 
 		case KEY_F11:
+			if (!IsProcessAssignMacroKey)
 			{
 				if(!CheckDialogMode(DMODE_NOPLUGINS))
 				{
@@ -2995,6 +3000,15 @@ int Dialog::ProcessKey(int Key)
 						PrevFocusPos=FocusPos;
 					}
 
+					if(Key == KEY_CTRLSPACE || Key == KEY_RCTRLSPACE)
+					{
+						edt->EnableAC();
+						edt->AutoComplete(true,false);
+						edt->RevertAC();
+						Redraw();
+						return TRUE;
+					}
+
 					if (edt->ProcessKey(Key))
 					{
 						if (Item[FocusPos]->Flags & DIF_READONLY)
@@ -3023,13 +3037,6 @@ int Dialog::ProcessKey(int Key)
 						}
 
 						edt->LastPartLength=-1;
-
-						if(Key == KEY_CTRLSHIFTEND || Key == KEY_RCTRLSHIFTEND || Key == KEY_CTRLSHIFTNUMPAD1 || Key == KEY_RCTRLSHIFTNUMPAD1)
-						{
-							edt->EnableAC();
-							edt->AutoComplete(true,false);
-							edt->RevertAC();
-						}
 
 						Redraw(); // Перерисовка должна идти после DN_EDITCHANGE (imho)
 						return TRUE;
