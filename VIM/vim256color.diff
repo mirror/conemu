@@ -1,0 +1,33 @@
+Index: os_win32.c
+===================================================================
+--- os_win32.c	(revision 586)
++++ os_win32.c	(working copy)
+@@ -4216,6 +4216,28 @@
+ 	    }
+ #endif
+ 	}
++	else if (s[0] == ESC && len >= 9 && s[1] == '[' && (s[2] == '3' || s[2] == '4') && s[3] == '8' && s[4] == ';' && s[5] == '5' && s[6] == ';')
++	{
++		//ESC [ 48 ; 5 ; clr m
++		//ESC [ 38 ; 5 ; clr m
++		DWORD nWritten = 0;
++		int i, iMax = (len<11)?len:11;
++		for (i = 7; i < iMax; i++)
++		{
++			if (s[i] == 'm')
++			{
++				if (!WriteConsole(g_hConOut, s, i+1, &nWritten, NULL))
++					nWritten = 0;
++				break;
++			}
++		}
++
++		if (!nWritten)
++			nWritten = write_chars(s, 1);
++
++	    len -= (nWritten - 1);
++	    s += nWritten;
++	}
+ 	else
+ 	{
+ 	    /* Write a single character */
