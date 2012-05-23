@@ -325,6 +325,7 @@ static struct TKeyCodeName
 } KeyMacroCodes[]=
 {
 	{ MCODE_OP_AKEY,                 5, L"$AKey"      }, // клавиша, которой вызвали макрос
+	{ MCODE_OP_BREAK,                6, L"$Break"     },
 	{ MCODE_OP_CONTINUE,             9, L"$Continue"  },
 	{ MCODE_OP_ELSE,                 5, L"$Else"      },
 	{ MCODE_OP_END,                  4, L"$End"       },
@@ -2563,13 +2564,13 @@ static bool kbdLayoutFunc(const TMacroFunction*)
 	BOOL Ret=TRUE;
 	HKL  Layout=0, RetLayout=0;
 
-		wchar_t LayoutName[1024]={}; // BUGBUG!!!
-	if (ifn.GetConsoleKeyboardLayoutName(LayoutName))
-		{
-			wchar_t *endptr;
+	wchar_t LayoutName[1024]={}; // BUGBUG!!!
+	if (ifn.GetConsoleKeyboardLayoutNameW(LayoutName))
+	{
+		wchar_t *endptr;
 		DWORD res=wcstoul(LayoutName, &endptr, 16);
-			RetLayout=(HKL)(INT_PTR)(HIWORD(res)? res : MAKELONG(res,res));
-		}
+		RetLayout=(HKL)(INT_PTR)(HIWORD(res)? res : MAKELONG(res,res));
+	}
 
 	HWND hWnd = Console.GetWindow();
 
@@ -5362,11 +5363,6 @@ done:
 	
 	switch (Key)
 	{
-		case MCODE_OP_BREAK:
-		case MCODE_OP_CONTINUE:
-			CHECKMR(); //Maximus: для отладки
-			goto begin; // следом идет Jump
-
 		case MCODE_OP_NOP:
 			CHECKMR(); //Maximus: для отладки
 			goto begin;
@@ -5455,7 +5451,7 @@ done:
 					INPUT_RECORD *inRec=&Work.cRec;
 					if (!inRec->EventType)
 						inRec->EventType = KEY_EVENT;
-					if(inRec->EventType == KEY_EVENT || inRec->EventType == FARMACRO_KEY_EVENT)
+					if(inRec->EventType == MOUSE_EVENT || inRec->EventType == KEY_EVENT || inRec->EventType == FARMACRO_KEY_EVENT)
 						aKey=ShieldCalcKeyCode(inRec,FALSE,nullptr);
 				}
 				else if (!aKey)
@@ -6037,8 +6033,20 @@ done:
 		case MCODE_F_MENU_GETVALUE:       // S=Menu.GetValue([N])
 		case MCODE_F_MENU_GETHOTKEY:      // S=gethotkey([N])
 		{
+			#if 1
+			//Maximus: доп.инфа по текущему VMenu
 			parseParams(2,Params);
+			#else
+			parseParams(1,Params);
+			#endif
 			_KEYMACRO(CleverSysLog Clev(Key == MCODE_F_MENU_GETHOTKEY?L"MCODE_F_MENU_GETHOTKEY":(Key == MCODE_F_MENU_ITEMSTATUS?L"MCODE_F_MENU_ITEMSTATUS":L"MCODE_F_MENU_GETVALUE")));
+			#if 0
+			//Maximus: не требуется
+			tmpVar=Params[0];
+
+			if (!tmpVar.isInteger())
+				tmpVar=0ll;
+			#endif
 
 			int CurMMode=CtrlObject->Macro.GetMode();
 
@@ -6056,6 +6064,9 @@ done:
 				if (!f)
 					f=fo;
 
+				__int64 Result;
+				#if 1
+				//Maximus: доп.инфа по текущему VMenu
 				// Undefined or "-1" - current item, "0" - menu itself
 				TVarType typeIndex=Params[0].type();
 				__int64 MenuItemPos=Params[0].getInteger()-1;
@@ -6063,12 +6074,16 @@ done:
 					MenuItemPos=-2;
 				else if (typeIndex == vtUnknown || (typeIndex == vtInteger && MenuItemPos < -2))
 					MenuItemPos=-1;
+				#endif
 
 				if (f)
 				{
+					#if 0
+					//Maximus: не требуется
+					__int64 MenuItemPos=tmpVar.i()-1;
+					#endif
 					if (Key == MCODE_F_MENU_GETHOTKEY)
 					{
-						__int64 Result;
 						if ((Result=f->VMProcess(Key,nullptr,MenuItemPos)) )
 						{
 
@@ -6080,6 +6095,8 @@ done:
 					}
 					else if (Key == MCODE_F_MENU_GETVALUE)
 					{
+						#if 1
+						//Maximus: доп.инфа по текущему VMenu
 						if (Params[1].isUnknown())
 							tmpVar=Params[1]; //TODO:
 						else
@@ -6096,6 +6113,15 @@ done:
 							else if (tmpVar.isUnknown())
 								tmpVar=L"";
 						}
+						#else
+						string NewStr;
+						if (f->VMProcess(Key,&NewStr,MenuItemPos))
+						{
+							HiText2Str(NewStr, NewStr);
+							RemoveExternalSpaces(NewStr);
+							tmpVar=NewStr.CPtr();
+						}
+						#endif
 						else
 							tmpVar=L"";
 					}

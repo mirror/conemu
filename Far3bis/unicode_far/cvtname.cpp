@@ -162,9 +162,16 @@ bool MixToFullPath(const string& stPath, string& strDest, const string& stCurren
 						}
 					}
 				}
-				else //"abc" or whatever
+				else
 				{
-					pstCurrentDir=stCurrentDir;
+					if(HasPathPrefix(stPath)) // \\?\<ANY_UNKNOWN_FORMAT>
+					{
+						blIgnore = true;
+					}
+					else //"abc" or whatever
+					{
+						pstCurrentDir=stCurrentDir;
+					}
 				}
 			}
 			break;
@@ -258,7 +265,7 @@ string TryConvertVolumeGuidToDrivePath(const string& Path)
 
 	if (ParsePath(Path) == PATH_VOLUMEGUID)
 	{
-		if (ifn.GetVolumePathNamesForVolumeNamePresent())
+		if (ifn.GetVolumePathNamesForVolumeNameWPresent())
 		{
 			DWORD BufSize = NT_MAX_PATH;
 			string PathNames;
@@ -512,6 +519,13 @@ string& PrepareDiskPath(string &strPath, bool CheckFullPath)
 					Src = const_cast<wchar_t*>(DirPtr);
 					if (IsSlash(*Src))
 						Src++;
+				}
+				else
+				{
+					if(HasPathPrefix(lpwszPath)) // \\?\<ANY_UNKNOWN_FORMAT>
+					{
+						Src = lpwszPath + 4;
+					}
 				}
 
 				if (*Src)

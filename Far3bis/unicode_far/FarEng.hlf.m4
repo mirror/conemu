@@ -2276,6 +2276,12 @@ determining the total file size in the sub-folders.
   #Create folders in uppercase#
   If the name of a new folder contains only lowercase letters and this option is on, the folder will be created in uppercase.
 
+  #Smart folder panel monitor#
+  Если эта опция выставлена, то мониторинг файловых панелей фар будет выполняться только тогда когда фар активен,
+т.е. обновления панелей не будет до тех пор, пока фар не получит фокус ввода. Это позволяет не локировать каталоги текущих панелей.
+Но синхронизация состояния панелей при получении фокуса #иногда не срабатывает#. Поэтому эта опция по-умолчанию отключена,
+и мониторинг файловых панелей выполняется даже тогда, когда фар работатет в фоне.
+
   #Save commands history#
   Forces saving ~commands history~@History@ before exit and restoring after starting Far.
 
@@ -2862,6 +2868,27 @@ $ #Editor: search/replace#
     The following option is available in search dialog only:
 
       #Select found#        - ^<wrap>found text is selected
+
+    При нажатии кнопки #Всё# будет показано ~меню~@FindAllMenu@ с результатами поиска всех вхождений.
+
+
+@FindAllMenu
+$ #Редактор: меню с результатами поиска всех вхождений#
+    В этом меню доступны следующие сочетания клавиш:
+
+      #F5#                   - переключить размер меню
+
+      #Ctrl-Up, Ctrl-Down#   - скроллировать текст редактора
+
+      #Ctrl-Enter#           - перейти к позиции найденного текста
+
+      #Add#                  - добавить стековую закладку с текущей позицией
+
+      #ПравыйCtrl-0..9#      - установить закладку 0..9 в текущей позиции
+
+      #Ctrl-Shift-0..9#      - установить закладку 0..9 в текущей позиции
+
+      #ЛевыйCtrl-0..9#       - перейти к позиции закладки 0..9
 
 
 @FileOpenCreate
@@ -3612,7 +3639,8 @@ characters, delimited with commas. Allowed column types are:
                  These modifiers may be used in combination,
                  for example NMR
 
-    X          - file extension
+    X[R]       - file extension
+                 where: R - right align file extension;
 
     S[C,T,F,E] - file size
     P[C,T,F,E] - allocation file size

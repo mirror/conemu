@@ -79,13 +79,17 @@ DlgEdit::DlgEdit(Dialog* pOwner,unsigned Index,DLGEDITTYPE Type):
 				{
 					iList=CurItem->ListItems;
 				}
+				if(CurItem->Flags&DIF_HISTORY)
+				{
+					iFlags|=EditControl::EC_COMPLETE_HISTORY;
+				}
 				if(CurItem->Flags&DIF_EDITPATH)
 				{
-					iFlags|=EditControl::EC_ENABLEFNCOMPLETE;
+					iFlags|=EditControl::EC_COMPLETE_FILESYSTEM;
 				}
 				if(CurItem->Flags&DIF_EDITPATHEXEC)
 				{
-					iFlags|=EditControl::EC_ENABLEPATHCOMPLETE;
+					iFlags|=EditControl::EC_COMPLETE_PATH;
 				}
 			}
 			lineEdit=new EditControl(pOwner,&callback,true,iHistory,iList,iFlags);
@@ -114,7 +118,7 @@ DlgEdit::~DlgEdit()
 void DlgEdit::SetHistory(const wchar_t* Name)
 {
 	delete iHistory;
-	iHistory=new History(HISTORYTYPE_DIALOG, Name, Opt.DialogsHistoryCount, &Opt.Dialogs.EditHistory, false);
+	iHistory=new History(HISTORYTYPE_DIALOG, Name, &Opt.Dialogs.EditHistory, false);
 }
 
 int DlgEdit::ProcessKey(int Key)

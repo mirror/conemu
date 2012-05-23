@@ -123,7 +123,8 @@ const wchar_t NKeyViewEditHistory[]=L"History.ViewEditHistory";
 const wchar_t NKeyFolderHistory[]=L"History.FolderHistory";
 const wchar_t NKeyDialogHistory[]=L"History.DialogHistory";
 
-const wchar_t NParamHistoryCount[]=L"HistoryCount";
+const wchar_t NParamHistoryCount[]=L"Count";
+const wchar_t NParamHistoryLifetime[]=L"Lifetime";
 
 static const WCHAR _BoxSymbols[48+1] =
 {
@@ -150,6 +151,7 @@ void SystemSettings()
 	Builder.AddCheckbox(MConfigCopySharing, &Opt.CMOpt.CopyOpened);
 	Builder.AddCheckbox(MConfigScanJunction, &Opt.ScanJunction);
 	Builder.AddCheckbox(MConfigCreateUppercaseFolders, &Opt.CreateUppercaseFolders);
+	Builder.AddCheckbox(MConfigSmartFolderMonitor, &Opt.SmartFolderMonitor);
 
 	Builder.AddCheckbox(MConfigSaveHistory, &Opt.SaveHistory);
 	Builder.AddCheckbox(MConfigSaveFoldersHistory, &Opt.SaveFoldersHistory);
@@ -909,10 +911,14 @@ static struct FARConfig
 
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyHelp,L"ActivateURL",&Opt.HelpURLRules,1, 0},
 
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyCommandHistory, NParamHistoryCount,&Opt.HistoryCount,512, 0}, //BUGBUG
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialogHistory, NParamHistoryCount,&Opt.DialogsHistoryCount,512, 0}, //BUGBUG
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyFolderHistory, NParamHistoryCount,&Opt.FoldersHistoryCount,512, 0}, //BUGBUG
-	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyViewEditHistory, NParamHistoryCount,&Opt.ViewHistoryCount,512, 0}, //BUGBUG
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyCommandHistory, NParamHistoryCount,&Opt.HistoryCount,1000, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyCommandHistory, NParamHistoryLifetime,&Opt.HistoryLifetime,90, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialogHistory, NParamHistoryCount,&Opt.DialogsHistoryCount,1000, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyDialogHistory, NParamHistoryLifetime,&Opt.DialogsHistoryLifetime,90, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyFolderHistory, NParamHistoryCount,&Opt.FoldersHistoryCount,1000, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyFolderHistory, NParamHistoryLifetime,&Opt.FoldersHistoryLifetime,90, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyViewEditHistory, NParamHistoryCount,&Opt.ViewHistoryCount,1000, 0},
+	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyViewEditHistory, NParamHistoryLifetime,&Opt.ViewHistoryLifetime,90, 0},
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterface,L"DelShowTotal",&Opt.DelOpt.DelShowTotal,0, 0},
 
@@ -940,6 +946,10 @@ static struct FARConfig
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"Append",&Opt.AutoComplete.AppendCompletion, 0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"ModalList",&Opt.AutoComplete.ModalList, 0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"ShowList",&Opt.AutoComplete.ShowList, 1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"UseFilesystem",&Opt.AutoComplete.UseFilesystem, 1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"UseHistory",&Opt.AutoComplete.UseHistory, 1, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyInterfaceCompletion,L"UsePath",&Opt.AutoComplete.UsePath, 1, 0},
+
 
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyLayout,L"FullscreenHelp",&Opt.FullScreenHelp,0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeyLayout,L"LeftHeightDecrement",&Opt.LeftHeightDecrement,0, 0},
@@ -1105,6 +1115,7 @@ static struct FARConfig
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"ShowCheckingFile", &Opt.ShowCheckingFile, 0, 0},
 	{1, GeneralConfig::TYPE_TEXT,    FSSF_PRIVATE,           NKeySystem,L"ShowStatusInfo",&Opt.InfoPanel.strShowStatusInfo, 0, L""},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"SilentLoadPlugin",  &Opt.LoadPlug.SilentLoadPlugin, 0, 0},
+	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"SmartFolderMonitor",  &Opt.SmartFolderMonitor, 0, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"SubstNameRule", &Opt.SubstNameRule, 2, 0},
 	{0, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"SubstPluginPrefix",&Opt.SubstPluginPrefix, 0, 0},
 	{1, GeneralConfig::TYPE_INTEGER, FSSF_PRIVATE,           NKeySystem,L"UpdateEnvironment",&Opt.UpdateEnvironment,0,0},
@@ -1369,8 +1380,7 @@ void ReadConfig()
 		{
 			wchar_t *endptr;
 			const wchar_t *ValPtr;
-			UserDefinedList DestList;
-			DestList.SetParameters(L';',0,ULF_UNIQUE);
+			UserDefinedList DestList(ULF_UNIQUE);
 			DestList.Set(strXLatLayouts);
 			size_t I=0;
 
@@ -1399,7 +1409,7 @@ void ReadConfig()
 	{
 		if (Opt.FindOpt.strSearchOutFormatWidth.IsEmpty())
 			Opt.FindOpt.strSearchOutFormatWidth=L"0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
-		TextToViewSettings(Opt.FindOpt.strSearchOutFormat.CPtr(),Opt.FindOpt.strSearchOutFormatWidth.CPtr(),false,
+		TextToViewSettings(Opt.FindOpt.strSearchOutFormat.CPtr(),Opt.FindOpt.strSearchOutFormatWidth.CPtr(),
                                   Opt.FindOpt.OutColumnTypes,Opt.FindOpt.OutColumnWidths,Opt.FindOpt.OutColumnWidthType,
                                   Opt.FindOpt.OutColumnCount);
 	}

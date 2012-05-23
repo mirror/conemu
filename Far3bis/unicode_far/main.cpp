@@ -110,6 +110,8 @@ static void show_help()
 #ifdef _DEBUGEXC
 	    L" /xd  Enable exception handling.\n"
 #endif
+	    L" /ro  Read-Only config mode.\n"
+		 L" /rw  Normal config mode.\n"
 		;
 	Console.Write(HelpMsg, ARRAYSIZE(HelpMsg)-1);
 	Console.Commit();
@@ -405,6 +407,9 @@ void InitProfile(string &strProfilePath)
 
 	SetEnvironmentVariable(L"FARPROFILE", Opt.ProfilePath);
 	SetEnvironmentVariable(L"FARLOCALPROFILE", Opt.LocalProfilePath);
+
+	if (Opt.ReadOnlyConfig < 0) // do not override 'far /ro', 'far /rw'
+		Opt.ReadOnlyConfig = GetPrivateProfileInt(L"General", L"ReadOnlyConfig", FALSE, g_strFarINI);
 }
 
 int ExportImportMain(bool Export, const wchar_t *XML, const wchar_t *ProfilePath)
@@ -529,6 +534,8 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 
 	// макросы не дисаблим
 	Opt.Macro.DisableMacro=0;
+
+	Opt.ReadOnlyConfig = -1; // not initialized
 
 	string strProfilePath;
 
@@ -683,6 +690,12 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 					{
 						Opt.WindowMode=TRUE;
 					}
+					break;
+				case L'R':
+					if (Upper(Argv[I][2]) == L'O') // -ro
+						Opt.ReadOnlyConfig = TRUE;
+					if (Upper(Argv[I][2]) == L'W') // -rw
+						Opt.ReadOnlyConfig = FALSE;
 					break;
 			}
 		}

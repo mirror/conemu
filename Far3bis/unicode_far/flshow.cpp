@@ -686,7 +686,7 @@ void FileList::PrepareViewSettings(int ViewMode,OpenPanelInfo *PlugInfo)
 		{
 			TextToViewSettings(Info.PanelModesArray[ViewMode].ColumnTypes,
 			                   Info.PanelModesArray[ViewMode].ColumnWidths,
-			                   false,ViewSettings.ColumnType,ViewSettings.ColumnWidth,
+			                   ViewSettings.ColumnType,ViewSettings.ColumnWidth,
 			                   ViewSettings.ColumnWidthType,ViewSettings.ColumnCount);
 
 			if (Info.PanelModesArray[ViewMode].StatusColumnTypes &&
@@ -694,7 +694,7 @@ void FileList::PrepareViewSettings(int ViewMode,OpenPanelInfo *PlugInfo)
 			{
 				TextToViewSettings(Info.PanelModesArray[ViewMode].StatusColumnTypes,
 				                   Info.PanelModesArray[ViewMode].StatusColumnWidths,
-				                   true,ViewSettings.StatusColumnType,ViewSettings.StatusColumnWidth,
+				                   ViewSettings.StatusColumnType,ViewSettings.StatusColumnWidth,
 				                   ViewSettings.StatusColumnWidthType,ViewSettings.StatusColumnCount);
 			}
 			else if (Info.PanelModesArray[ViewMode].Flags&PMFLAGS_DETAILEDSTATUS)
@@ -1241,7 +1241,12 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							const wchar_t *NamePtr = ShowShortNames && !ListData[ListPos]->strShortName.IsEmpty() && !ShowStatus ? ListData[ListPos]->strShortName:ListData[ListPos]->strName;
 
 							string strNameCopy;
+							#if 1
+							//Maximus: плагин сказал, что у его элементов НЕТ "расширений"
+							if (!(ListData[ListPos]->FileAttr & FILE_ATTRIBUTE_DIRECTORY) && !(ListData[ListPos]->UserFlags & PPIF_HASNOTEXTENSION) && (ViewFlags & COLUMN_NOEXTENSION))
+							#else
 							if (!(ListData[ListPos]->FileAttr & FILE_ATTRIBUTE_DIRECTORY) && (ViewFlags & COLUMN_NOEXTENSION))
+							#endif
 							{
 								const wchar_t *ExtPtr = PointToExt(NamePtr);
 								if (ExtPtr)
@@ -1374,16 +1379,25 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						case EXTENSION_COLUMN:
 						{
 							const wchar_t *ExtPtr = nullptr;
+							#if 1
+							//Maximus: плагин сказал, что у его элементов НЕТ "расширений"
+							if (!(ListData[ListPos]->FileAttr & FILE_ATTRIBUTE_DIRECTORY) && !(ListData[ListPos]->UserFlags & PPIF_HASNOTEXTENSION))
+							#else
 							if (!(ListData[ListPos]->FileAttr & FILE_ATTRIBUTE_DIRECTORY))
+							#endif
 							{
 								const wchar_t *NamePtr = ShowShortNames && !ListData[ListPos]->strShortName.IsEmpty() && !ShowStatus ? ListData[ListPos]->strShortName:ListData[ListPos]->strName;
 								ExtPtr = PointToExt(NamePtr);
 							}
 							if (ExtPtr && *ExtPtr) ExtPtr++; else ExtPtr = L"";
 
+							unsigned __int64 ViewFlags=ColumnTypes[K];
 							#if 1
 							//Maximus: многострочная статусная область
-							strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+							if (ViewFlags&COLUMN_RIGHTALIGN)
+								strLine<<fmt::RightAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+							else
+								strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
 
 							if (!ShowStatus)
 							{
@@ -1391,7 +1405,10 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								strLine.Clear();
 							}
 							#else
-							FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+							if (ViewFlags&COLUMN_RIGHTALIGN)
+								FS<<fmt::RightAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+							else
+								FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
 							#endif
 
 							if (!ShowStatus && StrLength(ExtPtr) > ColumnWidth)

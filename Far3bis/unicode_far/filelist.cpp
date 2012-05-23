@@ -756,7 +756,7 @@ __int64 FileList::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			{
 				if (mps->Mode == 2)
 				{
-					itemsList=new UserDefinedList(L'\n',L'\r',ULF_UNIQUE);
+					itemsList=new UserDefinedList(ULF_UNIQUE,  L"\r\n");
 					if (!itemsList->Set(mps->Item->s()))
 						return Result;
 				}
@@ -1034,14 +1034,19 @@ int FileList::ProcessKey(int Key)
 	switch (Key)
 	{
 		case KEY_GOTFOCUS:
-			StartFSWatcher();
-			CtrlObject->Cp()->GetAnotherPanel(this)->StartFSWatcher();
-
+			if (Opt.SmartFolderMonitor)
+			{
+				StartFSWatcher();
+				CtrlObject->Cp()->GetAnotherPanel(this)->StartFSWatcher();
+			}
 			break;
 
 		case KEY_KILLFOCUS:
-			StopFSWatcher();
-			CtrlObject->Cp()->GetAnotherPanel(this)->StopFSWatcher();
+			if (Opt.SmartFolderMonitor)
+			{
+				StopFSWatcher();
+				CtrlObject->Cp()->GetAnotherPanel(this)->StopFSWatcher();
+			}
 			break;
 
 		case KEY_F1:
@@ -3241,7 +3246,7 @@ void FileList::SetViewMode(int ViewMode)
 		string strColumnTypes,strColumnWidths;
 //    SetScreenPosition();
 		ViewSettingsToText(ViewSettings.ColumnType,ViewSettings.ColumnWidth,ViewSettings.ColumnWidthType,
-		                   ViewSettings.ColumnCount,false,strColumnTypes,strColumnWidths);
+		                   ViewSettings.ColumnCount,strColumnTypes,strColumnWidths);
 		ProcessPluginEvent(FE_CHANGEVIEWMODE,(void*)strColumnTypes.CPtr());
 	}
 

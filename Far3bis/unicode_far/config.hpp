@@ -123,6 +123,10 @@ struct AutoCompleteOptions
 	int ShowList;
 	int ModalList;
 	int AppendCompletion;
+
+	int UseFilesystem;
+	int UseHistory;
+	int UsePath;
 };
 
 
@@ -529,6 +533,7 @@ struct Options
 	int OnlyEditorViewerUsed; // =1, если старт был /e или /v
 	int SaveViewHistory;
 	int ViewHistoryCount;
+	int ViewHistoryLifetime;
 
 	string strExternalEditor;
 	EditorOptions EdOpt;
@@ -550,9 +555,12 @@ struct Options
 
 	int SaveHistory;
 	int HistoryCount;
+	int HistoryLifetime;
 	int SaveFoldersHistory;
 	int FoldersHistoryCount;
+	int FoldersHistoryLifetime;
 	int DialogsHistoryCount;
+	int DialogsHistoryLifetime;
 
 	FindFileOptions FindOpt;
 
@@ -737,6 +745,7 @@ struct Options
 	int CurrentElevationMode;
 
 	BOOL WindowMode;
+	BOOL ReadOnlyConfig;
 
 	string ProfilePath;
 	string LocalProfilePath;
@@ -745,6 +754,7 @@ struct Options
 
 	string strBoxSymbols;
 
+	int SmartFolderMonitor; // def: 0=always monitor panel folder(s), 1=only when FAR has input focus
 };
 
 extern Options Opt;

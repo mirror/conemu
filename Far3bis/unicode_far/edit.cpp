@@ -60,6 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "colormix.hpp"
 #include "fileedit.hpp"
 #include "imports.hpp"
+#include "console.hpp"
 
 static int Recurse=0;
 
@@ -3439,7 +3440,9 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 	int Result=0;
 	static int Reenter=0;
 	string CurrentLine;
-	if(ECFlags.Check(EC_ENABLEAUTOCOMPLETE) && *Str && !Reenter && (CtrlObject->Macro.GetCurRecord(nullptr,nullptr) == MACROMODE_NOMACRO || Manual))
+	size_t EventsCount = 0;
+	Console.GetNumberOfInputEvents(EventsCount);
+	if(ECFlags.Check(EC_ENABLEAUTOCOMPLETE) && *Str && !Reenter && !EventsCount && (CtrlObject->Macro.GetCurRecord(nullptr,nullptr) == MACROMODE_NOMACRO || Manual)) 
 	{
 		Reenter++;
 
@@ -3456,7 +3459,9 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 		if(Opt.AutoComplete.ShowList)
 			CtrlObject->Macro.SetMode(Area);
 
-		if(pHistory)
+#define CMP_ENABLED(c) ((Manual && (c)) || (!Manual && ((c) == 1)))
+
+		if(pHistory && ECFlags.Check(EC_COMPLETE_HISTORY) && CMP_ENABLED(Opt.AutoComplete.UseHistory))
 		{
 			if(pHistory->GetAllSimilar(ComplMenu,strTemp))
 			{
@@ -3473,11 +3478,11 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 				}
 			}
 		}
-		if(ECFlags.Check(EC_ENABLEFNCOMPLETE))
+		if(ECFlags.Check(EC_COMPLETE_FILESYSTEM) && CMP_ENABLED(Opt.AutoComplete.UseFilesystem))
 		{
 			EnumFiles(ComplMenu,strTemp);
 		}
-		if(ECFlags.Check(EC_ENABLEPATHCOMPLETE))
+		if(ECFlags.Check(EC_COMPLETE_PATH) && CMP_ENABLED(Opt.AutoComplete.UsePath))
 		{
 			EnumModules(strTemp, &ComplMenu);
 		}
@@ -3564,7 +3569,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 								PrevPos=0;
 								if(!strTemp.IsEmpty())
 								{
-									if(pHistory)
+									if(pHistory && ECFlags.Check(EC_COMPLETE_HISTORY) && CMP_ENABLED(Opt.AutoComplete.UseHistory))
 									{
 										if(pHistory->GetAllSimilar(ComplMenu,strTemp))
 										{
@@ -3582,11 +3587,11 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 										}
 									}
 								}
-								if(ECFlags.Check(EC_ENABLEFNCOMPLETE))
+								if(ECFlags.Check(EC_COMPLETE_FILESYSTEM) && CMP_ENABLED(Opt.AutoComplete.UseFilesystem))
 								{
 									EnumFiles(ComplMenu,strTemp);
 								}
-								if(ECFlags.Check(EC_ENABLEPATHCOMPLETE))
+								if(ECFlags.Check(EC_COMPLETE_PATH) && CMP_ENABLED(Opt.AutoComplete.UsePath))
 								{
 									EnumModules(strTemp, &ComplMenu);
 								}

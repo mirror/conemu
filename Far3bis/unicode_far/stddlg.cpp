@@ -46,6 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "message.hpp"
 #include "lasterror.hpp"
 #include "TaskBar.hpp"
+#include "interf.hpp"
 
 int GetSearchReplaceString(
     bool IsReplaceMode,
@@ -67,6 +68,13 @@ int GetSearchReplaceString(
 
 	if (!ReplaceHistoryName)
 		ReplaceHistoryName = L"ReplaceText";
+
+	#if 1
+	//Maximus: поддержка "узких" дисплеев
+	int BorderW = (72<(ScrX-1))?72:(ScrX-1);
+	int ElemW = BorderW - 2; // 70
+	int ElemX2 = (BorderW + 4) / 2; // 40
+	#endif
 
 	if (IsReplaceMode)
 	{
@@ -90,16 +98,36 @@ int GetSearchReplaceString(
 		*/
 		FarDialogItem ReplaceDlgData[]=
 		{
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_DOUBLEBOX,3,1,BorderW,12,0,nullptr,nullptr,0,MSG(MEditReplaceTitle)},
+			#else
 			{DI_DOUBLEBOX,3,1,72,12,0,nullptr,nullptr,0,MSG(MEditReplaceTitle)},
+			#endif
 			{DI_TEXT,5,2,0,2,0,nullptr,nullptr,0,MSG(MEditSearchFor)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_EDIT,5,3,ElemW,3,0,TextHistoryName,nullptr,DIF_FOCUS|DIF_USELASTHISTORY|(*TextHistoryName?DIF_HISTORY:0),SearchStr},
+			#else
 			{DI_EDIT,5,3,70,3,0,TextHistoryName,nullptr,DIF_FOCUS|DIF_USELASTHISTORY|(*TextHistoryName?DIF_HISTORY:0),SearchStr},
+			#endif
 			{DI_TEXT,5,4,0,4,0,nullptr,nullptr,0,MSG(MEditReplaceWith)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_EDIT,5,5,ElemW,5,0,ReplaceHistoryName,nullptr,(*ReplaceHistoryName?DIF_HISTORY:0)/*|DIF_USELASTHISTORY*/,ReplaceStr},
+			#else
 			{DI_EDIT,5,5,70,5,0,ReplaceHistoryName,nullptr,(*ReplaceHistoryName?DIF_HISTORY:0)/*|DIF_USELASTHISTORY*/,ReplaceStr},
+			#endif
 			{DI_TEXT,3,6,0,6,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_CHECKBOX,5,7,0,7,Case,nullptr,nullptr,0,MSG(MEditSearchCase)},
 			{DI_CHECKBOX,5,8,0,8,WholeWords,nullptr,nullptr,0,MSG(MEditSearchWholeWords)},
 			{DI_CHECKBOX,5,9,0,9,Reverse,nullptr,nullptr,0,MSG(MEditSearchReverse)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_CHECKBOX,ElemX2,7,0,7,Regexp,nullptr,nullptr,0,MSG(MEditSearchRegexp)},
+			#else
 			{DI_CHECKBOX,40,7,0,7,Regexp,nullptr,nullptr,0,MSG(MEditSearchRegexp)},
+			#endif
 			{DI_TEXT,3,10,0,10,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_BUTTON,0,11,0,11,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MEditReplaceReplace)},
 			{DI_BUTTON,0,11,0,11,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MEditSearchCancel)},
@@ -107,7 +135,12 @@ int GetSearchReplaceString(
 		MakeDialogItemsEx(ReplaceDlgData,ReplaceDlg);
 
 		Dialog Dlg(ReplaceDlg,ARRAYSIZE(ReplaceDlgData));
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		Dlg.SetPosition(-1,-1,BorderW+4,14);
+		#else
 		Dlg.SetPosition(-1,-1,76,14);
+		#endif
 
 		if (HelpTopic && *HelpTopic)
 			Dlg.SetHelp(HelpTopic);
@@ -144,15 +177,31 @@ int GetSearchReplaceString(
 		*/
 		FarDialogItem SearchDlgData[]=
 		{
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_DOUBLEBOX,3,1,BorderW,10,0,nullptr,nullptr,0,MSG(MEditSearchTitle)},
+			#else
 			{DI_DOUBLEBOX,3,1,72,10,0,nullptr,nullptr,0,MSG(MEditSearchTitle)},
+			#endif
 			{DI_TEXT,5,2,0,2,0,nullptr,nullptr,0,MSG(MEditSearchFor)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_EDIT,5,3,ElemW,3,0,TextHistoryName,nullptr,DIF_FOCUS|DIF_USELASTHISTORY|(*TextHistoryName?DIF_HISTORY:0),SearchStr},
+			#else
 			{DI_EDIT,5,3,70,3,0,TextHistoryName,nullptr,DIF_FOCUS|DIF_USELASTHISTORY|(*TextHistoryName?DIF_HISTORY:0),SearchStr},
+			#endif
 			{DI_TEXT,3,4,0,4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_CHECKBOX,5,5,0,5,Case,nullptr,nullptr,0,MSG(MEditSearchCase)},
 			{DI_CHECKBOX,5,6,0,6,WholeWords,nullptr,nullptr,0,MSG(MEditSearchWholeWords)},
 			{DI_CHECKBOX,5,7,0,7,Reverse,nullptr,nullptr,0,MSG(MEditSearchReverse)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_CHECKBOX,ElemX2,5,0,5,Regexp,nullptr,nullptr,0,MSG(MEditSearchRegexp)},
+			{DI_CHECKBOX,ElemX2,6,0,6,SelectFound,nullptr,nullptr,0,MSG(MEditSearchSelFound)},
+			#else
 			{DI_CHECKBOX,40,5,0,5,Regexp,nullptr,nullptr,0,MSG(MEditSearchRegexp)},
 			{DI_CHECKBOX,40,6,0,6,SelectFound,nullptr,nullptr,0,MSG(MEditSearchSelFound)},
+			#endif
 			{DI_TEXT,3,8,0,8,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_BUTTON,0,9,0,9,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MEditSearchSearch)},
 			{DI_BUTTON,0,9,0,9,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MEditSearchAll)},
@@ -161,7 +210,12 @@ int GetSearchReplaceString(
 		MakeDialogItemsEx(SearchDlgData,SearchDlg);
 
 		Dialog Dlg(SearchDlg,ARRAYSIZE(SearchDlg));
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		Dlg.SetPosition(-1,-1,BorderW+4,12);
+		#else
 		Dlg.SetPosition(-1,-1,76,12);
+		#endif
 
 		if (HelpTopic && *HelpTopic)
 			Dlg.SetHelp(HelpTopic);

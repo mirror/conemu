@@ -1484,6 +1484,16 @@ MConfigCreateUppercaseFolders
 "Crear directorios en ma&yúsculas"
 "Vytvárať priečinky s &veľkými písmenami"
 
+MConfigSmartFolderMonitor
+"Обновление панелей только если фар активен"
+upd:"Smart folder panel monitor"
+upd:"Smart folder panel monitor"
+upd:"Smart folder panel monitor"
+upd:"Smart folder panel monitor"
+upd:"Smart folder panel monitor"
+upd:"Smart folder panel monitor"
+upd:"Smart folder panel monitor"
+
 MConfigSaveHistory
 "Сохранять &историю команд"
 "Save commands &history"
@@ -5049,6 +5059,16 @@ upd:"Occurrences: %1, lines: %2"
 upd:"Occurrences: %1, lines: %2"
 "Frecuencia: %1, líneas: %2"
 "Nájdených: %1, riadky: %2"
+
+MEditFindAllMenuFooter
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
+"F1, F5, Ctrl-Enter, Ctrl-Up/Down, Add"
 
 MEditNotFound
 "Строка не найдена"
@@ -17335,6 +17355,16 @@ upd:"$Continue outside the loop"
 upd:"$Continue outside the loop"
 "$Continuar por fuera del loop"
 "$Pokračovať mimo slučky"
+
+MMacroPErrBreakOutsideTheLoop
+"Оператор $Break вне цикла"
+upd:"$Break outside the loop"
+upd:"$Break outside the loop"
+upd:"$Break outside the loop"
+upd:"$Break outside the loop"
+upd:"$Break outside the loop"
+upd:"$Break outside the loop"
+upd:"$Break outside the loop"
 
 MCannotSaveFile
 l:

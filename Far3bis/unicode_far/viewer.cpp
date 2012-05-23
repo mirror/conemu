@@ -3294,19 +3294,44 @@ void Viewer::Search(int Next,int FirstChar)
 	{
 		const wchar_t *TextHistoryName=L"SearchText";
 		const wchar_t *HexMask = L"HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH " ;
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		int BorderW = (72<(ScrX-1))?72:(ScrX-1);
+		int ElemW = BorderW - 2; // 70
+		int ElemX2 = (BorderW + 4) / 2; // 40
+		#endif
 		FarDialogItem SearchDlgData[]=
 		{
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_DOUBLEBOX,3,1,BorderW,11,0,nullptr,nullptr,0,MSG(MViewSearchTitle)},
+			#else
 			{DI_DOUBLEBOX,3,1,72,11,0,nullptr,nullptr,0,MSG(MViewSearchTitle)},
+			#endif
 			{DI_TEXT,5,2,0,2,0,nullptr,nullptr,0,MSG(MViewSearchFor)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_EDIT,5,3,ElemW,3,0,TextHistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_USELASTHISTORY,L""},
+			{DI_FIXEDIT,5,3,ElemW,3,0,nullptr,HexMask,DIF_MASKEDIT,L""},
+			#else
 			{DI_EDIT,5,3,70,3,0,TextHistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_USELASTHISTORY,L""},
 			{DI_FIXEDIT,5,3,70,3,0,nullptr,HexMask,DIF_MASKEDIT,L""},
+			#endif
 			{DI_TEXT,3,4,0,4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_RADIOBUTTON,5,5,0,5,1,nullptr,nullptr,DIF_GROUP,MSG(MViewSearchForText)},
 			{DI_RADIOBUTTON,5,6,0,6,0,nullptr,nullptr,0,MSG(MViewSearchForHex)},
+			#if 1
+			//Maximus: поддержка "узких" дисплеев
+			{DI_CHECKBOX,ElemX2,5,0,5,0,nullptr,nullptr,0,MSG(MViewSearchCase)},
+			{DI_CHECKBOX,ElemX2,6,0,6,0,nullptr,nullptr,0,MSG(MViewSearchWholeWords)},
+			{DI_CHECKBOX,ElemX2,7,0,7,0,nullptr,nullptr,0,MSG(MViewSearchReverse)},
+			{DI_CHECKBOX,ElemX2,8,0,8,0,nullptr,nullptr,DIF_DISABLE,MSG(MViewSearchRegexp)},
+			#else
 			{DI_CHECKBOX,40,5,0,5,0,nullptr,nullptr,0,MSG(MViewSearchCase)},
 			{DI_CHECKBOX,40,6,0,6,0,nullptr,nullptr,0,MSG(MViewSearchWholeWords)},
 			{DI_CHECKBOX,40,7,0,7,0,nullptr,nullptr,0,MSG(MViewSearchReverse)},
 			{DI_CHECKBOX,40,8,0,8,0,nullptr,nullptr,DIF_DISABLE,MSG(MViewSearchRegexp)},
+			#endif
 			{DI_TEXT,3,9,0,9,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_BUTTON,0,10,0,10,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MViewSearchSearch)},
 			{DI_BUTTON,0,10,0,10,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MViewSearchCancel)},
@@ -3340,7 +3365,12 @@ void Viewer::Search(int Next,int FirstChar)
 		SearchDlg[SD_EDIT_TEXT].UserData = (DWORD_PTR)&my;
 
 		Dialog Dlg(SearchDlg,ARRAYSIZE(SearchDlg),ViewerSearchDlgProc);
+		#if 1
+		//Maximus: поддержка "узких" дисплеев
+		Dlg.SetPosition(-1,-1,BorderW+4,13);
+		#else
 		Dlg.SetPosition(-1,-1,76,13);
+		#endif
 		Dlg.SetHelp(L"ViewerSearch");
 
 		if (FirstChar)

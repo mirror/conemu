@@ -51,14 +51,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "elevation.hpp"
 #include "pathmix.hpp"
 
-History::History(enumHISTORYTYPE TypeHistory, const wchar_t *HistoryName, size_t HistoryCount, const int *EnableSave, bool SaveType):
+History::History(enumHISTORYTYPE TypeHistory, const wchar_t *HistoryName, const int *EnableSave, bool SaveType):
 	strHistoryName(HistoryName),
 	EnableAdd(true),
 	KeepSelectedPos(false),
 	SaveType(SaveType),
 	RemoveDups(1),
 	TypeHistory(TypeHistory),
-	HistoryCount(HistoryCount),
 	EnableSave(EnableSave),
 	CurrentItem(0)
 {
@@ -72,15 +71,15 @@ void History::CompactHistory()
 {
 	HistoryCfg->BeginTransaction();
 
-	HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_CMD,L"",90,1000);
-	HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_FOLDER,L"",90,1000);
-	HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_VIEW,L"",90,1000);
+	HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_CMD, L"", Opt.HistoryLifetime, Opt.HistoryCount);
+	HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_FOLDER, L"", Opt.FoldersHistoryLifetime, Opt.FoldersHistoryCount);
+	HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_VIEW, L"", Opt.ViewHistoryLifetime, Opt.ViewHistoryCount);
 
 	DWORD index=0;
 	string strName;
-	while (HistoryCfg->EnumLargeHistories(index++, 1000, HISTORYTYPE_DIALOG, strName))
+	while (HistoryCfg->EnumLargeHistories(index++, Opt.DialogsHistoryCount, HISTORYTYPE_DIALOG, strName))
 	{
-		HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_DIALOG,strName,90,1000);
+		HistoryCfg->DeleteOldUnlocked(HISTORYTYPE_DIALOG, strName, Opt.DialogsHistoryLifetime, Opt.DialogsHistoryCount);
 	}
 
 	HistoryCfg->EndTransaction();

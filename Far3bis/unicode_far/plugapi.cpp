@@ -1644,7 +1644,7 @@ int WINAPI apiViewer(const wchar_t *FileName,const wchar_t *Title,
 		if (Flags & (VF_DELETEONCLOSE|VF_DELETEONLYFILEONCLOSE))
 			Viewer->SetTempViewName(FileName,(Flags&VF_DELETEONCLOSE)?TRUE:FALSE);
 
-		Viewer->SetEnableF6((Flags & VF_ENABLE_F6) );
+		Viewer->SetEnableF6(Flags & VF_ENABLE_F6);
 
 		/* $ 21.05.2002 SKV
 		  Запускаем свой цикл только если не был указан флаг.
@@ -1665,6 +1665,9 @@ int WINAPI apiViewer(const wchar_t *FileName,const wchar_t *Title,
 	{
 		/* 09.09.2001 IS ! Добавим имя файла в историю, если потребуется */
 		FileViewer Viewer(FileName,FALSE,DisableHistory,Title,X1,Y1,X2,Y2,CodePage);
+
+		Viewer.SetEnableF6(Flags & VF_ENABLE_F6);
+
 		/* $ 28.05.2001 По умолчанию Вьюер, поэтому нужно здесь признак выставиль явно */
 		Viewer.SetDynamicallyBorn(false);
 		FrameManager->EnterModalEV();
@@ -1677,8 +1680,6 @@ int WINAPI apiViewer(const wchar_t *FileName,const wchar_t *Title,
 		*/
 		if (Flags & (VF_DELETEONCLOSE|VF_DELETEONLYFILEONCLOSE))
 			Viewer.SetTempViewName(FileName,(Flags&VF_DELETEONCLOSE)?TRUE:FALSE);
-
-		Viewer.SetEnableF6((Flags & VF_ENABLE_F6) );
 
 		if (!Viewer.GetExitCode())
 		{

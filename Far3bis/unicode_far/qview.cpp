@@ -59,7 +59,8 @@ static int LastWrapType = -1;
 QuickView::QuickView():
 	QView(nullptr),
 	Directory(0),
-	PrevMacroMode(-1)
+	PrevMacroMode(-1),
+	uncomplete_dirscan(false)
 {
 	Type=QVIEW_PANEL;
 	if (LastWrapMode < 0)
@@ -223,35 +224,37 @@ void QuickView::DisplayObject()
 
 		if (Directory==1 || Directory==4)
 		{
+			int iColor = uncomplete_dirscan ? COL_PANELHIGHLIGHTTEXT : COL_PANELINFOTEXT;
+			const wchar_t *prefix = uncomplete_dirscan ? L"~" : L"";
 			GotoXY(X1+2,Y1+4);
 			PrintText(MSG(MQuickViewContains));
 			GotoXY(X1+2,Y1+6);
 			PrintText(MSG(MQuickViewFolders));
-			SetColor(COL_PANELINFOTEXT);
+			SetColor(iColor);
 			FString.Clear();
-			FString<<Data.DirCount;
+			FString<<prefix<<Data.DirCount;
 			PrintText(FString);
 			SetColor(COL_PANELTEXT);
 			GotoXY(X1+2,Y1+7);
 			PrintText(MSG(MQuickViewFiles));
-			SetColor(COL_PANELINFOTEXT);
+			SetColor(iColor);
 			FString.Clear();
-			FString<<Data.FileCount;
+			FString<<prefix<<Data.FileCount;
 			PrintText(FString);
 			SetColor(COL_PANELTEXT);
 			GotoXY(X1+2,Y1+8);
 			PrintText(MSG(MQuickViewBytes));
-			SetColor(COL_PANELINFOTEXT);
+			SetColor(iColor);
 			string strSize;
 			InsertCommas(Data.FileSize,strSize);
-			PrintText(strSize);
+			PrintText(prefix+strSize);
 			SetColor(COL_PANELTEXT);
 			GotoXY(X1+2,Y1+9);
 			PrintText(MSG(MQuickViewAllocated));
-			SetColor(COL_PANELINFOTEXT);
+			SetColor(iColor);
 			InsertCommas(Data.AllocationSize,strSize);
 			FString.Clear();
-			FString << strSize << L" (" << ToPercent64(Data.AllocationSize,Data.FileSize) << L"%)";
+			FString << prefix << strSize << L" (" << ToPercent64(Data.AllocationSize,Data.FileSize) << L"%)";
 			PrintText(FString);
 
 			if (Directory!=4)
@@ -259,26 +262,26 @@ void QuickView::DisplayObject()
 				SetColor(COL_PANELTEXT);
 				GotoXY(X1+2,Y1+11);
 				PrintText(MSG(MQuickViewCluster));
-				SetColor(COL_PANELINFOTEXT);
+				SetColor(iColor);
 				InsertCommas(Data.ClusterSize,strSize);
-				PrintText(strSize);
+				PrintText(prefix+strSize);
 
 				SetColor(COL_PANELTEXT);
 				GotoXY(X1+2,Y1+12);
 				PrintText(MSG(MQuickViewSlack));
-				SetColor(COL_PANELINFOTEXT);
+				SetColor(iColor);
 				InsertCommas(Data.FilesSlack, strSize);
 				FString.Clear();
-				FString << strSize << L" (" << ToPercent64(Data.FilesSlack, Data.AllocationSize) << L"%)";
+				FString << prefix << strSize << L" (" << ToPercent64(Data.FilesSlack, Data.AllocationSize) << L"%)";
 				PrintText(FString);
 
 				SetColor(COL_PANELTEXT);
 				GotoXY(X1+2,Y1+13);
 				PrintText(MSG(MQuickViewMFTOverhead));
-				SetColor(COL_PANELINFOTEXT);
+				SetColor(iColor);
 				InsertCommas(Data.MFTOverhead, strSize);
 				FString.Clear();
-				FString<<strSize<<L" ("<<ToPercent64(Data.MFTOverhead, Data.AllocationSize)<<L"%)";
+				FString<<prefix<<strSize<<L" ("<<ToPercent64(Data.MFTOverhead, Data.AllocationSize)<<L"%)";
 				PrintText(FString);
 
 			}
@@ -449,21 +452,14 @@ void QuickView::ShowFile(const wchar_t *FileName,int TempFile,HANDLE hDirPlugin)
 		{
 			int ExitCode=GetPluginDirInfo(hDirPlugin,strCurFileName,Data.DirCount,
 			                              Data.FileCount,Data.FileSize,Data.AllocationSize);
-			if (ExitCode)
-				Directory=4;
-			else
-				Directory=3;
+			Directory = (ExitCode ? 4 : 3);
+			uncomplete_dirscan = (ExitCode == 0);
 		}
 		else
 		{
 			int ExitCode=GetDirInfo(MSG(MQuickViewTitle), strCurFileName, Data, 500, nullptr, GETDIRINFO_ENHBREAK|GETDIRINFO_SCANSYMLINKDEF|GETDIRINFO_DONTREDRAWFRAME);
-
-			if (ExitCode==1)
-				Directory=1;
-			else if (ExitCode==-1)
-				Directory=2;
-			else
-				Directory=3;
+			Directory = (ExitCode == -1 ? 2 : 1); // ExitCode: 1=done; 0=Esc,CtrlBreak; -1=Other
+			uncomplete_dirscan = ExitCode != 1;
 		}
 	}
 	else
