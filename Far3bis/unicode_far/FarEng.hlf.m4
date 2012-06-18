@@ -156,9 +156,6 @@ executing Far under telnet.
 and line position.
   For example: far /e70:2 readme.
 
-  #/i#
-  Set icon for Far console window.
-
   #/p[<path>]#
   Search for "main" plugins in the folder given in <path>.
   Several search paths may be given separated by ';'.
@@ -207,8 +204,8 @@ user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
 the "dir" command in the provided example), Far will wait for the end of data
 in the input stream until you press Ctrl-Break.
 
-  #/w#
-  Stretch to console window instead of console buffer.
+  #/w[-]#
+  Stretch to console window instead of console buffer or vise versa.
 
   #/x#
   Disable exception handling. This option has been designed for plugin developers,
@@ -228,6 +225,15 @@ and it is not recommended to specify it during normal operation.
   Импортировать все настройки из файла in.farconfig и завершить работу.
   Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
+
+  #/ro#
+  Работа без сохранения изменений в базах настроек. Этот режим позволяет работать
+с настройками доступными только для чтения, в том числе на защищенных от записи носителях.
+Опция перекрывает значение ReadOnlyConfig из Far.exe.ini.
+
+  #/rw#
+  Нормальный (Read-Write) режим работы с БД настроек.
+Опция перекрывает значение ReadOnlyConfig из Far.exe.ini.
 
   It is possible to specify at most two paths (to folders, files or archives) or
 two commands with plugin prefix in the command line. The first path applies to the
@@ -2719,6 +2725,7 @@ while searching (so, for example, #Text# will not be found when searching for #t
         #Whole words#         - ^<wrap>the given text will be found only if it occurs in the text as a whole word.
 
         #Regular expressions# - ^<wrap>enable the use of ~regular expressions~@RegExp@ in the search string.
+Поиск построчный, поэтому многострочные конструкции и переводы строк не будут найдены.
 
     #Search for hex#
 
@@ -2863,7 +2870,8 @@ $ #Editor: search/replace#
 
       #Reverse search#      - ^<wrap>change the direction of search (from the end of file towards the beginning)
 
-      #Regular expressions# - ^<wrap>treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@)
+      #Regular expressions# - ^<wrap>treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@).
+Поиск построчный, поэтому многострочные конструкции и переводы строк не будут найдены.
 
     The following option is available in search dialog only:
 

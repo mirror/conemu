@@ -131,7 +131,7 @@ bool GetErrorString(string &strErrStr)
 #endif
 }
 
-INT_PTR WINAPI MsgDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI MsgDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -168,7 +168,7 @@ INT_PTR WINAPI MsgDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 			const INPUT_RECORD* record=(const INPUT_RECORD *)Param2;
 			if (record->EventType==KEY_EVENT)
 			{
-				int key = InputRecordToKey((const INPUT_RECORD *)Param2);
+				int key = InputRecordToKey(record);
 				switch(key)
 				{
 				case KEY_F3:
@@ -178,8 +178,8 @@ INT_PTR WINAPI MsgDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						GetWin32ErrorString(LastError, Txt[0]);
 						GetNtErrorString(NtStatus, Txt[1]);
 						DialogBuilder Builder(MError, nullptr);
-						Builder.AddConstEditField(FormatString() << L"LastError: 0x" << fmt::Width(8) << fmt::FillChar(L'0') << fmt::Radix(16) << LastError << L" - " << Txt[0], 65);
-						Builder.AddConstEditField(FormatString() << L"NTSTATUS: 0x" << fmt::Width(8) << fmt::FillChar(L'0') << fmt::Radix(16) << NtStatus << L" - " << Txt[1], 65);
+						Builder.AddConstEditField(FormatString() << L"LastError: 0x" << fmt::MinWidth(8) << fmt::FillChar(L'0') << fmt::Radix(16) << LastError << L" - " << Txt[0], 65);
+						Builder.AddConstEditField(FormatString() << L"NTSTATUS: 0x" << fmt::MinWidth(8) << fmt::FillChar(L'0') << fmt::Radix(16) << NtStatus << L" - " << Txt[1], 65);
 						Builder.AddOK();
 						Builder.ShowDialog();
 					}
@@ -259,6 +259,57 @@ int Message(
 
 	if (IsErrorType)
 		ErrorSets = GetErrorString(strErrStr);
+
+#if 1 // try to replace inserts
+	if (Items && 0 != (Flags & MSG_INSERT_STRINGS))
+	{
+		string str_err(strErrStr);
+		DWORD insert_mask = 0;
+		size_t len = strErrStr.GetLength(), pos = 0, inserts_n = 0, inserts[10];
+
+		for (size_t i = 1; i <= ItemsNumber-Buttons; ++i)
+		{
+			if (0 != (Flags & MSG_INSERT_STR(i)))
+			{
+				inserts[inserts_n++] = i;
+				if (inserts_n >= ARRAYSIZE(inserts))
+					break;
+			}
+		}
+
+		while (str_err.Pos(pos, L"%", pos))
+		{
+			if (pos >= len-1)
+				break;
+
+			if (str_err.At(pos+1) >= L'1' && str_err.At(pos+1) <= L'9')
+			{
+				size_t insert_i = 0, pos1 = pos+1;
+				while (pos1 < len && str_err.At(pos1) >= L'0' && str_err.At(pos1) <= L'9')
+				{
+					insert_i = 10*insert_i + str_err.At(pos1) - L'0';
+					++pos1;
+				}
+				if (insert_i >= 1 && insert_i <= inserts_n)
+				{
+					insert_mask |= MSG_INSERT_STR(inserts[insert_i-1]);
+					const wchar_t *replacement = Items[inserts[insert_i-1]-1];
+					str_err.Replace(pos,pos1-pos,replacement);
+					len += wcslen(replacement) - (pos1-pos);
+					pos += wcslen(replacement) - (pos1-pos);
+				}
+				else
+					pos = pos1;
+			}
+			else if (str_err.At(pos+1) == L'%') // "%%"
+				pos += 2;
+			else
+				++pos;
+		}
+		if (insert_mask == (Flags & MSG_INSERT_STRINGS))
+			strErrStr = str_err;
+	}
+#endif
 
 	// выделим память под рабочий массив указателей на строки (+запас 16)
 	Str=(const wchar_t **)xf_malloc((ItemsNumber+ADDSPACEFORPSTRFORMESSAGE) * sizeof(wchar_t*));
@@ -580,7 +631,6 @@ int Message(
 
 	for (I=0; I<StrCount; I++)
 	{
-		int PosX;
 		CPtrStr=Str[I];
 		wchar_t Chr=*CPtrStr;
 
@@ -613,7 +663,7 @@ int Message(
 
 		int Width=X2-X1+1;
 		wchar_t *lpwszTemp = nullptr;
-
+		int PosX;
 		if (Flags & MSG_LEFTALIGN)
 		{
 			lpwszTemp = (wchar_t*)xf_malloc((Width-10+1)*sizeof(wchar_t));

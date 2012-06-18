@@ -324,7 +324,7 @@ BOOL WINAPI apiShowHelp(
 /* $ 05.07.2000 IS
   Функция, которая будет действовать и в редакторе, и в панелях, и...
 */
-INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	#if 1
 	//Maximus: для отлова недобросовестных плагинов
@@ -396,12 +396,6 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 		}
 		return FALSE;
 	}
-
-	struct Opt2Flags
-	{
-		int *Opt;
-		DWORD Flags;
-	};
 
 	switch (Command)
 	{
@@ -618,7 +612,7 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 						wi->Id=static_cast<FileEditor*>(f)->GetId();
 						break;
 					case WTYPE_DIALOG:
-						wi->Id=(INT_PTR)f;
+						wi->Id=(intptr_t)f;
 						break;
 					default:
 						wi->Id=0;
@@ -664,7 +658,7 @@ INT_PTR WINAPI apiAdvControl(const GUID* PluginId, ADVANCED_CONTROL_COMMANDS Com
 		   пригодится плагинам */
 		case ACTL_GETFARHWND:
 		{
-			return (INT_PTR)Console.GetWindow();
+			return (intptr_t)Console.GetWindow();
 		}
 		case ACTL_REDRAWALL:
 		{
@@ -926,7 +920,7 @@ int WINAPI apiMenuFn(
 }
 
 // Функция FarDefDlgProc обработки диалога по умолчанию
-INT_PTR WINAPI apiDefDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI apiDefDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	if (hDlg) // исключаем лишний вызов для hDlg=0
 		return DefDlgProc(hDlg,Msg,Param1,Param2);
@@ -935,7 +929,7 @@ INT_PTR WINAPI apiDefDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 }
 
 // Посылка сообщения диалогу
-INT_PTR WINAPI apiSendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI apiSendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	if (hDlg) // исключаем лишний вызов для hDlg=0
 		return SendDlgMessage(hDlg,Msg,Param1,Param2);
@@ -945,7 +939,7 @@ INT_PTR WINAPI apiSendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 
 HANDLE WINAPI apiDialogInit(const GUID* PluginId, const GUID* Id, int X1, int Y1, int X2, int Y2,
                             const wchar_t *HelpTopic, const FarDialogItem *Item,
-                            size_t ItemsNumber, DWORD_PTR Reserved, unsigned __int64 Flags,
+                            size_t ItemsNumber, intptr_t Reserved, unsigned __int64 Flags,
                             FARWINDOWPROC DlgProc, void* Param)
 {
 	HANDLE hDlg=INVALID_HANDLE_VALUE;
@@ -1211,7 +1205,7 @@ int WINAPI apiMessageFn(const GUID* PluginId,const GUID* Id,unsigned __int64 Fla
 	return MsgCode;
 }
 
-INT_PTR WINAPI apiPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int Param1,void* Param2)
+intptr_t WINAPI apiPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int Param1,void* Param2)
 {
 	_FCTLLOG(CleverSysLog CSL(L"Control"));
 	_FCTLLOG(SysLog(L"(hPlugin=0x%08X, Command=%s, Param1=[%d/0x%08X], Param2=[%d/0x%08X])",hPlugin,_FCTL_ToName(Command),(int)Param1,Param1,(int)Param2,Param2));
@@ -1381,12 +1375,13 @@ INT_PTR WINAPI apiPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int 
 		case FCTL_SETCMDLINE:
 		case FCTL_INSERTCMDLINE:
 		{
-			CmdLine->DisableAC();
-			if (Command==FCTL_SETCMDLINE)
-				CmdLine->SetString((const wchar_t*)Param2);
-			else
-				CmdLine->InsertString((const wchar_t*)Param2);
-			CmdLine->RevertAC();
+			{
+				SetAutocomplete disable(CmdLine);
+				if (Command==FCTL_SETCMDLINE)
+					CmdLine->SetString((const wchar_t*)Param2);
+				else
+					CmdLine->InsertString((const wchar_t*)Param2);
+			}
 			CmdLine->Redraw();
 			return TRUE;
 		}
@@ -1853,7 +1848,7 @@ void WINAPI apiText(int X,int Y,const FarColor* Color,const wchar_t *Str)
 	}
 }
 
-INT_PTR WINAPI apiEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	#if 1
 	//Maximus: для отлова недобросовестных плагинов
@@ -1906,7 +1901,7 @@ INT_PTR WINAPI apiEditorControl(int EditorID, EDITOR_CONTROL_COMMANDS Command, i
 	return 0;
 }
 
-INT_PTR WINAPI apiViewerControl(int ViewerID, VIEWER_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiViewerControl(int ViewerID, VIEWER_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	#if 1
 	//Maximus: для отлова недобросовестных плагинов
@@ -2140,7 +2135,7 @@ wchar_t* WINAPI apiPasteFromClipboard()
 	return PasteFromClipboard();
 }
 
-INT_PTR WINAPI apiMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	if (CtrlObject) // все зависит от этой бадяги.
 	{
@@ -2288,7 +2283,7 @@ INT_PTR WINAPI apiMacroControl(const GUID* PluginId, FAR_MACRO_CONTROL_COMMANDS 
 	return 0;
 }
 
-INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	switch (Command)
 	{
@@ -2336,7 +2331,7 @@ INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 				}
 			}
 			if(plugin&&CtrlObject->Plugins->IsPluginUnloaded(plugin)) plugin=nullptr;
-			return reinterpret_cast<INT_PTR>(plugin);
+			return reinterpret_cast<intptr_t>(plugin);
 		}
 
 		case PCTL_UNLOADPLUGIN:
@@ -2400,7 +2395,7 @@ INT_PTR WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Com
 	return 0;
 }
 
-INT_PTR WINAPI apiFileFilterControl(HANDLE hHandle, FAR_FILE_FILTER_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiFileFilterControl(HANDLE hHandle, FAR_FILE_FILTER_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	FileFilter *Filter=nullptr;
 
@@ -2471,7 +2466,7 @@ INT_PTR WINAPI apiFileFilterControl(HANDLE hHandle, FAR_FILE_FILTER_CONTROL_COMM
 	return FALSE;
 }
 
-INT_PTR WINAPI apiRegExpControl(HANDLE hHandle, FAR_REGEXP_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiRegExpControl(HANDLE hHandle, FAR_REGEXP_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	RegExp* re=nullptr;
 
@@ -2532,7 +2527,7 @@ INT_PTR WINAPI apiRegExpControl(HANDLE hHandle, FAR_REGEXP_CONTROL_COMMANDS Comm
 	return FALSE;
 }
 
-INT_PTR WINAPI apiSettingsControl(HANDLE hHandle, FAR_SETTINGS_CONTROL_COMMANDS Command, int Param1, void* Param2)
+intptr_t WINAPI apiSettingsControl(HANDLE hHandle, FAR_SETTINGS_CONTROL_COMMANDS Command, int Param1, void* Param2)
 {
 	AbstractSettings* settings=nullptr;
 

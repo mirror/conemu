@@ -323,7 +323,7 @@ BOOL apiSetCurrentDirectory(
     bool Validate = true
 );
 
-// for elevation only, dont' use outside.
+// for elevation only, don't use outside.
 bool CreateSymbolicLinkInternal(const string& Object,const string& Target, DWORD dwFlags);
 bool apiSetFileEncryptionInternal(const wchar_t* Name, bool Encrypt);
 
@@ -387,3 +387,25 @@ void apiEnableLowFragmentationHeap();
 
 int RegQueryStringValue(HKEY hKey, const string& ValueName, string &strData, const wchar_t *lpwszDefault = L"");
 int EnumRegValueEx(HKEY hRegRootKey, const string& Key, DWORD Index, string &strDestName, string &strData, LPDWORD IData=nullptr,__int64* IData64=nullptr, DWORD *Type=nullptr);
+
+struct FAR_SECURITY_DESCRIPTOR
+{
+	size_t Size;
+	intptr_t SecurityDescriptorBaseAddress;
+	PSECURITY_DESCRIPTOR SecurityDescriptor;
+};
+
+struct FAR_SECURITY_DESCRIPTOR_EX:public FAR_SECURITY_DESCRIPTOR
+{
+	FAR_SECURITY_DESCRIPTOR_EX() {Size = 0, SecurityDescriptor = nullptr;}
+	~FAR_SECURITY_DESCRIPTOR_EX() {if(SecurityDescriptor) xf_free(SecurityDescriptor);}
+};
+
+bool apiGetFileSecurity(const string& Object, SECURITY_INFORMATION RequestedInformation, FAR_SECURITY_DESCRIPTOR& SecurityDescriptor);
+
+bool apiSetFileSecurity(const string& Object, SECURITY_INFORMATION RequestedInformation, const FAR_SECURITY_DESCRIPTOR& SecurityDescriptor);
+
+// for elevation only, don't use outside.
+bool apiOpenVirtualDiskInternal(VIRTUAL_STORAGE_TYPE& VirtualStorageType, const string& Object, VIRTUAL_DISK_ACCESS_MASK VirtualDiskAccessMask, OPEN_VIRTUAL_DISK_FLAG Flags, OPEN_VIRTUAL_DISK_PARAMETERS& Parameters, HANDLE& Handle);
+
+bool apiOpenVirtualDisk(VIRTUAL_STORAGE_TYPE& VirtualStorageType, const string& Object, VIRTUAL_DISK_ACCESS_MASK VirtualDiskAccessMask, OPEN_VIRTUAL_DISK_FLAG Flags, OPEN_VIRTUAL_DISK_PARAMETERS& Parameters, HANDLE& Handle);

@@ -57,6 +57,7 @@ enum ELEVATION_COMMAND
 	C_FUNCTION_SETOWNER,
 	C_FUNCTION_CREATEFILE,
 	C_FUNCTION_SETENCRYPTION,
+	C_FUNCTION_OPENVIRTUALDISK,
 };
 
 class AutoObject;
@@ -92,6 +93,7 @@ public:
 	bool fSetOwner(const string& Object, const string& Owner);
 	HANDLE fCreateFile(const string& Object, DWORD DesiredAccess, DWORD ShareMode, LPSECURITY_ATTRIBUTES SecurityAttributes, DWORD CreationDistribution, DWORD FlagsAndAttributes, HANDLE TemplateFile);
 	bool fSetFileEncryption(const string& Object, bool Encrypt);
+	bool fOpenVirtualDisk(VIRTUAL_STORAGE_TYPE& VirtualStorageType, const string& Object, VIRTUAL_DISK_ACCESS_MASK VirtualDiskAccessMask, OPEN_VIRTUAL_DISK_FLAG Flags, OPEN_VIRTUAL_DISK_PARAMETERS& Parameters, HANDLE& Handle);
 
 private:
 	HANDLE Pipe;
@@ -106,9 +108,7 @@ private:
 	CriticalSection CS;
 	string strPipeID;
 
-	bool ReadData(AutoObject& Data) const;
-	bool WriteData(LPCVOID Data, size_t DataSize) const;
-	bool WriteData(const string& Data) const {return WriteData(Data.CPtr(), (Data.GetLength()+1)*sizeof(wchar_t));}
+	bool Write(LPCVOID Data, size_t DataSize) const;
 	template<typename T>
 	inline bool Read(T& Data) const;
 	template<typename T>

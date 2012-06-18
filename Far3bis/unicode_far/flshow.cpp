@@ -215,7 +215,7 @@ void FileList::ShowFileList(int Fast)
 			CenterStr(strTitle,strTitleMsg,ViewSettings.ColumnWidth[I]);
 			SetColor(COL_PANELCOLUMNTITLE);
 			GotoXY(ColumnPos,Y1+1);
-			FS<<fmt::Precision(ViewSettings.ColumnWidth[I])<<strTitleMsg;
+			FS<<fmt::MaxWidth(ViewSettings.ColumnWidth[I])<<strTitleMsg;
 		}
 
 		if (I>=ViewSettings.ColumnCount-1)
@@ -608,9 +608,9 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 		Text(strTotalStr);
 	else
 	{
-		FS<<fmt::Precision(BoxPos)<<strTotalStr;
+		FS<<fmt::MaxWidth(BoxPos)<<strTotalStr;
 		SetColor(COL_PANELBOX);
-		FS<<fmt::Precision(BoxLength)<<strTotalStr.CPtr()+BoxPos;
+		FS<<fmt::MaxWidth(BoxLength)<<strTotalStr.CPtr()+BoxPos;
 		SetColor(COL_PANELTOTALINFO);
 		Text(strTotalStr.CPtr()+BoxPos+BoxLength);
 	}
@@ -1182,9 +1182,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 					#if 1
 					//Maximus: многострочная статусная область
-					strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ColumnData+CurLeftPos;
+					strLine<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<ColumnData+CurLeftPos;
 					#else
-					FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ColumnData+CurLeftPos;
+					FS<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<ColumnData+CurLeftPos;
 					#endif
 				}
 				else
@@ -1395,9 +1395,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							#if 1
 							//Maximus: многострочная статусная область
 							if (ViewFlags&COLUMN_RIGHTALIGN)
-								strLine<<fmt::RightAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+								strLine<<fmt::RightAlign()<<fmt::ExactWidth(ColumnWidth)<<ExtPtr;
 							else
-								strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+								strLine<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<ExtPtr;
 
 							if (!ShowStatus)
 							{
@@ -1406,9 +1406,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							}
 							#else
 							if (ViewFlags&COLUMN_RIGHTALIGN)
-								FS<<fmt::RightAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+								FS<<fmt::RightAlign()<<fmt::ExactWidth(ColumnWidth)<<ExtPtr;
 							else
-								FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ExtPtr;
+								FS<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<ExtPtr;
 							#endif
 
 							if (!ShowStatus && StrLength(ExtPtr) > ColumnWidth)
@@ -1533,9 +1533,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 							#if 1
 							//Maximus: многострочная статусная область
-							strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<strDizText;
+							strLine<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<strDizText;
 							#else
-							FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<strDizText;
+							FS<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<strDizText;
 							#endif
 							break;
 						}
@@ -1570,9 +1570,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 							#if 1
 							//Maximus: многострочная статусная область
-							strLine<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<Owner+CurLeftPos;
+							strLine<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<Owner+CurLeftPos;
 							#else
-							FS<<fmt::LeftAlign()<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<Owner+CurLeftPos;
+							FS<<fmt::LeftAlign()<<fmt::ExactWidth(ColumnWidth)<<Owner+CurLeftPos;
 							#endif
 							break;
 						}
@@ -1581,9 +1581,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						{
 							#if 1
 							//Maximus: многострочная статусная область
-							strLine<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
+							strLine<<fmt::ExactWidth(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
 							#else
-							FS<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
+							FS<<fmt::ExactWidth(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
 							#endif
 							break;
 						}
@@ -1592,9 +1592,9 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						{
 							#if 1
 							//Maximus: многострочная статусная область
-							strLine<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfStreams;
+							strLine<<fmt::ExactWidth(ColumnWidth)<<ListData[ListPos]->NumberOfStreams;
 							#else
-							FS<<fmt::Width(ColumnWidth)<<fmt::Precision(ColumnWidth)<<ListData[ListPos]->NumberOfStreams;
+							FS<<fmt::ExactWidth(ColumnWidth)<<ListData[ListPos]->NumberOfStreams;
 							#endif
 							break;
 						}
@@ -1605,13 +1605,13 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			#if 0
 			else
 			{
-				FS<<fmt::Width(ColumnWidth)<<L"";
+				FS<<fmt::MinWidth(ColumnWidth)<<L"";
 			}
 			#else
 			//Maximus: многострочная статусная область
 			else
 			{
-				strLine<<fmt::Width(ColumnWidth)<<L"";
+				strLine<<fmt::MinWidth(ColumnWidth)<<L"";
 			}
 			
 			//Maximus: многострочная статусная область
@@ -1679,22 +1679,22 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 			if (LineLen<(X2-X1-1))
 			{
 				if (StatusAlign & COLUMN_CENTERALIGN)
-					FS<<fmt::Width((X2-X1-1-LineLen)>>1)<<L"";
+					FS<<fmt::MinWidth((X2-X1-1-LineLen)>>1)<<L"";
 				else if (StatusAlign & COLUMN_RIGHTALIGN)
-					FS<<fmt::Width(X2-X1-1-LineLen)<<L"";
+					FS<<fmt::MinWidth(X2-X1-1-LineLen)<<L"";
 			}
 			else if (LineLen>(X2-X1-1))
 			{
 				LineLen = X2-X1-1;
 			}
-	        FS<<fmt::Width(LineLen)<<fmt::Precision(LineLen)<<strLine/*LinePtr*/;
+	        FS<<fmt::MinWidth(LineLen)<<strLine/*LinePtr*/;
         }
         #endif
 
 		if ((!ShowStatus || StatusLine) && WhereX()<X2)
 		{
 			SetColor(COL_PANELTEXT);
-			FS<<fmt::Width(X2-WhereX())<<L"";
+			FS<<fmt::MinWidth(X2-WhereX())<<L"";
 		}
 	}
 

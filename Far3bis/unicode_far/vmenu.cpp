@@ -115,7 +115,7 @@ VMenu::VMenu(const wchar_t *Title,       // заголовок меню
 		NewItem.Clear();
 
 		if (!IsPtr(Data[I].Name))
-			NewItem.strName = MSG(static_cast<LNGID>(reinterpret_cast<DWORD_PTR>(Data[I].Name)));
+			NewItem.strName = MSG(static_cast<LNGID>(reinterpret_cast<intptr_t>(Data[I].Name)));
 		else
 			NewItem.strName = Data[I].Name;
 
@@ -1265,13 +1265,13 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			switch (iParam)
 			{
 				case 0:
-					switch ((INT_PTR)vParam)
+					switch ((intptr_t)vParam)
 					{
 						case 0:
 						case 1:
-							if (bFilterEnabled != ((INT_PTR)vParam == 1))
+							if (bFilterEnabled != ((intptr_t)vParam == 1))
 							{
-								bFilterEnabled=((INT_PTR)vParam == 1);
+								bFilterEnabled=((intptr_t)vParam == 1);
 								bFilterLocked=false;
 								strFilter.Clear();
 								#if 1
@@ -1308,11 +1308,11 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 					break;
 
 				case 1:
-					switch ((INT_PTR)vParam)
+					switch ((intptr_t)vParam)
 					{
 						case 0:
 						case 1:
-							bFilterLocked=((INT_PTR)vParam == 1);
+							bFilterLocked=((intptr_t)vParam == 1);
 							DisplayObject();
 							RetValue = 1;
 							break;
@@ -1451,7 +1451,7 @@ __int64 VMenu::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		{
 			static string strId;
 			strId = GuidToStr(MenuId);
-			return reinterpret_cast<INT_PTR>(strId.CPtr());
+			return reinterpret_cast<intptr_t>(strId.CPtr());
 		}
 
 	}
@@ -2502,7 +2502,7 @@ void VMenu::DrawTitles()
 		GotoXY(X1+(X2-X1-1-WidthTitle)/2,Y1);
 		SetColor(Colors[VMenuColorTitle]);
 
-		FS << L" " << fmt::Width(WidthTitle) << fmt::Precision(WidthTitle) << strDisplayTitle << L" ";
+		FS << L" " << fmt::ExactWidth(WidthTitle) << strDisplayTitle << L" ";
 	}
 
 	if (!strBottomTitle.IsEmpty())
@@ -2515,7 +2515,7 @@ void VMenu::DrawTitles()
 		GotoXY(X1+(X2-X1-1-WidthTitle)/2,Y2);
 		SetColor(Colors[VMenuColorTitle]);
 
-		FS << L" " << fmt::Width(WidthTitle) << fmt::Precision(WidthTitle) << strBottomTitle << L" ";
+		FS << L" " << fmt::ExactWidth(WidthTitle) << strBottomTitle << L" ";
 	}
 }
 
@@ -2717,7 +2717,7 @@ void VMenu::ShowMenu(bool IsParent)
 						ItemWidth = X2-X1-3;
 
 					GotoXY(X1+(X2-X1-1-ItemWidth)/2,Y);
-					FS << L" " << fmt::LeftAlign() << fmt::Width(ItemWidth) << fmt::Precision(ItemWidth) << Item[I]->strName << L" ";
+					FS << L" " << fmt::LeftAlign() << fmt::ExactWidth(ItemWidth) << Item[I]->strName << L" ";
 				}
 
 				strTmpStr.ReleaseBuffer();
@@ -2818,7 +2818,7 @@ void VMenu::ShowMenu(bool IsParent)
 				{
 					int Width = X2-WhereX()+(BoxType==NO_BOX?1:0);
 					if (Width > 0)
-						FS << fmt::Width(Width) << L"";
+						FS << fmt::MinWidth(Width) << L"";
 				}
 
 				if (Item[I]->Flags & MIF_SUBMENU)
@@ -2859,7 +2859,7 @@ void VMenu::ShowMenu(bool IsParent)
 
 			SetColor(Colors[VMenuColorText]);
 			// сделаем добавочку для NO_BOX
-			FS << fmt::Width(((BoxType!=NO_BOX)?X2-X1-1:X2-X1)+((BoxType==NO_BOX)?1:0)) << L"";
+			FS << fmt::MinWidth(((BoxType!=NO_BOX)?X2-X1-1:X2-X1)+((BoxType==NO_BOX)?1:0)) << L"";
 		}
 	}
 
@@ -3415,13 +3415,13 @@ BOOL VMenu::GetVMenuInfo(FarListInfo* Info)
 }
 
 // функция обработки меню (по умолчанию)
-INT_PTR WINAPI VMenu::DefMenuProc(HANDLE hVMenu, int Msg, int Param1, void* Param2)
+intptr_t WINAPI VMenu::DefMenuProc(HANDLE hVMenu, int Msg, int Param1, void* Param2)
 {
 	return 0;
 }
 
 // функция посылки сообщений меню
-INT_PTR WINAPI VMenu::SendMenuMessage(HANDLE hVMenu, int Msg, int Param1, void* Param2)
+intptr_t WINAPI VMenu::SendMenuMessage(HANDLE hVMenu, int Msg, int Param1, void* Param2)
 {
 	CriticalSectionLock Lock(((VMenu*)hVMenu)->CS);
 
@@ -3606,8 +3606,8 @@ static int WINAPI SortItem(const MenuItemEx **el1, const MenuItemEx **el2, const
 static int WINAPI SortItemDataDWORD(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
 	int Res;
-	DWORD Dw1=(DWORD)(DWORD_PTR)((*el1)->UserData);
-	DWORD Dw2=(DWORD)(DWORD_PTR)((*el2)->UserData);
+	DWORD Dw1=(DWORD)(intptr_t)((*el1)->UserData);
+	DWORD Dw2=(DWORD)(intptr_t)((*el2)->UserData);
 
 	if (Dw1 == Dw2)
 		Res=0;

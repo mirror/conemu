@@ -54,11 +54,11 @@ int GetSearchReplaceString(
     string& ReplaceStr,
     const wchar_t *TextHistoryName,
     const wchar_t *ReplaceHistoryName,
-    int& Case,
-    int& WholeWords,
-    int& Reverse,
-    int& SelectFound,
-    int& Regexp,
+    bool& Case,
+    bool& WholeWords,
+    bool& Reverse,
+    bool& SelectFound,
+    bool& Regexp,
     const wchar_t *HelpTopic)
 {
 	int Result = 0;
@@ -152,10 +152,10 @@ int GetSearchReplaceString(
 			Result = 1;
 			SearchStr = ReplaceDlg[2].strData;
 			ReplaceStr = ReplaceDlg[4].strData;
-			Case=ReplaceDlg[6].Selected;
-			WholeWords=ReplaceDlg[7].Selected;
-			Reverse=ReplaceDlg[8].Selected;
-			Regexp=ReplaceDlg[9].Selected;
+			Case=ReplaceDlg[6].Selected == BSTATE_CHECKED;
+			WholeWords=ReplaceDlg[7].Selected == BSTATE_CHECKED;
+			Reverse=ReplaceDlg[8].Selected == BSTATE_CHECKED;
+			Regexp=ReplaceDlg[9].Selected == BSTATE_CHECKED;
 		}
 	}
 	else
@@ -228,11 +228,11 @@ int GetSearchReplaceString(
 			Result = ExitCode == 10? 1 : 2;
 			SearchStr = SearchDlg[2].strData;
 			ReplaceStr.Clear();
-			Case=SearchDlg[4].Selected;
-			WholeWords=SearchDlg[5].Selected;
-			Reverse=SearchDlg[6].Selected;
-			Regexp=SearchDlg[7].Selected;
-			SelectFound=SearchDlg[8].Selected;
+			Case=SearchDlg[4].Selected == BSTATE_CHECKED;
+			WholeWords=SearchDlg[5].Selected == BSTATE_CHECKED;
+			Reverse=SearchDlg[6].Selected == BSTATE_CHECKED;
+			Regexp=SearchDlg[7].Selected == BSTATE_CHECKED;
+			SelectFound=SearchDlg[8].Selected == BSTATE_CHECKED;
 		}
 	}
 
@@ -241,7 +241,7 @@ int GetSearchReplaceString(
 
 
 // Функция для коррекции аля Shift-F4 Shift-Enter без отпускания Shift ;-)
-static INT_PTR WINAPI GetStringDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+static intptr_t WINAPI GetStringDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	/*
 	  if(Msg == DM_KEY)
@@ -362,25 +362,8 @@ int GetString(
 			Dlg.SetHelp(HelpTopic);
 
 		Dlg.SetPluginOwner(reinterpret_cast<Plugin*>(PluginNumber));
-#if 0
 
-		if (Opt.ExceptRules)
-		{
-			__try
-			{
-				Dlg.Process();
-			}
-			__except(xfilter(EXCEPT_FARDIALOG,
-			                 GetExceptionInformation(),nullptr,1)) // nullptr=???
-			{
-				return FALSE;
-			}
-		}
-		else
-#endif
-		{
-			Dlg.Process();
-		}
+		Dlg.Process();
 
 		ExitCode=Dlg.GetExitCode();
 

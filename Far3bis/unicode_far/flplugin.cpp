@@ -258,7 +258,7 @@ void FileList::FileListToPluginItem(FileListItem *fi,PluginPanelItem *pi)
 	if (fi->UserData && (fi->UserFlags & PPIF_USERDATA))
 	{
 		DWORD Size=*(DWORD *)fi->UserData;
-		pi->UserData=(DWORD_PTR)xf_malloc(Size);
+		pi->UserData=(intptr_t)xf_malloc(Size);
 		memcpy((void *)pi->UserData,(void *)fi->UserData,Size);
 	}
 	else
@@ -322,7 +322,7 @@ size_t FileList::FileListToPluginItem2(FileListItem *fi,FarGetPluginPanelItem *g
 			if (fi->UserData&&(fi->UserFlags&PPIF_USERDATA))
 			{
 				DWORD Size=*(DWORD *)fi->UserData;
-				gpi->Item->UserData=(DWORD_PTR)data;
+				gpi->Item->UserData=(intptr_t)data;
 				memcpy((void *)gpi->Item->UserData,(void *)fi->UserData,Size);
 				data+=ALIGN(Size);
 			}
@@ -402,7 +402,7 @@ void FileList::PluginToFileListItem(PluginPanelItem *pi,FileListItem *fi)
 	if (pi->UserData && (pi->Flags & PPIF_USERDATA))
 	{
 		DWORD Size=*(DWORD *)pi->UserData;
-		fi->UserData=(DWORD_PTR)xf_malloc(Size);
+		fi->UserData=(intptr_t)xf_malloc(Size);
 		memcpy((void *)fi->UserData,(void *)pi->UserData,Size);
 	}
 	else

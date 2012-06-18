@@ -1719,3 +1719,40 @@ int EnumRegValueEx(HKEY hRegRootKey, const string& Key, DWORD Index, string &str
 	}
 	return RetCode;
 }
+
+bool apiGetFileSecurity(const string& Object, SECURITY_INFORMATION RequestedInformation, FAR_SECURITY_DESCRIPTOR& SecurityDescriptor)
+{
+	bool Result = false;
+	NTPath NtObject(Object);
+	DWORD LengthNeeded = 0;
+	GetFileSecurity(NtObject, RequestedInformation, nullptr, 0, &LengthNeeded);
+	if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+	{
+		SecurityDescriptor.Size = LengthNeeded;
+		SecurityDescriptor.SecurityDescriptor = static_cast<PSECURITY_DESCRIPTOR>(xf_malloc(SecurityDescriptor.Size));
+		Result = GetFileSecurity(NtObject, RequestedInformation, SecurityDescriptor.SecurityDescriptor, LengthNeeded, &LengthNeeded) != FALSE;
+	}
+	return Result;
+}
+
+bool apiSetFileSecurity(const string& Object, SECURITY_INFORMATION RequestedInformation, const FAR_SECURITY_DESCRIPTOR& SecurityDescriptor)
+{
+	return SetFileSecurity(NTPath(Object), RequestedInformation, SecurityDescriptor.SecurityDescriptor) != FALSE;
+}
+
+bool apiOpenVirtualDiskInternal(VIRTUAL_STORAGE_TYPE& VirtualStorageType, const string& Object, VIRTUAL_DISK_ACCESS_MASK VirtualDiskAccessMask, OPEN_VIRTUAL_DISK_FLAG Flags, OPEN_VIRTUAL_DISK_PARAMETERS& Parameters, HANDLE& Handle)
+{
+	DWORD Result = ifn.OpenVirtualDisk(&VirtualStorageType, Object, VirtualDiskAccessMask, Flags, &Parameters, &Handle);
+	SetLastError(Result);
+	return Result == ERROR_SUCCESS;
+}
+bool apiOpenVirtualDisk(VIRTUAL_STORAGE_TYPE& VirtualStorageType, const string& Object, VIRTUAL_DISK_ACCESS_MASK VirtualDiskAccessMask, OPEN_VIRTUAL_DISK_FLAG Flags, OPEN_VIRTUAL_DISK_PARAMETERS& Parameters, HANDLE& Handle)
+{
+	NTPath NtObject(Object);
+	bool Result = apiOpenVirtualDiskInternal(VirtualStorageType, NtObject, VirtualDiskAccessMask, Flags, Parameters, Handle);
+	if(!Result && ElevationRequired(ELEVATION_READ_REQUEST))
+	{
+		Result = Elevation.fOpenVirtualDisk(VirtualStorageType, NtObject, VirtualDiskAccessMask, Flags, Parameters, Handle);
+	}
+	return Result;
+}

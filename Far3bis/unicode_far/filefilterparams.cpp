@@ -73,7 +73,7 @@ FileFilterParams::FileFilterParams()
 	ClearAllFlags();
 }
 
-const FileFilterParams &FileFilterParams::operator=(const FileFilterParams &FF)
+FileFilterParams &FileFilterParams::operator=(const FileFilterParams &FF)
 {
 	if (this != &FF)
 	{
@@ -84,6 +84,7 @@ const FileFilterParams &FileFilterParams::operator=(const FileFilterParams &FF)
 		FSize=FF.FSize;
 		FDate=FF.FDate;
 		FAttr=FF.FAttr;
+		FHardLinks = FF.FHardLinks;
 		FF.GetColors(&FHighlight.Colors);
 		FHighlight.SortGroup=FF.GetSortGroup();
 		FHighlight.bContinueProcessing=FF.GetContinueProcessing();
@@ -98,86 +99,13 @@ void FileFilterParams::SetTitle(const wchar_t *Title)
 	m_strTitle = Title;
 }
 
-// Преобразование корявого формата PATHEXT в ФАРовский :-)
-// Функции передается нужные расширения, она лишь добавляет то, что есть
-// в %PATHEXT%
-// IS: Сравнений на совпадение очередной маски с тем, что имеется в Dest
-// IS: не делается, т.к. дубли сами уберутся при компиляции маски
-string &Add_PATHEXT(string &strDest)
-{
-	string strBuf;
-	size_t curpos=strDest.GetLength()-1;
-	UserDefinedList MaskList(ULF_UNIQUE);
-
-	if (apiGetEnvironmentVariable(L"PATHEXT" ,strBuf) && MaskList.Set(strBuf))
-	{
-		/* $ 13.10.2002 IS проверка на '|' (маски исключения) */
-		if (!strDest.IsEmpty() && (strDest.At(curpos)!=L',' && strDest.At(curpos)!=L';') && strDest.At(curpos)!=L'|')
-			strDest += L",";
-
-		const wchar_t *Ptr;
-		MaskList.Reset();
-
-		while (nullptr!=(Ptr=MaskList.GetNext()))
-		{
-			strDest += L"*";
-			strDest += Ptr;
-			strDest += L",";
-		}
-	}
-
-	// лишняя запятая - в морг!
-	curpos=strDest.GetLength()-1;
-
-	if (strDest.At(curpos) == L',' || strDest.At(curpos)==L';')
-		strDest.SetLength(curpos);
-
-	return strDest;
-}
-
 void FileFilterParams::SetMask(bool Used, const wchar_t *Mask)
 {
 	FMask.Used = Used;
 	FMask.strMask = Mask;
-	/* Обработка %PATHEXT% */
-	string strMask = FMask.strMask;
-	size_t pos;
-
-	// проверим
-	if (strMask.PosI(pos,L"%PATHEXT%"))
-	{
-		{
-			size_t IQ1=(strMask.At(pos+9) == L',' || strMask.At(pos+9) == L';')?10:9;
-			wchar_t *Ptr = strMask.GetBuffer();
-			// Если встречается %pathext%, то допишем в конец...
-			wmemmove(Ptr+pos,Ptr+pos+IQ1,strMask.GetLength()-pos-IQ1+1);
-			strMask.ReleaseBuffer();
-		}
-		size_t posSeparator;
-
-		if (strMask.Pos(posSeparator, EXCLUDEMASKSEPARATOR))
-		{
-			if (pos > posSeparator) // PATHEXT находится в масках исключения
-			{
-				Add_PATHEXT(strMask); // добавляем то, чего нету.
-			}
-			else
-			{
-				string strTmp = strMask;
-				strTmp.LShift(posSeparator);
-				strMask.SetLength(posSeparator);
-				Add_PATHEXT(strMask);
-				strMask += strTmp;
-			}
-		}
-		else
-		{
-			Add_PATHEXT(strMask); // добавляем то, чего нету.
-		}
-	}
 
 	// Проверка на валидность текущих настроек фильтра
-	if (!FMask.FilterMask.Set(strMask,FMF_SILENT))
+	if (!FMask.FilterMask.Set(FMask.strMask,FMF_SILENT))
 	{
 		FMask.strMask = L"*";
 		FMask.FilterMask.Set(FMask.strMask,FMF_SILENT);
@@ -728,7 +656,7 @@ void FilterDlgRelativeDateItemsUpdate(HANDLE hDlg, bool bClear)
 	SendDlgMessage(hDlg,DM_ENABLEREDRAW,TRUE,0);
 }
 
-INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -773,7 +701,7 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 			else if (Param1==ID_FF_RESET) // Reset
 			{
 				SendDlgMessage(hDlg,DM_ENABLEREDRAW,FALSE,0);
-				INT_PTR ColorConfig = SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
+				intptr_t ColorConfig = SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
 				SendDlgMessage(hDlg,DM_SETTEXTPTR,ID_FF_MASKEDIT,const_cast<wchar_t*>(L"*"));
 				SendDlgMessage(hDlg,DM_SETTEXTPTR,ID_FF_SIZEFROMEDIT,nullptr);
 				SendDlgMessage(hDlg,DM_SETTEXTPTR,ID_FF_SIZETOEDIT,nullptr);
@@ -886,7 +814,7 @@ INT_PTR WINAPI FileFilterConfigDlgProc(HANDLE hDlg,int Msg,int Param1,void* Para
 
 				if (!bTemp)
 				{
-					INT_PTR ColorConfig = SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
+					intptr_t ColorConfig = SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0);
 					Message(MSG_WARNING,1,ColorConfig?MSG(MFileHilightTitle):MSG(MFileFilterTitle),MSG(MBadFileSizeFormat),MSG(MOk));
 					return FALSE;
 				}
@@ -914,8 +842,8 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 	const wchar_t DaysMask[] = L"9999";
 	string strDateMask, strTimeMask;
 	// Определение параметров даты и времени в системе.
-	int DateSeparator=GetDateSeparator();
-	int TimeSeparator=GetTimeSeparator();
+	wchar_t DateSeparator=GetDateSeparator();
+	wchar_t TimeSeparator=GetTimeSeparator();
 	wchar_t DecimalSeparator=GetDecimalSeparator();
 	int DateFormat=GetDateFormat();
 
@@ -923,20 +851,20 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 	{
 		case 0:
 			// Маска даты для форматов DD.MM.YYYYY и MM.DD.YYYYY
-			strDateMask.Format(L"99%c99%c9999N",DateSeparator,DateSeparator);
+			strDateMask = FormatString() << L"99" << DateSeparator << "99" << DateSeparator << "9999N";
 			break;
 		case 1:
 			// Маска даты для форматов DD.MM.YYYYY и MM.DD.YYYYY
-			strDateMask.Format(L"99%c99%c9999N",DateSeparator,DateSeparator);
+			strDateMask = FormatString() << L"99" << DateSeparator << "99" << DateSeparator << "9999N";
 			break;
 		default:
 			// Маска даты для формата YYYYY.MM.DD
-			strDateMask.Format(L"N9999%c99%c99",DateSeparator,DateSeparator);
+			strDateMask = FormatString() << L"N9999" << DateSeparator << "c99" << DateSeparator << "c99";
 			break;
 	}
 
 	// Маска времени
-	strTimeMask.Format(L"99%c99%c99%c999",TimeSeparator,TimeSeparator,DecimalSeparator);
+	strTimeMask = FormatString() << L"99" << TimeSeparator << "99" << TimeSeparator << "99" << DecimalSeparator << "999";
 	FarDialogItem FilterDlgData[]=
 	{
 		{DI_DOUBLEBOX,3,1,76,20,0,nullptr,nullptr,DIF_SHOWAMPERSAND,MSG(MFileFilterTitle)},

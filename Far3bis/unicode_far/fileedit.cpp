@@ -87,7 +87,7 @@ enum enumOpenEditor
 };
 
 
-INT_PTR WINAPI hndOpenEditor(HANDLE hDlg, int msg, int param1, void* param2)
+intptr_t WINAPI hndOpenEditor(HANDLE hDlg, int msg, int param1, void* param2)
 {
 	if (msg == DN_INITDIALOG)
 	{
@@ -135,9 +135,9 @@ bool dlgOpenEditor(string &strFileName, UINT &codepage)
 		{DI_TEXT,     5,2, 0,2,0,nullptr,nullptr,0,MSG(MEditOpenCreateLabel)},
 		#if 1
 		//Maximus: поддержка "узких" дисплеев
-		{DI_EDIT,     5,3,ElemW,3,0,HistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_EDITEXPAND|DIF_EDITPATH,L""},
+		{DI_EDIT,     5,3,ElemW,3,0,HistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_USELASTHISTORY|DIF_EDITEXPAND|DIF_EDITPATH,L""},
 		#else
-		{DI_EDIT,     5,3,70,3,0,HistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_EDITEXPAND|DIF_EDITPATH,L""},
+		{DI_EDIT,     5,3,70,3,0,HistoryName,nullptr,DIF_FOCUS|DIF_HISTORY|DIF_USELASTHISTORY|DIF_EDITEXPAND|DIF_EDITPATH,L""},
 		#endif
 		{DI_TEXT,     3,4, 0,4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 		{DI_TEXT,     5,5, 0,5,0,nullptr,nullptr,0,MSG(MEditCodePage)},
@@ -152,7 +152,6 @@ bool dlgOpenEditor(string &strFileName, UINT &codepage)
 		{DI_BUTTON,   0,7, 0,7,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MCancel)},
 	};
 	MakeDialogItemsEx(EditDlgData,EditDlg);
-	EditDlg[ID_OE_FILENAME].strData = strFileName;
 	Dialog Dlg(EditDlg, ARRAYSIZE(EditDlg), hndOpenEditor, &codepage);
 	#if 1
 	//Maximus: поддержка "узких" дисплеев
@@ -196,7 +195,7 @@ enum enumSaveFileAs
 	ID_SF_CANCEL,
 };
 
-INT_PTR WINAPI hndSaveFileAs(HANDLE hDlg, int msg, int param1, void* param2)
+intptr_t WINAPI hndSaveFileAs(HANDLE hDlg, int msg, int param1, void* param2)
 {
 	static UINT codepage=0;
 
@@ -515,11 +514,11 @@ void FileEditor::Init(
 		if (FramePos!=-1)
 		{
 			int SwitchTo=FALSE;
-			int MsgCode=0;
 
 			if (!(*FrameManager)[FramePos]->GetCanLoseFocus(TRUE) ||
 			        Opt.Confirm.AllowReedit)
 			{
+				int MsgCode=0;
 				if (OpenModeExstFile == FEOPMODE_QUERY)
 				{
 					SetMessageHelp(L"EditorReload");
@@ -859,8 +858,6 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 	if (Key!=KEY_F4 && Key!=KEY_IDLE)
 		F4KeyOnly=false;
 
-	DWORD FNAttr;
-
 	if (Flags.Check(FFILEEDIT_REDRAWTITLE) && (((unsigned int)Key & 0x00ffffff) < KEY_END_FKEY || IsInternalKeyReal((unsigned int)Key & 0x00ffffff)))
 		ShowConsoleTitle();
 
@@ -887,7 +884,7 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 		{
 			if (Flags.Check(FFILEEDIT_ENABLEF6))
 			{
-				int FirstSave=1, NeedQuestion=1;
+				int FirstSave=1;
 				UINT cp=m_codepage;
 
 				// проверка на "а может это говно удалили уже?"
@@ -916,21 +913,28 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 
 				if (!FirstSave || m_editor->IsFileChanged() || apiGetFileAttributes(strFullFileName)!=INVALID_FILE_ATTRIBUTES)
 				{
-					long FilePos=m_editor->GetCurPos(true, m_bAddSignature);
+					__int64 FilePos=m_editor->GetCurPos(true, m_bAddSignature); // TODO: GetCurPos should return __int64
 
 					/* $ 01.02.2001 IS
 					   ! Открываем вьюер с указанием длинного имени файла, а не короткого
 					*/
+					int NeedQuestion = 1;
 					if (ProcessQuitKey(FirstSave,NeedQuestion))
 					{
-						/* $ 11.10.200 IS
-						   не будем удалять файл, если было включено удаление, но при этом
-						   пользователь переключился во вьюер
-						*/
+						int delete_on_close = 0;
+						if (Flags.Check(FFILEEDIT_DELETEONCLOSE))
+							delete_on_close = 1;
+						else if (Flags.Check(FFILEEDIT_DELETEONLYFILEONCLOSE))
+							delete_on_close = 2;
 						SetDeleteOnClose(0);
-						//объект будет в конце удалён в FrameManager
-						new FileViewer(strFullFileName, GetCanLoseFocus(), Flags.Check(FFILEEDIT_DISABLEHISTORY), FALSE,
-						               FilePos, nullptr, EditNamesList, Flags.Check(FFILEEDIT_SAVETOSAVEAS), cp);
+
+						//объект будет в конце удалён во FrameManager
+						new FileViewer(
+							strFullFileName.CPtr(),
+							GetCanLoseFocus(), Flags.Check(FFILEEDIT_DISABLEHISTORY), FALSE,
+							FilePos, nullptr, EditNamesList, Flags.Check(FFILEEDIT_SAVETOSAVEAS), cp,
+							strTitle.IsEmpty() ? nullptr : strTitle.CPtr(),
+							delete_on_close);
 					}
 
 					ShowTime(2);
@@ -1042,11 +1046,10 @@ int FileEditor::ReProcessKey(int Key,int CalledFromControl)
 				BOOL Done=FALSE;
 				string strOldCurDir;
 				apiGetCurrentDirectory(strOldCurDir);
-
 				while (!Done) // бьемся до упора
 				{
 					size_t pos;
-
+					DWORD FNAttr;
 					// проверим путь к файлу, может его уже снесли...
 					if (FindLastSlash(pos,strFullFileName))
 					{
@@ -1517,7 +1520,7 @@ int FileEditor::LoadFile(const string& Name,int &UserBreak)
 		UINT64 FileSize=0;
 		if (EditFile.GetSize(FileSize))
 		{
-			UINT64 MaxSize = Opt.EdOpt.FileSizeLimitHi * 0x100000000ull + Opt.EdOpt.FileSizeLimitLo;
+			UINT64 MaxSize = static_cast<DWORD>(Opt.EdOpt.FileSizeLimitHi) * 0x100000000ull + static_cast<DWORD>(Opt.EdOpt.FileSizeLimitLo);
 
 			if (FileSize > MaxSize)
 			{
@@ -2177,7 +2180,7 @@ int FileEditor::GetTypeAndName(string &strType, string &strName)
 
 void FileEditor::ShowConsoleTitle()
 {
-	string strEditorTitleFormat=Opt.strEditorTitleFormat;
+	string strEditorTitleFormat=Opt.strEditorTitleFormat.Get();
 	ReplaceStrings(strEditorTitleFormat,L"%Lng",MSG(MInEditor),-1,true);
 	ReplaceStrings(strEditorTitleFormat,L"%File",PointToName(strFileName),-1,true);
 	ConsoleTitle::SetFarTitle(strEditorTitleFormat);
@@ -2346,7 +2349,7 @@ void FileEditor::ShowStatus()
 		TruncPathStr(strLocalTitle, NameLength);
 
 	//предварительный расчет
-	strLineStr.Format(L"%d/%d", m_editor->NumLastLine, m_editor->NumLastLine);
+	strLineStr = FormatString() << m_editor->NumLastLine << L'/' << m_editor->NumLastLine;
 	int SizeLineStr = (int)strLineStr.GetLength();
 
 	if (SizeLineStr > 12)
@@ -2354,30 +2357,30 @@ void FileEditor::ShowStatus()
 	else
 		SizeLineStr = 12;
 
-	strLineStr.Format(L"%d/%d", m_editor->NumLine+1, m_editor->NumLastLine);
+	strLineStr = FormatString() << m_editor->NumLine+1 << L'/' << m_editor->NumLastLine;
 	string strAttr(AttrStr);
 	FormatString FString;
-	FString<<fmt::LeftAlign()<<fmt::Width(NameLength)<<strLocalTitle<<L' '<<
+	FString<<fmt::LeftAlign()<<fmt::MinWidth(NameLength)<<strLocalTitle<<L' '<<
 	(m_editor->Flags.Check(FEDITOR_MODIFIED) ? L'*':L' ')<<
 	(m_editor->Flags.Check(FEDITOR_LOCKMODE) ? L'-':L' ')<<
 	(m_editor->Flags.Check(FEDITOR_PROCESSCTRLQ) ? L'"':L' ')<<
-	fmt::Width(5)<<m_codepage<<L' '<<fmt::Width(3)<<MSG(MEditStatusLine)<<L' '<<
-	fmt::Width(SizeLineStr)<<fmt::Precision(SizeLineStr)<<strLineStr<<L' '<<
+	fmt::MinWidth(5)<<m_codepage<<L' '<<fmt::MinWidth(3)<<MSG(MEditStatusLine)<<L' '<<
+	fmt::ExactWidth(SizeLineStr)<<strLineStr<<L' '<<
 
-	fmt::Width(3)<<MSG(MEditStatusCol)<<L' '<<
-	fmt::LeftAlign()<<fmt::Width(4)<<m_editor->CurLine->GetTabCurPos()+1<<L' '<<
+	fmt::MinWidth(3)<<MSG(MEditStatusCol)<<L' '<<
+	fmt::LeftAlign()<<fmt::MinWidth(4)<<m_editor->CurLine->GetTabCurPos()+1<<L' '<<
 
-	fmt::Width(2)<<MSG(MEditStatusChar)<<L' '<<
-	fmt::LeftAlign()<<fmt::Width(4)<<m_editor->CurLine->GetCurPos()+1<<L' '<<
+	fmt::MinWidth(2)<<MSG(MEditStatusChar)<<L' '<<
+	fmt::LeftAlign()<<fmt::MinWidth(4)<<m_editor->CurLine->GetCurPos()+1<<L' '<<
 
 
-	fmt::Width(3)<<strAttr;
+	fmt::MinWidth(3)<<strAttr;
 	int StatusWidth=ObjWidth - ((Opt.ViewerEditorClock && Flags.Check(FFILEEDIT_FULLSCREEN))?5:0);
 
 	if (StatusWidth<0)
 		StatusWidth=0;
 
-	FS<<fmt::LeftAlign()<<fmt::Width(StatusWidth)<<fmt::Precision(StatusWidth)<<FString;
+	FS<<fmt::LeftAlign()<<fmt::ExactWidth(StatusWidth)<<FString;
 	{
 		const wchar_t *Str;
 		int Length;
@@ -2393,14 +2396,14 @@ void FileEditor::ShowStatus()
 			switch(m_editor->EdOpt.CharCodeBase)
 			{
 			case 0:
-				FS << fmt::Width(7) << fmt::FillChar(L'0') << fmt::Radix(8) << static_cast<UINT>(Str[CurPos]);
+				FS << fmt::MinWidth(7) << fmt::FillChar(L'0') << fmt::Radix(8) << static_cast<UINT>(Str[CurPos]);
 				break;
 			case 2:
-				FS << fmt::Width(4) << fmt::FillChar(L'0') << fmt::Radix(16) << static_cast<UINT>(Str[CurPos]) << L'h';
+				FS << fmt::MinWidth(4) << fmt::FillChar(L'0') << fmt::Radix(16) << static_cast<UINT>(Str[CurPos]) << L'h';
 				break;
 			case 1:
 			default:
-				FS << fmt::Width(5) << static_cast<UINT>(Str[CurPos]);
+				FS << fmt::MinWidth(5) << static_cast<UINT>(Str[CurPos]);
 				break;
 			}
 
@@ -2416,14 +2419,14 @@ void FileEditor::ShowStatus()
 					switch(m_editor->EdOpt.CharCodeBase)
 					{
 					case 0:
-						FS << fmt::Width(4) << fmt::FillChar(L'0') << fmt::Radix(8) << static_cast<UINT>(C);
+						FS << fmt::MinWidth(4) << fmt::FillChar(L'0') << fmt::Radix(8) << static_cast<UINT>(C);
 						break;
 					case 2:
-						FS << fmt::Width(2) << fmt::FillChar(L'0') << fmt::Radix(16) << static_cast<UINT>(C) << L'h';
+						FS << fmt::MinWidth(2) << fmt::FillChar(L'0') << fmt::Radix(16) << static_cast<UINT>(C) << L'h';
 						break;
 					case 1:
 					default:
-						FS << fmt::Width(3) << static_cast<UINT>(C);
+						FS << fmt::MinWidth(3) << static_cast<UINT>(C);
 						break;
 					}
 				}
@@ -2502,7 +2505,7 @@ void FileEditor::SetDeleteOnClose(int NewMode)
 
 void FileEditor::GetEditorOptions(EditorOptions& EdOpt)
 {
-	m_editor->EdOpt.CopyTo(EdOpt);
+	EdOpt = m_editor->EdOpt;
 }
 
 void FileEditor::SetEditorOptions(EditorOptions& EdOpt)
@@ -2544,7 +2547,7 @@ int FileEditor::EditorControl(int Command, void *Param)
 
 	if (Command == ECTL_READINPUT || Command == ECTL_PROCESSINPUT)
 	{
-		_KEYMACRO(SysLog(L"(Command=%s, Param=[%d/0x%08X]) Macro.IsExecuting()=%d",_ECTL_ToName(Command),(int)((DWORD_PTR)Param),(int)((DWORD_PTR)Param),CtrlObject->Macro.IsExecuting()));
+		_KEYMACRO(SysLog(L"(Command=%s, Param=[%d/0x%08X]) Macro.IsExecuting()=%d",_ECTL_ToName(Command),(int)((intptr_t)Param),(int)((intptr_t)Param),CtrlObject->Macro.IsExecuting()));
 	}
 
 #else
@@ -2616,7 +2619,7 @@ int FileEditor::EditorControl(int Command, void *Param)
 		}
 		case ECTL_DELETESESSIONBOOKMARK:
 		{
-			return m_editor->DeleteSessionBookmark(m_editor->PointerToSessionBookmark((int)(INT_PTR)Param));
+			return m_editor->DeleteSessionBookmark(m_editor->PointerToSessionBookmark((int)(intptr_t)Param));
 		}
 		case ECTL_GETSESSIONBOOKMARKS:
 		{
@@ -2649,7 +2652,7 @@ int FileEditor::EditorControl(int Command, void *Param)
 				InitKeyBar();
 			else
 			{
-				if ((INT_PTR)Param != (INT_PTR)-1) // не только перерисовать?
+				if ((intptr_t)Param != (intptr_t)-1) // не только перерисовать?
 					EditKeyBar.Change(Kbt);
 
 				EditKeyBar.Show();

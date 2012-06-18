@@ -173,7 +173,9 @@ TreeList::TreeList(int IsPanel):
 	NumericSort(FALSE),
 	CaseSensitiveSort(FALSE),
 	ExitCode(1),
-	SaveListData(nullptr)
+	SaveListData(nullptr),
+	SaveTreeCount(0),
+	SaveWorkDir(0)
 {
 	Type=TREE_PANEL;
 	#if 1
@@ -331,7 +333,7 @@ void TreeList::DisplayTree(int Fast)
 
 		if (WhereX()<X2)
 		{
-			FS<<fmt::Width(X2-WhereX())<<L"";
+			FS<<fmt::MinWidth(X2-WhereX())<<L"";
 		}
 	}
 
@@ -347,7 +349,7 @@ void TreeList::DisplayTree(int Fast)
 	if (TreeCount>0)
 	{
 		GotoXY(X1+1,Y2-1);
-		FS<<fmt::LeftAlign()<<fmt::Width(X2-X1-1)<<fmt::Precision(X2-X1-1)<<ListData[CurFile]->strName;
+		FS<<fmt::LeftAlign()<<fmt::ExactWidth(X2-X1-1)<<ListData[CurFile]->strName;
 	}
 
 	UpdateViewPanel();
@@ -370,18 +372,18 @@ void TreeList::DisplayTreeName(const wchar_t *Name,int Pos)
 		if (Focus || ModalMode)
 		{
 			SetColor((Pos==WorkDir) ? COL_PANELSELECTEDCURSOR:COL_PANELCURSOR);
-			FS<<L" "<<fmt::Precision(X2-WhereX()-3)<<Name<<L" ";
+			FS<<L" "<<fmt::MaxWidth(X2-WhereX()-3)<<Name<<L" ";
 		}
 		else
 		{
 			SetColor((Pos==WorkDir) ? COL_PANELSELECTEDTEXT:COL_PANELTEXT);
-			FS<<L"["<<fmt::Precision(X2-WhereX()-3)<<Name<<L"]";
+			FS<<L"["<<fmt::MaxWidth(X2-WhereX()-3)<<Name<<L"]";
 		}
 	}
 	else
 	{
 		SetColor((Pos==WorkDir) ? COL_PANELSELECTEDTEXT:COL_PANELTEXT);
-		FS<<fmt::Precision(X2-WhereX()-1)<<Name;
+		FS<<fmt::MaxWidth(X2-WhereX()-1)<<Name;
 	}
 }
 
@@ -664,7 +666,7 @@ int TreeList::GetCacheTreeName(const string& Root, string& strName,int CreateDir
 			lpwszRemoteName[I]=L'_';
 
 	strRemoteName.ReleaseBuffer();
-	strName.Format(L"%s\\%s.%x.%s.%s", strFolderName.CPtr(), strVolumeName.CPtr(), dwVolumeSerialNumber, strFileSystemName.CPtr(), strRemoteName.CPtr());
+	strName = FormatString() << strFolderName << L"\\" << strVolumeName << L"." << fmt::Radix(16) << dwVolumeSerialNumber << L"." << strFileSystemName << L"." << strRemoteName;
 	return TRUE;
 }
 
@@ -1040,7 +1042,7 @@ int TreeList::ProcessKey(int Key)
 		{
 			if (SetCurPath())
 			{
-				int SaveOpt=Opt.DeleteToRecycleBin;
+				bool SaveOpt=Opt.DeleteToRecycleBin;
 
 				if (Key==KEY_SHIFTDEL||Key==KEY_SHIFTNUMDEL||Key==KEY_SHIFTDECIMAL)
 					Opt.DeleteToRecycleBin=0;
@@ -1062,21 +1064,21 @@ int TreeList::ProcessKey(int Key)
 		case(KEY_MSWHEEL_UP | KEY_ALT):
 		case(KEY_MSWHEEL_UP | KEY_RALT):
 		{
-			Scroll(Key & (KEY_ALT|KEY_RALT)?-1:-Opt.MsWheelDelta);
+			Scroll(Key & (KEY_ALT|KEY_RALT)?-1:(int)-Opt.MsWheelDelta);
 			return TRUE;
 		}
 		case KEY_MSWHEEL_DOWN:
 		case(KEY_MSWHEEL_DOWN | KEY_ALT):
 		case(KEY_MSWHEEL_DOWN | KEY_RALT):
 		{
-			Scroll(Key & (KEY_ALT|KEY_RALT)?1:Opt.MsWheelDelta);
+			Scroll(Key & (KEY_ALT|KEY_RALT)?1:(int)Opt.MsWheelDelta);
 			return TRUE;
 		}
 		case KEY_MSWHEEL_LEFT:
 		case(KEY_MSWHEEL_LEFT | KEY_ALT):
 		case(KEY_MSWHEEL_LEFT | KEY_RALT):
 		{
-			int Roll = Key & (KEY_ALT|KEY_RALT)?1:Opt.MsHWheelDelta;
+			int Roll = Key & (KEY_ALT|KEY_RALT)?1:(int)Opt.MsHWheelDelta;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_LEFT);
@@ -1087,7 +1089,7 @@ int TreeList::ProcessKey(int Key)
 		case(KEY_MSWHEEL_RIGHT | KEY_ALT):
 		case(KEY_MSWHEEL_RIGHT | KEY_RALT):
 		{
-			int Roll = Key & (KEY_ALT|KEY_RALT)?1:Opt.MsHWheelDelta;
+			int Roll = Key & (KEY_ALT|KEY_RALT)?1:(int)Opt.MsHWheelDelta;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_RIGHT);
@@ -1181,7 +1183,7 @@ int TreeList::ProcessKey(int Key)
 			//вызовем EMenu если он есть
 			if (CtrlObject->Plugins->FindPlugin(Opt.KnownIDs.Emenu))
 			{
-				CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(static_cast<INT_PTR>(1))); // EMenu Plugin :-)
+				CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(static_cast<intptr_t>(1))); // EMenu Plugin :-)
 			}
 			return TRUE;
 		}

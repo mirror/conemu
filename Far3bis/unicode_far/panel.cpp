@@ -104,10 +104,10 @@ class ChDiskPluginItem
 		void Clear() { HotKey = 0; Item.Clear(); }
 		bool operator==(const ChDiskPluginItem &rhs) const { return HotKey==rhs.HotKey && !StrCmpI(Item.strName,rhs.Item.strName) && Item.UserData==rhs.Item.UserData; }
 		int operator<(const ChDiskPluginItem &rhs) const {return (Opt.ChangeDriveMode&DRIVE_SORT_PLUGINS_BY_HOTKEY && HotKey!=rhs.HotKey)?unsigned(HotKey-1)<unsigned(rhs.HotKey-1):StrCmpI(Item.strName,rhs.Item.strName)<0;}
-		const ChDiskPluginItem& operator=(const ChDiskPluginItem &rhs);
+		ChDiskPluginItem& operator=(const ChDiskPluginItem &rhs);
 };
 
-const ChDiskPluginItem& ChDiskPluginItem::operator=(const ChDiskPluginItem &rhs)
+ChDiskPluginItem& ChDiskPluginItem::operator=(const ChDiskPluginItem &rhs)
 {
 	if (this != &rhs)
 	{
@@ -121,13 +121,22 @@ const ChDiskPluginItem& ChDiskPluginItem::operator=(const ChDiskPluginItem &rhs)
 
 Panel::Panel():
 	Focus(0),
+	Type(0),
 	EnableUpdate(TRUE),
 	PanelMode(NORMAL_PANEL),
+	SortMode(0),
+	SortOrder(0),
+	SortGroups(0),
 	PrevViewMode(VIEW_3),
+	ViewMode(0),
+	CurTopFile(0),
+	CurFile(0),
+	ShowShortNames(0),
 	NumericSort(0),
 	CaseSensitiveSort(0),
 	DirectoriesFirst(1),
 	ModalMode(0),
+	PluginCommand(0),
 	ViewSettings(),
 	ProcessingPluginCommand(0)
 {
@@ -161,7 +170,6 @@ void Panel::ChangeDirToCurrent()
 
 void Panel::ChangeDisk()
 {
-	DisableElevation DE;
 	int Pos=0,FirstCall=TRUE;
 
 	if (!strCurDir.IsEmpty() && strCurDir.At(1)==L':')
@@ -350,23 +358,23 @@ static size_t AddPluginItems(VMenu &ChDisk, int Pos, int DiskCount, bool SetSele
 static void ConfigureChangeDriveMode()
 {
 	DialogBuilder Builder(MChangeDriveConfigure, L"ChangeDriveMode");
-	Builder.AddCheckbox(MChangeDriveShowDiskType, &Opt.ChangeDriveMode, DRIVE_SHOW_TYPE);
-	Builder.AddCheckbox(MChangeDriveShowNetworkName, &Opt.ChangeDriveMode, DRIVE_SHOW_NETNAME);
-	Builder.AddCheckbox(MChangeDriveShowLabel, &Opt.ChangeDriveMode, DRIVE_SHOW_LABEL);
-	Builder.AddCheckbox(MChangeDriveShowFileSystem, &Opt.ChangeDriveMode, DRIVE_SHOW_FILESYSTEM);
+	Builder.AddCheckbox(MChangeDriveShowDiskType, Opt.ChangeDriveMode, DRIVE_SHOW_TYPE);
+	Builder.AddCheckbox(MChangeDriveShowNetworkName, Opt.ChangeDriveMode, DRIVE_SHOW_NETNAME);
+	Builder.AddCheckbox(MChangeDriveShowLabel, Opt.ChangeDriveMode, DRIVE_SHOW_LABEL);
+	Builder.AddCheckbox(MChangeDriveShowFileSystem, Opt.ChangeDriveMode, DRIVE_SHOW_FILESYSTEM);
 
 	BOOL ShowSizeAny = Opt.ChangeDriveMode & (DRIVE_SHOW_SIZE | DRIVE_SHOW_SIZE_FLOAT);
 
 	DialogItemEx *ShowSize = Builder.AddCheckbox(MChangeDriveShowSize, &ShowSizeAny);
-	DialogItemEx *ShowSizeFloat = Builder.AddCheckbox(MChangeDriveShowSizeFloat, &Opt.ChangeDriveMode, DRIVE_SHOW_SIZE_FLOAT);
+	DialogItemEx *ShowSizeFloat = Builder.AddCheckbox(MChangeDriveShowSizeFloat, Opt.ChangeDriveMode, DRIVE_SHOW_SIZE_FLOAT);
 	ShowSizeFloat->Indent(4);
 	Builder.LinkFlags(ShowSize, ShowSizeFloat, DIF_DISABLE);
 
-	Builder.AddCheckbox(MChangeDriveShowRemovableDrive, &Opt.ChangeDriveMode, DRIVE_SHOW_REMOVABLE);
-	Builder.AddCheckbox(MChangeDriveShowPlugins, &Opt.ChangeDriveMode, DRIVE_SHOW_PLUGINS);
-	Builder.AddCheckbox(MChangeDriveSortPluginsByHotkey, &Opt.ChangeDriveMode, DRIVE_SORT_PLUGINS_BY_HOTKEY)->Indent(4);
-	Builder.AddCheckbox(MChangeDriveShowCD, &Opt.ChangeDriveMode, DRIVE_SHOW_CDROM);
-	Builder.AddCheckbox(MChangeDriveShowNetworkDrive, &Opt.ChangeDriveMode, DRIVE_SHOW_REMOTE);
+	Builder.AddCheckbox(MChangeDriveShowRemovableDrive, Opt.ChangeDriveMode, DRIVE_SHOW_REMOVABLE);
+	Builder.AddCheckbox(MChangeDriveShowPlugins, Opt.ChangeDriveMode, DRIVE_SHOW_PLUGINS);
+	Builder.AddCheckbox(MChangeDriveSortPluginsByHotkey, Opt.ChangeDriveMode, DRIVE_SORT_PLUGINS_BY_HOTKEY)->Indent(4);
+	Builder.AddCheckbox(MChangeDriveShowCD, Opt.ChangeDriveMode, DRIVE_SHOW_CDROM);
+	Builder.AddCheckbox(MChangeDriveShowNetworkDrive, Opt.ChangeDriveMode, DRIVE_SHOW_REMOTE);
 
 	Builder.AddOKCancel();
 	if (Builder.ShowDialog())
@@ -384,7 +392,7 @@ static void ConfigureChangeDriveMode()
 }
 
 
-INT_PTR WINAPI ChDiskDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI ChDiskDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -453,6 +461,7 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 			DiskTypeWidth = Max(DiskTypeWidth,StrLength(MSG(DrTMsg[J].FarMsg)));
 		}
 
+		DisableElevation* DE = new DisableElevation;
 		/* $ 02.04.2001 VVM
 		! ѕопытка не будить сп€щие диски... */
 		for (DiskMask=Mask,MenuLine=I=0; DiskMask; DiskMask>>=1,I++)
@@ -628,6 +637,8 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 		{
 			PluginMenuItemsCount = AddPluginItems(ChDisk, Pos, DiskCount, SetSelected);
 		}
+
+		delete DE;
 
 		int X=X1+5;
 
@@ -1288,7 +1299,7 @@ int Panel::ProcessDelDisk(wchar_t Drive, int DriveType,VMenu *ChDiskMenu)
 				VIRTUAL_STORAGE_TYPE vst = {VIRTUAL_STORAGE_TYPE_DEVICE_VHD, VIRTUAL_STORAGE_TYPE_VENDOR_MICROSOFT};
 				OPEN_VIRTUAL_DISK_PARAMETERS ovdp = {OPEN_VIRTUAL_DISK_VERSION_1, 0};
 				HANDLE Handle;
-				if(ifn.OpenVirtualDisk(&vst, strVhdPath, VIRTUAL_DISK_ACCESS_DETACH, OPEN_VIRTUAL_DISK_FLAG_NONE, &ovdp, &Handle) == ERROR_SUCCESS)
+				if(apiOpenVirtualDisk(vst, strVhdPath, VIRTUAL_DISK_ACCESS_DETACH, OPEN_VIRTUAL_DISK_FLAG_NONE, ovdp, Handle))
 				{
 					int Result = ifn.DetachVirtualDisk(Handle, DETACH_VIRTUAL_DISK_FLAG_NONE, 0) == ERROR_SUCCESS? DRIVE_DEL_SUCCESS : DRIVE_DEL_FAIL;
 					CloseHandle(Handle);
@@ -1363,7 +1374,7 @@ void Panel::FastFind(int FirstKey)
 	// // _SVS(CleverSysLog Clev(L"Panel::FastFind"));
 	INPUT_RECORD rec;
 	string strLastName, strName;
-	int Key,KeyToProcess=0;
+	int KeyToProcess=0;
 	WaitInFastFind++;
 	{
 		int FindX=Min(X1+9,ScrX-22);
@@ -1379,6 +1390,7 @@ void Panel::FastFind(int FirstKey)
 
 		while (!KeyToProcess)
 		{
+			int Key;
 			if (FirstKey)
 			{
 				FirstKey=_CorrectFastFindKbdLayout(FrameManager->GetLastInputRecord(),FirstKey);
@@ -2188,7 +2200,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 			{
 				static struct
 				{
-					int *Opt;
+					BoolOption *Opt;
 					DWORD Flags;
 				} PFLAGS[]=
 				{
@@ -2198,7 +2210,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 				unsigned __int64 Flags=0;
 
 				for (size_t I=0; I < ARRAYSIZE(PFLAGS); ++I)
-					if (*(PFLAGS[I].Opt) )
+					if (*PFLAGS[I].Opt)
 						Flags|=PFLAGS[I].Flags;
 
 				Flags|=GetSortOrder()<0?PFLAGS_REVERSESORTORDER:0;
@@ -2597,7 +2609,7 @@ static int MessageRemoveConnection(wchar_t Letter, int &UpdateProfile)
 	UpdateProfile=DCDlg[5].Selected?0:CONNECT_UPDATE_PROFILE;
 
 	if (IsPersistent)
-		Opt.ChangeDriveDisconnectMode=DCDlg[5].Selected;
+		Opt.ChangeDriveDisconnectMode=DCDlg[5].Selected == BSTATE_CHECKED;
 
 	return ExitCode == 7;
 }
@@ -2605,7 +2617,7 @@ static int MessageRemoveConnection(wchar_t Letter, int &UpdateProfile)
 BOOL Panel::NeedUpdatePanel(Panel *AnotherPanel)
 {
 	/* ќбновить, если обновление разрешено и пути совпадают */
-	if ((!Opt.AutoUpdateLimit || static_cast<DWORD>(GetFileCount()) <= Opt.AutoUpdateLimit) &&
+	if ((!Opt.AutoUpdateLimit || static_cast<unsigned>(GetFileCount()) <= static_cast<unsigned>(Opt.AutoUpdateLimit)) &&
 	        !StrCmpI(AnotherPanel->strCurDir,strCurDir))
 		return TRUE;
 
@@ -2793,7 +2805,7 @@ bool Panel::ExecShortcutFolder(string& strShortcutFolder,const GUID& PluginGuid,
 				}
 
 				OpenShortcutInfo info={sizeof(OpenShortcutInfo),strPluginFile.IsEmpty()?nullptr:strPluginFile.CPtr(),strPluginData.IsEmpty()?nullptr:strPluginData.CPtr()};
-				HANDLE hNewPlugin=CtrlObject->Plugins->Open(pPlugin,OPEN_SHORTCUT,FarGuid,(INT_PTR)&info);
+				HANDLE hNewPlugin=CtrlObject->Plugins->Open(pPlugin,OPEN_SHORTCUT,FarGuid,(intptr_t)&info);
 
 				if (hNewPlugin)
 				{

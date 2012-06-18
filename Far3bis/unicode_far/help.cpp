@@ -304,7 +304,7 @@ int Help::ReadHelp(const wchar_t *Mask)
 	string strMacroArea;
 
 	OldGetFileString GetStr(HelpFile);
-	int nStrLength,GetCode;
+	int nStrLength;
 	size_t SizeKeyName=20;
 
 	for (;;)
@@ -316,7 +316,7 @@ int Help::ReadHelp(const wchar_t *Mask)
 
 		if (!MacroProcess && !RepeatLastLine && !BreakProcess)
 		{
-			if ((GetCode=GetStr.GetString(&ReadStr, nCodePage, nStrLength)) <= 0)
+			if (GetStr.GetString(&ReadStr, nCodePage, nStrLength) <= 0)
 			{
 				strReadStr=ReadStr;
 				if (StringLen(strSplitLine)<MaxLength)
@@ -1047,7 +1047,7 @@ void Help::OutString(const wchar_t *Str)
 	if (!Locked() && WhereX()<X2)
 	{
 		SetColor(CurColor);
-		FS<<fmt::Width(X2-WhereX())<<L"";
+		FS<<fmt::MinWidth(X2-WhereX())<<L"";
 	}
 }
 
@@ -1206,7 +1206,7 @@ int Help::ProcessKey(int Key)
 		case(KEY_MSWHEEL_UP | KEY_ALT):
 		case(KEY_MSWHEEL_UP | KEY_RALT):
 		{
-			int n = (Key == KEY_MSWHEEL_UP ? Opt.MsWheelDeltaHelp : 1);
+			int n = (Key == KEY_MSWHEEL_UP ? (int)Opt.MsWheelDeltaHelp : 1);
 			while (n-- > 0)
 				ProcessKey(KEY_UP);
 
@@ -1216,7 +1216,7 @@ int Help::ProcessKey(int Key)
 		case(KEY_MSWHEEL_DOWN | KEY_ALT):
 		case(KEY_MSWHEEL_DOWN | KEY_RALT):
 		{
-			int n = (Key == KEY_MSWHEEL_DOWN ? Opt.MsWheelDeltaHelp : 1);
+			int n = (Key == KEY_MSWHEEL_DOWN ? (int)Opt.MsWheelDeltaHelp : 1);
 			while (n-- > 0)
 				ProcessKey(KEY_DOWN);
 
@@ -1721,13 +1721,12 @@ void Help::MoveToReference(int Forward,int CurScreen)
 	int SaveCurX=StackData.CurX;
 	int SaveCurY=StackData.CurY;
 	int SaveTopStr=StackData.TopStr;
-	BOOL ReferencePresent;
 	StackData.strSelTopic.Clear();
 	Lock();
 
 	if (!ErrorHelp) while (StackData.strSelTopic.IsEmpty())
 		{
-			ReferencePresent=IsReferencePresent();
+			BOOL ReferencePresent=IsReferencePresent();
 
 			if (Forward)
 			{

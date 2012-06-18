@@ -287,7 +287,6 @@ public:
 		FindList[FindListCount]->ArcIndex = LIST_INDEX_NONE;
 		return FindListCount++;
 	}
-
 }
 itd;
 
@@ -342,7 +341,8 @@ struct Vars
 };
 
 string strFindMask, strFindStr;
-int SearchMode,CmpCase,WholeWords,SearchInArchives,SearchHex;
+bool CmpCase,WholeWords,SearchInArchives,SearchHex;
+int SearchMode;
 
 string strLastDirName;
 string strPluginSearchPath;
@@ -760,7 +760,7 @@ void SetPluginDirectory(const wchar_t *DirName,HANDLE hPlugin,bool UpdatePanel=f
 	}
 }
 
-INT_PTR WINAPI AdvancedDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
+intptr_t WINAPI AdvancedDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
 	switch (Msg)
 	{
@@ -827,7 +827,7 @@ void AdvancedDialog()
 			if (Opt.FindOpt.strSearchOutFormatWidth.IsEmpty())
 				Opt.FindOpt.strSearchOutFormatWidth=L"0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
 
-			TextToViewSettings(Opt.FindOpt.strSearchOutFormat.CPtr(),Opt.FindOpt.strSearchOutFormatWidth.CPtr(),
+			TextToViewSettings(Opt.FindOpt.strSearchOutFormat,Opt.FindOpt.strSearchOutFormatWidth,
                                   Opt.FindOpt.OutColumnTypes,Opt.FindOpt.OutColumnWidths,Opt.FindOpt.OutColumnWidthType,
                                   Opt.FindOpt.OutColumnCount);
         }
@@ -836,7 +836,7 @@ void AdvancedDialog()
 	}
 }
 
-INT_PTR WINAPI MainDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
+intptr_t WINAPI MainDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
 	Vars* v = reinterpret_cast<Vars*>(SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0));
 	switch (Msg)
@@ -950,7 +950,7 @@ INT_PTR WINAPI MainDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 					string strDataStr;
 					Transform(strDataStr,(LPCWSTR)SendDlgMessage(hDlg,DM_GETCONSTTEXTPTR,Param2?FAD_EDIT_TEXT:FAD_EDIT_HEX,0),Param2?L'X':L'S');
 					SendDlgMessage(hDlg,DM_SETTEXTPTR,Param2?FAD_EDIT_HEX:FAD_EDIT_TEXT,const_cast<wchar_t*>(strDataStr.CPtr()));
-					INT_PTR iParam = reinterpret_cast<INT_PTR>(Param2);
+					intptr_t iParam = reinterpret_cast<intptr_t>(Param2);
 					SendDlgMessage(hDlg,DM_SHOWITEM,FAD_EDIT_TEXT,ToPtr(!iParam));
 					SendDlgMessage(hDlg,DM_SHOWITEM,FAD_EDIT_HEX,ToPtr(iParam));
 					SendDlgMessage(hDlg,DM_ENABLE,FAD_TEXT_CP,ToPtr(!iParam));
@@ -1003,7 +1003,7 @@ INT_PTR WINAPI MainDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 							{
 								// Преобразуем номер таблицы сиволов к строке
 								string strCodePageName;
-								strCodePageName.Format(L"%u", SelectedCodePage);
+								strCodePageName = FormatString() << SelectedCodePage;
 								// Получаем текущее состояние флага в реестре
 								int SelectType = 0;
 								GeneralCfg->GetValue(FavoriteCodePagesKey, strCodePageName, &SelectType, 0);
@@ -1081,7 +1081,7 @@ INT_PTR WINAPI MainDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 						// Строка "Содержащих текст"
 						if (!v->FindFoldersChanged)
 						{
-							BOOL Checked = (Item.Data && *Item.Data)?FALSE:Opt.FindOpt.FindFolders;
+							BOOL Checked = (Item.Data && *Item.Data)?FALSE:(int)Opt.FindOpt.FindFolders;
 							SendDlgMessage(hDlg, DM_SETCHECK, FAD_CHECKBOX_DIRS, ToPtr(Checked?BSTATE_CHECKED:BSTATE_UNCHECKED));
 						}
 
@@ -1534,7 +1534,7 @@ bool IsFileIncluded(PluginPanelItem* FileItem, const wchar_t *FullName, DWORD Fi
 	return FileFound;
 }
 
-INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
+intptr_t WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 {
 	CriticalSectionLock Lock(PluginCS);
 	Vars* v = reinterpret_cast<Vars*>(SendDlgMessage(hDlg, DM_GETDLGDATA, 0, 0));
@@ -1793,6 +1793,8 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 						return TRUE;
 					}
 
+					bool real_name = true;
+
 					// FindFileArcIndex нельзя здесь использовать
 					// Он может быть уже другой.
 					if(FindItem.ArcIndex != LIST_INDEX_NONE)
@@ -1802,6 +1804,8 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 
 						if(!(ArcItem.Flags & OPIF_REALNAMES))
 						{
+							real_name = false;
+
 							string strFindArcName = ArcItem.strArcName;
 							if(!ArcItem.hPlugin)
 							{
@@ -1853,7 +1857,8 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 							RemoveTemp=true;
 						}
 					}
-					else
+
+					if (real_name)
 					{
 						strSearchFileName = FindItem.FindData.strFileName;
 						if (apiGetFileAttributes(strSearchFileName) == INVALID_FILE_ATTRIBUTES && apiGetFileAttributes(FindItem.FindData.strAlternateFileName) != INVALID_FILE_ATTRIBUTES)
@@ -1869,17 +1874,17 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 
 						if (key==KEY_F3 || key==KEY_NUMPAD5 || key==KEY_SHIFTNUMPAD5)
 						{
-							int ListSize=ListBox->GetItemCount();
 							NamesList ViewList;
+							int list_count = 0;
 
 							// Возьмем все файлы, которые имеют реальные имена...
 							if (Opt.FindOpt.CollectFiles)
 							{
-								for (int I=0; I<ListSize; I++)
+								for (size_t I=0; I<itd.GetFindListCount(); I++)
 								{
 									FINDLIST FindItem;
-									itd.GetFindListItem(reinterpret_cast<size_t>(ListBox->GetUserData(nullptr,0,I)), FindItem);
-
+									itd.GetFindListItem(I, FindItem);
+									
 									bool RealNames=true;
 									if(FindItem.ArcIndex != LIST_INDEX_NONE)
 									{
@@ -1890,11 +1895,13 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 											RealNames=false;
 										}
 									}
-
 									if (RealNames)
 									{
 										if (!FindItem.FindData.strFileName.IsEmpty() && !(FindItem.FindData.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))
+										{
+											++list_count;
 											ViewList.AddName(FindItem.FindData.strFileName, FindItem.FindData.strAlternateFileName);
+										}
 									}
 								}
 
@@ -1905,7 +1912,7 @@ INT_PTR WINAPI FindDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
 							SendDlgMessage(hDlg,DM_SHOWDIALOG,FALSE,0);
 							SendDlgMessage(hDlg,DM_ENABLEREDRAW,FALSE,0);
 							{
-								FileViewer ShellViewer(strSearchFileName,FALSE,FALSE,FALSE,-1,nullptr,(FindItem.ArcIndex != LIST_INDEX_NONE)?nullptr:(Opt.FindOpt.CollectFiles?&ViewList:nullptr));
+								FileViewer ShellViewer(strSearchFileName,FALSE,FALSE,FALSE,-1,nullptr,(list_count > 1 ? &ViewList : nullptr));
 								ShellViewer.SetDynamicallyBorn(FALSE);
 								ShellViewer.SetEnableF6(TRUE);
 
@@ -2539,7 +2546,7 @@ void DoScanTree(HANDLE hDlg, string& strRoot)
 
 			bool bContinue=false;
 			WIN32_FIND_STREAM_DATA sd;
-			HANDLE hFindStream=nullptr;
+			HANDLE hFindStream = INVALID_HANDLE_VALUE;
 			bool FirstCall=true;
 			string strFindDataFileName=FindData.strFileName;
 
@@ -2554,7 +2561,7 @@ void DoScanTree(HANDLE hDlg, string& strRoot)
 
 				if (Opt.FindOpt.FindAlternateStreams)
 				{
-					if (hFindStream)
+					if (hFindStream != INVALID_HANDLE_VALUE)
 					{
 						if (!FirstCall)
 						{
@@ -2629,7 +2636,7 @@ void DoScanTree(HANDLE hDlg, string& strRoot)
 					AddMenuRecord(hDlg,strFullStreamName, FindData);
 				}
 
-				if (!Opt.FindOpt.FindAlternateStreams || !hFindStream)
+				if (!Opt.FindOpt.FindAlternateStreams || hFindStream == INVALID_HANDLE_VALUE)
 				{
 					break;
 				}
@@ -3232,7 +3239,7 @@ FindFiles::FindFiles()
 	static string strLastFindMask=L"*.*", strLastFindStr;
 	// Статической структуре и статические переменные
 	static string strSearchFromRoot;
-	static int LastCmpCase=0,LastWholeWords=0,LastSearchInArchives=0,LastSearchHex=0;
+	static bool LastCmpCase=0,LastWholeWords=0,LastSearchInArchives=0,LastSearchHex=0;
 	// Создадим объект фильтра
 	Filter=new FileFilter(CtrlObject->Cp()->ActivePanel,FFT_FINDFILE);
 	CmpCase=LastCmpCase;
@@ -3240,7 +3247,7 @@ FindFiles::FindFiles()
 	SearchInArchives=LastSearchInArchives;
 	SearchHex=LastSearchHex;
 	SearchMode=Opt.FindOpt.FileSearchMode;
-	UseFilter=Opt.FindOpt.UseFilter;
+	UseFilter=Opt.FindOpt.UseFilter!=0;
 	strFindMask = strLastFindMask;
 	strFindStr = strLastFindStr;
 	strSearchFromRoot = MSG(MSearchFromRootFolder);
@@ -3403,10 +3410,10 @@ FindFiles::FindFiles()
 		}
 
 		Opt.FindCodePage = CodePage;
-		CmpCase=FindAskDlg[FAD_CHECKBOX_CASE].Selected;
-		WholeWords=FindAskDlg[FAD_CHECKBOX_WHOLEWORDS].Selected;
-		SearchHex=FindAskDlg[FAD_CHECKBOX_HEX].Selected;
-		SearchInArchives=FindAskDlg[FAD_CHECKBOX_ARC].Selected;
+		CmpCase=FindAskDlg[FAD_CHECKBOX_CASE].Selected == BSTATE_CHECKED;
+		WholeWords=FindAskDlg[FAD_CHECKBOX_WHOLEWORDS].Selected == BSTATE_CHECKED;
+		SearchHex=FindAskDlg[FAD_CHECKBOX_HEX].Selected == BSTATE_CHECKED;
+		SearchInArchives=FindAskDlg[FAD_CHECKBOX_ARC].Selected == BSTATE_CHECKED;
 
 		if (v.FindFoldersChanged)
 		{

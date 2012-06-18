@@ -491,7 +491,6 @@ static TMacroFunction intMacroFunction[]=
 	{L"Panel.SetPath",    nullptr, L"N=panel.SetPath(panelType,pathName[,fileName])",            panelsetpathFunc,   nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPATH,   },
 	{L"Panel.SetPos",     nullptr, L"N=panel.SetPos(panelType,fileName)",                        panelsetposFunc,    nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPOS,    },
 	{L"Panel.SetPosIdx",  nullptr, L"N=Panel.SetPosIdx(panelType,Idx[,InSelection])",            panelsetposidxFunc, nullptr, 0, IMFF_UNLOCKSCREEN|IMFF_DISABLEINTINPUT, MCODE_F_PANEL_SETPOSIDX, },
-	{L"PanelItem",        nullptr, L"V=PanelItem(Panel,Index,TypeInfo)",                         panelitemFunc,      nullptr, 0, 0,                                      MCODE_F_PANELITEM,       },
 	{L"Plugin.Call",      nullptr, L"N=Plugin.Call(Guid[,Item])",                                usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CALL,     },
 	{L"Plugin.Command",   nullptr, L"N=Plugin.Command(Guid[,Command])",                          usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_COMMAND,  },
 	{L"Plugin.Config",    nullptr, L"N=Plugin.Config(Guid[,MenuGuid])",                          usersFunc,          nullptr, 0, 0,                                      MCODE_F_PLUGIN_CONFIG,   },
@@ -515,9 +514,9 @@ static TMacroFunction intMacroFunction[]=
 	{L"WaitKey",          nullptr, L"V=Waitkey([N,[T]])",                                        waitkeyFunc,        nullptr, 0, 0,                                      MCODE_F_WAITKEY,         },
 	{L"Window.Scroll",    nullptr, L"N=Window.Scroll(Lines[,Axis])",                             windowscrollFunc,   nullptr, 0, 0,                                      MCODE_F_WINDOW_SCROLL,   },
 	{L"Xlat",             nullptr, L"S=Xlat(S[,Flags])",                                         xlatFunc,           nullptr, 0, 0,                                      MCODE_F_XLAT,            },
-	{}
 };
 
+static_assert(MCODE_F_LAST - KEY_MACRO_F_BASE == ARRAYSIZE(intMacroFunction), "intMacroFunction size != MCODE_F_* count");
 
 int MKeywordsSize = ARRAYSIZE(MKeywords);
 int MKeywordsFlagsSize = ARRAYSIZE(MKeywordsFlags);
@@ -883,8 +882,8 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 	if (Recording) // Идет запись?
 	{
 		// признак конца записи?
-		if ((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlDot
-			|| (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot)
+		if (Key==Opt.Macro.KeyMacroCtrlDot || Key==Opt.Macro.KeyMacroRCtrlDot
+			|| Key==Opt.Macro.KeyMacroCtrlShiftDot || Key==Opt.Macro.KeyMacroRCtrlShiftDot)
 		{
 			_KEYMACRO(CleverSysLog Clev(L"MACRO End record..."));
 			int WaitInMainLoop0=WaitInMainLoop;
@@ -902,7 +901,7 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 			// если удаляем или был вызван диалог изменения, то не нужно выдавать диалог настройки.
 			//if (MacroKey != (DWORD)-1 && (Key==KEY_CTRLSHIFTDOT || Recording==2) && RecBufferSize)
 			if (AssignRet && AssignRet!=2 && RecBufferSize
-				&& ((unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot))
+				&& (Key==Opt.Macro.KeyMacroCtrlShiftDot || Key==Opt.Macro.KeyMacroRCtrlShiftDot))
 			{
 				if (!GetMacroSettings(MacroKey,Flags))
 					AssignRet=0;
@@ -975,7 +974,7 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 					if (RecBufferSize > 1)
 						Macro.Buffer=RecBuffer;
 					else if (RecBuffer && RecBufferSize > 0)
-						Macro.Buffer=reinterpret_cast<DWORD*>((DWORD_PTR)(*RecBuffer));
+						Macro.Buffer=reinterpret_cast<DWORD*>((intptr_t)(*RecBuffer));
 					else if (!RecBufferSize)
 						Macro.Buffer=nullptr;
 
@@ -1041,8 +1040,8 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 		}
 	}
 	// Начало записи?
-	else if ((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlDot
-			|| (unsigned int)Key==Opt.Macro.KeyMacroCtrlShiftDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlShiftDot)
+	else if (Key==Opt.Macro.KeyMacroCtrlDot || Key==Opt.Macro.KeyMacroRCtrlDot
+			|| Key==Opt.Macro.KeyMacroCtrlShiftDot || Key==Opt.Macro.KeyMacroRCtrlShiftDot)
 	{
 		_KEYMACRO(CleverSysLog Clev(L"MACRO Begin record..."));
 
@@ -1062,7 +1061,7 @@ int KeyMacro::ProcessEvent(const struct FAR_INPUT_RECORD *Rec)
 		// тип записи - с вызовом диалога настроек или...
 		// В зависимости от того, КАК НАЧАЛИ писать макрос, различаем общий режим (Ctrl-.
 		// с передачей плагину кеев) или специальный (Ctrl-Shift-. - без передачи клавиш плагину)
-		Recording=((unsigned int)Key==Opt.Macro.KeyMacroCtrlDot || (unsigned int)Key==Opt.Macro.KeyMacroRCtrlDot) ? MACROMODE_RECORDING_COMMON:MACROMODE_RECORDING;
+		Recording=(Key==Opt.Macro.KeyMacroCtrlDot || Key==Opt.Macro.KeyMacroRCtrlDot) ? MACROMODE_RECORDING_COMMON:MACROMODE_RECORDING;
 
 		if (RecBuffer)
 			xf_free(RecBuffer);
@@ -1394,7 +1393,7 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 				{
 					if (CurFrame && CurFrame->GetType()==MODALTYPE_DIALOG) // ?? Mode == MACRO_DIALOG ??
 					{
-						Cond=reinterpret_cast<LPCWSTR>(static_cast<INT_PTR>(CurFrame->VMProcess(CheckCode)));
+						Cond=reinterpret_cast<LPCWSTR>(static_cast<intptr_t>(CurFrame->VMProcess(CheckCode)));
 					}
 
 					break;
@@ -1403,7 +1402,7 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 				{
 					if (CurFrame && CurFrame->GetType()==MODALTYPE_DIALOG) // ?? Mode == MACRO_DIALOG ??
 					{
-						Cond=reinterpret_cast<LPCWSTR>(static_cast<INT_PTR>(CurFrame->VMProcess(CheckCode)));
+						Cond=reinterpret_cast<LPCWSTR>(static_cast<intptr_t>(CurFrame->VMProcess(CheckCode)));
 					}
 
 					break;
@@ -1841,7 +1840,7 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 									}
 									break;
 								case MCODE_V_MENUINFOID:
-									Cond=reinterpret_cast<LPCWSTR>(static_cast<INT_PTR>(f->VMProcess(CheckCode)));
+									Cond=reinterpret_cast<LPCWSTR>(static_cast<intptr_t>(f->VMProcess(CheckCode)));
 									break;
 							}
 						}
@@ -2569,7 +2568,7 @@ static bool kbdLayoutFunc(const TMacroFunction*)
 	{
 		wchar_t *endptr;
 		DWORD res=wcstoul(LayoutName, &endptr, 16);
-		RetLayout=(HKL)(INT_PTR)(HIWORD(res)? res : MAKELONG(res,res));
+		RetLayout=(HKL)(intptr_t)(HIWORD(res)? res : MAKELONG(res,res));
 	}
 
 	HWND hWnd = Console.GetWindow();
@@ -2591,13 +2590,13 @@ static bool kbdLayoutFunc(const TMacroFunction*)
 		else
 		{
 			wParam=0;
-			Layout=(HKL)(INT_PTR)(HIWORD(dwLayout)? dwLayout : MAKELONG(dwLayout,dwLayout));
+			Layout=(HKL)(intptr_t)(HIWORD(dwLayout)? dwLayout : MAKELONG(dwLayout,dwLayout));
 		}
 
 		Ret=PostMessage(hWnd,WM_INPUTLANGCHANGEREQUEST, wParam, (LPARAM)Layout);
 	}
 
-	VMStack.Push(Ret?TVar(static_cast<INT64>(reinterpret_cast<INT_PTR>(RetLayout))):0);
+	VMStack.Push(Ret?TVar(static_cast<INT64>(reinterpret_cast<intptr_t>(RetLayout))):0);
 
 	return Ret?true:false;
 }
@@ -3658,19 +3657,19 @@ static bool editorsetFunc(const TMacroFunction*)
 				case 1:  // ExpandTabs;
 					EdOpt.ExpandTabs=longState; break;
 				case 2:  // PersistentBlocks;
-					EdOpt.PersistentBlocks=longState; break;
+					EdOpt.PersistentBlocks=longState != 0; break;
 				case 3:  // DelRemovesBlocks;
-					EdOpt.DelRemovesBlocks=longState; break;
+					EdOpt.DelRemovesBlocks=longState != 0; break;
 				case 4:  // AutoIndent;
-					EdOpt.AutoIndent=longState; break;
+					EdOpt.AutoIndent=longState != 0; break;
 				case 5:  // AutoDetectCodePage;
-					EdOpt.AutoDetectCodePage=longState; break;
+					EdOpt.AutoDetectCodePage=longState != 0; break;
 				case 6:  // AnsiCodePageForNewFile;
-					EdOpt.AnsiCodePageForNewFile=longState; break;
+					EdOpt.AnsiCodePageForNewFile=longState != 0; break;
 				case 7:  // CursorBeyondEOL;
-					EdOpt.CursorBeyondEOL=longState; break;
+					EdOpt.CursorBeyondEOL=longState != 0; break;
 				case 8:  // BSLikeDel;
-					EdOpt.BSLikeDel=longState; break;
+					EdOpt.BSLikeDel=longState != 0; break;
 				case 9:  // CharCodeBase;
 					EdOpt.CharCodeBase=longState; break;
 				case 10: // SavePos;
@@ -3680,19 +3679,19 @@ static bool editorsetFunc(const TMacroFunction*)
 				case 12: // char WordDiv[256];
 					EdOpt.strWordDiv = Value.toString(); break;
 				case 13: // F7Rules;
-					EdOpt.F7Rules=longState; break;
+					EdOpt.F7Rules=longState != 0; break;
 				case 14: // AllowEmptySpaceAfterEof;
-					EdOpt.AllowEmptySpaceAfterEof=longState; break;
+					EdOpt.AllowEmptySpaceAfterEof=longState != 0; break;
 				case 15: // ShowScrollBar;
-					EdOpt.ShowScrollBar=longState; break;
+					EdOpt.ShowScrollBar=longState != 0; break;
 				case 16: // EditOpenedForWrite;
-					EdOpt.EditOpenedForWrite=longState; break;
+					EdOpt.EditOpenedForWrite=longState != 0; break;
 				case 17: // SearchSelFound;
-					EdOpt.SearchSelFound=longState; break;
+					EdOpt.SearchSelFound=longState != 0; break;
 				case 18: // SearchRegexp;
-					EdOpt.SearchRegexp=longState; break;
+					EdOpt.SearchRegexp=longState != 0; break;
 				case 19: // SearchPickUpWord;
-					EdOpt.SearchPickUpWord=longState; break;
+					EdOpt.SearchPickUpWord=longState != 0; break;
 				case 20: // ShowWhiteSpace;
 					EdOpt.ShowWhiteSpace=longState; break;
 				default:
@@ -3919,7 +3918,6 @@ static bool panelsetposidxFunc(const TMacroFunction*)
 		if (TypePanel == FILE_PANEL || TypePanel ==TREE_PANEL)
 		{
 			long EndPos=SelPanel->GetFileCount();
-			long StartPos;
 			long I;
 			long idxFoundItem=0;
 
@@ -3928,6 +3926,7 @@ static bool panelsetposidxFunc(const TMacroFunction*)
 				EndPos--;
 				if ( EndPos > 0 )
 				{
+					long StartPos;
 					long Direct=idxItem < 0?-1:1;
 
 					if( Direct < 0 )
@@ -4143,9 +4142,9 @@ static bool replaceFunc(const TMacroFunction*)
 	__int64 Ret=1;
 	// TODO: Здесь нужно проверить в соответствии с УНИХОДОМ!
 	string strStr;
-	int lenS=(int)StrLength(Src.s());
+	//int lenS=(int)StrLength(Src.s());
 	int lenF=(int)StrLength(Find.s());
-	int lenR=(int)StrLength(Repl.s());
+	//int lenR=(int)StrLength(Repl.s());
 	int cnt=0;
 
 	if( lenF )
@@ -4171,8 +4170,8 @@ static bool replaceFunc(const TMacroFunction*)
 
 	if (cnt)
 	{
-		if (lenR > lenF)
-			lenS+=cnt*(lenR-lenF+1); //???
+		//if (lenR > lenF)
+		//	lenS+=cnt*(lenR-lenF+1); //???
 
 		strStr=Src.s();
 		cnt=(int)Count.i();
@@ -5034,13 +5033,13 @@ struct ProcessMacroFuncInfo
 	int nResults;
 };
 */
-	int I;
 	GUID guid;
 	if (StrToGuid(thisFunc->fnGUID,guid) && CtrlObject->Plugins->FindPlugin(guid))
 	{
 		FarMacroValue *vParams=new FarMacroValue[nParam];
 		if (vParams)
 		{
+			int I;
 			memset(vParams,0,sizeof(FarMacroValue) * nParam);
 
 			for (I=nParam-1; I >= 0; --I)
@@ -6223,7 +6222,7 @@ done:
 					{
 						if (tmpVar.isUnknown())
 							tmpVar = -1;
-						tmpVar=f->VMProcess(Key,(void*)static_cast<INT_PTR>(tmpVar.toInteger()),tmpAction.toInteger());
+						tmpVar=f->VMProcess(Key,(void*)static_cast<intptr_t>(tmpVar.toInteger()),tmpAction.toInteger());
 						succees=true;
 					}
 					else
@@ -6572,7 +6571,6 @@ UINT64 KeyMacro::SwitchFlags(UINT64& Flags,UINT64 Value)
 */
 wchar_t *KeyMacro::MkTextSequence(DWORD *Buffer,int BufferSize,const wchar_t *Src)
 {
-	int J, Key;
 	string strMacroKeyText;
 	string strTextBuffer;
 
@@ -6584,14 +6582,14 @@ wchar_t *KeyMacro::MkTextSequence(DWORD *Buffer,int BufferSize,const wchar_t *Sr
 	if (BufferSize == 1)
 	{
 		if (
-		    (((DWORD)(DWORD_PTR)Buffer)&KEY_MACRO_ENDBASE) >= KEY_MACRO_BASE && (((DWORD)(DWORD_PTR)Buffer)&KEY_MACRO_ENDBASE) <= KEY_MACRO_ENDBASE ||
-		    (((DWORD)(DWORD_PTR)Buffer)&KEY_OP_ENDBASE) >= KEY_OP_BASE && (((DWORD)(DWORD_PTR)Buffer)&KEY_OP_ENDBASE) <= KEY_OP_ENDBASE
+		    (((DWORD)(intptr_t)Buffer)&KEY_MACRO_ENDBASE) >= KEY_MACRO_BASE && (((DWORD)(intptr_t)Buffer)&KEY_MACRO_ENDBASE) <= KEY_MACRO_ENDBASE ||
+		    (((DWORD)(intptr_t)Buffer)&KEY_OP_ENDBASE) >= KEY_OP_BASE && (((DWORD)(intptr_t)Buffer)&KEY_OP_ENDBASE) <= KEY_OP_ENDBASE
 		)
 		{
 			return Src?xf_wcsdup(Src):nullptr;
 		}
 
-		if (KeyToText((DWORD)(DWORD_PTR)Buffer,strMacroKeyText))
+		if (KeyToText((DWORD)(intptr_t)Buffer,strMacroKeyText))
 			return xf_wcsdup(strMacroKeyText.CPtr());
 
 		return nullptr;
@@ -6601,9 +6599,9 @@ wchar_t *KeyMacro::MkTextSequence(DWORD *Buffer,int BufferSize,const wchar_t *Sr
 	strTextBuffer.Clear();
 
 	if (Buffer[0] == MCODE_OP_KEYS)
-		for (J=1; J < BufferSize; J++)
+		for (int J=1; J < BufferSize; J++)
 		{
-			Key=Buffer[J];
+			int Key=Buffer[J];
 
 			if (Key == MCODE_OP_ENDKEYS || Key == MCODE_OP_KEYS)
 				continue;
@@ -6991,7 +6989,7 @@ void KeyMacro::RegisterMacroIntFunction()
 
 	if (!InitedInternalFuncs)
 	{
-		for(size_t I=0; intMacroFunction[I].Name; ++I)
+		for(size_t I=0; I < ARRAYSIZE(intMacroFunction); ++I)
 			KeyMacro::RegisterMacroFunction(intMacroFunction+I);
 
 		InitedInternalFuncs=true;
@@ -7302,12 +7300,11 @@ void KeyMacro::RunStartMacro()
 }
 
 // обработчик диалогового окна назначения клавиши
-INT_PTR WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	string strKeyText;
 	static int LastKey=0;
 	static DlgParam *KMParam=nullptr;
-	int Index;
 	const INPUT_RECORD* record=nullptr;
 	int key=0;
 
@@ -7448,6 +7445,7 @@ M1:
 		string strKey;
 
 		// если УЖЕ есть такой макрос...
+		int Index;
 		if ((Index=MacroDlg->GetIndex((int)key,strKey,KMParam->Mode,true,true)) != -1)
 		{
 			MacroRecord *Mac=MacroDlg->MacroLIB+Index;
@@ -7482,7 +7480,7 @@ M1:
 				        Mac->BufferSize == MacroDlg->RecBufferSize &&
 				        (
 				            (Mac->BufferSize >  1 && !memcmp(Mac->Buffer,MacroDlg->RecBuffer,MacroDlg->RecBufferSize*sizeof(DWORD))) ||
-				            (Mac->BufferSize == 1 && (DWORD)(DWORD_PTR)Mac->Buffer == (DWORD)(DWORD_PTR)MacroDlg->RecBuffer)
+				            (Mac->BufferSize == 1 && (DWORD)(intptr_t)Mac->Buffer == (DWORD)(intptr_t)MacroDlg->RecBuffer)
 				        )
 				   ))
 				{
@@ -7627,7 +7625,7 @@ enum MACROSETTINGSDLG
 	MS_BUTTON_CANCEL,
 };
 
-INT_PTR WINAPI KeyMacro::ParamMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI KeyMacro::ParamMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	static DlgParam *KMParam=nullptr;
 
@@ -7972,7 +7970,7 @@ int KeyMacro::PostNewMacro(MacroRecord *MRec,BOOL NeedAddSendFlag,bool IsPluginS
 	if ((MRec->BufferSize+1) > 2)
 		memcpy(&NewMacroWORK2.Buffer[IsPluginSend?1:0],MRec->Buffer,sizeof(DWORD)*MRec->BufferSize);
 	else if (MRec->Buffer)
-		NewMacroWORK2.Buffer[IsPluginSend?1:0]=(DWORD)(DWORD_PTR)MRec->Buffer;
+		NewMacroWORK2.Buffer[IsPluginSend?1:0]=(DWORD)(intptr_t)MRec->Buffer;
 
 	if (IsPluginSend)
 		NewMacroWORK2.Buffer[NewMacroWORK2.BufferSize+1]=MCODE_OP_ENDKEYS;
@@ -8109,7 +8107,7 @@ int KeyMacro::GetIndex(int Key, string& strKey, int CheckMode, bool UseCommon, b
 		int KeyParam=Key;
 		for (int I=0; I < 2; ++I)
 		{
-			int Pos,Len;
+			int Len;
 			MacroRecord *MPtr=nullptr;
 			Key=KeyParam;
 
@@ -8141,7 +8139,7 @@ int KeyMacro::GetIndex(int Key, string& strKey, int CheckMode, bool UseCommon, b
 
 				for (; ctrl < 2; ctrl++)
 				{
-					for (Pos=0; Pos < Len; ++Pos, ++MPtr)
+					for (int Pos=0; Pos < Len; ++Pos, ++MPtr)
 					{
 						if (Key != -1)
 						{
@@ -8607,8 +8605,8 @@ DWORD KeyMacro::SetOpCode(MacroRecord *MR,int PC,DWORD OpCode)
 	}
 	else
 	{
-		OldOpCode=(DWORD)(DWORD_PTR)MR->Buffer;
-		MR->Buffer=(DWORD*)(DWORD_PTR)OpCode;
+		OldOpCode=(DWORD)(intptr_t)MR->Buffer;
+		MR->Buffer=(DWORD*)(intptr_t)OpCode;
 	}
 
 	return OldOpCode;

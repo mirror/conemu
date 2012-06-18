@@ -142,7 +142,7 @@ static int atime(string &strDest,const tm *tmPtr)
 static int st_time(string &strDest,const tm *tmPtr,const wchar_t chr)
 {
 	int res;
-	int DateSeparator=GetDateSeparator();
+	wchar_t DateSeparator=GetDateSeparator();
 
 	if (chr==L'v')
 	{
@@ -467,7 +467,7 @@ size_t StrFTime(string &strDest, const wchar_t *Format,const tm *t)
 				case L'T':
 				case L'X':
 				{
-					int TimeSeparator=GetTimeSeparator();
+					wchar_t TimeSeparator=GetTimeSeparator();
 					strBuf.Format(L"%02d%c%02d%c%02d",t->tm_hour,TimeSeparator,t->tm_min,TimeSeparator,t->tm_sec);
 					break;
 				}
@@ -572,7 +572,7 @@ void GetFileDateAndTime(const wchar_t *Src,LPWORD Dst,size_t Count,int Separator
 	}
 }
 
-void StrToDateTime(const wchar_t *CDate, const wchar_t *CTime, FILETIME &ft, int DateFormat, int DateSeparator, int TimeSeparator, bool bRelative)
+void StrToDateTime(const wchar_t *CDate, const wchar_t *CTime, FILETIME &ft, int DateFormat, wchar_t DateSeparator, wchar_t TimeSeparator, bool bRelative)
 {
 	WORD DateN[3]={},TimeN[4]={};
 	SYSTEMTIME st={};
@@ -762,7 +762,7 @@ void ConvertDate(const FILETIME &ft,string &strDateText, string &strTimeText,int
 					p3=st.wDay;
 					break;
 			}
-			strDateText = FormatString()<<fmt::FillChar(f1)<<fmt::Width(w1)<<p1<<DateSeparator<<fmt::FillChar(f2)<<fmt::Width(w2)<<p2<<DateSeparator<<fmt::FillChar(f3)<<fmt::Width(w3)<<p3;
+			strDateText = FormatString()<<fmt::FillChar(f1)<<fmt::MinWidth(w1)<<p1<<DateSeparator<<fmt::FillChar(f2)<<fmt::MinWidth(w2)<<p2<<DateSeparator<<fmt::FillChar(f3)<<fmt::MinWidth(w3)<<p3;
 		}
 	}
 
@@ -786,5 +786,5 @@ void ConvertRelativeDate(const FILETIME &ft,string &strDaysText,string &strTimeT
 	UINT64 d = time.QuadPart/=24;
 
 	strDaysText = FormatString()<<d;
-	strTimeText = FormatString()<<fmt::Width(2)<<fmt::FillChar(L'0')<<h<<GetTimeSeparator()<<fmt::Width(2)<<fmt::FillChar(L'0')<<m<<GetTimeSeparator()<<fmt::Width(2)<<fmt::FillChar(L'0')<<s<<GetDecimalSeparator()<<fmt::Width(3)<<fmt::FillChar(L'0')<<ms;
+	strTimeText = FormatString()<<fmt::MinWidth(2)<<fmt::FillChar(L'0')<<h<<GetTimeSeparator()<<fmt::MinWidth(2)<<fmt::FillChar(L'0')<<m<<GetTimeSeparator()<<fmt::MinWidth(2)<<fmt::FillChar(L'0')<<s<<GetDecimalSeparator()<<fmt::MinWidth(3)<<fmt::FillChar(L'0')<<ms;
 }

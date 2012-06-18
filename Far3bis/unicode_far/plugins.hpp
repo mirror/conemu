@@ -301,7 +301,7 @@ class PluginManager
 //api functions
 
 	public:
-		HANDLE Open(Plugin *pPlugin,int OpenFrom,const GUID& Guid,INT_PTR Item);
+		HANDLE Open(Plugin *pPlugin,int OpenFrom,const GUID& Guid,intptr_t Item);
 		HANDLE OpenFilePlugin(const string* Name, int OpMode, OPENFILEPLUGINTYPE Type);
 		HANDLE OpenFindListPlugin(const PluginPanelItem *PanelItem,size_t ItemsNumber);
 		void ClosePanel(HANDLE hPlugin);

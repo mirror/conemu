@@ -309,10 +309,9 @@ void UserMenu::ProcessUserMenu(bool ChoiceMenuType)
 				if (!FirstRun)
 				{
 					// подымаемся выше...
-					size_t pos;
-
 					if(!IsRootPath(strMenuFilePath))
 					{
+						size_t pos;
 						if (FindLastSlash(pos,strMenuFilePath))
 						{
 							strMenuFilePath.SetLength(pos--);
@@ -348,10 +347,9 @@ void UserMenu::ProcessUserMenu(bool ChoiceMenuType)
 			{
 				if (MenuMode == MM_LOCAL)
 				{
-					size_t pos;
-
 					if(!IsRootPath(strMenuFilePath))
 					{
+						size_t pos;
 						if (FindLastSlash(pos,strMenuFilePath))
 						{
 							strMenuFilePath.SetLength(pos--);
@@ -431,7 +429,7 @@ int FillUserMenu(VMenu& FarUserMenu,DList<UserMenuItem> *Menu,int MenuPos,int *F
 			string strHotKey = MenuItem->strHotKey;
 			FuncNum = PrepareHotKey(strHotKey);
 			int Offset = strHotKey.At(0)==L'&'?5:4;
-			FarUserMenuItem.strName=FormatString()<<((!strHotKey.IsEmpty() && !FuncNum)?L"&":L"")<<fmt::LeftAlign()<<fmt::Width(Offset)<<fmt::Precision(Offset)<<strHotKey;
+			FarUserMenuItem.strName=FormatString()<<((!strHotKey.IsEmpty() && !FuncNum)?L"&":L"")<<fmt::LeftAlign()<<fmt::ExactWidth(Offset)<<strHotKey;
 			FarUserMenuItem.strName+=strLabel;
 
 			if (MenuItem->Submenu)
@@ -870,7 +868,7 @@ enum EditMenuItems
 	EM_BUTTON_CANCEL,
 };
 
-INT_PTR WINAPI EditMenuDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI EditMenuDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 #if defined(PROJECT_DI_MEMOEDIT)
 	Dialog* Dlg=(Dialog*)hDlg;

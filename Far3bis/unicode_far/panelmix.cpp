@@ -609,7 +609,7 @@ const string FormatStr_Attribute(DWORD FileAttributes,int Width)
 	};
 
 	if (Width > 0)
-		strResult<<fmt::Width(Width)<<fmt::Precision(Width);
+		strResult<<fmt::ExactWidth(Width);
 
 	strResult<<OutStr;
 
@@ -679,7 +679,7 @@ const string FormatStr_DateTime(const FILETIME *FileTime,int ColumnType,unsigned
 			break;
 	}
 
-	strResult<<fmt::Width(Width)<<fmt::Precision(Width)<<strOutStr;
+	strResult<<fmt::ExactWidth(Width)<<strOutStr;
 
 	return strResult;
 }
@@ -774,7 +774,7 @@ const string FormatStr_Size(__int64 FileSize, __int64 AllocationSize, __int64 St
 					if (Opt.ShowUnknownReparsePoint)
 					{
 						FormatString strResult;
-						strResult<<L":"<<fmt::Radix(16)<<fmt::Width(8)<<fmt::Precision(8)<<ReparseTag;
+						strResult<<L":"<<fmt::Radix(16)<<fmt::ExactWidth(8)<<ReparseTag;
 						strMsg=strResult;
 						PtrName = strMsg;
 					}
@@ -798,7 +798,7 @@ const string FormatStr_Size(__int64 FileSize, __int64 AllocationSize, __int64 St
 				strStr << PtrName;
 			}
 		}
-		strResult<<fmt::Width(Width)<<fmt::Precision(Width)<<strStr;
+		strResult<<fmt::ExactWidth(Width)<<strStr;
 	}
 	else
 	{

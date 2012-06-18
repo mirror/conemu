@@ -1002,7 +1002,7 @@ void Plugin::CloseAnalyse(HANDLE hHandle)
 	}
 }
 
-HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
+HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, intptr_t Item)
 {
 	ChangePriority *ChPriority = new ChangePriority(THREAD_PRIORITY_NORMAL);
 
@@ -1048,7 +1048,7 @@ HANDLE Plugin::Open(int OpenFrom, const GUID& Guid, INT_PTR Item)
 		      {
 		        PluginHandle *hPlugin=new PluginHandle;
 		        hPlugin->InternalHandle=es.hResult;
-		        hPlugin->PluginNumber=(INT_PTR)this;
+		        hPlugin->PluginNumber=(intptr_t)this;
 		        return((HANDLE)hPlugin);
 		      }
 		      else

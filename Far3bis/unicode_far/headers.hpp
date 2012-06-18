@@ -45,7 +45,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __GNUC__
 #include <cctype>
 #include <climits>
-
+#include <stdint.h>
 #include <malloc.h>
 #endif //__GNUC__
 
@@ -178,13 +178,13 @@ inline const T&Max(const T &a, const T &b) { return a>b?a:b; }
 template <class T>
 inline const T Round(const T &a, const T &b) { return a/b+(a%b*2>b?1:0); }
 
-inline void* ToPtr(INT_PTR T){ return reinterpret_cast<void*>(T); }
+inline void* ToPtr(intptr_t T){ return reinterpret_cast<void*>(T); }
 
 template<typename T>
 inline void ClearStruct(T& s) { memset(&s, 0, sizeof(s)); }
 
 template<typename T>
-inline void ClearStruct(T* s) { T dont_instantiate_this_template_with_pointers = s; }
+inline void ClearStruct(T* s) { static_assert(sizeof(T) < 0 /* always false */, "ClearStruct template requires a reference to an object"); }
 
 template<typename T, size_t N>
 inline void ClearArray(T (&a)[N]) { memset(a, 0, sizeof(a[0])*N); }

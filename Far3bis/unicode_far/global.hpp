@@ -46,11 +46,11 @@ extern string g_strFarINI;
 extern string g_strFarPath;
 
 extern string strGlobalSearchString;
-extern int GlobalSearchCase;
-extern int GlobalSearchWholeWords; // значение "Whole words" для поиска
-extern int GlobalSearchHex; // значение "Search for hex" для поиска
+extern bool GlobalSearchCase;
+extern bool GlobalSearchWholeWords; // значение "Whole words" для поиска
+extern bool GlobalSearchHex; // значение "Search for hex" для поиска
 
-extern int GlobalSearchReverse;
+extern bool GlobalSearchReverse;
 
 extern int ScreenSaverActive;
 
@@ -105,7 +105,7 @@ extern DWORD RedrawTimeout;
 extern SYSTEM_INFO SystemInfo;
 inline bool IsPtr(const void* Address)
 {
-	return reinterpret_cast<DWORD_PTR>(Address)>=reinterpret_cast<DWORD_PTR>(SystemInfo.lpMinimumApplicationAddress) && reinterpret_cast<DWORD_PTR>(Address)<=reinterpret_cast<DWORD_PTR>(SystemInfo.lpMaximumApplicationAddress);
+	return reinterpret_cast<uintptr_t>(Address)>=reinterpret_cast<uintptr_t>(SystemInfo.lpMinimumApplicationAddress) && reinterpret_cast<uintptr_t>(Address)<=reinterpret_cast<uintptr_t>(SystemInfo.lpMaximumApplicationAddress);
 }
 
 extern FormatScreen FS;

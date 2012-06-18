@@ -197,7 +197,7 @@ void KeyBar::DisplayObject()
 			}
 		}
 
-		FS<<fmt::LeftAlign()<<fmt::Width(LabelWidth)<<fmt::Precision(LabelWidth)<<strLabel;
+		FS<<fmt::LeftAlign()<<fmt::ExactWidth(LabelWidth)<<strLabel;
 
 		if (i<KEY_COUNT-1)
 		{
@@ -211,7 +211,7 @@ void KeyBar::DisplayObject()
 	if (Width>0)
 	{
 		SetColor(COL_KEYBARTEXT);
-		FS<<fmt::Width(Width)<<L"";
+		FS<<fmt::MinWidth(Width)<<L"";
 	}
 }
 

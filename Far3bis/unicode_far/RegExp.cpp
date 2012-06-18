@@ -159,8 +159,8 @@ rechar* RegExp::charbits=(rechar*)RegExp::icharbits;
 #define ISLOWER(c) IsCharLower(c)
 #define ISUPPER(c) IsCharUpper(c)
 #define ISALPHA(c) IsCharAlpha(c)
-#define TOUPPER(c) ((rechar)(DWORD_PTR)CharUpper((LPTSTR)(DWORD_PTR)c))
-#define TOLOWER(c) ((rechar)(DWORD_PTR)CharLower((LPTSTR)(DWORD_PTR)c))
+#define TOUPPER(c) ((rechar)(intptr_t)CharUpper((LPTSTR)(intptr_t)c))
+#define TOLOWER(c) ((rechar)(intptr_t)CharLower((LPTSTR)(intptr_t)c))
 
 #else
 
@@ -2594,16 +2594,7 @@ int RegExp::InnerMatch(const prechar str,const prechar strend,PMatch match,int& 
 				}
 				case opLineEnd:
 				{
-					if (str==strend)continue;
-
-					if (str[0]==0x0d || str[0]==0x0a)
-					{
-						if (str[0]==0x0d)str++;
-
-						if (str[0]==0x0a)str++;
-
-						continue;
-					}
+					if (str==strend || str[0]==0x0d || str[0]==0x0a)continue;
 
 					break;
 				}

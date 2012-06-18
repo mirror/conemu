@@ -225,15 +225,15 @@ void Edit::DisplayObject()
 		if (Flags.Check(FEDITLINE_OVERTYPE))
 		{
 			int NewCursorSize=IsConsoleFullscreen()?
-			                  (Opt.CursorSize[3]?Opt.CursorSize[3]:99):
-					                  (Opt.CursorSize[2]?Opt.CursorSize[2]:99);
+			                  (Opt.CursorSize[3]?(int)Opt.CursorSize[3]:99):
+					                  (Opt.CursorSize[2]?(int)Opt.CursorSize[2]:99);
 			::SetCursorType(1,CursorSize==-1?NewCursorSize:CursorSize);
 		}
 		else
 {
 			int NewCursorSize=IsConsoleFullscreen()?
-			                  (Opt.CursorSize[1]?Opt.CursorSize[1]:10):
-					                  (Opt.CursorSize[0]?Opt.CursorSize[0]:10);
+			                  (Opt.CursorSize[1]?(int)Opt.CursorSize[1]:10):
+					                  (Opt.CursorSize[0]?(int)Opt.CursorSize[0]:10);
 			::SetCursorType(1,CursorSize==-1?NewCursorSize:CursorSize);
 		}
 	}
@@ -474,18 +474,18 @@ void Edit::FastShow()
 			if (Mask && *Mask)
 				OutStrLength=StrLength(RemoveTrailingSpaces(OutStr));
 
-			FS<<fmt::LeftAlign()<<fmt::Width(OutStrLength)<<fmt::Precision(OutStrLength)<<OutStr;
+			FS<<fmt::LeftAlign()<<fmt::ExactWidth(OutStrLength)<<OutStr;
 			SetColor(Color);
 			int BlankLength=EditLength-OutStrLength;
 
 			if (BlankLength > 0)
 			{
-				FS<<fmt::Width(BlankLength)<<L"";
+				FS<<fmt::MinWidth(BlankLength)<<L"";
 			}
 		}
 		else
 		{
-			FS<<fmt::LeftAlign()<<fmt::Width(EditLength)<<fmt::Precision(EditLength)<<OutStr;
+			FS<<fmt::LeftAlign()<<fmt::ExactWidth(EditLength)<<OutStr;
 		}
 	}
 	else
@@ -513,19 +513,19 @@ void Edit::FastShow()
 			if (Flags.Check(FEDITLINE_DROPDOWNBOX))
 			{
 				SetColor(SelColor);
-				FS<<fmt::Width(X2-X1+1)<<OutStr;
+				FS<<fmt::MinWidth(X2-X1+1)<<OutStr;
 			}
 			else
 				Text(OutStr);
 		}
 		else
 		{
-			FS<<fmt::Precision(TabSelStart)<<OutStr;
+			FS<<fmt::MaxWidth(TabSelStart)<<OutStr;
 			SetColor(SelColor);
 
 			if (!Flags.Check(FEDITLINE_DROPDOWNBOX))
 			{
-				FS<<fmt::Precision(TabSelEnd-TabSelStart)<<OutStr+TabSelStart;
+				FS<<fmt::MaxWidth(TabSelEnd-TabSelStart)<<OutStr+TabSelStart;
 
 				if (TabSelEnd<EditLength)
 				{
@@ -536,7 +536,7 @@ void Edit::FastShow()
 			}
 			else
 			{
-				FS<<fmt::Width(X2-X1+1)<<OutStr;
+				FS<<fmt::MinWidth(X2-X1+1)<<OutStr;
 			}
 		}
 	}
@@ -620,7 +620,7 @@ __int64 Edit::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			return (__int64)(CursorPos+1);
 		case MCODE_F_EDITOR_SEL:
 		{
-			int Action=(int)((INT_PTR)vParam);
+			int Action=(int)((intptr_t)vParam);
 
 			switch (Action)
 			{
@@ -2248,8 +2248,7 @@ int Edit::Search(const string& Str,string& ReplaceStr,int Position,int Case,int 
 			}
 
 			int found = FALSE;
-			int pos, half = 0;
-
+			int half = 0;
 			if (!Reverse)
 			{
 				if (re.SearchEx(this->Str,this->Str+Position,this->Str+StrSize,pm,n))
@@ -2257,7 +2256,7 @@ int Edit::Search(const string& Str,string& ReplaceStr,int Position,int Case,int 
 			}
 			else
 			{
-				pos = 0;
+				int pos = 0;
 				for (;;)
 				{
 					if (!re.SearchEx(this->Str,this->Str+pos,this->Str+StrSize,pm+half,n))
@@ -2300,10 +2299,9 @@ int Edit::Search(const string& Str,string& ReplaceStr,int Position,int Case,int 
 
 				if (WholeWords)
 				{
-					wchar_t ChLeft,ChRight;
 					int locResultLeft=FALSE;
 					int locResultRight=FALSE;
-					ChLeft=this->Str[I-1];
+					wchar_t ChLeft=this->Str[I-1];
 
 					if (I>0)
 						locResultLeft=(IsSpace(ChLeft) || wcschr(WordDiv(),ChLeft));
@@ -2312,7 +2310,7 @@ int Edit::Search(const string& Str,string& ReplaceStr,int Position,int Case,int 
 
 					if (I+Length<StrSize)
 					{
-						ChRight=this->Str[I+Length];
+						wchar_t ChRight=this->Str[I+Length];
 						locResultRight=(IsSpace(ChRight) || wcschr(WordDiv(),ChRight));
 					}
 					else
@@ -2434,8 +2432,6 @@ int Edit::GetTabCurPos()
 
 void Edit::SetTabCurPos(int NewPos)
 {
-	int Pos;
-
 	if (Mask && *Mask)
 	{
 		wchar_t *ShortStr=new wchar_t[StrSize+1];
@@ -2444,7 +2440,7 @@ void Edit::SetTabCurPos(int NewPos)
 			return;
 
 		xwcsncpy(ShortStr,Str,StrSize+1);
-		Pos=StrLength(RemoveTrailingSpaces(ShortStr));
+		int Pos=StrLength(RemoveTrailingSpaces(ShortStr));
 		delete[] ShortStr;
 
 		if (NewPos>Pos)
@@ -2460,6 +2456,10 @@ int Edit::RealPosToTab(int Pos)
 	return RealPosToTab(0, 0, Pos, nullptr);
 }
 
+const wchar_t* Edit::WordDiv()
+{
+	return *strWordDiv;
+}
 
 int Edit::RealPosToTab(int PrevLength, int PrevPos, int Pos, int* CorrectPos)
 {
@@ -3027,7 +3027,7 @@ void Edit::Xlat(bool All)
 		   Обрабатываем только то слово, на котором стоит курсор, или то слово, что
 		   находится левее позиции курсора на 1 символ
 		*/
-		int start=CurPos, end, StrSize=StrLength(Str);
+		int start=CurPos, StrSize=StrLength(Str);
 		bool DoXlat=true;
 
 		if (IsWordDiv(Opt.XLat.strWordDivForXlat,Str[start]))
@@ -3043,7 +3043,7 @@ void Edit::Xlat(bool All)
 				start--;
 
 			start++;
-			end=start+1;
+			int end=start+1;
 
 			while (end<StrSize && !IsWordDiv(Opt.XLat.strWordDivForXlat,Str[end]))
 				end++;
@@ -3163,9 +3163,9 @@ void EditControl::Changed(bool DelBlock)
 
 void EditControl::SetMenuPos(VMenu& menu)
 {
-	if(ScrY-Y1<Min(Opt.Dialogs.CBoxMaxHeight,menu.GetItemCount())+2 && Y1>ScrY/2)
+	if(ScrY-Y1<Min(Opt.Dialogs.CBoxMaxHeight.Get(),menu.GetItemCount())+2 && Y1>ScrY/2)
 	{
-		menu.SetPosition(X1,Max(0,Y1-1-Min(Opt.Dialogs.CBoxMaxHeight,menu.GetItemCount())-1),Min(ScrX-2,X2),Y1-1);
+		menu.SetPosition(X1,Max(0,Y1-1-Min(Opt.Dialogs.CBoxMaxHeight.Get(),menu.GetItemCount())-1),Min(ScrX-2,X2),Y1-1);
 	}
 	else
 	{
@@ -3835,18 +3835,6 @@ int EditControl::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 		return TRUE;
 	}
 	return FALSE;
-}
-
-void EditControl::EnableAC(bool Permanent)
-{
-	ACState=Permanent?true:ECFlags.Check(EC_ENABLEAUTOCOMPLETE)!=FALSE;
-	ECFlags.Set(EC_ENABLEAUTOCOMPLETE);
-}
-
-void EditControl::DisableAC(bool Permanent)
-{
-	ACState=Permanent?false:ECFlags.Check(EC_ENABLEAUTOCOMPLETE)!=FALSE;
-	ECFlags.Clear(EC_ENABLEAUTOCOMPLETE);
 }
 
 void EditControl::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)

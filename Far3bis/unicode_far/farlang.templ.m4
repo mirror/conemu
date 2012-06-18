@@ -2058,6 +2058,26 @@ upd:"ClearType friendly redraw (can be slow)"
 "Limpiar rediseño (puede ser lento)"
 "Použiť &ClearType (pomalšie)"
 
+MConfigSetConsoleIcon
+upd:"Set console icon"
+"Set console icon"
+upd:"Set icon for console window"
+upd:"Set icon for console window"
+upd:"Set icon for console window"
+upd:"Set icon for console window"
+upd:"Set icon for console window"
+upd:"Set icon for console window"
+
+MConfigSetAdminConsoleIcon
+upd:"Alternate for Administrator"
+"Alternate for Administrator"
+upd:"Alternate for Administrator"
+upd:"Alternate for Administrator"
+upd:"Alternate for Administrator"
+upd:"Alternate for Administrator"
+upd:"Alternate for Administrator"
+upd:"Alternate for Administrator"
+
 MConfigTitleAddons
 "Дополнительная информация для &заголовка окна:"
 "Far &window title addons:"
@@ -22674,14 +22694,14 @@ upd:"to process this object:"
 "spracovanie tohto objektu:"
 
 MElevationRequiredCreate
-"для создания этого объекта:"
-"to create this object:"
-upd:"to create this object:"
-upd:"to create this object:"
-upd:"to create this object:"
-upd:"to create this object:"
-"para crear este objeto:"
-"vytvorenie tohto objektu:"
+"для открытия этого объекта:"
+"to open this object:"
+upd:"to open this object:"
+upd:"to open this object:"
+upd:"to open this object:"
+upd:"to open this object:"
+upd:"to open this object:"
+upd:"to open this object:"
 
 MElevationRequiredDelete
 "для удаления этого объекта:"

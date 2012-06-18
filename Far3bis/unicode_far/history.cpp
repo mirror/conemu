@@ -51,7 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "elevation.hpp"
 #include "pathmix.hpp"
 
-History::History(enumHISTORYTYPE TypeHistory, const wchar_t *HistoryName, const int *EnableSave, bool SaveType):
+History::History(enumHISTORYTYPE TypeHistory, const wchar_t *HistoryName, const BoolOption& EnableSave, bool SaveType):
 	strHistoryName(HistoryName),
 	EnableAdd(true),
 	KeepSelectedPos(false),
@@ -341,7 +341,7 @@ int History::ProcessMenu(string &strStr, GUID* Guid, string *pstrFile, string *p
 					ListColors.ColorCount=VMENU_COLOR_COUNT;
 					ListColors.Colors=RealColors;
 					HistoryMenu.GetColors(&ListColors);
-					if(DlgProc(this,DN_CTLCOLORDLGLIST,CurItem->ID,(INT_PTR)&ListColors))
+					if(DlgProc(this,DN_CTLCOLORDLGLIST,CurItem->ID,(intptr_t)&ListColors))
 						HistoryMenu.SetColors(&ListColors);
 				}
 		*/
@@ -758,5 +758,5 @@ bool History::EqualType(int Type1, int Type2)
 
 HistoryConfig* History::HistoryCfgRef(void)
 {
-	return (*EnableSave)?HistoryCfg:HistoryCfgMem;
+	return EnableSave? HistoryCfg : HistoryCfgMem;
 }

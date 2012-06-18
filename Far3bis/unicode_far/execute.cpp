@@ -60,6 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "console.hpp"
 #include "constitle.hpp"
 #include "configdb.hpp"
+#include "mix.hpp"
 
 static const wchar_t strSystemExecutor[]=L"System.Executor";
 
@@ -878,7 +879,6 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 	DWORD dwError = 0;
 	HANDLE hProcess = nullptr;
 	LPCWSTR lpVerb = nullptr;
-	bool internal;
 
 	if (FolderRun && DirectRun)
 	{
@@ -886,15 +886,16 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 	}
 	else
 	{
+		bool internal;
 		FindModule(strNewCmdStr,strNewCmdStr,dwSubSystem,internal);
 
 		if (/*!*NewCmdPar && */ dwSubSystem == IMAGE_SUBSYSTEM_UNKNOWN)
 		{
-			DWORD Error=0, dwSubSystem2=0;
 
 			const wchar_t *ExtPtr=wcsrchr(PointToName(strNewCmdStr), L'.');
 			if (ExtPtr)
 			{
+				DWORD Error=0, dwSubSystem2=0;
 				if (!(!StrCmpI(ExtPtr,L".exe") || !StrCmpI(ExtPtr,L".com") || IsBatchExtType(ExtPtr)))
 				{
 					lpVerb=GetShellAction(strNewCmdStr,dwSubSystem2,Error);
@@ -1079,7 +1080,7 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 
 			if (AlwaysWaitFinish || !SeparateWindow)
 			{
-				if (!Opt.ConsoleDetachKey)
+				if (Opt.ConsoleDetachKey.IsEmpty())
 				{
 					WaitForSingleObject(hProcess,INFINITE);
 				}
@@ -1095,7 +1096,7 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 					INPUT_RECORD ir[256];
 					size_t rd;
 					int vkey=0,ctrl=0;
-					TranslateKeyToVK(Opt.ConsoleDetachKey,vkey,ctrl,nullptr);
+					TranslateKeyToVK(KeyNameToKey(Opt.ConsoleDetachKey),vkey,ctrl,nullptr);
 					int alt=ctrl&(PKF_ALT|PKF_RALT);
 					int shift=ctrl&PKF_SHIFT;
 					ctrl=ctrl&(PKF_CONTROL|PKF_RCONTROL);
@@ -1125,14 +1126,7 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 									        (ctrl ?bCtrl:!bCtrl) &&
 									        (shift ?bShift:!bShift))
 									{
-										HICON hSmallIcon=nullptr,hLargeIcon=nullptr;
-										HWND hWnd = Console.GetWindow();
-
-										if (hWnd)
-										{
-											hSmallIcon = CopyIcon((HICON)SendMessage(hWnd,WM_SETICON,0,(LPARAM)0));
-											hLargeIcon = CopyIcon((HICON)SendMessage(hWnd,WM_SETICON,1,(LPARAM)0));
-										}
+										ConsoleIcons.restorePreviousIcons();
 
 										Console.ReadInput(ir, 256, rd);
 										/*
@@ -1147,6 +1141,7 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 										Console.Free();
 										Console.Allocate();
 
+										HWND hWnd = Console.GetWindow();
 										if (hWnd)   // если окно имело HOTKEY, то старое должно его забыть.
 											SendMessage(hWnd,WM_SETHOTKEY,0,(LPARAM)0);
 
@@ -1156,21 +1151,7 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 										Sleep(100);
 										InitConsole(0);
 
-										hWnd = Console.GetWindow();
-
-										if (hWnd)
-										{
-											if (Opt.SmallIcon)
-											{
-												ExtractIconEx(g_strFarModuleName,0,&hLargeIcon,&hSmallIcon,1);
-											}
-
-											if (hLargeIcon )
-												SendMessage(hWnd,WM_SETICON,1,(LPARAM)hLargeIcon);
-
-											if (hSmallIcon )
-												SendMessage(hWnd,WM_SETICON,0,(LPARAM)hSmallIcon);
-										}
+										ConsoleIcons.setFarIcons();
 
 										stop=1;
 										break;
@@ -1247,11 +1228,11 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 		SetMessageHelp(L"ErrCannotExecute");
 		if(DirectRun)
 		{
-			Message(MSG_WARNING|MSG_ERRORTYPE, 1,MSG(MError), MSG(MCannotExecute), strNewCmdStr, MSG(MOk));
+			Message(MSG_WARNING|MSG_ERRORTYPE|MSG_INSERT_STR2, 1,MSG(MError), MSG(MCannotExecute), strNewCmdStr, MSG(MOk));
 		}
 		else
 		{
-			Message(MSG_WARNING|MSG_ERRORTYPE, 1, MSG(MError), MSG(MCannotInvokeComspec), strComspec, MSG(MCheckComspecVar), MSG(MOk));
+			Message(MSG_WARNING|MSG_ERRORTYPE|MSG_INSERT_STR2, 1, MSG(MError), MSG(MCannotInvokeComspec), strComspec, MSG(MCheckComspecVar), MSG(MOk));
 		}
 	}
 
@@ -1306,9 +1287,10 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 
 int CommandLine::ExecString(const string& CmdLine, bool AlwaysWaitFinish, bool SeparateWindow, bool DirectRun, bool WaitForIdle, bool Silent, bool RunAs)
 {
-	CmdStr.DisableAC();
-	SetString(CmdLine);
-	CmdStr.RevertAC();
+	{
+		SetAutocomplete disable(&CmdStr);
+		SetString(CmdLine);
+	}
 
 	LastCmdPartLength=-1;
 
@@ -1326,7 +1308,7 @@ int CommandLine::ExecString(const string& CmdLine, bool AlwaysWaitFinish, bool S
 		{
 			//CmdStr.SetString(L"");
 			GotoXY(X1,Y1);
-			FS<<fmt::Width(X2-X1+1)<<L"";
+			FS<<fmt::MinWidth(X2-X1+1)<<L"";
 			Show();
 			ScrBuf.Flush();
 		}
@@ -1818,7 +1800,7 @@ int CommandLine::ProcessOSCommands(const string& CmdLine, bool SeparateWindow, b
 		{
 			//CmdStr.SetString(L"");
 			GotoXY(X1,Y1);
-			FS<<fmt::Width(X2-X1+1)<<L"";
+			FS<<fmt::MinWidth(X2-X1+1)<<L"";
 			Show();
 			return TRUE;
 		}
@@ -1901,7 +1883,7 @@ bool CommandLine::IntChDir(const string& CmdLine,int ClosePanel,bool Selent)
 	{
 		if (Opt.Exec.UseHomeDir && !Opt.Exec.strHomeDir.IsEmpty())
 		{
-			string strTemp=Opt.Exec.strHomeDir;
+			string strTemp=Opt.Exec.strHomeDir.Get();
 
 			if (strExpandedDir.At(1))
 			{

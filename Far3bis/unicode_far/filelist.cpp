@@ -367,7 +367,6 @@ void FileList::SortFileList(int KeepPosition)
 int _cdecl SortList(const void *el1,const void *el2)
 {
 	int RetCode;
-	__int64 RetCode64;
 	const wchar_t *Ext1=nullptr,*Ext2=nullptr;
 	FileListItem *SPtr1,*SPtr2;
 	SPtr1=((FileListItem **)el1)[0];
@@ -423,6 +422,7 @@ int _cdecl SortList(const void *el1,const void *el2)
 	// НЕ СОРТИРУЕМ КАТАЛОГИ В РЕЖИМЕ "ПО РАСШИРЕНИЮ" (Опционально!)
 	if (!(ListSortMode == BY_EXT && !Opt.SortFolderExt && ((SPtr1->FileAttr & FILE_ATTRIBUTE_DIRECTORY) && (SPtr2->FileAttr & FILE_ATTRIBUTE_DIRECTORY))))
 	{
+		__int64 RetCode64;
 		switch (ListSortMode)
 		{
 			case BY_NAME:
@@ -1571,26 +1571,13 @@ int FileList::ProcessKey(int Key)
 
 				if (Key==KEY_SHIFTF4)
 				{
-					static string strLastFileName;
-
 					do
 					{
-						if (!dlgOpenEditor(strLastFileName, codepage))
+						if (!dlgOpenEditor(strFileName, codepage))
 							return FALSE;
 
-						/*if (!GetString(MSG(MEditTitle),
-						               MSG(MFileToEdit),
-						               L"NewEdit",
-						               strLastFileName,
-						               strLastFileName,
-						               512, //BUGBUG
-						               L"Editor",
-						               FIB_BUTTONS|FIB_EXPANDENV|FIB_EDITPATH|FIB_ENABLEEMPTY))
-						  return FALSE;*/
-
-						if (!strLastFileName.IsEmpty())
+						if (!strFileName.IsEmpty())
 						{
-							strFileName = strLastFileName;
 							Unquote(strFileName);
 							ConvertNameToShort(strFileName,strShortFileName);
 
@@ -1718,7 +1705,6 @@ int FileList::ProcessKey(int Key)
 				{
 					if (Edit)
 					{
-						int editorExitCode;
 						int EnableExternal=(((Key==KEY_F4 || Key==KEY_SHIFTF4) && Opt.EdOpt.UseExternalEditor) ||
 						                    ((Key==KEY_ALTF4 || Key==KEY_RALTF4) && !Opt.EdOpt.UseExternalEditor)) && !Opt.strExternalEditor.IsEmpty();
 						/* $ 02.08.2001 IS обработаем ассоциации для alt-f4 */
@@ -1741,7 +1727,6 @@ int FileList::ProcessKey(int Key)
 							{
 								RefreshedPanel=FrameManager->GetCurrentFrame()->GetType()==MODALTYPE_EDITOR?FALSE:TRUE;
 								FileEditor ShellEditor(strFileName,codepage,(Key==KEY_SHIFTF4?FFILEEDIT_CANNEWFILE:0)|FFILEEDIT_DISABLEHISTORY,-1,-1,&strPluginData);
-								editorExitCode=ShellEditor.GetExitCode();
 								ShellEditor.SetDynamicallyBorn(false);
 								FrameManager->EnterModalEV();
 								FrameManager->ExecuteModal();//OT
@@ -1759,8 +1744,7 @@ int FileList::ProcessKey(int Key)
 
 								if (ShellEditor)
 								{
-									editorExitCode=ShellEditor->GetExitCode();
-
+									int editorExitCode=ShellEditor->GetExitCode();
 									if (editorExitCode == XC_LOADING_INTERRUPTED || editorExitCode == XC_OPEN_ERROR)
 									{
 										delete ShellEditor;
@@ -1962,7 +1946,7 @@ int FileList::ProcessKey(int Key)
 				int OldFileCount=FileCount,OldCurFile=CurFile;
 				assert(CurFile<FileCount);
 				int OldSelection=ListData[CurFile]->Selected;
-				int ToPlugin=0;
+
 				int RealName=PanelMode!=PLUGIN_PANEL;
 				ReturnCurrentFile=TRUE;
 
@@ -1975,6 +1959,7 @@ int FileList::ProcessKey(int Key)
 
 				if (RealName)
 				{
+					int ToPlugin=0;
 					ShellCopy ShCopy(this,Key==KEY_SHIFTF6,FALSE,TRUE,TRUE,ToPlugin,nullptr);
 				}
 				else
@@ -2061,7 +2046,7 @@ int FileList::ProcessKey(int Key)
 					PluginDelete();
 				else
 				{
-					int SaveOpt=Opt.DeleteToRecycleBin;
+					bool SaveOpt=Opt.DeleteToRecycleBin;
 
 					if (Key==KEY_SHIFTDEL || Key==KEY_SHIFTNUMDEL || Key==KEY_SHIFTDECIMAL)
 						Opt.DeleteToRecycleBin=0;
@@ -2080,18 +2065,18 @@ int FileList::ProcessKey(int Key)
 		case KEY_MSWHEEL_UP:
 		case(KEY_MSWHEEL_UP | KEY_ALT):
 		case(KEY_MSWHEEL_UP | KEY_RALT):
-			Scroll(Key & (KEY_ALT|KEY_RALT)?-1:-Opt.MsWheelDelta);
+			Scroll(Key & (KEY_ALT|KEY_RALT)?-1:(int)-Opt.MsWheelDelta);
 			return TRUE;
 		case KEY_MSWHEEL_DOWN:
 		case(KEY_MSWHEEL_DOWN | KEY_ALT):
 		case(KEY_MSWHEEL_DOWN | KEY_RALT):
-			Scroll(Key & (KEY_ALT|KEY_RALT)?1:Opt.MsWheelDelta);
+			Scroll(Key & (KEY_ALT|KEY_RALT)?1:(int)Opt.MsWheelDelta);
 			return TRUE;
 		case KEY_MSWHEEL_LEFT:
 		case(KEY_MSWHEEL_LEFT | KEY_ALT):
 		case(KEY_MSWHEEL_LEFT | KEY_RALT):
 		{
-			int Roll = Key & (KEY_ALT|KEY_RALT)?1:Opt.MsHWheelDelta;
+			int Roll = Key & (KEY_ALT|KEY_RALT)?1:(int)Opt.MsHWheelDelta;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_LEFT);
@@ -2102,7 +2087,7 @@ int FileList::ProcessKey(int Key)
 		case(KEY_MSWHEEL_RIGHT | KEY_ALT):
 		case(KEY_MSWHEEL_RIGHT | KEY_RALT):
 		{
-			int Roll = Key & (KEY_ALT|KEY_RALT)?1:Opt.MsHWheelDelta;
+			int Roll = Key & (KEY_ALT|KEY_RALT)?1:(int)Opt.MsHWheelDelta;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_RIGHT);
@@ -2383,7 +2368,7 @@ int FileList::ProcessKey(int Key)
 			//вызовем EMenu если он есть
 			if (CtrlObject->Plugins->FindPlugin(Opt.KnownIDs.Emenu))
 			{
-				CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(static_cast<INT_PTR>(1))); // EMenu Plugin :-)
+				CtrlObject->Plugins->CallPlugin(Opt.KnownIDs.Emenu, OPEN_FILEPANEL, reinterpret_cast<void*>(static_cast<intptr_t>(1))); // EMenu Plugin :-)
 			}
 			return TRUE;
 		}
@@ -3911,7 +3896,6 @@ long FileList::SelectFiles(int Mode,const wchar_t *Mask)
 	   диктуемая CmpName.
 	*/
 	string strMask=L"*.*", strRawMask;
-	int Selection=0,I;
 	bool WrapBrackets=false; // говорит о том, что нужно взять кв.скобки в скобки
 
 	if (CurFile>=FileCount)
@@ -4042,7 +4026,7 @@ long FileList::SelectFiles(int Mode,const wchar_t *Mask)
 
 	if (bUseFilter || FileMask.Set(strMask, FMF_SILENT)) // Скомпилируем маски файлов и работаем
 	{                                                // дальше в зависимости от успеха компиляции
-		for (I=0; I < FileCount; I++)
+		for (int I=0; I < FileCount; I++)
 		{
 			CurPtr=ListData[I];
 			int Match=FALSE;
@@ -4059,6 +4043,7 @@ long FileList::SelectFiles(int Mode,const wchar_t *Mask)
 
 			if (Match)
 			{
+				int Selection = 0;
 				switch (Mode)
 				{
 					case SELECT_ADD:
@@ -4217,15 +4202,21 @@ void FileList::CompareDir()
 	// каждый элемент активной панели...
 	for (int I=0; I < FileCount; I++)
 	{
+		if ((ListData[I]->FileAttr & FILE_ATTRIBUTE_DIRECTORY) != 0)
+			continue;
+
 		// ...сравниваем с элементом пассивной панели...
 		for (int J=0; J < Another->FileCount; J++)
 		{
-			int Cmp=0;
+			if ((Another->ListData[J]->FileAttr & FILE_ATTRIBUTE_DIRECTORY) != 0)
+				continue;
+
 			PtrTempName1=PointToName(ListData[I]->strName);
 			PtrTempName2=PointToName(Another->ListData[J]->strName);
 
 			if (!StrCmpI(PtrTempName1,PtrTempName2))
 			{
+				int Cmp=0;
 				if (CompareFatTime)
 				{
 					WORD DosDate,DosTime,AnotherDosDate,AnotherDosTime;

@@ -102,7 +102,7 @@ Editor::Editor(ScreenObject *pOwner,bool DialogUsed):
 {
 	_KEYMACRO(SysLog(L"Editor::Editor()"));
 	_KEYMACRO(SysLog(1));
-	Opt.EdOpt.CopyTo(EdOpt);
+	EdOpt = Opt.EdOpt;
 	SetOwner(pOwner);
 
 	if (DialogUsed)
@@ -479,7 +479,6 @@ int Editor::BlockEnd2NumLine(int *Pos)
 
 	if (eBlock)
 	{
-		int StartSel, EndSel;
 		Edit *eLine=eBlock;
 		iLine=BlockStart2NumLine(nullptr); // получили строку начала блока
 
@@ -497,6 +496,7 @@ int Editor::BlockEnd2NumLine(int *Pos)
 		{
 			while (eLine)  // поиск строки, содержащую конец блока
 			{
+				int StartSel, EndSel;
 				eLine->GetSelection(StartSel,EndSel);
 
 				if (EndSel == -1) // это значит, что конец блока "за строкой"
@@ -596,7 +596,7 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 			__int64 Ret=-1;
 			int Val[1];
 			EditorBookMarks ebm={};
-			int iMode=(int)((INT_PTR)vParam);
+			int iMode=(int)((intptr_t)vParam);
 
 			switch (iMode)
 			{
@@ -619,7 +619,7 @@ __int64 Editor::VMProcess(int OpCode,void *vParam,__int64 iParam)
 		{
 			int iLine;
 			int iPos;
-			int Action=(int)((INT_PTR)vParam);
+			int Action=(int)((intptr_t)vParam);
 
 			switch (Action)
 			{
@@ -1878,7 +1878,7 @@ int Editor::ProcessKey(int Key)
 		case(KEY_MSWHEEL_UP | KEY_ALT):
 		case(KEY_MSWHEEL_UP | KEY_RALT):
 		{
-			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:Opt.MsWheelDeltaEdit;
+			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:(int)Opt.MsWheelDeltaEdit;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_CTRLUP);
@@ -1889,7 +1889,7 @@ int Editor::ProcessKey(int Key)
 		case(KEY_MSWHEEL_DOWN | KEY_ALT):
 		case(KEY_MSWHEEL_DOWN | KEY_RALT):
 		{
-			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:Opt.MsWheelDeltaEdit;
+			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:(int)Opt.MsWheelDeltaEdit;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_CTRLDOWN);
@@ -1900,7 +1900,7 @@ int Editor::ProcessKey(int Key)
 		case(KEY_MSWHEEL_LEFT | KEY_ALT):
 		case(KEY_MSWHEEL_LEFT | KEY_RALT):
 		{
-			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:Opt.MsHWheelDeltaEdit;
+			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:(int)Opt.MsHWheelDeltaEdit;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_LEFT);
@@ -1911,7 +1911,7 @@ int Editor::ProcessKey(int Key)
 		case(KEY_MSWHEEL_RIGHT | KEY_ALT):
 		case(KEY_MSWHEEL_RIGHT | KEY_RALT):
 		{
-			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:Opt.MsHWheelDeltaEdit;
+			int Roll = (Key & (KEY_ALT|KEY_RALT))?1:(int)Opt.MsHWheelDeltaEdit;
 
 			for (int i=0; i<Roll; i++)
 				ProcessKey(KEY_RIGHT);
@@ -2134,7 +2134,7 @@ int Editor::ProcessKey(int Key)
 		case KEY_RALTF7:
 		{
 			TurnOffMarkingBlock();
-			int LastSearchReversePrev = LastSearchReverse;
+			bool LastSearchReversePrev = LastSearchReverse;
 			LastSearchReverse = !LastSearchReverse;
 			Search(TRUE);
 			LastSearchReverse = LastSearchReversePrev;
@@ -2737,8 +2737,8 @@ int Editor::ProcessKey(int Key)
 					  - CTRL-DEL в начале строки при выделенном блоке и
 					    включенном EditorDelRemovesBlocks
 					*/
-					int save=EdOpt.DelRemovesBlocks;
-					EdOpt.DelRemovesBlocks=0;
+					bool save=EdOpt.DelRemovesBlocks;
+					EdOpt.DelRemovesBlocks=false;
 					int ret=ProcessKey(KEY_DEL);
 					EdOpt.DelRemovesBlocks=save;
 					return ret;
@@ -3684,7 +3684,8 @@ BOOL Editor::Search(int Next)
 	static string strLastReplaceStr;
 	string strMsgStr;
 	const wchar_t *TextHistoryName=L"SearchText",*ReplaceHistoryName=L"ReplaceText";
-	int CurPos,Case,WholeWords,ReverseSearch,SelectFound,Regexp,Match,NewNumLine,UserBreak;
+	int CurPos, NewNumLine;
+	bool Case,WholeWords,ReverseSearch,SelectFound,Regexp,Match,UserBreak;
 
 	if (Next && strLastSearchStr.IsEmpty())
 		return TRUE;
@@ -3841,12 +3842,12 @@ BOOL Editor::Search(int Next)
 					CurPos = CurPtr->GetCurPos();
 
 					MenuItemEx Item = {};
-					Item.strName = FormatString() << fmt::LeftAlign() << fmt::Width(11) << fmt::Precision(11) << fmt::FillChar(L' ') << (FormatString() << NewNumLine+1 << L':' << CurPos+1) << BoxSymbols[BS_V1] << CurPtr->GetStringAddr() + CurPos;
+					Item.strName = FormatString() << fmt::LeftAlign() << fmt::ExactWidth(11) << fmt::FillChar(L' ') << (FormatString() << NewNumLine+1 << L':' << CurPos+1) << BoxSymbols[BS_V1] << CurPtr->GetStringAddr() + CurPos;
 					FindCoord coord = {(UINT)NewNumLine, (UINT)CurPos, (UINT)SearchLength};
 					Item.UserData = &coord;
 					Item.UserDataSize = sizeof(coord);
 					FindAllList.AddItem(&Item);
-					CurPos+=SearchLength;
+					CurPos += SearchLength? SearchLength : 1;
 					if(NewNumLine != LastCheckedLine)
 					{
 						LastCheckedLine = NewNumLine;
@@ -4261,7 +4262,7 @@ void Editor::Paste(const wchar_t *Src)
 		   добавлена в начало строки при автоотступе) в пробелы.
 		*/
 		int StartPos=CurLine->GetCurPos();
-		int oldAutoIndent=EdOpt.AutoIndent;
+		bool oldAutoIndent=EdOpt.AutoIndent;
 
 		for (int I=0; ClipText[I];)
 		{
@@ -4547,7 +4548,7 @@ void Editor::DeleteBlock()
 		if (DeleteNext)
 		{
 			const wchar_t *NextStr,*EndSeq;
-			int NextLength,NextStartSel,NextEndSel;
+			int NextStartSel,NextEndSel;
 			CurPtr->m_next->GetSelection(NextStartSel,NextEndSel);
 
 			if (NextStartSel==-1)
@@ -4557,6 +4558,7 @@ void Editor::DeleteBlock()
 				EndSel=-1;
 			else
 			{
+				int NextLength;
 				CurPtr->m_next->GetBinaryString(&NextStr,&EndSeq,NextLength);
 				NextLength-=NextEndSel;
 
@@ -4665,7 +4667,7 @@ void Editor::UnmarkEmptyBlock()
 
 	if (BlockStart || VBlockStart) // присутствует выделение
 	{
-		int Lines=0,StartSel,EndSel;
+		int Lines=0;
 		Edit *Block=BlockStart;
 
 		if (VBlockStart)
@@ -4675,6 +4677,7 @@ void Editor::UnmarkEmptyBlock()
 		}
 		else while (Block) // пробегаем по всем выделенным строкам
 			{
+				int StartSel,EndSel;
 				Block->GetRealSelection(StartSel,EndSel);
 
 				if (StartSel==-1)
@@ -6248,11 +6251,11 @@ int Editor::EditorControl(int Command,void *Param)
 						if (espar->wszParam && espar->Size)
 							xwcsncpy(espar->wszParam,EdOpt.strWordDiv,espar->Size);
 
-						rc=(int)EdOpt.strWordDiv.GetLength()+1;
+						rc=(int)EdOpt.strWordDiv.Get().GetLength()+1;
 						break;
 					case ESPT_SETWORDDIV:
 						_ECTLLOG(SysLog(L"  wszParam    =[%s]",espar->wszParam));
-						SetWordDiv((!espar->wszParam || !*espar->wszParam)?Opt.strWordDiv.CPtr():espar->wszParam);
+						SetWordDiv((!espar->wszParam || !*espar->wszParam)?Opt.strWordDiv:static_cast<const wchar_t*>(espar->wszParam));
 						break;
 					case ESPT_TABSIZE:
 						_ECTLLOG(SysLog(L"  iParam      =%d",espar->iParam));
@@ -6264,11 +6267,11 @@ int Editor::EditorControl(int Command,void *Param)
 						break;
 					case ESPT_AUTOINDENT:
 						_ECTLLOG(SysLog(L"  iParam      =%s",espar->iParam?L"On":L"Off"));
-						SetAutoIndent(espar->iParam);
+						SetAutoIndent(espar->iParam != 0);
 						break;
 					case ESPT_CURSORBEYONDEOL:
 						_ECTLLOG(SysLog(L"  iParam      =%s",espar->iParam?L"On":L"Off"));
-						SetCursorBeyondEOL(espar->iParam);
+						SetCursorBeyondEOL(espar->iParam != 0);
 						break;
 					case ESPT_CHARCODEBASE:
 						_ECTLLOG(SysLog(L"  iParam      =%s",(!espar->iParam?L"0 (Oct)":(espar->iParam==1?L"1 (Dec)":(espar->iParam==2?L"2 (Hex)":L"?????")))));
@@ -6730,10 +6733,10 @@ Edit * Editor::GetStringByNumber(int DestLine)
 		return CurLine;
 	}
 
-	if (DestLine>NumLastLine)
+	if (DestLine>=NumLastLine)
 		return nullptr;
 
-	if(DestLine==0 || DestLine==NumLastLine)
+	if(DestLine==0 || DestLine==(NumLastLine-1))
 	{
 		if(DestLine==0)
 		{
@@ -6850,7 +6853,6 @@ void Editor::BeginVBlockMarking()
 void Editor::AdjustVBlock(int PrevX)
 {
 	int x=GetLineCurPos();
-	int c2;
 
 	//_D(SysLog(L"AdjustVBlock, x=%i,   vblock is VBlockY=%i:%i, VBlockX=%i:%i, PrevX=%i",x,VBlockY,VBlockSizeY,VBlockX,VBlockSizeX,PrevX));
 	if (x==VBlockX+VBlockSizeX)   // ничего не случилось, никаких табуляций нет
@@ -6863,7 +6865,7 @@ void Editor::AdjustVBlock(int PrevX)
 	}
 	else if (x<VBlockX)   // курсор убежал за начало блока
 	{
-		c2=VBlockX;
+		int c2=VBlockX;
 
 		if (PrevX>VBlockX)      // сдвигались вправо, а пришли влево
 		{
@@ -6955,7 +6957,7 @@ void Editor::Xlat()
 		else
 		{
 			wchar_t *Str=CurLine->Str;
-			int start=CurLine->GetCurPos(), end, StrSize=CurLine->GetLength();//StrLength(Str);
+			int start=CurLine->GetCurPos(), StrSize=CurLine->GetLength();//StrLength(Str);
 			// $ 10.12.2000 IS
 			//   Обрабатываем только то слово, на котором стоит курсор, или то слово,
 			//   что находится левее позиции курсора на 1 символ
@@ -6974,7 +6976,7 @@ void Editor::Xlat()
 					start--;
 
 				start++;
-				end=start+1;
+				int end=start+1;
 
 				while (end<StrSize && !IsWordDiv(Opt.XLat.strWordDivForXlat,Str[end]))
 					end++;
@@ -7047,7 +7049,7 @@ void Editor::SetConvertTabs(int NewMode)
 	}
 }
 
-void Editor::SetDelRemovesBlocks(int NewMode)
+void Editor::SetDelRemovesBlocks(bool NewMode)
 {
 	if (NewMode!=EdOpt.DelRemovesBlocks)
 	{
@@ -7075,7 +7077,7 @@ void Editor::SetShowWhiteSpace(int NewMode)
 	}
 }
 
-void Editor::SetPersistentBlocks(int NewMode)
+void Editor::SetPersistentBlocks(bool NewMode)
 {
 	if (NewMode!=EdOpt.PersistentBlocks)
 	{
@@ -7091,7 +7093,7 @@ void Editor::SetPersistentBlocks(int NewMode)
 }
 
 //     "Курсор за пределами строки"
-void Editor::SetCursorBeyondEOL(int NewMode)
+void Editor::SetCursorBeyondEOL(bool NewMode)
 {
 	if (NewMode!=EdOpt.CursorBeyondEOL)
 	{
@@ -7154,7 +7156,7 @@ void Editor::EditorShowMsg(const wchar_t *Title,const wchar_t *Msg, const wchar_
 			wmemset(Progress,BoxSymbols[BS_X_DB],CurPos);
 			wmemset(Progress+(CurPos),BoxSymbols[BS_X_B0],Length-CurPos);
 			strProgress.ReleaseBuffer(Length);
-			strProgress+=FormatString()<<L" "<<fmt::Width(PercentLength)<<strPercent<<L"%";
+			strProgress+=FormatString()<<L" "<<fmt::MinWidth(PercentLength)<<strPercent<<L"%";
 		}
 
 		TBC.SetProgressValue(Percent,100);
@@ -7165,14 +7167,14 @@ void Editor::EditorShowMsg(const wchar_t *Title,const wchar_t *Msg, const wchar_
 	preRedrawItem.Param.Param1=(void *)Title;
 	preRedrawItem.Param.Param2=(void *)Msg;
 	preRedrawItem.Param.Param3=(void *)Name;
-	preRedrawItem.Param.Param4=(void *)(INT_PTR)(Percent);
+	preRedrawItem.Param.Param4=(void *)(intptr_t)(Percent);
 	PreRedraw.SetParam(preRedrawItem.Param);
 }
 
 void Editor::PR_EditorShowMsg()
 {
 	PreRedrawItem preRedrawItem=PreRedraw.Peek();
-	Editor::EditorShowMsg((wchar_t*)preRedrawItem.Param.Param1,(wchar_t*)preRedrawItem.Param.Param2,(wchar_t*)preRedrawItem.Param.Param3,(int)(INT_PTR)preRedrawItem.Param.Param4);
+	Editor::EditorShowMsg((wchar_t*)preRedrawItem.Param.Param1,(wchar_t*)preRedrawItem.Param.Param2,(wchar_t*)preRedrawItem.Param.Param3,(int)(intptr_t)preRedrawItem.Param.Param4);
 }
 
 

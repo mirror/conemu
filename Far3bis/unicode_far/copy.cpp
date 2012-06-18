@@ -78,7 +78,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /* Общее время ожидания пользователя */
 extern long WaitUserTime;
-/* Длф того, что бы время при одижании пользователя тикало, а remaining/speed нет */
+/* Для того, что бы время при одижании пользователя тикало, а remaining/speed нет */
 static long OldCalcTime;
 
 #define SDDATA_SIZE   64*1024
@@ -220,7 +220,7 @@ static void GetTimeText(DWORD Time,string &strTimeText)
 	Sec-=(Min*60);
 	DWORD Hour=Min/60;
 	Min-=(Hour*60);
-	strTimeText.Format(L"%02u:%02u:%02u",Hour,Min,Sec);
+	strTimeText = FormatString() << fmt::ExactWidth(2) << fmt::FillChar(L'0') << Hour << ":" << fmt::ExactWidth(2) << fmt::FillChar(L'0') << Min << ":" << fmt::ExactWidth(2) << fmt::FillChar(L'0') << Sec;
 }
 
 bool CopyProgress::Timer()
@@ -280,7 +280,7 @@ void CopyProgress::SetScanName(const wchar_t *Name)
 	}
 
 	GotoXY(Rect.Left+5,Rect.Top+3);
-	FS<<fmt::LeftAlign()<<fmt::Width(Rect.Right-Rect.Left-9)<<fmt::Precision(Rect.Right-Rect.Left-9)<<Name;
+	FS<<fmt::LeftAlign()<<fmt::ExactWidth(Rect.Right-Rect.Left-9)<<Name;
 	Flush();
 }
 
@@ -364,15 +364,24 @@ void CopyProgress::SetNames(const wchar_t *Src,const wchar_t *Dst)
 		CreateBackground();
 	}
 
+	if (Time)
+	{
+		if (!ShowTotalCopySize || 0 == TotalFiles)
+		{
+			CopyStartTime = clock();
+			WaitUserTime = OldCalcTime = 0;
+		}
+	}
+
 	const int NameWidth = Rect.Right-Rect.Left-9;
 	string tmp(Src);
 	TruncPathStr(tmp, NameWidth);
 	strSrc.Clear();
-	strSrc<<fmt::LeftAlign()<<fmt::Width(NameWidth)<<fmt::Precision(NameWidth)<<tmp;
+	strSrc<<fmt::LeftAlign()<<fmt::ExactWidth(NameWidth)<<tmp;
 	tmp = Dst;
 	TruncPathStr(tmp, NameWidth);
 	strDst.Clear();
-	strDst<<fmt::LeftAlign()<<fmt::Width(NameWidth)<<fmt::Precision(NameWidth)<<tmp;
+	strDst<<fmt::LeftAlign()<<fmt::ExactWidth(NameWidth)<<tmp;
 
 	if (Total)
 	{
@@ -427,7 +436,7 @@ void CopyProgress::SetProgress(bool TotalProgress,UINT64 CompletedSize,UINT64 To
 	Percents=ToPercent64(CompletedSize,TotalSize);
 	FormatString strPercents;
 	Text(BarCoord.X,BarCoord.Y,Color,Bar);
-	Text(static_cast<int>(BarCoord.X+BarLength),BarCoord.Y,Color,FormatString()<<fmt::Width(4)<<Percents<<L"%");
+	Text(static_cast<int>(BarCoord.X+BarLength),BarCoord.Y,Color,FormatString()<<fmt::MinWidth(4)<<Percents<<L"%");
 
 	if (Time&&(!Total||TotalProgress))
 	{
@@ -468,9 +477,9 @@ void CopyProgress::SetProgress(bool TotalProgress,UINT64 CompletedSize,UINT64 To
 			}
 			;
 			string tmp[3];
-			tmp[0].Format(L"%8.8s", strWorkTimeStr.CPtr());
-			tmp[1].Format(L"%8.8s", strTimeLeftStr.CPtr());
-			tmp[2].Format(L"%8.8s", strSpeed.CPtr());
+			tmp[0] = FormatString() << fmt::ExactWidth(8) << strWorkTimeStr;
+			tmp[1] = FormatString() << fmt::ExactWidth(8) << strTimeLeftStr;
+			tmp[2] = FormatString() << fmt::ExactWidth(8) << strSpeed;
 			strTime = LangString(MCopyTimeInfo) << tmp[0] << tmp[1] << tmp[2];
 		}
 
@@ -619,7 +628,7 @@ enum
 	DM_SWITCHRO = DM_USER+2,
 };
 
-INT_PTR WINAPI CopyDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI CopyDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 
 	CopyDlgParam *DlgParam=(CopyDlgParam *)SendDlgMessage(hDlg,DM_GETDLGDATA,0,0);
@@ -648,7 +657,7 @@ INT_PTR WINAPI CopyDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		{
 			if (Param1==ID_SC_USEFILTER) // "Use filter"
 			{
-				UseFilter=static_cast<int>(reinterpret_cast<INT_PTR>(Param2));
+				UseFilter=static_cast<int>(reinterpret_cast<intptr_t>(Param2));
 				return TRUE;
 			}
 
@@ -839,7 +848,6 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
                      int &ToPlugin,          // =?
                      const wchar_t* PluginDestPath,
                      bool ToSubdir):
-	sddata(nullptr),
 	CopyBuffer(nullptr),
 	RPT(RP_EXACTCOPY)
 {
@@ -864,7 +872,6 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 	IconicState=IsIconic(Console.GetWindow());
 	// Создадим объект фильтра
 	Filter=new FileFilter(SrcPanel, FFT_COPY);
-	sddata=new char[SDDATA_SIZE];
 	// $ 26.05.2001 OT Запретить перерисовку панелей во время копирования
 	_tran(SysLog(L"call (*FrameManager)[0]->LockRefresh()"));
 	(*FrameManager)[0]->Lock();
@@ -1291,7 +1298,7 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 				strCopyDlgValue = CopyDlg[ID_SC_TARGETEDIT].strData;
 				if(!Move)
 				{
-					Opt.CMOpt.MultiCopy=CopyDlg[ID_SC_MULTITARGET].Selected;
+					Opt.CMOpt.MultiCopy=CopyDlg[ID_SC_MULTITARGET].Selected == BSTATE_CHECKED;
 				}
 
 				if (!CopyDlg[ID_SC_MULTITARGET].Selected || !wcspbrk(strCopyDlgValue,L",;")) // отключено multi*
@@ -1471,10 +1478,6 @@ ShellCopy::ShellCopy(Panel *SrcPanel,        // исходная панель (активная)
 			DestList.Reset();
 			TotalFiles=0;
 			TotalCopySize=TotalCopiedSize=TotalSkippedSize=0;
-
-			// Запомним время начала
-			CopyStartTime = clock();
-			WaitUserTime = OldCalcTime = 0;
 
 			if (CountTarget > 1)
 				Move=0;
@@ -1686,9 +1689,6 @@ ShellCopy::~ShellCopy()
 	(*FrameManager)[0]->Unlock();
 	(*FrameManager)[0]->Refresh();
 
-	if (sddata)
-		delete[] sddata;
-
 	if (Filter) // Уничтожим объект фильтра
 		delete Filter;
 
@@ -1708,10 +1708,9 @@ COPY_CODES ShellCopy::CopyFileTree(const string& Dest)
 	//SaveScreen SaveScr;
 	DWORD DestAttr=INVALID_FILE_ATTRIBUTES;
 	string strSelName, strSelShortName;
-	size_t Length;
 	DWORD FileAttr;
 
-	if (!(Length=Dest.GetLength()) || !StrCmp(Dest,L"."))
+	if (Dest.IsEmpty() || !StrCmp(Dest,L"."))
 		return COPY_FAILURE; //????
 
 	SetCursorType(FALSE,0);
@@ -2339,7 +2338,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 			{
 				string strSrcFullName,strDestFullName;
 				ConvertNameToFull(Src,strSrcFullName);
-				SECURITY_ATTRIBUTES sa;
+				FAR_SECURITY_DESCRIPTOR_EX sd;
 
 				// для Move нам необходимо узнать каталог родитель, чтобы получить его секьюрити
 				if (!(Flags&(FCOPY_COPYSECURITY|FCOPY_LEAVESECURITY)))
@@ -2351,10 +2350,10 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 					else if (apiGetFileAttributes(strDest) == INVALID_FILE_ATTRIBUTES) // если каталога нет...
 					{
 						// ...получаем секьюрити родителя
-						if (GetSecurity(GetParentFolder(strDest,strDestFullName), sa))
+						if (GetSecurity(GetParentFolder(strDest,strDestFullName), sd))
 							IsSetSecuty=TRUE;
 					}
-					else if (GetSecurity(strDest,sa)) // иначе получаем секьюрити Dest`а
+					else if (GetSecurity(strDest,sd)) // иначе получаем секьюрити Dest`а
 						IsSetSecuty=TRUE;
 				}
 
@@ -2366,7 +2365,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 					if (SuccessMove)
 					{
 						if (IsSetSecuty)// && !strcmp(DestFSName,"NTFS"))
-							SetRecursiveSecurity(strDestPath,sa);
+							SetRecursiveSecurity(strDestPath,sd);
 
 						if (PointToName(strDestPath)==strDestPath.CPtr())
 							strRenamedName = strDestPath;
@@ -2389,12 +2388,12 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 							case 1:
 							{
 								int CopySecurity = Flags&FCOPY_COPYSECURITY;
-								SECURITY_ATTRIBUTES tmpsa;
+								FAR_SECURITY_DESCRIPTOR_EX tmpsd;
 
-								if ((CopySecurity) && !GetSecurity(Src,tmpsa))
+								if ((CopySecurity) && !GetSecurity(Src,tmpsd))
 									CopySecurity = FALSE;
-
-								if (apiCreateDirectory(strDestPath,CopySecurity?&tmpsa:nullptr))
+								SECURITY_ATTRIBUTES TmpSecAttr  ={sizeof(TmpSecAttr), tmpsd.SecurityDescriptor, FALSE};
+								if (apiCreateDirectory(strDestPath,CopySecurity?&TmpSecAttr:nullptr))
 								{
 									if (PointToName(strDestPath)==strDestPath.CPtr())
 										strRenamedName = strDestPath;
@@ -2412,18 +2411,18 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 				} /* while */
 			} // if (Rename)
 
-			SECURITY_ATTRIBUTES sa;
+			FAR_SECURITY_DESCRIPTOR_EX sd;
 
-			if ((Flags&FCOPY_COPYSECURITY) && !GetSecurity(Src,sa))
+			if ((Flags&FCOPY_COPYSECURITY) && !GetSecurity(Src,sd))
 				return COPY_CANCEL;
-
+			SECURITY_ATTRIBUTES SecAttr = {sizeof(SecAttr), sd.SecurityDescriptor, FALSE};
 			if (RPT!=RP_SYMLINKFILE && SrcData.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)
 			{
 				while (!apiCreateDirectoryEx(
 					// CreateDirectoryEx preserves reparse points,
 					// so we shouldn't use template when copying with content
 					((SrcData.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT) && (Flags&FCOPY_COPYSYMLINKCONTENTS))? L"" : Src,
-					strDestPath,(Flags&FCOPY_COPYSECURITY) ? &sa:nullptr))
+					strDestPath,(Flags&FCOPY_COPYSECURITY) ? &SecAttr:nullptr))
 				{
 					int MsgCode=Message(MSG_WARNING|MSG_ERRORTYPE,3,MSG(MError),
 					                MSG(MCopyCannotCreateFolder),strDestPath,MSG(MCopyRetry),
@@ -2621,7 +2620,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 					if (NWFS_Attr)
 						apiSetFileAttributes(strSrcFullName,SrcData.dwFileAttributes&(~FILE_ATTRIBUTE_READONLY));
 
-					SECURITY_ATTRIBUTES sa;
+					FAR_SECURITY_DESCRIPTOR_EX sd;
 					IsSetSecuty=FALSE;
 
 					// для Move нам необходимо узнать каталог родитель, чтобы получить его секьюрити
@@ -2634,10 +2633,10 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 							string strDestFullName;
 
 							// ...получаем секьюрити родителя
-							if (GetSecurity(GetParentFolder(strDest,strDestFullName),sa))
+							if (GetSecurity(GetParentFolder(strDest,strDestFullName), sd))
 								IsSetSecuty=TRUE;
 						}
-						else if (GetSecurity(strDest,sa)) // иначе получаем секьюрити Dest`а
+						else if (GetSecurity(strDest, sd)) // иначе получаем секьюрити Dest`а
 							IsSetSecuty=TRUE;
 					}
 
@@ -2661,7 +2660,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 					else
 					{
 						if (IsSetSecuty)
-							SetSecurity(strDestPath,sa);
+							SetSecurity(strDestPath, sd);
 					}
 
 					if (NWFS_Attr)
@@ -3027,8 +3026,8 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 		}
 	}
 
-	SECURITY_ATTRIBUTES sa;
-	if ((Flags&FCOPY_COPYSECURITY) && !GetSecurity(SrcName,sa))
+	FAR_SECURITY_DESCRIPTOR_EX sd;
+	if ((Flags&FCOPY_COPYSECURITY) && !GetSecurity(SrcName,sd))
 		return COPY_CANCEL;
 
 	int OpenMode=FILE_SHARE_READ;
@@ -3061,7 +3060,8 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 	{
 		//if (DestAttr!=INVALID_FILE_ATTRIBUTES && !Append) //вот это портит копирование поверх хардлинков
 		//apiDeleteFile(DestName);
-		bool DstOpened = DestFile.Open(strDestName, GENERIC_WRITE, FILE_SHARE_READ, (Flags&FCOPY_COPYSECURITY) ? &sa:nullptr, (Append ? OPEN_EXISTING:CREATE_ALWAYS), SrcData.dwFileAttributes&(~((Flags&(FCOPY_DECRYPTED_DESTINATION))?FILE_ATTRIBUTE_ENCRYPTED|FILE_FLAG_SEQUENTIAL_SCAN:FILE_FLAG_SEQUENTIAL_SCAN)));
+		SECURITY_ATTRIBUTES SecAttr = {sizeof(SecAttr), sd.SecurityDescriptor, FALSE};
+		bool DstOpened = DestFile.Open(strDestName, GENERIC_WRITE, FILE_SHARE_READ, (Flags&FCOPY_COPYSECURITY) ? &SecAttr:nullptr, (Append ? OPEN_EXISTING:CREATE_ALWAYS), SrcData.dwFileAttributes&(~((Flags&(FCOPY_DECRYPTED_DESTINATION))?FILE_ATTRIBUTE_ENCRYPTED|FILE_FLAG_SEQUENTIAL_SCAN:FILE_FLAG_SEQUENTIAL_SCAN)));
 		Flags&=~FCOPY_DECRYPTED_DESTINATION;
 
 		if (!DstOpened)
@@ -3119,8 +3119,6 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 
 	CP->SetProgressValue(0,0);
 
-	DWORD BytesRead,BytesWritten;
-
 	if(SrcFile.InitWalk(CopyBufferSize))
 	{
 		while(SrcFile.Step())
@@ -3172,6 +3170,7 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 				return COPY_CANCEL;
 			}
 
+			DWORD BytesRead,BytesWritten;
 			while (!SrcFile.Read(CopyBuffer, SrcFile.GetChunkSize(), BytesRead))
 			{
 				int MsgCode = Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MError),
@@ -3387,8 +3386,6 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const FAR_FIND_DATA_EX &SrcDa
 			{
 				CP->SetTotalProgressValue(TotalCopiedSize,TotalCopySize);
 			}
-
-			CP->SetNames(SrcName,strDestName);
 		}
 	}
 
@@ -3461,7 +3458,7 @@ enum
  DM_OPENVIEWER = DM_USER+33,
 };
 
-INT_PTR WINAPI WarnDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI WarnDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -3663,9 +3660,9 @@ int ShellCopy::AskOverwrite(const FAR_FIND_DATA_EX &SrcData,
 				strDestSizeText<<DestSize;
 				string strDateText, strTimeText;
 				ConvertDate(SrcLastWriteTime,strDateText,strTimeText,8,FALSE,FALSE,TRUE,TRUE);
-				strSrcFileStr<<fmt::LeftAlign()<<fmt::Width(17)<<MSG(MCopySource)<<L" "<<fmt::Width(25)<<fmt::Precision(25)<<strSrcSizeText<<L" "<<strDateText<<L" "<<strTimeText;
+				strSrcFileStr<<fmt::LeftAlign()<<fmt::MinWidth(17)<<MSG(MCopySource)<<L" "<<fmt::ExactWidth(25)<<strSrcSizeText<<L" "<<strDateText<<L" "<<strTimeText;
 				ConvertDate(DestData.ftLastWriteTime,strDateText,strTimeText,8,FALSE,FALSE,TRUE,TRUE);
-				strDestFileStr<<fmt::LeftAlign()<<fmt::Width(17)<<MSG(MCopyDest)<<L" "<<fmt::Width(25)<<fmt::Precision(25)<<strDestSizeText<<L" "<<strDateText<<L" "<<strTimeText;
+				strDestFileStr<<fmt::LeftAlign()<<fmt::MinWidth(17)<<MSG(MCopyDest)<<L" "<<fmt::ExactWidth(25)<<strDestSizeText<<L" "<<strDateText<<L" "<<strTimeText;
 
 				WarnCopyDlgData[WDLG_SRCFILEBTN].Data=strSrcFileStr;
 				WarnCopyDlgData[WDLG_DSTFILEBTN].Data=strDestFileStr;
@@ -3763,9 +3760,9 @@ int ShellCopy::AskOverwrite(const FAR_FIND_DATA_EX &SrcData,
 					FormatString strDestSizeText;
 					strDestSizeText<<DestSize;
 					ConvertDate(SrcData.ftLastWriteTime,strDateText,strTimeText,8,FALSE,FALSE,TRUE,TRUE);
-					strSrcFileStr<<fmt::LeftAlign()<<fmt::Width(17)<<MSG(MCopySource)<<L" "<<fmt::Width(25)<<fmt::Precision(25)<<strSrcSizeText<<L" "<<strDateText<<L" "<<strTimeText;
+					strSrcFileStr<<fmt::LeftAlign()<<fmt::MinWidth(17)<<MSG(MCopySource)<<L" "<<fmt::ExactWidth(25)<<strSrcSizeText<<L" "<<strDateText<<L" "<<strTimeText;
 					ConvertDate(DestData.ftLastWriteTime,strDateText,strTimeText,8,FALSE,FALSE,TRUE,TRUE);
-					strDestFileStr<<fmt::LeftAlign()<<fmt::Width(17)<<MSG(MCopyDest)<<L" "<<fmt::Width(25)<<fmt::Precision(25)<<strDestSizeText<<L" "<<strDateText<<L" "<<strTimeText;
+					strDestFileStr<<fmt::LeftAlign()<<fmt::MinWidth(17)<<MSG(MCopyDest)<<L" "<<fmt::ExactWidth(25)<<strDestSizeText<<L" "<<strDateText<<L" "<<strTimeText;
 					WarnCopyDlgData[WDLG_SRCFILEBTN].Data=strSrcFileStr;
 					WarnCopyDlgData[WDLG_DSTFILEBTN].Data=strDestFileStr;
 					WarnCopyDlgData[WDLG_TEXT].Data=MSG(MCopyFileRO);
@@ -3830,46 +3827,34 @@ int ShellCopy::AskOverwrite(const FAR_FIND_DATA_EX &SrcData,
 
 
 
-int ShellCopy::GetSecurity(const string& FileName,SECURITY_ATTRIBUTES &sa)
+int ShellCopy::GetSecurity(const string& FileName, FAR_SECURITY_DESCRIPTOR_EX& sd)
 {
-	SECURITY_INFORMATION si=DACL_SECURITY_INFORMATION;
-	SECURITY_DESCRIPTOR *sd=(SECURITY_DESCRIPTOR *)sddata;
-	DWORD Needed;
-	BOOL RetSec=GetFileSecurity(NTPath(FileName),si,sd,SDDATA_SIZE,&Needed);
-	int LastError=GetLastError();
+	bool RetSec = apiGetFileSecurity(NTPath(FileName), DACL_SECURITY_INFORMATION, sd);
 
-	if (!RetSec || Needed>SDDATA_SIZE)
+	if (!RetSec)
 	{
-		sd=nullptr;
-
+		int LastError = GetLastError();
 		if (LastError!=ERROR_SUCCESS && LastError!=ERROR_FILE_NOT_FOUND &&
 		        Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MError),
 		                MSG(MCannotGetSecurity),FileName,MSG(MOk),MSG(MCancel))==1)
 			return FALSE;
 	}
-
-	sa.nLength=sizeof(SECURITY_ATTRIBUTES);
-	sa.lpSecurityDescriptor=sd;
-	sa.bInheritHandle=FALSE;
 	return TRUE;
 }
 
 
 
-int ShellCopy::SetSecurity(const string& FileName,const SECURITY_ATTRIBUTES &sa)
+int ShellCopy::SetSecurity(const string& FileName,const FAR_SECURITY_DESCRIPTOR_EX& sd)
 {
-	SECURITY_INFORMATION si=DACL_SECURITY_INFORMATION;
-	BOOL RetSec=SetFileSecurity(NTPath(FileName),si,(PSECURITY_DESCRIPTOR)sa.lpSecurityDescriptor);
-	int LastError=GetLastError();
-
+	bool RetSec = apiSetFileSecurity(NTPath(FileName), DACL_SECURITY_INFORMATION, sd);
 	if (!RetSec)
 	{
+		int LastError = GetLastError();
 		if (LastError!=ERROR_SUCCESS && LastError!=ERROR_FILE_NOT_FOUND &&
 		        Message(MSG_WARNING|MSG_ERRORTYPE,2,MSG(MError),
 		                MSG(MCannotSetSecurity),FileName,MSG(MOk),MSG(MCancel))==1)
 			return FALSE;
 	}
-
 	return TRUE;
 }
 
@@ -3877,7 +3862,7 @@ BOOL ShellCopySecuryMsg(const wchar_t *Name)
 {
 	static clock_t PrepareSecuryStartTime;
 
-	if (!Name || !*Name || (static_cast<DWORD>(clock() - PrepareSecuryStartTime) > Opt.ShowTimeoutDACLFiles))
+	if (!Name || !*Name || (static_cast<clock_t>(clock() - PrepareSecuryStartTime) > static_cast<clock_t>(Opt.ShowTimeoutDACLFiles)))
 	{
 		static int Width=30;
 		int WidthTemp;
@@ -3911,9 +3896,9 @@ BOOL ShellCopySecuryMsg(const wchar_t *Name)
 }
 
 
-int ShellCopy::SetRecursiveSecurity(const string& FileName,const SECURITY_ATTRIBUTES &sa)
+int ShellCopy::SetRecursiveSecurity(const string& FileName,const FAR_SECURITY_DESCRIPTOR_EX& sd)
 {
-	if (SetSecurity(FileName,sa))
+	if (SetSecurity(FileName, sd))
 	{
 		if (apiGetFileAttributes(FileName) & FILE_ATTRIBUTE_DIRECTORY)
 		{
@@ -3927,7 +3912,7 @@ int ShellCopy::SetRecursiveSecurity(const string& FileName,const SECURITY_ATTRIB
 				if (!ShellCopySecuryMsg(strFullName))
 					break;
 
-				if (!SetSecurity(strFullName,sa))
+				if (!SetSecurity(strFullName, sd))
 				{
 					return FALSE;
 				}
@@ -3944,9 +3929,9 @@ int ShellCopy::SetRecursiveSecurity(const string& FileName,const SECURITY_ATTRIB
 
 int ShellCopy::ShellSystemCopy(const string& SrcName,const string& DestName,const FAR_FIND_DATA_EX &SrcData)
 {
-	SECURITY_ATTRIBUTES sa;
+	FAR_SECURITY_DESCRIPTOR_EX sd;
 
-	if ((Flags&FCOPY_COPYSECURITY) && !GetSecurity(SrcName,sa))
+	if ((Flags&FCOPY_COPYSECURITY) && !GetSecurity(SrcName, sd))
 		return COPY_CANCEL;
 
 	CP->SetNames(SrcName,DestName);
@@ -3960,7 +3945,7 @@ int ShellCopy::ShellSystemCopy(const string& SrcName,const string& DestName,cons
 
 	Flags&=~FCOPY_DECRYPTED_DESTINATION;
 
-	if ((Flags&FCOPY_COPYSECURITY) && !SetSecurity(DestName,sa))
+	if ((Flags&FCOPY_COPYSECURITY) && !SetSecurity(DestName, sd))
 		return COPY_CANCEL;
 
 	return COPY_SUCCESS;
