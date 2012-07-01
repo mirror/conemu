@@ -1,5 +1,15 @@
 @echo off
 
+rem Usage:
+rem   SetProgress
+rem     -- Several sample calls delimited with "pause"
+rem   SetProgress 0
+rem     -- Remove progress state
+rem   SetProgress 1 <Percents>
+rem     -- Set progress to specified value (0..100)
+rem   SetProgress 2
+rem     -- Set progress error state
+
 rem Run this file in cmd.exe or tcc.exe to change
 rem Title of console window.
 
