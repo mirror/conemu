@@ -24,26 +24,25 @@ if not "%~1"=="" goto set_pr
 rem Without parameters - run demo
 
 echo %ESC%[s
+echo %ESC%[s
 
-echo %ESC%[u%ESC%[K
-echo Press enter to set 30%% progress...
+echo %ESC%[u%ESC%[KPress enter to set 30%% progress...
 pause>nul
 call :set_pr 1 30
 
-echo %ESC%[u%ESC%[K
-echo Press enter to set 60%% progress
+echo %ESC%[u%ESC%[KPress enter to set 60%% progress
 pause>nul
 call :set_pr 1 60
 
-echo %ESC%[u%ESC%[K
-echo Press enter to set Error state
+echo %ESC%[u%ESC%[KPress enter to set Error state
 pause>nul
 call :set_pr 2
 
-echo %ESC%[u%ESC%[K
-echo Press enter to remove progress
+echo %ESC%[u%ESC%[KPress enter to remove progress
 pause>nul
 call :set_pr 0
+
+echo %ESC%[u%ESC%[K
 
 goto :EOF
 
