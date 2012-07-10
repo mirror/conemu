@@ -3826,7 +3826,7 @@ BOOL Editor::Search(int Next)
 				SetCursorType(FALSE,-1);
 				int Total=ReverseSearch?StartLine:NumLastLine-StartLine;
 				int Current=abs(NewNumLine-StartLine);
-				EditorShowMsg(MSG(MEditSearchTitle),MSG(MEditSearchingFor),strMsgStr,Current*100/Total);
+				EditorShowMsg(MSG(MEditSearchTitle),MSG(MEditSearchingFor),strMsgStr,Total > 0 ? Current*100/Total : 100);
 				TBC.SetProgressValue(Current,Total);
 			}
 
@@ -3836,10 +3836,12 @@ BOOL Editor::Search(int Next)
 			if (CurPtr->Search(strSearchStr,strReplaceStrCurrent,CurPos,Case,WholeWords,ReverseSearch,Regexp,&SearchLength))
 			{
 				Match=1;
+				Edit *FoundPtr = CurPtr;
+				int iFoundPos = CurPtr->GetCurPos();
 
 				if(FindAllReferences)
 				{
-					CurPos = CurPtr->GetCurPos();
+					CurPos = iFoundPos;
 
 					MenuItemEx Item = {};
 					Item.strName = FormatString() << fmt::LeftAlign() << fmt::ExactWidth(11) << fmt::FillChar(L' ') << (FormatString() << NewNumLine+1 << L':' << CurPos+1) << BoxSymbols[BS_V1] << CurPtr->GetStringAddr() + CurPos;
@@ -3862,7 +3864,6 @@ BOOL Editor::Search(int Next)
 						Lock();
 						UnmarkBlock();
 						Flags.Set(FEDITOR_MARKINGBLOCK);
-						int iFoundPos = CurPtr->GetCurPos();
 						CurPtr->Select(iFoundPos, iFoundPos+SearchLength);
 						BlockStart = CurPtr;
 						BlockStartLine = NewNumLine;
@@ -3946,7 +3947,6 @@ BOOL Editor::Search(int Next)
 								int SaveOvertypeMode=Flags.Check(FEDITOR_OVERTYPE);
 								Flags.Set(FEDITOR_OVERTYPE);
 								CurLine->SetOvertypeMode(TRUE);
-								//int CurPos=CurLine->GetCurPos();
 
 								int I=0;
 								for (; SearchLength && strReplaceStrCurrent[I]; I++,SearchLength--)
@@ -4020,8 +4020,8 @@ BOOL Editor::Search(int Next)
 								/* Fast method */
 								const wchar_t *Str,*Eol;
 								int StrLen,NewStrLen;
-								int SStrLen=SearchLength,
-											RStrLen=(int)strReplaceStrCurrent.GetLength();
+								int SStrLen=SearchLength;
+								int RStrLen=(int)strReplaceStrCurrent.GetLength();
 								CurLine->GetBinaryString(&Str,&Eol,StrLen);
 								int EolLen=StrLength(Eol);
 								NewStrLen=StrLen;
@@ -4064,11 +4064,10 @@ BOOL Editor::Search(int Next)
 					if (!ReplaceMode)
 						break;
 
-					CurPos=CurLine->GetCurPos();
-
-					if (Skip)
-						if (!ReverseSearch)
-							CurPos++;
+					CurPos = CurLine->GetCurPos();
+					CurPos += (Skip && !ReverseSearch ? 1:0);
+					if (!Skip && ReverseSearch)
+						(CurLine = CurPtr = FoundPtr)->SetCurPos(CurPos = iFoundPos); 
 				}
 			}
 			else

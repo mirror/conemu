@@ -2688,6 +2688,26 @@ MViewConfigSaveShortPos
 "Guardar &marcadores"
 "Ukladať &záložky"
 
+MViewConfigSaveCodepage
+"Сохранять ко&дировку файла"
+"Save file &codepage"
+upd:"Save file &codepage"
+upd:"Save file &codepage"
+upd:"Save file &codepage"
+upd:"Save file &codepage"
+upd:"Save file &codepage"
+upd:"Save file &codepage"
+
+MViewConfigSaveWrapMode
+"Сохранять &режим переноса"
+"Save w&rap mode"
+upd:"Save w&rap mode"
+upd:"Save w&rap mode"
+upd:"Save w&rap mode"
+upd:"Save w&rap mode"
+upd:"Save w&rap mode"
+upd:"Save w&rap mode"
+
 MViewAutoDetectCodePage
 "&Автоопределение кодовой страницы"
 "&Autodetect code page"
@@ -12967,14 +12987,14 @@ MMenuSortUseNumeric
 "Použiť čí&selné triedenie"
 
 MMenuSortUseCaseSensitive
-"Сортировка с учётом регистра"
-"Use case sensitive sort"
-"Použít řazení citlivé na velikost písmen"
-"Sortierung abhängig von Groß-/Kleinschreibung"
-"Nagy/kisbetű érzékeny rendezés"
-"Sortuj uwzględniając wielkość liter"
-"Usar orden sensible min/mayúsc."
-"Triediť podľa malých a VEĽKÝCH písmen"
+"Прописные буквы раньше строчных" #"Верхний регистр раньше нижнего"
+"Uppercase before lowercase"
+upd:"Použít řazení citlivé na velikost písmen"
+upd:"Sortierung abhängig von Groß-/Kleinschreibung"
+upd:"Nagy/kisbetű érzékeny rendezés"
+upd:"Sortuj uwzględniając wielkość liter"
+upd:"Usar orden sensible min/mayúsc."
+upd:"Triediť podľa malých a VEĽKÝCH písmen"
 
 MMaskGroupBottom
 "Редактирование: Ins, Del, F4, F7, Ctrl-R"

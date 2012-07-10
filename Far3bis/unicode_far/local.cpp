@@ -238,6 +238,195 @@ int NumStrCmp(const wchar_t *s1, size_t n1, const wchar_t *s2, size_t n2, bool I
 	return 0;
 }
 
+static bool alt_sort_initialized = false;
+static wchar_t *alt_sort_table = nullptr;
+
+class AltSortTableCleaner
+{
+public:
+	AltSortTableCleaner()
+	{}
+
+	~AltSortTableCleaner()
+	{
+		xf_free(alt_sort_table);
+		alt_sort_table = nullptr;
+		alt_sort_initialized = true;
+	}
+};
+
+static AltSortTableCleaner alt_sort_cleaner;
+
+static int __cdecl cmp_w(const void *pv1, const void *pv2)
+{
+	wchar_t w1 = *((const wchar_t *)pv1), w2 = *((const wchar_t *)pv2);
+	return StrCmpNN(&w1,1, &w2,1);
+}
+
+int __cdecl StrCmpNNC(const wchar_t *s1, size_t n1, const wchar_t *s2, size_t n2)
+{
+	if (!alt_sort_table)
+	{
+		if (alt_sort_initialized)
+			return StrCmpNN(s1,(int)n1, s2,(int)n2); // unsuccessful init - use regular sort
+
+		alt_sort_initialized = true;
+
+		wchar_t *table = (wchar_t *)xf_malloc(0x10000*sizeof(wchar_t));
+		wchar_t *chars = (wchar_t *)xf_malloc(0x10000*sizeof(wchar_t));
+		if (!table || !chars)
+		{
+			xf_free(chars);
+			xf_free(table);
+			return StrCmpNN(s1,(int)n1, s2,(int)n2);
+		}
+
+		for (int ic=0; ic < 0x10000; ++ic)
+			chars[ic] = static_cast<wchar_t>(ic);
+
+		qsort(chars+1, 0x10000-1, sizeof(wchar_t), cmp_w);
+
+		int u_beg = 0, u_end = 0xffff;
+		for (int ic=0; ic < 0x10000; ++ic)
+		{
+			if (chars[ic] == 0x0061) // L'a'
+			{
+				u_beg = ic;
+				break;
+			}
+			table[chars[ic]] = static_cast<wchar_t>(ic);
+		}
+		for (int ic=0xffff; ic > u_beg; --ic)
+		{
+			if (IsUpper(chars[ic]))
+			{
+				u_end = ic;
+				break;
+			}
+			table[chars[ic]] = static_cast<wchar_t>(ic);
+		}
+		assert(u_beg > 0 && u_beg < u_end && u_end < 0xffff);
+
+		int cc = u_beg;
+		for (int ic=u_beg; ic <= u_end; ++ic) // uppercase first
+		{
+			if (IsUpper(chars[ic]))
+				table[chars[ic]] = static_cast<wchar_t>(cc++);
+		}
+		for (int ic=u_beg; ic <= u_end; ++ic) // than not uppercase
+		{
+			if (!IsUpper(chars[ic]))
+				table[chars[ic]] = static_cast<wchar_t>(cc++);
+		}
+		assert(cc == u_end+1);
+
+		xf_free(chars);
+		alt_sort_table = table;
+	}
+
+	size_t l1 = 0;
+	size_t l2 = 0;
+	while (l1 < n1 && l2 < n2 && *s1 && *s2)
+	{
+		int res = (int)alt_sort_table[*s1] - (int)alt_sort_table[*s2];
+		if (res)
+			return res;
+
+		++s1; ++l1;
+		++s2; ++l2;
+	}
+
+	if ((l1 == n1 || !*s1) && (l2 == n2 || !*s2))
+	{
+		if (l1 < l2)
+			return -1;
+		else if (l1 == l2)
+			return 0;
+		else
+			return 1;
+	}
+	else if (l1 == n1 || !*s1)
+		return -1;
+	else if (l2 == n2 || !*s2)
+		return 1;
+
+	assert(false);
+	return 0;
+}
+
+int NumStrCmpC(const wchar_t *s1, size_t n1, const wchar_t *s2, size_t n2)
+{
+	size_t l1 = 0;
+	size_t l2 = 0;
+	while (l1 < n1 && l2 < n2 && *s1 && *s2)
+	{
+		if (iswdigit(*s1) && iswdigit(*s2))
+		{
+			// skip leading zeroes
+			while (l1 < n1 && *s1 == L'0')
+			{
+				s1++;
+				l1++;
+			}
+			while (l2 < n2 && *s2 == L'0')
+			{
+				s2++;
+				l2++;
+			}
+
+			// if end of string reached
+			if (l1 == n1 || !*s1 || l2 == n2 || !*s2)
+				break;
+
+			// compare numbers
+			int res = 0;
+			while (l1 < n1 && l2 < n2 && iswdigit(*s1) && iswdigit(*s2))
+			{
+				if (!res && *s1 != *s2)
+					res = *s1 < *s2 ? -1 : 1;
+
+				s1++; s2++;
+				l1++; l2++;
+			}
+			if ((l1 == n1 || !iswdigit(*s1)) && (l2 == n2 || !iswdigit(*s2)))
+			{
+				if (res)
+					return res;
+			}
+			else if (l1 == n1 || !iswdigit(*s1))
+				return -1;
+			else if (l2 == n2 || !iswdigit(*s2))
+				return 1;
+		}
+		else
+		{
+			int res = StrCmpNC(s1, s2, 1);
+			if (res)
+				return res;
+
+			s1++; s2++;
+			l1++; l2++;
+		}
+	}
+
+	if ((l1 == n1 || !*s1) && (l2 == n2 || !*s2))
+	{
+		if (l1 < l2)
+			return -1;
+		else if (l1 == l2)
+			return 0;
+		else
+			return 1;
+	}
+	else if (l1 == n1 || !*s1)
+		return -1;
+	else if (l2 == n2 || !*s2)
+		return 1;
+
+	assert(false);
+	return 0;
+}
+
 SELF_TEST(
 	assert(!NumStrCmp(L"", -1, L"", -1, false));
 	assert(NumStrCmp(L"", -1, L"a", -1, false) < 0);

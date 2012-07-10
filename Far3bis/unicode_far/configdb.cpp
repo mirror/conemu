@@ -1463,12 +1463,20 @@ public:
 
 	PluginsCacheConfigDb()
 	{
-		//Maximus: нет смысла хранить все битности в одной базе. "/co" с ума сойдет
-		#ifdef _WIN64
-		Initialize(L"plugincache64.db", true);
-		#else
-		Initialize(L"plugincache.db", true);
-		#endif
+		string namedb(L"plugincache"
+#if 1
+#if   defined(_M_IA64)
+			L"IA64"
+#elif defined(_M_AMD64)	|| defined(_M_X64)
+			L"64"
+#elif defined(_M_ARM)
+			L"ARM"
+#elif defined(_M_IX86)
+			L"32"
+#endif
+#endif
+			L".db");
+		Initialize(namedb.CPtr(), true);
 	}
 
 	bool BeginTransaction() { return SQLiteDb::BeginTransaction(); }
@@ -2461,9 +2469,9 @@ public:
 		return b;
 	}
 
-	unsigned __int64 SetViewerPos(const wchar_t *Name, __int64 FilePos, __int64 LeftPos, int Hex, UINT CodePage)
+	unsigned __int64 SetViewerPos(const wchar_t *Name, __int64 FilePos, __int64 LeftPos, int Hex_Wrap, UINT CodePage)
 	{
-		if (stmtSetViewerPos.Bind(Name).Bind(GetCurrentUTCTimeInUI64()).Bind(FilePos).Bind(LeftPos).Bind(Hex).Bind((int)CodePage).StepAndReset())
+		if (stmtSetViewerPos.Bind(Name).Bind(GetCurrentUTCTimeInUI64()).Bind(FilePos).Bind(LeftPos).Bind(Hex_Wrap).Bind((int)CodePage).StepAndReset())
 			return LastInsertRowID();
 		return 0;
 	}

@@ -185,9 +185,6 @@ user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
   #/ma#
   Macros with the "Run after Far start" option set will not be run when Far is started.
 
-  #/s <path>#
-  Custom location for Far configuration files - overrides Far.exe.ini.
-
   #/u <username>#
   Allows to have separate registry settings for different users.
   Affects only 1.x Far Manager plugins
@@ -2284,7 +2281,7 @@ determining the total file size in the sub-folders.
 
   #Smart folder panel monitor#
   Если эта опция выставлена, то мониторинг файловых панелей фар будет выполняться только тогда когда фар активен,
-т.е. обновления панелей не будет до тех пор, пока фар не получит фокус ввода. Это позволяет не локировать каталоги текущих панелей.
+т.е. обновления панелей не будет до тех пор, пока фар не получит фокус ввода. Это позволяет не блокировать каталоги текущих панелей.
 Но синхронизация состояния панелей при получении фокуса #иногда не срабатывает#. Поэтому эта опция по-умолчанию отключена,
 и мониторинг файловых панелей выполняется даже тогда, когда фар работатет в фоне.
 
@@ -3297,6 +3294,12 @@ $ #Settings dialog: viewer#
                           positions) in recently viewed files
                           (created with #RightCtrl-0..9# or
                           #Ctrl-Shift-0..9#)
+
+  #Save file codepage#      Save and restore selected file codepage.
+                          При включённой опции сохранения позиции кодировка также сохраняется,
+                          так как позиция в файле зависит от кодировки.
+
+  #Save wrap mode#          Save and restore file Wrap/WordWrap mode.
 
   #Search dialog#           Always returns focus to search text field in
   #auto-focus#              the ~Viewer~@Viewer@ search dialog.

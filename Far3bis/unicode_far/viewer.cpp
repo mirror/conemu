@@ -166,26 +166,7 @@ Viewer::~Viewer()
 	if (ViewFile.Opened())
 	{
 		ViewFile.Close();
-
-		if (Opt.ViOpt.SavePos)
-		{
-			string strCacheName=strPluginData.IsEmpty()?strFullFileName:strPluginData+PointToName(strFileName);
-			UINT CodePage=0;
-
-			if (CodePageChangedByUser)
-			{
-				CodePage=VM.CodePage;
-			}
-
-			ViewerPosCache poscache;
-			poscache.FilePos=FilePos;
-			poscache.LeftPos=LeftPos;
-			poscache.Hex=VM.Hex;
-			poscache.CodePage=CodePage;
-			poscache.bm=BMSavePos;
-
-			FilePositionCache::AddPosition(strCacheName,poscache);
-		}
+		SavePosition();
 	}
 
 	delete[] vString.lpData;
@@ -226,6 +207,24 @@ Viewer::~Viewer()
 	{
 		CtrlObject->Plugins->CurViewer=this; //HostFileViewer;
 		CtrlObject->Plugins->ProcessViewerEvent(VE_CLOSE,nullptr,ViewerID);
+	}
+}
+
+
+void Viewer::SavePosition()
+{
+	if (Opt.ViOpt.SavePos || Opt.ViOpt.SaveCodepage || Opt.ViOpt.SaveWrapMode)
+	{
+		ViewerPosCache poscache;
+
+		poscache.FilePos = FilePos;
+		poscache.LeftPos = LeftPos;
+		poscache.Hex_Wrap = (VM.Hex & 0x03) | 0x10 | (VM.Wrap ? 0x20 : 0x00) | (VM.WordWrap ? 0x40 : 0x00);
+		poscache.CodePage = CodePageChangedByUser ? VM.CodePage : 0;
+		poscache.bm = BMSavePos;
+
+		string strCacheName = strPluginData.IsEmpty() ? strFullFileName : strPluginData+PointToName(strFileName);
+		FilePositionCache::AddPosition(strCacheName, poscache);
 	}
 }
 
@@ -315,28 +314,38 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	apiGetFindDataEx(strFileName, ViewFindData);
 	UINT CachedCodePage=0;
 
-	if (Opt.ViOpt.SavePos && !ReadStdin)
+	if ((Opt.ViOpt.SavePos || Opt.ViOpt.SaveCodepage || Opt.ViOpt.SaveWrapMode) && !ReadStdin)
 	{
 		__int64 NewLeftPos,NewFilePos;
 		string strCacheName=strPluginData.IsEmpty()?strFileName:strPluginData+PointToName(strFileName);
 		ViewerPosCache poscache;
 
 		bool found = FilePositionCache::GetPosition(strCacheName,poscache);
-		NewFilePos=poscache.FilePos;
-		NewLeftPos=poscache.LeftPos;
-		if ( found && VM.Hex == -1 ) // keep VM.Hex if file listed (Grey+ / Gray-)
+		if (Opt.ViOpt.SavePos)
 		{
-			if ( 1 != (VM.Hex = poscache.Hex) )
-				dump_text_mode = VM.Hex;
-		}
-		CachedCodePage=poscache.CodePage;
-		BMSavePos=poscache.bm;
+			NewFilePos=poscache.FilePos;
+			NewLeftPos=poscache.LeftPos;
+			if ( found && VM.Hex == -1 ) // keep VM.Hex if file listed (Grey+ / Gray-)
+			{
+				if ( 1 != (VM.Hex = (poscache.Hex_Wrap & 0x03)) )
+					dump_text_mode = VM.Hex;
+			}
+			BMSavePos=poscache.bm;
 
-		// Проверяем поддерживается или нет загруженная из кэша кодовая страница
-		if (CachedCodePage && !IsCodePageSupported(CachedCodePage))
-			CachedCodePage = 0;
-		LastSelectPos=FilePos=NewFilePos;
-		LeftPos=NewLeftPos;
+			LastSelectPos=FilePos=NewFilePos;
+			LeftPos=NewLeftPos;
+		}
+		if (Opt.ViOpt.SaveCodepage || Opt.ViOpt.SavePos)
+		{
+			CachedCodePage=poscache.CodePage;
+			if (CachedCodePage && !IsCodePageSupported(CachedCodePage))
+				CachedCodePage = 0;
+		}
+		if (Opt.ViOpt.SaveWrapMode && 0 != (poscache.Hex_Wrap & 0x10))
+		{
+			VM.Wrap     = (poscache.Hex_Wrap & 0x20 ? 1 : 0);
+			VM.WordWrap = (poscache.Hex_Wrap & 0x40 ? 1 : 0);
+		}
 	}
 	else
 	{
@@ -1446,6 +1455,9 @@ int Viewer::ProcessKey(int Key)
 		}
 		case KEY_IDLE:
 		{
+			if (Opt.ViewerEditorClock && HostFileViewer && HostFileViewer->IsFullScreen() && Opt.ViOpt.ShowTitleBar)
+				ShowTime(FALSE);
+
 			if (ViewFile.Opened() && update_check_period >= 0)
 			{
 				DWORD now_ticks = GetTickCount();
@@ -1498,10 +1510,6 @@ int Viewer::ProcessKey(int Key)
 					}
 				}
 			}
-
-			if (Opt.ViewerEditorClock && HostFileViewer && HostFileViewer->IsFullScreen() && Opt.ViOpt.ShowTitleBar)
-				ShowTime(FALSE);
-
 			return TRUE;
 		}
 		case KEY_ALTBS:
@@ -1542,27 +1550,8 @@ int Viewer::ProcessKey(int Key)
 
 				if (NextFileFound)
 				{
-					if (Opt.ViOpt.SavePos)
-					{
-						string strCacheName=strPluginData.IsEmpty()?strFileName:strPluginData+PointToName(strFileName);
-						UINT CodePage=0;
-
-						if (CodePageChangedByUser)
-							CodePage=VM.CodePage;
-
-						{
-							ViewerPosCache poscache;
-							poscache.FilePos=FilePos;
-							poscache.LeftPos=LeftPos;
-							poscache.Hex=VM.Hex;
-							poscache.CodePage=CodePage;
-							poscache.bm=BMSavePos;
-
-							FilePositionCache::AddPosition(strCacheName,poscache);
-
-							BMSavePos.Clear(); //Preapare for new file loading
-						}
-					}
+					SavePosition();
+					BMSavePos.Clear(); //Prepare for new file loading
 
 					if (PointToName(strName) == strName)
 					{
@@ -2086,38 +2075,29 @@ int Viewer::ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent)
 	   шелчок мышью на статус баре */
 
 	/* $ 12.10.2001 SKV
-	  угу, а только если он нсть, statusline...
+	  угу, а только если он есть, statusline...
 	*/
-	if (IntKeyState.MouseY == (Y1-1) && (HostFileViewer && HostFileViewer->IsTitleBarVisible()))  // Status line
+	if (IntKeyState.MouseY == (Y1-1) && (HostFileViewer && HostFileViewer->IsTitleBarVisible()))
 	{
-		int XCodePage, XPos, NameLength;
-		NameLength=ObjWidth-40;
-
-		if (Opt.ViewerEditorClock && HostFileViewer && HostFileViewer->IsFullScreen())
-			NameLength-=6;
-
-		if (NameLength<20)
-			NameLength=20;
-
-		XCodePage=NameLength+1;
-		XPos=NameLength+1+10+1+10+1;
-
-		while (IsMouseButtonPressed());
-
+		while (IsMouseButtonPressed()) {}
 		if (IntKeyState.MouseY != Y1-1)
 			return TRUE;
 
-		//_D(SysLog(L"MsX=%i, XTable=%i, XPos=%i",MsX,XTable,XPos));
-		if (IntKeyState.MouseX>=XCodePage && IntKeyState.MouseX<=XCodePage+10)
-		{
-			ProcessKey(KEY_SHIFTF8);
-			return (TRUE);
-		}
+		int NameLen = Max(20, ObjWidth-40-(Opt.ViewerEditorClock && HostFileViewer && HostFileViewer->IsFullScreen() ? 3+5 : 0));
+		wchar_t tt[10];
+		int cp_len = wsprintf(tt, L"%u", VM.CodePage);
+		//                           ViewMode     CopdePage             Goto
+		static const int keys[]   = {KEY_SHIFTF4, KEY_SHIFTF8,          KEY_ALTF8   };
+		int xpos[ARRAYSIZE(keys)] = {NameLen,     NameLen+3+(5-cp_len), NameLen+40-4};
+		int xlen[ARRAYSIZE(keys)] = {3,           cp_len,                          4};
 
-		if (IntKeyState.MouseX>=XPos && IntKeyState.MouseX<=XPos+7+1+4+1+3)
+		for (int i = 0; i < static_cast<int>(ARRAYSIZE(keys)); ++i)
 		{
-			ProcessKey(KEY_ALTF8);
-			return (TRUE);
+			if (IntKeyState.MouseX >= xpos[i] && IntKeyState.MouseX < xpos[i]+xlen[i])
+			{
+				ProcessKey(keys[i]);
+				return TRUE;
+			}
 		}
 	}
 
