@@ -1,4 +1,4 @@
-Clink - bash style autocomplete
+﻿You may try «Clink» - bash style autocomplete
 Download and unpack files to this folder
 
 http://clink.googlecode.com
