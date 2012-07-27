@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2011 Maximus5
+Copyright (c) 2012 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -28,11 +28,22 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-//#define CE_MAX_INPUT_QUEUE_BUFFER 255
+#define CE_MAX_INPUT_QUEUE_BUFFER 255
 
-#define ALL_MODIFIERS (LEFT_ALT_PRESSED|RIGHT_ALT_PRESSED|LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED|SHIFT_PRESSED)
-#define CTRL_MODIFIERS (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED)
+struct InQueue
+{
+	HANDLE hInputEvent;
+	int nInputQueue, nMaxInputQueue;
+	INPUT_RECORD* pInputQueue;
+	INPUT_RECORD* pInputQueueEnd;
+	INPUT_RECORD* pInputQueueRead;
+	INPUT_RECORD* pInputQueueWrite;
 
-BOOL ProcessInputMessage(MSG64::MsgStr &msg, INPUT_RECORD &r);
-//BOOL WriteInputQueue(const INPUT_RECORD *pr, BOOL bSetEvent = TRUE);
-DWORD WINAPI InputThread(LPVOID lpvParam);
+	BOOL Initialize(int anMaxInputQueue, HANDLE ahInputEvent/*by value*/);
+	void Release();
+
+	BOOL WriteInputQueue(const INPUT_RECORD *pr, BOOL bSetEvent = TRUE, DWORD nLength = 1);
+	BOOL IsInputQueueEmpty();
+	BOOL ReadInputQueue(INPUT_RECORD *prs, DWORD *pCount, BOOL bNoRemove = FALSE);
+	BOOL GetNumberOfBufferEvents();
+};
