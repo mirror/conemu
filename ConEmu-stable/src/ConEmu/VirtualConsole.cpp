@@ -56,7 +56,7 @@ FEFF    ZERO WIDTH NO-BREAK SPACE
     * commonly abbreviated RLM
 */
 
-
+#define HIDE_USE_EXCEPTION_INFO
 #define SHOWDEBUGSTR
 #ifdef _DEBUG
 //#define SHOWDEBUGSTEPS
@@ -83,6 +83,7 @@ FEFF    ZERO WIDTH NO-BREAK SPACE
 
 #define DEBUGSTRDRAW(s) //DEBUGSTR(s)
 #define DEBUGSTRCOORD(s) //DEBUGSTR(s)
+#define DEBUGSTRFAIL(s) DEBUGSTR(s)
 
 // WARNING("не появляются табы во второй консоли");
 WARNING("На предыдущей строке символы под курсором прыгают влево");
@@ -91,8 +92,6 @@ WARNING("При быстром наборе текста курсор часто 'замерзает' на одной из букв, но
 WARNING("Глюк с частичной отрисовкой экрана часто появляется при Alt-F7, Enter. Особенно, если файла нет");
 // Иногда не отрисовывается диалог поиска полностью - только бежит текущая сканируемая директория.
 // Иногда диалог отрисовался, но часть до текста "..." отсутствует
-
-//PRAGMA_ERROR("При попытке компиляции F:\\VCProject\\FarPlugin\\PPCReg\\compile.cmd - Enter в консоль не прошел");
 
 WARNING("В каждой VCon создать буфер BYTE[256] для хранения распознанных клавиш (Ctrl,...,Up,PgDn,Add,и пр.");
 WARNING("Нераспознанные можно помещать в буфер {VKEY,wchar_t=0}, в котором заполнять последний wchar_t по WM_CHAR/WM_SYSCHAR");
@@ -107,8 +106,8 @@ WARNING("Часто после разблокирования компьютера размер консоли изменяется (OK), 
 
 //Курсор, его положение, размер консоли, измененный текст, и пр...
 
-#define VCURSORWIDTH 2
-#define HCURSORHEIGHT 2
+#define VCURSORWIDTH  /*2*/ mp_Set->CursorMinSize()
+#define HCURSORHEIGHT /*2*/ mp_Set->CursorMinSize()
 
 #define Assert(V) if ((V)==FALSE) { wchar_t szAMsg[MAX_PATH*2]; _wsprintf(szAMsg, SKIPLEN(countof(szAMsg)) L"Assertion (%s) at\n%s:%i", _T(#V), _T(__FILE__), __LINE__); Box(szAMsg); }
 
@@ -127,7 +126,7 @@ WARNING("Часто после разблокирования компьютера размер консоли изменяется (OK), 
 #endif
 
 #ifdef _DEBUG
-#define DUMPDC(f) if (mb_DebugDumpDC) DumpImage(hDC, Width, Height, f);
+#define DUMPDC(f) if (mb_DebugDumpDC) DumpImage(hDC, NULL, Width, Height, f);
 #else
 #define DUMPDC(f)
 #endif
@@ -175,8 +174,8 @@ CVirtualConsole* CVirtualConsole::CreateVCon(RConStartArgs *args)
 
 	if (args->bForceUserDialog)
 	{
-		_ASSERTE(args->bRecreate==FALSE);
-		args->bRecreate = FALSE;
+		_ASSERTE(args->aRecreate!=cra_RecreateTab);
+		args->aRecreate = cra_CreateTab;
 
 		int nRc = gpConEmu->RecreateDlg(args);
 		if (nRc != IDC_START)
@@ -194,12 +193,19 @@ CVirtualConsole* CVirtualConsole::CreateVCon(RConStartArgs *args)
 	return pCon;
 }
 
-CVirtualConsole::CVirtualConsole(const RConStartArgs *args)
+CVirtualConsole::CVirtualConsole(const RConStartArgs *args) : hDC(NULL)
 {
 	mh_WndDC = NULL;
 	//CreateView();
 	mp_RCon = NULL; //new CRealConsole(this);
 	mp_Ghost = NULL;
+
+	mp_Set = NULL; // указатель на настройки разделяемые по приложениям
+
+	#ifdef __GNUC__
+	HMODULE hGdi32 = GetModuleHandle(L"gdi32.dll");
+	GdiAlphaBlend = (AlphaBlend_t)(hGdi32 ? GetProcAddress(hGdi32, "GdiAlphaBlend") : NULL);
+	#endif
 
 	gpConEmu->OnVConCreated(this, args);
 
@@ -225,7 +231,7 @@ CVirtualConsole::CVirtualConsole(const RConStartArgs *args)
 	mh_FontByIndex[MAX_FONT_STYLES] = NULL; // зарезервировано для 'Unicode CharMap'
 	memset(&TransparentInfo, 0, sizeof(TransparentInfo));
 	isFade = false; isForeground = true;
-	mp_Colors = gpSet->GetColors();
+	mp_Colors = gpSet->GetColors(-1);
 	memset(&m_LeftPanelView, 0, sizeof(m_LeftPanelView));
 	memset(&m_RightPanelView, 0, sizeof(m_RightPanelView));
 	mn_ConEmuFadeMsg = /*mn_ConEmuSettingsMsg =*/ 0;
@@ -279,11 +285,11 @@ CVirtualConsole::CVirtualConsole(const RConStartArgs *args)
 	hOldBrush = NULL;
 	hOldFont = NULL;
 
-	if (gpSet->wndWidth)
-		TextWidth = gpSet->wndWidth;
+	if (gpConEmu->wndWidth)
+		TextWidth = gpConEmu->wndWidth;
 
-	if (gpSet->wndHeight)
-		TextHeight = gpSet->wndHeight;
+	if (gpConEmu->wndHeight)
+		TextHeight = gpConEmu->wndHeight;
 
 	DEBUGTEST(mb_DebugDumpDC = false);
 
@@ -721,6 +727,8 @@ bool CVirtualConsole::InitDC(bool abNoDc, bool abNoWndResize, MSectionLock *pSDC
 	HEAPVAL
 	hSelectedFont = NULL;
 
+	bool lbRc = false;
+
 	// Это может быть, если отключена буферизация (debug) и вывод идет сразу на экран
 	if (!abNoDc)
 	{
@@ -751,9 +759,9 @@ bool CVirtualConsole::InitDC(bool abNoDc, bool abNoWndResize, MSectionLock *pSDC
 			Height = TextHeight * nFontHeight;
 #ifdef _DEBUG
 
-			if (Height > 1200)
+			if (Height > 2000)
 			{
-				_ASSERTE(Height <= 1200);
+				_ASSERTE(Height <= 2000);
 			}
 
 #endif
@@ -767,19 +775,41 @@ bool CVirtualConsole::InitDC(bool abNoDc, bool abNoWndResize, MSectionLock *pSDC
 				if (gpConEmu->isVisible(this))
 				{
 					MSetter lInConsoleResize(&mb_InConsoleResize);
-					gpConEmu->OnSize(-1);
+					gpConEmu->OnSize(false);
 				}
 			}
 
-			hBitmap = CreateCompatibleBitmap(hScreenDC, Width, Height);
+			if (GetDeviceCaps(hScreenDC, BITSPIXEL) == 32)
+			{
+				// For custom font rendering
+				BITMAPINFO bmi;
+				bmi.bmiHeader.biSize        = sizeof(bmi.bmiHeader);
+				bmi.bmiHeader.biWidth       = Width;
+				bmi.bmiHeader.biHeight      = -Height;
+				bmi.bmiHeader.biPlanes      = 1;
+				bmi.bmiHeader.biBitCount    = 32;
+				bmi.bmiHeader.biCompression = BI_RGB;
+				void* pvBits;
+				hBitmap = CreateDIBSection(hDC, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0);
+				hDC.pPixels = (COLORREF*)pvBits;
+				hDC.iWidth = Width;
+			}
+			else
+				hBitmap = CreateCompatibleBitmap(hScreenDC, Width, Height);
 			SelectObject(hDC, hBitmap);
 		}
 
 		ReleaseDC(0, hScreenDC);
-		return hBitmap!=NULL;
+		lbRc = (hBitmap!=NULL);
+		goto wrap;
 	}
 
-	return true;
+	lbRc = true;
+wrap:
+	// сбросим, уже не требуется
+	isFontSizeChanged = false;
+
+	return lbRc;
 }
 
 void CVirtualConsole::DumpConsole()
@@ -811,7 +841,7 @@ bool CVirtualConsole::Dump(LPCWSTR asFile)
 		return FALSE;
 	
 	// Она сделает снимок нашего буфера (hDC) в png файл
-	DumpImage(hDC, Width, Height, asFile);
+	DumpImage(hDC, NULL, Width, Height, asFile);
 	HANDLE hFile = CreateFile(asFile, GENERIC_WRITE, FILE_SHARE_READ,
 	                          NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -999,6 +1029,7 @@ bool CVirtualConsole::isCharNonSpacing(wchar_t inChar)
 
 bool CVirtualConsole::isCharSpace(wchar_t inChar)
 {
+	TODO("0x0020,0x00A0,0x1680,0x180E,0x2000,0x2001,0x2002,0x2003,0x2004,0x2005,0x2006,0x2007,0x2008,0x2009,0x200A,0x200b,0x200c,0x200d,0x205F,0x2060,0x3000,0xFEFF,0x00B7,0x237D,0x2420,0x2422,0x2423");
 	// Сюда пихаем все символы, которые можно отрисовать пустым фоном (как обычный пробел)
 	bool isSpace = (inChar == ucSpace || inChar == ucNoBreakSpace || inChar == 0 
 		/*|| (inChar>=0x2000 && inChar<=0x200F)
@@ -1006,55 +1037,117 @@ bool CVirtualConsole::isCharSpace(wchar_t inChar)
 	return isSpace;
 }
 
-void CVirtualConsole::BlitPictureTo(int inX, int inY, int inWidth, int inHeight)
+bool CVirtualConsole::isCharRTL(wchar_t inChar)
 {
-#ifdef _DEBUG
+	bool isRtl =
+	(inChar==0x05BE)||(inChar==0x05C0)||(inChar==0x05C3)||(inChar==0x05C6)||
+	((inChar>=0x05D0)&&(inChar<=0x05F4))||
+	(inChar==0x0608)||(inChar==0x060B)||(inChar==0x060D)||
+	((inChar>=0x061B)&&(inChar<=0x064A))||
+	((inChar>=0x066D)&&(inChar<=0x066F))||
+	((inChar>=0x0671)&&(inChar<=0x06D5))||
+	((inChar>=0x06E5)&&(inChar<=0x06E6))||
+	((inChar>=0x06EE)&&(inChar<=0x06EF))||
+	((inChar>=0x06FA)&&(inChar<=0x0710))||
+	((inChar>=0x0712)&&(inChar<=0x072F))||
+	((inChar>=0x074D)&&(inChar<=0x07A5))||
+	((inChar>=0x07B1)&&(inChar<=0x07EA))||
+	((inChar>=0x07F4)&&(inChar<=0x07F5))||
+	((inChar>=0x07FA)&&(inChar<=0x0815))||
+	(inChar==0x081A)||(inChar==0x0824)||(inChar==0x0828)||
+	((inChar>=0x0830)&&(inChar<=0x0858))||
+	((inChar>=0x085E)&&(inChar<=0x08AC))||
+	(inChar==0x200F)||(inChar==0xFB1D)||
+	((inChar>=0xFB1F)&&(inChar<=0xFB28))||
+	((inChar>=0xFB2A)&&(inChar<=0xFD3D))||
+	((inChar>=0xFD50)&&(inChar<=0xFDFC))||
+	((inChar>=0xFE70)&&(inChar<=0xFEFC))
+	//((inChar>=0x10800)&&(inChar<=0x1091B))||
+	//((inChar>=0x10920)&&(inChar<=0x10A00))||
+	//((inChar>=0x10A10)&&(inChar<=0x10A33))||
+	//((inChar>=0x10A40)&&(inChar<=0x10B35))||
+	//((inChar>=0x10B40)&&(inChar<=0x10C48))||
+	//((inChar>=0x1EE00)&&(inChar<=0x1EEBB))
+	;
+  return isRtl;
+}
+
+
+void CVirtualConsole::BlitPictureTo(int inX, int inY, int inWidth, int inHeight, COLORREF crBack)
+{
+	#ifdef _DEBUG
 	BOOL lbDump = FALSE;
+	if (lbDump) DumpImage(hBgDc, NULL, bgBmpSize.X, bgBmpSize.Y, L"F:\\bgtemp.png");
+	#endif
 
-	if (lbDump) DumpImage(hBgDc, bgBmpSize.X, bgBmpSize.Y, L"F:\\bgtemp.png");
-
-#endif
-
-	if (bgBmpSize.X>inX && bgBmpSize.Y>inY)
-		BitBlt(hDC, inX, inY, inWidth, inHeight, hBgDc, inX, inY, SRCCOPY);
-
-	if (bgBmpSize.X<(inX+inWidth) || bgBmpSize.Y<(inY+inHeight))
+	if ((gpSet->bgOperation == eUpRight)
+		|| (gpSet->bgOperation == eDownLeft)
+		|| (gpSet->bgOperation == eDownRight))
 	{
+		HBRUSH hBr = NULL;
+		#if 0
+		hBr = PartBrush(L' ', crBack, 0);
+		#else
 		if (hBrush0 == NULL)
 		{
 			hBrush0 = CreateSolidBrush(mp_Colors[0]);
 			SelectBrush(hBrush0);
 		}
+		hBr = hBrush0;
+		#endif
 
-		RECT rect = {max(inX,bgBmpSize.X), inY, inX+inWidth, inY+inHeight};
-#ifndef SKIP_ALL_FILLRECT
+		RECT rect = {inX, inY, inX+inWidth, inY+inHeight};
+		FillRect(hDC, &rect, hBr);
 
-		if (!IsRectEmpty(&rect))
-			FillRect(hDC, &rect, hBrush0);
-
-#endif
-
-		if (bgBmpSize.X>inX)
+		int xShift = ((gpSet->bgOperation == eUpRight) || (gpSet->bgOperation == eDownRight)) ? max(0,(Width - bgBmpSize.X)) : 0;
+		int yShift = ((gpSet->bgOperation == eDownLeft) || (gpSet->bgOperation == eDownRight)) ? max(0,(Height - bgBmpSize.Y)) : 0;
+		if (bgBmpSize.X>(inX-xShift) && bgBmpSize.Y>(inY-yShift))
 		{
-			rect.left = inX; rect.top = max(inY,bgBmpSize.Y); rect.right = bgBmpSize.X;
-#ifndef SKIP_ALL_FILLRECT
+			//BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+			BitBlt(hDC, inX, inY, inWidth, inHeight, hBgDc, inX-xShift, inY-yShift, SRCCOPY);
+			//GdiAlphaBlend(hDC, inX, inY, inWidth, inHeight, hBgDc, inX-xShift, inY, inWidth, inHeight, bf);
+		}
+	}
+	else
+	{
+		if (bgBmpSize.X>inX && bgBmpSize.Y>inY)
+			BitBlt(hDC, inX, inY, inWidth, inHeight, hBgDc, inX, inY, SRCCOPY);
 
+		// Заливка цветом (там где нет картинки)
+		if ((bgBmpSize.X < (inX+inWidth)) || (bgBmpSize.Y < (inY+inHeight)))
+		{
+			if (hBrush0 == NULL)
+			{
+				hBrush0 = CreateSolidBrush(mp_Colors[0]);
+				SelectBrush(hBrush0);
+			}
+
+			RECT rect = {max(inX,bgBmpSize.X), inY, inX+inWidth, inY+inHeight};
+
+			#ifndef SKIP_ALL_FILLRECT
 			if (!IsRectEmpty(&rect))
 				FillRect(hDC, &rect, hBrush0);
+			#endif
 
-#endif
+			if (bgBmpSize.X>inX)
+			{
+				rect.left = inX; rect.top = max(inY,bgBmpSize.Y); rect.right = bgBmpSize.X;
+
+				#ifndef SKIP_ALL_FILLRECT
+				if (!IsRectEmpty(&rect))
+					FillRect(hDC, &rect, hBrush0);
+				#endif
+			}
 		}
-
-		//DeleteObject(hBrush);
 	}
 }
 
-void CVirtualConsole::SelectFont(HFONT hNew)
+void CVirtualConsole::SelectFont(CEFONT hNew)
 {
-	if (hNew == NULL)
+	if (!hNew.IsSet())
 	{
-		if (hOldFont)
-			SelectObject(hDC, hOldFont);
+		if (hOldFont.IsSet())
+			hDC.SelectObject(hOldFont);
 
 		hOldFont = NULL;
 		hSelectedFont = NULL;
@@ -1067,9 +1160,9 @@ void CVirtualConsole::SelectFont(HFONT hNew)
 			hNew = mh_UCharMapFont;
 
 #endif
-		hSelectedFont = (HFONT)SelectObject(hDC, hNew);
+		hSelectedFont = hDC.SelectObject(hNew);
 
-		if (!hOldFont)
+		if (!hOldFont.IsSet())
 			hOldFont = hSelectedFont;
 
 		hSelectedFont = hNew;
@@ -1166,30 +1259,41 @@ void CVirtualConsole::CharABC(wchar_t ch, ABC *abc)
 {
 	BOOL lbCharABCOk;
 
+	WARNING("Не работает с *.bdf?");
+
 	if (!gpSetCls->CharABC[ch].abcB)
 	{
-		if (gpSetCls->mh_Font2 && gpSet->isFixFarBorders && isCharBorder(ch))
+		if (isCharRTL(ch))
 		{
-			SelectFont(gpSetCls->mh_Font2);
+			WARNING("Поскольку с RTL все достаточно сложно, пока считаем шрифт моноширным");
+			gpSetCls->CharABC[ch].abcA = gpSetCls->CharABC[ch].abcC = 0;
+			gpSetCls->CharABC[ch].abcB = nFontWidth;
 		}
 		else
 		{
-			TODO("Тут надо бы деление по стилям сделать");
-			SelectFont(gpSetCls->mh_Font[0]);
-		}
+			if (gpSetCls->mh_Font2.IsSet() && gpSet->isFixFarBorders && isCharBorder(ch))
+			{
+				SelectFont(gpSetCls->mh_Font2);
+			}
+			else
+			{
+				TODO("Тут надо бы деление по стилям сделать");
+				SelectFont(gpSetCls->mh_Font[0]);
+			}
 
-		//This function succeeds only with TrueType fonts
-		lbCharABCOk = GetCharABCWidths(hDC, ch, ch, &gpSetCls->CharABC[ch]);
+			//This function succeeds only with TrueType fonts
+			lbCharABCOk = GetCharABCWidths(hDC, ch, ch, &gpSetCls->CharABC[ch]);
 
-		if (!lbCharABCOk)
-		{
-			// Значит шрифт не TTF/OTF
-			gpSetCls->CharABC[ch].abcB = CharWidth(ch);
-			_ASSERTE(gpSetCls->CharABC[ch].abcB);
+			if (!lbCharABCOk)
+			{
+				// Значит шрифт не TTF/OTF
+				gpSetCls->CharABC[ch].abcB = CharWidth(ch);
+				_ASSERTE(gpSetCls->CharABC[ch].abcB);
 
-			if (!gpSetCls->CharABC[ch].abcB) gpSetCls->CharABC[ch].abcB = 1;
+				if (!gpSetCls->CharABC[ch].abcB) gpSetCls->CharABC[ch].abcB = 1;
 
-			gpSetCls->CharABC[ch].abcA = gpSetCls->CharABC[ch].abcC = 0;
+				gpSetCls->CharABC[ch].abcA = gpSetCls->CharABC[ch].abcC = 0;
+			}
 		}
 	}
 
@@ -1220,7 +1324,7 @@ WORD CVirtualConsole::CharWidth(wchar_t ch)
 	//bool isBorder = false; //, isVBorder = false;
 
 	// Наверное все же нужно считать именно в том шрифте, которым будет идти отображение
-	if (gpSetCls->mh_Font2 && gpSet->isFixFarBorders && isCharBorder(ch))
+	if (gpSetCls->mh_Font2.IsSet() && gpSet->isFixFarBorders && isCharBorder(ch))
 	{
 		SelectFont(gpSetCls->mh_Font2);
 	}
@@ -1238,7 +1342,7 @@ WORD CVirtualConsole::CharWidth(wchar_t ch)
 	//BOOL lb1 = GetCharABCWidths(hDC, ch, ch, &abc);
 	//#endif
 
-	if (GetTextExtentPoint32(hDC, &ch, 1, &sz) && sz.cx)
+	if (hDC.GetTextExtentPoint32(&ch, 1, &sz) && sz.cx)
 		nWidth = sz.cx;
 	else
 		nWidth = nFontWidth;
@@ -1374,6 +1478,9 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 	if (!this || !mp_RCon || !mp_RCon->ConWnd())
 		return false;
 
+	if (abForce)
+		mp_RCon->ResetActiveAppSettingsId();
+
 	isForce = abForce;
 
 	if (!gpConEmu->isMainThread())
@@ -1421,7 +1528,7 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 	// Рисуем актуальную информацию из CRealConsole. ЗДЕСЬ запросы в консоль не делаются.
 	//RetrieveConsoleInfo();
 #ifdef MSGLOGGER
-	DcDebug dbg(&hDC, ahDc); // для отладки - рисуем сразу на канвасе окна
+	DcDebug dbg(&hDC.hDC, ahDc); // для отладки - рисуем сразу на канвасе окна
 #endif
 	HEAPVAL
 	bool lRes = false;
@@ -1918,40 +2025,12 @@ bool CVirtualConsole::UpdatePrepare(HDC *ahDc, MSectionLock *pSDC, MSectionLock 
 	isViewer = gpConEmu->isViewer();
 	isFilePanel = gpConEmu->isFilePanel(true);
 	isFade = !isForeground && gpSet->isFadeInactive;
-	mp_Colors = gpSet->GetColors(isFade);
+	mp_Colors = gpSet->GetColors(mp_RCon->GetActiveAppSettingsId(), isFade);
+	if ((nFontHeight != gpSetCls->FontHeight()) || (nFontWidth != gpSetCls->FontWidth()))
+		isFontSizeChanged = true;
 	nFontHeight = gpSetCls->FontHeight();
 	nFontWidth = gpSetCls->FontWidth();
 	nFontCharSet = gpSetCls->FontCharSet();
-	//bExtendColors = gpSet->isExtendColors;
-	//nExtendColor = gpSet->nExtendColor;
-	//bExtendFonts = gpSet->isExtendFonts;
-	//nFontNormalColor = gpSet->nFontNormalColor;
-	//nFontBoldColor = gpSet->nFontBoldColor;
-	//nFontItalicColor = gpSet->nFontItalicColor;
-	//m_ForegroundColors[0x100], m_BackgroundColors[0x100];
-	//TODO("В принципе, это можно делать не всегда, а только при изменениях");
-	//int nColorIndex = 0;
-	//for (int nBack = 0; nBack <= 0xF; nBack++) {
-	//	for (int nFore = 0; nFore <= 0xF; nFore++, nColorIndex++) {
-	//		m_ForegroundColors[nColorIndex] = nFore;
-	//		m_BackgroundColors[nColorIndex] = nBack;
-	//		mh_FontByIndex[nColorIndex] = gpSetCls->mh_Font;
-	//		if (bExtendFonts) {
-	//			if (nBack == nFontBoldColor) { // nFontBoldColor may be -1, тогда мы сюда не попадаем
-	//				if (nFontNormalColor != 0xFF)
-	//					m_BackgroundColors[nColorIndex] = nFontNormalColor;
-	//				mh_FontByIndex[nColorIndex] = gpSetCls->mh_FontB;
-	//			} else if (nBack == nFontItalicColor) { // nFontItalicColor may be -1, тогда мы сюда не попадаем
-	//				if (nFontNormalColor != 0xFF)
-	//					m_BackgroundColors[nColorIndex] = nFontNormalColor;
-	//				mh_FontByIndex[nColorIndex] = gpSetCls->mh_FontI;
-	//			}
-	//		}
-	//	}
-	//}
-	//winSize.X = csbi.srWindow.Right - csbi.srWindow.Left + 1; winSize.Y = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-	//if (winSize.X < csbi.dwSize.X)
-	//    winSize.X = csbi.dwSize.X;
 	winSize = MakeCoord(mp_RCon->TextWidth(),mp_RCon->TextHeight());
 	//csbi.dwCursorPosition.X -= csbi.srWindow.Left; -- горизонтальная прокрутка игнорируется!
 	csbi.dwCursorPosition.Y -= csbi.srWindow.Top;
@@ -1966,7 +2045,8 @@ bool CVirtualConsole::UpdatePrepare(HDC *ahDc, MSectionLock *pSDC, MSectionLock 
 	}
 
 	// Первая инициализация, или смена размера
-	BOOL lbSizeChanged = (hDC == NULL) || (TextWidth != (uint)winSize.X || TextHeight != (uint)winSize.Y);
+	BOOL lbSizeChanged = (hDC == NULL) || (TextWidth != (uint)winSize.X || TextHeight != (uint)winSize.Y)
+		|| isFontSizeChanged; // или смена шрифта ('Auto' на 'Main')
 #ifdef _DEBUG
 	COORD dbgWinSize = winSize;
 	COORD dbgTxtSize = {TextWidth,TextHeight};
@@ -1979,7 +2059,7 @@ bool CVirtualConsole::UpdatePrepare(HDC *ahDc, MSectionLock *pSDC, MSectionLock 
 	{
 		// 100627 перенес после InitDC, т.к. циклилось
 		//if (lbSizeChanged)
-		//	gpConEmu->OnConsoleResize(TRUE);
+		//	gpConEmu->OnConsole Resize(TRUE);
 		//if (pSDC && !pSDC->isLocked())  // Если секция еще не заблокирована (отпускает - вызывающая функция)
 		//	pSDC->Lock(&csDC, TRUE, 200); // но по таймауту, чтобы не повисли ненароком
 
@@ -2002,7 +2082,7 @@ bool CVirtualConsole::UpdatePrepare(HDC *ahDc, MSectionLock *pSDC, MSectionLock 
 
 #endif
 		//if (lbSizeChanged) -- попробуем вверх перенести
-		//	gpConEmu->OnConsoleResize();
+		//	gpConEmu->OnConsole Resize();
 	}
 
 	// Требуется полная перерисовка!
@@ -2194,6 +2274,8 @@ bool CVirtualConsole::UpdatePrepare(HDC *ahDc, MSectionLock *pSDC, MSectionLock 
 
 void CVirtualConsole::Update_CheckAndFill()
 {
+#if 0
+	WARNING("Пока не используется!");
 	// pointers
 	wchar_t* ConCharLine = mpsz_ConChar;
 	CharAttr* ConAttrLine = mpn_ConAttrEx;
@@ -2256,6 +2338,7 @@ void CVirtualConsole::Update_CheckAndFill()
 			}
 		}
 	}
+#endif
 }
 
 // Разбор строки на составляющие (возвращает true, если есть ячейки с НЕ основным фоном)
@@ -2355,7 +2438,7 @@ bool CVirtualConsole::Update_ParseTextParts(uint row, const wchar_t* ConCharLine
 		}
 		else
 		{
-			//PRAGMA_ERROR("доделать ветку");
+			TODO("доделать ветку");
 			while (++j < (int)TextWidth)
 			{
 				attr = ConAttrLine+j;
@@ -2457,9 +2540,9 @@ void CVirtualConsole::UpdateText()
 
 
 	if (/*gpSet->isForceMonospace ||*/ !drawImage)
-		SetBkMode(hDC, OPAQUE);
+		hDC.SetBkMode(OPAQUE);
 	else
-		SetBkMode(hDC, TRANSPARENT);
+		hDC.SetBkMode(TRANSPARENT);
 
 	int *nDX = (int*)malloc((TextWidth+1)*sizeof(int));
 	// rows
@@ -2471,14 +2554,47 @@ void CVirtualConsole::UpdateText()
 	bool bForceMonospace = gpSet->isMonospace == 2;
 	bool bFixFarBorders = gpSet->isFixFarBorders;
 	//mh_FontByIndex[0] = gpSetCls->mh_Font; mh_FontByIndex[1] = gpSetCls->mh_FontB; mh_FontByIndex[2] = gpSetCls->mh_FontI; mh_FontByIndex[3] = gpSetCls->mh_FontBI;
-	HFONT hFont = gpSetCls->mh_Font[0];
-	HFONT hFont2 = gpSetCls->mh_Font2;
+	CEFONT hFont = gpSetCls->mh_Font[0];
+	CEFONT hFont2 = gpSetCls->mh_Font2;
+
+	// 120616 - Chinese - off?
+	bool bFixFrameCoord = !gbIsDBCS || mp_RCon->isFar();
+
+	_ASSERTE(((TextWidth * nFontWidth) >= Width));
+#if 0
+	if (((TextHeight * nFontHeight) < Height) || ((TextWidth * nFontWidth) < Width))
+	{
+		bool lbDelBrush = false;
+		HBRUSH hBr = CreateBackBrush(false, lbDelBrush);
+
+		if (nFontHeight && (TextHeight * nFontHeight) < Height)
+		{
+			RECT rcFill = {0, TextHeight * nFontHeight, Width, Height};
+			FillRect(hDC, &rcFill, hBr);
+		}
+
+		if (nFontWidth && ((TextWidth * nFontWidth) < Width))
+		{
+			RECT rcFill = {TextWidth * nFontWidth, 0, Width, Height};
+			FillRect(hDC, &rcFill, hBr);
+		}
+
+		if (lbDelBrush)
+			DeleteObject(hBr);
+	}
+#endif
 
 	//BUGBUG: хорошо бы отрисовывать последнюю строку, даже если она чуть не влазит
 	for(; pos <= nMaxPos;
 	        ConCharLine += TextWidth, ConAttrLine += TextWidth, ConCharXLine += TextWidth,
 	        pos += nFontHeight, row++)
 	{
+		if (row >= (int)TextHeight)
+		{
+			//_ASSERTE(row < (int)TextHeight);
+			DEBUGSTRFAIL(L"############ _ASSERTE(row < (int)TextHeight) #############\n");
+			break;
+		}
 		//2009-09-25. Некоторые (старые?) программы умудряются засунуть в консоль символы (ASC<32)
 		//            их нужно заменить на юникодные аналоги
 		//{
@@ -2608,7 +2724,8 @@ void CVirtualConsole::UpdateText()
 			HEAPVAL
 
 			// корректировка лидирующих пробелов и рамок
-			if (bProportional && (c==ucBoxDblHorz || c==ucBoxSinglHorz))
+			// 120616 - Chinese - off
+			if (bProportional && bFixFrameCoord && (c==ucBoxDblHorz || c==ucBoxSinglHorz))
 			{
 				lbS1 = true; nS11 = nS12 = j;
 
@@ -2641,11 +2758,11 @@ void CVirtualConsole::UpdateText()
 			    while ((nS12 < end) && (ConCharLine[nS12+1] == c))
 			        nS12 ++;
 			}*/
-			//SetTextColor(hDC, pColors[attrFore]);
-			SetTextColor(hDC, attr.crForeColor);
+			//hDC.SetTextColor(pColors[attrFore]);
+			hDC.SetTextColor(attr.crForeColor);
 
 			// корректировка положения вертикальной рамки (Coord.X>0)
-			if (bProportional && j)
+			if (bProportional && j && bFixFrameCoord)
 			{
 				HEAPVAL;
 				DWORD nPrevX = ConCharXLine[j-1];
@@ -2663,7 +2780,7 @@ void CVirtualConsole::UpdateText()
 					//ConCharXLine[j-1] = j * nFontWidth;
 					bool bMayBeFrame = true;
 
-					// Пройти вверх и вних от текущей строки, проверив,
+					// Пройти вверх и вниз от текущей строки, проверив,
 					// есть ли в этой же X-координате вертикальная рамка (или угол)
 					TODO("Хорошо бы для панелей определять границы колонок более корректно, лучше всего - через API?");
 					//if (!bBord && !bFrame)
@@ -2713,11 +2830,12 @@ void CVirtualConsole::UpdateText()
 
 					if (gbNoDblBuffer) GdiFlush();
 
+					const CharAttr PrevAttr = ConAttrLine[j-1];
+
 					// Если не отрисовка фона картинкой
 					if (!(drawImage && ISBGIMGCOLOR(attr.nBackIdx)))
 					{
 						//BYTE PrevAttrFore = attrFore, PrevAttrBack = attrBack;
-						const CharAttr PrevAttr = ConAttrLine[j-1];
 						wchar_t PrevC = ConCharLine[j-1];
 
 						//GetCharAttr(PrevC, PrevAttr, PrevC, PrevAttrFore, PrevAttrBack);
@@ -2729,8 +2847,8 @@ void CVirtualConsole::UpdateText()
 						// нужно продлить рамку до текущего символа
 						if (isCharBorderVertical(c) && isCharBorder(PrevC))
 						{
-							//SetBkColor(hDC, pColors[attrBack]);
-							SetBkColor(hDC, attr.crBackColor);
+							//hDC.SetBkColor(pColors[attrBack]);
+							hDC.SetBkColor(attr.crBackColor);
 							wchar_t *pchBorder = (c == ucBoxDblDownLeft || c == ucBoxDblUpLeft
 							                      || c == ucBoxSinglDownDblHorz || c == ucBoxSinglUpDblHorz
 							                      || c == ucBoxDblDownDblHorz || c == ucBoxDblUpDblHorz
@@ -2745,9 +2863,9 @@ void CVirtualConsole::UpdateText()
 							}
 
 							//UINT nFlags = ETO_CLIPPED; // || ETO_OPAQUE;
-							//ExtTextOut(hDC, rect.left, rect.top, nFlags, &rect, Spaces, min(nSpaceCount, nCnt), 0);
+							//hDC.ExtTextOut(rect.left, rect.top, nFlags, &rect, Spaces, min(nSpaceCount, nCnt), 0);
 							//if (! (drawImage && ISBGIMGCOLOR(attr.nBackIdx)))
-							//	SetBkColor(hDC, pColors[attrBack]);
+							//	hDC.SetBkColor(pColors[attrBack]);
 							//else if (drawImage)
 							//	BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
 							UINT nFlags = ETO_CLIPPED | ETO_OPAQUE;
@@ -2756,9 +2874,9 @@ void CVirtualConsole::UpdateText()
 							if (bFixFarBorders)
 								SelectFont(hFont2);
 
-							SetTextColor(hDC, PrevAttr.crForeColor);
-							ExtTextOut(hDC, rect.left, rect.top, nFlags, &rect, pchBorder, nCnt, 0);
-							SetTextColor(hDC, attr.crForeColor); // Вернуть
+							hDC.SetTextColor(PrevAttr.crForeColor);
+							hDC.ExtTextOut(rect.left, rect.top, nFlags, &rect, pchBorder, nCnt, 0);
+							hDC.SetTextColor(attr.crForeColor); // Вернуть
 						}
 						else
 						{
@@ -2768,7 +2886,7 @@ void CVirtualConsole::UpdateText()
 					}
 					else if (drawImage)
 					{
-						BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+						BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, PrevAttr.crBackColor);
 					} HEAPVAL
 
 					if (gbNoDblBuffer) GdiFlush();
@@ -2778,11 +2896,12 @@ void CVirtualConsole::UpdateText()
 			ConCharXLine[j] = (j ? ConCharXLine[j-1] : 0)+CharWidth(c);
 			HEAPVAL
 
+			#if 0
 			if (bForceMonospace)
 			{
 				HEAPVAL
-				//SetBkColor(hDC, pColors[attrBack]);
-				SetBkColor(hDC, attr.crBackColor);
+				//hDC.SetBkColor(pColors[attrBack]);
+				hDC.SetBkColor(attr.crBackColor);
 				j2 = j + 1;
 
 				if (bFixFarBorders && isUnicode)
@@ -2792,17 +2911,9 @@ void CVirtualConsole::UpdateText()
 
 				RECT rect;
 
-				if (!bProportional)
-					rect = MakeRect(j * nFontWidth, pos, j2 * nFontWidth, pos + nFontHeight);
-				else
-				{
-					rect.left = j ? ConCharXLine[j-1] : 0;
-					rect.top = pos;
-					rect.right = (TextWidth>(UINT)j2) ? ConCharXLine[j2-1] : Width;
-					rect.bottom = rect.top + nFontHeight;
-				}
+				rect = MakeRect(j * nFontWidth, pos, j2 * nFontWidth, pos + nFontHeight);
 
-				UINT nFlags = ETO_CLIPPED | ((drawImage && ISBGIMGCOLOR(attr.nBackIdx)) ? 0 : ETO_OPAQUE);
+				UINT nFlags = /*ETO_CLIPPED |*/ ((drawImage && ISBGIMGCOLOR(attr.nBackIdx)) ? 0 : ETO_OPAQUE);
 				int nShift = 0;
 				HEAPVAL
 
@@ -2834,8 +2945,8 @@ void CVirtualConsole::UpdateText()
 
 				if (!(drawImage && ISBGIMGCOLOR(attr.nBackIdx)))
 				{
-					//SetBkColor(hDC, pColors[attrBack]);
-					SetBkColor(hDC, attr.crBackColor);
+					//hDC.SetBkColor(pColors[attrBack]);
+					hDC.SetBkColor(attr.crBackColor);
 
 					// В режиме ForceMonospace символы пытаемся рисовать по центру (если они уже знакоместа)
 					// чтобы не оставалось мусора от предыдущей отрисовки - нужно залить знакоместо фоном
@@ -2847,7 +2958,7 @@ void CVirtualConsole::UpdateText()
 				}
 				else if (drawImage)
 				{
-					BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+					BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, attr.crBackColor);
 					lbImgDrawn = TRUE;
 				}
 
@@ -2883,11 +2994,11 @@ void CVirtualConsole::UpdateText()
 					if (nFontCharSet == OEM_CHARSET && !isUnicode)
 					{
 						char cOem = Uni2Oem(c);
-						ExtTextOutA(hDC, rect.left, rect.top, nFlags, &rect, &cOem, 1, 0);
+						hDC.ExtTextOutA(rect.left, rect.top, nFlags, &rect, &cOem, 1, 0);
 					}
 					else
 					{
-						ExtTextOut(hDC, rect.left, rect.top, nFlags, &rect, &c, 1, 0);
+						hDC.ExtTextOut(rect.left, rect.top, nFlags, &rect, &c, 1, 0);
 					}
 				}
 
@@ -2896,6 +3007,7 @@ void CVirtualConsole::UpdateText()
 				HEAPVAL
 			} // end  - if (gpSet->isForceMonospace)
 			else
+			#endif
 			{
 				wchar_t* pszDraw = NULL;
 				int      nDrawLen = -1;
@@ -2929,7 +3041,7 @@ void CVirtualConsole::UpdateText()
 				else if (!isUnicodeOrProgress)
 				{
 					j2 = j + 1; HEAPVAL
-#ifndef DRAWEACHCHAR
+
 					// Если этого не делать - в пропорциональных шрифтах буквы будут наезжать одна на другую
 					wchar_t ch;
 					//int nLastNonSpace = -1;
@@ -2937,15 +3049,14 @@ void CVirtualConsole::UpdateText()
 					TODO("при поиске по строке - обновлять nLastNonSpace");
 
 					while (j2 < end && ConAttrLine[j2] == attr
-					        && !isCharBorder(ch = ConCharLine[j2])
+							&& (ch = ConCharLine[j2], bFixFarBorders ? !isCharBorder(ch) : (!bEnhanceGraphics || !isCharProgress(ch)))
 							&& !isCharNonSpacing(ch)
-					        && (!bProportional || !isFilePanel || (ch != L'}' && ch!=L' '))) // корректировка имен в колонках
+							&& (!bProportional || !isFilePanel || (ch != L'}' && ch!=L' '))) // корректировка имен в колонках
 					{
 						ConCharXLine[j2] = (j2 ? ConCharXLine[j2-1] : 0)+CharWidth(ch);
 						j2++;
 					}
 
-#endif
 					TODO("От хвоста - отбросить пробелы (если если есть nLastNonSpace)");
 					SelectFont(hFont);
 					HEAPVAL
@@ -3016,8 +3127,7 @@ void CVirtualConsole::UpdateText()
 								nDrawLen = nCnt;
 								pszDraw = (c==ucBoxDblHorz) ? ms_HorzDbl : ms_HorzSingl;
 							}
-
-#ifdef _DEBUG
+							#ifdef _DEBUG
 							else
 							{
 								//static bool bShowAssert = true;
@@ -3025,8 +3135,7 @@ void CVirtualConsole::UpdateText()
 								_ASSERTE(!bIsHorzBorder || (c==ucBoxDblHorz || c==ucBoxSinglHorz));
 								//}
 							}
-
-#endif
+							#endif
 						}
 
 						//while (j2 < end && ConAttrLine[j2] == attr &&
@@ -3061,12 +3170,12 @@ void CVirtualConsole::UpdateText()
 
 				if (!(drawImage && ISBGIMGCOLOR(attr.nBackIdx)))
 				{
-					//SetBkColor(hDC, pColors[attrBack]);
-					SetBkColor(hDC, attr.crBackColor);
+					//hDC.SetBkColor(pColors[attrBack]);
+					hDC.SetBkColor(attr.crBackColor);
 				}
 				else if (drawImage)
 				{
-					BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+					BlitPictureTo(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, attr.crBackColor);
 					lbImgDrawn = TRUE;
 				}
 
@@ -3129,30 +3238,125 @@ void CVirtualConsole::UpdateText()
 						WideCharToMultiByte(CP_OEMCP, 0, pszDraw, nDrawLen, tmpOem, TextWidth, 0, 0);
 
 						if (!bProportional)
+						{
 							for(int idx = 0; idx < nDrawLen; idx++)
 							{
 								WARNING("BUGBUG: что именно нужно передавать для получения ширины OEM символа?");
 								nDX[idx] = CharWidth(tmpOem[idx]);
 							}
+						}
 
-						ExtTextOutA(hDC, rect.left, rect.top, nFlags,
+						hDC.ExtTextOutA(rect.left, rect.top, nFlags,
 						            &rect, tmpOem, nDrawLen, bProportional ? 0 : nDX);
 					}
 					else
 					{
-						if (nDrawLen == 1)  // support visualizer change
-							ExtTextOut(hDC, rect.left, rect.top, nFlags, &rect,
-							           &c/*ConCharLine + j*/, 1, 0);
-						else
-						{
-							if (!bProportional)
-								for(int idx = 0, n = nDrawLen; n; idx++, n--)
-									nDX[idx] = CharWidth(pszDraw[idx]);
+						int nShift0 = 0, nPrevEdge = 0;
+						ABC abc;
 
-							// nDX это сдвиги до начала следующего символа, с начала предыдущего
-							ExtTextOut(hDC, rect.left, rect.top, nFlags, &rect,
-							           pszDraw, nDrawLen, bProportional ? 0 : nDX);
+						// Для пропорциональных шрифтов - где рисовать каждый символ разбирается GDI
+						if (!bProportional)
+						{
+							if (!bForceMonospace)
+							{
+								// В этом режиме символ отрисовывается в начале своей ячейки
+								for (int idx = 0, n = nDrawLen; n; idx++, n--)
+								{
+									// Информация для GDI. Ширина отрисовки, т.е. сдвиг между текущим и следующим символом.
+									nDX[idx] = nFontWidth; //CharWidth(pszDraw[idx]); -- лишний вызов функции
+								}
+							}
+							else
+							{
+								for (int idx = 0, n = nDrawLen; n; idx++, n--)
+								{
+									WARNING("Для RTL нужно переделать");
+									// GDI учитывает nDX не по порядку следования символов в памяти,
+									// а по порядку отрисовки (что логично), то есть нужно смотреть на строку,
+									// брать кусок RTL и считать nDX для pszDraw в обратном порядке
+
+
+									wchar_t ch = pszDraw[idx];
+									if (isCharSpace(ch) || isCharBorder(ch) || isCharProgress(ch))
+									{
+										abc.abcA = abc.abcC = 0;
+										abc.abcB = nFontWidth;
+									}
+									else
+									{
+										//Для НЕ TrueType вызывается wrapper (CharWidth)
+										CharABC(ch, &abc);
+									}
+
+									int nDrawWidth = abc.abcA + abc.abcB + 1;
+
+									//if (!idx)
+									//	nShift0 = abc.abcA;
+
+									#ifdef _DEBUG
+									if (abc.abcA!=0)
+									{
+										int nDbgA = 0;
+									}
+									if (abc.abcC!=0)
+									{
+										// Для японских иероглифов - "1"
+										int nDbgC = 0;
+									}
+									#endif
+
+									//if (abc.abcA<0)
+									//{
+									//	// иначе символ наверное налезет на предыдущий?
+									//	//nShift = -abc.abcA;
+									//	nDX[idx] = abc.abcA + abc.abcB + abc.abcC;
+									//}
+									//else
+									if (nDrawWidth < nFontWidth)
+									{
+										int nEdge = ((nFontWidth - nDrawWidth) >> 1) - nPrevEdge;
+
+										if (idx)
+										{
+											nDX[idx-1] += nEdge;
+											_ASSERTE(nDX[idx-1]>=-100);
+										}
+										else
+										{
+											nShift0 += nEdge;
+										}
+
+										nPrevEdge += nEdge;
+
+										nDX[idx] = nFontWidth;
+
+										//if (abc.abcA < nEdge)
+										//{
+										//	// символ I, i, и др. очень тонкие - рисуем посередине
+										//	nShift = nEdge - abc.abcA;
+										//}
+									}
+									else
+									{
+										// Ширина отрисовываемой части больше чем знакоместо,
+										// но т.к. юзер хотел режим Monospace - принудительно
+										// выставляем ширину ячейки
+										nDX[idx] = nFontWidth; // abc.abcA + abc.abcB /*+ abc.abcC*/;
+										if (nPrevEdge)
+										{
+											_ASSERTE(idx>0 && "Must be, cause of nPrevEdge");
+											nDX[idx-1] -= nPrevEdge;
+											nPrevEdge = 0;
+										}
+										//_ASSERTE(abc.abcC==0 && "Check what symbols can produce '!=0'");
+									}
+								}
+							}
 						}
+
+						// nDX это сдвиги до начала следующего символа, с начала предыдущего
+						hDC.ExtTextOut(rect.left+nShift0, rect.top, nFlags, &rect,
+						           pszDraw, nDrawLen, bProportional ? 0 : nDX);
 					}
 				}
 
@@ -3177,6 +3381,18 @@ void CVirtualConsole::UpdateText()
 			//    }
 			//}
 		}
+	}
+
+	if ((pos > nMaxPos) && (pos < (int)Height))
+	{
+		bool lbDelBrush = false;
+		HBRUSH hBr = CreateBackBrush(false, lbDelBrush);
+
+		RECT rcFill = {0, pos, Width, Height};
+		FillRect(hDC, &rcFill, hBr);
+
+		if (lbDelBrush)
+			DeleteObject(hBr);
 	}
 
 	free(nDX);
@@ -3289,14 +3505,16 @@ HBRUSH CVirtualConsole::PartBrush(wchar_t ch, COLORREF nBackCol, COLORREF nForeC
 
 void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, UINT dwSize)
 {
-	if (mp_RCon && mp_RCon->GuiWnd())
-	{
-		// В GUI режиме VirtualConsole скрыта под GUI окном и видна только при "включении" BufferHeight
-		if (!mp_RCon->isBufferHeight())
-		{
-			return;
-		}
-	}
+	if (!mp_RCon || !mp_RCon->isNeedCursorDraw())
+		return;
+	//if (mp_RCon && mp_RCon->GuiWnd())
+	//{
+	//	// В GUI режиме VirtualConsole скрыта под GUI окном и видна только при "включении" BufferHeight
+	//	if (!mp_RCon->isBufferHeight())
+	//	{
+	//		return;
+	//	}
+	//}
 
 	Cursor.x = csbi.dwCursorPosition.X;
 	Cursor.y = csbi.dwCursorPosition.Y;
@@ -3322,7 +3540,10 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 	RECT rect;
 	bool bForeground = gpConEmu->isMeForeground();
 
-	if (!bForeground && gpSet->isCursorBlockInactive)
+	// указатель на настройки разделяемые по приложениям
+	mp_Set = gpSet->GetAppSettings(mp_RCon->GetActiveAppSettingsId());
+
+	if (!bForeground && mp_Set->CursorBlockInactive())
 	{
 		dwSize = 100;
 		rect.left = pix.X; /*Cursor.x * nFontWidth;*/
@@ -3330,7 +3551,7 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 		rect.bottom = (pos.Y+1) * nFontHeight;
 		rect.top = (pos.Y * nFontHeight) /*+ 1*/;
 	}
-	else if (!gpSet->isCursorV)
+	else if (!mp_Set->CursorV())
 	{
 		if (!gpSet->isMonospace)
 		{
@@ -3353,7 +3574,8 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 		{
 			nHeight = MulDiv(nFontHeight, dwSize, 100);
 
-			if (nHeight < HCURSORHEIGHT) nHeight = HCURSORHEIGHT;
+			nHeight = min(nFontHeight,max(nHeight,(LONG)HCURSORHEIGHT));
+			//if (nHeight < HCURSORHEIGHT) nHeight = HCURSORHEIGHT;
 		}
 
 		//if (nHeight < HCURSORHEIGHT) nHeight = HCURSORHEIGHT;
@@ -3387,9 +3609,12 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 
 		if (dwSize)
 		{
-			nWidth = MulDiv((nR - rect.left), dwSize, 100);
+			int nMaxWidth = (nR - rect.left);
 
-			if (nWidth < VCURSORWIDTH) nWidth = VCURSORWIDTH;
+			nWidth = MulDiv(nMaxWidth, dwSize, 100);
+
+			nWidth = min(nMaxWidth,max(nWidth,(LONG)VCURSORWIDTH));
+			//if (nWidth < VCURSORWIDTH) nWidth = VCURSORWIDTH;
 		}
 
 		rect.right = min(nR, (rect.left+nWidth));
@@ -3399,12 +3624,6 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 		rect.bottom = (pos.Y+1) * nFontHeight;
 	}
 
-	//if (!gpSet->isCursorBlink) {
-	//	gpConEmu->m_Child->SetCaret ( 1, rect.left, rect.top, rect.right-rect.left, rect.bottom-rect.top );
-	//	return;
-	//} else {
-	//	gpConEmu->m_Child->SetCaret ( -1 ); // Если был создан системный курсор - он разрушится
-	//}
 	rect.left += rcClient.left;
 	rect.right += rcClient.left;
 	rect.top += rcClient.top;
@@ -3413,7 +3632,7 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 	// XOR режим, иначе (тем более при немигающем) курсор закрывает
 	// весь символ и его не видно
 	// 110131 Если курсор мигающий - разрешим нецветной курсор для AltIns в фаре
-	bool bCursorColor = gpSet->isCursorColor || (dwSize >= 40 && !gpSet->isCursorBlink);
+	bool bCursorColor = mp_Set->CursorColor() || (dwSize >= 40 && !mp_Set->CursorBlink());
 
 	// Теперь в rect нужно отобразить курсор (XOR'ом попробуем?)
 	if (bCursorColor)
@@ -3421,7 +3640,7 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 		HBRUSH hBr = CreateSolidBrush(0xC0C0C0);
 		HBRUSH hOld = (HBRUSH)SelectObject(hPaintDC, hBr);
 
-		if (bForeground || !gpSet->isCursorBlockInactive)
+		if (bForeground || !mp_Set->CursorBlockInactive())
 		{
 			BitBlt(hPaintDC, rect.left, rect.top, rect.right-rect.left, rect.bottom-rect.top, hDC, 0,0,
 			       PATINVERT);
@@ -3469,6 +3688,10 @@ void CVirtualConsole::UpdateCursor(bool& lRes)
 			return;
 		}
 	}
+
+	// указатель на настройки разделяемые по приложениям
+	mp_Set = gpSet->GetAppSettings(mp_RCon->GetActiveAppSettingsId());
+
 	//------------------------------------------------------------------------
 	///| Drawing cursor |/////////////////////////////////////////////////////
 	//------------------------------------------------------------------------
@@ -3484,7 +3707,7 @@ void CVirtualConsole::UpdateCursor(bool& lRes)
 	// Если курсор (в консоли) видим, и находится в видимой области (при прокрутке)
 	if (cinf.bVisible && isCursorValid)
 	{
-		if (!gpSet->isCursorBlink || !bForeground)
+		if (!mp_Set->CursorBlink() || !bForeground)
 		{
 			Cursor.isVisible = true; // Видим всегда (даже в неактивной консоли), не мигает
 
@@ -3611,6 +3834,35 @@ void CVirtualConsole::StretchPaint(HDC hPaintDC, int anX, int anY, int anShowWid
 	}
 }
 
+HBRUSH CVirtualConsole::CreateBackBrush(bool bGuiVisible, bool& rbNonSystem, COLORREF *pColors /*= NULL*/)
+{
+	HBRUSH hBr = NULL;
+	
+	if (bGuiVisible)
+	{
+		hBr = GetSysColorBrush(COLOR_APPWORKSPACE);
+		rbNonSystem = false;
+	}
+	else
+	{
+		if (!pColors)
+		{
+			pColors = gpSet->GetColors(mp_RCon->GetActiveAppSettingsId());
+		}
+
+		// Залить цветом 0
+		int nBackColorIdx = mp_RCon->GetDefaultBackColorIdx(); // Black
+		//#ifdef _DEBUG
+		//nBackColorIdx = 2; // Green
+		//#endif
+		
+		hBr = CreateSolidBrush(pColors[nBackColorIdx]);
+		rbNonSystem = (hBr != NULL);
+	}
+
+	return hBr;
+}
+
 // hdc - это DC родительского окна (ghWnd)
 // rcClient - это место, куда нужно "положить" битмап. может быть произвольным!
 void CVirtualConsole::Paint(HDC hPaintDc, RECT rcClient)
@@ -3652,84 +3904,50 @@ void CVirtualConsole::Paint(HDC hPaintDc, RECT rcClient)
 #ifdef _DEBUG
 	else
 	{
-		int nConNo = gpConEmu->IsVConValid(this);
+		int nConNo = gpConEmu->isVConValid(this);
 		nConNo = nConNo;
 	}
 #endif
 
-	//else if (!mpsz_ConChar || !mpn_ConAttrEx)
-	//	lbSimpleBlack = TRUE;
 	if (lbSimpleBlack)
 	{
-		//RECT rcWndClient; Get ClientRect(ghWnd, &rcWndClient);
-		//RECT rcCalcCon = gpConEmu->CalcRect(CER_BACK, rcWndClient, CER_MAINCLIENT);
-		//RECT rcCon = gpConEmu->CalcRect(CER_CONSOLE, rcCalcCon, CER_BACK);
-		//rcClient = gpConEmu->CalcRect(CER_BACK, rcCon, CER_CONSOLE);
-
-		//// Заливка без полос прокруток
-		//::GetClientRect(mh_WndDC, &rcClient);
-
 		// Сброс блокировки, если была
 		LockDcRect(false);
+
+		COLORREF *pColors = gpSet->GetColors(mp_RCon->GetActiveAppSettingsId());
 		
-		HBRUSH hBr = NULL;
-		BOOL lbDelBrush = FALSE;
-		
-		COLORREF *pColors = gpSet->GetColors();
-		
-		if (lbGuiVisible)
-		{
-			hBr = GetSysColorBrush(COLOR_APPWORKSPACE);
-			//hBr = CreateSolidBrush(GetSysColor(COLOR_BTNFACE));
-			//lbDelBrush = (hBr != NULL);
-		}
-		else
-		{
-			// Залить цветом 0
-			int nBackColorIdx = 0; // Black
-			#ifdef _DEBUG
-			nBackColorIdx = 2; // Green
-			#endif
-			
-			hBr = CreateSolidBrush(pColors[nBackColorIdx]);
-			lbDelBrush = (hBr != NULL);
-		}
-		//RECT rcClient; Get ClientRect('ghWnd DC', &rcClient);
-		//PAINTSTRUCT ps;
-		//HDC hPaintDc = BeginPaint('ghWnd DC', &ps);
+		bool lbDelBrush = false;
+		HBRUSH hBr = CreateBackBrush(lbGuiVisible, lbDelBrush, pColors);
 		
 		//#ifndef SKIP_ALL_FILLRECT
 		FillRect(hPaintDc, &rcClient, hBr);
 		//#endif
 		
+		TODO("Переделать на StatusBar, если gpSet->isStatusBarShow");
 		if (!lbGuiVisible)
 		{
-			HFONT hOldF = (HFONT)SelectObject(hPaintDc, gpSetCls->mh_Font[0]);
+			CEDC cePaintDc(hPaintDc);
+			CEFONT hOldF = cePaintDc.SelectObject(gpSetCls->mh_Font[0]);
 			LPCWSTR pszStarting = L"Initializing ConEmu.";
 			
-			if (gpConEmu->isProcessCreated())
-			{
+			// 120721 - если показана статусная строка - не будем писать в саму консоль?
+			if (gpSet->isStatusBarShow)
+				pszStarting = NULL;
+			else if (gpConEmu->isProcessCreated())
 				pszStarting = L"No consoles";
-			}
+			else if (this && mp_RCon)
+				pszStarting = mp_RCon->GetConStatus();
 			else if (CRealConsole::ms_LastRConStatus[0])
-			{
 				pszStarting = CRealConsole::ms_LastRConStatus;
-			}
-
-			if (this)
-			{
-				if (mp_RCon)
-					pszStarting = mp_RCon->GetConStatus();
-			}
 
 			if (pszStarting != NULL)
 			{
 				UINT nFlags = ETO_CLIPPED;
-				SetTextColor(hPaintDc, pColors[7]);
-				SetBkColor(hPaintDc, pColors[0]);
-				ExtTextOut(hPaintDc, rcClient.left, rcClient.top, nFlags, &rcClient,
+				cePaintDc.SetTextColor(pColors[7]);
+				cePaintDc.SetBkColor(pColors[0]);
+				cePaintDc.ExtTextOut(rcClient.left, rcClient.top, nFlags, &rcClient,
 				           pszStarting, _tcslen(pszStarting), 0);
-				SelectObject(hPaintDc, hOldF);
+				cePaintDc.SelectObject(hOldF);
 			}
 		}
 
@@ -3777,7 +3995,7 @@ void CVirtualConsole::Paint(HDC hPaintDc, RECT rcClient)
 		if ((rcFull.right - rcFull.left) < (LONG)Width || (rcFull.bottom - client.top) < (LONG)Height)
 		{
 			WARNING("Зацикливается. Вызывает Paint, который вызывает OnSize. В итоге - 100% загрузки проц.");
-			gpConEmu->OnSize(-1); // Только ресайз дочерних окон
+			gpConEmu->OnSize(false); // Только ресайз дочерних окон
 		}
 	}
 
@@ -3968,7 +4186,8 @@ void CVirtualConsole::Paint(HDC hPaintDc, RECT rcClient)
 	{
 		if (mpsz_ConChar && mpn_ConAttrEx)
 		{
-			HFONT hOldFont = (HFONT)SelectObject(hPaintDc, gpSetCls->mh_Font[0]);
+			CEDC cePaintDc(hPaintDc);
+			CEFONT hOldFont = cePaintDc.SelectObject(gpSetCls->mh_Font[0]);
 			MSectionLock SCON; SCON.Lock(&csCON);
 
 			int CurChar = csbi.dwCursorPosition.Y * TextWidth + csbi.dwCursorPosition.X;
@@ -3984,7 +4203,7 @@ void CVirtualConsole::Paint(HDC hPaintDc, RECT rcClient)
 
 			UpdateCursorDraw(hPaintDc, rcClient, csbi.dwCursorPosition, cinf.dwSize);
 			Cursor.isVisiblePrev = Cursor.isVisible;
-			SelectObject(hPaintDc, hOldFont);
+			cePaintDc.SelectObject(hOldFont);
 			SCON.Unlock();
 		}
 	}
@@ -4130,17 +4349,17 @@ void CVirtualConsole::UpdateInfo()
 
 	if (!mp_RCon)
 	{
-		SetDlgItemText(gpSetCls->hInfo, tConSizeChr, L"(None)");
-		SetDlgItemText(gpSetCls->hInfo, tConSizePix, L"(None)");
-		SetDlgItemText(gpSetCls->hInfo, tPanelLeft, L"(None)");
-		SetDlgItemText(gpSetCls->hInfo, tPanelRight, L"(None)");
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tConSizeChr, L"(None)");
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tConSizePix, L"(None)");
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tPanelLeft, L"(None)");
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tPanelRight, L"(None)");
 	}
 	else
 	{
 		_wsprintf(szSize, SKIPLEN(countof(szSize)) _T("%ix%i"), mp_RCon->TextWidth(), mp_RCon->TextHeight());
-		SetDlgItemText(gpSetCls->hInfo, tConSizeChr, szSize);
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tConSizeChr, szSize);
 		_wsprintf(szSize, SKIPLEN(countof(szSize)) _T("%ix%i"), Width, Height);
-		SetDlgItemText(gpSetCls->hInfo, tConSizePix, szSize);
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tConSizePix, szSize);
 		RECT rcPanel;
 		RCon()->GetPanelRect(FALSE, &rcPanel);
 
@@ -4149,7 +4368,7 @@ void CVirtualConsole::UpdateInfo()
 		else
 			wcscpy_c(szSize, L"<Absent>");
 
-		SetDlgItemText(gpSetCls->hInfo, tPanelLeft, szSize);
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tPanelLeft, szSize);
 		RCon()->GetPanelRect(TRUE, &rcPanel);
 
 		if (rcPanel.right>rcPanel.left)
@@ -4157,7 +4376,7 @@ void CVirtualConsole::UpdateInfo()
 		else
 			wcscpy_c(szSize, L"<Absent>");
 
-		SetDlgItemText(gpSetCls->hInfo, tPanelRight, szSize);
+		SetDlgItemText(gpSetCls->mh_Tabs[gpSetCls->thi_Info], tPanelRight, szSize);
 	}
 }
 
@@ -4576,9 +4795,13 @@ COORD CVirtualConsole::FindOpaqueCell()
 
 // Показать контекстное меню для ТЕКУЩЕЙ закладки консоли
 // ptCur - экранные координаты
-void CVirtualConsole::ShowPopupMenu(POINT ptCur)
+void CVirtualConsole::ShowPopupMenu(POINT ptCur, DWORD Align /* = TPM_LEFTALIGN */)
 {
+	CVConGuard guard(this);
 	BOOL lbNeedCreate = (mh_PopupMenu == NULL);
+
+	if (!Align)
+		Align = TPM_LEFTALIGN;
 
 	// Создать или обновить enable/disable
 	mh_PopupMenu = gpConEmu->CreateVConPopupMenu(this, mh_PopupMenu, TRUE, mh_TerminatePopup);
@@ -4627,7 +4850,7 @@ void CVirtualConsole::ShowPopupMenu(POINT ptCur)
 	//EnableMenuItem(mh_PopupMenu, IDM_SAVEALL, MF_BYCOMMAND | (lbHaveModified ? MF_ENABLED : MF_GRAYED));
 	
 	int nCmd = gpConEmu->trackPopupMenu(tmp_VCon, mh_PopupMenu,
-	                          TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_NONOTIFY | TPM_RETURNCMD,
+	                          Align | TPM_RIGHTBUTTON | TPM_NONOTIFY | TPM_RETURNCMD,
 	                          ptCur.x, ptCur.y, 0, ghWnd, NULL);
 
 	if (!nCmd)
@@ -4641,27 +4864,34 @@ void CVirtualConsole::ExecPopupMenuCmd(int nCmd)
 	if (!this)
 		return;
 
-	switch(nCmd)
+	CVConGuard guard(this);
+
+	switch (nCmd)
 	{
 		case IDM_CLOSE:
 			mp_RCon->CloseTab();
 			break;
 		case IDM_DETACH:
-			if (mp_RCon->Detach())
-				gpConEmu->OnVConTerminated(this);
+			mp_RCon->Detach();
+			//if (mp_RCon->Detach())
+			//	gpConEmu->OnVConClosed(this);
+			break;
+		case IDM_RENAMETAB:
+			mp_RCon->DoRenameTab();
 			break;
 		case IDM_TERMINATEPRC:
-			mp_RCon->CloseConsole(TRUE);
+			mp_RCon->CloseConsole(true, false);
 			break;
 		case IDM_TERMINATECON:
-			mp_RCon->CloseConsoleWindow();
+			//mp_RCon->CloseConsoleWindow();
+			mp_RCon->CloseConsole(false, true);
 			break;
 		case IDM_RESTART:
 		case IDM_RESTARTAS:
 
 			if (gpConEmu->isActive(this))
 			{
-				gpConEmu->Recreate(TRUE, FALSE, (nCmd==IDM_RESTARTAS));
+				gpConEmu->RecreateAction(cra_RecreateTab/*TRUE*/, isPressed(VK_SHIFT), (nCmd==IDM_RESTARTAS));
 			}
 			else
 			{
@@ -4670,7 +4900,7 @@ void CVirtualConsole::ExecPopupMenuCmd(int nCmd)
 
 			break;
 		case ID_NEWCONSOLE:
-			gpConEmu->Recreate(FALSE, gpSet->isMultiNewConfirm);
+			gpConEmu->RecreateAction(cra_CreateTab/*FALSE*/, gpSet->isMultiNewConfirm || isPressed(VK_SHIFT));
 			break;
 		case IDM_ATTACHTO:
 			gpConEmu->OnSysCommand(ghWnd, IDM_ATTACHTO, 0);
@@ -4765,7 +4995,7 @@ bool CVirtualConsole::RegisterPanelView(PanelViewInit* ppvi)
 
 	if (ppvi->bRegister)
 	{
-		_ASSERTE(ppvi->bVisible);
+		//_ASSERTE(ppvi->bVisible); -- допустимо. Временное скрытие, например, при Ctrl+L
 
 		// При повторной регистрации - не дергаться
 		if (!lbPrevRegistered)
@@ -4896,6 +5126,12 @@ bool CVirtualConsole::UpdatePanelRgn(bool abLeftPanel, bool abTestOnly, bool abO
 			pp->hWnd = NULL;
 
 		pp->bVisible = FALSE;
+		return FALSE;
+	}
+	else if (!pp->bVisible || !pp->bRegister)
+	{
+		if (IsWindowVisible(pp->hWnd))
+			mp_RCon->ShowOtherWindow(pp->hWnd, SW_HIDE);
 		return FALSE;
 	}
 
@@ -5065,9 +5301,9 @@ bool CVirtualConsole::UpdatePanelView(bool abLeftPanel, bool abOnRegister/*=fals
 
 	// Подготовить размеры
 	POINT pt[2];
-	int nTopShift = 1 + ((pp->nFarPanelSettings & 0x20/*FPS_SHOWCOLUMNTITLES*/) ? 1 : 0); //-V112
+	int nTopShift = 1 + ((pp->FarPanelSettings.ShowColumnTitles) ? 1 : 0); //-V112
 	int nBottomShift = 0;
-	if (mp_RCon && (pp->nFarPanelSettings & 0x40/*FPS_SHOWSTATUSLINE*/))
+	if (mp_RCon && (pp->FarPanelSettings.ShowStatusLine))
 	{
 		nBottomShift = mp_RCon->GetStatusLineCount(pp->PanelRect.left) + 1;
 		if (nBottomShift < 2)
@@ -5188,7 +5424,7 @@ void CVirtualConsole::PolishPanelViews()
 		int nNFore = btNamesColor & 0xF;
 		int nNBack = (btNamesColor & 0xF0) >> 4;
 
-		if ((pp->nFarPanelSettings & 0x20/*FPS_SHOWCOLUMNTITLES*/) && pp->tColumnTitle.nFlags) //-V112
+		if ((pp->FarPanelSettings.ShowColumnTitles) && pp->tColumnTitle.nFlags) //-V112
 		{
 			LPCWSTR pszNameTitle = pp->tColumnTitle.sText;
 			CharAttr ca; CharAttrFromConAttr(pp->tColumnTitle.bConAttr, &ca);
@@ -5196,7 +5432,7 @@ void CVirtualConsole::PolishPanelViews()
 			int nX1 = rc.left + 1;
 
 			if ((pp->tColumnTitle.nFlags & PVI_TEXT_SKIPSORTMODE)
-			        && (pp->nFarPanelSettings & 0x800/*FPS_SHOWSORTMODELETTER*/))
+			        && (pp->FarPanelSettings.ShowSortModeLetter & 0x800/*FPS_SHOWSORTMODELETTER*/))
 				nX1 += 2;
 
 			int nLineLen = rc.right - nX1;
@@ -5236,7 +5472,7 @@ void CVirtualConsole::PolishPanelViews()
 		pszLine = mpsz_ConChar+TextWidth*(rc.bottom);
 		pAttrs = mpn_ConAttrEx+TextWidth*(rc.bottom);
 
-		if ((pp->nFarPanelSettings & 0x40/*FPS_SHOWSTATUSLINE*/))
+		if ((pp->FarPanelSettings.ShowStatusLine))
 		{
 			for(x = rc.left+1; x < rc.right; x++)
 			{
@@ -5432,6 +5668,10 @@ bool CVirtualConsole::PutBackgroundImage(CBackground* pBack, LONG X, LONG Y, LON
 //    }
 //}
 
+
+// вызывается из SetBackgroundImageData
+//   при получении нового Background (CECMD_SETBACKGROUND) из плагина
+//   при очистке (закрытие/рестарт) консоли
 UINT CVirtualConsole::IsBackgroundValid(const CESERVER_REQ_SETBACKGROUND* apImgData, bool* rpIsEmf) const
 {
 	if (rpIsEmf)
@@ -5512,7 +5752,8 @@ bool CVirtualConsole::PrepareBackground(HDC* phBgDc, COORD* pbgBmpSize)
 		return false;
 	}
 
-	_ASSERTE(gpConEmu->isMainThread());
+	_ASSERTE(gpConEmu->isMainThread() && "Must be executed in main thread");
+
 	LONG lBgWidth = 0, lBgHeight = 0;
 	BOOL lbVConImage = FALSE;
 
@@ -5525,6 +5766,7 @@ bool CVirtualConsole::PrepareBackground(HDC* phBgDc, COORD* pbgBmpSize)
 		}
 	}
 
+	// Если плагин свой фон не подсунул
 	if (!lbVConImage)
 	{
 		if (mp_Bg)
@@ -5533,7 +5775,8 @@ bool CVirtualConsole::PrepareBackground(HDC* phBgDc, COORD* pbgBmpSize)
 			mp_Bg = NULL;
 		}
 
-		return gpSetCls->PrepareBackground(phBgDc, pbgBmpSize);
+		// То работаем на общих основаниях, через настройки (или AppDistinct)
+		return gpSetCls->PrepareBackground(this, phBgDc, pbgBmpSize);
 	}
 
 	bool lbForceUpdate = false;
@@ -5594,7 +5837,8 @@ bool CVirtualConsole::PrepareBackground(HDC* phBgDc, COORD* pbgBmpSize)
 	return lbForceUpdate;
 }
 
-// вызывается при получении нового Background
+// вызывается при получении нового Background (CECMD_SETBACKGROUND) из плагина
+// и для очистки при закрытии (рестарте) консоли
 SetBackgroundResult CVirtualConsole::SetBackgroundImageData(CESERVER_REQ_SETBACKGROUND* apImgData)
 {
 	if (!this) return esbr_Unexpected;
@@ -5611,7 +5855,7 @@ SetBackgroundResult CVirtualConsole::SetBackgroundImageData(CESERVER_REQ_SETBACK
 
 	if (!nSize)
 	{
-		_ASSERTE(IsBackgroundValid(apImgData, NULL) != 0);
+		_ASSERTE(FALSE && "!IsBackgroundValid(apImgData, NULL)");
 		return esbr_InvalidArg;
 	}
 
@@ -5829,4 +6073,9 @@ void CVirtualConsole::OnTaskbarFocus()
 {
 	if (mp_Ghost)
 		mp_Ghost->ActivateTaskbar();
+}
+
+HDC CVirtualConsole::GetIntDC()
+{
+	return hDC;
 }

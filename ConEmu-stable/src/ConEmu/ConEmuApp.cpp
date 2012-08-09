@@ -26,13 +26,14 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+#define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
 #include <commctrl.h>
+#include <shobjidl.h>
+#include <shlobj.h>
+#include <propkey.h>
 #include "../common/ConEmuCheck.h"
-#ifdef _DEBUG
-#include "../common/execute.cpp"
-#endif
+#include "../common/execute.h"
 #include "Options.h"
 #include "ConEmu.h"
 #include "TaskBar.h"
@@ -42,9 +43,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _DEBUG
 //	#define SHOW_STARTED_MSGBOX
+//	#define WAIT_STARTED_DEBUGGER
 #endif
 
 #define DEBUGSTRMOVE(s) //DEBUGSTR(s)
+#define DEBUGSTRTIMER(s) //DEBUGSTR(s)
 
 WARNING("Заменить все MBoxAssert, _ASSERT, _ASSERTE на WaitForSingleObject(CreateThread(out,Title,dwMsgFlags),INFINITE);");
 
@@ -67,7 +70,10 @@ wchar_t gszDbgModLabel[6] = {0};
 
 //externs
 HINSTANCE g_hInstance=NULL;
-HWND ghWnd=NULL, /*ghWnd DC=NULL,*/ ghConWnd=NULL, ghWndApp=NULL;
+HWND ghWnd=NULL, ghWndWork=NULL, ghWndApp=NULL;
+#ifdef _DEBUG
+HWND ghConWnd=NULL;
+#endif
 CConEmuMain *gpConEmu = NULL;
 //CVirtualConsole *pVCon=NULL;
 Settings  *gpSet = NULL;
@@ -87,6 +93,11 @@ const TCHAR *const gsClassNameApp = VirtualConsoleClassApp;
 
 
 OSVERSIONINFO gOSVer = {};
+WORD gnOsVer = 0x500;
+bool gbIsWine = false;
+bool gbIsDBCS = false;
+wchar_t gsDefGuiFont[32] = L"Lucida Console"; // gbIsWine ? L"Liberation Mono" : L"Lucida Console"
+wchar_t gsDefConFont[32] = L"Lucida Console"; // DBCS ? L"Liberation Mono" : L"Lucida Console"
 
 
 #ifdef MSGLOGGER
@@ -103,7 +114,7 @@ void DebugLogMessage(HWND h, UINT m, WPARAM w, LPARAM l, BOOL posted, BOOL extra
 #define WP1(s) case s: lstrcpyA(szWP, #s); break;
 #define WP2(s) case s: lstrcpyA(szWP, #s);
 
-	switch(m)
+	switch (m)
 	{
 			MSG1(WM_NOTIFY);
 			MSG1(WM_PAINT);
@@ -186,7 +197,7 @@ void DebugLogMessage(HWND h, UINT m, WPARAM w, LPARAM l, BOOL posted, BOOL extra
 			MSG1(WM_CREATE);
 			MSG2(WM_SYSCOMMAND);
 			{
-				switch(w)
+				switch (w)
 				{
 						WP1(SC_MAXIMIZE_SECRET);
 						WP2(SC_RESTORE_SECRET);
@@ -333,6 +344,18 @@ void DebugLogFile(LPCSTR asMessage)
 		CloseHandle(hLogFile);
 	}
 }
+BOOL POSTMESSAGE(HWND h,UINT m,WPARAM w,LPARAM l,BOOL extra)
+{
+	MCHKHEAP;
+	DebugLogMessage(h,m,w,l,TRUE,extra);
+	return PostMessage(h,m,w,l);
+}
+LRESULT SENDMESSAGE(HWND h,UINT m,WPARAM w,LPARAM l)
+{
+	MCHKHEAP;
+	DebugLogMessage(h,m,w,l,FALSE,FALSE);
+	return SendMessage(h,m,w,l);
+}
 #endif
 #ifdef _DEBUG
 char gsz_MDEBUG_TRAP_MSG[3000];
@@ -353,6 +376,29 @@ int __stdcall _MDEBUG_TRAP(LPCSTR asFile, int anLine)
 int MDEBUG_CHK = TRUE;
 #endif
 
+
+void ShutdownGuiStep(LPCWSTR asInfo, int nParm1 /*= 0*/, int nParm2 /*= 0*/, int nParm3 /*= 0*/, int nParm4 /*= 0*/)
+{
+#ifdef _DEBUG
+	static int nDbg = 0;
+	if (!nDbg)
+		nDbg = IsDebuggerPresent() ? 1 : 2;
+	if (nDbg != 1)
+		return;
+	wchar_t szFull[512];
+	msprintf(szFull, countof(szFull), L"%u:ConEmuG:PID=%u:TID=%u: ",
+		GetTickCount(), GetCurrentProcessId(), GetCurrentThreadId());
+	if (asInfo)
+	{
+		int nLen = lstrlen(szFull);
+		msprintf(szFull+nLen, countof(szFull)-nLen, asInfo, nParm1, nParm2, nParm3, nParm4);
+	}
+	lstrcat(szFull, L"\n");
+	OutputDebugString(szFull);
+#endif
+}
+
+
 /* Используются как extern в ConEmuCheck.cpp */
 /*
 LPVOID _calloc(size_t nCount,size_t nSize) {
@@ -367,27 +413,27 @@ void   _free(LPVOID ptr) {
 */
 
 
-COORD /*__forceinline*/ MakeCoord(int W,int H)
+COORD /*__forceinline*/ MakeCoord(int X,int Y)
 {
-	COORD rc; rc.X=W; rc.Y=H;
-	return rc;
+	COORD cr = {(SHORT)X,(SHORT)Y};
+	return cr;
 }
 
-POINT /*__forceinline*/ MakePoint(int W,int H)
+POINT /*__forceinline*/ MakePoint(int X,int Y)
 {
-	POINT rc; rc.x=W; rc.y=H;
-	return rc;
+	POINT pt = {X,Y};
+	return pt;
 }
 
 RECT /*__forceinline*/ MakeRect(int W,int H)
 {
-	RECT rc; rc.left=0; rc.top=0; rc.right=W; rc.bottom=H;
+	RECT rc = {0,0,W,H};
 	return rc;
 }
 
 RECT /*__forceinline*/ MakeRect(int X1, int Y1,int X2,int Y2)
 {
-	RECT rc; rc.left=X1; rc.top=Y1; rc.right=X2; rc.bottom=Y2;
+	RECT rc = {X1,Y1,X2,Y2};
 	return rc;
 }
 
@@ -406,6 +452,14 @@ BOOL IntersectSmallRect(RECT& rc1, SMALL_RECT& rc2)
 
 wchar_t* GetDlgItemText(HWND hDlg, WORD nID)
 {
+	wchar_t* pszText = NULL;
+	size_t cchMax = 0;
+	MyGetDlgItemText(hDlg, nID, cchMax, pszText);
+	return pszText;
+}
+
+size_t MyGetDlgItemText(HWND hDlg, WORD nID, size_t& cchMax, wchar_t*& pszText, bool bEscapes /*= false*/)
+{
 	HWND hEdit;
 
 	if (nID)
@@ -417,21 +471,151 @@ wchar_t* GetDlgItemText(HWND hDlg, WORD nID)
 		return NULL;
 
 	//
-	wchar_t* psz = NULL;
 	int nLen = GetWindowTextLength(hEdit);
 
 	if (nLen > 0)
 	{
-		psz = (wchar_t*)calloc(nLen+1,2);
-
-		if (psz)
+		if (!pszText || (((UINT)nLen) >= cchMax))
 		{
-			psz[0] = 0;
-			GetWindowText(hEdit, psz, nLen+1);
+			SafeFree(pszText);
+			cchMax = nLen+32;
+			pszText = (wchar_t*)calloc(cchMax,sizeof(*pszText));
+			_ASSERTE(pszText);
+		}
+		
+
+		if (pszText)
+		{
+			pszText[0] = 0;
+			GetWindowText(hEdit, pszText, nLen+1);
+
+			if (bEscapes)
+			{
+				wchar_t* pszSrc = wcschr(pszText, L'\\');
+				if (pszSrc)
+				{
+					wchar_t* pszDst = pszSrc;
+					while (*pszSrc)
+					{
+						if (*pszSrc == L'\\')
+						{
+							// -- Must be the same set in MySetDlgItemText
+							switch (pszSrc[1])
+							{
+							case L'\\':
+								*(pszDst++) = L'\\';
+								pszSrc += 2;
+								continue;
+							case L'r':
+								*(pszDst++) = L'\r';
+								pszSrc += 2;
+								continue;
+							case L'n':
+								*(pszDst++) = L'\n';
+								pszSrc += 2;
+								continue;
+							case L't':
+								*(pszDst++) = L'\t';
+								pszSrc += 2;
+								continue;
+							case L'e':
+								*(pszDst++) = 27; // ESC
+								pszSrc += 2;
+								continue;
+							case L'a':
+								*(pszDst++) = L'\a'; // BELL
+								pszSrc += 2;
+								continue;
+							}
+						}
+						*(pszDst++) = *(pszSrc++);
+					}
+					*pszDst = 0;
+				}
+			}
 		}
 	}
+	else
+	{
+		_ASSERTE(nLen == 0);
+		nLen = 0;
 
-	return psz;
+		if (pszText)
+			*pszText = 0;
+	}
+
+	return nLen;
+}
+
+BOOL MySetDlgItemText(HWND hDlg, int nIDDlgItem, LPCTSTR lpString, bool bEscapes /*= false*/)
+{
+	wchar_t* pszBuf = NULL;
+
+	// -- Must be the same set in MyGetDlgItemText
+	if (lpString && bEscapes && wcspbrk(lpString, L"\r\n\t\\"))
+	{
+		pszBuf = (wchar_t*)malloc((_tcslen(lpString)*2+1)*sizeof(*pszBuf));
+		if (!pszBuf)
+		{
+			MBoxAssert(pszBuf && "Memory allocation failed");
+			return FALSE;
+		}
+		wchar_t* pszDst = pszBuf;
+		LPCWSTR pszSrc = lpString;
+		while (*pszSrc)
+		{
+			switch (*pszSrc)
+			{
+				case L'\\':
+					*(pszDst++) = L'\\';
+					*(pszDst++) = L'\\';
+					pszSrc++;
+					continue;
+				case L'\r':
+					*(pszDst++) = L'\\';
+					*(pszDst++) = L'r';
+					pszSrc++;
+					continue;
+				case L'\n':
+					*(pszDst++) = L'\\';
+					*(pszDst++) = L'n';
+					pszSrc++;
+					continue;
+				case L'\t':
+					*(pszDst++) = L'\\';
+					*(pszDst++) = L't';
+					pszSrc++;
+					continue;
+				case 27: //ESC
+					*(pszDst++) = L'\\';
+					*(pszDst++) = L'e';
+					pszSrc++;
+					continue;
+				case L'\a': //BELL
+					*(pszDst++) = L'\\';
+					*(pszDst++) = L'a';
+					pszSrc++;
+					continue;
+			}
+			*(pszDst++) = *(pszSrc++);
+		}
+		*pszDst = 0;
+		lpString = pszBuf;
+	}
+
+	BOOL lbRc = SetDlgItemText(hDlg, nIDDlgItem, lpString);
+
+	SafeFree(pszBuf);
+	return lbRc;
+}
+
+bool isKey(DWORD wp,DWORD vk)
+{
+	bool bEq = ((wp==vk)
+		|| ((vk==VK_LSHIFT||vk==VK_RSHIFT)&&wp==VK_SHIFT)
+		|| ((vk==VK_LCONTROL||vk==VK_RCONTROL)&&wp==VK_CONTROL)
+		|| ((vk==VK_LMENU||vk==VK_RMENU)&&wp==VK_MENU));
+	return bEq;
 }
 
 
@@ -498,31 +682,129 @@ BOOL CheckCreateAppWindow()
 	return TRUE;
 }
 
+LRESULT CALLBACK SkipShowWindowProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
+{
+	LRESULT result = 0;
+	//static UINT nMsgBtnCreated = 0;
+
+	switch (messg)
+	{
+	case WM_PAINT:
+		{
+			PAINTSTRUCT ps = {};
+			BeginPaint(hWnd, &ps);
+			EndPaint(hWnd, &ps);
+		}
+		return 0;
+
+	case WM_ERASEBKGND:
+		return TRUE;
+
+	//default:
+	//	if (!nMsgBtnCreated)
+	//	{
+	//		nMsgBtnCreated = RegisterWindowMessage(L"TaskbarButtonCreated");
+	//	}
+
+	//	if (messg == nMsgBtnCreated)
+	//	{
+	//		gpConEmu->Taskbar_DeleteTabXP(hWnd);
+	//	}
+	}
+
+	result = DefWindowProc(hWnd, messg, wParam, lParam);
+	return result;
+}
+
+void SkipOneShowWindow()
+{
+	static bool bProcessed = false;
+	if (bProcessed)
+		return; // уже
+	bProcessed = true;
+
+	STARTUPINFO si = {sizeof(si)};
+	GetStartupInfo(&si);
+	if (si.wShowWindow == SW_SHOWNORMAL)
+		return; // финты не требуются
+
+	const wchar_t szSkipClass[] = L"ConEmuSkipShowWindow";
+	WNDCLASSEX wc = {sizeof(WNDCLASSEX), 0, SkipShowWindowProc, 0, 0,
+	                 g_hInstance, hClassIcon, LoadCursor(NULL, IDC_ARROW),
+	                 NULL /*(HBRUSH)COLOR_BACKGROUND*/,
+	                 NULL, szSkipClass, hClassIconSm
+	                };// | CS_DROPSHADOW
+
+	if (!RegisterClassEx(&wc))
+		return;
+
+	gpConEmu->Taskbar_Init();
+
+	//ghWnd = CreateWindow(szClassName, 0, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, gpSet->wndX, gpSet->wndY, cRect.right - cRect.left - 4, cRect.bottom - cRect.top - 4, NULL, NULL, (HINSTANCE)g_hInstance, NULL);
+	DWORD style = WS_OVERLAPPED | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+	int nWidth=100, nHeight=100, nX = -32000, nY = -32000;
+	DWORD exStyle = WS_EX_TOOLWINDOW;
+	HWND hSkip = CreateWindowEx(exStyle, szSkipClass, L"", style, nX, nY, nWidth, nHeight, NULL, NULL, (HINSTANCE)g_hInstance, NULL);
+
+	if (hSkip)
+	{
+		HRGN hRgn = CreateRectRgn(0,0,1,1);
+		SetWindowRgn(hSkip, hRgn, FALSE);
+
+		ShowWindow(hSkip, SW_SHOWNORMAL);
+		gpConEmu->Taskbar_DeleteTabXP(hSkip);
+		DestroyWindow(hSkip);
+	}
+
+	// Класс более не нужен
+	UnregisterClass(szSkipClass, g_hInstance);
+
+	return;
+}
+
+int MessageBox(LPCTSTR lpText, UINT uType, LPCTSTR lpCaption /*= NULL*/, HWND hParent /*= NULL*/)
+{
+	DontEnable de;
+
+	int nBtn = MessageBox(gbMessagingStarted ? (hParent ? hParent : ghWnd) : NULL,
+		lpText, lpCaption ? lpCaption : gpConEmu->GetLastTitle(), uType);
+
+	return nBtn;
+}
 
 BOOL gbInDisplayLastError = FALSE;
 
-int DisplayLastError(LPCTSTR asLabel, DWORD dwError /* =0 */, DWORD dwMsgFlags /* =0 */, LPCWSTR asTitlte /*= NULL*/)
+int DisplayLastError(LPCTSTR asLabel, DWORD dwError /* =0 */, DWORD dwMsgFlags /* =0 */, LPCWSTR asTitle /*= NULL*/)
 {
 	int nBtn = 0;
 	DWORD dw = dwError ? dwError : GetLastError();
 	wchar_t* lpMsgBuf = NULL;
+	wchar_t *out = NULL;
 	MCHKHEAP
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&lpMsgBuf, 0, NULL);
-	INT_PTR nLen = _tcslen(asLabel)+64+(lpMsgBuf ? _tcslen(lpMsgBuf) : 0);
-	wchar_t *out = new wchar_t[nLen];
-	_wsprintf(out, SKIPLEN(nLen) _T("%s\nLastError=0x%08X\n%s"), asLabel, dw, lpMsgBuf);
+
+	if (dw && (dw != (DWORD)-1))
+	{
+		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&lpMsgBuf, 0, NULL);
+		INT_PTR nLen = _tcslen(asLabel)+64+(lpMsgBuf ? _tcslen(lpMsgBuf) : 0);
+		out = new wchar_t[nLen];
+		_wsprintf(out, SKIPLEN(nLen) _T("%s\nLastError=0x%08X\n%s"), asLabel, dw, lpMsgBuf);
+	}
 
 	if (gbMessagingStarted) apiSetForegroundWindow(ghWnd);
 
 	if (!dwMsgFlags) dwMsgFlags = MB_SYSTEMMODAL | MB_ICONERROR;
 
 	WARNING("!!! Заменить MessageBox на WaitForSingleObject(CreateThread(out,Title,dwMsgFlags),INFINITE);");
+
 	BOOL lb = gbInDisplayLastError; gbInDisplayLastError = TRUE;
-	nBtn = MessageBox(gbMessagingStarted ? ghWnd : NULL, out, asTitlte ? asTitlte : gpConEmu->GetLastTitle(), dwMsgFlags);
+	nBtn = MessageBox(out ? out : asLabel, dwMsgFlags, asTitle);
 	gbInDisplayLastError = lb;
+
 	MCHKHEAP
-	LocalFree(lpMsgBuf);
-	delete [] out;
+	if (lpMsgBuf)
+		LocalFree(lpMsgBuf);
+	if (out)	
+		delete [] out;
 	MCHKHEAP
 	return nBtn;
 }
@@ -756,8 +1038,20 @@ void MessageLoop()
 	MSG Msg = {NULL};
 	gbMessagingStarted = TRUE;
 
+#ifdef _DEBUG
+	wchar_t szDbg[128];
+#endif
+
 	while (GetMessage(&Msg, NULL, 0, 0))
 	{
+		#ifdef _DEBUG
+		if (Msg.message == WM_TIMER)
+		{
+			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_TIMER(0x%08X,%u)\n", (DWORD)Msg.hwnd, Msg.wParam);
+			DEBUGSTRTIMER(szDbg);
+		}
+		#endif
+
 		BOOL lbDlgMsg = FALSE;
 
 		if (gpConEmu)
@@ -841,8 +1135,11 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, uint& params)
 	int nInitLen = _tcslen(pszCmdLine);
 	cmdLine = lstrdup(pszCmdLine);
 	// Имя исполняемого файла (conemu.exe)
-	const wchar_t* pszExeName = wcsrchr(gpConEmu->ms_ConEmuExe, L'\\');
-	if (pszExeName) pszExeName++; else pszExeName = gpConEmu->ms_ConEmuExe;
+	const wchar_t* pszExeName = PointToName(gpConEmu->ms_ConEmuExe);
+	wchar_t* pszExeNameOnly = lstrdup(pszExeName);
+	wchar_t* pszDot = (wchar_t*)PointToExt(pszExeNameOnly);
+	_ASSERTE(pszDot);
+	if (pszDot) *pszDot = 0;
 
 	wchar_t *pszNext = NULL, *pszStart = NULL, chSave = 0;
 
@@ -883,7 +1180,7 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, uint& params)
 		if (pszFN) pszFN++; else pszFN = pszStart;
 
 		// Если первый параметр - наш conemu.exe или его путь - нужно его выбросить
-		if (!lstrcmpi(pszFN, pszExeName))
+		if (!lstrcmpi(pszFN, pszExeName) || !lstrcmpi(pszFN, pszExeNameOnly))
 		{
 			// Нужно отрезать
 			INT_PTR nCopy = (nInitLen - (pszNext - cmdLine)) * sizeof(wchar_t);
@@ -924,7 +1221,7 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, uint& params)
 		gpConEmu->mpsz_ConEmuArgs = lstrdup(cmdLine);
 
 		// Теперь проверяем наличие слеша
-		if (*pszStart != L'/')
+		if (*pszStart != L'/' && !wcschr(pszStart, L'/'))
 		{
 			params = (uint)-1;
 			cmdNew = cmdLine;
@@ -965,14 +1262,524 @@ void ResetConman()
 	}
 }
 
+// Creates a CLSID_ShellLink to insert into the Tasks section of the Jump List.  This type of Jump
+// List item allows the specification of an explicit command line to execute the task.
+HRESULT _CreateShellLink(PCWSTR pszArguments, PCWSTR pszPrefix, PCWSTR pszTitle, IShellLink **ppsl)
+{
+	if ((!pszArguments || !*pszArguments) && (!pszTitle || !*pszTitle))
+	{
+		return E_INVALIDARG;
+	}
+
+	LPCWSTR pszConfig = gpSetCls->GetConfigName();
+	if (pszConfig && !*pszConfig)
+		pszConfig = NULL;
+
+	wchar_t* pszBuf = NULL;
+	if (!pszArguments || !*pszArguments)
+	{
+		size_t cchMax = _tcslen(pszTitle)
+			+ (pszPrefix ? _tcslen(pszPrefix) : 0)
+			+ (pszConfig ? _tcslen(pszConfig) : 0)
+			+ 32;
+
+		pszBuf = (wchar_t*)malloc(cchMax*sizeof(*pszBuf));
+		if (!pszBuf)
+			return E_UNEXPECTED;
+
+		pszBuf[0] = 0;
+		if (pszPrefix)
+		{
+			_wcscat_c(pszBuf, cchMax, pszPrefix);
+			_wcscat_c(pszBuf, cchMax, L" ");
+		}
+		if (pszConfig)
+		{
+			_wcscat_c(pszBuf, cchMax, L"/config \"");
+			_wcscat_c(pszBuf, cchMax, pszConfig);
+			_wcscat_c(pszBuf, cchMax, L"\" ");
+		}
+		_wcscat_c(pszBuf, cchMax, L"/cmd ");
+		_wcscat_c(pszBuf, cchMax, pszTitle);
+		pszArguments = pszBuf;
+	}
+	else if (pszPrefix)
+	{
+		size_t cchMax = _tcslen(pszArguments)
+			+ _tcslen(pszPrefix)
+			+ (pszConfig ? _tcslen(pszConfig) : 0)
+			+ 32;
+		pszBuf = (wchar_t*)malloc(cchMax*sizeof(*pszBuf));
+		if (!pszBuf)
+			return E_UNEXPECTED;
+
+		pszBuf[0] = 0;
+		_wcscat_c(pszBuf, cchMax, pszPrefix);
+		_wcscat_c(pszBuf, cchMax, L" ");
+		if (pszConfig)
+		{
+			_wcscat_c(pszBuf, cchMax, L"/config \"");
+			_wcscat_c(pszBuf, cchMax, pszConfig);
+			_wcscat_c(pszBuf, cchMax, L"\" ");
+		}
+		_wcscat_c(pszBuf, cchMax, L"/cmd ");
+		_wcscat_c(pszBuf, cchMax, pszArguments);
+		pszArguments = pszBuf;
+	}
+
+    IShellLink *psl;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&psl));
+    if (SUCCEEDED(hr))
+    {
+        // Determine our executable's file path so the task will execute this application
+        WCHAR szAppPath[MAX_PATH];
+        if (GetModuleFileName(NULL, szAppPath, ARRAYSIZE(szAppPath)))
+        {
+            hr = psl->SetPath(szAppPath);
+
+			// Иконка
+			wchar_t szIcon[MAX_PATH+1], szTmp[MAX_PATH+1]; szIcon[0] = 0; szTmp[0] = 0;
+			LPCWSTR pszTemp = pszArguments, pszIcon = NULL;
+			wchar_t* pszBatch = NULL;
+			while (NextArg(&pszTemp, szTmp) == 0)
+			{
+				if (lstrcmpi(szTmp, L"/icon") == 0)
+				{
+					if (NextArg(&pszTemp, szTmp) == 0)
+						pszIcon = szTmp;
+					break;
+				}
+				else if (lstrcmpi(szTmp, L"/cmd") == 0)
+				{
+					if ((*pszTemp == CmdFilePrefix)
+						|| (*pszTemp == TaskBracketLeft) || (lstrcmp(pszTemp, AutoStartTaskName) == 0))
+					{
+						pszBatch = gpConEmu->LoadConsoleBatch(pszTemp);
+					}
+
+					if (pszBatch)
+					{
+						pszTemp = pszBatch;
+					}
+
+					if (NextArg(&pszTemp, szTmp) == 0)
+						pszIcon = szTmp;
+					break;
+				}
+			}
+			if (pszIcon && *pszIcon)
+			{
+				DWORD n;
+				wchar_t* pszFilePart;
+				n = GetFullPathName(szTmp, countof(szIcon), szIcon, &pszFilePart);
+				if (!n || (n >= countof(szIcon)) || !FileExists(szIcon))
+				{
+					n = SearchPath(NULL, pszIcon, NULL, countof(szIcon), szIcon, &pszFilePart);
+					if (!n || (n >= countof(szIcon)))
+						n = SearchPath(NULL, pszIcon, L".exe", countof(szIcon), szIcon, &pszFilePart);
+					if (!n || (n >= countof(szIcon)))
+						szIcon[0] = 0;
+				}
+			}
+			SafeFree(pszBatch);
+			psl->SetIconLocation(szIcon[0] ? szIcon : szAppPath, 0);
+
+			DWORD n = GetCurrentDirectory(countof(szAppPath), szAppPath);
+			if (n && (n < countof(szAppPath)))
+				psl->SetWorkingDirectory(szAppPath);
+
+            if (SUCCEEDED(hr))
+            {
+                hr = psl->SetArguments(pszArguments);
+                if (SUCCEEDED(hr))
+                {
+                    // The title property is required on Jump List items provided as an IShellLink
+                    // instance.  This value is used as the display name in the Jump List.
+                    IPropertyStore *pps;
+                    hr = psl->QueryInterface(IID_PPV_ARGS(&pps));
+                    if (SUCCEEDED(hr))
+                    {
+						PROPVARIANT propvar = {VT_BSTR};
+						//hr = InitPropVariantFromString(pszTitle, &propvar);
+						propvar.bstrVal = ::SysAllocString(pszTitle);
+                        hr = pps->SetValue(PKEY_Title, propvar);
+                        if (SUCCEEDED(hr))
+                        {
+                            hr = pps->Commit();
+                            if (SUCCEEDED(hr))
+                            {
+                                hr = psl->QueryInterface(IID_PPV_ARGS(ppsl));
+                            }
+                        }
+						//PropVariantClear(&propvar);
+						::SysFreeString(propvar.bstrVal);
+                        pps->Release();
+                    }
+                }
+            }
+        }
+        else
+        {
+            hr = HRESULT_FROM_WIN32(GetLastError());
+        }
+        psl->Release();
+    }
+
+    if (pszBuf)
+    	free(pszBuf);
+    return hr;
+}
+
+// The Tasks category of Jump Lists supports separator items.  These are simply IShellLink instances
+// that have the PKEY_AppUserModel_IsDestListSeparator property set to TRUE.  All other values are
+// ignored when this property is set.
+HRESULT _CreateSeparatorLink(IShellLink **ppsl)
+{
+    IPropertyStore *pps;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pps));
+    if (SUCCEEDED(hr))
+    {
+		PROPVARIANT propvar = {VT_BOOL};
+        //hr = InitPropVariantFromBoolean(TRUE, &propvar);
+		propvar.boolVal = VARIANT_TRUE;
+        hr = pps->SetValue(PKEY_AppUserModel_IsDestListSeparator, propvar);
+        if (SUCCEEDED(hr))
+        {
+            hr = pps->Commit();
+            if (SUCCEEDED(hr))
+            {
+                hr = pps->QueryInterface(IID_PPV_ARGS(ppsl));
+            }
+        }
+        //PropVariantClear(&propvar);
+        pps->Release();
+    }
+    return hr;
+}
+
+void UpdateWin7TaskList(bool bForce)
+{
+	// Добаляем Tasks, они есть только в Win7+
+	if (gnOsVer < 0x601)
+		return;
+
+	// -- т.к. работа с TaskList занимает некоторое время - обновление будет делать только по запросу
+	//if (!bForce && !gpSet->isStoreTaskbarkTasks && !gpSet->isStoreTaskbarCommands)
+	if (!bForce)
+		return; // сохранять не просили
+
+	SetCursor(LoadCursor(NULL, IDC_WAIT));
+
+	LPCWSTR pszTasks[32] = {};
+	LPCWSTR pszTasksPrefix[32] = {};
+	LPCWSTR pszHistory[32] = {};
+	LPCWSTR pszCurCmd = NULL, pszCurCmdTitle = NULL;
+	size_t nTasksCount = 0, nHistoryCount = 0;
+
+
+	if (gpSet->isStoreTaskbarCommands)
+	{
+		// gpConEmu->mpsz_ConEmuArgs хранит аргументы с "/cmd"
+		pszCurCmd = SkipNonPrintable(gpConEmu->mpsz_ConEmuArgs);
+		pszCurCmdTitle = pszCurCmd;
+		if (pszCurCmdTitle && (*pszCurCmdTitle == L'/'))
+		{
+			if (StrCmpNI(pszCurCmdTitle, L"/cmd ", 5) == 0)
+			{
+				pszCurCmdTitle = SkipNonPrintable(pszCurCmdTitle+5);
+			}
+		}
+		if (!pszCurCmdTitle || !*pszCurCmdTitle)
+		{
+			pszCurCmd = pszCurCmdTitle = NULL;
+		}
+
+		// Теперь команды из истории
+		LPCWSTR pszCommand = gpSet->HistoryGet();
+		if (pszCommand)
+		{
+			while (*pszCommand && (nHistoryCount < countof(pszHistory)))
+			{
+				// Текущую - к pszCommand не добавляем. Ее в конец
+				if (!pszCurCmdTitle || (lstrcmpi(pszCurCmdTitle, pszCommand) != 0))
+				{
+					pszHistory[nHistoryCount++] = pszCommand;
+				}
+				pszCommand += _tcslen(pszCommand)+1;
+			}
+		}
+
+		if (pszCurCmdTitle)
+			nHistoryCount++;
+	}
+
+	if (gpSet->isStoreTaskbarkTasks)
+	{
+		int nGroup = 0;
+		const Settings::CommandTasks* pGrp = NULL;
+		while ((pGrp = gpSet->CmdTaskGet(nGroup++)) && (nTasksCount < countof(pszTasks)))
+		{
+			if (pGrp->pszName && *pGrp->pszName)
+			{
+				pszTasksPrefix[nTasksCount] = pGrp->pszGuiArgs;
+				pszTasks[nTasksCount++] = pGrp->pszName;
+			}
+		}
+	}
+
+
+	bool lbRc = false;
+
+    // The visible categories are controlled via the ICustomDestinationList interface.  If not customized,
+    // applications will get the Recent category by default.
+    ICustomDestinationList *pcdl = NULL;
+    HRESULT hr = CoCreateInstance(CLSID_DestinationList, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pcdl));
+    if (FAILED(hr) || !pcdl)
+    {
+    	DisplayLastError(L"ICustomDestinationList create failed", (DWORD)hr);
+    }
+    else
+    {
+		UINT cMinSlots = 0;
+		IObjectArray *poaRemoved = NULL;
+		hr = pcdl->BeginList(&cMinSlots, IID_PPV_ARGS(&poaRemoved));
+		if (FAILED(hr))
+		{
+			DisplayLastError(L"pcdl->BeginList failed", (DWORD)hr);
+		}
+		else
+		{
+			if (cMinSlots < 3)
+				cMinSlots = 3;
+
+			// Вся история и все команды - скорее всего в TaskList не поместятся. Нужно подрезать.
+			if (cMinSlots < (nTasksCount + nHistoryCount + (pszCurCmdTitle ? 1 : 0)))
+			{
+				// Минимум одну позицию - оставить под историю/текущую команду
+				if (nTasksCount && (cMinSlots < (nTasksCount + 1)))
+				{
+					nTasksCount = cMinSlots-1;
+					if (nTasksCount < countof(pszTasks))
+						pszTasks[nTasksCount] = NULL;
+				}
+
+				if ((nTasksCount + (pszCurCmdTitle ? 1 : 0)) >= cMinSlots)
+                	nHistoryCount = 0;
+                else
+                	nHistoryCount = cMinSlots - (nTasksCount + (pszCurCmdTitle ? 1 : 0));
+
+                if (nHistoryCount < countof(pszHistory))
+                	pszHistory[nHistoryCount] = NULL;
+			}
+
+			IObjectCollection *poc = NULL;
+			hr = CoCreateInstance(CLSID_EnumerableObjectCollection, NULL, CLSCTX_INPROC, IID_PPV_ARGS(&poc));
+			if (FAILED(hr) || !poc)
+			{
+				DisplayLastError(L"IObjectCollection create failed", (DWORD)hr);
+			}
+			else
+			{
+				IShellLink * psl = NULL;
+				bool bNeedSeparator = false;
+
+				// Если просили - добавляем наши внутренние "Tasks"
+				if (SUCCEEDED(hr) && gpSet->isStoreTaskbarkTasks && nTasksCount)
+				{
+					for (size_t i = 0; (i < countof(pszTasks)) && pszTasks[i]; i++)
+					{
+						hr = _CreateShellLink(NULL, pszTasksPrefix[i], pszTasks[i], &psl);
+
+						if (SUCCEEDED(hr))
+						{
+							hr = poc->AddObject(psl);
+							psl->Release();
+							if (SUCCEEDED(hr))
+								bNeedSeparator = true;
+						}
+
+						if (FAILED(hr))
+						{
+							DisplayLastError(L"Add task (CmdGroup) failed", (DWORD)hr);
+							break;
+						}
+					}
+				}
+
+				// И команды из истории
+				if (SUCCEEDED(hr) && gpSet->isStoreTaskbarCommands && (nHistoryCount || pszCurCmdTitle))
+				{
+					if (bNeedSeparator)
+					{
+						bNeedSeparator = false; // один раз
+						hr = _CreateSeparatorLink(&psl);
+						if (SUCCEEDED(hr))
+						{
+							hr = poc->AddObject(psl);
+							psl->Release();
+						}
+					}
+
+					if (SUCCEEDED(hr) && pszCurCmdTitle)
+					{
+						hr = _CreateShellLink(pszCurCmd, NULL, pszCurCmdTitle, &psl);
+
+						if (SUCCEEDED(hr))
+						{
+							hr = poc->AddObject(psl);
+							psl->Release();
+						}
+
+						if (FAILED(hr))
+						{
+							DisplayLastError(L"Add task (pszCurCmd) failed", (DWORD)hr);
+						}
+					}
+
+					for (size_t i = 0; SUCCEEDED(hr) && (i < countof(pszHistory)) && pszHistory[i]; i++)
+					{
+						hr = _CreateShellLink(NULL, NULL, pszHistory[i], &psl);
+
+						if (SUCCEEDED(hr))
+						{
+							hr = poc->AddObject(psl);
+							psl->Release();
+						}
+
+						if (FAILED(hr))
+						{
+							DisplayLastError(L"Add task (pszHistory) failed", (DWORD)hr);
+							break;
+						}
+					}
+				}
+
+
+				if (SUCCEEDED(hr))
+				{
+					IObjectArray * poa = NULL;
+					hr = poc->QueryInterface(IID_PPV_ARGS(&poa));
+					if (FAILED(hr) || !poa)
+					{
+						DisplayLastError(L"poc->QueryInterface(IID_PPV_ARGS(&poa)) failed", (DWORD)hr);
+					}
+					else
+					{
+						// Add the tasks to the Jump List. Tasks always appear in the canonical "Tasks"
+						// category that is displayed at the bottom of the Jump List, after all other
+						// categories.
+						hr = pcdl->AddUserTasks(poa);
+						if (FAILED(hr))
+						{
+							DisplayLastError(L"pcdl->AddUserTasks(poa) failed", (DWORD)hr);
+						}
+						else
+						{
+							// Commit the list-building transaction.
+							hr = pcdl->CommitList();
+							if (FAILED(hr))
+							{
+								DisplayLastError(L"pcdl->CommitList() failed", (DWORD)hr);
+							}
+							else
+							{
+								MessageBox(ghOpWnd, L"Taskbar jump list was updated successfully", gpConEmu->GetDefaultTitle(), MB_ICONINFORMATION);
+							}
+						}
+						poa->Release();
+					}
+				}
+				poc->Release();
+			}
+
+			if (poaRemoved)
+				poaRemoved->Release();
+		}
+
+        pcdl->Release();
+    }
+
+
+
+    // В Win7 можно также показывать в JumpList "документы" (ярлыки, пути, и т.п.)
+    // Но это не то... Похоже, чтобы добавить такой "путь" в Recent/Frequent list
+    // нужно создавать физический файл (например, с расширением ".conemu"),
+    // и (!) регистрировать для него обработчиком conemu.exe
+	#if 0
+	//SHAddToRecentDocs(SHARD_PATHW, pszTemp);
+
+	//HRESULT hres;
+	//IShellLink* phsl = NULL;
+	//// Get a pointer to the IShellLink interface. 
+	//hres = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, 
+	//					   IID_IShellLink, (LPVOID*)&phsl); 
+	//if (SUCCEEDED(hres))
+	//{
+	//	STARTUPINFO si = {sizeof(si)};
+	//	GetStartupInfo(&si);
+	//	if (!si.wShowWindow)
+	//		si.wShowWindow = SW_SHOWNORMAL;
+
+	//	phsl->SetPath(gpConEmu->ms_ConEmuExe);
+	//	phsl->SetDescription(pszTemp);
+	//	phsl->SetArguments(pszTemp);
+	//	phsl->SetShowCmd(si.wShowWindow);
+
+	//	DWORD n = GetCurrentDirectory(countof(szExe), szExe);
+	//	if (n && (n < countof(szExe)))
+	//		phsl->SetWorkingDirectory(szExe);
+	//}
+
+	//if (phsl)
+	//{
+	//	//_ASSERTE(SHARD_SHELLITEM == 0x00000008L);
+	//	SHAddToRecentDocs(0x00000008L/*SHARD_SHELLITEM*/, phsl);
+	//	phsl->Release();
+	//}
+	#endif
+
+	SetCursor(LoadCursor(NULL, IDC_ARROW));
+}
+
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	_ASSERTE(sizeof(CESERVER_REQ_STARTSTOPRET) <= sizeof(CESERVER_REQ_STARTSTOP));
 	gOSVer.dwOSVersionInfoSize = sizeof(gOSVer);
 	GetVersionEx(&gOSVer);
+	gnOsVer = ((gOSVer.dwMajorVersion & 0xFF) << 8) | (gOSVer.dwMinorVersion & 0xFF);
 	HeapInitialize();
 	RemoveOldComSpecC();
+
+	gbIsWine = IsWine(); // В общем случае, на флажок ориентироваться нельзя. Это для информации.
+	if (gbIsWine)
+		wcscpy_c(gsDefGuiFont, L"Liberation Mono");
+
+	gbIsDBCS = IsDbcs();
+	if (gbIsDBCS)
+	{
+		HKEY hk = NULL;
+		DWORD nOemCP = GetOEMCP();
+		if (nOemCP && !RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Console\\TrueTypeFont", 0, KEY_READ, &hk))
+		{
+			wchar_t szName[64]; _wsprintf(szName, SKIPLEN(countof(szName)) L"%u", nOemCP);
+			wchar_t szVal[64] = {}; DWORD cbSize = sizeof(szVal)-2;
+			if (!RegQueryValueEx(hk, szName, NULL, NULL, (LPBYTE)szVal, &cbSize) && *szVal)
+			{
+				if (*szVal == L'*')
+				{
+					lstrcpyn(gsDefConFont, szVal+1, countof(gsDefConFont));
+				}
+				else
+				{
+					lstrcpyn(gsDefConFont, szVal, countof(gsDefConFont));
+				}
+			}
+			RegCloseKey(hk);
+		}
+	}
+
+
 	gpSetCls = new CSettings;
 	gpConEmu = new CConEmuMain;
 	/*int nCmp;
@@ -989,6 +1796,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	gpLocalSecurity = LocalSecurity();
 #ifdef _DEBUG
 	gAllowAssertThread = am_Thread;
+
+	//wchar_t szDbg[64];
+	//msprintf(szDbg, countof(szDbg), L"xx=0x%X.", 0);
 #endif
 
 //#ifdef _DEBUG
@@ -1011,12 +1821,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 //		'я', (wchar_t)0x44F, 0x44F, L"End");
 //#endif
 
-#ifdef SHOW_STARTED_MSGBOX
+#if defined(SHOW_STARTED_MSGBOX)
 	wchar_t szTitle[128]; _wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"Conemu started, PID=%i", GetCurrentProcessId());
 	MessageBox(NULL, GetCommandLineW(), szTitle, MB_OK|MB_ICONINFORMATION|MB_SETFOREGROUND|MB_SYSTEMMODAL);
+#elif defined(WAIT_STARTED_DEBUGGER)
+	while (!IsDebuggerPresent())
+		Sleep(250);
+	int nDbg = IsDebuggerPresent();
 #else
-#ifdef _DEBUG
 
+#ifdef _DEBUG
 	if (_tcsstr(GetCommandLine(), L"/debugi"))
 	{
 		if (!IsDebuggerPresent()) _ASSERT(FALSE);
@@ -1027,22 +1841,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{
 			if (!IsDebuggerPresent()) MBoxA(L"Conemu started");
 		}
-
 #endif
+
 	//pVCon = NULL;
 	//bool setParentDisabled=false;
-	bool ClearTypePrm = false;
-	bool FontPrm = false; TCHAR* FontVal = NULL; //wchar_t szTempFontFam[MAX_PATH];
+	bool ClearTypePrm = false; LONG ClearTypeVal = CLEARTYPE_NATURAL_QUALITY;
+	bool FontPrm = false; TCHAR* FontVal = NULL;
+	bool IconPrm = false;
 	bool SizePrm = false; LONG SizeVal = 0;
 	bool BufferHeightPrm = false; int BufferHeightVal = 0;
 	bool ConfigPrm = false; TCHAR* ConfigVal = NULL;
 	//bool FontFilePrm = false; TCHAR* FontFile = NULL; //ADD fontname; by Mors
 	bool WindowPrm = false; int WindowModeVal = 0;
+#if 0
+	//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
 	bool AttachPrm = false; LONG AttachVal=0;
+#endif
 	bool MultiConPrm = false, MultiConValue = false;
 	bool VisPrm = false, VisValue = false;
 	//bool SingleInstance = false;
 	gpSetCls->SingleInstanceArg = false;
+	gpSetCls->SingleInstanceShowHide = sih_None;
 	//gpConEmu->cBlinkShift = GetCaretBlinkTime()/15;
 	//memset(&gOSVer, 0, sizeof(gOSVer));
 	//gOSVer.dwOSVersionInfoSize = sizeof(gOSVer);
@@ -1067,6 +1886,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	TCHAR *psUnknown = NULL;
 	uint  params = 0;
 
+	// [OUT] params = (uint)-1, если в первый аргумент не начинается с '/'
+	// т.е. комстрока такая "ConEmu.exe c:\tools\far.exe", 
+	// а не такая "ConEmu.exe /cmd c:\tools\far.exe", 
 	if (!PrepareCommandLine(/*OUT*/cmdLine, /*OUT*/cmdNew, /*OUT*/params))
 		return 100;
 
@@ -1080,9 +1902,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		//}
 		// Parse parameters.
 		// Duplicated parameters are permitted, the first value is used.
-		uint i = 0; // ммать... curCommand увеличивался, а i НЕТ
+		uint i = 0;
 
-		while(i < params && curCommand && *curCommand)
+		while (i < params && curCommand && *curCommand)
 		{
 			if (!klstricmp(curCommand, _T("/autosetup")))
 			{
@@ -1118,21 +1940,38 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				{
 					BOOL bNeedFree = FALSE;
 
-					if (*curCommand!=_T('"') && _tcschr(curCommand, _T(' ')))
-					{
-						TCHAR* psz = (TCHAR*)calloc(_tcslen(curCommand)+3, sizeof(TCHAR));
-						*psz = _T('"');
-						_tcscpy(psz+1, curCommand);
-						_tcscat(psz, _T("\""));
-						curCommand = psz;
-					}
+					//if (*curCommand!=_T('"') && _tcschr(curCommand, _T(' ')))
+					//{
+					//	TCHAR* psz = (TCHAR*)calloc(_tcslen(curCommand)+3, sizeof(TCHAR));
+					//	*psz = _T('"');
+					//	_tcscpy(psz+1, curCommand);
+					//	_tcscat(psz, _T("\""));
+					//	curCommand = psz;
+					//}
 
-					if (0==RegSetValueEx(hk, _T("AutoRun"), NULL, REG_SZ, (LPBYTE)curCommand,
-					                    (DWORD)sizeof(TCHAR)*(_tcslen(curCommand)+1))) //-V220
+					size_t cchMax = _tcslen(curCommand);
+					LPCWSTR pszArg1 = NULL;
+					if ((i + 1) < params)
+					{
+						// Здесь может быть "/GHWND=NEW"
+						pszArg1 = curCommand + cchMax + 1;
+						if (!*pszArg1)
+							pszArg1 = NULL;
+						else
+							cchMax += _tcslen(pszArg1);
+					}
+					cchMax += 16; // + кавычки и пробелы всякие
+
+					wchar_t* pszCmd = (wchar_t*)calloc(cchMax, sizeof(*pszCmd));
+					_wsprintf(pszCmd, SKIPLEN(cchMax) L"\"%s\"%s%s%s", curCommand,
+						pszArg1 ? L" \"" : L"", pszArg1 ? pszArg1 : L"", pszArg1 ? L"\"" : L"");
+					
+
+					if (0 == RegSetValueEx(hk, _T("AutoRun"), NULL, REG_SZ, (LPBYTE)pszCmd,
+					                    (DWORD)sizeof(TCHAR)*(_tcslen(pszCmd)+1))) //-V220
 						nSetupRc = 1;
 
-					if (bNeedFree)
-						free(curCommand);
+					free(pszCmd);
 				}
 				else
 				{
@@ -1161,9 +2000,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			{
 				gpConEmu->mb_StartDetached = TRUE;
 			}
-			else if (!klstricmp(curCommand, _T("/ct")) || !klstricmp(curCommand, _T("/cleartype")))
+			else if (!klstricmp(curCommand, _T("/ct")) || !klstricmp(curCommand, _T("/cleartype"))
+				|| !klstricmp(curCommand, _T("/ct0")) || !klstricmp(curCommand, _T("/ct1")) || !klstricmp(curCommand, _T("/ct2")))
 			{
 				ClearTypePrm = true;
+				switch (curCommand[3])
+				{
+				case L'0':
+					ClearTypeVal = NONANTIALIASED_QUALITY; break;
+				case L'1':
+					ClearTypeVal = ANTIALIASED_QUALITY; break;
+				default:
+					ClearTypeVal = CLEARTYPE_NATURAL_QUALITY;
+				}
 			}
 			// имя шрифта
 			else if (!klstricmp(curCommand, _T("/font")) && i + 1 < params)
@@ -1187,6 +2036,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					SizeVal = klatoi(curCommand);
 				}
 			}
+#if 0
+			//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
 			else if (!klstricmp(curCommand, _T("/attach")) /*&& i + 1 < params*/)
 			{
 				//curCommand += _tcslen(curCommand) + 1; i++;
@@ -1229,16 +2080,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 								// Если на самом верху НЕ консоль - это может быть панель проводника,
 								// или другое плавающее окошко... Поищем ВЕРХНЮЮ консоль
-								if (_tcscmp(sClass, _T("ConsoleWindowClass"))!=0)
+								if (isConsoleClass(sClass))
 								{
-									_tcscpy(sClass, _T("ConsoleWindowClass"));
-									hCon = FindWindow(_T("ConsoleWindowClass"), NULL);
+									wcscpy_c(sClass, RealConsoleClass);
+									hCon = FindWindow(RealConsoleClass, NULL);
+									if (!hCon)
+										hCon = FindWindow(WineConsoleClass, NULL);
 
 									if (!hCon)
 										return 100;
 								}
 
-								if (_tcscmp(sClass, _T("ConsoleWindowClass"))==0)
+								if (isConsoleClass(sClass))
 								{
 									// перебрать все ConEmu, может кто-то уже подцеплен?
 									HWND hEmu = NULL;
@@ -1264,6 +2117,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					}
 				}
 			}
+#endif
 			//Start ADD fontname; by Mors
 			else if (!klstricmp(curCommand, _T("/fontfile")) && i + 1 < params)
 			{
@@ -1297,6 +2151,92 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			{
 				WindowModeVal = rMaximized; WindowPrm = true;
 			}
+			else if (!klstricmp(curCommand, _T("/min")))
+			{
+				gpConEmu->WindowStartMinimized = true;
+			}
+			else if (!klstricmp(curCommand, _T("/tsa")) || !klstricmp(curCommand, _T("/tray")))
+			{
+				gpConEmu->ForceMinimizeToTray = true;
+			}
+			else if (!klstricmp(curCommand, _T("/noupdate")))
+			{
+				gpConEmu->DisableAutoUpdate = true;
+			}
+			else if (!klstricmp(curCommand, _T("/nokeyhooks")))
+			{
+				gpConEmu->DisableKeybHooks = true;
+			}
+			else if (!klstricmp(curCommand, _T("/inside")))
+			{
+				gpConEmu->m_InsideIntegration = CConEmuMain::ii_Auto;
+				gpConEmu->mb_InsideIntegrationShift = isPressed(VK_SHIFT);
+			}
+			else if (!klstricmp(curCommand, _T("/insidepid")) && ((i + 1) < params))
+			{
+				curCommand += _tcslen(curCommand) + 1; i++;
+
+				wchar_t* pszEnd;
+				gpConEmu->mn_InsideParentPID = wcstol(curCommand, &pszEnd, 10);
+				if (gpConEmu->mn_InsideParentPID)
+				{
+					// Здесь указывается PID, в который нужно внедриться.
+					gpConEmu->m_InsideIntegration = CConEmuMain::ii_Auto;
+					gpConEmu->mb_InsideIntegrationShift = isPressed(VK_SHIFT);
+				}
+			}
+			else if (!klstricmp(curCommand, _T("/insidewnd")) && ((i + 1) < params))
+			{
+				curCommand += _tcslen(curCommand) + 1; i++;
+				if (curCommand[0] == L'0' && (curCommand[1] == L'x' || curCommand[1] == L'X'))
+					curCommand += 2;
+				else if (curCommand[0] == L'x' || curCommand[0] == L'X')
+					curCommand ++;
+
+				wchar_t* pszEnd;
+				HWND hParent = (HWND)wcstol(curCommand, &pszEnd, 16);
+				if (hParent && IsWindow(hParent))
+				{
+					// Здесь указывается HWND, в котором нужно создаваться.
+					gpConEmu->m_InsideIntegration = CConEmuMain::ii_Simple;
+					gpConEmu->mh_InsideParentWND = hParent;
+					gpConEmu->mb_InsideIntegrationShift = isPressed(VK_SHIFT);
+				}
+			}
+			else if (!klstricmp(curCommand, _T("/icon")) && ((i + 1) < params))
+			{
+				curCommand += _tcslen(curCommand) + 1; i++;
+
+				if (!IconPrm && *curCommand)
+				{
+					IconPrm = true;
+					gpConEmu->mps_IconPath = lstrdup(curCommand);
+				}
+			}
+			else if (!klstricmp(curCommand, _T("/dir")) && i + 1 < params)
+			{
+				curCommand += _tcslen(curCommand) + 1; i++;
+
+				if (*curCommand)
+				{
+					// Например, "%USERPROFILE%"
+					wchar_t* pszExpand = NULL;
+					if (wcschr(curCommand, L'%') && ((pszExpand = ExpandEnvStr(curCommand)) != NULL))
+					{
+						SetCurrentDirectory(pszExpand);
+						SafeFree(pszExpand);
+					}
+					else
+					{
+						SetCurrentDirectory(curCommand);
+					}
+					gpConEmu->RefreshConEmuCurDir();
+				}
+			}
+			else if (!klstricmp(curCommand, _T("/updatejumplist")))
+			{
+				gpConEmu->mb_UpdateJumpListOnStartup = true;
+			}
 			else if (!klstricmp(curCommand, L"/log") || !klstricmp(curCommand, L"/log0")  || !klstricmp(curCommand, L"/log1"))
 			{
 				gpSetCls->isAdvLogging = 1;
@@ -1312,6 +2252,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			else if (!klstricmp(curCommand, _T("/single")))
 			{
 				gpSetCls->SingleInstanceArg = true;
+			}
+			else if (!klstricmp(curCommand, _T("/showhide")) || !klstricmp(curCommand, _T("/showhideTSA")))
+			{
+				gpSetCls->SingleInstanceArg = true;
+				gpSetCls->SingleInstanceShowHide = !klstricmp(curCommand, _T("/showhide"))
+					? sih_ShowMinimize : sih_ShowHideTSA;
 			}
 			//else if ( !klstricmp(curCommand, _T("/DontSetParent")) || !klstricmp(curCommand, _T("/Windows7")) )
 			//{
@@ -1350,7 +2296,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			{
 				curCommand += _tcslen(curCommand) + 1; i++;
 
-				if (!ConfigPrm)
+				//if (!ConfigPrm) -- используем последний из параметров, если их несколько
 				{
 					ConfigPrm = true;
 					const int maxConfigNameLen = 127;
@@ -1370,9 +2316,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					ConfigVal = curCommand;
 				}
 			}
+			else if (!klstricmp(curCommand, _T("/Title")) && i + 1 < params)
+			{
+				curCommand += _tcslen(curCommand) + 1; i++;
+
+				const int maxTitleNameLen = 127;
+				int nLen = _tcslen(curCommand);
+
+				if (nLen > maxTitleNameLen)
+				{
+					int nCchSize = nLen+100;
+					wchar_t* psz = (wchar_t*)calloc(nCchSize,sizeof(wchar_t));
+					_wsprintf(psz, SKIPLEN(nCchSize) L"Too long /Title name (%i chars).\r\n", nLen);
+					_wcscat_c(psz, nCchSize, curCommand);
+					MBoxA(psz);
+					free(psz); free(cmdLine);
+					return 100;
+				}
+
+				gpConEmu->SetTitleTemplate(curCommand);
+			}
 			else if (!klstricmp(curCommand, _T("/?")))
 			{
-				MessageBox(NULL, pHelp, L"About ConEmu...", MB_ICONQUESTION);
+				//MessageBox(NULL, pHelp, L"About ConEmu...", MB_ICONQUESTION);
+				gpConEmu->OnInfo_About();
 				free(cmdLine);
 				return -1; // NightRoman
 			}
@@ -1400,6 +2367,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		return 100;
 	}
 
+
 //------------------------------------------------------------------------
 ///| load settings and apply parameters |/////////////////////////////////
 //------------------------------------------------------------------------
@@ -1414,6 +2382,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	// load settings from registry
 	gpSet->LoadSettings();
+
+	// Если в режиме "Inside" подходящего окна не нашли и юзер отказался от "обычного" режима
+	if (gpConEmu->m_InsideIntegration && (gpConEmu->mh_InsideParentWND == (HWND)-1))
+	{
+		return 100;
+	}
 
 
 	// Проверить наличие необходимых файлов (перенес сверху, чтобы учитывался флажок "Inject ConEmuHk")
@@ -1439,6 +2413,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	{
 		if (nCmdShow == SW_SHOWMAXIMIZED)
 			gpConEmu->WindowMode = rMaximized;
+		else if (nCmdShow == SW_SHOWMINIMIZED || nCmdShow == SW_SHOWMINNOACTIVE)
+			gpConEmu->WindowStartMinimized = true;
 	}
 	else
 	{
@@ -1468,13 +2444,37 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		MCHKHEAP
 		const wchar_t* pszDefCmd = NULL;
 		wchar_t* pszReady = NULL;
-		int nLen = _tcslen(cmdNew)+1;
+		int nLen = _tcslen(cmdNew)+8;
 
-		if (params == (uint)-1)
+		// params = (uint)-1, если в первый аргумент не начинается с '/'
+		// т.е. комстрока такая "ConEmu.exe c:\tools\far.exe"
+		if ((params == (uint)-1)
+			&& (gpSet->nStartType == 0)
+			&& (gpSet->psStartSingleApp && *gpSet->psStartSingleApp))
 		{
-			pszDefCmd = gpSet->GetCmd();
-			_ASSERTE(pszDefCmd && *pszDefCmd);
-			nLen += 3 + _tcslen(pszDefCmd);
+			// В psStartSingleApp может быть прописан путь к фару.
+			// Тогда, если в проводнике набросили, например, txt файл
+			// на иконку ConEmu, этот наброшенный путь прилепится
+			// к строке запуска фара.
+			pszDefCmd = gpSet->psStartSingleApp;
+			wchar_t szExe[MAX_PATH+1];
+			if (0 != NextArg(&pszDefCmd, szExe))
+			{
+				_ASSERTE(FALSE && "NextArg failed");
+			}
+			else
+			{
+				// Только если szExe это Far.
+				if (IsFarExe(szExe))
+					pszDefCmd = gpSet->psStartSingleApp;
+				else
+					pszDefCmd = NULL; // Запускать будем только то, что "набросили"
+			}
+
+			if (pszDefCmd)
+			{
+				nLen += 3 + _tcslen(pszDefCmd);
+			}
 		}
 
 		pszReady = (TCHAR*)malloc(nLen*sizeof(TCHAR));
@@ -1489,11 +2489,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{
 			lstrcpy(pszReady, pszDefCmd);
 			lstrcat(pszReady, L" ");
-			lstrcat(pszReady, cmdNew);
+			lstrcat(pszReady, SkipNonPrintable(cmdNew));
+
+			// Запомним в истории!
+			gpSet->HistoryAdd(pszReady);
+		}
+		else if (params == (uint)-1)
+		{
+			*pszReady = DropLnkPrefix; // Признак того, что это передача набрасыванием на ярлык
+			lstrcpy(pszReady+1, SkipNonPrintable(cmdNew));
+
+			// Запомним в истории!
+			gpSet->HistoryAdd(pszReady+1);
 		}
 		else
 		{
-			lstrcpy(pszReady, cmdNew);
+			lstrcpy(pszReady, SkipNonPrintable(cmdNew));
+
+			// Запомним в истории!
+			gpSet->HistoryAdd(pszReady);
 		}
 
 		MCHKHEAP
@@ -1526,7 +2540,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	gpSetCls->InitFont(
 	    FontPrm ? FontVal : NULL,
 	    SizePrm ? SizeVal : -1,
-	    ClearTypePrm ? CLEARTYPE_NATURAL_QUALITY : -1
+	    ClearTypePrm ? ClearTypeVal : -1
 	);
 
 ///////////////////////////////////
@@ -1534,14 +2548,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (gpSetCls->SingleInstanceArg)
 	{
 		// При запуске серии закладок из cmd файла второму экземпляру лучше чуть-чуть подождать
-		Sleep(1000);
+		if (gpSetCls->SingleInstanceShowHide == sih_None)
+			Sleep(1000); // чтобы успело "появиться" главное окно ConEmu
+
 		// Поехали
 		DWORD dwStart = GetTickCount();
 
-		while(!gpConEmu->isFirstInstance())
+		while (!gpConEmu->isFirstInstance())
 		{
 			if (gpConEmu->RunSingleInstance())
 				return 0; // командная строка успешно запущена в существующем экземпляре
+
+			// Если передать не удалось (может первый экземпляр еще в процессе инициализации?)
+			Sleep(250);
 
 			// Если ожидание длится более 10 секунд - запускаемся самостоятельно
 			if ((GetTickCount() - dwStart) > 10*1000)
@@ -1559,6 +2578,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 //------------------------------------------------------------------------
 	BOOL lbConsoleAllocated = FALSE;
 
+#if 0
+	//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
 	if (AttachPrm)
 	{
 		if (!AttachVal)
@@ -1570,6 +2591,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 		gpSetCls->nAttachPID = AttachVal;
 	}
+#endif
 
 //------------------------------------------------------------------------
 ///| Initializing |///////////////////////////////////////////////////////
@@ -1611,6 +2633,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 //------------------------------------------------------------------------
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 	MessageLoop();
+	ShutdownGuiStep(L"MessageLoop terminated");
 //------------------------------------------------------------------------
 ///| Deinitialization |///////////////////////////////////////////////////
 //------------------------------------------------------------------------
@@ -1644,6 +2667,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		delete gpUpd;
 		gpUpd = NULL;
 	}
+
+	ShutdownGuiStep(L"Gui terminated");
 
 	// Нельзя. Еще живут глобальные объекты
 	//HeapDeinitialize();

@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "DwmApi_Part.h"
 #include <TCHAR.H>
@@ -37,11 +38,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FrameHolder.h"
 #include "ConEmu.h"
 #include "Options.h"
+#include "Status.h"
 
 #ifdef _DEBUG
 static int _nDbgStep = 0; wchar_t _szDbg[512];
 #endif
-#define DBGFUNCTION(s) // { wsprintf(_szDbg, L"%i: %s", ++_nDbgStep, s); OutputDebugString(_szDbg); /*Sleep(1000);*/ }
+#define DBGFUNCTION(s) //{ wsprintf(_szDbg, L"%i: %s", ++_nDbgStep, s); OutputDebugString(_szDbg); /*Sleep(1000);*/ }
 #define DEBUGSTRSIZE(s) DEBUGSTR(s)
 
 extern HICON hClassIconSm;
@@ -144,6 +146,7 @@ bool CFrameHolder::ProcessNcMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 #endif
 
 	bool lbRc;
+	static POINT ptLastNcClick = {};
 
 	switch (uMsg)
 	{
@@ -204,19 +207,60 @@ bool CFrameHolder::ProcessNcMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 			DBGFUNCTION(L"WM_NCMOUSEHOVER \n"); break;
 		}
 		#endif
+
+		ptLastNcClick = MakePoint(LOWORD(lParam),HIWORD(lParam));
+
+		if ((uMsg == WM_NCMOUSEMOVE) || (uMsg == WM_NCLBUTTONUP))
+			gpConEmu->isSizing(); // могло не сброситься, проверим
+
 		RedrawLock();
 		lbRc = gpConEmu->mp_TabBar->ProcessTabMouseEvent(hWnd, uMsg, wParam, lParam, lResult);
 		RedrawUnlock();
 		if (!lbRc)
 		{
-			if (wParam == HTSYSMENU && uMsg == WM_NCLBUTTONDOWN)
+			if ((wParam == HTSYSMENU && uMsg == WM_NCLBUTTONDOWN)
+				/*|| (wParam == HTCAPTION && uMsg == WM_NCRBUTTONDOWN)*/)
 			{
-				gpConEmu->ShowSysmenu();
+				//if (uMsg == WM_NCRBUTTONDOWN)
+				//	gpConEmu->ShowSysmenu((SHORT)LOWORD(lParam),(SHORT)HIWORD(lParam));
+				//else
+
+				DWORD nCurTick = GetTickCount();
+				DWORD nOpenDelay = nCurTick - gpConEmu->mn_SysMenuOpenTick;
+				DWORD nCloseDelay = nCurTick - gpConEmu->mn_SysMenuCloseTick;
+				DWORD nDoubleTime = GetDoubleClickTime();
+
+				if (gpConEmu->mn_SysMenuOpenTick && (nOpenDelay < nDoubleTime))
+				{
+					PostMessage(ghWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+				}
+				else if (gpConEmu->mn_SysMenuCloseTick && (nCloseDelay < (nDoubleTime/2)))
+				{
+					// Пропустить - кликом закрыли меню
+					int nDbg = 0;
+				}
+				else
+				{
+					gpConEmu->ShowSysmenu();
+				}
 				lResult = 0;
 				lbRc = true;
 			}
 		}
 		return lbRc;
+
+	//case WM_LBUTTONDBLCLK:
+	//	{
+	//		// Глюк? DblClick по иконке приводит к WM_LBUTTONDBLCLK вместо WM_NCLBUTTONDBLCLK
+	//		POINT pt = MakePoint(LOWORD(lParam),HIWORD(lParam));
+	//		if (gpConEmu->PtDiffTest(pt, ptLastNcClick.x, ptLastNcClick.y, 4))
+	//		{
+	//			PostMessage(ghWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+	//			lResult = 0;
+	//			return true;
+	//		}
+	//	}
+	//	return false;
 		
 	case WM_MOUSEMOVE:
 		DBGFUNCTION(L"WM_MOUSEMOVE \n");
@@ -506,6 +550,18 @@ LRESULT CFrameHolder::OnPaint(HWND hWnd, BOOL abForceGetDc)
 	hdc = BeginPaint(hWnd, &ps);
 
 	GetClientRect(hWnd, &wr);
+
+	if (gpSet->isStatusBarShow)
+	{
+		int nHeight = gpSet->StatusBarHeight();
+		if (nHeight < (wr.bottom - wr.top))
+		{
+			RECT rcStatus = {wr.left, wr.bottom - nHeight, wr.right, wr.bottom};
+			gpConEmu->mp_Status->PaintStatus(hdc, rcStatus);
+			wr.bottom = rcStatus.top;
+		}
+	}
+
 	cr = wr;
 
 	if (gpConEmu->DrawType() == fdt_Aero)

@@ -28,6 +28,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#undef SHOW_AUTOSCROLL
+
 #define NEWMOUSESTYLE
 #define NEWRUNSTYLE
 //#undef NEWRUNSTYLE
@@ -45,11 +47,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/Memory.h"
 
 #ifdef __GNUC__
-#define TimeGetTime GetTickCount
 #define wmemmove_s(d,ds,s,ss) wmemmove(d,s,ss)
 #define SecureZeroMemory(p,s) memset(p,0,s)
-#else
-#define TimeGetTime timeGetTime
+#endif
+
+#ifndef TimeGetTime
+	#ifdef __GNUC__
+		#define TimeGetTime GetTickCount
+	#else
+		#define TimeGetTime timeGetTime
+	#endif
 #endif
 
 #ifdef KL_MEM
@@ -59,26 +66,26 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 // Array sizes
-#define MAX_CONSOLE_COUNT 12
+#define MAX_CONSOLE_COUNT 30
 
 
 #include "globals.h"
 #include "resource.h"
 
 
-#define DRAG_L_ALLOWED 0x01
-#define DRAG_R_ALLOWED 0x02
-#define DRAG_L_STARTED 0x10
-#define DRAG_R_STARTED 0x20
-#define MOUSE_R_LOCKED 0x40
-#define MOUSE_SIZING_BEGIN  0x080
-#define MOUSE_SIZING_TODO   0x100
-#define MOUSE_SIZING_DBLCKL 0x200
-#define MOUSE_DRAGPANEL_SPLIT 0x400
-#define MOUSE_DRAGPANEL_LEFT  0x800
+#define DRAG_L_ALLOWED        0x0001
+#define DRAG_R_ALLOWED        0x0002
+#define DRAG_L_STARTED        0x0010
+#define DRAG_R_STARTED        0x0020
+#define MOUSE_R_LOCKED        0x0040
+#define MOUSE_SIZING_BEGIN    0x0080
+#define MOUSE_SIZING_TODO     0x0100
+#define MOUSE_SIZING_DBLCKL   0x0200
+#define MOUSE_DRAGPANEL_SPLIT 0x0400
+#define MOUSE_DRAGPANEL_LEFT  0x0800
 #define MOUSE_DRAGPANEL_RIGHT 0x1000
 #define MOUSE_DRAGPANEL_SHIFT 0x2000
-//#define MOUSE_SIZING   0x80
+#define MOUSE_WINDOW_DRAG     0x4000
 
 #define MOUSE_DRAGPANEL_ALL (MOUSE_DRAGPANEL_SPLIT|MOUSE_DRAGPANEL_LEFT|MOUSE_DRAGPANEL_RIGHT|MOUSE_DRAGPANEL_SHIFT)
 
@@ -117,9 +124,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define MAX_CMD_HISTORY 100
 #define MAX_CMD_HISTORY_SHOW 16
+#define MAX_CMD_GROUP_SHOW 16
 
-#define MBox(rt) {BOOL b = gbDontEnable; gbDontEnable = TRUE; (int)MessageBox(gbMessagingStarted ? ghWnd : NULL, rt, Title, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION); gbDontEnable = b; }
-#define MBoxA(rt) {BOOL b = gbDontEnable; gbDontEnable = TRUE; (int)MessageBox(gbMessagingStarted ? ghWnd : NULL, rt, _T("ConEmu"), /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION); gbDontEnable = b; }
+int MessageBox(LPCTSTR lpText, UINT uType, LPCTSTR lpCaption = NULL, HWND hParent = NULL);
+
+#define MBox(rt) MessageBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION, Title) // {BOOL b = gbDontEnable; gbDontEnable = TRUE; (int)MessageBox(gbMessagingStarted ? ghWnd : NULL, rt, Title, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION); gbDontEnable = b; }
+#define MBoxA(rt) MessageBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION, NULL) // {BOOL b = gbDontEnable; gbDontEnable = TRUE; (int)MessageBox(gbMessagingStarted ? ghWnd : NULL, rt, _T("ConEmu"), /*MB_SYSTEMMODAL |*/ MB_ICONINFORMATION); gbDontEnable = b; }
+#define MBoxError(rt) MessageBox(rt, /*MB_SYSTEMMODAL |*/ MB_ICONSTOP, NULL) // {BOOL b = gbDontEnable; gbDontEnable = TRUE; (int)MessageBox(gbMessagingStarted ? ghWnd : NULL, rt, _T("ConEmu"), /*MB_SYSTEMMODAL |*/ MB_ICONSTOP); gbDontEnable = b; }
 
 //#define MBoxAssert(V) if ((V)==FALSE) { TCHAR szAMsg[MAX_PATH*2]; StringCchPrintf(szAMsg, countof(szAMsg), _T("Assertion (%s) at\n%s:%i"), _T(#V), _T(__FILE__), __LINE__); MBoxA(szAMsg); }
 #define MBoxAssert(V) _ASSERTE(V)
@@ -136,17 +147,21 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //#define INVALIDATE() InvalidateRect(HDCWND, NULL, FALSE)
 
-#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
+//#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
 //#define SafeFree(p) { if ((p)!=NULL) { LPVOID pp = (p); (p) = NULL; free(pp); } }
 
 #ifdef MSGLOGGER
-#define POSTMESSAGE(h,m,w,l,e) {MCHKHEAP; DebugLogMessage(h,m,w,l,TRUE,e); PostMessage(h,m,w,l);}
-#define SENDMESSAGE(h,m,w,l) {MCHKHEAP;  DebugLogMessage(h,m,w,l,FALSE,FALSE); SendMessage(h,m,w,l);}
+BOOL POSTMESSAGE(HWND h,UINT m,WPARAM w,LPARAM l,BOOL extra);
+LRESULT SENDMESSAGE(HWND h,UINT m,WPARAM w,LPARAM l);
 #define SETWINDOWPOS(hw,hp,x,y,w,h,f) {MCHKHEAP; DebugLogPos(hw,x,y,w,h,"SetWindowPos"); SetWindowPos(hw,hp,x,y,w,h,f);}
 #define MOVEWINDOW(hw,x,y,w,h,r) {MCHKHEAP; DebugLogPos(hw,x,y,w,h,"MoveWindow"); MoveWindow(hw,x,y,w,h,r);}
 #define SETCONSOLESCREENBUFFERSIZERET(h,s,r) {MCHKHEAP; DebugLogBufSize(h,s); r=SetConsoleScreenBufferSize(h,s);}
 #define SETCONSOLESCREENBUFFERSIZE(h,s) {BOOL lb; SETCONSOLESCREENBUFFERSIZERET(h,s,lb);}
 #define DEBUGLOGFILE(m) DebugLogFile(m)
+void DebugLogFile(LPCSTR asMessage);
+void DebugLogBufSize(HANDLE h, COORD sz);
+void DebugLogPos(HWND hw, int x, int y, int w, int h, LPCSTR asFunc);
+void DebugLogMessage(HWND h, UINT m, WPARAM w, LPARAM l, BOOL posted, BOOL extra);
 #else
 #define POSTMESSAGE(h,m,w,l,e) PostMessage(h,m,w,l)
 #define SENDMESSAGE(h,m,w,l) SendMessage(h,m,w,l)
@@ -188,15 +203,17 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#endif
 
 extern BOOL gbInDisplayLastError;
-int DisplayLastError(LPCTSTR asLabel, DWORD dwError = 0, DWORD dwMsgFlags = 0, LPCWSTR asTitlte = NULL);
+int DisplayLastError(LPCTSTR asLabel, DWORD dwError = 0, DWORD dwMsgFlags = 0, LPCWSTR asTitle = NULL);
 
-COORD /*__forceinline*/ MakeCoord(int W,int H);
+void ShutdownGuiStep(LPCWSTR asInfo, int nParm1 = 0, int nParm2 = 0, int nParm3 = 0, int nParm4 = 0);
+
+COORD /*__forceinline*/ MakeCoord(int X,int Y);
 //{
 //	COORD rc; rc.X=W; rc.Y=H;
 //	return rc;
 //}
 
-POINT /*__forceinline*/ MakePoint(int W,int H);
+POINT /*__forceinline*/ MakePoint(int X,int Y);
 
 RECT /*__forceinline*/ MakeRect(int W,int H);
 //{
@@ -218,6 +235,8 @@ BOOL /*__forceinline*/ CoordInRect(const COORD& c, const RECT& r);
 BOOL IntersectSmallRect(RECT& rc1, SMALL_RECT& rc2);
 
 wchar_t* GetDlgItemText(HWND hDlg, WORD nID);
+size_t MyGetDlgItemText(HWND hDlg, WORD nID, size_t& cchMax, wchar_t*& pszText, bool bEscapes = false);
+BOOL MySetDlgItemText(HWND hDlg, int nIDDlgItem, LPCTSTR lpString, bool bEscapes = false);
 
 //#pragma warning(disable: 4311) // 'type cast' : pointer truncation from 'HBRUSH' to 'BOOL'
 
@@ -237,43 +256,11 @@ wchar_t* GetDlgItemText(HWND hDlg, WORD nID);
 ///| Global variables |///////////////////////////////////////////////////
 //------------------------------------------------------------------------
 
-#define pHelp \
-	L"Console emulation program.\n" \
-	L"Home page: http://conemu-maximus5.googlecode.com\n\n" \
-	L"By default this program launches \"Far.exe\" (if exists) or \"cmd.exe\".\n" \
-	L"\n" \
-	L"Command line switches:\n" \
-	L"/? - This help screen.\n" \
-	L"/config <configname> - Use alternative named configuration\n" \
-	L"/ct - Clear Type anti-aliasing.\n" \
-	L"/fs | /max - (Full screen) | (Maximized) mode.\n" \
-	L"/multi | /nomulti - enable or disable multiconsole features\n" \
-	L"/font <fontname> - Specify the font name.\n" \
-	L"/size <fontsize> - Specify the font size.\n" \
-	L"/fontfile <fontfilename> - Loads fonts from file.\n" \
-	L"/BufferHeight <lines> - may be used with cmd.exe\n" \
-	/* L"/Attach [PID] - intercept console of specified process\n" */ \
-	L"\n" \
-	L"/cmd <commandline>|@<commandfile> - Command line to start. This must be the last used switch.\n" \
-	L"\n" \
-	L"Command line examples:\n" \
-	L"ConEmu.exe /ct /font \"Lucida Console\" /size 16 /cmd Far.exe /w\n" \
-	L"\n" \
-	L"\x00A9 2006-2008 Zoin (based on console emulator by SEt)\n" \
-	CECOPYRIGHTSTRING_W /*\x00A9 2009-2011 ConEmu.Maximus5@gmail.com*/ L"\n" \
-	L"\n" \
-	L"Contributors\n" \
-	L"NightRoman: drawing optimization, BufferHeight and other fixes\n" \
-	L"dolzenko_: windows switching via GUI tabs\n" \
-	L"alex_itd: Drag'n'Drop, RightClick, AltEnter\n" \
-	L"Mors: loading font from file."
-
-
 //#include "VirtualConsole.h"
 //#include "options.h"
 //#include "DragDrop.h"
 //#include "TrayIcon.h"
-//#include "ConEmuChild.h"
+//#include "VConChild.h"
 //#include "ConEmu.h"
 //#include "ConEmuApp.h"
 //#include "tabbar.h"
@@ -288,10 +275,11 @@ wchar_t* GetDlgItemText(HWND hDlg, WORD nID);
 // GNU C HEADER PATCH
 #ifdef __GNUC__
 typedef BOOL (WINAPI* AlphaBlend_t)(HDC hdcDest, int xoriginDest, int yoriginDest, int wDest, int hDest, HDC hdcSrc, int xoriginSrc, int yoriginSrc, int wSrc, int hSrc, BLENDFUNCTION ftn);
-typedef BOOL (WINAPI* GetLayeredWindowAttributes_t)(HWND hwnd, COLORREF *pcrKey, BYTE *pbAlpha, DWORD *pdwFlags);
 typedef BOOL (WINAPI* SetLayeredWindowAttributes_t)(HWND hwnd, COLORREF crKey, BYTE bAlpha, DWORD dwFlags);
 typedef BOOL (WINAPI* CreateRestrictedToken_t)(HANDLE ExistingTokenHandle, DWORD Flags, DWORD DisableSidCount, PSID_AND_ATTRIBUTES SidsToDisable, DWORD DeletePrivilegeCount, PLUID_AND_ATTRIBUTES PrivilegesToDelete, DWORD RestrictedSidCount, PSID_AND_ATTRIBUTES SidsToRestrict, PHANDLE NewTokenHandle);
 #endif
+// GetLayeredWindowAttributes по€вилась только в XP
+typedef BOOL (WINAPI* GetLayeredWindowAttributes_t)(HWND hwnd, COLORREF *pcrKey, BYTE *pbAlpha, DWORD *pdwFlags);
 
 #ifdef __GNUC__
 	#define MAPVK_VK_TO_VSC     (0)
@@ -321,3 +309,60 @@ typedef BOOL (WINAPI* CreateRestrictedToken_t)(HANDLE ExistingTokenHandle, DWORD
 #ifndef DISABLE_MAX_PRIVILEGE
 #define DISABLE_MAX_PRIVILEGE   0x1 
 #endif
+
+
+enum ConEmuMargins
+{
+	// –азница между размером всего окна и клиентской области окна (рамка + заголовок)
+	CEM_FRAME = 0x0001,
+	// ¬ысота таба (пока только .top)
+	CEM_TAB = 0x0002,
+	CEM_TABACTIVATE = 0x1002,   // ѕринудительно считать, что таб есть (при включении таба)
+	CEM_TABDEACTIVATE = 0x2002, // ѕринудительно считать, что таба нет (при отключении таба)
+	CEM_TAB_MASK = (CEM_TAB|CEM_TABACTIVATE|CEM_TABDEACTIVATE),
+	CEM_SCROLL = 0x0004, // ≈сли полоса прокрутки всегда (!!!) видна - то ее ширина/высота
+	CEM_STATUS = 0x0008, // ¬ысота строки статуса
+	CEM_PAD = 0x0010, // Ўирина "отступа" от краев
+	// ћаска дл€ получени€ всех отступов
+	CEM_ALL_MARGINS = CEM_FRAME|CEM_TAB|CEM_SCROLL|CEM_STATUS|CEM_PAD,
+	CEM_CLIENT_MARGINS = CEM_TAB|CEM_SCROLL|CEM_STATUS|CEM_PAD,
+};
+
+enum ConEmuRect
+{
+	CER_MAIN = 0,   // ѕолный размер окна
+	// ƒалее все координаты считаютс€ относительно клиенсткой области {0,0}
+	CER_MAINCLIENT, // клиентска€ область главного окна (Ѕ≈« отрезани€ табов, прокруток, DoubleView и прочего. ÷еликом)
+	CER_TAB,        // положение контрола с закладками (всего)
+	CER_WORKSPACE,  // рабоча€ область ConEmu. ¬ ней располагаютс€ VCon/GUI apps. Ќо после DoubleView будет ЅќЋ№Ў≈ чем CER_BACK, т.к. это все видимые VCon.
+	CER_BACK,       // область, отведенна€ под VCon. “ут нужна вс€ область, без отрезани€ прокруток и округлений размеров под знакоместо
+	CER_SCROLL,     // положение полосы прокрутки
+	CER_DC,         // положение окна отрисовки
+	CER_CONSOLE,    // !!! _ размер в символах _ !!!
+	CER_CONSOLE_NTVDMOFF, // same as CER_CONSOLE, но во врем€ отключени€ режима 16бит
+	CER_FULLSCREEN, // полный размер в pix текущего монитора (содержащего ghWnd)
+	CER_MAXIMIZED,  // размер максимизированного окна на текущем мониторе (содержащего ghWnd)
+	CER_RESTORE,    // размер "восстановленного" окна после максимизации (коррекци€ по размеру монитора?)
+	CER_MONITOR,    // полный размер в pix рабочей области текущего монитора (содержащего ghWnd)
+//	CER_CORRECTED   // скорректированное положение (чтобы окно было видно на текущем мониторе)
+};
+
+enum DragPanelBorder
+{
+	DPB_NONE = 0,
+	DPB_SPLIT,    // драг влево/вправо
+	DPB_LEFT,     // высота левой
+	DPB_RIGHT,    // высота правой
+};
+
+enum TrackMenuPlace
+{
+	tmp_None = 0,
+	tmp_System,
+	tmp_VCon,
+	tmp_Cmd,
+	tmp_KeyBar,
+	tmp_TabsList,
+	tmp_PasteCmdLine,
+	tmp_StatusBarCols,
+};

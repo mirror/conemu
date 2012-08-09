@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include "header.h"
 #include "TaskBar.h"
 #include "ConEmu.h"
@@ -49,6 +50,14 @@ const IID IID_ITaskbarList  = {0x56FDF342, 0xFD6D, 0x11d0, {0x95, 0x8A, 0x00, 0x
 //#endif
 //#endif
 
+/*
+Note  When an application displays a window, its taskbar button is created
+by the system. When the button is in place, the taskbar sends a
+TaskbarButtonCreated message to the window. Its value is computed by
+calling RegisterWindowMessage(L("TaskbarButtonCreated")). That message must
+be received by your application before it calls any ITaskbarList3 method.
+*/
+
 CTaskBar::CTaskBar()
 {
 	mp_TaskBar1 = NULL;
@@ -56,6 +65,7 @@ CTaskBar::CTaskBar()
 	mp_TaskBar3 = NULL;
 	mp_TaskBar4 = NULL;
 	mh_Shield = NULL;
+	mb_OleInitalized = false;
 }
 
 CTaskBar::~CTaskBar()
@@ -70,6 +80,12 @@ CTaskBar::~CTaskBar()
 void CTaskBar::Taskbar_Init()
 {
 	HRESULT hr = S_OK;
+
+	if (!mb_OleInitalized)
+	{
+		hr = OleInitialize(NULL);  // как бы попробовать включать Ole только во время драга. кажется что из-за него глючит переключалка языка
+		mb_OleInitalized = SUCCEEDED(hr);
+	}
 
 	if (!mp_TaskBar1)
 	{
@@ -236,8 +252,9 @@ HRESULT CTaskBar::Taskbar_DeleteTabXP(HWND hBtn)
 {
 	HRESULT hr;
 
-	// 111127 на Vista тоже кнопку "убирать" нужно
-	_ASSERTE(gpConEmu && (gOSVer.dwMajorVersion <= 5 || (gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion == 0)));
+	// -- SkipShowWindowProc
+	//// 111127 на Vista тоже кнопку "убирать" нужно
+	//_ASSERTE(gpConEmu && (gOSVer.dwMajorVersion <= 5 || (gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion == 0)));
 
 	if (mp_TaskBar1)
 	{

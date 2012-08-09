@@ -44,8 +44,8 @@ struct CeFullPanelInfo
 	int nYCountFull; // тут четко, кусок иконки не допускается
 	int nYCount; // а тут допускается отображение верхней части иконки
 	//
-	DWORD nFarInterfaceSettings;
-	DWORD nFarPanelSettings;
+	CEFarInterfaceSettings FarInterfaceSettings;
+	CEFarPanelSettings FarPanelSettings;
 	BOOL  bLeftPanel, bPlugin;
 	BOOL IsFilePanel;
 	int PanelMode; // 0..9 - текущий режим панели.
@@ -86,7 +86,7 @@ struct CeFullPanelInfo
 
 
 	int RegisterPanelView();
-	int UnregisterPanelView();
+	int UnregisterPanelView(bool abHideOnly=false);
 	void Close();
 	HWND CreateView();
 	BOOL ReallocItems(INT_PTR anCount);
@@ -125,6 +125,13 @@ struct CeFullPanelInfo
 	                    DWORD_PTR        apUserData,
 	                    unsigned __int64 anFlags,
 	                    DWORD            anNumberOfLinks);
+	BOOL BisItem2CeItem(INT_PTR anIndex,
+	                    BOOL abLoaded,
+	                    unsigned __int64 anFlags = 0,
+	                    COLORREF acrForegroundColor = 0,
+	                    COLORREF acrBackgroundColor = 0,
+	                    int anPosX = 0, int anPosY = 0); // 1-based, relative to Far workspace
+						
 
 	/*{
 	if (ppItems) {

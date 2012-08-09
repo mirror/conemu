@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../Common/WinObjects.h"
 #include "PluginSrv.h"
 
-#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
+//#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
 #ifdef _DEBUG
 #define OUTPUTDEBUGSTRING(m) OutputDebugString(m)
 #else
@@ -106,7 +106,9 @@ extern PanelViewRegInfo gPanelRegLeft, gPanelRegRight;
 BOOL CreateTabs(int windowCount);
 
 BOOL AddTab(int &tabCount, bool losingFocus, bool editorSave,
-            int Type, LPCWSTR Name, LPCWSTR FileName, int Current, int Modified, int EditViewId);
+            int Type, LPCWSTR Name, LPCWSTR FileName,
+			int Current, int Modified, int Modal,
+			int EditViewId);
 
 void SendTabs(int tabCount, BOOL abForceSend=FALSE);
 
@@ -121,7 +123,7 @@ extern GUID guid_ConEmuPluginMenu;
 extern GUID guid_ConEmuGuiMacroDlg;
 extern GUID guid_ConEmuWaitEndSynchro;
 
-HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item);
+HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item,bool FromMacro);
 HANDLE WINAPI OpenPluginW1(int OpenFrom,INT_PTR Item);
 HANDLE WINAPI OpenPluginW2(int OpenFrom,const GUID* Guid,INT_PTR Data);
 
@@ -169,11 +171,15 @@ BOOL OutDataWrite(LPVOID apData, DWORD anSize);
 
 //void CheckMacro(BOOL abAllowAPI);
 //BOOL IsKeyChanged(BOOL abAllowReload);
+int ShowMessageGui(int aiMsg, int aiButtons);
 int ShowMessage(int aiMsg, int aiButtons);
 int ShowMessageA(int aiMsg, int aiButtons);
-int ShowMessageGui(int aiMsg, int aiButtons);
 int FUNC_X(ShowMessageW)(int aiMsg, int aiButtons);
 int FUNC_Y(ShowMessageW)(int aiMsg, int aiButtons);
+int ShowMessage(LPCWSTR asMsg, int aiButtons, bool bWarning);
+int ShowMessageA(LPCSTR asMsg, int aiButtons, bool bWarning);
+int FUNC_X(ShowMessageW)(LPCWSTR asMsg, int aiButtons, bool bWarning);
+int FUNC_Y(ShowMessageW)(LPCWSTR asMsg, int aiButtons, bool bWarning);
 //void ReloadMacroA();
 //void FUNC_X(ReloadMacro)();
 //void FUNC_Y(ReloadMacro)();
@@ -210,17 +216,13 @@ extern "C" {
 #endif
 
 
-void ShowPluginMenu(int nID = -1);
-int ShowPluginMenuA();
-int FUNC_Y(ShowPluginMenuW)();
-int FUNC_X(ShowPluginMenuW)();
-
 BOOL EditOutputA(LPCWSTR asFileName, BOOL abView);
 BOOL FUNC_Y(EditOutputW)(LPCWSTR asFileName, BOOL abView);
 BOOL FUNC_X(EditOutputW)(LPCWSTR asFileName, BOOL abView);
 
 BOOL Attach2Gui();
 BOOL StartDebugger();
+void ShowConsoleInfo();
 
 //#define DEFAULT_SYNCHRO_TIMEOUT 10000
 //BOOL FUNC_X(CallSynchro)(SynchroArg *Param, DWORD nTimeout /*= 10000*/);
@@ -230,6 +232,10 @@ BOOL IsMacroActive();
 BOOL IsMacroActiveA();
 BOOL FUNC_X(IsMacroActiveW)();
 BOOL FUNC_Y(IsMacroActiveW)();
+
+int GetMacroArea();
+int FUNC_X(GetMacroAreaW)();
+int FUNC_Y(GetMacroAreaW)();
 
 //BOOL SendConsoleEvent(INPUT_RECORD* pr, UINT nCount);
 
@@ -256,6 +262,7 @@ BOOL FarSetConsoleSize(SHORT nNewWidth, SHORT nNewHeight);
 BOOL StartupHooks(HMODULE ahOurDll);
 void ShutdownHooks();
 
+bool RunExternalProgramW(wchar_t* pszCommand, wchar_t* pszCurDir, bool bSilent=false);
 bool FUNC_Y(ProcessCommandLineW)(wchar_t* pszCommand);
 bool FUNC_X(ProcessCommandLineW)(wchar_t* pszCommand);
 bool ProcessCommandLineA(char* pszCommand);
@@ -296,8 +303,82 @@ void FUNC_X(FillUpdateBackgroundW)(struct PaintBackgroundArg* pFar);
 
 void CommonPluginStartup();
 
+struct HookCallbackArg;
+BOOL OnConsoleReadInputWork(HookCallbackArg* pArgs);
+VOID WINAPI OnConsoleReadInputPost(HookCallbackArg* pArgs);
+
 #ifdef _DEBUG
 #define SHOWDBGINFO(x) OutputDebugStringW(x)
 #else
 #define SHOWDBGINFO(x)
 #endif
+
+enum PluginCallCommands
+{
+	pcc_None = 0,
+	//
+	pcc_EditConsoleOutput = 1,
+	pcc_ViewConsoleOutput = 2,
+	pcc_SwitchTabVisible = 3,
+	pcc_SwitchTabNext = 4,
+	pcc_SwitchTabPrev = 5,
+	pcc_SwitchTabCommit = 6,
+	pcc_AttachToConEmu = 7,
+	pcc_StartDebug = 8,
+	pcc_ConsoleInfo = 9,
+	//
+	pcc_First = 1,
+	pcc_Last = pcc_ConsoleInfo,
+};
+
+enum PluginMenuCommands
+{
+	menu_EditConsoleOutput = 0,
+	menu_ViewConsoleOutput,
+	menu_Separator1,
+	menu_SwitchTabVisible,
+	menu_SwitchTabNext,
+	menu_SwitchTabPrev,
+	menu_SwitchTabCommit,
+	menu_ShowTabsList,
+	menu_Separator2,
+	menu_ConEmuMacro, // должен вызываться "по настоящему", а не через callplugin
+	menu_Separator3,
+	menu_AttachToConEmu,
+	menu_Separator4,
+	menu_StartDebug,
+	menu_ConsoleInfo,
+	//
+	menu_Last = (menu_ConsoleInfo+1)
+};
+
+struct PluginAndMenuCommands
+{
+	int LangID; // ID для GetMsg
+	PluginMenuCommands MenuID; // по сути - индекс в векторе
+	PluginCallCommands CallID; // ID для CallPlugin
+};
+
+struct ConEmuPluginMenuItem
+{
+	bool    Separator;
+	bool    Selected;
+	bool    Disabled;
+	bool    Checked;
+
+	int     MsgID;
+	LPCWSTR MsgText;
+
+	INT_PTR UserData;
+};
+
+extern PluginAndMenuCommands gpPluginMenu[menu_Last];
+bool pcc_Selected(PluginMenuCommands nMenuID);
+bool pcc_Disabled(PluginMenuCommands nMenuID);
+
+void ShowPluginMenu(PluginCallCommands nCallID = pcc_None);
+int ShowPluginMenuA(ConEmuPluginMenuItem* apItems, int Count);
+int FUNC_Y(ShowPluginMenuW)(ConEmuPluginMenuItem* apItems, int Count);
+int FUNC_X(ShowPluginMenuW)(ConEmuPluginMenuItem* apItems, int Count);
+
+void ShutdownPluginStep(LPCWSTR asInfo, int nParm1 = 0, int nParm2 = 0, int nParm3 = 0, int nParm4 = 0);

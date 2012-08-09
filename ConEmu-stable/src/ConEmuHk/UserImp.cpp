@@ -53,42 +53,7 @@ BOOL UserImp::loadExports(BOOL abAllowLoadLibrary)
 		
 		if (hUser32)
 		{
-			allowSetForegroundWindow_f = (allowSetForegroundWindow_t)GetProcAddress(hUser32, "AllowSetForegroundWindow");
-			setForegroundWindow_f = (setForegroundWindow_t)GetProcAddress(hUser32, "SetForegroundWindow");
-			getForegroundWindow_f = (getForegroundWindow_t)GetProcAddress(hUser32, "GetForegroundWindow");
-			getWindowThreadProcessId_f = (getWindowThreadProcessId_t)GetProcAddress(hUser32, "GetWindowThreadProcessId");
-			setWindowPos_f = (setWindowPos_t)GetProcAddress(hUser32, "SetWindowPos");
-			getWindowLongPtrW_f = (getWindowLongPtrW_t)GetProcAddress(hUser32, WIN3264TEST("GetWindowLongW","GetWindowLongPtrW"));
-			setWindowLongPtrW_f = (setWindowLongPtrW_t)GetProcAddress(hUser32, WIN3264TEST("SetWindowLongW","SetWindowLongPtrW"));
-			getParent_f = (getParent_t)GetProcAddress(hUser32, "GetParent");
-			setParent_f = (setParent_t)GetProcAddress(hUser32, "SetParent");
-			getWindowRect_f = (getWindowRect_t)GetProcAddress(hUser32, "GetWindowRect");
-			systemParametersInfoW_f = (systemParametersInfoW_t)GetProcAddress(hUser32, "SystemParametersInfoW");
-			setWindowTextW_f = (setWindowTextW_t)GetProcAddress(hUser32, "SetWindowTextW");
-			endDialog_f = (endDialog_t)GetProcAddress(hUser32, "EndDialog");
-			postMessageW_f = (postMessageW_t)GetProcAddress(hUser32, "PostMessageW");
-			sendMessageW_f = (sendMessageW_t)GetProcAddress(hUser32, "SendMessageW");
-			dialogBoxIndirectParamW_f = (dialogBoxIndirectParamW_t)GetProcAddress(hUser32, "DialogBoxIndirectParamW");
-			getClassNameW_f = (getClassNameW_t)GetProcAddress(hUser32, "GetClassNameW");
-			getClientRect_f = (getClientRect_t)GetProcAddress(hUser32, "GetClientRect");
-			getMenu_f = (getMenu_t)GetProcAddress(hUser32, "GetMenu");
-			attachThreadInput_f = (attachThreadInput_t)GetProcAddress(hUser32, "AttachThreadInput");
-			getFocus_f = (getFocus_t)GetProcAddress(hUser32, "GetFocus");
-			getWindowRect_f = (getWindowRect_t)GetProcAddress(hUser32, "GetWindowRect");
-			isWindow_f = (isWindow_t)GetProcAddress(hUser32, "IsWindow");
-			isWindowVisible_f = (isWindowVisible_t)GetProcAddress(hUser32, "IsWindowVisible");
-			showWindow_f = (showWindow_t)GetProcAddress(hUser32, "ShowWindow");
-			getKeyState_f = (getKeyState_t)GetProcAddress(hUser32, "GetKeyState");
-			callNextHookEx_f = (callNextHookEx_t)GetProcAddress(hUser32, "CallNextHookEx");
-			setWindowsHookExW_f = (setWindowsHookExW_t)GetProcAddress(hUser32, "SetWindowsHookExW");
-			unhookWindowsHookEx_f = (unhookWindowsHookEx_t)GetProcAddress(hUser32, "UnhookWindowsHookEx");
-			mapWindowPoints_f = (mapWindowPoints_t)GetProcAddress(hUser32, "MapWindowPoints");
-			_ASSERTEX(allowSetForegroundWindow_f && setForegroundWindow_f && getForegroundWindow_f && getWindowThreadProcessId_f);
-			_ASSERTEX(setWindowPos_f && getWindowLongPtrW_f && setWindowLongPtrW_f && getParent_f && setParent_f && getWindowRect_f);
-			_ASSERTEX(systemParametersInfoW_f && setWindowTextW_f && endDialog_f && postMessageW_f && sendMessageW_f);
-			_ASSERTEX(dialogBoxIndirectParamW_f && getClassNameW_f && getClientRect_f && getMenu_f && attachThreadInput_f);
-			_ASSERTEX(getFocus_f && getWindowRect_f && isWindow_f && isWindowVisible_f && showWindow_f);
-			_ASSERTEX(getKeyState_f && callNextHookEx_f && setWindowsHookExW_f && unhookWindowsHookEx_f && mapWindowPoints_f);
+			loadExportsFrom(hUser32);
 		}
 	}
 	
@@ -100,9 +65,77 @@ BOOL UserImp::loadExports(BOOL abAllowLoadLibrary)
 	return (hUser32 != NULL);
 }
 
+BOOL UserImp::loadExportsFrom(HMODULE hModule)
+{
+	// bUserLoaded - то что LoadLibrary(L"user32.dll") дернули
+	// а вот функции - еще могли и не загружать
+	if (bUserLoaded && isWindow_f)
+		return TRUE;
+
+	BOOL lbRc = FALSE;
+
+	if (hModule && (hUser32 != hModule))
+		hUser32 = hModule;
+
+	if (hUser32)
+	{
+		allowSetForegroundWindow_f = (allowSetForegroundWindow_t)GetProcAddress(hUser32, "AllowSetForegroundWindow");
+		setForegroundWindow_f = (setForegroundWindow_t)GetProcAddress(hUser32, "SetForegroundWindow");
+		getForegroundWindow_f = (getForegroundWindow_t)GetProcAddress(hUser32, "GetForegroundWindow");
+		getWindowThreadProcessId_f = (getWindowThreadProcessId_t)GetProcAddress(hUser32, "GetWindowThreadProcessId");
+		setWindowPos_f = (setWindowPos_t)GetProcAddress(hUser32, "SetWindowPos");
+		getWindowLongPtrW_f = (getWindowLongPtrW_t)GetProcAddress(hUser32, WIN3264TEST("GetWindowLongW","GetWindowLongPtrW"));
+		setWindowLongPtrW_f = (setWindowLongPtrW_t)GetProcAddress(hUser32, WIN3264TEST("SetWindowLongW","SetWindowLongPtrW"));
+		getParent_f = (getParent_t)GetProcAddress(hUser32, "GetParent");
+		setParent_f = (setParent_t)GetProcAddress(hUser32, "SetParent");
+		getWindowRect_f = (getWindowRect_t)GetProcAddress(hUser32, "GetWindowRect");
+		systemParametersInfoW_f = (systemParametersInfoW_t)GetProcAddress(hUser32, "SystemParametersInfoW");
+		setWindowTextW_f = (setWindowTextW_t)GetProcAddress(hUser32, "SetWindowTextW");
+		endDialog_f = (endDialog_t)GetProcAddress(hUser32, "EndDialog");
+		postMessageW_f = (postMessageW_t)GetProcAddress(hUser32, "PostMessageW");
+		sendMessageW_f = (sendMessageW_t)GetProcAddress(hUser32, "SendMessageW");
+		dialogBoxIndirectParamW_f = (dialogBoxIndirectParamW_t)GetProcAddress(hUser32, "DialogBoxIndirectParamW");
+		getClassNameW_f = (getClassNameW_t)GetProcAddress(hUser32, "GetClassNameW");
+		getClientRect_f = (getClientRect_t)GetProcAddress(hUser32, "GetClientRect");
+		getMenu_f = (getMenu_t)GetProcAddress(hUser32, "GetMenu");
+		attachThreadInput_f = (attachThreadInput_t)GetProcAddress(hUser32, "AttachThreadInput");
+		getFocus_f = (getFocus_t)GetProcAddress(hUser32, "GetFocus");
+		getWindowRect_f = (getWindowRect_t)GetProcAddress(hUser32, "GetWindowRect");
+		isWindow_f = (isWindow_t)GetProcAddress(hUser32, "IsWindow");
+		isWindowVisible_f = (isWindowVisible_t)GetProcAddress(hUser32, "IsWindowVisible");
+		showWindow_f = (showWindow_t)GetProcAddress(hUser32, "ShowWindow");
+		getKeyState_f = (getKeyState_t)GetProcAddress(hUser32, "GetKeyState");
+		callNextHookEx_f = (callNextHookEx_t)GetProcAddress(hUser32, "CallNextHookEx");
+		setWindowsHookExW_f = (setWindowsHookExW_t)GetProcAddress(hUser32, "SetWindowsHookExW");
+		unhookWindowsHookEx_f = (unhookWindowsHookEx_t)GetProcAddress(hUser32, "UnhookWindowsHookEx");
+		mapWindowPoints_f = (mapWindowPoints_t)GetProcAddress(hUser32, "MapWindowPoints");
+		registerWindowMessageW_f = (registerWindowMessageW_t)GetProcAddress(hUser32, "RegisterWindowMessageW");
+		_ASSERTEX(allowSetForegroundWindow_f && setForegroundWindow_f && getForegroundWindow_f && getWindowThreadProcessId_f);
+		_ASSERTEX(setWindowPos_f && getWindowLongPtrW_f && setWindowLongPtrW_f && getParent_f && setParent_f && getWindowRect_f);
+		_ASSERTEX(systemParametersInfoW_f && setWindowTextW_f && endDialog_f && postMessageW_f && sendMessageW_f);
+		_ASSERTEX(dialogBoxIndirectParamW_f && getClassNameW_f && getClientRect_f && getMenu_f && attachThreadInput_f);
+		_ASSERTEX(getFocus_f && getWindowRect_f && isWindow_f && isWindowVisible_f && showWindow_f && getKeyState_f);
+		_ASSERTEX(callNextHookEx_f && setWindowsHookExW_f && unhookWindowsHookEx_f && mapWindowPoints_f && registerWindowMessageW_f);
+
+		bUserLoaded = lbRc = (isWindow_f!=NULL);
+	}
+
+	return lbRc;
+}
+
 void UserImp::setAllowLoadLibrary()
 {
 	bAllowLoadLibrary = TRUE;
+}
+
+bool UserImp::isExportsLoaded()
+{
+	return (bUserLoaded!=0);
+}
+
+bool UserImp::isUser32(HMODULE hModule)
+{
+	return ((hModule != NULL) && (this != NULL) && (hModule == hUser32));
 }
 
 BOOL UserImp::allowSetForegroundWindow(DWORD dwProcessId)
@@ -685,4 +718,24 @@ BOOL UserImp::mapWindowPoints(HWND hWndFrom, HWND hWndTo, LPPOINT lpPoints, UINT
 		_ASSERTEX(mapWindowPoints_f!=NULL);
 	}
 	return lbRc;
+}
+
+UINT UserImp::registerWindowMessageW(LPCWSTR lpString)
+{
+	if (!bUserLoaded && !loadExports(bAllowLoadLibrary))
+	{
+		_ASSERTEX(hUser32!=NULL);
+		return FALSE;
+	}
+
+	UINT iMsg = 0;
+	if (registerWindowMessageW_f)
+	{
+		iMsg = registerWindowMessageW_f(lpString);
+	}
+	else
+	{
+		_ASSERTEX(registerWindowMessageW_f!=NULL);
+	}
+	return iMsg;
 }

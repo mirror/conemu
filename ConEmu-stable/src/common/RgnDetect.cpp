@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "common.hpp"
 #include "RgnDetect.h"
@@ -1296,7 +1297,7 @@ int CRgnDetect::MarkDialog(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHei
 	}
 	else if (!nX1 && !nY1 && !nY2 && nX2 == nWidth_1)
 	{
-		if ((mp_FarInfo->nFarInterfaceSettings & 0x10/*FIS_ALWAYSSHOWMENUBAR*/) == 0)
+		if ((mp_FarInfo->FarInterfaceSettings.AlwaysShowMenuBar) == 0)
 		{
 			DlgFlags |= FR_ACTIVEMENUBAR;
 		}
@@ -1376,6 +1377,7 @@ int CRgnDetect::MarkDialog(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHei
 							mrc_LeftPanel = sr;  // левая или полноэкранная
 
 						DlgFlags |= nPossible;
+						bFindExterior = false;
 
 						// Может все панели уже нашли?
 						if ((nPossible & FR_FULLPANEL))
@@ -2066,12 +2068,12 @@ void CRgnDetect::PrepareTransparent(const CEFAR_INFO_MAPPING *apFarInfo, const C
 	// 1. UserScreen под ним заменяется на crColorKey
 	// 2. а текст - на пробелы
 	// Проверять наличие KeyBar по настройкам (Keybar + CmdLine)
-	bShowKeyBar = (mp_FarInfo->nFarInterfaceSettings & 8/*FIS_SHOWKEYBAR*/) != 0;
+	bShowKeyBar = (mp_FarInfo->FarInterfaceSettings.ShowKeyBar) != 0;
 	nBottomLines = bShowKeyBar ? 2 : 1;
 	// Проверять наличие MenuBar по настройкам
 	// Или может быть меню сейчас показано?
 	// 1 - при видимом сейчас или постоянно меню
-	bAlwaysShowMenuBar = (mp_FarInfo->nFarInterfaceSettings & 0x10/*FIS_ALWAYSSHOWMENUBAR*/) != 0;
+	bAlwaysShowMenuBar = (mp_FarInfo->FarInterfaceSettings.AlwaysShowMenuBar) != 0;
 
 	if (bAlwaysShowMenuBar)
 		m_DetectedDialogs.AllFlags |= FR_MENUBAR; // ставим сразу, чтобы детектор панелей не запутался

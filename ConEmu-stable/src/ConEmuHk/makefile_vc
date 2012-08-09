@@ -14,7 +14,7 @@ NO_OPTIMIZE = 1
 
 DEF_NAME = export
 
-DEFINES=/DUSE_SEH
+DEF_SEH = /DUSE_SEH
 
 !if defined(AMD64)
 OUTNAME = ConEmuHk64
@@ -43,19 +43,23 @@ RC_NAME = ConEmuHk
 LINK_OBJS = \
 $(OBJDIR)\Entry.obj \
 $(OBJDIR)\Injects.obj \
+$(OBJDIR)\Ansi.obj \
 $(OBJDIR)\ConEmuHooks.obj \
 $(OBJDIR)\RegHooks.obj \
-$(OBJDIR)\execute.obj \
+$(OBJDIR)\Execute.obj \
+$(OBJDIR)\ExtConsole.obj \
 $(OBJDIR)\SetHook.obj \
 $(OBJDIR)\ShellProcessor.obj \
 $(OBJDIR)\WinObjects.obj \
 $(OBJDIR)\ConEmuCheck.obj \
 $(OBJDIR)\Common.obj \
+$(OBJDIR)\InQueue.obj \
 $(OBJDIR)\MAssert.obj \
 $(OBJDIR)\Memory.obj \
 $(OBJDIR)\MSecurity.obj \
 $(OBJDIR)\MStrSafe.obj \
 $(OBJDIR)\GuiAttach.obj \
+$(OBJDIR)\RConStartArgs.obj \
 $(OBJDIR)\UserImp.obj
 
 USERLIBS = 
@@ -96,13 +100,13 @@ CPP_OPT=$(CPP_OPT) /DDEBUG /Fd$(PDBNAME) /DCRTPRINTF /DCONEMU_MINIMAL
 !ifdef AMD64
 COMMONLIB = ../common/libCRT64.lib 
 #../common/chkstk64.obj
-CPP_PROJ_NO=/nologo /c /W3 /wd4995 /Gy /GF /Zp8 /J $(COMPAT64) /GS- /Gr /GR- /EHs-c- /LD /I"$(COMINC)" $(ENV_INC_OPT) $(CPP_WIDE) /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS $(USERCPP)
+CPP_PROJ_NO=/nologo /c /W3 /wd4995 /Gy /GF $(DEF_SEH) /Zp8 /J $(COMPAT64) /GS- /Gr /GR- /EHs-c- /LD /I"$(COMINC)" $(ENV_INC_OPT) $(CPP_WIDE) /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS $(USERCPP)
 ULOUT=-Tpd+
 LINK_MACHINE = /MACHINE:X64
 !elseif defined(IA64)
 COMMONLIB = ../common/libCRTIA64.lib 
 #../common/chkstkIA64.obj
-CPP_PROJ_NO=/nologo /c /W3 /wd4995 /Gy /GF /Zp8 /J $(COMPAT64) /GS- /Gr /GR- /EHs-c- /LD /I"$(COMINC)" $(ENV_INC_OPT) $(CPP_WIDE) /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS $(USERCPP)
+CPP_PROJ_NO=/nologo /c /W3 /wd4995 /Gy /GF $(DEF_SEH) /Zp8 /J $(COMPAT64) /GS- /Gr /GR- /EHs-c- /LD /I"$(COMINC)" $(ENV_INC_OPT) $(CPP_WIDE) /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS $(USERCPP)
 ULOUT=-Tpd+
 LINK_MACHINE = /MACHINE:X64
 !else
@@ -113,7 +117,7 @@ COMMONLIB = ../common/libCRT.lib
 CPP_ALIGN=/Zp1
 !endif
 # /I"$(COMMON)"
-CPP_PROJ_NO=/nologo /c /W3 /wd4995 /Gy /GF $(DEFINES) $(CPP_ALIGN) /J /Gr /GS- /GR- /EHs-c-a- /LD /I"$(COMINC)" $(ENV_INC_OPT) $(CPP_WIDE) /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS $(CPPWINVER) $(USERCPP)
+CPP_PROJ_NO=/nologo /c /W3 /wd4995 /Gy /GF $(DEF_SEH) $(CPP_ALIGN) /J /Gr /GS- /GR- /EHs-c-a- /LD /I"$(COMINC)" $(ENV_INC_OPT) $(CPP_WIDE) /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_NON_CONFORMING_SWPRINTFS $(CPPWINVER) $(USERCPP)
 ULOUT=-Tpd -Re
 LINK_MACHINE = /MACHINE:X86
 !endif
@@ -243,14 +247,17 @@ dirs:
 
 .PHONY: clean
 clean:
-	@echo copying release files
+	@echo Copying release files
 	@if not exist "$(RELEASEDIR)\$(NULL)" mkdir "$(RELEASEDIR)"
+	@echo moving "$(DLLFULLNAME)" to "$(RELEASEDIR)\$(OUTNAME).dll"
 	@move $(DLLFULLNAME) $(RELEASEDIR)\$(OUTNAME).dll
 #!ifdef DEBUG
+	@echo moving "$(PDBNAME)" to "$(RELEASEDIR)\$(OUTNAME).pdb"
 	@move $(PDBNAME) $(RELEASEDIR)\$(OUTNAME).pdb
 #!else
 #	@if exist $(PDBNAME) del $(PDBNAME)
 #!endif
+	@echo moving "$(MAP)" to "$(RELEASEDIR)\$(OUTNAME).map"
 	@move $(MAP) $(RELEASEDIR)\$(OUTNAME).map
 
 
@@ -261,9 +268,13 @@ $(OBJDIR)\Injects.obj: Injects.cpp Console2.h
 
 $(OBJDIR)\Common.obj: ../common/Common.cpp
 
+$(OBJDIR)\InQueue.obj: ../common/InQueue.cpp
+
 $(OBJDIR)\ConEmuHk.obj: ConEmuHk.cpp
 
 $(OBJDIR)\ConEmuCmd.obj: ConEmuCmd.cpp
+
+$(OBJDIR)\Ansi.obj: Ansi.cpp
 
 $(OBJDIR)\ConEmuHooks.obj: ConEmuHooks.cpp
 
@@ -271,7 +282,9 @@ $(OBJDIR)\RegHooks.obj: RegHooks.cpp
 
 $(OBJDIR)\ConEmuSrv.obj: ConEmuSrv.cpp
 
-$(OBJDIR)\execute.obj: ../common/execute.cpp ../common/execute.h
+$(OBJDIR)\Execute.obj: ../common/Execute.cpp ../common/Execute.h
+
+$(OBJDIR)\ExtConsole.obj: ExtConsole.cpp ExtConsole.h
 
 $(OBJDIR)\SetHook.obj: SetHook.cpp SetHook.h
 
@@ -290,5 +303,7 @@ $(OBJDIR)\MSecurity.obj: ../common/MSecurity.cpp
 $(OBJDIR)\MStrSafe.obj: ../common/MStrSafe.cpp
 
 $(OBJDIR)\GuiAttach.obj: GuiAttach.cpp GuiAttach.h
+
+$(OBJDIR)\RConStartArgs.obj: ../common/RConStartArgs.cpp ../common/RConStartArgs.h
 
 $(OBJDIR)\UserImp.obj: UserImp.cpp UserImp.h

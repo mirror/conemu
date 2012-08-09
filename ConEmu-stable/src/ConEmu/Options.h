@@ -31,12 +31,45 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define CONEMU_ROOT_KEY L"Software\\ConEmu"
 
+template <class T>
+T GetMinMax(T a, int v1, int v2)
+{
+	if (a < (T)v1)
+		a = (T)v1;
+	else if (a > (T)v2)
+		a = (T)v2;
+	return a;
+}
+
+template <class T>
+void MinMax(T &a, int v1, int v2)
+{
+	if (a < (T)v1)
+		a = (T)v1;
+	else if (a > (T)v2)
+		a = (T)v2;
+}
+
+template <class T>
+void MinMax(T &a, int v2)
+{
+	if (a > (T)v2)
+		a = (T)v2;
+}
+
 #define MIN_ALPHA_VALUE 40
+#define MIN_INACTIVE_ALPHA_VALUE 0
+#define DEFAULT_FINDDLG_ALPHA 180
 #define MAX_FONT_STYLES 8  //normal/(bold|italic|underline)
 #define MAX_FONT_GROUPS 20 // Main, Borders, Japan, Cyrillic, ...
 
 #define LONGOUTPUTHEIGHT_MIN 300
 #define LONGOUTPUTHEIGHT_MAX 9999
+
+#define CURSORSIZE_MIN 5
+#define CURSORSIZE_MAX 100
+#define CURSORSIZEPIX_MIN 1
+#define CURSORSIZEPIX_MAX 99
 
 #include <pshpack1.h>
 typedef struct tagMYRGB
@@ -60,6 +93,9 @@ enum BackgroundOp
 	eUpLeft = 0,
 	eStretch = 1,
 	eTile = 2,
+	eUpRight = 3,
+	eDownLeft = 4,
+	eDownRight = 5,
 };
 
 #define BgImageColorsDefaults (1|2)
@@ -67,6 +103,122 @@ enum BackgroundOp
 #include "UpdateSet.h"
 
 class CSettings;
+class CVirtualConsole;
+
+#define CmdFilePrefix     L'@'
+#define DropLnkPrefix     L'?'
+#define TaskBracketLeft   L'{'
+#define TaskBracketRight  L'}'
+#define AutoStartTaskName L"<Startup>"
+
+#define SCROLLBAR_DELAY_MIN 100
+#define SCROLLBAR_DELAY_MAX 15000
+
+#define CENTERCONSOLEPAD_MIN 0
+#define CENTERCONSOLEPAD_MAX 64
+
+#define CEHOTKEY_MODMASK    0xFFFFFF00
+#define CEHOTKEY_NUMHOSTKEY 0xFFFFFF00
+#define CEHOTKEY_ARRHOSTKEY 0xFEFEFE00
+#define CEHOTKEY_NOMOD      0x80808000
+
+enum ConEmuHotKeyType
+{
+	chk_User = 0,  // обычный настраиваемый hotkey
+	chk_Modifier,  // для драга, например
+	chk_Modifier2, // для драга, например (когда нужно задать более одного модификатора)
+	chk_NumHost,   // system hotkey (<HostKey>-Number, и БЫЛ РАНЬШЕ <HostKey>-Arrows)
+	chk_ArrHost,   // system hotkey (<HostKey>-Number, и БЫЛ РАНЬШЕ <HostKey>-Arrows)
+	chk_System,    // predefined hotkeys, ненастраиваемые (пока?)
+	chk_Global,    // globally registered hotkey
+	chk_Macro,     // GUI Macro
+};
+
+// Уехал в common.hpp
+//enum ConEmuModifiers
+//{
+//	// Для удобства, в младшем байте VkMod хранится VK кнопки
+//	cvk_VK_MASK  = 0x000000FF,
+//
+//	// Модификаторы, которые юзер просил различать, правый или левый
+//	cvk_LCtrl    = 0x00000100,
+//	cvk_RCtrl    = 0x00000200,
+//	cvk_LAlt     = 0x00000400,
+//	cvk_RAlt     = 0x00000800,
+//	cvk_LShift   = 0x00001000,
+//	cvk_RShift   = 0x00002000,
+//
+//	// Если без разницы, правый или левый
+//	cvk_Ctrl     = 0x00010000,
+//	cvk_Alt      = 0x00020000,
+//	cvk_Shift    = 0x00040000,
+//	cvk_Win      = 0x00080000,
+//	cvk_Apps     = 0x00100000,
+//
+//	// Маска всех с учетом правый/левый
+//	cvk_DISTINCT = cvk_LCtrl|cvk_RCtrl|cvk_LAlt|cvk_RAlt|cvk_LShift|cvk_RShift|cvk_Win|cvk_Apps,
+//	// Маска вообще всех допустимых флагов, за исключением самого VK
+//	cvk_ALLMASK  = 0xFFFFFF00,
+//};
+
+struct ConEmuHotKey
+{
+	int DescrLangID;
+	
+	ConEmuHotKeyType HkType; // 0 - hotkey, 1 - modifier (для драга, например), 2 - system hotkey (настройка nMultiHotkeyModifier)
+
+	bool*   Enabled;
+	wchar_t Name[64];
+	
+	//// User. Если NULL - значит системный, не изменяемый
+	//union
+	//{
+	//	DWORD* VkModPtr; // (HkType==chk_User, chk_Hostkey, chk_System, chk_Global)
+	//	BYTE*  ModPtr;   // (HkType==chk_Modifier)
+	//};
+	
+	DWORD VkMod;
+
+    bool (WINAPI *fkey)(DWORD VkMod, bool TestOnly, const ConEmuHotKey* hk, CRealConsole* pRCon); // true-обработали, false-пропустить в консоль
+	bool OnKeyUp; // Некоторые комбинации нужно обрабатывать "на отпускание" (показ диалогов, меню, ...)
+
+	wchar_t* GuiMacro;
+
+	// Internal
+	size_t cchGuiMacroMax;
+	bool   NotChanged;
+
+	bool CanChangeVK() const
+	{
+		//chk_System - пока не настраивается
+		if (HkType==chk_User || HkType==chk_Global || HkType==chk_Macro)
+		{
+			return true;
+		}
+		return false;
+	};
+
+	void Free()
+	{
+		SafeFree(GuiMacro);
+	};
+};
+
+// Некоторые комбинации нужно обрабатывать "на отпускание" во избежание глюков с интерфейсом
+extern const ConEmuHotKey* ConEmuSkipHotKey; // = ((ConEmuHotKey*)INVALID_HANDLE_VALUE)
+
+
+struct FindTextOptions
+{
+	size_t   cchTextMax;
+	wchar_t* pszText;
+	bool     bMatchCase;
+	bool     bMatchWholeWords;
+	bool     bFreezeConsole;
+	bool     bHighlightAll;
+	bool     bTransparent;
+};
+
 
 struct Settings
 {
@@ -81,15 +233,356 @@ struct Settings
 
 		wchar_t Type[16]; // Информационно: L"[reg]" или L"[xml]"
 
+		bool IsConfigNew; // true, если конфигурация новая
+
 		//reg->Load(L"DefaultBufferHeight", DefaultBufferHeight);
 		int DefaultBufferHeight;
 		
 		//bool AutoScroll;
 		
 		//reg->Load(L"AutoBufferHeight", AutoBufferHeight);
-		bool AutoBufferHeight;
+		bool AutoBufferHeight; // Long console output
 		//reg->Load(L"CmdOutputCP", nCmdOutputCP);
 		int nCmdOutputCP;
+
+		ConEmuComspec ComSpec;
+
+	public:
+		struct ColorPalette
+		{
+			wchar_t* pszName;
+			bool bPredefined;
+
+			//reg->Load(L"ExtendColors", isExtendColors);
+			bool isExtendColors;
+			//reg->Load(L"ExtendColorIdx", nExtendColorIdx);
+			BYTE nExtendColorIdx; // 0..15
+
+			//reg->Load(L"TextColorIdx", nTextColorIdx);
+			BYTE nTextColorIdx; // 0..15,16
+			//reg->Load(L"BackColorIdx", nBackColorIdx);
+			BYTE nBackColorIdx; // 0..15,16
+			//reg->Load(L"PopTextColorIdx", nPopTextColorIdx);
+			BYTE nPopTextColorIdx; // 0..15,16
+			//reg->Load(L"PopBackColorIdx", nPopBackColorIdx);
+			BYTE nPopBackColorIdx; // 0..15,16
+
+
+			COLORREF Colors[0x20];
+
+			void FreePtr()
+			{
+				SafeFree(pszName);
+                ColorPalette* p = this;
+                SafeFree(p);
+			};
+		};
+
+		struct AppSettings
+		{
+			size_t   cchNameMax;
+			wchar_t* AppNames; // "far.exe|far64.exe" и т.п.
+			wchar_t* AppNamesLwr; // For internal use
+			BYTE Elevated; // 00 - unimportant, 01 - elevated, 02 - nonelevated
+			
+			//const COLORREF* Palette/*[0x20]*/; // текущая палитра (Fade/не Fade)
+
+			bool OverridePalette; // Palette+Extend
+			wchar_t szPaletteName[128];
+			//reg->Load(L"ExtendColors", isExtendColors);
+			bool isExtendColors;
+			char ExtendColors() const { return (OverridePalette || !AppNames) ? isExtendColors : gpSet->AppStd.isExtendColors; };
+			//reg->Load(L"ExtendColorIdx", nExtendColorIdx);
+			BYTE nExtendColorIdx; // 0..15
+			BYTE ExtendColorIdx() const { return (OverridePalette || !AppNames) ? nExtendColorIdx : gpSet->AppStd.nExtendColorIdx; };
+
+			BYTE nTextColorIdx; // 0..15,16
+			BYTE TextColorIdx() const { return (OverridePalette || !AppNames) ? nTextColorIdx : gpSet->AppStd.nTextColorIdx; };
+			BYTE nBackColorIdx; // 0..15,16
+			BYTE BackColorIdx() const { return (OverridePalette || !AppNames) ? nBackColorIdx : gpSet->AppStd.nBackColorIdx; };
+			BYTE nPopTextColorIdx; // 0..15,16
+			BYTE PopTextColorIdx() const { return (OverridePalette || !AppNames) ? nPopTextColorIdx : gpSet->AppStd.nPopTextColorIdx; };
+			BYTE nPopBackColorIdx; // 0..15,16
+			BYTE PopBackColorIdx() const { return (OverridePalette || !AppNames) ? nPopBackColorIdx : gpSet->AppStd.nPopBackColorIdx; };
+
+
+			bool OverrideExtendFonts;
+			//reg->Load(L"ExtendFonts", isExtendFonts);
+			bool isExtendFonts;
+			bool ExtendFonts() const { return (OverrideExtendFonts || !AppNames) ? isExtendFonts : gpSet->AppStd.isExtendFonts; };
+			//reg->Load(L"ExtendFontNormalIdx", nFontNormalColor);
+			BYTE nFontNormalColor; // 0..15
+			BYTE FontNormalColor() const { return (OverrideExtendFonts || !AppNames) ? nFontNormalColor : gpSet->AppStd.nFontNormalColor; };
+			//reg->Load(L"ExtendFontBoldIdx", nFontBoldColor);
+			BYTE nFontBoldColor;   // 0..15
+			BYTE FontBoldColor() const { return (OverrideExtendFonts || !AppNames) ? nFontBoldColor : gpSet->AppStd.nFontBoldColor; };
+			//reg->Load(L"ExtendFontItalicIdx", nFontItalicColor);
+			BYTE nFontItalicColor; // 0..15
+			BYTE FontItalicColor() const { return (OverrideExtendFonts || !AppNames) ? nFontItalicColor : gpSet->AppStd.nFontItalicColor; };
+
+			bool OverrideCursor;
+			//reg->Load(L"CursorType", isCursorV);
+			bool isCursorV;
+			bool CursorV() const { return (OverrideCursor || !AppNames) ? isCursorV : gpSet->AppStd.isCursorV; };
+			//reg->Load(L"CursorBlink", isCursorBlink);
+			bool isCursorBlink;
+			bool CursorBlink() const { return (OverrideCursor || !AppNames) ? isCursorBlink : gpSet->AppStd.isCursorBlink; };
+			//reg->Load(L"CursorColor", isCursorColor);
+			bool isCursorColor;
+			bool CursorColor() const { return (OverrideCursor || !AppNames) ? isCursorColor : gpSet->AppStd.isCursorColor; };
+			//reg->Load(L"CursorBlockInactive", isCursorBlockInactive);
+			bool isCursorBlockInactive;
+			bool CursorBlockInactive() const { return (OverrideCursor || !AppNames) ? isCursorBlockInactive : gpSet->AppStd.isCursorBlockInactive; };
+			//reg->Load(L"CursorIgnoreSize", isCursorIgnoreSize);
+			bool isCursorIgnoreSize;
+			bool CursorIgnoreSize() const { return (OverrideCursor || !AppNames) ? isCursorIgnoreSize : gpSet->AppStd.isCursorIgnoreSize; };
+			//reg->Load(L"CursorFixedSize", nCursorFixedSize);
+			BYTE nCursorFixedSize; // в процентах
+			BYTE CursorFixedSize() const { return (OverrideCursor || !AppNames) ? nCursorFixedSize : gpSet->AppStd.nCursorFixedSize; };
+			//reg->Load(L"CursorMinSize", nCursorMinSize);
+			BYTE nCursorMinSize; // в пикселях
+			BYTE CursorMinSize() const { return (OverrideCursor || !AppNames) ? nCursorMinSize : gpSet->AppStd.nCursorMinSize; };
+
+			bool OverrideClipboard;
+			// *** Copying
+			//reg->Load(L"ClipboardDetectLineEnd", isCTSDetectLineEnd);
+			bool isCTSDetectLineEnd; // cbCTSDetectLineEnd
+			bool CTSDetectLineEnd() const { return (OverrideClipboard || !AppNames) ? isCTSDetectLineEnd : gpSet->AppStd.isCTSDetectLineEnd; };
+			//reg->Load(L"ClipboardBashMargin", isCTSBashMargin);
+			bool isCTSBashMargin; // cbCTSBashMargin
+			bool CTSBashMargin() const { return (OverrideClipboard || !AppNames) ? isCTSBashMargin : gpSet->AppStd.isCTSBashMargin; };
+			//reg->Load(L"ClipboardTrimTrailing", isCTSTrimTrailing);
+			BYTE isCTSTrimTrailing; // cbCTSTrimTrailing: 0 - нет, 1 - да, 2 - только для stream-selection
+			BYTE CTSTrimTrailing() const { return (OverrideClipboard || !AppNames) ? isCTSTrimTrailing : gpSet->AppStd.isCTSTrimTrailing; };
+			//reg->Load(L"ClipboardEOL", isCTSEOL);
+			BYTE isCTSEOL; // cbCTSEOL: 0="CR+LF", 1="LF", 2="CR"
+			BYTE CTSEOL() const { return (OverrideClipboard || !AppNames) ? isCTSEOL : gpSet->AppStd.isCTSEOL; };
+			// *** Pasting
+			//reg->Load(L"ClipboardAllLines", isPasteAllLines);
+			bool isPasteAllLines;
+			bool PasteAllLines() const { return (OverrideClipboard || !AppNames) ? isPasteAllLines : gpSet->AppStd.isPasteAllLines; };
+			//reg->Load(L"ClipboardFirstLine", isPasteFirstLine);
+			bool isPasteFirstLine;
+			bool PasteFirstLine() const { return (OverrideClipboard || !AppNames) ? isPasteFirstLine : gpSet->AppStd.isPasteFirstLine; };
+			// *** Prompt
+			// cbCTSClickPromptPosition
+			//reg->Load(L"ClipboardClickPromptPosition", isCTSClickPromptPosition);
+			BYTE isCTSClickPromptPosition; // cbCTSClickPromptPosition
+			BYTE CTSClickPromptPosition() const { return (OverrideClipboard || !AppNames) ? isCTSClickPromptPosition : gpSet->AppStd.isCTSClickPromptPosition; };
+
+			bool OverrideBgImage;
+			//reg->Load(L"BackGround Image show", isShowBgImage);
+			char isShowBgImage; // cbBgImage
+			char ShowBgImage() const { return (OverrideBgImage || !AppNames) ? isShowBgImage : gpSet->AppStd.isShowBgImage; };
+			//reg->Load(L"BackGround Image", sBgImage, countof(sBgImage));
+			WCHAR sBgImage[MAX_PATH]; // tBgImage
+			LPCWSTR BgImage() const { return (OverrideBgImage || !AppNames) ? sBgImage : gpSet->AppStd.sBgImage; };
+			//reg->Load(L"bgOperation", nBgOperation);
+			char nBgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2, ...}
+			char BgOperation() const { return (OverrideBgImage || !AppNames) ? nBgOperation : gpSet->AppStd.nBgOperation; };
+
+
+			void SetNames(LPCWSTR asAppNames)
+			{
+				size_t iLen = wcslen(asAppNames);
+
+				if (!AppNames || !AppNamesLwr || (iLen >= cchNameMax))
+				{
+					SafeFree(AppNames);
+					SafeFree(AppNamesLwr);
+
+					cchNameMax = iLen+32;
+					AppNames = (wchar_t*)malloc(cchNameMax*sizeof(wchar_t));
+					AppNamesLwr = (wchar_t*)malloc(cchNameMax*sizeof(wchar_t));
+					if (!AppNames || !AppNamesLwr)
+					{
+						_ASSERTE(AppNames!=NULL && AppNamesLwr!=NULL);
+						return;
+					}
+				}
+
+				_wcscpy_c(AppNames, iLen+1, asAppNames);
+				_wcscpy_c(AppNamesLwr, iLen+1, asAppNames);
+				CharLowerBuff(AppNamesLwr, iLen);
+			};
+
+			void FreeApps()
+			{
+				SafeFree(AppNames);
+				SafeFree(AppNamesLwr);
+				cchNameMax = 0;
+			};
+		};
+		int GetAppSettingsId(LPCWSTR asExeAppName, bool abElevated);
+		const AppSettings* GetAppSettings(int anAppId=-1);
+		COLORREF* GetColors(int anAppId=-1, BOOL abFade = FALSE);
+		COLORREF GetFadeColor(COLORREF cr);
+		void ResetFadeColors();
+
+		struct CommandTasks
+		{
+			size_t   cchNameMax;
+			wchar_t* pszName;
+			size_t   cchGuiArgMax;
+			wchar_t* pszGuiArgs;
+			size_t   cchCmdMax;
+			wchar_t* pszCommands; // "\r\n" separated commands
+
+			void FreePtr()
+			{
+				SafeFree(pszName);
+				cchNameMax = 0;
+				SafeFree(pszGuiArgs);
+				cchGuiArgMax = 0;
+				SafeFree(pszCommands);
+				cchCmdMax = 0;
+                CommandTasks* p = this;
+                SafeFree(p);
+			};
+
+			void SetName(LPCWSTR asName, int anCmdIndex)
+			{
+				wchar_t szCmd[16];
+				if (!asName || !*asName)
+				{
+					_wsprintf(szCmd, SKIPLEN(countof(szCmd)) L"Group%i", (anCmdIndex+1));
+					asName = szCmd;
+				}
+
+				// Для простоты дальнейшей работы - имя должно быть заключено в угловые скобки
+				size_t iLen = wcslen(asName);
+
+				if (!pszName || ((iLen+2) >= cchNameMax))
+				{
+					SafeFree(pszName);
+
+					cchNameMax = iLen+16;
+					pszName = (wchar_t*)malloc(cchNameMax*sizeof(wchar_t));
+					if (!pszName)
+					{
+						_ASSERTE(pszName!=NULL);
+						return;
+					}
+				}
+
+				if (asName[0] == TaskBracketLeft)
+				{
+					_wcscpy_c(pszName, iLen+1, asName);
+				}
+				else
+				{
+					*pszName = TaskBracketLeft;
+					_wcscpy_c(pszName+1, iLen+1, asName);
+				}
+				if (asName[iLen-1] != TaskBracketRight)
+				{
+					iLen = wcslen(pszName);
+					pszName[iLen++] = TaskBracketRight; pszName[iLen] = 0;
+				}
+			};
+
+			void SetGuiArg(LPCWSTR asGuiArg)
+			{
+				if (!asGuiArg)
+					asGuiArg = L"";
+
+				size_t iLen = wcslen(asGuiArg);
+
+				if (!pszGuiArgs || (iLen >= cchGuiArgMax))
+				{
+					SafeFree(pszGuiArgs);
+
+					cchGuiArgMax = iLen+256;
+					pszGuiArgs = (wchar_t*)malloc(cchGuiArgMax*sizeof(wchar_t));
+					if (!pszGuiArgs)
+					{
+						_ASSERTE(pszGuiArgs!=NULL);
+						return;
+					}
+				}
+
+				_wcscpy_c(pszGuiArgs, cchGuiArgMax, asGuiArg);
+			};
+
+			void SetCommands(LPCWSTR asCommands)
+			{
+				if (!asCommands)
+					asCommands = L"";
+
+				size_t iLen = wcslen(asCommands);
+
+				if (!pszCommands || (iLen >= cchCmdMax))
+				{
+					SafeFree(pszCommands);
+
+					cchCmdMax = iLen+1024;
+					pszCommands = (wchar_t*)malloc(cchCmdMax*sizeof(wchar_t));
+					if (!pszCommands)
+					{
+						_ASSERTE(pszCommands!=NULL);
+						return;
+					}
+				}
+
+				_wcscpy_c(pszCommands, cchCmdMax, asCommands);
+			};
+		};
+		const CommandTasks* CmdTaskGet(int anIndex); // 0-based, index of CmdTasks. "-1" == autosaved task
+		void CmdTaskSet(int anIndex, LPCWSTR asName, LPCWSTR asGuiArgs, LPCWSTR asCommands); // 0-based, index of CmdTasks
+		bool CmdTaskXch(int anIndex1, int anIndex2); // 0-based, index of CmdTasks
+
+		const ColorPalette* PaletteGet(int anIndex); // 0-based, index of Palettes
+		void PaletteSaveAs(LPCWSTR asName); // Save active colors to named palette
+		void PaletteDelete(LPCWSTR asName); // Delete named palette
+		void PaletteSetStdIndexes();
+
+	protected:
+		AppSettings AppStd;
+		int AppCount;
+		AppSettings** Apps;
+		// Для CSettings
+		AppSettings* GetAppSettingsPtr(int anAppId, BOOL abCreateNew = FALSE);
+		void AppSettingsDelete(int anAppId);
+		bool AppSettingsXch(int anIndex1, int anIndex2); // 0-based, index of Apps
+
+		int CmdTaskCount;
+		CommandTasks** CmdTasks;
+		CommandTasks* StartupTask;
+		bool LoadCmdTask(SettingsBase* reg, CommandTasks* &pTask, int iIndex);
+		bool SaveCmdTask(SettingsBase* reg, CommandTasks* pTask);
+		void FreeCmdTasks();
+
+		int PaletteCount;
+		ColorPalette** Palettes;
+		void FreePalettes();
+
+		int PaletteGetIndex(LPCWSTR asName);
+		void SavePalettes(SettingsBase* reg);
+		void SortPalettes();
+
+		void SaveStatusSettings(SettingsBase* reg);
+
+	private:	
+		// reg->Load(L"ColorTableNN", Colors[i]);
+		COLORREF Colors[0x20];
+		COLORREF ColorsFade[0x20];
+		bool mb_FadeInitialized;
+
+		struct CEAppColors
+		{
+			COLORREF Colors[0x20];
+			COLORREF ColorsFade[0x20];
+			bool FadeInitialized;
+		} **AppColors; // [AppCount]
+
+		void LoadAppSettings(SettingsBase* reg, bool abFromOpDlg = false);
+		void LoadAppSettings(SettingsBase* reg, AppSettings* pApp, COLORREF* pColors);
+		void SaveAppSettings(SettingsBase* reg, AppSettings* pApp, COLORREF* pColors);
+
+		void FreeApps(int NewAppCount = 0, AppSettings** NewApps = NULL, Settings::CEAppColors** NewAppColors = NULL);
+
+		DWORD mn_FadeMul;
+		inline BYTE GetFadeColorItem(BYTE c);
 
 	public:
 		//reg->Load(L"FontAutoSize", isFontAutoSize);
@@ -102,23 +595,8 @@ struct Settings
 		//reg->Load(L"ConsoleFontHeight", ConsoleFont.lfHeight);
 		LOGFONT ConsoleFont;
 		
-		COLORREF* GetColors(BOOL abFade = FALSE);
-		COLORREF GetFadeColor(COLORREF cr);
 		bool NeedDialogDetect();
 		
-		//reg->Load(L"ExtendColors", isExtendColors);
-		bool isExtendColors;
-		//reg->Load(L"ExtendColorIdx", nExtendColor);
-		char nExtendColor; // 0..15
-		
-		//reg->Load(L"ExtendFonts", isExtendFonts);
-		bool isExtendFonts;
-		//reg->Load(L"ExtendFontNormalIdx", nFontNormalColor);
-		char nFontNormalColor; // 0..15
-		//reg->Load(L"ExtendFontBoldIdx", nFontBoldColor);
-		char nFontBoldColor;   // 0..15
-		//reg->Load(L"ExtendFontItalicIdx", nFontItalicColor);
-		char nFontItalicColor; // 0..15
 		
 		//reg->Load(L"TrueColorerSupport", isTrueColorer);
 		bool isTrueColorer;
@@ -134,7 +612,7 @@ struct Settings
 		//reg->Load(L"bgImageColors", nBgImageColors);
 		DWORD nBgImageColors;
 		//reg->Load(L"bgOperation", bgOperation);
-		char bgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2}
+		char bgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2, ...}
 		//reg->Load(L"bgPluginAllowed", isBgPluginAllowed);
 		char isBgPluginAllowed;
 		
@@ -144,10 +622,19 @@ struct Settings
 		
 
 		/* *** Transparency *** */
+		bool isTransparentAllowed();
 		//reg->Load(L"AlphaValue", nTransparent);
 		u8 nTransparent;
+		//reg->Load(L"AlphaValueSeparate", nTransparentSeparate);
+		bool isTransparentSeparate;
+		//reg->Load(L"AlphaValueInactive", nTransparentInactive);
+		u8 nTransparentInactive;
 		//reg->Load(L"UserScreenTransparent", isUserScreenTransparent);
 		bool isUserScreenTransparent;
+		//reg->Load(L"ColorKeyTransparent", isColorKeyTransparent);
+		bool isColorKeyTransparent;
+		//reg->Load(L"ColorKeyValue", nColorKeyValue);
+		DWORD nColorKeyValue;
 
 		/* *** Command Line History (from start dialog) *** */
 		//reg->Load(L"CmdLineHistory", &psCmdHistory);
@@ -155,9 +642,25 @@ struct Settings
 		//nCmdHistorySize = 0; HistoryCheck();
 		DWORD nCmdHistorySize;
 
-		/* *** Command Line (Registry) *** */
-		//reg->Load(L"CmdLine", &psCmd);
-		LPTSTR psCmd;
+		/* *** Startup options *** */
+		//reg->Load(L"StartType", nStartType);
+		BYTE nStartType; // 0-cmd line, 1-cmd task file, 2-named task, 3-auto saved task
+		//reg->Load(L"CmdLine", &psStartSingleApp);
+		LPTSTR psStartSingleApp;
+		//reg->Load(L"StartTasksFile", &psStartTasksFile);
+		LPTSTR psStartTasksFile;
+		//reg->Load(L"StartTasksName", &psStartTasksName);
+		LPTSTR psStartTasksName;
+		//reg->Load(L"StartFarFolders", isStartFarFolders);
+		bool isStartFarFolders;
+		//reg->Load(L"StartFarEditors", isStartFarEditors);
+		bool isStartFarEditors;
+
+		//reg->Load(L"StoreTaskbarkTasks", isStoreTaskbarkTasks);
+		bool isStoreTaskbarkTasks;
+		//reg->Load(L"StoreTaskbarCommands", isStoreTaskbarCommands);
+		bool isStoreTaskbarCommands;
+
 		
 		/* Command Line ("/cmd" arg) */
 		LPTSTR psCurCmd;
@@ -167,12 +670,6 @@ struct Settings
 	public:
 		/* "Active" command line */
 		LPCTSTR GetCmd();
-		/* "Default" command line "far/cmd", based on /BufferHeight switch */
-		//LPCTSTR GetDefaultCmd();
-		///* OUR(!) startup info */
-		//STARTUPINFOW ourSI;
-		/* If Attach to PID requested */
-		//DWORD nAttachPID; HWND hAttachConWnd;
 
 		//reg->Load(L"FontName", inFont, countof(inFont))
 		wchar_t inFont[LF_FACESIZE];
@@ -197,14 +694,17 @@ struct Settings
 		//reg->Load(L"FontSizeX3", FontSizeX3);
 		DWORD FontSizeX3; // ширина знакоместа при моноширном режиме (не путать с FontSizeX2)
 		
-		//bool isFullScreen;
+		
 		//reg->Load(L"HideCaption", isHideCaption);
-		bool isHideCaption;
+		bool isHideCaption; // Hide caption when maximized
+		//reg->Load(L"QuakeStyle", isQuakeStyle);
+		BYTE isQuakeStyle;
 		protected:
 		//reg->Load(L"HideCaptionAlways", mb_HideCaptionAlways);
 		bool mb_HideCaptionAlways;
 		public:
 		bool isHideCaptionAlways(); //<<mb_HideCaptionAlways
+		bool isForcedHideCaptionAlways(); // true, если mb_HideCaptionAlways отключать нельзя
 		//reg->Load(L"HideCaptionAlwaysFrame", nHideCaptionAlwaysFrame);
 		BYTE nHideCaptionAlwaysFrame;
 		//reg->Load(L"HideCaptionAlwaysDelay", nHideCaptionAlwaysDelay);
@@ -217,6 +717,8 @@ struct Settings
 		bool isAlwaysOnTop;
 		//reg->Load(L"DesktopMode", isDesktopMode);
 		bool isDesktopMode;
+		//reg->Load(L"SnapToDesktopEdges", isSnapToDesktopEdges);
+		bool isSnapToDesktopEdges;
 		//reg->Load(L"FixFarBorders", isFixFarBorders)
 		BYTE isFixFarBorders;
 		//reg->Load(L"ExtendUCharMap", isExtendUCharMap);
@@ -238,30 +740,48 @@ struct Settings
 		/* *** Text selection *** */
 		//reg->Load(L"ConsoleTextSelection", isConsoleTextSelection);
 		BYTE isConsoleTextSelection;
+		//reg->Load(L"CTS.AutoCopy", isCTSAutoCopy);
+		bool isCTSAutoCopy;
+		//reg->Load(L"CTS.EndOnTyping", isCTSEndOnTyping);
+		BYTE isCTSEndOnTyping;
+		//reg->Load(L"CTS.Freeze", isCTSFreezeBeforeSelect);
+		bool isCTSFreezeBeforeSelect;
 		//reg->Load(L"CTS.SelectBlock", isCTSSelectBlock);
 		bool isCTSSelectBlock;
 		//reg->Load(L"CTS.SelectText", isCTSSelectText);
 		bool isCTSSelectText;
+		////reg->Load(L"CTS.ClickPromptPosition", isCTSClickPromptPosition);
+		//BYTE isCTSClickPromptPosition; // & vkCTSVkPromptClk
 		//reg->Load(L"CTS.VkBlock", isCTSVkBlock);
-		BYTE isCTSVkBlock; // модификатор запуска выделения мышкой
+		//BYTE isCTSVkBlock; // модификатор запуска выделения мышкой
+		//reg->Load(L"CTS.VkBlockStart", vmCTSVkBlockStart);
+		//DWORD vmCTSVkBlockStart; // кнопка начала выделения вертикального блока
 		//reg->Load(L"CTS.VkText", isCTSVkText);
-		BYTE isCTSVkText; // модификатор запуска выделения мышкой
+		//BYTE isCTSVkText; // модификатор запуска выделения мышкой
+		//reg->Load(L"CTS.VkTextStart", vmCTSVkTextStart);
+		//DWORD vmCTSVkTextStart; // кнопка начала выделения текстового блока
 		//reg->Load(L"CTS.ActMode", isCTSActMode);
 		BYTE isCTSActMode; // режим и модификатор разрешения действий правой и средней кнопки мышки
 		//reg->Load(L"CTS.VkAct", isCTSVkAct);
-		BYTE isCTSVkAct; // режим и модификатор разрешения действий правой и средней кнопки мышки
+		//BYTE isCTSVkAct; // режим и модификатор разрешения действий правой и средней кнопки мышки
 		//reg->Load(L"CTS.RBtnAction", isCTSRBtnAction);
-		BYTE isCTSRBtnAction; // 0-off, 1-copy, 2-paste
+		BYTE isCTSRBtnAction; // 0-off, 1-copy, 2-paste, 3-auto
 		//reg->Load(L"CTS.MBtnAction", isCTSMBtnAction);
-		BYTE isCTSMBtnAction; // 0-off, 1-copy, 2-paste
+		BYTE isCTSMBtnAction; // 0-off, 1-copy, 2-paste, 3-auto
 		//reg->Load(L"CTS.ColorIndex", isCTSColorIndex);
 		BYTE isCTSColorIndex;
-		//reg->Load(L"FarGotoEditor", isFarGotoEditor);
+		//reg->Load(L"ClipboardConfirmEnter", isPasteConfirmEnter);
+		bool isPasteConfirmEnter;
+		//reg->Load(L"ClipboardConfirmLonger", nPasteConfirmLonger);
+		DWORD nPasteConfirmLonger;
+		//reg->Load(L"FarGotoEditorOpt", isFarGotoEditor);
 		bool isFarGotoEditor; // Подсвечивать и переходить на файл/строку (ошибки компилятора)
 		//reg->Load(L"FarGotoEditorVk", isFarGotoEditorVk);
-		BYTE isFarGotoEditorVk; // Клавиша-модификатор для isFarGotoEditor
+		//BYTE isFarGotoEditorVk; // Клавиша-модификатор для isFarGotoEditor
+		//reg->Load(L"FarGotoEditorPath", sFarGotoEditor);
+		wchar_t* sFarGotoEditor; // Команда запуска редактора
 		
-		bool isModifierPressed(DWORD vk);
+		bool IsModifierPressed(int nDescrID, bool bAllowEmpty);
 		//bool isSelectionModifierPressed();
 		//typedef struct tag_CharRanges
 		//{
@@ -279,7 +799,7 @@ struct Settings
 		//reg->Load(L"KeyboardHooks", m_isKeyboardHooks); if (m_isKeyboardHooks>2) m_isKeyboardHooks = 0;
 		BYTE m_isKeyboardHooks;
 	public:
-		bool isKeyboardHooks();
+		bool isKeyboardHooks(bool abNoDisable = false);
 
 		//bool CheckUpdatesWanted();
 
@@ -294,17 +814,16 @@ struct Settings
 		//reg->Load(L"PartBrushBlack", isPartBrushBlack);
 		BYTE isPartBrushBlack;
 		
-		//reg->Load(L"CursorType", isCursorV);
-		bool isCursorV;
-		//reg->Load(L"CursorBlink", isCursorBlink);
-		bool isCursorBlink;
-		//reg->Load(L"CursorColor", isCursorColor);
-		bool isCursorColor;
-		//reg->Load(L"CursorBlockInactive", isCursorBlockInactive);
-		bool isCursorBlockInactive;
-		
 		//reg->Load(L"RightClick opens context menu", isRClickSendKey);
+		// 0 - не звать EMenu, 1 - звать всегда, 2 - звать по длинному клику
 		char isRClickSendKey;
+		//Для тачскринов - удобнее по длинному тапу показывать меню,
+		// а по двойному (Press and tap) выполнять выделение файлов
+		// Поэтому, если isRClickTouch, то "длинный"/"короткий" клик инвертируется
+		// --> isRClickSendKey==1 - звать всегда (isRClickTouchInvert не влияет)
+		// --> isRClickSendKey==2 - звать по длинному тапу (аналог простого RClick)
+		// При этом, PressAndTap всегда посылает RClick в консоль (для выделения файлов).
+		bool isRClickTouchInvert();
 		//reg->Load(L"RightClickMacro2", &sRClickMacro);
 		wchar_t *sRClickMacro;
 		LPCWSTR RClickMacro();
@@ -317,10 +836,10 @@ struct Settings
 		LPCWSTR SafeFarCloseMacro();
 		LPCWSTR SafeFarCloseMacroDefault();
 		
-		//reg->Load(L"AltEnter", isSendAltEnter);
-		bool isSendAltEnter;
-		//reg->Load(L"AltSpace", isSendAltSpace);
-		bool isSendAltSpace;
+		////reg->Load(L"AltEnter", isSendAltEnter);
+		//bool isSendAltEnter;
+		////reg->Load(L"AltSpace", isSendAltSpace);
+		//bool isSendAltSpace;
 		//reg->Load(L"SendAltTab", isSendAltTab);
 		bool isSendAltTab;
 		//reg->Load(L"SendAltEsc", isSendAltEsc);
@@ -331,6 +850,8 @@ struct Settings
 		bool isSendPrintScrn;
 		//reg->Load(L"SendCtrlEsc", isSendCtrlEsc);
 		bool isSendCtrlEsc;
+		////reg->Load(L"SendAltF9", isSendAltF9);
+		//bool isSendAltF9;
 		
 		//reg->Load(L"Min2Tray", isMinToTray);
 		bool isMinToTray;
@@ -349,17 +870,24 @@ struct Settings
 		//reg->Load(L"DndDrop", isDropEnabled);
 		BYTE isDropEnabled;
 		//reg->Load(L"DndLKey", nLDragKey);
-		BYTE nLDragKey;
+		//BYTE nLDragKey;
 		//reg->Load(L"DndRKey", nRDragKey);
-		BYTE nRDragKey; // Был DWORD
+		//BYTE nRDragKey; // Был DWORD
 		//reg->Load(L"DefCopy", isDefCopy);
 		bool isDefCopy;
+		//reg->Load(L"DropUseMenu", isDropUseMenu);
+		BYTE isDropUseMenu;
 		//reg->Load(L"DragOverlay", isDragOverlay);
-		BYTE isDragOverlay;
+		bool isDragOverlay;
 		//reg->Load(L"DragShowIcons", isDragShowIcons);
 		bool isDragShowIcons;
 		//reg->Load(L"DragPanel", isDragPanel); if (isDragPanel > 2) isDragPanel = 1;
 		BYTE isDragPanel; // изменение размера панелей мышкой
+		//reg->Load(L"DragPanelBothEdges", isDragPanelBothEdges);
+		bool isDragPanelBothEdges; // таскать за обе рамки (правую-левой панели и левую-правой панели)
+
+		//reg->Load(L"KeyBarRClick", isKeyBarRClick);
+		bool isKeyBarRClick; // Правый клик по кейбару - показать PopupMenu
 		
 		//reg->Load(L"DebugSteps", isDebugSteps);
 		bool isDebugSteps;
@@ -381,6 +909,29 @@ struct Settings
 		//mn_LastFadeSrc = mn_LastFadeDst = -1;		
 		COLORREF mn_LastFadeDst;
 		public:
+
+		//reg->Load(L"StatusBar.Show", isStatusBarShow);
+		bool isStatusBarShow;
+		//reg->Load(L"StatusBar.Flags", isStatusBarFlags);
+		DWORD isStatusBarFlags; // set of CEStatusFlags
+		//reg->Load(L"StatusFontFace", sStatusFontFace, countof(sStatusFontFace));
+		wchar_t sStatusFontFace[LF_FACESIZE];
+		//reg->Load(L"StatusFontCharSet", nStatusFontCharSet);
+		DWORD nStatusFontCharSet;
+		//reg->Load(L"StatusFontHeight", nStatusFontHeight);
+		int nStatusFontHeight;
+		int StatusBarFontHeight() { return max(4,nStatusFontHeight); };
+		int StatusBarHeight() { return StatusBarFontHeight()+2; };
+		//reg->Load(L"StatusBar.Color.Back", nStatusBarBack);
+		DWORD nStatusBarBack;
+		//reg->Load(L"StatusBar.Color.Light", nStatusBarLight);
+		DWORD nStatusBarLight;
+		//reg->Load(L"StatusBar.Color.Dark", nStatusBarDark);
+		DWORD nStatusBarDark;
+		//reg->Load(L"StatusBar.HideColumns", nHideStatusColumns);
+		bool isStatusColumnHidden[64]; // _ASSERTE(countof(isStatusColumnHidden)>csi_Last);
+		//для информации, чтобы сохранить изменения при выходе
+		bool mb_StatusSettingsWasChanged;
 		
 		//reg->Load(L"Tabs", isTabs);
 		char isTabs;
@@ -423,21 +974,26 @@ struct Settings
 		//reg->Load(L"ToolbarAddSpace", nToolbarAddSpace);
 		int nToolbarAddSpace;
 		//reg->Load(L"ConWnd Width", wndWidth);
-		DWORD wndWidth;
+		DWORD _wndWidth;
 		//reg->Load(L"ConWnd Height", wndHeight);
-		DWORD wndHeight;
+		DWORD _wndHeight;
 		//reg->Load(L"16bit Height", ntvdmHeight);
 		DWORD ntvdmHeight; // в символах
 		//reg->Load(L"ConWnd X", wndX);
-		int wndX; // в пикселях
+		int _wndX; // в пикселях
 		//reg->Load(L"ConWnd Y", wndY);
-		int wndY; // в пикселях
+		int _wndY; // в пикселях
 		//reg->Load(L"WindowMode", WindowMode); if (WindowMode!=rFullScreen && WindowMode!=rMaximized && WindowMode!=rNormal) WindowMode = rNormal;
-		DWORD WindowMode;
+		DWORD _WindowMode;
 		//reg->Load(L"Cascaded", wndCascade);
 		bool wndCascade;
 		//reg->Load(L"AutoSaveSizePos", isAutoSaveSizePos);
 		bool isAutoSaveSizePos;
+		//reg->Load(L"UseCurrentSizePos", isUseCurrentSizePos);
+		bool isUseCurrentSizePos; // Show in settings dialog and save current window size/pos
+
+		bool isIntegralSize();
+
 	private:
 		// При закрытии окна крестиком - сохранять только один раз,
 		// а то размер может в процессе закрытия консолей измениться
@@ -449,34 +1005,49 @@ struct Settings
 		DWORD nIconID;
 		//reg->Load(L"TryToCenter", isTryToCenter);
 		bool isTryToCenter;
+		//reg->Load(L"CenterConsolePad", nCenterConsolePad);
+		DWORD nCenterConsolePad;
 		//reg->Load(L"ShowScrollbar", isAlwaysShowScrollbar); if (isAlwaysShowScrollbar > 2) isAlwaysShowScrollbar = 2;
-		BYTE isAlwaysShowScrollbar;
+		BYTE isAlwaysShowScrollbar; // 0-не показывать, 1-всегда, 2-автоматически (на откусывает место от консоли)
+		//reg->Load(L"ScrollBarAppearDelay", nScrollBarAppearDelay);
+		DWORD nScrollBarAppearDelay;
+		//reg->Load(L"ScrollBarDisappearDelay", nScrollBarDisappearDelay);
+		DWORD nScrollBarDisappearDelay;
 		
 		//reg->Load(L"TabMargins", rcTabMargins);
 		RECT rcTabMargins;
 		//reg->Load(L"TabFrame", isTabFrame);
 		bool isTabFrame;
-		
-		//reg->Load(L"MinimizeRestore", icMinimizeRestore);
-		BYTE icMinimizeRestore;
+
+		//reg->Load(L"MinimizeRestore", vmMinimizeRestore);
+		//DWORD vmMinimizeRestore;
 		//reg->Load(L"Multi", isMulti);
 		bool isMulti;
 		private:
-		//reg->Load(L"Multi.Modifier", nMultiHotkeyModifier); TestHostkeyModifiers();
-		DWORD nMultiHotkeyModifier;
+		//reg->Load(L"Multi.Modifier", nHostkeyModifier); TestHostkeyModifiers();
+		DWORD nHostkeyNumberModifier; // Используется для 0..9, WinSize
+		//reg->Load(L"Multi.ArrowsModifier", nHostkeyArrowModifier); TestHostkeyModifiers();
+		DWORD nHostkeyArrowModifier; // Используется для WinSize
+		//
 		public:
-		//reg->Load(L"Multi.NewConsole", icMultiNew);
-		BYTE icMultiNew;
-		//reg->Load(L"Multi.Next", icMultiNext);
-		BYTE icMultiNext;
-		//reg->Load(L"Multi.Recreate", icMultiRecreate);
-		BYTE icMultiRecreate;
-		//reg->Load(L"Multi.Buffer", icMultiBuffer);
-		BYTE icMultiBuffer;
-		//reg->Load(L"Multi.Close", icMultiClose);
-		BYTE icMultiClose;
-		//reg->Load(L"Multi.CmdKey", icMultiCmd);
-		BYTE icMultiCmd;
+		//reg->Load(L"Multi.NewConsole", vmMultiNew);
+		//DWORD vmMultiNew;
+		//reg->Load(L"Multi.NewConsoleShift", vmMultiNewShift);
+		//DWORD vmMultiNewShift; // Default - vmMultiNew+Shift
+		//reg->Load(L"Multi.Next", vmMultiNext);
+		//DWORD vmMultiNext;
+		//reg->Load(L"Multi.NextShift", vmMultiNextShift);
+		//DWORD vmMultiNextShift;
+		//reg->Load(L"Multi.Recreate", vmMultiRecreate);
+		//DWORD vmMultiRecreate;
+		//reg->Load(L"Multi.Buffer", vmMultiBuffer);
+		//DWORD vmMultiBuffer;
+		//reg->Load(L"Multi.Close", vmMultiClose);
+		//DWORD vmMultiClose;
+		//reg->Load(L"Multi.CloseConfirm", isCloseConsoleConfirm);
+		bool isCloseConsoleConfirm;
+		//reg->Load(L"Multi.CmdKey", vmMultiCmd);
+		//DWORD vmMultiCmd;
 		//reg->Load(L"Multi.AutoCreate", isMultiAutoCreate);
 		bool isMultiAutoCreate;
 		//reg->Load(L"Multi.LeaveOnClose", isMultiLeaveOnClose);
@@ -497,16 +1068,62 @@ struct Settings
 		bool isFixAltOnAltTab;
 		//reg->Load(L"ShellNoZoneCheck", isShellNoZoneCheck);
 		bool isShellNoZoneCheck;
+
+		// FindText: bMatchCase, bMatchWholeWords, bFreezeConsole, bHighlightAll;
+		FindTextOptions FindOptions;
 		
-		bool IsHostkey(WORD vk);
-		bool IsHostkeySingle(WORD vk);
-		bool IsHostkeyPressed();
-		WORD GetPressedHostkey();
-		UINT GetHostKeyMod(); // набор флагов MOD_xxx для RegisterHotKey
+
+	public:
+		/* ************************ */
+		/* ************************ */
+		/* *** Hotkeys/Hostkeys *** */
+		/* ************************ */
+		/* ************************ */
+
+		// VkMod = LOBYTE - VK, старшие три байта - модификаторы (тоже VK)
+
+		// Задать или сбросить модификатор в VkMod
+		static DWORD SetModifier(DWORD VkMod, BYTE Mod/*VK*/, bool Xor=true);
+		// Сервисная функция для инициализации. Формирует готовый VkMod
+		static DWORD MakeHotKey(BYTE Vk, BYTE vkMod1=0, BYTE vkMod2=0, BYTE vkMod3=0);
+		// Вернуть назначенные модификаторы (idx = 1..3). Возвращает 0 (нету) или VK
+		static DWORD GetModifier(DWORD VkMod, int idx/*1..3*/);
+		// Вернуть имя модификатора (типа "Apps+Space")
+		static LPCWSTR GetHotkeyName(const ConEmuHotKey* ppHK, wchar_t (&szFull)[128]);
+		static void GetVkKeyName(BYTE vk, wchar_t (&szName)[32]);
+		// Извлечь сам VK
+		static DWORD GetHotkey(DWORD VkMod);
+		// набор флагов MOD_xxx для RegisterHotKey
+		static DWORD GetHotKeyMod(DWORD VkMod);
+		// Есть ли в этом (VkMod) хоткее - модификатор Mod (VK)
+		static bool  HasModifier(DWORD VkMod, BYTE Mod/*VK*/);
+		// Вернуть заданный VkMod, или 0 если не задан. nDescrID = vkXXX (e.g. vkMinimizeRestore)
+		DWORD GetHotkeyById(int nDescrID, const ConEmuHotKey** ppHK = NULL);
+		// Проверить, задан ли этот hotkey. nDescrID = vkXXX (e.g. vkMinimizeRestore)
+		bool IsHotkey(int nDescrID);
+		// Установить новый hotkey. nDescrID = vkXXX (e.g. vkMinimizeRestore).
+		void SetHotkeyById(int nDescrID, DWORD VkMod);
+		// Проверить, есть ли хоткеи с назначенным одиночным модификатором
+		bool isModifierExist(BYTE Mod/*VK*/, bool abStrictSingle = false);
+		// Есть ли такой хоткей или модификатор (актуально для VK_APPS)
+		bool isKeyOrModifierExist(BYTE Mod/*VK*/);
+		// Проверить на дубли
+		void CheckHotkeyUnique();
+	private:
+		void LoadHotkeys(SettingsBase* reg);
+		void SaveHotkeys(SettingsBase* reg);
+		// nHostMod в младших 3-х байтах может содержать VK (модификаторы).
+		// Функция проверяет, чтобы они не дублировались
+		void TestHostkeyModifiers(DWORD& nHostMod);
+	public:
 
 		/* *** Заголовки табов *** */
 		//reg->Load(L"TabConsole", szTabConsole, countof(szTabConsole));
 		WCHAR szTabConsole[32];
+		//reg->Load(L"TabSkipWords", szTabSkipWords, countof(szTabSkipWords));
+		WCHAR szTabSkipWords[255];
+		//reg->Load(L"TabPanels", szTabPanels, countof(szTabPanels));
+		WCHAR szTabPanels[32];
 		//reg->Load(L"TabEditor", szTabEditor, countof(szTabEditor));
 		WCHAR szTabEditor[32];
 		//reg->Load(L"TabEditorModified", szTabEditorModified, countof(szTabEditorModified));
@@ -553,7 +1170,12 @@ struct Settings
 		DWORD nAffinity;
 
 		//reg->Load(L"UseInjects", isUseInjects);
-		bool isUseInjects;
+		bool isUseInjects; // 0 - off, 1 - always /*, 2 - only executable*/. Note, Root process is infiltrated always.
+		//reg->Load(L"ProcessAnsi", isProcessAnsi);
+		bool isProcessAnsi; // ANSI X3.64 & XTerm-256-colors Support
+		//reg->Load(L"UseClink", mb_UseClink);
+		bool mb_UseClink; // использовать расширение командной строки (ReadConsole)
+		bool isUseClink();
 		//reg->Load(L"PortableReg", isPortableReg);
 		bool isPortableReg;
 
@@ -601,15 +1223,22 @@ struct Settings
 		HotGuiMacro Macros[24];
 		
 	public:
+		ConEmuHotKey* AllocateHotkeys();
 		void LoadSettings();
 		void InitSettings();
+		void LoadCmdTasks(SettingsBase* reg, bool abFromOpDlg = false);
+		void LoadPalettes(SettingsBase* reg);
 		BOOL SaveSettings(BOOL abSilent = FALSE);
+		void SaveAppSettings(SettingsBase* reg);
+		bool SaveCmdTasks(SettingsBase* reg);
 		void SaveSizePosOnExit();
 		void SaveConsoleFont();
+		void SaveFindOptions(SettingsBase* reg = NULL);
 		void UpdateMargins(RECT arcMargins);
 	public:
 		void HistoryCheck();
 		void HistoryAdd(LPCWSTR asCmd);
+		void HistoryReset();
 		LPCWSTR HistoryGet();
 		//void UpdateConsoleMode(DWORD nMode);
 		//BOOL CheckConIme();
@@ -619,25 +1248,6 @@ struct Settings
 		
 		void GetSettingsType(wchar_t (&szType)[8], bool& ReadOnly);
 		
-	private:
-		// reg->Load(L"ColorTableNN", Colors[i]);
-		COLORREF Colors[0x20];
-		
-		bool mb_FadeInitialized;
-		
-		DWORD mn_FadeMul;
-		COLORREF ColorsFade[0x20];
-		inline BYTE GetFadeColorItem(BYTE c);
-		
-		bool TestHostkeyModifiers();
-		static BYTE CheckHostkeyModifier(BYTE vk);
-		static void ReplaceHostkey(BYTE vk, BYTE vkNew);
-		static void AddHostkey(BYTE vk);
-		static void TrimHostkeys();
-		static bool MakeHostkeyModifier();
-		static BYTE HostkeyCtrlId2Vk(WORD nID);
-		BYTE mn_HostModOk[15], mn_HostModSkip[15];
-		bool isHostkeySingleLR(WORD vk, WORD vkC, WORD vkL, WORD vkR);
 	private:
 		struct CEFontRange
 		{

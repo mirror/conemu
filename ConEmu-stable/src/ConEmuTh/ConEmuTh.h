@@ -32,8 +32,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/common.hpp"
 #include "../Common/WinObjects.h"
 #include "ConEmuTh_Lang.h"
+#include "ImgCache.h"
 
-#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
+//#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
 
 #ifdef _DEBUG
 	#define OUTPUTDEBUGSTRING(m) OutputDebugString(m)
@@ -109,7 +110,7 @@ struct CePluginPanelItem
 	CEFAR_FIND_DATA  FindData;
 	BOOL             bVirtualItem;
 	DWORD_PTR        UserData;
-	UINT             PreviewLoaded; // пытались ли уже загружать превьюшку (|1-загрузили Shell, |2-загрузили Preview, |4-Thumbnail был реально загружен, а не только извлечена информаци€)
+	ImgLoadType      PreviewLoaded; // пытались ли уже загружать превьюшку, и что удалось загрузить
 	const wchar_t*   pszFullName; // ƒл€ упрощени€ отрисовки - ссылка на временный буфер
 	const wchar_t*   pszDescription; // ссылка на данные в этом CePluginPanelItem
 	unsigned __int64 Flags;
@@ -117,6 +118,14 @@ struct CePluginPanelItem
 	BOOL             bIsCurrent; // “ќЋ№ ќ »Ќ‘ќ–ћј÷»ќЌЌќ, ориентироватьс€ на это поле нельз€, оно может быть неактуально
 	//BOOL           bItemColorLoaded;
 	//COLORREF       crFore, crBack;
+	struct
+	{
+		BOOL Loaded;
+		unsigned __int64 Flags;
+		COLORREF ForegroundColor;
+		COLORREF BackgroundColor;
+		int PosX, PosY; // 1-based, relative to Far workspace
+	} BisInfo;
 };
 
 struct CePluginPanelItemColor
@@ -231,7 +240,8 @@ extern HANDLE ghDisplayThread; extern DWORD gnDisplayThreadId;
 //extern HWND ghLeftView, ghRightView;
 //extern bool gbWaitForKeySequenceEnd;
 extern DWORD gnWaitForKeySeqTick;
-extern DWORD gnFarPanelSettings, gnFarInterfaceSettings;
+extern CEFarPanelSettings gFarPanelSettings;
+extern CEFarInterfaceSettings gFarInterfaceSettings;
 //class CRgnDetect;
 //extern CRgnDetect *gpRgnDetect;
 
@@ -264,7 +274,7 @@ extern DWORD gnRgnDetectFlags;
 void FUNC_X(GetPluginInfoW)(void* piv);
 void FUNC_Y(GetPluginInfoW)(void* piv);
 
-HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item);
+HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item,bool FromMacro);
 HANDLE WINAPI OpenPluginW1(int OpenFrom,INT_PTR Item);
 HANDLE WINAPI OpenPluginW2(int OpenFrom,const GUID* Guid,INT_PTR Data);
 
@@ -286,7 +296,7 @@ void SavePanelViewState(BOOL bLeftPanel, DWORD dwMode);
 
 bool isPreloadByDefault();
 
-void EntryPoint(int OpenFrom,INT_PTR Item);
+void EntryPoint(int OpenFrom,INT_PTR Item,bool FromMacro);
 BOOL LoadFarVersion();
 void StartPlugin(BOOL abManual);
 void ExitPlugin(void);
@@ -317,6 +327,9 @@ BOOL IsMacroActive();
 BOOL IsMacroActiveA();
 BOOL FUNC_X(IsMacroActiveW)();
 BOOL FUNC_Y(IsMacroActiveW)();
+int GetMacroArea();
+int FUNC_X(GetMacroAreaW)();
+int FUNC_Y(GetMacroAreaW)();
 //CeFullPanelInfo* LoadPanelInfo(BOOL abActive);
 CeFullPanelInfo* GetActivePanel();
 BOOL LoadPanelInfoA(BOOL abActive);

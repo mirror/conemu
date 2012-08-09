@@ -33,11 +33,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 BOOL CreateMainWindow();
 BOOL CheckCreateAppWindow();
 
-int __stdcall _MDEBUG_TRAP(LPCSTR asFile, int anLine);
+void SkipOneShowWindow();
 
-#ifdef MSGLOGGER
-void DebugLogFile(LPCSTR asMessage);
-void DebugLogBufSize(HANDLE h, COORD sz);
-void DebugLogPos(HWND hw, int x, int y, int w, int h, LPCSTR asFunc);
-void DebugLogMessage(HWND h, UINT m, WPARAM w, LPARAM l, BOOL posted, BOOL extra);
-#endif
+void UpdateWin7TaskList(bool bForce);
+
+int __stdcall _MDEBUG_TRAP(LPCSTR asFile, int anLine);

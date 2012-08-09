@@ -1,6 +1,8 @@
 NAME = ConEmuHk
 SRCS = Entry.cpp \
+       Ansi.cpp \
        ConEmuHooks.cpp \
+       ExtConsole.cpp \
        Injects.cpp \
        RegHooks.cpp \
        SetHook.cpp \
@@ -10,6 +12,7 @@ SRCS = Entry.cpp \
        ../common/Common.cpp \
        ../common/ConEmuCheck.cpp \
        ../common/Execute.cpp \
+       ../common/InQueue.cpp \
        ../common/MAssert.cpp \
        ../common/MSecurity.cpp \
        ../common/MStrSafe.cpp \

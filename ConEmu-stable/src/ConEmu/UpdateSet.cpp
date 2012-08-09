@@ -26,9 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
-#pragma once
-
+#define HIDE_USE_EXCEPTION_INFO
 #include "header.h"
 #include "UpdateSet.h"
 #include "ConEmu.h"
@@ -64,7 +62,7 @@ void ConEmuUpdateSettings::ResetToDefaults()
 	szUpdateVerLocation = NULL;
 	isUpdateCheckOnStartup = false;
 	isUpdateCheckHourly = false;
-	isUpdateConfirmDownload = true;
+	isUpdateConfirmDownload = true; // true-Show MessageBox, false-notify via TSA only
 	isUpdateUseBuilds = 0; // 0-спросить пользователя при первом запуске, 1-stable only, 2-latest
 	isUpdateUseProxy = false;
 	szUpdateProxy = szUpdateProxyUser = szUpdateProxyPassword = NULL; // "Server:port"
@@ -75,7 +73,8 @@ void ConEmuUpdateSettings::ResetToDefaults()
 	szUpdateExeCmdLineDef = lstrdup(L"\"%1\" /p:%3 /qr");
 	SafeFree(szUpdateExeCmdLine);
 
-	wchar_t* pszArcPath = NULL; BOOL bWin64 = IsWindows64(NULL);
+	bool bWinRar = false;
+	wchar_t* pszArcPath = NULL; BOOL bWin64 = IsWindows64();
 	for (int i = 0; !(pszArcPath && *pszArcPath) && (i <= 5); i++)
 	{
 		SettingsRegistry regArc;
@@ -83,29 +82,44 @@ void ConEmuUpdateSettings::ResetToDefaults()
 		{
 		case 0:
 			if (regArc.OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\7-Zip", KEY_READ|(bWin64?KEY_WOW64_32KEY:0)))
+			{
 				regArc.Load(L"Path", &pszArcPath);
+			}
 			break;
 		case 1:
 			if (bWin64 && regArc.OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\7-Zip", KEY_READ|KEY_WOW64_64KEY))
+			{
 				regArc.Load(L"Path", &pszArcPath);
+			}
 			break;
 		case 2:
 			if (regArc.OpenKey(HKEY_CURRENT_USER, L"SOFTWARE\\7-Zip", KEY_READ))
+			{
 				regArc.Load(L"Path", &pszArcPath);
+			}
 			break;
 		case 3:
 			if (regArc.OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WinRAR", KEY_READ|(bWin64?KEY_WOW64_32KEY:0)))
+			{
+				bWinRar = true;
 				regArc.Load(L"exe32", &pszArcPath);
+			}
 			break;
 		case 4:
 			if (bWin64 && regArc.OpenKey(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WinRAR", KEY_READ|KEY_WOW64_64KEY))
+			{
+				bWinRar = true;
 				regArc.Load(L"exe64", &pszArcPath);
+			}
 			break;
 		case 5:
 			if (regArc.OpenKey(HKEY_CURRENT_USER, L"SOFTWARE\\WinRAR", KEY_READ))
 			{
+				bWinRar = true;
 				if (!regArc.Load(L"exe32", &pszArcPath) && bWin64)
+				{
 					regArc.Load(L"exe64", &pszArcPath);
+				}
 			}
 			break;
 		}
@@ -122,15 +136,25 @@ void ConEmuUpdateSettings::ResetToDefaults()
 		if (szUpdateArcCmdLineDef)
 		{
 			if (pszExt && lstrcmpi(pszExt, L".exe") == 0)
+			{
+				_ASSERTE(bWinRar==true);
+				//Issue 537: old WinRAR beta's fails
+				//_wsprintf(szUpdateArcCmdLineDef, SKIPLEN(cchMax) L"\"%s\" x -y \"%%1\"%s", pszArcPath, bWinRar ? L" \"%%2\\\"" : L"");
 				_wsprintf(szUpdateArcCmdLineDef, SKIPLEN(cchMax) L"\"%s\" x -y \"%%1\"", pszArcPath);
+			}
 			else
-				_wsprintf(szUpdateArcCmdLineDef, SKIPLEN(cchMax) L"\"%s\\7zg.exe\" x -y \"%%1\"", pszArcPath);
+			{
+				_ASSERTE(bWinRar==false);
+				int nLen = lstrlen(pszArcPath);
+				bool bNeedSlash = (*pszArcPath && (pszArcPath[nLen-1] != L'\\')) ? true : false;
+				_wsprintf(szUpdateArcCmdLineDef, SKIPLEN(cchMax) L"\"%s%s7zg.exe\" x -y \"%%1\"", pszArcPath, bNeedSlash ? L"\\" : L"");
+			}
 		}
 	}
 	SafeFree(pszArcPath);
 	SafeFree(szUpdateArcCmdLine);
 
-	szUpdateDownloadPath = lstrdup(L"%TEMP%");
+	szUpdateDownloadPath = lstrdup(L"%TEMP%\\ConEmu");
 	isUpdateLeavePackages = false;
 	szUpdatePostUpdateCmd = lstrdup(L"echo Last successful update>ConEmuUpdate.info && date /t>>ConEmuUpdate.info && time /t>>ConEmuUpdate.info"); // Юзер может чего-то свое делать с распакованными файлами
 }
@@ -209,10 +233,40 @@ bool ConEmuUpdateSettings::UpdatesAllowed(wchar_t (&szReason)[128])
 		}
 		break;
 	case 2:
-		if (!*UpdateArcCmdLine())
 		{
-			wcscpy_c(szReason, L"Update.ArcCmdLine is not specified");
-			return false; // Не указана строка запуска архиватора
+			LPCWSTR pszCmd = UpdateArcCmdLine();
+			if (!*pszCmd)
+			{
+				wcscpy_c(szReason, L"Update.ArcCmdLine is not specified");
+				return false; // Не указана строка запуска архиватора
+			}
+			wchar_t szExe[MAX_PATH+1] = {};
+			NextArg(&pszCmd, szExe);
+			pszCmd = PointToName(szExe);
+			if (!pszCmd || !*pszCmd)
+			{
+				wcscpy_c(szReason, L"Update.ArcCmdLine is invalid");
+				return false; // Ошибка в строке запуска архиватора
+			}
+			if ((lstrcmpi(pszCmd, L"WinRar.exe") == 0) || (lstrcmpi(pszCmd, L"Rar.exe") == 0) || (lstrcmpi(pszCmd, L"UnRar.exe") == 0))
+			{
+				// Issue 537: AutoUpdate to the version 120509x64 unpacks to the wrong folder
+				HKEY hk;
+				DWORD nSubFolder = 0;
+				if (0 == RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\WinRAR\\Extraction\\Profile", 0, KEY_READ, &hk))
+				{
+					DWORD nSize = sizeof(nSubFolder);
+					if (0 != RegQueryValueEx(hk, L"UnpToSubfolders", NULL, NULL, (LPBYTE)&nSubFolder, &nSize))
+						nSubFolder = 0;
+					RegCloseKey(hk);
+				}
+
+				if (nSubFolder)
+				{
+					wcscpy_c(szReason, L"Update.ArcCmdLine: Unwanted option\n[HKCU\\Software\\WinRAR\\Extraction\\Profile]\n\"UnpToSubfolders\"=1");
+					return false; // Ошибка в настройке архиватора
+				}
+			}
 		}
 		break;
 	default:

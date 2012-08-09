@@ -38,8 +38,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#define MCHKHEAP
 #define DEBUGSTRMENU(s) //DEBUGSTR(s)
 #define DEBUGSTRINPUT(s) //DEBUGSTR(s)
-#define DEBUGSTRDLGEVT(s) //OutputDebugStringW(s)
+#define DEBUGSTRDLGEVT(s) //DEBUGSTR(s)
 #define DEBUGSTRCMD(s) DEBUGSTR(s)
+#define DEBUGSTRACTIVATE(s) DEBUGSTR(s)
 
 
 //#include <stdio.h>
@@ -229,11 +230,83 @@ DWORD GetMainThreadId();
 int gnSynchroCount = 0;
 bool gbSynchroProhibited = false;
 bool gbInputSynchroPending = false;
-void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName);
+//void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName);
 
-struct HookModeFar gFarMode = {sizeof(HookModeFar), TRUE};
+struct HookModeFar gFarMode = {sizeof(HookModeFar), TRUE/*bFarHookMode*/};
 extern SetFarHookMode_t SetFarHookMode;
 
+
+PluginAndMenuCommands gpPluginMenu[menu_Last] = 
+{
+	{CEMenuEditOutput, menu_EditConsoleOutput, pcc_EditConsoleOutput},
+	{CEMenuViewOutput, menu_ViewConsoleOutput, pcc_ViewConsoleOutput},
+	{0, menu_Separator1}, // Separator
+	{CEMenuShowHideTabs, menu_SwitchTabVisible, pcc_SwitchTabVisible},
+	{CEMenuNextTab, menu_SwitchTabNext, pcc_SwitchTabNext},
+	{CEMenuPrevTab, menu_SwitchTabPrev, pcc_SwitchTabPrev},
+	{CEMenuCommitTab, menu_SwitchTabCommit, pcc_SwitchTabCommit},
+	{CEMenuShowTabsList, menu_ShowTabsList},
+	{0, menu_Separator2},
+	{CEMenuGuiMacro, menu_ConEmuMacro}, // должен вызываться "по настоящему", а не через callplugin
+	{0, menu_Separator3},
+	{CEMenuAttach, menu_AttachToConEmu, pcc_AttachToConEmu},
+	{0, menu_Separator4},
+	{CEMenuDebug, menu_StartDebug, pcc_StartDebug},
+	{CEMenuConInfo, menu_ConsoleInfo, pcc_StartDebug},
+};
+bool pcc_Selected(PluginMenuCommands nMenuID)
+{
+	bool bSelected = false;
+	switch (nMenuID)
+	{
+	case menu_EditConsoleOutput:
+		if (ConEmuHwnd && IsWindow(ConEmuHwnd))
+			bSelected = true;
+		break;
+	case menu_AttachToConEmu:
+		if (!((ConEmuHwnd && IsWindow(ConEmuHwnd)) || IsTerminalMode()))
+			bSelected = true;
+		break;
+	case menu_ViewConsoleOutput:
+	case menu_SwitchTabVisible:
+	case menu_SwitchTabNext:
+	case menu_SwitchTabPrev:
+	case menu_SwitchTabCommit:
+	case menu_ConEmuMacro:
+	case menu_StartDebug:
+	case menu_ConsoleInfo:
+		break;
+	}
+	return bSelected;
+}
+bool pcc_Disabled(PluginMenuCommands nMenuID)
+{
+	bool bDisabled = false;
+	switch (nMenuID)
+	{
+	case menu_AttachToConEmu:
+		if ((ConEmuHwnd && IsWindow(ConEmuHwnd)) || IsTerminalMode())
+			bDisabled = true;
+		break;
+	case menu_StartDebug:
+		if (IsDebuggerPresent() || IsTerminalMode())
+			bDisabled = true;
+		break;
+	case menu_EditConsoleOutput:
+	case menu_ViewConsoleOutput:
+	case menu_SwitchTabVisible:
+	case menu_SwitchTabNext:
+	case menu_SwitchTabPrev:
+	case menu_SwitchTabCommit:
+	case menu_ConEmuMacro:
+		if (!ConEmuHwnd || !IsWindow(ConEmuHwnd))
+			bDisabled = true;
+		break;
+	case menu_ConsoleInfo:
+		break;
+	}
+	return bDisabled;
+}
 
 
 
@@ -290,7 +363,7 @@ void CheckConEmuDetached()
 }
 
 BOOL gbInfoW_OK = FALSE;
-HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item)
+HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item,bool FromMacro)
 {
 	if (!gbInfoW_OK)
 		return INVALID_HANDLE_VALUE;
@@ -313,9 +386,10 @@ HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item)
 	else
 	{
 		//if (!gbCmdCallObsolete) {
-		INT_PTR nID = -1; // выбор из меню
+		INT_PTR nID = pcc_None; // выбор из меню
 
-		if ((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO)
+		//if ((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO)
+		if (FromMacro)
 		{
 			if (Item >= 0x4000)
 			{
@@ -354,7 +428,7 @@ HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item)
 				return INVALID_HANDLE_VALUE;
 			}
 
-			if (Item >= 1 && Item <= 8)
+			if (Item >= pcc_First && Item <= pcc_Last)
 			{
 				nID = Item; // Будет сразу выполнена команда
 			}
@@ -380,7 +454,7 @@ HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item)
 			}
 		}
 
-		ShowPluginMenu((int)nID);
+		ShowPluginMenu((PluginCallCommands)nID);
 		//} else {
 		//	gbCmdCallObsolete = FALSE;
 		//}
@@ -394,7 +468,8 @@ HANDLE WINAPI OpenPluginW(int OpenFrom,INT_PTR Item)
 	if (!gbInfoW_OK)
 		return INVALID_HANDLE_VALUE;
 	
-	return OpenPluginWcmn(OpenFrom, Item);
+	// Far2 api!
+	return OpenPluginWcmn(OpenFrom, Item, ((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO));
 }
 
 void TouchReadPeekConsoleInputs(int Peek /*= -1*/)
@@ -596,6 +671,8 @@ void OnMainThreadActivated()
 	SetEvent(ghReqCommandEvent);
 }
 
+DWORD gnPeekReadCount = 0;
+
 // Вызывается только в основной нити
 // и ТОЛЬКО если фар считывает один (1) INPUT_RECORD
 void OnConsolePeekReadInput(BOOL abPeek)
@@ -613,6 +690,9 @@ void OnConsolePeekReadInput(BOOL abPeek)
 #endif
 	bool lbNeedSynchro = false;
 
+	// Для того, чтобы WaitPluginActivateion знал, живой фар, или не очень...
+	gnPeekReadCount++;
+
 	if (gpConMapInfo && gpFarInfo && gpFarInfoMapping)
 		TouchReadPeekConsoleInputs(abPeek ? 1 : 0);
 
@@ -628,6 +708,7 @@ void OnConsolePeekReadInput(BOOL abPeek)
 
 			if (nMapPID == 0 || nMapPID != gnSelfPID)
 			{
+				WARNING("***ALT*** не нужно звать ConEmuC, если текущий процесс уже альт.сервер");
 				bNeedReload = true;
 				dwLastTickCount = GetTickCount();
 				CESERVER_REQ_HDR in;
@@ -860,7 +941,7 @@ void DebugInputPrint(INPUT_RECORD r)
 	//		_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"Unknown event type (%i)\n", r.EventType);
 	//	}
 	//}
-	OutputDebugString(szDbg);
+	DEBUGSTR(szDbg);
 }
 #endif
 
@@ -1352,7 +1433,7 @@ int WINAPI ProcessSynchroEventW(int Event,void *Param)
 
 				wchar_t szDbg[255];
 				_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"FarWindow: %s activated (was %s)\n", pszCurType, pszLastType);
-				OutputDebugStringW(szDbg);
+				DEBUGSTR(szDbg);
 				nLastType = nCurType;
 			}
 		}
@@ -1477,6 +1558,27 @@ ExportFunc Far3Func[] =
 BOOL gbExitFarCalled = FALSE;
 void ExitFarCmn();
 
+void ShutdownPluginStep(LPCWSTR asInfo, int nParm1 /*= 0*/, int nParm2 /*= 0*/, int nParm3 /*= 0*/, int nParm4 /*= 0*/)
+{
+#ifdef _DEBUG
+	static int nDbg = 0;
+	if (!nDbg)
+		nDbg = IsDebuggerPresent() ? 1 : 2;
+	if (nDbg != 1)
+		return;
+	wchar_t szFull[512];
+	msprintf(szFull, countof(szFull), L"%u:ConEmuP:PID=%u:TID=%u: ",
+		GetTickCount(), GetCurrentProcessId(), GetCurrentThreadId());
+	if (asInfo)
+	{
+		int nLen = lstrlen(szFull);
+		msprintf(szFull+nLen, countof(szFull)-nLen, asInfo, nParm1, nParm2, nParm3, nParm4);
+	}
+	lstrcat(szFull, L"\n");
+	OutputDebugString(szFull);
+#endif
+}
+
 
 BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
@@ -1509,7 +1611,7 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 			//TODO("перенести инициализацию фаровских callback'ов в SetStartupInfo, т.к. будет грузиться как Inject!");
 			//if (!StartupHooks(ghPluginModule)) {
 			//	_ASSERTE(FALSE);
-			//	OutputDebugString(L"!!! Can't install injects!!!\n");
+			//	DEBUGSTR(L"!!! Can't install injects!!!\n");
 			//}
 			// Check Terminal mode
 			TerminalMode = isTerminalMode();
@@ -1536,17 +1638,19 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 					if (ConEmuHwnd)
 					{
 						_ASSERTE(FALSE);
-						OutputDebugString(L"!!! Can't install injects!!!\n");
+						DEBUGSTR(L"!!! Can't install injects!!!\n");
 					}
 					else
 					{
-						OutputDebugString(L"No GUI, injects was not installed!\n");
+						DEBUGSTR(L"No GUI, injects was not installed!\n");
 					}
 				}
 			}
 		}
 		break;
 		case DLL_PROCESS_DETACH:
+			ShutdownPluginStep(L"DLL_PROCESS_DETACH");
+
 			if (!gbExitFarCalled)
 			{
 				_ASSERTE(gbExitFarCalled == TRUE);
@@ -1590,6 +1694,8 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 			}
 
 			HeapDeinitialize();
+
+			ShutdownPluginStep(L"DLL_PROCESS_DETACH - done");
 			break;
 	}
 
@@ -2050,6 +2156,62 @@ void ExecuteSynchro()
 	}
 }
 
+static DWORD WaitPluginActivateion(DWORD nCount, HANDLE *lpHandles, BOOL bWaitAll, DWORD dwMilliseconds)
+{
+	DWORD nWait = WAIT_TIMEOUT;
+	if (IS_SYNCHRO_ALLOWED)
+	{
+		DWORD nStepWait = 1000;
+		DWORD nPrevCount = gnPeekReadCount;
+
+		#ifdef _DEBUG
+		if (IsDebuggerPresent())
+		{
+			nStepWait = 30000;
+			if (dwMilliseconds && (dwMilliseconds < 60000))
+				dwMilliseconds = 60000;
+		}
+		#endif
+
+		DWORD nStartTick = GetTickCount(), nCurrentTick = 0;
+		DWORD nTimeout = nStartTick + dwMilliseconds;
+		do {
+			nWait = WaitForMultipleObjects(nCount, lpHandles, bWaitAll, min(dwMilliseconds,nStepWait));
+			if (((nWait >= WAIT_OBJECT_0) && (nWait < (WAIT_OBJECT_0+nCount))) || (nWait != WAIT_TIMEOUT))
+			{
+				_ASSERTE((nWait >= WAIT_OBJECT_0) && (nWait < (WAIT_OBJECT_0+nCount)));
+				break; // Succeded
+			}
+
+			nCurrentTick = GetTickCount();
+
+			if ((nWait == WAIT_TIMEOUT) && (nPrevCount == gnPeekReadCount) && (dwMilliseconds > 1000)
+				#ifdef _DEBUG
+				&& (!IsDebuggerPresent() || (nCurrentTick > (nStartTick + nStepWait)))
+				#endif
+				)
+			{
+				// Ждать дальше смысла видимо нет, фар не дергает (Peek/Read)Input
+				break;
+			}
+			// Если вдруг произошел облом с Syncho (почему?), дернем еще раз
+			ExecuteSynchro();
+		} while (dwMilliseconds && ((dwMilliseconds == INFINITE) || (nCurrentTick <= nTimeout)));
+
+		#ifdef _DEBUG
+		if (nWait == WAIT_TIMEOUT)
+		{
+			DEBUGSTRACTIVATE(L"ConEmu plugin activation failed");
+		}
+		#endif
+	}
+	else
+	{
+		nWait = WaitForMultipleObjects(nCount, lpHandles, bWaitAll, dwMilliseconds);
+	}
+	return nWait;
+}
+
 // Должна вызываться ТОЛЬКО из нитей уже заблокированных семафором ghPluginSemaphore
 static BOOL ActivatePlugin(
     DWORD nCmd, LPVOID pCommandData,
@@ -2069,7 +2231,10 @@ static BOOL ActivatePlugin(
 	DEBUGSTRMENU(L"*** Waiting for plugin activation\n");
 
 	if (nCmd == CMD_REDRAWFAR || nCmd == CMD_FARPOST)
+	{
+		WARNING("Оптимизировать!");
 		nTimeout = min(1000,nTimeout); // чтобы не зависало при попытке ресайза, если фар не отзывается.
+	}
 
 	if (gbSynchroProhibited)
 	{
@@ -2080,6 +2245,10 @@ static BOOL ActivatePlugin(
 	//if (gFarVersion.dwVerMajor = 2 && gFarVersion.dwBuild >= 1006)
 	else if (IS_SYNCHRO_ALLOWED)
 	{
+		#ifdef _DEBUG
+		int iArea = (gFarVersion.dwVerMajor>=2) ? GetMacroArea() : -1;
+		#endif
+
 		InterlockedIncrement(&gnAllowDummyMouseEvent);
 		ExecuteSynchro();
 
@@ -2093,14 +2262,14 @@ static BOOL ActivatePlugin(
 				{
 					gbUngetDummyMouseEvent = TRUE;
 					// попытаться еще раз
-					nWait = WaitForMultipleObjects(nCount, hEvents, FALSE, nTimeout);
+					nWait = WaitPluginActivateion(nCount, hEvents, FALSE, nTimeout);
 				}
 			}
 		}
 		else
 		{
 			// Подождать активации. Сколько ждать - может указать вызывающая функция
-			nWait = WaitForMultipleObjects(nCount, hEvents, FALSE, nTimeout);
+			nWait = WaitPluginActivateion(nCount, hEvents, FALSE, nTimeout);
 		}
 
 		if (gnAllowDummyMouseEvent > 0)
@@ -2118,7 +2287,7 @@ static BOOL ActivatePlugin(
 	else
 	{
 		// Подождать активации. Сколько ждать - может указать вызывающая функция
-		nWait = WaitForMultipleObjects(nCount, hEvents, FALSE, nTimeout);
+		nWait = WaitPluginActivateion(nCount, hEvents, FALSE, nTimeout);
 	}
 
 
@@ -2126,14 +2295,15 @@ static BOOL ActivatePlugin(
 	{
 		//110712 - если CMD_REDRAWFAR, то показывать Assert смысла мало, фар может быть занят
 		//  например чтением панелей?
-		_ASSERTE(nWait==WAIT_OBJECT_0 || (nCmd==CMD_REDRAWFAR));
+		//На CMD_SETWINDOW тоже ругаться не будем - окошко может быть заблокировано, или фар занят.
+		_ASSERTE(nWait==WAIT_OBJECT_0 || (nCmd==CMD_REDRAWFAR) || (nCmd==CMD_SETWINDOW));
 
 		if (nWait == (WAIT_OBJECT_0+1))
 		{
 			if (!gbReqCommandWaiting)
 			{
 				// Значит плагин в основной нити все-таки активировался, подождем еще?
-				OutputDebugString(L"!!! Plugin execute timeout !!!\n");
+				DEBUGSTR(L"!!! Plugin execute timeout !!!\n");
 				nWait = WaitForMultipleObjects(nCount, hEvents, FALSE, nTimeout);
 			}
 
@@ -2179,7 +2349,7 @@ BOOL ProcessCommand(DWORD nCmd, BOOL bReqMainThread, LPVOID pCommandData, CESERV
 		bReqMainThread = FALSE;
 	}
 
-	//PRAGMA_ERROR("Это нужно делать только тогда, когда семафор уже заблокирован!");
+	//Это нужно делать только тогда, когда семафор уже заблокирован!
 	//if (gpCmdRet) { Free(gpCmdRet); gpCmdRet = NULL; }
 	//gpData = NULL; gpCursor = NULL;
 	WARNING("Тут нужно сделать проверку содержимого консоли");
@@ -2757,9 +2927,9 @@ BOOL ProcessCommand(DWORD nCmd, BOOL bReqMainThread, LPVOID pCommandData, CESERV
 				{
 					int nCurLen = lstrlen(pszMacro);
 					if (gFarVersion.dwVerMajor==1)
-						_wsprintf(pszMacro+nCurLen, SKIPLEN(cchMax-nCurLen) L" $if(Editor) AltF8 \"%i\" Enter $end", pCmd->nLine);
+						_wsprintf(pszMacro+nCurLen, SKIPLEN(cchMax-nCurLen) L" $if(Editor) AltF8 \"%i:%i\" Enter $end", pCmd->nLine, pCmd->nColon);
 					else
-						_wsprintf(pszMacro+nCurLen, SKIPLEN(cchMax-nCurLen) L" $if(Editor) AltF8 print(\"%i\") Enter $end", pCmd->nLine);
+						_wsprintf(pszMacro+nCurLen, SKIPLEN(cchMax-nCurLen) L" $if(Editor) AltF8 print(\"%i:%i\") Enter $end", pCmd->nLine, pCmd->nColon);
 				}
 
 				_wcscat_c(pszMacro, cchMax, L" $end");
@@ -2840,7 +3010,7 @@ BOOL FarSetConsoleSize(SHORT nNewWidth, SHORT nNewHeight)
 //	SHORT nWidth = nNewWidth; if (nWidth</*4*/MIN_CON_WIDTH) nWidth = /*4*/MIN_CON_WIDTH;
 //	SHORT nHeight = nNewHeight; if (nHeight</*3*/MIN_CON_HEIGHT) nHeight = /*3*/MIN_CON_HEIGHT;
 //	MConHandle hConOut ( L"CONOUT$" );
-//	COORD crMax = GetLargestConsoleWindowSize(hConOut);
+//	COORD crMax = MyGetLargestConsoleWindowSize(hConOut);
 //	if (crMax.X && nWidth > crMax.X) nWidth = crMax.X;
 //	if (crMax.Y && nHeight > crMax.Y) nHeight = crMax.Y;
 //
@@ -2875,12 +3045,12 @@ BOOL FarSetConsoleSize(SHORT nNewWidth, SHORT nNewHeight)
 	return lbRc;
 }
 
-void EmergencyShow()
-{
-	SetWindowPos(FarHwnd, HWND_TOP, 50,50,0,0, SWP_NOSIZE);
-	apiShowWindowAsync(FarHwnd, SW_SHOWNORMAL);
-	EnableWindow(FarHwnd, true);
-}
+//void EmergencyShow()
+//{
+//	SetWindowPos(FarHwnd, HWND_TOP, 50,50,0,0, SWP_NOSIZE);
+//	apiShowWindowAsync(FarHwnd, SW_SHOWNORMAL);
+//	EnableWindow(FarHwnd, true);
+//}
 
 static BOOL gbTryOpenMapHeader = FALSE;
 static BOOL gbStartupHooksAfterMap = FALSE;
@@ -2968,7 +3138,7 @@ void CloseMapHeader();
 //	//		CloseHandle(ghColorMappingOld); ghColorMappingOld = NULL;
 //	//	}
 //	//#endif
-//	COORD crMaxSize = GetLargestConsoleWindowSize(GetStdHandle(STD_OUTPUT_HANDLE));
+//	COORD crMaxSize = MyGetLargestConsoleWindowSize(GetStdHandle(STD_OUTPUT_HANDLE));
 //	nMapCells = max(crMaxSize.X,200) * max(crMaxSize.Y,200) * 2;
 //	if (gnColorMappingMaxCells > nMapCells)
 //		nMapCells = gnColorMappingMaxCells;
@@ -3150,7 +3320,7 @@ VOID WINAPI OnConsoleWasAttached(HookCallbackArg* pArgs)
 		// сразу переподцепимся к GUI
 		if (!Attach2Gui())
 		{
-			EmergencyShow();
+			EmergencyShow(FarHwnd);
 		}
 
 		// Сбрасываем после Attach2Gui, чтобы MonitorThreadProcW случайно
@@ -3217,7 +3387,7 @@ DWORD WINAPI MonitorThreadProcW(LPVOID lpParameter)
 
 				if (!TerminalMode && !IsWindowVisible(FarHwnd))
 				{
-					EmergencyShow();
+					EmergencyShow(FarHwnd);
 				}
 			}
 		}
@@ -3243,7 +3413,7 @@ DWORD WINAPI MonitorThreadProcW(LPVOID lpParameter)
 
 				if (!TerminalMode && !IsWindowVisible(FarHwnd))
 				{
-					EmergencyShow();
+					EmergencyShow(FarHwnd);
 				}
 			}
 		}
@@ -3507,11 +3677,11 @@ void CommonPluginStartup()
 		if (ConEmuHwnd)
 		{
 			_ASSERTE(FALSE);
-			OutputDebugString(L"!!! Can't install injects!!!\n");
+			DEBUGSTR(L"!!! Can't install injects!!!\n");
 		}
 		else
 		{
-			OutputDebugString(L"No GUI, injects was not installed!\n");
+			DEBUGSTR(L"No GUI, injects was not installed!\n");
 		}
 	}
 }
@@ -3781,7 +3951,7 @@ void InitHWND(/*HWND ahFarHwnd*/)
 		int tabCount = 0;
 		MSectionLock SC; SC.Lock(csTabs);
 		CreateTabs(1);
-		AddTab(tabCount, false, false, WTYPE_PANELS, NULL, NULL, 1, 0, 0);
+		AddTab(tabCount, false, false, WTYPE_PANELS, NULL, NULL, 1, 0, 0, 0);
 		// Сейчас отсылать не будем - выполним, когда вызовется SetStartupInfo -> CommonStartup
 		//SendTabs(tabCount=1, TRUE);
 		SC.Unlock();
@@ -4230,7 +4400,9 @@ BOOL CreateTabs(int windowCount)
 #endif
 
 BOOL AddTab(int &tabCount, bool losingFocus, bool editorSave,
-            int Type, LPCWSTR Name, LPCWSTR FileName, int Current, int Modified, int EditViewId)
+            int Type, LPCWSTR Name, LPCWSTR FileName,
+			int Current, int Modified, int Modal,
+			int EditViewId)
 {
 	BOOL lbCh = FALSE;
 	DEBUGSTR(L"--AddTab\n");
@@ -4246,6 +4418,7 @@ BOOL AddTab(int &tabCount, bool losingFocus, bool editorSave,
 		gpTabs->Tabs.tabs[0].Type = WTYPE_PANELS;
 		gpTabs->Tabs.tabs[0].Modified = 0; // Иначе GUI может ошибочно считать, что есть несохраненные редакторы
 		gpTabs->Tabs.tabs[0].EditViewId = 0;
+		gpTabs->Tabs.tabs[0].Modal = 0;
 
 		if (!tabCount)
 			tabCount++;
@@ -4268,15 +4441,38 @@ BOOL AddTab(int &tabCount, bool losingFocus, bool editorSave,
 		// when receiving saving event receiver is still reported as modified
 		if (editorSave && lstrcmpi(FileName, Name) == 0)
 			Modified = 0;
+		
 
-		lbCh = (gpTabs->Tabs.tabs[tabCount].Current != (Current/*losingFocus*/ ? 1 : 0)/*(losingFocus ? 0 : Current)*/) ||
-		       (gpTabs->Tabs.tabs[tabCount].Type != Type) ||
-		       (gpTabs->Tabs.tabs[tabCount].Modified != Modified) ||
-		       (lstrcmp(gpTabs->Tabs.tabs[tabCount].Name, Name) != 0);
+		// Облагородить заголовок таба с Ctrl-O
+		wchar_t szConOut[MAX_PATH];
+		LPCWSTR pszName = PointToName(Name);
+		if (pszName && (wmemcmp(pszName, L"CEM", 3) == 0))
+		{
+			LPCWSTR pszExt = PointToExt(pszName);
+			if (lstrcmpi(pszExt, L".tmp") == 0)
+			{
+				if (gFarVersion.dwVerMajor==1)
+				{
+					GetMsgA(CEConsoleOutput, szConOut);
+				}
+				else
+					lstrcpyn(szConOut, GetMsgW(CEConsoleOutput), countof(szConOut));
+				
+				Name = szConOut;
+			}
+		}
+		
+
+		lbCh = (gpTabs->Tabs.tabs[tabCount].Current != (Current/*losingFocus*/ ? 1 : 0)/*(losingFocus ? 0 : Current)*/)
+		    || (gpTabs->Tabs.tabs[tabCount].Type != Type)
+		    || (gpTabs->Tabs.tabs[tabCount].Modified != Modified)
+			|| (gpTabs->Tabs.tabs[tabCount].Modal != Modal)
+		    || (lstrcmp(gpTabs->Tabs.tabs[tabCount].Name, Name) != 0);
 		// when receiving losing focus event receiver is still reported as current
 		gpTabs->Tabs.tabs[tabCount].Type = Type;
 		gpTabs->Tabs.tabs[tabCount].Current = (Current/*losingFocus*/ ? 1 : 0)/*losingFocus ? 0 : Current*/;
 		gpTabs->Tabs.tabs[tabCount].Modified = Modified;
+		gpTabs->Tabs.tabs[tabCount].Modal = Modal;
 		gpTabs->Tabs.tabs[tabCount].EditViewId = EditViewId;
 
 		if (gpTabs->Tabs.tabs[tabCount].Current != 0)
@@ -4492,6 +4688,7 @@ void NotifyConEmuUnloaded()
 
 void StopThread(void)
 {
+	ShutdownPluginStep(L"StopThread");
 	#ifdef _DEBUG
 	LPCVOID lpPtrConInfo = gpConMapInfo;
 	#endif
@@ -4499,6 +4696,8 @@ void StopThread(void)
 	//LPVOID lpPtrColorInfo = gpColorerInfo; gpColorerInfo = NULL;
 	gbBgPluginsAllowed = FALSE;
 	NotifyConEmuUnloaded();
+
+	ShutdownPluginStep(L"...ClosingTabs");
 	CloseTabs();
 
 	//if (hEventCmd[CMD_EXIT])
@@ -4513,7 +4712,10 @@ void StopThread(void)
 	//	PostThreadMessage(gnInputThreadId, WM_QUIT, 0, 0);
 	//}
 
+	ShutdownPluginStep(L"...Stopping server");
 	PlugServerStop();
+
+	ShutdownPluginStep(L"...Finalizing");
 
 	SafeCloseHandle(ghPluginSemaphore);
 
@@ -4604,6 +4806,7 @@ void StopThread(void)
 	//CloseColorerHeader();
 
 	CommonShutdown();
+	ShutdownPluginStep(L"StopThread - done");
 }
 
 
@@ -4771,14 +4974,19 @@ int WINAPI ProcessDialogEventW(int Event, void *Param)
 
 void ExitFarCmn()
 {
+	ShutdownPluginStep(L"ExitFarCmn");
 	// Плагин выгружается, Вызывать Syncho больше нельзя
 	gbSynchroProhibited = true;
 	ShutdownHooks();
 	StopThread();
+
+	ShutdownPluginStep(L"ExitFarCmn - done");
 }
 
 void   WINAPI ExitFARW(void)
 {
+	ShutdownPluginStep(L"ExitFARW");
+
 	ExitFarCmn();
 
 	if (gbInfoW_OK)
@@ -4790,6 +4998,8 @@ void   WINAPI ExitFARW(void)
 	}
 
 	gbExitFarCalled = TRUE;
+
+	ShutdownPluginStep(L"ExitFARW - done");
 }
 
 void WINAPI ExitFARW3(void*)
@@ -4837,12 +5047,12 @@ void CheckResources(BOOL abFromStartup)
 	// Теперь он отвязан от gpConMapInfo
 	ReloadFarInfo(TRUE);
 
+	wchar_t szLang[64];
 	if (gpConMapInfo)  //2010-12-13 Имеет смысл только при запуске из-под ConEmu
 	{
-		wchar_t szLang[64];
 		GetEnvironmentVariable(L"FARLANG", szLang, 63);
 
-		if (abFromStartup || lstrcmpW(szLang, gsFarLang))
+		if (abFromStartup || lstrcmpW(szLang, gsFarLang) || !gdwServerPID)
 		{
 			wchar_t szTitle[1024] = {0};
 			GetConsoleTitleW(szTitle, 1024);
@@ -4850,9 +5060,11 @@ void CheckResources(BOOL abFromStartup)
 			InitResources();
 			DWORD dwServerPID = 0;
 			FindServerCmd(CECMD_FARLOADED, dwServerPID);
+			_ASSERTE(dwServerPID!=0);
 			gdwServerPID = dwServerPID;
 			SetConsoleTitleW(szTitle);
 		}
+		_ASSERTE(gdwServerPID!=0);
 	}
 }
 
@@ -5029,6 +5241,25 @@ int ShowMessage(int aiMsg, int aiButtons)
 	else
 		return FUNC_X(ShowMessageW)(aiMsg, aiButtons);
 }
+int ShowMessage(LPCWSTR asMsg, int aiButtons, bool bWarning)
+{
+	if (!asMsg)
+		return -1;
+
+	if (gFarVersion.dwVerMajor==1)
+	{
+		int nLen = lstrlen(asMsg)+1;
+		char* psz = (char*)malloc(nLen);
+		WideCharToMultiByte(CP_OEMCP, 0, asMsg, nLen, psz, nLen, 0,0);
+		int nBtn = ShowMessageA(psz, aiButtons, bWarning);
+		free(psz);
+		return nBtn;
+	}
+	else if (gFarVersion.dwBuild>=FAR_Y_VER)
+		return FUNC_Y(ShowMessageW)(asMsg, aiButtons, bWarning);
+	else
+		return FUNC_X(ShowMessageW)(asMsg, aiButtons, bWarning);
+}
 int ShowMessageGui(int aiMsg, int aiButtons)
 {
 	wchar_t wszBuf[MAX_PATH];
@@ -5169,25 +5400,9 @@ void PostMacro(const wchar_t* asMacro, INPUT_RECORD* apRec)
 }
 
 
-void ShowPluginMenu(int nID /*= -1*/)
+void ShowPluginMenu(PluginCallCommands nCallID /*= pcc_None*/)
 {
 	int nItem = -1;
-
-	enum {
-		menu_EditConsoleOutput = 0,
-		menu_ViewConsoleOutput,
-		menu_Separator1,
-		menu_SwitchTabVisible,
-		menu_SwitchTabNext,
-		menu_SwitchTabPrev,
-		menu_SwitchTabCommit,
-		menu_Separator2,
-		menu_ConEmuMacro, // должен вызываться "по настоящему", а не через callplugin
-		menu_Separator3,
-		menu_AttachToConEmu,
-		menu_Separator4,
-		menu_StartDebug,
-	};
 
 	if (!FarHwnd)
 	{
@@ -5203,48 +5418,54 @@ void ShowPluginMenu(int nID /*= -1*/)
 
 	CheckConEmuDetached();
 
-	if (nID != -1)
+	if (nCallID != pcc_None)
 	{
 		// Команды CallPlugin
-		switch (nID)
+		for (size_t i = 0; i < countof(gpPluginMenu); i++)
 		{
-		case 1:
-			nItem = menu_EditConsoleOutput; break;
-		case 2:
-			nItem = menu_ViewConsoleOutput; break;
-		case 3:
-			nItem = menu_SwitchTabVisible; break;
-		case 4:
-			nItem = menu_SwitchTabNext; break;
-		case 5:
-			nItem = menu_SwitchTabPrev; break;
-		case 6:
-			nItem = menu_SwitchTabCommit; break;
-		case 7:
-			nItem = menu_AttachToConEmu; break;
-		case 8:
-			nItem = menu_StartDebug; break;
-		default:
-			_ASSERTE(nID>=1 && nID<=8);
-			break;
+			if (gpPluginMenu[i].CallID == nCallID)
+			{
+				nItem = gpPluginMenu[i].MenuID;
+				break;
+			}
 		}
+		_ASSERTE(nItem!=-1);
 
 		SHOWDBGINFO(L"*** ShowPluginMenu used default item\n");
 	}
-	else if (gFarVersion.dwVerMajor==1)
-	{
-		SHOWDBGINFO(L"*** calling ShowPluginMenuA\n");
-		nItem = ShowPluginMenuA();
-	}
-	else if (gFarVersion.dwBuild>=FAR_Y_VER)
-	{
-		SHOWDBGINFO(L"*** calling ShowPluginMenuWY\n");
-		nItem = FUNC_Y(ShowPluginMenuW)();
-	}
 	else
 	{
-		SHOWDBGINFO(L"*** calling ShowPluginMenuWX\n");
-		nItem = FUNC_X(ShowPluginMenuW)();
+		ConEmuPluginMenuItem items[menu_Last] = {};
+		int nCount = menu_Last; //sizeof(items)/sizeof(items[0]);
+		_ASSERTE(nCount == countof(gpPluginMenu));
+		for (int i = 0; i < nCount; i++)
+		{
+			if (!gpPluginMenu[i].LangID)
+			{
+				items[i].Separator = true;
+				continue;
+			}
+			_ASSERTE(i == gpPluginMenu[i].MenuID);
+			items[i].Selected = pcc_Selected((PluginMenuCommands)i);
+			items[i].Disabled = pcc_Disabled((PluginMenuCommands)i);
+			items[i].MsgID = gpPluginMenu[i].LangID;
+		}
+
+		if (gFarVersion.dwVerMajor==1)
+		{
+			SHOWDBGINFO(L"*** calling ShowPluginMenuA\n");
+			nItem = ShowPluginMenuA(items, nCount);
+		}
+		else if (gFarVersion.dwBuild>=FAR_Y_VER)
+		{
+			SHOWDBGINFO(L"*** calling ShowPluginMenuWY\n");
+			nItem = FUNC_Y(ShowPluginMenuW)(items, nCount);
+		}
+		else
+		{
+			SHOWDBGINFO(L"*** calling ShowPluginMenuWX\n");
+			nItem = FUNC_X(ShowPluginMenuW)(items, nCount);
+		}
 	}
 
 	if (nItem < 0)
@@ -5258,7 +5479,7 @@ void ShowPluginMenu(int nID /*= -1*/)
 	SHOWDBGINFO(szInfo);
 #endif
 
-	switch(nItem)
+	switch (nItem)
 	{
 		case menu_EditConsoleOutput:
 		case menu_ViewConsoleOutput:
@@ -5297,19 +5518,117 @@ void ShowPluginMenu(int nID /*= -1*/)
 
 			free(pIn);
 		} break;
+		
 		case menu_SwitchTabVisible: // Показать/спрятать табы
 		case menu_SwitchTabNext:
 		case menu_SwitchTabPrev:
 		case menu_SwitchTabCommit:
 		{
-			CESERVER_REQ in, *pOut = NULL;
-			ExecutePrepareCmd(&in, CECMD_TABSCMD, sizeof(CESERVER_REQ_HDR)+1);
+			CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_TABSCMD, sizeof(CESERVER_REQ_HDR)+sizeof(pIn->Data));
 			// Data[0] <== enum ConEmuTabCommand
-			in.Data[0] = nItem - menu_SwitchTabVisible;
-			pOut = ExecuteGuiCmd(FarHwnd, &in, FarHwnd);
+			switch (nItem)
+			{
+			case menu_SwitchTabVisible: // Показать/спрятать табы
+				pIn->Data[0] = ctc_ShowHide; break;
+			case menu_SwitchTabNext:
+				pIn->Data[0] = ctc_SwitchNext; break;
+			case menu_SwitchTabPrev:
+				pIn->Data[0] = ctc_SwitchPrev; break;
+			case menu_SwitchTabCommit:
+				pIn->Data[0] = ctc_SwitchCommit; break;
+			default:
+				_ASSERTE(nItem==menu_SwitchTabVisible); // неизвестная команда!
+				pIn->Data[0] = ctc_ShowHide;
+			}
 
+			CESERVER_REQ* pOut = ExecuteGuiCmd(FarHwnd, pIn, FarHwnd);
 			if (pOut) ExecuteFreeResult(pOut);
 		} break;
+		
+		case menu_ShowTabsList:
+		{
+			CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_GETALLTABS, sizeof(CESERVER_REQ_HDR));
+			CESERVER_REQ* pOut = ExecuteGuiCmd(FarHwnd, pIn, FarHwnd);
+			if (pOut && (pOut->GetAllTabs.Count > 0))
+			{
+				int nMenuRc = -1;
+
+				int Count = pOut->GetAllTabs.Count;
+				int AllCount = Count + pOut->GetAllTabs.Tabs[Count-1].ConsoleIdx;
+				ConEmuPluginMenuItem* pItems = (ConEmuPluginMenuItem*)calloc(AllCount,sizeof(*pItems));
+				if (pItems)
+				{
+					int nLastConsole = 0;
+					for (int i = 0, k = 0; i < Count; i++, k++)
+					{
+						if (nLastConsole != pOut->GetAllTabs.Tabs[i].ConsoleIdx)
+						{
+							pItems[k++].Separator = true;
+							nLastConsole = pOut->GetAllTabs.Tabs[i].ConsoleIdx;
+						}
+						_ASSERTE(k < AllCount);
+						pItems[k].Selected = (pOut->GetAllTabs.Tabs[i].ActiveConsole && pOut->GetAllTabs.Tabs[i].ActiveTab);
+						pItems[k].Checked = pOut->GetAllTabs.Tabs[i].ActiveTab;
+						pItems[k].Disabled = pOut->GetAllTabs.Tabs[i].Disabled;
+						pItems[k].MsgText = pOut->GetAllTabs.Tabs[i].Title;
+						pItems[k].UserData = i;
+					}
+					if (gFarVersion.dwVerMajor==1)
+						nMenuRc = ShowPluginMenuA(pItems, AllCount);
+					else if (gFarVersion.dwBuild>=FAR_Y_VER)
+						nMenuRc = FUNC_Y(ShowPluginMenuW)(pItems, AllCount);
+					else
+						nMenuRc = FUNC_X(ShowPluginMenuW)(pItems, AllCount);
+
+					if ((nMenuRc >= 0) && (nMenuRc < AllCount))
+					{
+						nMenuRc = pItems[nMenuRc].UserData;
+
+						if (pOut->GetAllTabs.Tabs[nMenuRc].ActiveConsole && !pOut->GetAllTabs.Tabs[nMenuRc].ActiveTab)
+						{
+							DWORD nTab = pOut->GetAllTabs.Tabs[nMenuRc].TabIdx;
+							switch (GetMacroArea())
+							{
+							case MACROAREA_SHELL:
+							case MACROAREA_SEARCH:
+							case MACROAREA_INFOPANEL:
+							case MACROAREA_QVIEWPANEL:
+							case MACROAREA_TREEPANEL:
+								gnPluginOpenFrom = OPEN_FILEPANEL;
+								break;
+							case MACROAREA_EDITOR:
+								gnPluginOpenFrom = OPEN_EDITOR;
+								break;
+							case MACROAREA_VIEWER:
+								gnPluginOpenFrom = OPEN_VIEWER;
+								break;
+							default:
+								gnPluginOpenFrom = -1;
+							}
+							ProcessCommand(CMD_SETWINDOW, FALSE, &nTab);
+						}
+						else if (!pOut->GetAllTabs.Tabs[nMenuRc].ActiveConsole || !pOut->GetAllTabs.Tabs[nMenuRc].ActiveTab)
+						{
+							CESERVER_REQ* pActIn = ExecuteNewCmd(CECMD_ACTIVATETAB, sizeof(CESERVER_REQ_HDR)+2*sizeof(DWORD));
+							pActIn->dwData[0] = pOut->GetAllTabs.Tabs[nMenuRc].ConsoleIdx;
+							pActIn->dwData[1] = pOut->GetAllTabs.Tabs[nMenuRc].TabIdx;
+							CESERVER_REQ* pActOut = ExecuteGuiCmd(FarHwnd, pActIn, FarHwnd);
+							ExecuteFreeResult(pActOut);
+							ExecuteFreeResult(pActIn);
+						}
+					}
+
+					SafeFree(pItems);
+				}
+				ExecuteFreeResult(pOut);
+			}
+			else
+			{
+				ShowMessage(CEGetAllTabsFailed, 1);
+			}
+			ExecuteFreeResult(pIn);
+		} break;
+		
 		case menu_ConEmuMacro: // Execute GUI macro (gialog)
 		{
 			if (gFarVersion.dwVerMajor==1)
@@ -5319,6 +5638,7 @@ void ShowPluginMenu(int nID /*= -1*/)
 			else
 				FUNC_X(GuiMacroDlgW)();
 		} break;
+		
 		case menu_AttachToConEmu: // Attach to GUI (если FAR был CtrlAltTab)
 		{
 			if (TerminalMode) break;  // низзя
@@ -5327,6 +5647,7 @@ void ShowPluginMenu(int nID /*= -1*/)
 
 			Attach2Gui();
 		} break;
+
 		//#ifdef _DEBUG
 		//case 11: // Start "ConEmuC.exe /DEBUGPID="
 		//#else
@@ -5336,6 +5657,11 @@ void ShowPluginMenu(int nID /*= -1*/)
 			if (TerminalMode) break;  // низзя
 
 			StartDebugger();
+		} break;
+
+		case menu_ConsoleInfo:
+		{
+			ShowConsoleInfo();
 		} break;
 	}
 }
@@ -5360,9 +5686,14 @@ BOOL FindServerCmd(DWORD nServerCmd, DWORD &dwServerPID)
 
 		if (pOut)
 		{
+			_ASSERTE(SrvMapping.nServerPID == pOut->dwData[0]);
 			dwServerPID = SrvMapping.nServerPID;
 			ExecuteFreeResult(pOut);
 			lbRc = TRUE;
+		}
+		else
+		{
+			_ASSERTE(pOut!=NULL);
 		}
 
 		ExecuteFreeResult(pIn); 
@@ -5533,6 +5864,7 @@ BOOL Attach2Gui()
 	{
 		// "Server was already started. PID=%i. Exiting...\n", dwServerPID
 		gdwServerPID = dwServerPID;
+		_ASSERTE(gdwServerPID!=0);
 		gbTryOpenMapHeader = (gpConMapInfo==NULL);
 
 		if (gpConMapInfo)  // 04.03.2010 Maks - Если мэппинг уже открыт - принудительно передернуть ресурсы и информацию
@@ -5620,6 +5952,7 @@ BOOL Attach2Gui()
 	else
 	{
 		gdwServerPID = pi.dwProcessId;
+		_ASSERTE(gdwServerPID!=0);
 		SafeCloseHandle(pi.hProcess);
 		SafeCloseHandle(pi.hThread);
 		lbRc = TRUE;
@@ -5657,7 +5990,7 @@ BOOL StartDebugger()
 	si.cb = sizeof(si);
 	DWORD dwSelfPID = GetCurrentProcessId();
 
-	if ((nLen = GetEnvironmentVariableW(L"ConEmuBaseDir", szConEmuC, MAX_PATH-16)) < 1)
+	if ((nLen = GetEnvironmentVariableW(ENV_CONEMUBASEDIR_VAR_W, szConEmuC, MAX_PATH-16)) < 1)
 	{
 		ShowMessage(CECantDebugNotEnvVar,1); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available\nOK"
 		return FALSE; // Облом
@@ -5752,6 +6085,23 @@ BOOL IsMacroActive()
 	return lbActive;
 }
 
+int GetMacroArea()
+{
+	int nMacroArea = 0/*MACROAREA_OTHER*/;
+
+	if (gFarVersion.dwVerMajor==1)
+	{
+		_ASSERTE(gFarVersion.dwVerMajor>1);
+		nMacroArea = 1; // в Far 1.7x не поддерживается
+	}
+	else if (gFarVersion.dwBuild>=FAR_Y_VER)
+		nMacroArea = FUNC_Y(GetMacroAreaW)();
+	else
+		nMacroArea = FUNC_X(GetMacroAreaW)();
+
+	return nMacroArea;
+}
+
 
 void RedrawAll()
 {
@@ -5796,53 +6146,139 @@ int GetActiveWindowType()
 //}
 
 
-bool RunExternalProgramW(wchar_t* pszCommand, wchar_t* pszCurDir)
+bool RunExternalProgramW(wchar_t* pszCommand, wchar_t* pszCurDir, bool bSilent/*=false*/)
 {
-	//wchar_t strCmd[MAX_PATH+1];
-	//wchar_t* strArgs = pszCommand;
-	//NextArg((const wchar_t**)&strArgs, strCmd);
-	//wchar_t strDir[10]; lstrcpy(strDir, L"C:\\");
-	STARTUPINFO cif= {sizeof(STARTUPINFO)};
-	PROCESS_INFORMATION pri= {0};
-	HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-	DWORD oldConsoleMode;
-	DWORD nErr = 0;
-	DWORD nExitCode = 0;
-	GetConsoleMode(hStdin, &oldConsoleMode);
-	SetConsoleMode(hStdin, ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT); // подбиралось методом тыка
-#ifdef _DEBUG
-	WARNING("Посмотреть, как Update в консоль выводит.");
-	wprintf(L"\nCmd: <%s>\nDir: <%s>\n\n", pszCommand, pszCurDir);
-#endif
-	MWow64Disable wow; wow.Disable();
-	SetLastError(0);
-	BOOL lb = CreateProcess(/*strCmd, strArgs,*/ NULL, pszCommand, NULL, NULL, TRUE,
-	          NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE, NULL, pszCurDir, &cif, &pri);
-	nErr = GetLastError();
-	wow.Restore();
-
-	if (lb)
+	bool lbRc = false;
+	_ASSERTE(pszCommand && *pszCommand);
+	
+	if (bSilent)
 	{
-		WaitForSingleObject(pri.hProcess, INFINITE);
-		GetExitCodeProcess(pri.hProcess, &nExitCode);
-		CloseHandle(pri.hProcess);
-		CloseHandle(pri.hThread);
-#ifdef _DEBUG
-		wprintf(L"\nConEmuC: Process was terminated, ExitCode=%i\n\n", nExitCode);
-#endif
+		DWORD nCmdLen = lstrlen(pszCommand);
+		CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_NEWCMD, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_NEWCMD)+(nCmdLen*sizeof(wchar_t)));
+		if (pIn)
+		{
+			pIn->NewCmd.hFromConWnd = FarHwnd;
+			if (pszCurDir)
+				lstrcpyn(pIn->NewCmd.szCurDir, pszCurDir, countof(pIn->NewCmd.szCurDir));
+				
+			lstrcpyn(pIn->NewCmd.szCommand, pszCommand, nCmdLen+1);
+
+			HWND hGuiRoot = GetConEmuHWND(1);
+			CESERVER_REQ* pOut = ExecuteGuiCmd(hGuiRoot, pIn, FarHwnd);
+			if (pOut)
+			{
+				if (pOut->hdr.cbSize > sizeof(pOut->hdr) && pOut->Data[0])
+				{
+					lbRc = true;
+				}
+				ExecuteFreeResult(pOut);
+			}
+			else
+			{
+				_ASSERTE(pOut!=NULL);
+			}
+			ExecuteFreeResult(pIn);
+		}
 	}
 	else
 	{
-#ifdef _DEBUG
-		wprintf(L"\nConEmuC: CreateProcess failed, ErrCode=0x%08X\n\n", nErr);
-#endif
-	}
+		//wchar_t strCmd[MAX_PATH+1];
+		//wchar_t* strArgs = pszCommand;
+		//NextArg((const wchar_t**)&strArgs, strCmd);
+		//wchar_t strDir[10]; lstrcpy(strDir, L"C:\\");
+		STARTUPINFO cif= {sizeof(STARTUPINFO)};
+		PROCESS_INFORMATION pri= {0};
+		HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+		DWORD oldConsoleMode;
+		DWORD nErr = 0;
+		DWORD nExitCode = 0;
+		GetConsoleMode(hStdin, &oldConsoleMode);
+		SetConsoleMode(hStdin, ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT); // подбиралось методом тыка
+		
+		#ifdef _DEBUG
+		if (!bSilent)
+		{
+			WARNING("Посмотреть, как Update в консоль выводит.");
+			wprintf(L"\nCmd: <%s>\nDir: <%s>\n\n", pszCommand, pszCurDir);
+		}
+		#endif
 
-	//wprintf(L"Cmd: <%s>\nArg: <%s>\nDir: <%s>\n\n", strCmd, strArgs, pszCurDir);
-	SetConsoleMode(hStdin, oldConsoleMode);
-	return true;
+		MWow64Disable wow; wow.Disable();
+		SetLastError(0);
+		BOOL lb = CreateProcess(/*strCmd, strArgs,*/ NULL, pszCommand, NULL, NULL, TRUE,
+		          NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE, NULL, pszCurDir, &cif, &pri);
+		nErr = GetLastError();
+		wow.Restore();
+
+		if (lb)
+		{
+			WaitForSingleObject(pri.hProcess, INFINITE);
+			GetExitCodeProcess(pri.hProcess, &nExitCode);
+			CloseHandle(pri.hProcess);
+			CloseHandle(pri.hThread);
+			
+			#ifdef _DEBUG
+			if (!bSilent)
+				wprintf(L"\nConEmuC: Process was terminated, ExitCode=%i\n\n", nExitCode);
+			#endif
+			
+			lbRc = true;
+		}
+		else
+		{
+			#ifdef _DEBUG
+			if (!bSilent)
+				wprintf(L"\nConEmuC: CreateProcess failed, ErrCode=0x%08X\n\n", nErr);
+			#endif
+		}
+
+		//wprintf(L"Cmd: <%s>\nArg: <%s>\nDir: <%s>\n\n", strCmd, strArgs, pszCurDir);
+		SetConsoleMode(hStdin, oldConsoleMode);
+	}
+	
+	return lbRc;
 }
 
+
+void ShowConsoleInfo()
+{
+	DWORD nConIn = 0, nConOut = 0;
+	HANDLE hConIn = GetStdHandle(STD_INPUT_HANDLE);
+	HANDLE hConOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	GetConsoleMode(hConIn, &nConIn);
+	GetConsoleMode(hConOut, &nConOut);
+
+	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
+	GetConsoleScreenBufferInfo(hConOut, &csbi);
+	CONSOLE_CURSOR_INFO ci = {};
+	GetConsoleCursorInfo(hConOut, &ci);
+	
+	wchar_t szInfo[1024];
+	_wsprintf(szInfo, SKIPLEN(countof(szInfo))
+		L"ConEmu Console information\n"
+		L"TerminalMode=%s\n"
+		L"Console HWND=0x%08X; "
+		L"Virtual HWND=0x%08X\n"
+		L"ServerPID=%u; CurrentPID=%u\n"
+		L"ConInMode=0x%08X; ConOutMode=0x%08X\n"
+		L"Buffer size=(%u,%u); Rect=(%u,%u)-(%u,%u)\n"
+		L"CursorInfo=(%u,%u,%u%s); MaxWndSize=(%u,%u)\n"
+		L"OutputAttr=0x%02X\n"
+		,
+		TerminalMode ? L"Yes" : L"No",
+		(DWORD)FarHwnd, (DWORD)ConEmuHwnd,
+		gdwServerPID, GetCurrentProcessId(),
+		nConIn, nConOut,
+		csbi.dwSize.X, csbi.dwSize.Y,
+		csbi.srWindow.Left, csbi.srWindow.Top, csbi.srWindow.Right, csbi.srWindow.Bottom,
+		csbi.dwCursorPosition.X, csbi.dwCursorPosition.Y, ci.dwSize, ci.bVisible ? L"V" : L"H",
+		csbi.dwMaximumWindowSize.X, csbi.dwMaximumWindowSize.Y,
+		csbi.wAttributes,
+		0
+	);
+
+	ShowMessage(szInfo, 0, false);
+}
 
 
 //// <Name>\0<Value>\0<Name2>\0<Value2>\0\0

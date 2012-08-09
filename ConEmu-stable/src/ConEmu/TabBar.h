@@ -66,7 +66,7 @@ class TabBarClass //: public CToolTip
 			int nCmd;
 			LPCWSTR pszCmd;
 			wchar_t szShort[32];
-		} History[MAX_CMD_HISTORY+1]; // структура для меню выбора команды новой консоли
+		} m_CmdPopupMenu[MAX_CMD_HISTORY+1]; // структура для меню выбора команды новой консоли
 		bool mb_InNewConPopup;
 		bool _active;
 		int _tabHeight;
@@ -94,7 +94,7 @@ class TabBarClass //: public CToolTip
 		void AddTab2VCon(VConTabs& vct);
 		void ShowTabError(LPCTSTR asInfo, int tabIndex = 0);
 		//void CheckTheming();
-
+		
 	protected:
 		static LRESULT CALLBACK TabProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 		static WNDPROC _defaultTabProc;
@@ -102,7 +102,7 @@ class TabBarClass //: public CToolTip
 		static WNDPROC _defaultToolProc;
 		static LRESULT CALLBACK ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 		static WNDPROC _defaultReBarProc;
-		static LRESULT TabHitTest();
+		static LRESULT TabHitTest(bool abForce = false);
 
 		//typedef union tag_FAR_WND_ID {
 		//	struct {
@@ -155,18 +155,21 @@ class TabBarClass //: public CToolTip
 		void Deactivate();
 		void RePaint();
 		//void Update(ConEmuTab* tabs, int tabsCount);
+		bool GetRebarClientRect(RECT* rc);
 		void Update(BOOL abPosted=FALSE);
 		BOOL NeedPostUpdate();
 		void UpdatePosition();
 		void UpdateTabFont();
 		void UpdateWidth();
-		void OnConsoleActivated(int nConNumber/*, BOOL bAlternative*/);
+		void OnConsoleActivated(int nConNumber); //0-based
 		void UpdateToolConsoles(bool abForcePos=false);
 		void OnCaptionHidden();
 		void OnWindowStateChanged();
 		void OnBufferHeight(BOOL abBufferHeight);
+		void OnAlternative(BOOL abAlternative);
 		LRESULT OnNotify(LPNMHDR nmhdr);
-		void OnNewConPopup();
+		void OnChooseTabPopup();
+		void OnNewConPopup(POINT* ptWhere = NULL, DWORD nFlags = 0);
 		void OnCommand(WPARAM wParam, LPARAM lParam);
 		void OnMouse(int message, int x, int y);
 		// Переключение табов
@@ -180,6 +183,7 @@ class TabBarClass //: public CToolTip
 		void SetRedraw(BOOL abEnableRedraw);
 		//void PaintHeader(HDC hdc, RECT rcPaint);
 		int  ActiveTabByName(int anType, LPCWSTR asName, CVirtualConsole** ppVCon);
+		void GetActiveTabRect(RECT* rcTab);
 
 		// Из Samples\Tabs
 		bool ProcessTabMouseEvent(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT &lResult) { return false; };

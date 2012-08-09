@@ -27,6 +27,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "MAssert.h"
 #include "common.hpp"
@@ -37,6 +38,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // !!! Использовать только через функцию: LocalSecurity() !!!
 SECURITY_ATTRIBUTES* gpLocalSecurity = NULL;
 u64 ghWorkingModule = 0;
+
+#ifdef _DEBUG
+bool gbPipeDebugBoxes = false;
+#endif
 
 //#ifdef _DEBUG
 //	#include <crtdbg.h>
@@ -175,17 +180,54 @@ LPCWSTR ModuleName(LPCWSTR asDefault)
 	return szFile;
 }
 
-HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], const wchar_t* szModule)
+// nTimeout - таймаут подключения
+HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], const wchar_t* szModule, DWORD nServerPID, DWORD nTimeout)
 {
 	HANDLE hPipe = NULL;
 	DWORD dwErr = 0, dwMode = 0;
 	BOOL fSuccess = FALSE;
 	DWORD dwStartTick = GetTickCount();
-	int nTries = 2;
+	DWORD nSleepError = 10;
+	int nTries = 10; // допустимое количество обломов, отличных от ERROR_PIPE_BUSY. после каждого - Sleep(nSleepError);
+	DWORD nOpenPipeTimeout = nTimeout ? max(nTimeout,EXECUTE_CMD_OPENPIPE_TIMEOUT) : EXECUTE_CMD_OPENPIPE_TIMEOUT;
+	BOOL bWaitPipeRc = FALSE, bWaitCalled = FALSE;
+	DWORD nWaitPipeErr = 0;
+	DWORD nDuration = 0;
+#ifdef _DEBUG
+	wchar_t szDbgMsg[512], szTitle[128];
+#endif
+
 	_ASSERTE(LocalSecurity()!=NULL);
 
+#ifdef _DEBUG
+	BOOL lbServerIsDebugged = FALSE;
+	// WinXP SP1 и выше
+	typedef BOOL (WINAPI* CheckRemoteDebuggerPresent_t)(HANDLE hProcess, PBOOL pbDebuggerPresent);
+	static CheckRemoteDebuggerPresent_t _CheckRemoteDebuggerPresent = NULL;
+	if (nServerPID)
+	{
+		if (!_CheckRemoteDebuggerPresent)
+			_CheckRemoteDebuggerPresent = (CheckRemoteDebuggerPresent_t)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "CheckRemoteDebuggerPresent");
+		
+		if (_CheckRemoteDebuggerPresent)
+		{
+			HANDLE hProcess = OpenProcess(MY_PROCESS_ALL_ACCESS, FALSE, nServerPID);
+			if (hProcess)
+			{
+				BOOL lb = FALSE;
+
+				if (_CheckRemoteDebuggerPresent(hProcess, &lb) && lb)
+					lbServerIsDebugged = TRUE;
+
+				CloseHandle(hProcess);
+			}
+		}
+	}
+#endif
+
+
 	// Try to open a named pipe; wait for it, if necessary.
-	while(1)
+	while (1)
 	{
 		hPipe = CreateFile(
 		            szPipeName,     // pipe name
@@ -195,21 +237,48 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		            OPEN_EXISTING,  // opens existing pipe
 		            0,              // default attributes
 		            NULL);          // no template file
+		dwErr = GetLastError();
 
 		// Break if the pipe handle is valid.
 		if (hPipe != INVALID_HANDLE_VALUE)
 			break; // OK, открыли
 
-		dwErr = GetLastError();
-		#ifdef _DEBUG
+#ifdef _DEBUG
+		if (gbPipeDebugBoxes)
+		{
+			szDbgMsg[0] = 0;
+			GetModuleFileName(NULL, szDbgMsg, countof(szDbgMsg));
+			msprintf(szTitle, countof(szTitle), L"%s: PID=%u", PointToName(szDbgMsg), GetCurrentProcessId());
+			msprintf(szDbgMsg, countof(szDbgMsg), L"Can't open pipe, ErrCode=%u\n%s\nWait: %u,%u,%u", dwErr, szPipeName, bWaitCalled, bWaitPipeRc, nWaitPipeErr);
+			int nBtn = ::MessageBox(NULL, szDbgMsg, szTitle, MB_SYSTEMMODAL|MB_RETRYCANCEL);
+			if (nBtn == IDCANCEL)
+				return NULL;
+		}
+#endif
+
+		nDuration = GetTickCount() - dwStartTick;
+
 		if (dwErr == ERROR_PIPE_BUSY)
 		{
-			_ASSERTEX(dwErr != ERROR_PIPE_BUSY);
+			if ((nTries > 0) && (nDuration < nOpenPipeTimeout))
+			{
+				bWaitCalled = TRUE;
+				// All pipe instances are busy, so wait for 500 ms.
+				bWaitPipeRc = WaitNamedPipe(szPipeName, 500);
+				nWaitPipeErr = GetLastError();
+				UNREFERENCED_PARAMETER(bWaitPipeRc); UNREFERENCED_PARAMETER(nWaitPipeErr);
+				// -- 120602 раз они заняты (но живы), то будем ждать, пока не освободятся
+				//nTries--;
+				continue;
+			}
+			else
+			{
+				_ASSERTEX(dwErr != ERROR_PIPE_BUSY);
+			}
 		}
-		#endif
 
 		// Сделаем так, чтобы хотя бы пару раз он попробовал повторить
-		if ((nTries <= 0) && (GetTickCount() - dwStartTick) > EXECUTE_CMD_OPENPIPE_TIMEOUT)
+		if ((nTries <= 0) || (nDuration > nOpenPipeTimeout))
 		{
 			//if (pszErr)
 			{
@@ -226,12 +295,12 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		// Может быть пайп еще не создан (в процессе срабатывания семафора)
 		if (dwErr == ERROR_FILE_NOT_FOUND)
 		{
-			Sleep(10);
+			Sleep(nSleepError);
 			continue;
 		}
 
 		// Exit if an error other than ERROR_PIPE_BUSY occurs.
-		if (dwErr != ERROR_PIPE_BUSY)
+		// -- if (dwErr != ERROR_PIPE_BUSY) // уже проверено выше
 		{
 			//if (pszErr)
 			{
@@ -241,8 +310,9 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 			return NULL;
 		}
 
-		// All pipe instances are busy, so wait for 500 ms.
-		WaitNamedPipe(szPipeName, 500);
+		// Уже сделано выше
+		//// All pipe instances are busy, so wait for 500 ms.
+		//WaitNamedPipe(szPipeName, 500);
 		//if (!WaitNamedPipe(szPipeName, 1000) )
 		//{
 		//	dwErr = GetLastError();
@@ -258,6 +328,11 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		//}
 	}
 
+#ifdef _DEBUG
+	DWORD nCurState = 0, nCurInstances = 0;
+	BOOL bCurState = GetNamedPipeHandleState(hPipe, &nCurState, &nCurInstances, NULL, NULL, NULL, 0);
+#endif
+
 	// The pipe connected; change to message-read mode.
 	dwMode = PIPE_READMODE_MESSAGE;
 	fSuccess = SetNamedPipeHandleState(
@@ -266,6 +341,7 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 	               NULL,     // don't set maximum bytes
 	               NULL);    // don't set maximum time
 
+#if 0
 	if (!fSuccess)
 	{
 		dwErr = GetLastError();
@@ -274,10 +350,26 @@ HANDLE ExecuteOpenPipe(const wchar_t* szPipeName, wchar_t (&szErr)[MAX_PATH*2], 
 		{
 			msprintf(szErr, countof(szErr), L"%s.%u: SetNamedPipeHandleState(%s) failed, code=0x%08X",
 			          ModuleName(szModule), GetCurrentProcessId(), szPipeName, dwErr);
+			#ifdef _DEBUG
+			int nCurLen = lstrlen(szErr);
+			msprintf(szErr+nCurLen, countof(szErr)-nCurLen, L"\nCurState: %u,x%08X,%u", bCurState, nCurState, nCurInstances);
+			#endif
 		}
 		CloseHandle(hPipe);
+
+#ifdef _DEBUG
+		if (gbPipeDebugBoxes)
+		{
+			szDbgMsg[0] = 0;
+			GetModuleFileName(NULL, szDbgMsg, countof(szDbgMsg));
+			msprintf(szTitle, countof(szTitle), L"%s: PID=%u", PointToName(szDbgMsg), GetCurrentProcessId());
+			::MessageBox(NULL, szErr, szTitle, MB_SYSTEMMODAL);
+		}
+#endif
+
 		return NULL;
 	}
+#endif
 
 	return hPipe;
 }
@@ -301,6 +393,7 @@ void ExecutePrepareCmd(CESERVER_REQ_HDR* pHdr, DWORD nCmd, size_t cbSize)
 		return;
 
 	pHdr->nCmd = nCmd;
+	pHdr->bAsync = FALSE; // сброс
 	pHdr->nSrcThreadId = GetCurrentThreadId();
 	pHdr->nSrcPID = GetCurrentProcessId();
 	// Обмен данными идет и между 32bit & 64bit процессами, размеры __int64 недопустимы
@@ -312,6 +405,7 @@ void ExecutePrepareCmd(CESERVER_REQ_HDR* pHdr, DWORD nCmd, size_t cbSize)
 	pHdr->hModule = ghWorkingModule;
 	pHdr->nBits = WIN3264TEST(32,64);
 	pHdr->nLastError = GetLastError();
+	pHdr->IsDebugging = IsDebuggerPresent();
 }
 
 CESERVER_REQ* ExecuteNewCmd(DWORD nCmd, size_t nSize)
@@ -428,12 +522,46 @@ BOOL LoadGuiMapping(DWORD nConEmuPID, ConEmuGuiMapping& GuiMapping)
 }
 
 
-CESERVER_REQ* ExecuteNewCmdOnCreate(enum CmdOnCreateType aCmd,
+CESERVER_REQ* ExecuteNewCmdOnCreate(CESERVER_CONSOLE_MAPPING_HDR* pSrvMap, HWND hConWnd, enum CmdOnCreateType aCmd,
 				LPCWSTR asAction, LPCWSTR asFile, LPCWSTR asParam,
 				DWORD* anShellFlags, DWORD* anCreateFlags, DWORD* anStartFlags, DWORD* anShowCmd,
 				int mn_ImageBits, int mn_ImageSubsystem,
 				HANDLE hStdIn, HANDLE hStdOut, HANDLE hStdErr)
 {
+	bool bEnabled = false;
+	if (!pSrvMap)
+	{
+		static bool bWasEnabled = false;
+		static DWORD nLastWasEnabledTick = 0;
+
+		// Чтобы проверки слишком часто не делать
+		if (!nLastWasEnabledTick || ((GetTickCount() - nLastWasEnabledTick) > 1000))
+		{
+			CESERVER_CONSOLE_MAPPING_HDR *Info = (CESERVER_CONSOLE_MAPPING_HDR*)calloc(1,sizeof(*Info));
+			if (Info)
+			{
+				if (::LoadSrvMapping(hConWnd, *Info))
+				{
+					bEnabled = (Info->nLoggingType == glt_Processes);
+				}
+				free(Info);
+			}
+
+			nLastWasEnabledTick = GetTickCount();
+		}
+
+		bWasEnabled = bEnabled;
+	}
+	else
+	{
+		bEnabled = (pSrvMap->nLoggingType == glt_Processes);
+	}
+	// Если логирование не просили
+	if (!bEnabled)
+	{
+		return NULL;
+	}
+
 	//szBaseDir[0] = 0;
 
 	//// Проверим, а надо ли?
@@ -530,10 +658,10 @@ CESERVER_REQ* ExecuteNewCmdOnCreate(enum CmdOnCreateType aCmd,
 }
 
 // Forward
-CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner);
+//CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner);
 
 // Выполнить в GUI (в CRealConsole)
-CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, const CESERVER_REQ* pIn, HWND hOwner)
+CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, CESERVER_REQ* pIn, HWND hOwner)
 {
 	wchar_t szGuiPipeName[128];
 
@@ -559,7 +687,7 @@ CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, const CESERVER_REQ* pIn, HWND hOwner)
 		{
 			if (lpRet)
 			{
-				_ASSERTE(nDelta <= EXECUTE_CMD_WARN_TIMEOUT || (pIn->hdr.nCmd == CECMD_CMDSTARTSTOP && nDelta <= EXECUTE_CMD_WARN_TIMEOUT2));
+				_ASSERTE(nDelta <= EXECUTE_CMD_WARN_TIMEOUT || lpRet->hdr.IsDebugging || (pIn->hdr.nCmd == CECMD_CMDSTARTSTOP && nDelta <= EXECUTE_CMD_WARN_TIMEOUT2));
 			}
 			else
 			{
@@ -574,33 +702,34 @@ CESERVER_REQ* ExecuteGuiCmd(HWND hConWnd, const CESERVER_REQ* pIn, HWND hOwner)
 }
 
 // Выполнить в ConEmuC
-CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, const CESERVER_REQ* pIn, HWND hOwner)
+CESERVER_REQ* ExecuteSrvCmd(DWORD dwSrvPID, CESERVER_REQ* pIn, HWND hOwner, BOOL bAsyncNoResult, DWORD nTimeout /*= 0*/)
 {
-	wchar_t szGuiPipeName[128];
+	wchar_t szPipeName[128];
 
 	if (!dwSrvPID)
 		return NULL;
 
 	DWORD nLastErr = GetLastError();
-	//_wsprintf(szGuiPipeName, SKIPLEN(countof(szGuiPipeName)) CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
-	msprintf(szGuiPipeName, countof(szGuiPipeName), CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
-	CESERVER_REQ* lpRet = ExecuteCmd(szGuiPipeName, pIn, 1000, hOwner);
+	//_wsprintf(szPipeName, SKIPLEN(countof(szPipeName)) CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
+	msprintf(szPipeName, countof(szPipeName), CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
+	CESERVER_REQ* lpRet = ExecuteCmd(szPipeName, pIn, nTimeout, hOwner, bAsyncNoResult, dwSrvPID);
+	_ASSERTE(pIn->hdr.bAsync == bAsyncNoResult);
 	SetLastError(nLastErr); // Чтобы не мешать процессу своими возможными ошибками общения с пайпом
 	return lpRet;
 }
 
 // Выполнить в ConEmuHk
-CESERVER_REQ* ExecuteHkCmd(DWORD dwHkPID, const CESERVER_REQ* pIn, HWND hOwner)
+CESERVER_REQ* ExecuteHkCmd(DWORD dwHkPID, CESERVER_REQ* pIn, HWND hOwner)
 {
-	wchar_t szGuiPipeName[128];
+	wchar_t szPipeName[128];
 
 	if (!dwHkPID)
 		return NULL;
 
 	DWORD nLastErr = GetLastError();
-	//_wsprintf(szGuiPipeName, SKIPLEN(countof(szGuiPipeName)) CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
-	msprintf(szGuiPipeName, countof(szGuiPipeName), CEHOOKSPIPENAME, L".", (DWORD)dwHkPID);
-	CESERVER_REQ* lpRet = ExecuteCmd(szGuiPipeName, pIn, 1000, hOwner);
+	//_wsprintf(szPipeName, SKIPLEN(countof(szPipeName)) CESERVERPIPENAME, L".", (DWORD)dwSrvPID);
+	msprintf(szPipeName, countof(szPipeName), CEHOOKSPIPENAME, L".", (DWORD)dwHkPID);
+	CESERVER_REQ* lpRet = ExecuteCmd(szPipeName, pIn, 1000, hOwner);
 	SetLastError(nLastErr); // Чтобы не мешать процессу своими возможными ошибками общения с пайпом
 	return lpRet;
 }
@@ -608,12 +737,13 @@ CESERVER_REQ* ExecuteHkCmd(DWORD dwHkPID, const CESERVER_REQ* pIn, HWND hOwner)
 //Arguments:
 //   hConWnd - Хэндл КОНСОЛЬНОГО окна (по нему формируется имя пайпа для GUI)
 //   pIn     - выполняемая команда
+//   nTimeout- таймаут подключения
 //Returns:
 //   CESERVER_REQ. Его необходимо освободить через free(...);
 //WARNING!!!
 //   Эта процедура не может получить с сервера более 600 байт данных!
 // В заголовке hOwner в дебаге может быть отображена ошибка
-CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner)
+CESERVER_REQ* ExecuteCmd(const wchar_t* szPipeName, CESERVER_REQ* pIn, DWORD nWaitPipe, HWND hOwner, BOOL bAsyncNoResult, DWORD nServerPID)
 {
 	CESERVER_REQ* pOut = NULL;
 	HANDLE hPipe = NULL;
@@ -622,15 +752,17 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, 
 	BOOL fSuccess = FALSE;
 	DWORD cbRead = 0, /*dwMode = 0,*/ dwErr = 0;
 
-	if (!pIn || !szGuiPipeName)
+	if (!pIn || !szPipeName)
 	{
-		_ASSERTE(pIn && szGuiPipeName);
+		_ASSERTE(pIn && szPipeName);
 		return NULL;
 	}
 
+	pIn->hdr.bAsync = bAsyncNoResult;
+
 	_ASSERTE(pIn->hdr.nSrcPID && pIn->hdr.nSrcThreadId);
 	_ASSERTE(pIn->hdr.cbSize >= sizeof(pIn->hdr));
-	hPipe = ExecuteOpenPipe(szGuiPipeName, szErr, NULL/*Сюда хорошо бы имя модуля подкрутить*/);
+	hPipe = ExecuteOpenPipe(szPipeName, szErr, NULL/*Сюда хорошо бы имя модуля подкрутить*/, nServerPID, nWaitPipe);
 
 	if (hPipe == NULL || hPipe == INVALID_HANDLE_VALUE)
 	{
@@ -660,7 +792,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, 
 	//while (1)
 	//{
 	//	hPipe = CreateFile(
-	//		szGuiPipeName,  // pipe name
+	//		szPipeName,  // pipe name
 	//		GENERIC_READ |  // read and write access
 	//		GENERIC_WRITE,
 	//		0,              // no sharing
@@ -681,7 +813,7 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, 
 	//	}
 	//
 	//	// All pipe instances are busy, so wait for 1 second.
-	//	if (!WaitNamedPipe(szGuiPipeName, nWaitPipe) )
+	//	if (!WaitNamedPipe(szPipeName, nWaitPipe) )
 	//	{
 	//		return NULL;
 	//	}
@@ -700,23 +832,39 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, 
 	//	return NULL;
 	//}
 	_ASSERTE(pIn->hdr.nSrcThreadId==GetCurrentThreadId());
-	// Send a message to the pipe server and read the response.
-	fSuccess = TransactNamedPipe(
-	               hPipe,                  // pipe handle
-	               (LPVOID)pIn,            // message to server
-	               pIn->hdr.cbSize,         // message length
-	               cbReadBuf,              // buffer to receive reply
-	               sizeof(cbReadBuf),      // size of read buffer
-	               &cbRead,                // bytes read
-	               NULL);                  // not overlapped
-	dwErr = GetLastError();
-	//CloseHandle(hPipe);
 
-	if (!fSuccess && (dwErr != ERROR_MORE_DATA))
+	if (bAsyncNoResult)
 	{
-		//_ASSERTE(fSuccess || (dwErr == ERROR_MORE_DATA));
-		CloseHandle(hPipe);
+		// Если нас не интересует возврат и нужно сразу вернуться
+		fSuccess = WriteFile(hPipe, pIn, pIn->hdr.cbSize, &cbRead, NULL);
+		#ifdef _DEBUG
+		dwErr = GetLastError();
+		_ASSERTE(fSuccess && (cbRead == pIn->hdr.cbSize));
+		#endif
 		return NULL;
+	}
+	else
+	{
+		WARNING("При Overlapped часто виснет в этом месте.");
+
+		// Send a message to the pipe server and read the response.
+		fSuccess = TransactNamedPipe(
+					   hPipe,                  // pipe handle
+					   (LPVOID)pIn,            // message to server
+					   pIn->hdr.cbSize,         // message length
+					   cbReadBuf,              // buffer to receive reply
+					   sizeof(cbReadBuf),      // size of read buffer
+					   &cbRead,                // bytes read
+					   NULL);                  // not overlapped
+		dwErr = GetLastError();
+		//CloseHandle(hPipe);
+
+		if (!fSuccess && (dwErr != ERROR_MORE_DATA))
+		{
+			//_ASSERTE(fSuccess || (dwErr == ERROR_MORE_DATA));
+			CloseHandle(hPipe);
+			return NULL;
+		}
 	}
 
 	if (cbRead < sizeof(CESERVER_REQ_HDR))
@@ -730,14 +878,18 @@ CESERVER_REQ* ExecuteCmd(const wchar_t* szGuiPipeName, const CESERVER_REQ* pIn, 
 	if (pOut->hdr.cbSize < cbRead)
 	{
 		CloseHandle(hPipe);
-		OutputDebugString(L"!!! Wrong nSize received from GUI server !!!\n");
+		if (pOut->hdr.cbSize)
+		{
+			_ASSERTE(pOut->hdr.cbSize == 0 || pOut->hdr.cbSize >= cbRead);
+			DEBUGSTR(L"!!! Wrong nSize received from GUI server !!!\n");
+		}
 		return NULL;
 	}
 
 	if (pOut->hdr.nVersion != CESERVER_REQ_VER)
 	{
 		CloseHandle(hPipe);
-		OutputDebugString(L"!!! Wrong nVersion received from GUI server !!!\n");
+		DEBUGSTR(L"!!! Wrong nVersion received from GUI server !!!\n");
 		return NULL;
 	}
 
@@ -855,7 +1007,7 @@ HWND myGetConsoleWindow()
 		wchar_t sClass[64];
 		if (hConWnd)
 			GetClassName_f(hConWnd, sClass, countof(sClass));
-		_ASSERTE(hConWnd==NULL || lstrcmp(sClass, L"ConsoleWindowClass")==0);
+		_ASSERTE(hConWnd==NULL || isConsoleClass(sClass));
 		#if 0
 		if (lstrcmp(sClass, VirtualConsoleClass) == 0)
 		{
@@ -1018,11 +1170,11 @@ void SetConEmuEnvVar(HWND hConEmuWnd)
 		// Установить переменную среды с дескриптором окна
 		wchar_t szVar[16];
 		msprintf(szVar, countof(szVar), L"0x%08X", (DWORD)hConEmuWnd); //-V205
-		SetEnvironmentVariable(L"ConEmuHWND", szVar);
+		SetEnvironmentVariable(ENV_CONEMUHWND_VAR_W, szVar);
 	}
 	else
 	{
-		SetEnvironmentVariable(L"ConEmuHWND", NULL);
+		SetEnvironmentVariable(ENV_CONEMUHWND_VAR_W, NULL);
 	}
 }
 

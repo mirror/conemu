@@ -123,6 +123,7 @@ void SetStartupInfoW1900(void *aInfo)
 			_ASSERTE(FarVer.Major<=0xFFFF && FarVer.Minor<=0xFFFF)
 			gFarVersion.dwVerMajor = (WORD)FarVer.Major;
 			gFarVersion.dwVerMinor = (WORD)FarVer.Minor;
+			gFarVersion.Bis = (FarVer.Stage==VS_BIS);
 		}
 		else
 		{
@@ -145,7 +146,35 @@ HANDLE WINAPI OpenW(const struct OpenInfo *Info)
 	if (!gbInfoW_OK)
 		return INVALID_HANDLE_VALUE;
 
-	return OpenPluginWcmn(Info->OpenFrom, Info->Data);
+	INT_PTR Item = Info->Data;
+	if (Info->OpenFrom == OPEN_FROMMACRO)
+	{
+		Item = 0; // Сразу сброс
+		OpenMacroInfo* p = (OpenMacroInfo*)Info->Data;
+		if (p->StructSize >= sizeof(*p))
+		{
+			if (p->Count > 0)
+			{
+				switch (p->Values[0].Type)
+				{
+				case FMVT_INTEGER:
+					Item = (INT_PTR)p->Values[0].Integer; break;
+				//case FMVT_DOUBLE:
+				//	Item = (INT_PTR)p->Values[0].Double; break;
+				case FMVT_STRING:
+					_ASSERTE(p->Values[0].String!=NULL);
+					Item = (INT_PTR)p->Values[0].String; break;
+				default:
+					_ASSERTE(p->Values[0].Type==FMVT_INTEGER || p->Values[0].Type==FMVT_STRING);
+				}
+			}
+		}
+		else
+		{
+			_ASSERTE(p->StructSize >= sizeof(*p));
+		}
+	}
+	return OpenPluginWcmn(Info->OpenFrom, Item, (Info->OpenFrom == OPEN_FROMMACRO));
 }
 
 // Common
@@ -236,7 +265,8 @@ void PostMacroW1900(wchar_t* asMacro)
 	InfoW1900->MacroControl(&guid_ConEmuTh, MCTL_SENDSTRING, 0, &mcr);
 }
 
-int ShowPluginMenuW1900()
+int 
+ShowPluginMenuW1900()
 {
 	if (!InfoW1900)
 		return -1;
@@ -245,6 +275,7 @@ int ShowPluginMenuW1900()
 	{
 		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW1900->GetMsg(&guid_ConEmuTh,CEMenuThumbnails)},
 		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW1900->GetMsg(&guid_ConEmuTh,CEMenuTiles)},
+		{(ghConEmuRoot && (gFarVersion.Bis)) ? 0 : MIF_DISABLE,  InfoW1900->GetMsg(&guid_ConEmuTh,CEMenuIcons)},
 	};
 	size_t nCount = countof(items);
 	CeFullPanelInfo* pi = IsThumbnailsActive(TRUE);
@@ -263,11 +294,19 @@ int ShowPluginMenuW1900()
 		{
 			items[1].Flags |= MIF_SELECTED|MIF_CHECKED;
 		}
+		else if (pi->PVM == pvm_Icons)
+		{
+			items[2].Flags |= MIF_SELECTED|MIF_CHECKED;
+		}
 		else
 		{
 			items[0].Flags |= MIF_SELECTED;
 		}
 	}
+
+	#ifndef _DEBUG
+	nCount--;
+	#endif
 	
 	GUID lguid_TypeMenu = { /* f3e4df2c-7ecc-42db-ba2e-6f43f7cd9415 */
 	    0xf3e4df2c,
@@ -293,6 +332,12 @@ BOOL IsMacroActiveW1900()
 		return FALSE;
 
 	return TRUE;
+}
+
+int GetMacroAreaW1900()
+{
+	int nArea = (int)InfoW1900->MacroControl(&guid_ConEmuTh, MCTL_GETAREA, 0, 0);
+	return nArea;
 }
 
 
@@ -355,6 +400,17 @@ void LoadPanelItemInfoW1900(CeFullPanelInfo* pi, INT_PTR nItem)
 	                   ppi->Flags,
 	                   ppi->NumberOfLinks);
 	// ppi не освобождаем - это ссылка на pi->pFarTmpBuf
+
+	if (gFarVersion.Bis)
+	{
+		FarGetPluginPanelItemInfo gppi = {sizeof(gppi)};
+		nSize = InfoW1900->PanelControl(hPanel, FCTL_GETPANELITEMINFO, (int)nItem, &gppi);
+		if (nSize)
+		{
+			pi->BisItem2CeItem(nItem, TRUE, gppi.Color.Flags, gppi.Color.ForegroundColor, gppi.Color.BackgroundColor, gppi.PosX, gppi.PosY);
+		}
+	}
+
 	//// Необходимый размер буфера для хранения элемента
 	//nSize = sizeof(CePluginPanelItem)
 	//	+(lstrlen(ppi->FileName)+1)*2
@@ -369,7 +425,7 @@ void LoadPanelItemInfoW1900(CeFullPanelInfo* pi, INT_PTR nItem)
 	//}
 	//
 	//// Лучше сбросить, чтобы мусор не оставался, да и поля в стуктуру могут добавляться, чтобы не забылось...
-	//PRAGMA_ERROR("Если содержимое полей не менялось (атрибуты размеры и пр.), то не обнулять структуру!");
+	//Если содержимое полей не менялось (атрибуты размеры и пр.), то не обнулять структуру!
 	//// Иначе сбрасываются цвета элементов...
 	//memset(((LPBYTE)pi->ppItems[nItem])+sizeof(pi->ppItems[nItem]->cbSize), 0, pi->ppItems[nItem]->cbSize-sizeof(pi->ppItems[nItem]->cbSize));
 	//
@@ -401,6 +457,48 @@ void LoadPanelItemInfoW1900(CeFullPanelInfo* pi, INT_PTR nItem)
 	//pi->ppItems[nItem]->pszDescription = psz;
 	//
 	//// ppi не освобождаем - это ссылка на pi->pFarTmpBuf
+}
+
+static int GetFarSetting(HANDLE h, size_t Root, LPCWSTR Name)
+{
+	int nValue = 0;
+	FarSettingsItem fsi = {Root, Name};
+	if (InfoW1900->SettingsControl(h, SCTL_GET, 0, &fsi))
+	{
+		_ASSERTE(fsi.Type == FST_QWORD);
+		nValue = (fsi.Number != 0);
+	}
+	else
+	{
+		_ASSERTE("InfoW1900->SettingsControl failed" && 0);
+	}
+	return nValue;
+}
+
+static void LoadFarSettingsW1900(CEFarInterfaceSettings* pInterface, CEFarPanelSettings* pPanel)
+{
+	_ASSERTE(GetCurrentThreadId() == gnMainThreadId);
+	GUID FarGuid = {};
+	FarSettingsCreate sc = {sizeof(FarSettingsCreate), FarGuid, INVALID_HANDLE_VALUE};
+	if (InfoW1900->SettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &sc))
+	{
+		if (pInterface)
+		{
+			memset(pInterface, 0, sizeof(*pInterface));
+			pInterface->AlwaysShowMenuBar = GetFarSetting(sc.Handle, FSSF_INTERFACE, L"ShowMenuBar");
+			pInterface->ShowKeyBar = GetFarSetting(sc.Handle, FSSF_SCREEN, L"KeyBar");
+		}
+
+		if (pPanel)
+		{
+			memset(pPanel, 0, sizeof(*pPanel));
+			pPanel->ShowColumnTitles = GetFarSetting(sc.Handle, FSSF_PANELLAYOUT, L"ColumnTitles");
+			pPanel->ShowStatusLine = GetFarSetting(sc.Handle, FSSF_PANELLAYOUT, L"StatusLine");
+			pPanel->ShowSortModeLetter = GetFarSetting(sc.Handle, FSSF_PANELLAYOUT, L"SortMode");
+		}
+
+		InfoW1900->SettingsControl(sc.Handle, SCTL_FREE, 0, 0);
+	}
 }
 
 BOOL LoadPanelInfoW1900(BOOL abActive)
@@ -447,17 +545,14 @@ BOOL LoadPanelInfoW1900(BOOL abActive)
 	pcefpi->ItemsNumber = pi.ItemsNumber;
 	pcefpi->CurrentItem = pi.CurrentItem;
 	pcefpi->TopPanelItem = pi.TopPanelItem;
-	pcefpi->Visible = (pi.Flags & PFLAGS_VISIBLE) == PFLAGS_VISIBLE;
+	pcefpi->Visible = (pi.PanelType == PTYPE_FILEPANEL) && ((pi.Flags & PFLAGS_VISIBLE) == PFLAGS_VISIBLE);
 	pcefpi->ShortNames = (pi.Flags & PFLAGS_ALTERNATIVENAMES) == PFLAGS_ALTERNATIVENAMES;
 	pcefpi->Focus = (pi.Flags & PFLAGS_FOCUS) == PFLAGS_FOCUS;
 	pcefpi->Flags = pi.Flags; // CEPANELINFOFLAGS
 	pcefpi->PanelMode = pi.ViewMode;
 	pcefpi->IsFilePanel = (pi.PanelType == PTYPE_FILEPANEL);
 	// Настройки интерфейса
-	pcefpi->nFarInterfaceSettings = gnFarInterfaceSettings =
-	                                    (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETINTERFACESETTINGS, 0, 0);
-	pcefpi->nFarPanelSettings = gnFarPanelSettings =
-	                                (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETPANELSETTINGS, 0, 0);
+	LoadFarSettingsW1900(&pcefpi->FarInterfaceSettings, &pcefpi->FarPanelSettings);
 
 	// Цвета фара
 	INT_PTR nColorSize = InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETARRAYCOLOR, 0, NULL);
@@ -629,12 +724,9 @@ BOOL CheckPanelSettingsW1900(BOOL abSilence)
 	if (!InfoW1900)
 		return FALSE;
 
-	gnFarPanelSettings =
-	    (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETPANELSETTINGS, 0, 0);
-	gnFarInterfaceSettings =
-	    (DWORD)InfoW1900->AdvControl(&guid_ConEmuTh, ACTL_GETINTERFACESETTINGS, 0, 0);
+	LoadFarSettingsW1900(&gFarInterfaceSettings, &gFarPanelSettings);
 
-	if (!(gnFarPanelSettings & FPS_SHOWCOLUMNTITLES))
+	if (!(gFarPanelSettings.ShowColumnTitles))
 	{
 		// Для корректного определения положения колонок необходим один из флажков в настройке панели:
 		// [x] Показывать заголовки колонок [x] Показывать суммарную информацию

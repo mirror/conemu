@@ -26,9 +26,23 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "MAssert.h"
 #include "MStrSafe.h"
+
+// Используется в ConEmuC.exe, и для минимизации кода
+// менеджер памяти тут использоваться не должен!
+#undef malloc
+#define malloc "malloc"
+#undef calloc
+#define calloc "calloc"
+
+#ifdef _DEBUG
+	#ifndef __GNUC__
+		#pragma comment(lib,"strsafe.lib")
+	#endif
+#endif
 
 LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 {
@@ -142,6 +156,14 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 						nLen = 8;
 						pszSrc += 3;
 					}
+					else if (pszSrc[0] == L'0' && pszSrc[1] == L'2' && (pszSrc[2] == L'X' || pszSrc[2] == L'x'))
+					{
+						if (pszSrc[2] == L'x')
+							cBase = L'a';
+						memmove(szValue, L"00", 4);
+						nLen = 2;
+						pszSrc += 3;
+					}
 					else if (pszSrc[0] == L'X' || pszSrc[0] == L'x')
 					{
 						if (pszSrc[0] == L'x')
@@ -171,7 +193,7 @@ LPCWSTR msprintf(LPWSTR lpOut, size_t cchOutMax, LPCWSTR lpFmt, ...)
 						nLen = (int)(pszValue - szValue);
 						if (!nLen)
 						{
-							*pszValue = L'0';
+							*(pszValue++) = L'0';
 							nLen = 1;
 						}
 					}
@@ -370,4 +392,26 @@ wrap:
 	*pszDst = 0;
 	_ASSERTE(lstrlenA(lpOut) < (int)cchOutMax);
 	return lpOut;
+}
+
+int lstrcmpni(LPCWSTR asStr1, LPCWSTR asStr2, int cchMax)
+{
+	wchar_t sz1[64], sz2[64];
+
+	int nCmp = 0;
+
+	if (cchMax >= 64)
+	{
+		_ASSERTE(FALSE && "Too long strings");
+		nCmp = wcsncmp(asStr1, asStr2, cchMax);
+	}
+	else
+	{
+		lstrcpyn(sz1, asStr1, cchMax+1);
+		lstrcpyn(sz2, asStr2, cchMax+1);
+
+		nCmp = lstrcmpi(sz1, sz2);
+	}
+
+	return nCmp;
 }

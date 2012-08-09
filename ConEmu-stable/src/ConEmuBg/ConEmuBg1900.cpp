@@ -118,8 +118,8 @@ void SetStartupInfoW1900(void *aInfo)
 {
 	INIT_FAR_PSI(::InfoW1900, ::FSFW1900, (PluginStartupInfo*)aInfo);
 	
-	_ASSERTE(FPS_SHOWSTATUSLINE == 0x00000040);
-	_ASSERTE(FPS_SHOWCOLUMNTITLES == 0x00000020);
+	//_ASSERTE(FPS_SHOWSTATUSLINE == 0x00000040);
+	//_ASSERTE(FPS_SHOWCOLUMNTITLES == 0x00000020);
 
 #ifdef _DEBUG
 	INT_PTR i;
@@ -143,6 +143,7 @@ void SetStartupInfoW1900(void *aInfo)
 			_ASSERTE(FarVer.Major<=0xFFFF && FarVer.Minor<=0xFFFF)
 			gFarVersion.dwVerMajor = (WORD)FarVer.Major;
 			gFarVersion.dwVerMinor = (WORD)FarVer.Minor;
+			gFarVersion.Bis = (FarVer.Stage==VS_BIS);
 		}
 		else
 		{
@@ -299,4 +300,10 @@ bool FMatchW1900(LPCWSTR asMask, LPWSTR asPath)
 {
 	INT_PTR iRc = FSFW1900->ProcessName(asMask, asPath, 0, PN_CMPNAME);
 	return (iRc != 0);
+}
+
+int GetMacroAreaW1900()
+{
+	int nArea = (int)InfoW1900->MacroControl(&guid_ConEmuBg, MCTL_GETAREA, 0, 0);
+	return nArea;
 }

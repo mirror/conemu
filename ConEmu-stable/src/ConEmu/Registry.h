@@ -61,8 +61,15 @@ struct SettingsBase
 
 		virtual void Delete(const wchar_t *regName) = 0;
 
-		virtual void Save(const wchar_t *regName, const wchar_t *value) = 0; // value = _T(""); // сюда мог придти и NULL
 		virtual void Save(const wchar_t *regName, LPCBYTE value, DWORD nType, DWORD nSize) = 0;
+
+		//virtual void Save(const wchar_t *regName, const wchar_t *value) = 0; // value = _T(""); // сюда мог придти и NULL
+		void Save(const wchar_t *regName, const wchar_t *value)
+		{
+			if (!value) value = L"";  // сюда мог придти и NULL
+
+			Save(regName, (LPCBYTE)value, REG_SZ, (_tcslen(value)+1)*sizeof(wchar_t));
+		}
 
 		void SaveMSZ(const wchar_t *regName, const wchar_t *value, DWORD nSize) // size in BYTES!!!
 		{
@@ -105,12 +112,36 @@ struct SettingsRegistry : public SettingsBase
 
 		virtual void Delete(const wchar_t *regName);
 
-		virtual void Save(const wchar_t *regName, const wchar_t *value); // value = _T(""); // сюда мог придти и NULL
+		//virtual void Save(const wchar_t *regName, const wchar_t *value); // value = _T(""); // сюда мог придти и NULL
 		virtual void Save(const wchar_t *regName, LPCBYTE value, DWORD nType, DWORD nSize);
 
 	public:
 		SettingsRegistry();
 		virtual ~SettingsRegistry();
+};
+
+struct SettingsINI : public SettingsBase
+{
+	protected:
+		wchar_t* mpsz_Section;
+		LPCWSTR  mpsz_IniFile;
+	public:
+
+		virtual bool OpenKey(const wchar_t *regPath, uint access, BOOL abSilent = FALSE);
+		virtual void CloseKey();
+
+		virtual bool Load(const wchar_t *regName, wchar_t **value);
+		virtual bool Load(const wchar_t *regName, LPBYTE value, DWORD nSize);
+		virtual bool Load(const wchar_t *regName, wchar_t *value, int maxLen); // нада, для проверки валидности типа реестра
+
+		virtual void Delete(const wchar_t *regName);
+
+		//virtual void Save(const wchar_t *regName, const wchar_t *value); // value = _T(""); // сюда мог придти и NULL
+		virtual void Save(const wchar_t *regName, LPCBYTE value, DWORD nType, DWORD nSize);
+
+	public:
+		SettingsINI();
+		virtual ~SettingsINI();
 };
 
 #ifndef __GNUC__
@@ -125,8 +156,9 @@ struct SettingsXML : public SettingsBase
 		bool mb_KeyEmpty;
 		//wchar_t ms_LevelPrefix[64];
 		//BSTR mbs_LevelPrefix, mbs_LevelSuffix;
+		static IXMLDOMDocument* CreateDomDocument(wchar_t* pszErr = NULL, size_t cchErrMax = 0);
 	public:
-		bool IsXmlAllowed();
+		static bool IsXmlAllowed();
 		virtual bool OpenKey(const wchar_t *regPath, uint access, BOOL abSilent = FALSE);
 		virtual void CloseKey();
 
@@ -136,7 +168,7 @@ struct SettingsXML : public SettingsBase
 
 		virtual void Delete(const wchar_t *regName);
 
-		virtual void Save(const wchar_t *regName, const wchar_t *value); // value = _T(""); // сюда мог придти и NULL
+		//virtual void Save(const wchar_t *regName, const wchar_t *value); // value = _T(""); // сюда мог придти и NULL
 		virtual void Save(const wchar_t *regName, LPCBYTE value, DWORD nType, DWORD nSize);
 
 	protected:

@@ -27,6 +27,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 
+#define HIDE_USE_EXCEPTION_INFO
 #define SHOWDEBUGSTR
 
 #include "Header.h"
@@ -41,118 +42,163 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Macro.h"
 
 
-CConEmuMacro::CConEmuMacro()
-{
-	TODO("Регистрация функций для автоматической обработки?");
-}
-
 // Общая функция, для обработки любого известного макроса
 LPWSTR CConEmuMacro::ExecuteMacro(LPWSTR asMacro, CRealConsole* apRCon)
 {
-	if (!asMacro)
-		return NULL;
-
 	// Skip white-spaces
-	while(*asMacro == L' ' || *asMacro == L'\t' || *asMacro == L'\r' || *asMacro == L'\n')
-		asMacro++;
+	SkipWhiteSpaces(asMacro);
 
-	if (!*asMacro)
-		return NULL;
-
-	wchar_t szFunction[64], chTerm = 0;
-	bool lbFuncOk = false;
-
-	for (size_t i = 0; i < (countof(szFunction)-1); i++)
+	if (!asMacro || !*asMacro)
 	{
-		chTerm = asMacro[i];
-		szFunction[i] = chTerm;
+		return lstrdup(L"Empty Macro");
+	}
 
-		if (chTerm < L' ' || chTerm > L'z')
+	if (*asMacro == L'"')
+	{
+		return lstrdup(L"Invalid Macro (remove quotas)");
+	}
+
+	LPWSTR pszAllResult = NULL;
+
+	while (*asMacro)
+	{
+		wchar_t szFunction[64], chTerm = 0;
+		bool lbFuncOk = false;
+
+		for (size_t i = 0; i < (countof(szFunction)-1); i++)
 		{
-			if (chTerm == 0)
+			chTerm = asMacro[i];
+			szFunction[i] = chTerm;
+
+			if (chTerm < L' ' || chTerm > L'z')
 			{
-				lbFuncOk = true;
-				asMacro = asMacro + i;
-			}
-
-			break;
-		}
-
-		if (chTerm == L':' || chTerm == L'(' || chTerm == L' ')
-		{
-			// Skip white-spaces
-			if (chTerm == L':' || chTerm == L'(')
-			{
-				asMacro = asMacro+i+1;
-			}
-			else
-			{
-				asMacro = asMacro+i;
-
-				while(*asMacro == L' ' || *asMacro == L'\t' || *asMacro == L'\r' || *asMacro == L'\n')
-					asMacro++;
-
-				if (*asMacro == L'(')
+				if (chTerm == 0)
 				{
-					chTerm = *asMacro;
-					asMacro++;
+					lbFuncOk = true;
+					asMacro = asMacro + i;
 				}
+
+				break;
 			}
 
-			lbFuncOk = true;
-			szFunction[i] = 0;
-			break;
-		}
-	}
+			if (chTerm == L':' || chTerm == L'(' || chTerm == L' ')
+			{
+				// Skip white-spaces
+				if (chTerm == L':' || chTerm == L'(')
+				{
+					asMacro = asMacro+i+1;
+				}
+				else
+				{
+					asMacro = asMacro+i;
 
-	if (!lbFuncOk)
-	{
-		if (chTerm || (!asMacro || (*asMacro != 0)))
+					SkipWhiteSpaces(asMacro);
+
+					if (*asMacro == L'(')
+					{
+						chTerm = *asMacro;
+						asMacro++;
+					}
+				}
+
+				lbFuncOk = true;
+				szFunction[i] = 0;
+				break;
+			}
+		}
+
+		if (!lbFuncOk)
 		{
-			_ASSERTE(chTerm || (asMacro && (*asMacro == 0)));
-			return NULL;
+			if (chTerm || (!asMacro || (*asMacro != 0)))
+			{
+				_ASSERTE(chTerm || (asMacro && (*asMacro == 0)));
+				return NULL;
+			}
 		}
+
+		// Подготовить аргументы (отрезать закрывающую скобку)
+		if (chTerm == L'(')
+		{
+			LPWSTR pszEnd = wcsrchr(asMacro, L')');
+
+			if (pszEnd)
+				*pszEnd = 0;
+		}
+
+		LPWSTR pszResult = NULL;
+
+		// Поехали
+		if (!lstrcmpi(szFunction, L"IsConEmu"))
+			pszResult = IsConEmu(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Close"))
+			pszResult = Close(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"FindEditor"))
+			pszResult = FindEditor(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"FindViewer"))
+			pszResult = FindViewer(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"FindFarWindow"))
+			pszResult = FindFarWindow(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"WindowFullscreen"))
+			pszResult = WindowFullscreen(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"WindowMaximize"))
+			pszResult = WindowMaximize(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"WindowMinimize"))
+			pszResult = WindowMinimize(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"WindowMode"))
+			pszResult = WindowMode(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"MsgBox"))
+			pszResult = MsgBox(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"FontSetSize"))
+			pszResult = FontSetSize(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"FontSetName"))
+			pszResult = FontSetName(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"IsRealVisible"))
+			pszResult = IsRealVisible(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"IsConsoleActive"))
+			pszResult = IsConsoleActive(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Paste"))
+			pszResult = Paste(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Progress"))
+			pszResult = Progress(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Shell") || !lstrcmpi(szFunction, L"ShellExecute"))
+			pszResult = Shell(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Tab") || !lstrcmpi(szFunction, L"Tabs") || !lstrcmpi(szFunction, L"TabControl"))
+			pszResult = Tab(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Task"))
+			pszResult = Task(asMacro, apRCon);
+		else if (!lstrcmpi(szFunction, L"Status") || !lstrcmpi(szFunction, L"StatusBar") || !lstrcmpi(szFunction, L"StatusControl"))
+			pszResult = Status(asMacro, apRCon);
+		else
+			pszResult = NULL; // Неизвестная функция
+
+		if (!pszAllResult)
+		{
+			pszAllResult = pszResult;
+		}
+		else
+		{
+			TODO("Добавить результат через разделитель ';'");
+		}
+
+		TODO("обработать следующую функцию");
+		break;
 	}
-
-	// Подготовить аргументы (отрезать закрывающую скобку)
-	if (chTerm == L'(')
-	{
-		LPWSTR pszEnd = wcsrchr(asMacro, L')');
-
-		if (pszEnd)
-			*pszEnd = 0;
-	}
-
-	LPWSTR pszResult = NULL;
-
-	// Поехали
-	if (!lstrcmpi(szFunction, L"IsConEmu"))
-		pszResult = IsConEmu(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"FindEditor"))
-		pszResult = FindEditor(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"FindViewer"))
-		pszResult = FindViewer(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"FindFarWindow"))
-		pszResult = FindFarWindow(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"WindowMinimize"))
-		pszResult = WindowMinimize(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"MsgBox"))
-		pszResult = MsgBox(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"FontSetSize"))
-		pszResult = FontSetSize(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"FontSetName"))
-		pszResult = FontSetName(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"IsRealVisible"))
-		pszResult = IsRealVisible(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"IsConsoleActive"))
-		pszResult = IsConsoleActive(asMacro, apRCon);
-	else if (!lstrcmpi(szFunction, L"Shell"))
-		pszResult = Shell(asMacro, apRCon);
-	else
-		pszResult = NULL; // Неизвестная функция
 
 	// Fin
-	return pszResult;
+	return pszAllResult;
+}
+
+void CConEmuMacro::SkipWhiteSpaces(LPWSTR& rsString)
+{
+	if (!rsString)
+	{
+		_ASSERTE(rsString!=NULL);
+		return;
+	}
+
+	// Skip white-spaces
+	while (*rsString == L' ' || *rsString == L'\t' || *rsString == L'\r' || *rsString == L'\n')
+		rsString++;
 }
 
 /* ***  Функции для парсера параметров  *** */
@@ -339,6 +385,36 @@ LPWSTR CConEmuMacro::IsConsoleActive(LPWSTR asArgs, CRealConsole* apRCon)
 	return pszResult;
 }
 
+LPWSTR CConEmuMacro::Close(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPWSTR pszResult = NULL;
+	int nCmd = 0, nFlags = 0;
+
+	if (GetNextInt(asArgs, nCmd))
+		GetNextInt(asArgs, nFlags);
+
+	switch (nCmd)
+	{
+	case 0:
+	case 1:
+		if (apRCon)
+		{
+			apRCon->CloseConsole(nCmd==1, (nFlags & 1)==0);
+			pszResult = lstrdup(L"OK");
+		}
+		break;
+	case 2:
+		if (gpConEmu->DoClose())
+			pszResult = lstrdup(L"OK");
+		break;
+	}
+
+	if (!pszResult)
+		lstrdup(L"Failed");
+
+	return pszResult;
+}
+
 // Найти окно и активировать его. // LPWSTR asName
 LPWSTR CConEmuMacro::FindEditor(LPWSTR asArgs, CRealConsole* apRCon)
 {
@@ -383,64 +459,73 @@ LPWSTR CConEmuMacro::FindFarWindow(LPWSTR asArgs, CRealConsole* apRCon)
 	return FindFarWindowHelper(nWindowType, pszName, apRCon);
 }
 LPWSTR CConEmuMacro::FindFarWindowHelper(
-    int anWindowType/*Panels=1, Viewer=2, Editor=3, |(Elevated=0x100), |(NotElevated=0x200)*/,
+    CEFarWindowType anWindowType/*Panels=1, Viewer=2, Editor=3, |(Elevated=0x100), |(NotElevated=0x200), |(Modal=0x400)*/,
     LPWSTR asName, CRealConsole* apRCon)
 {
-	CRealConsole* pRCon, *pActiveRCon = NULL;
-	CVirtualConsole* pVCon;
-	ConEmuTab tab;
+	CVConGuard VCon;
 	int iFound = 0;
-	DWORD nElevateFlag = (anWindowType & 0x300);
-	pVCon = gpConEmu->ActiveCon();
+	bool bFound = gpConEmu->isFarExist(anWindowType|fwt_ActivateFound, asName, &VCon);
 
-	if (pVCon)
-		pActiveRCon = pVCon->RCon();
+	if (!bFound && VCon.VCon())
+		iFound = -1; // редактор есть, но заблокирован модальным диалогом/другим редактором
+	else if (bFound)
+		iFound = gpConEmu->isVConValid(VCon.VCon()); //1-based
 
-	for(int i = 0; !iFound && (i < MAX_CONSOLE_COUNT); i++)
-	{
-		if (!(pVCon = gpConEmu->GetVCon(i)))
-			break;
+	//CRealConsole* pRCon, *pActiveRCon = NULL;
+	//CVirtualConsole* pVCon;
+	//ConEmuTab tab;
+	//int iFound = 0;
+	//DWORD nElevateFlag = (anWindowType & 0x300);
+	//pVCon = gpConEmu->ActiveCon();
 
-		if (!(pRCon = pVCon->RCon()) || pRCon == pActiveRCon)
-			continue;
+	//if (pVCon)
+	//	pActiveRCon = pVCon->RCon();
 
-		for(int j = 0; !iFound; j++)
-		{
-			if (!pRCon->GetTab(j, &tab))
-				break;
+	//for (int i = 0; !iFound && (i < MAX_CONSOLE_COUNT); i++)
+	//{
+	//	if (!(pVCon = gpConEmu->GetVCon(i)))
+	//		break;
 
-			// Если передали 0 - интересует любое окно
-			if (anWindowType)
-			{
-				if ((tab.Type & 0xFF) != (anWindowType & 0xFF))
-					continue;
+	//	if (!(pRCon = pVCon->RCon()) || pRCon == pActiveRCon)
+	//		continue;
 
-				if (nElevateFlag)
-				{
-					if ((nElevateFlag == 0x100) && !(tab.Type & 0x100))
-						continue;
+	//	for (int j = 0; !iFound; j++)
+	//	{
+	//		if (!pRCon->GetTab(j, &tab))
+	//			break;
 
-					if ((nElevateFlag == 0x200) && (tab.Type & 0x100))
-						continue;
-				}
-			}
+	//		// Если передали 0 - интересует любое окно
+	//		if (anWindowType)
+	//		{
+	//			if ((tab.Type & 0xFF) != (anWindowType & 0xFF))
+	//				continue;
 
-			if (lstrcmpi(tab.Name, asName) == 0)
-			{
-				if (pRCon->ActivateFarWindow(j))
-				{
-					iFound = i+1;
-					gpConEmu->Activate(pVCon);
-				}
-				else
-				{
-					iFound = -1;
-				}
+	//			if (nElevateFlag)
+	//			{
+	//				if ((nElevateFlag == 0x100) && !(tab.Type & 0x100))
+	//					continue;
 
-				break;
-			}
-		}
-	}
+	//				if ((nElevateFlag == 0x200) && (tab.Type & 0x100))
+	//					continue;
+	//			}
+	//		}
+
+	//		if (lstrcmpi(tab.Name, asName) == 0)
+	//		{
+	//			if (pRCon->ActivateFarWindow(j))
+	//			{
+	//				iFound = i+1;
+	//				gpConEmu->Activate(pVCon);
+	//			}
+	//			else
+	//			{
+	//				iFound = -1;
+	//			}
+
+	//			break;
+	//		}
+	//	}
+	//}
 
 	int cchSize = 32; //-V112
 	LPWSTR pszResult = (LPWSTR)malloc(2*cchSize);
@@ -455,9 +540,31 @@ LPWSTR CConEmuMacro::FindFarWindowHelper(
 	return pszResult;
 }
 
+// Fullscreen
+LPWSTR CConEmuMacro::WindowFullscreen(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPWSTR pszRc = WindowMode(NULL, NULL);
+
+	gpConEmu->OnAltEnter();
+
+	return pszRc;
+}
+
+// Fullscreen
+LPWSTR CConEmuMacro::WindowMaximize(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPWSTR pszRc = WindowMode(NULL, NULL);
+
+	gpConEmu->OnAltF9();
+
+	return pszRc;
+}
+
 // Минимизировать окно (можно насильно в трей) // [int nForceToTray=0/1]
 LPWSTR CConEmuMacro::WindowMinimize(LPWSTR asArgs, CRealConsole* apRCon)
 {
+	LPWSTR pszRc = WindowMode(NULL, NULL);
+
 	int nForceToTray = 0;
 	GetNextInt(asArgs, nForceToTray);
 
@@ -466,7 +573,59 @@ LPWSTR CConEmuMacro::WindowMinimize(LPWSTR asArgs, CRealConsole* apRCon)
 	else
 		PostMessage(ghWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
 
-	return lstrdup(L"OK");
+	return pszRc;
+}
+
+// Вернуть текущий статус: NORMAL/MAXIMIZED/FULLSCREEN/MINIMIZED
+// Или установить новый
+LPWSTR CConEmuMacro::WindowMode(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPCWSTR pszRc = NULL;
+	LPWSTR pszMode = NULL;
+
+	LPCWSTR sFS  = L"FS";
+	LPCWSTR sMAX = L"MAX";
+	LPCWSTR sMIN = L"MIN";
+	LPCWSTR sTSA = L"TSA";
+	LPCWSTR sNOR = L"NOR";
+
+	if (asArgs && GetNextString(asArgs, pszMode))
+	{
+		if (lstrcmpi(pszMode, sFS) == 0)
+		{
+			pszRc = sFS;
+			gpConEmu->SetWindowMode(rFullScreen);
+		}
+		else if (lstrcmpi(pszMode, sMAX) == 0)
+		{
+			pszRc = sMAX;
+			gpConEmu->SetWindowMode(rMaximized);
+		}
+		else if (lstrcmpi(pszMode, sMIN) == 0)
+		{
+			pszRc = sMIN;
+			PostMessage(ghWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+		}
+		else if (lstrcmpi(pszMode, sTSA) == 0)
+		{
+			pszRc = sTSA;
+			Icon.HideWindowToTray();
+		}
+		else //if (lstrcmpi(pszMode, sNOR) == 0)
+		{
+			pszRc = sNOR;
+			gpConEmu->SetWindowMode(rNormal);
+		}
+	}
+
+	pszRc = pszRc ? pszRc :
+		!IsWindowVisible(ghWnd) ? sTSA :
+		gpConEmu->isFullScreen() ? sFS :
+		gpConEmu->isZoomed() ? sMAX :
+		gpConEmu->isIconic() ? sMIN :
+		sNOR;
+
+	return lstrdup(pszRc);
 }
 
 // MessageBox(ConEmu,asText,asTitle,anType) // LPWSTR asText [, LPWSTR asTitle[, int anType]]
@@ -546,15 +705,91 @@ LPWSTR CConEmuMacro::FontSetName(LPWSTR asArgs, CRealConsole* apRCon)
 	return lstrdup(L"InvalidArg");
 }
 
+// Paste (<Cmd>[,"<Text>"])
+LPWSTR CConEmuMacro::Paste(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	int nCommand = 0;
+	LPWSTR pszText = NULL;
+
+	if (!apRCon)
+		return lstrdup(L"InvalidArg");
+
+	if (GetNextInt(asArgs, nCommand))
+	{
+		if (!(nCommand == 0 || nCommand == 1 || nCommand == 2 || nCommand == 3))
+		{
+			return lstrdup(L"InvalidArg");
+		}
+
+		if (GetNextString(asArgs, pszText))
+		{
+			if (!*pszText)
+				return lstrdup(L"InvalidArg");
+		}
+		else
+		{
+			pszText = NULL;
+		}
+
+		bool bFirstLineOnly = (nCommand & 1) != 0;
+		bool bNoConfirm = (nCommand & 2) != 0;
+
+		apRCon->Paste(bFirstLineOnly, pszText, bNoConfirm);
+
+		return lstrdup(L"OK");
+	}
+
+	return lstrdup(L"InvalidArg");
+}
+
+// Progress(<Type>[,<Value>])
+LPWSTR CConEmuMacro::Progress(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	int nType = 0, nValue = 0;
+	LPWSTR pszText = NULL;
+
+	if (!apRCon)
+		return lstrdup(L"InvalidArg");
+
+	if (GetNextInt(asArgs, nType))
+	{
+		if (!(nType == 0 || nType == 1 || nType == 2))
+		{
+			return lstrdup(L"InvalidArg");
+		}
+
+		GetNextInt(asArgs, nValue);
+
+		apRCon->SetProgress(nType, nValue);
+
+		return lstrdup(L"OK");
+	}
+
+	return lstrdup(L"InvalidArg");
+}
+
 // ShellExecute
+// <oper>,<app>[,<parm>[,<dir>[,<showcmd>]]]
 LPWSTR CConEmuMacro::Shell(LPWSTR asArgs, CRealConsole* apRCon)
 {
 	LPWSTR pszOper = NULL, pszFile = NULL, pszParm = NULL, pszDir = NULL;
+	LPWSTR pszBuf = NULL;
 	int nShowCmd = SW_SHOWNORMAL;
 	
 	if (GetNextString(asArgs, pszOper))
 	{
-		if (GetNextString(asArgs, pszFile) && *pszFile)
+		CVConGuard VCon(apRCon ? apRCon->VCon() : NULL);
+		if ((!GetNextString(asArgs, pszFile) || !*pszFile) && apRCon)
+		{
+			LPCWSTR pszCmd = apRCon->GetCmd();
+			if (pszCmd && *pszCmd)
+			{
+				pszBuf = lstrdup(pszCmd);
+				pszFile = pszBuf;
+			}
+		}
+
+		if (pszFile && *pszFile)
 		{
 			if (!GetNextString(asArgs, pszParm))
 				pszParm = NULL;
@@ -562,29 +797,70 @@ LPWSTR CConEmuMacro::Shell(LPWSTR asArgs, CRealConsole* apRCon)
 				pszDir = NULL;
 			else if (!GetNextInt(asArgs, nShowCmd))
 				nShowCmd = SW_SHOWNORMAL;
-			
-			if ((lstrcmpi(pszOper,L"new_console")==0) || (pszParm && wcsstr(pszParm, L"-new_console")))
+
+			bool bNewTaskGroup = false;
+
+			if (*pszFile == CmdFilePrefix || *pszFile == TaskBracketLeft)
 			{
-				RConStartArgs *pArgs = new RConStartArgs;
-				
-				size_t nAllLen = _tcslen(pszFile) + (pszParm ? _tcslen(pszParm) : 0) + 16;
-				pArgs->pszSpecialCmd = (wchar_t*)malloc(nAllLen*sizeof(wchar_t));
-				
-				if (*pszFile != L'"')
+				wchar_t* pszDataW = gpConEmu->LoadConsoleBatch(pszFile);
+				if (pszDataW)
 				{
-					pArgs->pszSpecialCmd[0] = L'"';
-					_wcscpy_c(pArgs->pszSpecialCmd+1, nAllLen-1, pszFile);
-					_wcscat_c(pArgs->pszSpecialCmd, nAllLen, L"\" ");
+					bNewTaskGroup = true;
+					SafeFree(pszDataW);
+				}
+			}
+			
+			bool bNewOper = bNewTaskGroup || (wmemcmp(pszOper, L"new_console", 11) == 0);
+
+			if (bNewOper || (pszParm && wcsstr(pszParm, L"-new_console")))
+			{
+				size_t nAllLen;
+				RConStartArgs *pArgs = new RConStartArgs;
+
+				if (bNewTaskGroup)
+				{
+					_ASSERTE(pszParm==NULL || *pszParm==0);
+					pArgs->pszSpecialCmd = lstrdup(pszFile);
 				}
 				else
 				{
-					_wcscpy_c(pArgs->pszSpecialCmd, nAllLen, pszFile);
-					_wcscat_c(pArgs->pszSpecialCmd, nAllLen, L" ");
-				}
-				
-				if (pszParm && *pszParm)
-				{
-					_wcscat_c(pArgs->pszSpecialCmd, nAllLen, pszParm);
+					nAllLen = _tcslen(pszFile) + (pszParm ? _tcslen(pszParm) : 0) + 16;
+					
+					if (bNewOper)
+					{
+						size_t nOperLen = _tcslen(pszOper);
+						if ((nOperLen > 11) && (pszOper[11] == L':'))
+							nAllLen += (nOperLen + 6);
+						else
+							bNewOper = false;
+					}
+					
+					pArgs->pszSpecialCmd = (wchar_t*)malloc(nAllLen*sizeof(wchar_t));
+					
+					if (*pszFile != L'"')
+					{
+						pArgs->pszSpecialCmd[0] = L'"';
+						_wcscpy_c(pArgs->pszSpecialCmd+1, nAllLen-1, pszFile);
+						_wcscat_c(pArgs->pszSpecialCmd, nAllLen, L"\" ");
+					}
+					else if (*pszFile)
+					{
+						_wcscpy_c(pArgs->pszSpecialCmd, nAllLen, pszFile);
+						_wcscat_c(pArgs->pszSpecialCmd, nAllLen, L" ");
+					}
+					
+					if (pszParm && *pszParm)
+					{
+						_wcscat_c(pArgs->pszSpecialCmd, nAllLen, pszParm);
+					}
+					
+					// Параметры запуска консоли могли передать в первом аргуементе (например "new_console:b")
+					if (bNewOper)
+					{
+						_wcscat_c(pArgs->pszSpecialCmd, nAllLen, L" \"-");
+						_wcscat_c(pArgs->pszSpecialCmd, nAllLen, pszOper);
+						_wcscat_c(pArgs->pszSpecialCmd, nAllLen, L"\"");
+					}
 				}
 				
 				if (pszDir)
@@ -611,5 +887,206 @@ LPWSTR CConEmuMacro::Shell(LPWSTR asArgs, CRealConsole* apRCon)
 		}
 	}
 
-	return lstrdup(L"InvalidArg");	
+	SafeFree(pszBuf);
+
+	return lstrdup(L"InvalidArg");
+}
+
+// Status(0[,<Parm>]) - Show/Hide status bar, Parm=1 - Show, Parm=2 - Hide
+// Status(1[,"<Text>"]) - Set status bar text
+LPWSTR CConEmuMacro::Status(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPWSTR pszResult = NULL;
+	int nStatusCmd = 0;
+	int nParm = 0;
+	LPWSTR pszText = NULL;
+
+	if (!GetNextInt(asArgs, nStatusCmd))
+		nStatusCmd = 0;
+
+	switch (nStatusCmd)
+	{
+	case csc_ShowHide:
+		GetNextInt(asArgs, nParm);
+		gpConEmu->StatusCommand(csc_ShowHide, nParm);
+		pszResult = lstrdup(L"OK");
+		break;
+	case csc_SetStatusText:
+		if (apRCon)
+		{
+			GetNextString(asArgs, pszText);
+			gpConEmu->StatusCommand(csc_ShowHide, 0, pszText, apRCon);
+			pszResult = lstrdup(L"OK");
+		}
+		break;
+	}
+
+	return pszResult ? pszResult : lstrdup(L"InvalidArg");
+}
+
+// TabControl
+// <Cmd>[,<Parm>]
+// Cmd: 0 - Show/Hide tabs
+//		1 - commit lazy changes
+//		2 - switch next (eq. CtrlTab)
+//		3 - switch prev (eq. CtrlShiftTab)
+//      4 - switch tab direct (no recent mode), parm=(1,-1)
+//      5 - switch tab recent, parm=(1,-1)
+//      6 - switch console direct (no recent mode), parm=(1,-1)
+//      7 - activate console by number, parm=(one-based console index)
+//		8 - show tabs list menu (indiffirent Far/Not Far)
+// Returns "OK" on success
+LPWSTR CConEmuMacro::Tab(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPWSTR pszResult = NULL;
+
+	int nTabCmd = 0;
+	if (GetNextInt(asArgs, nTabCmd))
+	{
+		int nParm = 0;
+		GetNextInt(asArgs, nParm);
+
+		switch (nTabCmd)
+		{
+		case ctc_ShowHide:
+		case ctc_SwitchCommit: // commit lazy changes
+		case ctc_SwitchNext:
+		case ctc_SwitchPrev:
+			gpConEmu->TabCommand((ConEmuTabCommand)nTabCmd);
+			pszResult = lstrdup(L"OK");
+			break;
+		case ctc_SwitchDirect: // switch tab direct (no recent mode), parm=(1,-1)
+			if (nParm == 1)
+			{
+				gpConEmu->mp_TabBar->SwitchNext(gpSet->isTabRecent);
+				pszResult = lstrdup(L"OK");
+			}
+			else if (nParm == -1)
+			{
+				gpConEmu->mp_TabBar->SwitchPrev(gpSet->isTabRecent);
+				pszResult = lstrdup(L"OK");
+			}
+			break;
+		case ctc_SwitchRecent: // switch tab recent, parm=(1,-1)
+			if (nParm == 1)
+			{
+				gpConEmu->mp_TabBar->SwitchNext(!gpSet->isTabRecent);
+				pszResult = lstrdup(L"OK");
+			}
+			else if (nParm == -1)
+			{
+				gpConEmu->mp_TabBar->SwitchPrev(!gpSet->isTabRecent);
+				pszResult = lstrdup(L"OK");
+			}
+			break;
+		case ctc_SwitchConsoleDirect: // switch console direct (no recent mode), parm=(1,-1)
+			{
+				int nActive = gpConEmu->ActiveConNum(); // 0-based
+				if (nParm == 1)
+				{
+					// Прокрутка вперед (циклически)
+					if (gpConEmu->GetVCon(nActive+1))
+					{
+						gpConEmu->ConActivate(nActive+1);
+						pszResult = lstrdup(L"OK");
+					}
+					else if (nActive)
+					{
+						gpConEmu->ConActivate(0);
+						pszResult = lstrdup(L"OK");
+					}
+				}
+				else if (nParm == -1)
+				{
+					// Прокрутка назад (циклически)
+					if (nActive > 0)
+					{
+						gpConEmu->ConActivate(nActive-1);
+						pszResult = lstrdup(L"OK");
+					}
+					else
+					{
+						int nNew = gpConEmu->GetConCount()-1;
+						if (nNew > nActive)
+						{
+							gpConEmu->ConActivate(nNew);
+							pszResult = lstrdup(L"OK");
+						}
+					}
+				}
+			}
+			break;
+		case ctc_ActivateConsole: // activate console by number, parm=(one-based console index)
+			if (nParm >= 1 && gpConEmu->GetVCon(nParm-1))
+			{
+				gpConEmu->ConActivate(nParm);
+				pszResult = lstrdup(L"OK");
+			}
+			break;
+		case ctc_ShowTabsList: // 
+			CConEmuCtrl::key_ShowTabsList(0, false, NULL, NULL/*чтобы не зависимо от фара показала меню*/);
+			break;
+		}
+	}
+
+	return pszResult ? pszResult : lstrdup(L"InvalidArg");
+}
+
+// Task(Index)
+// Task("Name")
+LPWSTR CConEmuMacro::Task(LPWSTR asArgs, CRealConsole* apRCon)
+{
+	LPCWSTR pszResult = NULL;
+	LPCWSTR pszName = NULL, pszDir = NULL;
+	wchar_t* pszBuf = NULL;
+	int nTaskIndex = 0;
+
+	if (*asArgs == L'"')
+	{
+		LPWSTR pszArg = NULL;
+		if (GetNextString(asArgs, pszArg))
+		{
+			if (*pszArg && (*pszArg != TaskBracketLeft))
+			{
+				size_t cchMax = _tcslen(pszArg)+3;
+				pszBuf = (wchar_t*)malloc(cchMax*sizeof(*pszBuf));
+				if (pszBuf)
+				{
+					*pszBuf = TaskBracketLeft;
+					_wcscpy_c(pszBuf+1, cchMax-1, pszArg);
+					pszBuf[cchMax-2] = TaskBracketRight;
+					pszBuf[cchMax-1] = 0;
+					pszName = pszBuf;
+				}
+			}
+			else
+			{
+				pszName = pszArg;
+			}
+		}
+	}
+	else
+	{
+		if (GetNextInt(asArgs, nTaskIndex) && (nTaskIndex > 0))
+		{
+			const Settings::CommandTasks* pTask = gpSet->CmdTaskGet(nTaskIndex - 1);
+			if (pTask)
+				pszName = pTask->pszName;
+		}
+	}
+
+	if (pszName && *pszName)
+	{
+		RConStartArgs *pArgs = new RConStartArgs;
+		pArgs->pszSpecialCmd = lstrdup(pszName);
+
+		if (pszDir)
+			pArgs->pszStartupDir = lstrdup(pszDir);
+
+		gpConEmu->PostCreateCon(pArgs);
+
+		pszResult = L"OK";
+	}
+
+	return pszResult ? lstrdup(pszResult) : lstrdup(L"InvalidArg");
 }

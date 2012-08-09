@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
 #include <Wininet.h>
 #include <shlobj.h>
@@ -33,6 +34,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "UpdateSet.h"
 #include "Options.h"
 #include "ConEmu.h"
+#include "TrayIcon.h"
 #include "version.h"
 
 CConEmuUpdate* gpUpd = NULL;
@@ -343,7 +345,7 @@ void CConEmuUpdate::StartCheckProcedure(BOOL abShowMessages)
 	{
 		wchar_t szErrMsg[255]; wcscpy_c(szErrMsg, L"Updates are not enabled in ConEmu settings\n");
 		wcscat_c(szErrMsg, szReason);
-		DisplayLastError(szErrMsg, 0);
+		DisplayLastError(szErrMsg, -1);
 		return;
 	}
 
@@ -433,9 +435,8 @@ bool CConEmuUpdate::ShowConfirmation()
 		ms_LastErrorInfo = NULL;
 		SC.Unlock();
 
-		BOOL b = gbDontEnable; gbDontEnable = FALSE;
+		DontEnable de;
 		int iBtn = MessageBox(NULL, pszConfirm, ms_DefaultTitle, MB_ICONQUESTION|MB_SETFOREGROUND|MB_SYSTEMMODAL|MB_YESNO);
-		gbDontEnable = b;
 
 		SafeFree(pszConfirm);
 
@@ -502,16 +503,17 @@ DWORD CConEmuUpdate::CheckProcInt()
 
 	DeleteBadTempFiles();
 
-#ifdef _WIN64
-	if (mp_Set->UpdateDownloadSetup() == 2)
-	{
-		if (mb_ManualCallMode)
-		{
-			ReportError(L"64bit versions of ConEmu may be updated with ConEmuSetup.exe only!", 0);
-		}
-		goto wrap;
-	}
-#endif
+	//120315 - OK, положим в архив и 64битный гуй
+	//#ifdef _WIN64
+	//if (mp_Set->UpdateDownloadSetup() == 2)
+	//{
+	//	if (mb_ManualCallMode)
+	//	{
+	//		ReportError(L"64bit versions of ConEmu may be updated with ConEmuSetup.exe only!", 0);
+	//	}
+	//	goto wrap;
+	//}
+	//#endif
 
 	if (!wi)
 	{
@@ -537,7 +539,7 @@ DWORD CConEmuUpdate::CheckProcInt()
 		BOOL bInfoRc;
 		DWORD crc;
 		
-		pszUpdateVerLocation = CreateTempFile(L"%TEMP%", L"ConEmuVersion.ini", hInfo);
+		pszUpdateVerLocation = CreateTempFile(mp_Set->szUpdateDownloadPath/*L"%TEMP%"*/, L"ConEmuVersion.ini", hInfo);
 		if (!pszUpdateVerLocation)
 			goto wrap;
 		bTempUpdateVerLocation = true;
@@ -821,9 +823,13 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 					pszMacro = szPID;
 					break;
 				default:
-					// Недопустимый управляющий символ
-					_ASSERTE(*pSrc==L'%');
+					// Недопустимый управляющий символ, это может быть переменная окружения
 					pszMacro = NULL;
+					pSrc--;
+					if (s)
+						*(pDst++) = L'%';
+					else
+						cchCmdMax++;
 				}
 
 				if (pszMacro)
@@ -941,7 +947,7 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 	wchar_t szName[128];
 	
 	if (!asDir || !*asDir)
-		asDir = L"%TEMP%";
+		asDir = L"%TEMP%\\ConEmu";
 	if (!asFileNameTempl || !*asFileNameTempl)
 		asFileNameTempl = L"ConEmu.tmp";
 	
@@ -958,11 +964,22 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 	{
 		lstrcpyn(szFile, asDir, MAX_PATH);
 	}
+
+	// Checking %TEMP% for valid path
+	LPCWSTR pszColon1, pszColon2;
+	if ((pszColon1 = wcschr(szFile, L':')) != NULL)
+	{
+		if ((pszColon2 = wcschr(pszColon1+1, L':')) != NULL)
+		{
+			ReportError(L"Invalid download path (%%TEMP%% variable?)\n%s", szFile, 0);
+			return NULL;
+		}
+	}
 	
 	int nLen = lstrlen(szFile);
 	if (nLen <= 0)
 	{
-		ReportError(L"CreateTempFile.asDir(%s) failed", asDir, 0);
+		ReportError(L"CreateTempFile.asDir(%s) failed, path is null", asDir, 0);
 		return NULL;
 	}
 	if (szFile[nLen-1] != L'\\')
@@ -970,6 +987,8 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 		szFile[nLen++] = L'\\'; szFile[nLen] = 0;
 	}
 	wchar_t* pszFilePart = szFile + nLen;
+
+	wchar_t* pszDirectory = lstrdup(szFile);
 	
 	
 	LPCWSTR pszName = PointToName(asFileNameTempl);
@@ -992,6 +1011,9 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 	if (psz)
 		*psz = 0;
 	
+	wchar_t* pszResult = NULL;
+	DWORD dwErr = 0;
+
 	for (UINT i = 0; i < 9999; i++)
 	{
 		_wcscpy_c(pszFilePart, MAX_PATH, szName);
@@ -1000,6 +1022,21 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 		_wcscat_c(pszFilePart, MAX_PATH, pszExt);
 		
 		hFile = CreateFile(szFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL|FILE_ATTRIBUTE_TEMPORARY, NULL);
+		//ERROR_PATH_NOT_FOUND?
+		if (!hFile || (hFile == INVALID_HANDLE_VALUE))
+		{
+			dwErr = GetLastError();
+			// на первом обломе - попытаться создать директорию, может ее просто нет?
+			if ((dwErr == ERROR_PATH_NOT_FOUND) && (i == 0))
+			{
+				if (!MyCreateDirectory(pszDirectory))
+				{
+					ReportError(L"CreateTempFile.asDir(%s) failed", asDir, 0);
+					goto wrap;
+				}
+			}
+		}
+
 		if (hFile && hFile != INVALID_HANDLE_VALUE)
 		{
 			psz = lstrdup(szFile);
@@ -1008,13 +1045,16 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 				CloseHandle(hFile); hFile = NULL;
 				ReportError(L"Can't allocate memory (%i bytes)", lstrlen(szFile));
 			}
-			return psz;
+			pszResult = psz;
+			goto wrap;
 		}
 	}
 	
-	ReportError(L"Cant create temp file(%s), code=%u", szFile, GetLastError());
+	ReportError(L"Can't create temp file(%s), code=%u", szFile, dwErr);
 	hFile = NULL;
-	return NULL;
+wrap:
+	SafeFree(pszDirectory);
+	return pszResult;
 }
 
 bool CConEmuUpdate::IsLocalFile(LPCWSTR& asPathOrUrl)
@@ -1156,7 +1196,16 @@ BOOL CConEmuUpdate::DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDst
 
 		if (mh_Connect == NULL)
 		{
-			mh_Connect = wi->_InternetConnectW(mh_Internet, szServer, INTERNET_DEFAULT_HTTP_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
+			wchar_t *pszColon = wcsrchr(szServer, L':');
+			INTERNET_PORT nServerPort = INTERNET_DEFAULT_HTTP_PORT;
+			if (pszColon != NULL)
+			{
+				*pszColon = 0;
+				nServerPort = wcstoul(pszColon+1, &pszColon, 10);
+				if (!nServerPort)
+					nServerPort = INTERNET_DEFAULT_HTTP_PORT;
+			}
+			mh_Connect = wi->_InternetConnectW(mh_Internet, szServer, nServerPort, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
 			if (!mh_Connect)
 			{
 				DWORD dwErr = GetLastError();
@@ -1206,7 +1255,14 @@ BOOL CConEmuUpdate::DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDst
 		{
 			DWORD dwErr = GetLastError();
 			if (mb_ManualCallMode || abPackage)
-				ReportError(L"HttpOpenRequest failed\nURL=%s\ncode=%u", asSource, dwErr);
+			{
+				// In offline mode, HttpSendRequest returns ERROR_FILE_NOT_FOUND if the resource is not found in the Internet cache.
+				ReportError(
+					(dwErr == 2)
+					? L"HttpOpenRequest failed\nURL=%s\ncode=%u, Internet is offline?"
+					: L"HttpOpenRequest failed\nURL=%s\ncode=%u"
+					, asSource, dwErr);
+			}
 			goto wrap;
 		}
 
@@ -1460,13 +1516,15 @@ bool CConEmuUpdate::NeedRunElevation()
 					{
 						szSystem[nLen++] = L'\\'; szSystem[nLen] = 0;
 					}
-					if (lstrcmpi(szTestFile, szSystem) == 0)
+					// наш внутренний lstrcmpni не прокатит - он для коротких строк
+					if (_wcsnicmp(szTestFile, szSystem, nLen) == 0)
 						return true; // Установлены в ProgramFiles
 				}
 			}
 		}
-		// Скорее всего не надо
-		return false;
+		// Issue 651: Проверим возможность создания/изменения файлов в любом случае
+		//// Скорее всего не надо
+		//return false;
 	}
 
 	// XP и ниже
@@ -1510,20 +1568,50 @@ bool CConEmuUpdate::QueryConfirmation(CConEmuUpdate::UpdateStep step, LPCWSTR as
 		return false;
 	}
 
-	bool lbRc;
+	bool lbRc = false;
 	wchar_t* pszMsg = NULL;
 	size_t cchMax;
 
 	switch (step)
 	{
 	case us_ConfirmDownload:
-		cchMax = _tcslen(asParm)+255;
-		pszMsg = (wchar_t*)malloc(cchMax*sizeof(*pszMsg));
-		_wsprintf(pszMsg, SKIPLEN(cchMax) L"New %s version available: %s\n%s\nDownload?",
-			(mp_Set->isUpdateUseBuilds==1) ? L"stable" : L"developer",
-			ms_NewVersion, asParm ? asParm : L"");
-		m_UpdateStep = step;
-		lbRc = QueryConfirmationInt(pszMsg);
+		{
+			cchMax = _tcslen(asParm)+255;
+			pszMsg = (wchar_t*)malloc(cchMax*sizeof(*pszMsg));
+
+			if (mb_ManualCallMode == 2)
+			{
+				lbRc = true;
+			}
+			else if (mp_Set->isUpdateConfirmDownload || mb_ManualCallMode)
+			{
+				wchar_t* pszDup = lstrdup(asParm);
+				wchar_t* pszFile = pszDup ? wcsrchr(pszDup, L'/') : NULL;
+				if (pszFile)
+				{
+					pszFile[1] = 0;
+					pszFile = (wchar_t*)(asParm + (pszFile - pszDup + 1));
+					asParm = pszDup;
+				}
+
+				_wsprintf(pszMsg, SKIPLEN(cchMax) L"New %s version available: %s\n\n%s\n%s\n\nDownload?",
+					(mp_Set->isUpdateUseBuilds==1) ? L"stable" : L"developer",
+					ms_NewVersion, asParm ? asParm : L"", pszFile ? pszFile : L"");
+				SafeFree(pszDup);
+
+				m_UpdateStep = step;
+				lbRc = QueryConfirmationInt(pszMsg);
+			}
+			else
+			{
+				_wsprintf(pszMsg, SKIPLEN(cchMax) L"New %s version available: %s\nClick here to download",
+					(mp_Set->isUpdateUseBuilds==1) ? L"stable" : L"developer",
+					ms_NewVersion);
+				Icon.ShowTrayIcon(pszMsg, tsa_Source_Updater);
+
+				lbRc = false;
+			}
+		}
 		break;
 	case us_ConfirmUpdate:
 		cchMax = 512;

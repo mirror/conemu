@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "defines.h"
 #include "MAssert.h"
@@ -144,26 +145,6 @@ int MyAssertProc(const wchar_t* pszFile, int nLine, const wchar_t* pszTest, bool
 			SetEvent(ghInMyAssertTrap);
 			gnInMyAssertThread = 0;
 			goto wrap;
-			
-			//CESERVER_REQ In;
-			//ExecutePrepareCmd(&In, CECMD_ASSERT, sizeof(CESERVER_REQ_HDR)+sizeof(MyAssertInfo));
-			//memmove(&In.AssertInfo, &a, sizeof(a));
-			//wchar_t szGuiPipeName[128];
-			//msprintf(szGuiPipeName, countof(szGuiPipeName), CEGUIPIPENAME, (DWORD)hGuiWnd);
-			//gbInMyAssertTrap = true;
-			//gbInMyAssertPipe = true;
-			//CESERVER_REQ* pOut = ExecuteCmd(szGuiPipeName, &In, 1000, hConWnd);
-			//gbInMyAssertTrap = false;
-			//gbInMyAssertPipe = false;
-			//if (pOut)
-			//{
-			//	if (pOut->hdr.cbSize > sizeof(CESERVER_REQ_HDR))
-			//	{
-			//		dwCode = pOut->dwData[0];
-			//	}
-			//	ExecuteFreeResult(pOut);
-			//	goto wrap;
-			//}
 		}
 	}
 

@@ -104,7 +104,8 @@ HANDLE WINAPI _export OpenPluginW(int OpenFrom,INT_PTR Item)
 	if (!gbInfoW_OK)
 		return INVALID_HANDLE_VALUE;
 
-	return OpenPluginWcmn(OpenFrom, Item);
+	// Far2 api!
+	return OpenPluginWcmn(OpenFrom, Item, ((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO));
 }
 
 void ExitFARW995(void)
@@ -174,7 +175,8 @@ void PostMacroW995(wchar_t* asMacro)
 	InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_KEYMACRO, (void*)&mcr);
 }
 
-int ShowPluginMenuW995()
+int 
+ShowPluginMenuW995()
 {
 	if (!InfoW995)
 		return -1;
@@ -183,6 +185,7 @@ int ShowPluginMenuW995()
 	{
 		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW995->GetMsg(InfoW995->ModuleNumber,CEMenuThumbnails)},
 		{ghConEmuRoot ? 0 : MIF_DISABLE,  InfoW995->GetMsg(InfoW995->ModuleNumber,CEMenuTiles)},
+		{/*ghConEmuRoot ? 0 :*/ MIF_DISABLE,  InfoW995->GetMsg(InfoW995->ModuleNumber,CEMenuIcons)},
 	};
 	int nCount = sizeof(items)/sizeof(items[0]);
 	CeFullPanelInfo* pi = IsThumbnailsActive(TRUE);
@@ -201,11 +204,19 @@ int ShowPluginMenuW995()
 		{
 			items[1].Flags |= MIF_SELECTED|MIF_CHECKED;
 		}
+		else if (pi->PVM == pvm_Icons)
+		{
+			items[2].Flags |= MIF_SELECTED|MIF_CHECKED;
+		}
 		else
 		{
 			items[0].Flags |= MIF_SELECTED;
 		}
 	}
+
+	#ifndef _DEBUG
+	nCount--;
+	#endif
 
 	int nRc = InfoW995->Menu(InfoW995->ModuleNumber, -1,-1, 0,
 	                         FMENU_USEEXT|FMENU_AUTOHIGHLIGHT|FMENU_CHANGECONSOLETITLE|FMENU_WRAPMODE,
@@ -225,6 +236,14 @@ BOOL IsMacroActiveW995()
 		return FALSE;
 
 	return TRUE;
+}
+
+int GetMacroAreaW995()
+{
+	#define MCMD_GETAREA 6
+	ActlKeyMacro area = {MCMD_GETAREA};
+	int nArea = (int)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_KEYMACRO, &area);
+	return nArea;
 }
 
 
@@ -300,7 +319,7 @@ void LoadPanelItemInfoW995(CeFullPanelInfo* pi, INT_PTR nItem)
 	//}
 	//
 	//// Лучше сбросить, чтобы мусор не оставался, да и поля в стуктуру могут добавляться, чтобы не забылось...
-	//PRAGMA_ERROR("Если содержимое полей не менялось (атрибуты размеры и пр.), то не обнулять структуру!");
+	//Если содержимое полей не менялось (атрибуты размеры и пр.), то не обнулять структуру!
 	//// Иначе сбрасываются цвета элементов...
 	//memset(((LPBYTE)pi->ppItems[nItem])+sizeof(pi->ppItems[nItem]->cbSize), 0, pi->ppItems[nItem]->cbSize-sizeof(pi->ppItems[nItem]->cbSize));
 	//
@@ -332,6 +351,28 @@ void LoadPanelItemInfoW995(CeFullPanelInfo* pi, INT_PTR nItem)
 	//pi->ppItems[nItem]->pszDescription = psz;
 	//
 	//// ppi не освобождаем - это ссылка на pi->pFarTmpBuf
+}
+
+static void LoadFarSettingsW995(CEFarInterfaceSettings* pInterface, CEFarPanelSettings* pPanel)
+{
+	DWORD nSet;
+
+	nSet = (DWORD)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
+	if (pInterface)
+	{
+		pInterface->Raw = nSet;
+		_ASSERTE((pInterface->AlwaysShowMenuBar != 0) == ((nSet & FIS_ALWAYSSHOWMENUBAR) != 0));
+		_ASSERTE((pInterface->ShowKeyBar != 0) == ((nSet & FIS_SHOWKEYBAR) != 0));
+	}
+	    
+	nSet = (DWORD)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
+	if (pPanel)
+	{
+		pPanel->Raw = nSet;
+		_ASSERTE((pPanel->ShowColumnTitles != 0) == ((nSet & FPS_SHOWCOLUMNTITLES) != 0));
+		_ASSERTE((pPanel->ShowStatusLine != 0) == ((nSet & FPS_SHOWSTATUSLINE) != 0));
+		_ASSERTE((pPanel->ShowSortModeLetter != 0) == ((nSet & FPS_SHOWSORTMODELETTER) != 0));
+	}
 }
 
 BOOL LoadPanelInfo995(BOOL abActive)
@@ -378,17 +419,14 @@ BOOL LoadPanelInfo995(BOOL abActive)
 	pcefpi->ItemsNumber = pi.ItemsNumber;
 	pcefpi->CurrentItem = pi.CurrentItem;
 	pcefpi->TopPanelItem = pi.TopPanelItem;
-	pcefpi->Visible = pi.Visible;
+	pcefpi->Visible = (pi.PanelType == PTYPE_FILEPANEL) && pi.Visible;
 	pcefpi->ShortNames = pi.ShortNames;
 	pcefpi->Focus = pi.Focus;
 	pcefpi->Flags = pi.Flags; // CEPANELINFOFLAGS
 	pcefpi->PanelMode = pi.ViewMode;
 	pcefpi->IsFilePanel = (pi.PanelType == PTYPE_FILEPANEL);
 	// Настройки интерфейса
-	pcefpi->nFarInterfaceSettings = gnFarInterfaceSettings =
-	                                    (DWORD)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
-	pcefpi->nFarPanelSettings = gnFarPanelSettings =
-	                                (DWORD)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
+	LoadFarSettingsW995(&pcefpi->FarInterfaceSettings, &pcefpi->FarPanelSettings);
 	// Цвета фара
 	BYTE FarConsoleColors[0x100];
 	INT_PTR nColorSize = InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETARRAYCOLOR, FarConsoleColors);
@@ -522,12 +560,9 @@ BOOL CheckPanelSettingsW995(BOOL abSilence)
 	if (!InfoW995)
 		return FALSE;
 
-	gnFarPanelSettings =
-	    (DWORD)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
-	gnFarInterfaceSettings =
-	    (DWORD)InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
+	LoadFarSettingsW995(&gFarInterfaceSettings, &gFarPanelSettings);
 
-	if (!(gnFarPanelSettings & FPS_SHOWCOLUMNTITLES))
+	if (!(gFarPanelSettings.ShowColumnTitles))
 	{
 		// Для корректного определения положения колонок необходим один из флажков в настройке панели:
 		// [x] Показывать заголовки колонок [x] Показывать суммарную информацию
@@ -561,7 +596,6 @@ void GetFarRectW995(SMALL_RECT* prcFarRect)
 	}
 }
 
-// Использовать только ACTL_GETSHORTWINDOWINFO. С ней проблем с синхронизацией быть не должно
 bool CheckFarPanelsW995()
 {
 	if (!InfoW995 || !InfoW995->AdvControl) return false;
@@ -569,68 +603,40 @@ bool CheckFarPanelsW995()
 	WindowInfo wi = {-1};
 	bool lbPanelsActive = false;
 
-	if (gFarVersion.dwBuild >= 1765)
+	_ASSERTE(gFarVersion.dwBuild >= 1765);
+
+	enum FARMACROAREA
 	{
-		enum FARMACROAREA
-		{
-			MACROAREA_OTHER             = 0,
-			MACROAREA_SHELL             = 1,
-			MACROAREA_VIEWER            = 2,
-			MACROAREA_EDITOR            = 3,
-			MACROAREA_DIALOG            = 4,
-			MACROAREA_SEARCH            = 5,
-			MACROAREA_DISKS             = 6,
-			MACROAREA_MAINMENU          = 7,
-			MACROAREA_MENU              = 8,
-			MACROAREA_HELP              = 9,
-			MACROAREA_INFOPANEL         =10,
-			MACROAREA_QVIEWPANEL        =11,
-			MACROAREA_TREEPANEL         =12,
-			MACROAREA_FINDFOLDER        =13,
-			MACROAREA_USERMENU          =14,
-			MACROAREA_AUTOCOMPLETION    =15,
-		};
+		MACROAREA_OTHER             = 0,
+		MACROAREA_SHELL             = 1,
+		MACROAREA_VIEWER            = 2,
+		MACROAREA_EDITOR            = 3,
+		MACROAREA_DIALOG            = 4,
+		MACROAREA_SEARCH            = 5,
+		MACROAREA_DISKS             = 6,
+		MACROAREA_MAINMENU          = 7,
+		MACROAREA_MENU              = 8,
+		MACROAREA_HELP              = 9,
+		MACROAREA_INFOPANEL         =10,
+		MACROAREA_QVIEWPANEL        =11,
+		MACROAREA_TREEPANEL         =12,
+		MACROAREA_FINDFOLDER        =13,
+		MACROAREA_USERMENU          =14,
+		MACROAREA_AUTOCOMPLETION    =15,
+	};
 #define MCMD_GETAREA 6
-		ActlKeyMacro area = {MCMD_GETAREA};
-		INT_PTR nArea = InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_KEYMACRO, &area);
+	ActlKeyMacro area = {MCMD_GETAREA};
+	INT_PTR nArea = InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_KEYMACRO, &area);
 
-		lbPanelsActive = (nArea == MACROAREA_SHELL || nArea == MACROAREA_SEARCH);
+	lbPanelsActive = (nArea == MACROAREA_SHELL || nArea == MACROAREA_SEARCH);
 
-		//switch(nArea)
-		//{
-		//case MACROAREA_SHELL:
-		//case MACROAREA_INFOPANEL:
-		//case MACROAREA_QVIEWPANEL:
-		//case MACROAREA_TREEPANEL:
-		//	return WTYPE_PANELS;
-		//case MACROAREA_VIEWER:
-		//	return WTYPE_VIEWER;
-		//case MACROAREA_EDITOR:
-		//	return WTYPE_EDITOR;
-		//case MACROAREA_DIALOG:
-		//case MACROAREA_SEARCH:
-		//case MACROAREA_DISKS:
-		//case MACROAREA_FINDFOLDER:
-		//case MACROAREA_AUTOCOMPLETION:
-		//	return WTYPE_DIALOG;
-		//case MACROAREA_HELP:
-		//	return WTYPE_HELP;
-		//case MACROAREA_MAINMENU:
-		//case MACROAREA_MENU:
-		//case MACROAREA_USERMENU:
-		//	return WTYPE_VMENU;
-		//case MACROAREA_OTHER: // Grabber
-		//	return -1;
-		//default:
-		//	return -1;
-		//}
-	}
-	else
-	{
-		_ASSERTE(GetCurrentThreadId() == gnMainThreadId);
-		INT_PTR iRc = InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETSHORTWINDOWINFO, (LPVOID)&wi);
-		lbPanelsActive = (iRc != 0) && (wi.Type == WTYPE_PANELS);
-	}
+	//}
+	//else
+	//{
+	//	_ASSERTE(GetCurrentThreadId() == gnMainThreadId);
+	//	INT_PTR iRc = InfoW995->AdvControl(InfoW995->ModuleNumber, ACTL_GETSHORTWINDOWINFO, (LPVOID)&wi);
+	//	lbPanelsActive = (iRc != 0) && (wi.Type == WTYPE_PANELS);
+	//}
 	
 	return lbPanelsActive;
 }

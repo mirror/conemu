@@ -28,6 +28,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+enum RecreateActionParm
+{
+	cra_CreateTab    = 0,
+	cra_RecreateTab  = 1,
+	cra_CreateWindow = 2,
+};
+
 struct RConStartArgs
 {
 	BOOL     bDetached;
@@ -48,13 +55,14 @@ struct RConStartArgs
  		eConfAlways = 1,
  		eConfNever = 2,
  	} eConfirmation;
+	BOOL     bForceDosBox; // useful with .bat files.
 	
-	BOOL     bRecreate; // Информационно и для CRecreateDlg
+	RecreateActionParm aRecreate; // Информационно и для CRecreateDlg
 
 	RConStartArgs();
 	~RConStartArgs();
 
 	BOOL CheckUserToken(HWND hPwd);
 
-	void ProcessNewConArg();
+	int ProcessNewConArg();
 };

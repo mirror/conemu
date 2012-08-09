@@ -29,7 +29,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _DEBUG
 //  Раскомментировать, чтобы сразу после запуска процесса (conemuc.exe) показать MessageBox, чтобы прицепиться дебаггером
-//  #define SHOW_STARTED_MSGBOX
+//	#define SHOW_STARTED_MSGBOX
 #elif defined(__GNUC__)
 //  Раскомментировать, чтобы сразу после запуска процесса (conemuc.exe) показать MessageBox, чтобы прицепиться дебаггером
 //  #define SHOW_STARTED_MSGBOX
@@ -74,25 +74,46 @@ int main(
 	ConsoleMain2_t lfConsoleMain2;
 	// Обязательно, иначе по CtrlC мы свалимся
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerRoutine, true);
-#if defined(SHOW_STARTED_MSGBOX) || defined(SHOW_COMSPEC_STARTED_MSGBOX)
 
+	#if defined(SHOW_STARTED_MSGBOX) || defined(SHOW_COMSPEC_STARTED_MSGBOX)
 	if (!IsDebuggerPresent())
 	{
 		wchar_t szTitle[100]; _wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"ConEmuC Loaded (PID=%i)", GetCurrentProcessId());
 		const wchar_t* pszCmdLine = GetCommandLineW();
 		MessageBox(NULL,pszCmdLine,szTitle,0);
 	}
+	#endif
 
+#ifdef _DEBUG
+	typedef struct _UNICODE_STRING {
+		USHORT Length;
+		USHORT MaximumLength;
+		PWSTR  Buffer;
+	} UNICODE_STRING;
+	UNICODE_STRING str = {};
+	WCHAR buf[MAX_PATH];
+	str.Buffer = (PWSTR)(((((DWORD_PTR)buf)+7)>>3)<<3);
+	lstrcpy(str.Buffer, L"kernel32.dll");
+	str.Length = lstrlen(str.Buffer)*2;
+	str.MaximumLength = str.Length+2;
+
+	typedef LONG (__stdcall* LdrGetDllHandleByName_t)(UNICODE_STRING* BaseDllName, UNICODE_STRING* FullDllName, PVOID *DllHandle);
+	HMODULE hNtDll = LoadLibrary(L"ntdll.dll");
+	HMODULE hKernel = GetModuleHandle(str.Buffer);
+	LdrGetDllHandleByName_t LdrGetDllHandleByName_f = (LdrGetDllHandleByName_t)GetProcAddress(hNtDll, "LdrGetDllHandleByName");
+	LONG ntStatus = -1; LPBYTE ptrProc = NULL;
+	if (LdrGetDllHandleByName_f)
+	{
+		DWORD_PTR nShift = ((LPBYTE)GetProcAddress(hKernel,"LoadLibraryW")) - (LPBYTE)hKernel;
+		ntStatus = LdrGetDllHandleByName_f(&str, NULL, (PVOID*)&ptrProc);
+		ptrProc += 0x12345;
+	}
 #endif
 	
 	//wchar_t szSkipEventName[128];
 	//_wsprintf(szSkipEventName, SKIPLEN(countof(szSkipEventName)) CEHOOKDISABLEEVENT, GetCurrentProcessId());
 	//HANDLE hSkipEvent = CreateEvent(NULL, TRUE, TRUE, szSkipEventName);
-#ifdef WIN64
-	hConEmu = LoadLibrary(L"ConEmuCD64.dll");
-#else
-	hConEmu = LoadLibrary(L"ConEmuCD.dll");
-#endif
+	hConEmu = LoadLibrary(WIN3264TEST(L"ConEmuCD.dll",L"ConEmuCD64.dll"));
 	dwErr = GetLastError();
 	//CloseHandle(hSkipEvent); hSkipEvent = NULL;
 
@@ -100,11 +121,7 @@ int main(
 	{
 		_wsprintfA(szErrInfo, SKIPLEN(countof(szErrInfo))
 		           "Can't load library \"%s\", ErrorCode=0x%08X\n",
-#ifdef WIN64
-		           "ConEmuCD64.dll",
-#else
-		           "ConEmuCD.dll",
-#endif
+		           WIN3264TEST(L"ConEmuCD.dll",L"ConEmuCD64.dll"),
 		           dwErr);
 		WriteConsoleA(GetStdHandle(STD_ERROR_HANDLE), szErrInfo, lstrlenA(szErrInfo), &dwOut, NULL);
 		return CERR_CONEMUHK_NOTFOUND;
@@ -120,22 +137,17 @@ int main(
 		_wsprintfA(szErrInfo, SKIPLEN(countof(szErrInfo))
 		           "Procedure \"%s\"  not found in library \"%s\"",
 		           lfConsoleMain2 ? "HandlerRoutine" : "ConsoleMain2",
-#ifdef WIN64
-		           "ConEmuHk64.dll"
-#else
-		           "ConEmuHk.dll"
-#endif
-		          );
+		           WIN3264TEST(L"ConEmuCD.dll",L"ConEmuCD64.dll"));
 		WriteConsoleW(GetStdHandle(STD_ERROR_HANDLE), szErrInfo, lstrlenA(szErrInfo), &dwOut, NULL);
 		FreeLibrary(hConEmu);
 		return CERR_CONSOLEMAIN_NOTFOUND;
 	}
 
 	// Main dll entry point for Server & ComSpec
-	iRc = lfConsoleMain2(FALSE/*abAlternative*/);
+	iRc = lfConsoleMain2(0/*WorkMode*/);
 	// Exiting
 	gfHandlerRoutine = NULL;
-	FreeLibrary(hConEmu);
+	//FreeLibrary(hConEmu); -- Shutdown Server/Comspec уже выполнен
 	ExitProcess(iRc);
 	return iRc;
 }

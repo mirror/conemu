@@ -72,7 +72,7 @@ extern "C" {
 
 HMODULE ghPluginModule = NULL; // ConEmuBg.dll - сам плагин
 //wchar_t* gszRootKey = NULL;
-FarVersion gFarVersion = {{0}};
+FarVersion gFarVersion = {};
 static RegisterBackground_t gfRegisterBackground = NULL;
 bool gbInStartPlugin = false;
 bool gbSetStartupInfoOk = false;
@@ -548,14 +548,12 @@ struct CachedImage
 		}
 		if (hDc)
 		{
-			WARNING("Исключение CloseHandle в Background");
-			CloseHandle(hDc);
+			DeleteDC(hDc);
 			hDc = NULL;
 		}
 		if (hBmp)
 		{
-			WARNING("Исключение CloseHandle в Background");
-			CloseHandle(hBmp);
+			DeleteObject(hBmp);
 			hBmp = NULL;
 		}
 		
@@ -1966,10 +1964,10 @@ void HSV2RGB(const HSVColor& HSV, RGBColor& rgb)
 // Сколько линий в области статуса (без учета рамок)
 int GetStatusLineCount(struct PaintBackgroundArg* pBk, BOOL bLeft)
 {
-	if (!(pBk->nFarPanelSettings & FPS_SHOWSTATUSLINE))
+	if (!(pBk->FarPanelSettings.ShowStatusLine))
 	{
 		// Что-то при запуске (1.7x?) иногда картинки прыгают, как будто статус сразу не нашли
-		_ASSERTE((pBk->nFarPanelSettings & FPS_SHOWSTATUSLINE) == FPS_SHOWSTATUSLINE);
+		_ASSERTE(pBk->FarPanelSettings.ShowStatusLine);
 		return 0;
 	}
 
@@ -1981,7 +1979,7 @@ int GetStatusLineCount(struct PaintBackgroundArg* pBk, BOOL bLeft)
 
 	RECT rcPanel = bLeft ? pBk->LeftPanel.rcPanelRect : pBk->RightPanel.rcPanelRect;
 		
-	if ((rcPanel.bottom-rcPanel.top) <= ((pBk->nFarPanelSettings & FPS_SHOWCOLUMNTITLES) ? 5 : 4))
+	if ((rcPanel.bottom-rcPanel.top) <= ((pBk->FarPanelSettings.ShowColumnTitles) ? 5 : 4))
 		return 1; // минимальная высота панели
 		
 	COORD bufSize = {(SHORT)(rcPanel.right-rcPanel.left+1),min(10,(SHORT)(rcPanel.bottom-rcPanel.top))};
@@ -2027,8 +2025,12 @@ int GetStatusLineCount(struct PaintBackgroundArg* pBk, BOOL bLeft)
 		static bool bWarnLines = false;
 		if (!bWarnLines)
 		{
-			bWarnLines = true;
-			_ASSERTE(nLines>0);
+			int nArea = GetMacroArea();
+			if (nArea == 1/*MACROAREA_SHELL*/ || nArea == 5/*MACROAREA_SEARCH*/)
+			{
+				bWarnLines = true;
+				_ASSERTE(nLines>0);
+			}
 		}
 	}
 #endif
@@ -3042,4 +3044,21 @@ bool FMatch(LPCWSTR asMask, LPWSTR asPath)
 		return FUNC_Y(FMatchW)(asMask, asPath);
 	else
 		return FUNC_X(FMatchW)(asMask, asPath);
+}
+
+int GetMacroArea()
+{
+	int nMacroArea = 0/*MACROAREA_OTHER*/;
+
+	if (gFarVersion.dwVerMajor==1)
+	{
+		_ASSERTE(gFarVersion.dwVerMajor>1);
+		nMacroArea = 1; // в Far 1.7x не поддерживается
+	}
+	else if (gFarVersion.dwBuild>=FAR_Y_VER)
+		nMacroArea = FUNC_Y(GetMacroAreaW)();
+	else
+		nMacroArea = FUNC_X(GetMacroAreaW)();
+
+	return nMacroArea;
 }

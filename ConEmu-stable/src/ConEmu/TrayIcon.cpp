@@ -26,10 +26,23 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define SHOWDEBUGSTR
+
+#define DEBUGSTRICON(x) DEBUGSTR(x)
+
+#define HIDE_USE_EXCEPTION_INFO
 #include "header.h"
 #include "TrayIcon.h"
 #include "ConEmu.h"
 #include "Options.h"
+
+#ifndef NIN_BALLOONUSERCLICK
+#define NIN_BALLOONSHOW         (WM_USER + 2)
+#define NIN_BALLOONTIMEOUT      (WM_USER + 4)
+#define NIN_BALLOONUSERCLICK    (WM_USER + 5)
+#endif
+
+#define MY_BALLOON_TICK 2000
 
 TrayIcon Icon;
 
@@ -38,12 +51,15 @@ TrayIcon::TrayIcon()
 	memset(&IconData, 0, sizeof(IconData));
 	mb_WindowInTray = false;
 	mb_InHidingToTray = false;
+	m_MsgSource = tsa_Source_None;
+	mb_SecondTimeoutMsg = false; mn_BalloonShowTick = 0;
 	//mn_SysItemId[0] = SC_MINIMIZE;
 	//mn_SysItemId[1] = SC_MAXIMIZE_SECRET;
 	//mn_SysItemId[2] = SC_RESTORE_SECRET;
 	//mn_SysItemId[3] = SC_SIZE;
 	//mn_SysItemId[4] = SC_MOVE;
 	//memset(mn_SysItemState, 0, sizeof(mn_SysItemState));
+	mh_Balloon = NULL;
 }
 
 TrayIcon::~TrayIcon()
@@ -81,8 +97,9 @@ void TrayIcon::AddTrayIcon()
 
 	if (!mb_WindowInTray)
 	{
+		mb_SecondTimeoutMsg = false; mn_BalloonShowTick = 0;
 		GetWindowText(ghWnd, IconData.szTip, countof(IconData.szTip));
-		Shell_NotifyIcon(NIM_ADD, &IconData);
+		Shell_NotifyIcon(NIM_ADD, (NOTIFYICONDATA*)&IconData);
 		mb_WindowInTray = true;
 	}
 	else
@@ -91,29 +108,42 @@ void TrayIcon::AddTrayIcon()
 	}
 }
 
-void TrayIcon::RemoveTrayIcon()
+void TrayIcon::RemoveTrayIcon(bool bForceRemove /*= false*/)
 {
-	if (mb_WindowInTray)
+	if (mb_WindowInTray && (bForceRemove || (m_MsgSource == tsa_Source_None)))
 	{
-		Shell_NotifyIcon(NIM_DELETE, &IconData);
+		mb_SecondTimeoutMsg = false; mn_BalloonShowTick = 0;
+		Shell_NotifyIcon(NIM_DELETE, (NOTIFYICONDATA*)&IconData);
 		mb_WindowInTray = false;
+		mh_Balloon = NULL;
 	}
 }
 
 void TrayIcon::UpdateTitle()
 {
-	if (!mb_WindowInTray || !IconData.hIcon)
+	// Добавил tsa_Source_None. Если висит Balloon с сообщением,
+	// то нет смысла обновлять тултип, он все-равно не виден...
+	if (!mb_WindowInTray || !IconData.hIcon || (m_MsgSource != tsa_Source_None))
 		return;
 
-	GetWindowText(ghWnd, IconData.szTip, countof(IconData.szTip));
-	Shell_NotifyIcon(NIM_MODIFY, &IconData);
+	// это тултип, который появляется при наведении курсора мышки
+	wchar_t szTitle[128] = {};
+	GetWindowText(ghWnd, szTitle, countof(szTitle));
+	if (*IconData.szInfo || *IconData.szInfoTitle || lstrcmp(szTitle, IconData.szTip))
+	{
+		IconData.szInfo[0] = 0;
+		IconData.szInfoTitle[0] = 0;
+		lstrcpyn(IconData.szTip, szTitle, countof(IconData.szTip));
+		Shell_NotifyIcon(NIM_MODIFY, (NOTIFYICONDATA*)&IconData);
+	}
 }
 
-void TrayIcon::HideWindowToTray(LPCTSTR asInfoTip /* = NULL */)
+void TrayIcon::ShowTrayIcon(LPCTSTR asInfoTip /*= NULL*/, TrayIconMsgSource aMsgSource /*= tsa_Source_None*/)
 {
-	mb_InHidingToTray = true;
+	m_MsgSource = aMsgSource;
 	if (asInfoTip && *asInfoTip)
 	{
+		// Сообщение, которое сейчас всплывет
 		IconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_INFO | NIF_TIP;
 		lstrcpyn(IconData.szInfoTitle, gpConEmu->GetDefaultTitle(), countof(IconData.szInfoTitle));
 		lstrcpyn(IconData.szInfo, asInfoTip, countof(IconData.szInfo));
@@ -125,11 +155,19 @@ void TrayIcon::HideWindowToTray(LPCTSTR asInfoTip /* = NULL */)
 		IconData.szInfoTitle[0] = 0;
 	}
 	AddTrayIcon(); // добавит или обновит tooltip
+}
+
+void TrayIcon::HideWindowToTray(LPCTSTR asInfoTip /* = NULL */)
+{
+	mb_InHidingToTray = true;
+
+	ShowTrayIcon(asInfoTip);
+
 	if (IsWindowVisible(ghWnd))
 	{
-		apiShowWindow(ghWnd, SW_HIDE);
+		gpConEmu->ShowWindow(SW_HIDE);
 	}
-	HMENU hMenu = gpConEmu->GetSystemMenu(/*ghWnd, false*/);
+	HMENU hMenu = gpConEmu->GetSysMenu(/*ghWnd, false*/);
 	SetMenuItemText(hMenu, ID_TOTRAY, TRAY_ITEM_RESTORE_NAME);
 	mb_InHidingToTray = false;
 	//for (int i = 0; i < countof(mn_SysItemId); i++)
@@ -146,12 +184,20 @@ void TrayIcon::RestoreWindowFromTray(BOOL abIconOnly /*= FALSE*/)
 {
 	if (!abIconOnly)
 	{
-		apiShowWindow(ghWnd, SW_SHOW);
+		gpConEmu->SetWindowMode(gpConEmu->WindowMode);
+
+		if (!IsWindowVisible(ghWnd))
+			gpConEmu->ShowWindow(SW_SHOW);
+
 		apiSetForegroundWindow(ghWnd);
 	}
-	//EnableMenuItem(GetSystemMenu(ghWnd, false), ID_TOTRAY, MF_BYCOMMAND | MF_ENABLED);
-	HMENU hMenu = gpConEmu->GetSystemMenu(/*ghWnd, false*/);
-	SetMenuItemText(hMenu, ID_TOTRAY, TRAY_ITEM_HIDE_NAME);
+
+	if (IsWindowVisible(ghWnd))
+	{
+		//EnableMenuItem(GetSystemMenu(ghWnd, false), ID_TOTRAY, MF_BYCOMMAND | MF_ENABLED);
+		HMENU hMenu = gpConEmu->GetSysMenu(/*ghWnd, false*/);
+		SetMenuItemText(hMenu, ID_TOTRAY, TRAY_ITEM_HIDE_NAME);
+	}
 
 	//for (int i = 0; i < countof(mn_SysItemId); i++)
 	//{
@@ -160,11 +206,13 @@ void TrayIcon::RestoreWindowFromTray(BOOL abIconOnly /*= FALSE*/)
 
 	if (!gpSet->isAlwaysShowTrayIcon)
 		RemoveTrayIcon();
+	else
+		UpdateTitle();
 }
 
 void TrayIcon::LoadIcon(HWND inWnd, int inIconResource)
 {
-	IconData.cbSize = sizeof(NOTIFYICONDATA);
+	IconData.cbSize = sizeof(IconData);
 	IconData.uID = 1;
 	IconData.hWnd = inWnd;
 	IconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_INFO | NIF_TIP;
@@ -189,13 +237,74 @@ void TrayIcon::LoadIcon(HWND inWnd, int inIconResource)
 
 LRESULT TrayIcon::OnTryIcon(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 {
-	switch(lParam)
+	#ifdef _DEBUG
+	wchar_t szMsg[128];
+	#endif
+
+	switch (lParam)
 	{
 		case WM_LBUTTONUP:
-			Icon.RestoreWindowFromTray();
+		case NIN_BALLOONUSERCLICK:
+			#ifdef _DEBUG
+			_wsprintf(szMsg, SKIPLEN(countof(szMsg)) (lParam==WM_LBUTTONUP) ? L"TSA: WM_LBUTTONUP(%i,0x%08X)\n" : L"TSA: NIN_BALLOONUSERCLICK(%i,0x%08X)\n", (int)wParam, (DWORD)lParam);
+			DEBUGSTRICON(szMsg);
+			#endif
+			if (gpSet->isQuakeStyle)
+			{
+				SingleInstanceShowHideType sih = sih_ShowHideTSA;
+				if (IsWindowVisible(ghWnd))
+				{
+					if (gpSet->isAlwaysOnTop || (gpSet->isQuakeStyle == 2))
+					{
+						sih = sih_HideTSA;
+					}
+					else
+					{
+						// Хм. Тут проблема. Если поверх ConEmu есть какое-то окно, то ConEmu нужно поднять?
+					}
+				}
+				gpConEmu->OnMinimizeRestore(sih);
+			}
+			else
+				Icon.RestoreWindowFromTray();
+			if (m_MsgSource == tsa_Source_Updater)
+			{
+				m_MsgSource = tsa_Source_None;
+				gpConEmu->CheckUpdates(2);
+			}
+			break;
+		case NIN_BALLOONSHOW:
+			#ifdef _DEBUG
+			_wsprintf(szMsg, SKIPLEN(countof(szMsg)) L"TSA: NIN_BALLOONSHOW(%i,0x%08X)\n", (int)wParam, (DWORD)lParam);
+			DEBUGSTRICON(szMsg);
+			#endif
+			mn_BalloonShowTick = GetTickCount();
+			break;
+		case NIN_BALLOONTIMEOUT:
+			{
+				#ifdef _DEBUG
+				_wsprintf(szMsg, SKIPLEN(countof(szMsg)) L"TSA: NIN_BALLOONTIMEOUT(%i,0x%08X)\n", (int)wParam, (DWORD)lParam);
+				DEBUGSTRICON(szMsg);
+				#endif
+
+				if (mb_SecondTimeoutMsg
+					|| (mn_BalloonShowTick && ((GetTickCount() - mn_BalloonShowTick) > MY_BALLOON_TICK)))
+				{
+					m_MsgSource = tsa_Source_None;
+					Icon.RestoreWindowFromTray(TRUE);
+				}
+				else if (!mb_SecondTimeoutMsg && (mn_BalloonShowTick && ((GetTickCount() - mn_BalloonShowTick) > MY_BALLOON_TICK)))
+				{
+					mb_SecondTimeoutMsg = true;
+				}
+			}
 			break;
 		case WM_RBUTTONUP:
 		{
+			#ifdef _DEBUG
+			_wsprintf(szMsg, SKIPLEN(countof(szMsg)) L"TSA: WM_RBUTTONUP(%i,0x%08X)\n", (int)wParam, (DWORD)lParam);
+			DEBUGSTRICON(szMsg);
+			#endif
 			POINT mPos;
 			GetCursorPos(&mPos);
 			apiSetForegroundWindow(ghWnd);
@@ -203,6 +312,12 @@ LRESULT TrayIcon::OnTryIcon(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 			PostMessage(hWnd, WM_NULL, 0, 0);
 		}
 		break;
+
+	#ifdef _DEBUG
+	default:
+		_wsprintf(szMsg, SKIPLEN(countof(szMsg)) L"TSA: OnTryIcon(uMsg, wParam=%i, lParam=0x%04X)\n", messg, (int)wParam, (DWORD)lParam);
+		DEBUGSTRICON(szMsg);
+	#endif
 	}
 
 	return 0;

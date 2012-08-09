@@ -59,7 +59,7 @@ TMPDIR = ../../gcc
 OBJDIR = $(TMPDIR)/conemudw$(DIRBIT)
 COMDIR = $(TMPDIR)/common
 #REOBJDIR = \.\.\/\.\.\/gcc\/conemudw
-DLLDIR = ../../Release
+DLLDIR = ../../Release/ConEmu
 COMMON = ../common
 COMINC = $(COMMON)
 EXT = dll
@@ -152,6 +152,9 @@ $(DLLFULLNAME): $(OBJS) $(DEF)
 	@$(MV) $(DLLNAME) $(DLLDIR)
 	@$(RM) $(DLLNAME).base
 	@$(RM) $(DLLNAME).exp
+	if exist "$(DLLDIR)\..\$(OUTNAME).dll" del "$(DLLDIR)\..\$(OUTNAME).dll"
+	if exist "$(DLLDIR)\..\$(OUTNAME).map" del "$(DLLDIR)\..\$(OUTNAME).map"
+	if exist "$(DLLDIR)\..\$(OUTNAME).pdb" del "$(DLLDIR)\..\$(OUTNAME).pdb"
 #ifdef DOCS
 #	@$(CP) $(DOCS) $(DLLDIR)
 #endif

@@ -1,4 +1,5 @@
 
+#define HIDE_USE_EXCEPTION_INFO
 //#include "StdAfx.h"
 #include <shlobj.h>
 #include <tchar.h>
@@ -309,7 +310,7 @@ CDataObject::CDataObject(FORMATETC *fmtetc, STGMEDIUM *stgmed, int count)
 CDataObject::~CDataObject()
 {
 	// Освобождать данные в m_pStgMedium.hGlobal
-	for(int i = 0; i < m_nNumFormats; i++)
+	for (int i = 0; i < m_nNumFormats; i++)
 	{
 		ReleaseStgMedium(m_pStgMedium+i);
 	}

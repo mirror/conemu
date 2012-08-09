@@ -5,24 +5,27 @@ SRCS =  \
 		BaseDragDrops.cpp  \
 		ConEmu.cpp         \
 		ConEmuApp.cpp      \
-		ConEmuChild.cpp    \
+		ConEmuCtrl.cpp     \
 		ConEmuPipe.cpp     \
+		CustomFonts.cpp    \
 		DragDrop.cpp       \
 		DragDropData.cpp   \
 		DwmHelper.cpp      \
 		FrameHolder.cpp    \
+		GestureEngine.cpp  \
 		GuiServer.cpp      \
 		LoadImg.cpp        \
 		Macro.cpp          \
 		Options.cpp        \
 		OptionsClass.cpp   \
-        OptionsFast.cpp    \
+		OptionsFast.cpp    \
 		RealBuffer.cpp     \
 		RealConsole.cpp    \
 		RealServer.cpp     \
 		Recreate.cpp       \
 		Registry.cpp       \
 		ScreenDump.cpp     \
+		Status.cpp         \
 		TabBar.cpp         \
 		TabID.cpp          \
 		TaskBar.cpp        \
@@ -30,15 +33,17 @@ SRCS =  \
 		TrayIcon.cpp       \
 		Update.cpp         \
 		UpdateSet.cpp      \
-		VConRelease.cpp \
+		VConChild.cpp      \
+		VConRelease.cpp    \
 		VirtualConsole.cpp \
-		../common/Common.cpp \
-		../common/ConEmuCheck.cpp \
-		../common/Memory.cpp \
-		../common/MSecurity.cpp \
-		../common/MStrSafe.cpp \
-		../common/RConStartArgs.cpp  \
-		../common/RgnDetect.cpp \
+		../common/Common.cpp        \
+		../common/ConEmuCheck.cpp   \
+		../common/execute.cpp       \
+		../common/Memory.cpp        \
+		../common/MSecurity.cpp     \
+		../common/MStrSafe.cpp      \
+		../common/RConStartArgs.cpp \
+		../common/RgnDetect.cpp     \
         ../common/WinObjects.cpp
 
 USERLIBS = -lversion -lshlwapi -loleaut32 -lNetapi32 -lwinmm

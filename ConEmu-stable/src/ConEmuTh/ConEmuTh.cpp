@@ -83,7 +83,7 @@ DWORD gnMainThreadId = 0, gnMainThreadIdInitial = 0;
 HANDLE ghDisplayThread = NULL; DWORD gnDisplayThreadId = 0;
 //HWND ghLeftView = NULL, ghRightView = NULL;
 //wchar_t* gszRootKey = NULL;
-FarVersion gFarVersion;
+FarVersion gFarVersion = {};
 //HMODULE ghConEmuDll = NULL;
 RegisterPanelView_t gfRegisterPanelView = NULL;
 GetFarHWND2_t gfGetFarHWND2 = NULL;
@@ -102,7 +102,8 @@ SECURITY_ATTRIBUTES* gpLocalSecurity = NULL;
 // *** lng resources begin ***
 wchar_t gsFolder[64], gsHardLink[64], gsSymLink[64], gsJunction[64], gsTitleThumbs[64], gsTitleTiles[64];
 // *** lng resources end ***
-DWORD gnFarPanelSettings = 0, gnFarInterfaceSettings = 0;
+CEFarPanelSettings gFarPanelSettings = {};
+CEFarInterfaceSettings gFarInterfaceSettings = {};
 
 //bool gbWaitForKeySequenceEnd = false;
 DWORD gnWaitForKeySeqTick = 0;
@@ -133,7 +134,8 @@ MFileMapping<DetectedDialogs> *gpDbgDlg = NULL;
 int WINAPI _export GetMinFarVersionW(void)
 {
 	// ACTL_SYNCHRO required
-	return MAKEFARVERSION(2,0,max(1007,FAR_X_VER));
+	// build 1765: Новая команда в FARMACROCOMMAND - MCMD_GETAREA
+	return MAKEFARVERSION(2,0,1765);
 }
 
 void WINAPI _export GetPluginInfoWcmn(void *piv)
@@ -146,18 +148,18 @@ void WINAPI _export GetPluginInfoWcmn(void *piv)
 
 
 BOOL gbInfoW_OK = FALSE;
-HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item)
+HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item,bool FromMacro)
 {
 	if (!gbInfoW_OK)
 		return INVALID_HANDLE_VALUE;
 
 	ReloadResourcesW();
-	EntryPoint(OpenFrom, Item);
+	EntryPoint(OpenFrom, Item, FromMacro);
 	return INVALID_HANDLE_VALUE;
 }
 
 // !!! WARNING !!! Version independent !!!
-void EntryPoint(int OpenFrom,INT_PTR Item)
+void EntryPoint(int OpenFrom,INT_PTR Item,bool FromMacro)
 {
 	if (!CheckConEmu())
 		return;
@@ -180,14 +182,16 @@ void EntryPoint(int OpenFrom,INT_PTR Item)
 
 	pi->OurTopPanelItem = pi->TopPanelItem;
 	HWND lhView = pi->hView; // (pi->bLeftPanel) ? ghLeftView : ghRightView;
+	BOOL lbWasVisible = pi->Visible;
 	PanelViewMode PVM = pvm_None;
 
 	// В Far2 плагин можно позвать через callplugin(...)
 	if (gFarVersion.dwVerMajor >= 2)
 	{
-		if ((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO)
+		//if ((OpenFrom & OPEN_FROMMACRO) == OPEN_FROMMACRO)
+		if (FromMacro)
 		{
-			if (Item == pvm_Thumbnails || Item == pvm_Tiles)
+			if (Item == pvm_Thumbnails || Item == pvm_Tiles || Item == pvm_Icons)
 				PVM = (PanelViewMode)Item;
 		}
 	}
@@ -203,10 +207,23 @@ void EntryPoint(int OpenFrom,INT_PTR Item)
 			case 1:
 				PVM = pvm_Tiles;
 				break;
+			case 2:
+				PVM = pvm_Icons;
+				break;
 			default:
 				// Отмена
 				return;
 		}
+	}
+
+	if (PVM == pvm_Icons)
+	{
+		if ((gFarVersion.dwVerMajor < 3) || (gFarVersion.dwBuild < 2579) || !gFarVersion.Bis)
+		{
+			ShowMessage(CEBisReqForIcons, 1);
+			return;
+		}
+		TODO("CENoPlaceForIcons: Проверить чтобы было место для отображения иконок - 'M' mark в колонке 'N'");
 	}
 
 	BOOL lbRc = FALSE;
@@ -214,7 +231,7 @@ void EntryPoint(int OpenFrom,INT_PTR Item)
 	DWORD dwMode = pvm_None; //PanelViewMode
 
 	// Если View не создан, или смена режима
-	if ((lhView == NULL) || (PVM != pi->PVM))
+	if ((lhView == NULL) || (!lbWasVisible && pi->Visible) || (PVM != pi->PVM))
 	{
 		// Для корректного определения положения колонок необходим один из флажков в настройке панели:
 		// [x] Показывать заголовки колонок [x] Показывать суммарную информацию
@@ -942,6 +959,23 @@ BOOL IsMacroActive()
 	return lbActive;
 }
 
+int GetMacroArea()
+{
+	int nMacroArea = 0/*MACROAREA_OTHER*/;
+
+	if (gFarVersion.dwVerMajor==1)
+	{
+		_ASSERTE(gFarVersion.dwVerMajor>1);
+		nMacroArea = 1; // в Far 1.7x не поддерживается
+	}
+	else if (gFarVersion.dwBuild>=FAR_Y_VER)
+		nMacroArea = FUNC_Y(GetMacroAreaW)();
+	else
+		nMacroArea = FUNC_X(GetMacroAreaW)();
+
+	return nMacroArea;
+}
+
 BOOL CheckPanelSettings(BOOL abSilence)
 {
 	BOOL lbOk = FALSE;
@@ -1029,8 +1063,8 @@ void ReloadPanelsInfo()
 	_ASSERTE(countof(p->nFarColors)==countof(gFarInfo.nFarColors) && sizeof(*p->nFarColors) == sizeof(*gFarInfo.nFarColors));
 	memmove(gFarInfo.nFarColors, p->nFarColors, sizeof(gFarInfo.nFarColors));
 
-	gFarInfo.nFarInterfaceSettings = p->nFarInterfaceSettings;
-	gFarInfo.nFarPanelSettings = p->nFarPanelSettings;
+	gFarInfo.FarInterfaceSettings.Raw = p->FarInterfaceSettings.Raw;
+	gFarInfo.FarPanelSettings.Raw = p->FarPanelSettings.Raw;
 	gFarInfo.bFarPanelAllowed = TRUE;
 	// Положения панелей
 	gFarInfo.bFarLeftPanel = pviLeft.Visible;
@@ -1040,19 +1074,19 @@ void ReloadPanelsInfo()
 
 	if (pviLeft.hView)
 	{
-		if (bLeftVisible && pviLeft.Visible)
+		if ((bLeftVisible != pviLeft.Visible)
+			|| memcmp(&rcLeft, &pviLeft.PanelRect, sizeof(RECT)))
 		{
-			if (memcmp(&rcLeft, &pviLeft.PanelRect, sizeof(RECT)))
-				pviLeft.RegisterPanelView();
+			pviLeft.RegisterPanelView();
 		}
 	}
 
 	if (pviRight.hView)
 	{
-		if (bRightVisible && pviRight.Visible)
+		if ((bRightVisible != pviRight.Visible)
+			|| memcmp(&rcRight, &pviRight.PanelRect, sizeof(RECT)))
 		{
-			if (memcmp(&rcRight, &pviRight.PanelRect, sizeof(RECT)))
-				pviRight.RegisterPanelView();
+			pviRight.RegisterPanelView();
 		}
 	}
 }
@@ -1773,12 +1807,8 @@ BOOL ProcessConsoleInput(BOOL abReadMode, PINPUT_RECORD lpBuffer, DWORD nBufSize
 						//	UngetBufferInput(n-1, p);
 						//}
 					}
-
-					//end: if (vk == VK_UP || vk == VK_DOWN || vk == VK_LEFT || vk == VK_RIGHT)
-					//PRAGMA_ERROR("!!!");
-					//p++; continue;
 				}
-			}
+			} //end: if (vk == VK_UP || vk == VK_DOWN || vk == VK_LEFT || vk == VK_RIGHT || vk == VK_PRIOR || vk == VK_NEXT)
 
 			//end: if (p->EventType == KEY_EVENT)
 		}

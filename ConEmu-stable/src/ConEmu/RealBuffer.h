@@ -46,6 +46,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#define CONSOLE_MOUSE_SELECTION         0x0004   // selecting with mouse
 #endif
 
+enum ExpandTextRangeType
+{
+	etr_None = 0,
+	etr_Word = 1,
+	etr_FileAndLine = 2,
+	etr_Url = 3,
+};
+
+#include "Options.h"
+
 class CRealBuffer
 {
 public:
@@ -56,6 +66,11 @@ public:
 public:
 	void DumpConsole(HANDLE ahFile);
 	bool LoadDumpConsole(LPCWSTR asDumpFile);
+
+	bool LoadAlternativeConsole(int iMode = 0);
+
+	void ReleaseMem();
+	void PreFillBuffers();
 	
 	BOOL SetConsoleSize(USHORT sizeX, USHORT sizeY, USHORT sizeBuffer, DWORD anCmdID=CECMD_SETSIZESYNC);
 	void SyncConsole2Window(USHORT wndSizeX, USHORT wndSizeY);
@@ -94,25 +109,30 @@ public:
 	void BuferModeChangeUnlock();
 	BOOL BufferHeightTurnedOn(CONSOLE_SCREEN_BUFFER_INFO* psbi);
 
-	LRESULT OnScroll(int nDirection);
+	LRESULT OnScroll(int nDirection, short nTrackPos = -1, UINT nCount = 1);
 	LRESULT OnSetScrollPos(WPARAM wParam);
 	
 	BOOL ApplyConsoleInfo();
 	
-	static BOOL GetConWindowSize(const CONSOLE_SCREEN_BUFFER_INFO& sbi, int* pnNewWidth, int* pnNewHeight, DWORD* pnScroll);
+	BOOL GetConWindowSize(const CONSOLE_SCREEN_BUFFER_INFO& sbi, int* pnNewWidth, int* pnNewHeight, DWORD* pnScroll);
 	
 	COORD ScreenToBuffer(COORD crMouse);
 	bool ProcessFarHyperlink(UINT messg, COORD crFrom);
-	bool ProcessFarHyperlink();
+	bool ProcessFarHyperlink(UINT messg=WM_USER);
+	ExpandTextRangeType GetLastTextRangeType();
 	
+	void ShowKeyBarHint(WORD nID);
+
 	bool OnMouse(UINT messg, WPARAM wParam, int x, int y, COORD crMouse);
 	
 	BOOL GetRBtnDrag(COORD* pcrMouse);
 	void SetRBtnDrag(BOOL abRBtnDrag, const COORD* pcrMouse = NULL);
 
 	bool OnMouseSelection(UINT messg, WPARAM wParam, int x, int y);
-	void StartSelection(BOOL abTextMode, SHORT anX=-1, SHORT anY=-1, BOOL abByMouse=FALSE);
+	void MarkFindText(int nDirection, LPCWSTR asText, bool abCaseSensitive, bool abWholeWords);
+	void StartSelection(BOOL abTextMode, SHORT anX=-1, SHORT anY=-1, BOOL abByMouse=FALSE, UINT anFromMsg=0, COORD *pcrTo=NULL);
 	void ExpandSelection(SHORT anX=-1, SHORT anY=-1);
+	bool DoSelectionFinalize(bool abCopy, WPARAM wParam = 0);
 	void DoSelectionStop();
 	bool DoSelectionCopy();
 	void UpdateSelection();
@@ -137,7 +157,7 @@ public:
 	
 	bool isSelectionAllowed();
 	bool isSelectionPresent();
-	
+	bool GetConsoleSelectionInfo(CONSOLE_SELECTION_INFO *sel);
 	
 	void ConsoleScreenBufferInfo(CONSOLE_SCREEN_BUFFER_INFO* sbi);
 	void ConsoleCursorInfo(CONSOLE_CURSOR_INFO *ci);
@@ -154,6 +174,8 @@ public:
 	BOOL isLeftPanel();
 	BOOL isRightPanel();
 
+	bool LookupFilePath(LPCWSTR asFileOrPath, wchar_t* pszPath, size_t cchPathMax);
+
 	const CRgnDetect* GetDetector();
 	
 private:
@@ -161,23 +183,20 @@ private:
 	BOOL InitBuffers(DWORD OneBufferSize);
 	BOOL CheckBufferSize();
 	BOOL LoadDataFromSrv(DWORD CharCount, CHAR_INFO* pData);
+	bool LoadDataFromDump(const CONSOLE_SCREEN_BUFFER_INFO& storedSbi, const CHAR_INFO* pData, DWORD cchMaxCellCount);
 
 	// координаты панелей в символах
 	RECT mr_LeftPanel, mr_RightPanel, mr_LeftPanelFull, mr_RightPanelFull; BOOL mb_LeftPanel, mb_RightPanel;
 	
 	void PrepareTransparent(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight);
 	
-	bool GetConsoleSelectionInfo(CONSOLE_SELECTION_INFO *sel);
 
-	enum ExpandTextRangeType
-	{
-		etr_None = 0,
-		etr_Word = 1,
-		etr_FileAndLine = 2,
-	};
 	ExpandTextRangeType ExpandTextRange(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[Out]*/, ExpandTextRangeType etr, wchar_t* pszText = NULL, size_t cchTextMax = 0);
+	void StoreLastTextRange(ExpandTextRangeType etr);
 
 	short CheckProgressInConsole(const wchar_t* pszCurLine);
+
+	void PrepareColorTable(bool bExtendFonts, CharAttr (&lcaTableExt)[0x100], CharAttr (&lcaTableOrg)[0x100], const Settings::AppSettings* pApp = NULL);
 
 protected:
 	CRealConsole* mp_RCon;
@@ -195,6 +214,7 @@ protected:
 	struct RConInfo
 	{
 		CONSOLE_SELECTION_INFO m_sel;
+		DWORD m_SelClickTick, m_SelDblClickTick;
 		CONSOLE_CURSOR_INFO m_ci;
 		DWORD m_dwConsoleCP, m_dwConsoleOutputCP, m_dwConsoleMode;
 		CONSOLE_SCREEN_BUFFER_INFO m_sbi;
@@ -216,6 +236,13 @@ protected:
 		BOOL bInSetSize; HANDLE hInSetSize;
 		int DefaultBufferHeight;
 		BOOL bConsoleDataChanged;
+		//RClick4KeyBar
+		BOOL bRClick4KeyBar;
+		COORD crRClick4KeyBar;
+		POINT ptRClick4KeyBar;
+		int nRClickVK; // VK_F1..F12
+		// Последний etr...
+		ExpandTextRangeType etrLast;
 	} con;
 	
 protected:

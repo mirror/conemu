@@ -26,11 +26,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
+#define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
 #include "Options.h"
 #include "OptionsFast.h"
 #include "ConEmu.h"
+#include "ConEmuApp.h"
 
 static bool bCheckHooks, bCheckUpdate, bCheckIme;
 // Если файл конфигурации пуст, то после вызова CheckOptionsFast
@@ -58,7 +59,12 @@ static INT_PTR CALLBACK CheckOptionsFastProc(HWND hDlg, UINT messg, WPARAM wPara
 				SetWindowText(hDlg, szTitle);
 			}
 
-			CheckDlgButton(hDlg, cbUseKeyboardHooksFast, gpSet->isKeyboardHooks());
+			CheckDlgButton(hDlg, cbUseKeyboardHooksFast, gpSet->isKeyboardHooks(true));
+
+			// Debug purposes only. ConEmu.exe switch "/nokeyhooks"
+			#ifdef _DEBUG
+			EnableWindow(GetDlgItem(hDlg, cbUseKeyboardHooksFast), !gpConEmu->DisableKeybHooks);
+			#endif
 
 			CheckDlgButton(hDlg, cbInjectConEmuHkFast, gpSet->isUseInjects);
 
@@ -147,14 +153,14 @@ static INT_PTR CALLBACK CheckOptionsFastProc(HWND hDlg, UINT messg, WPARAM wPara
 					gpSet->m_isKeyboardHooks = IsDlgButtonChecked(hDlg, cbUseKeyboardHooksFast) ? 1 : 2;
 
 					/* Inject ConEmuHk.dll */
-					gpSet->isUseInjects = (IsDlgButtonChecked(hDlg, cbInjectConEmuHkFast) == BST_CHECKED);
+					gpSet->isUseInjects = IsDlgButtonChecked(hDlg, cbInjectConEmuHkFast);
 
 					/* Auto Update settings */
 					gpSet->UpdSet.isUpdateCheckOnStartup = (IsDlgButtonChecked(hDlg, cbEnableAutoUpdateFast) == BST_CHECKED);
 					if (bCheckUpdate)
 					{	// При первом запуске - умолчания параметров
 						gpSet->UpdSet.isUpdateCheckHourly = false;
-						gpSet->UpdSet.isUpdateConfirmDownload = true;
+						gpSet->UpdSet.isUpdateConfirmDownload = true; // true-Show MessageBox, false-notify via TSA only
 					}
 					gpSet->UpdSet.isUpdateUseBuilds = IsDlgButtonChecked(hDlg, rbAutoUpdateStableFast) ? 1 : 2;
 
@@ -309,6 +315,9 @@ void CheckOptionsFast(LPCWSTR asTitle, bool abCreatingVanilla /*= false*/)
 
 	if (bCheckHooks || bCheckUpdate || bCheckIme)
 	{
+		// First ShowWindow forced to use nCmdShow. This may be weird...
+		SkipOneShowWindow();
+
 		DialogBoxParam(g_hInstance, MAKEINTRESOURCE(IDD_FAST_CONFIG), NULL, CheckOptionsFastProc, (LPARAM)asTitle);
 	}
 }

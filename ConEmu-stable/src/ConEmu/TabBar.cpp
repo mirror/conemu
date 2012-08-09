@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 
 #define SHOWDEBUGSTR
 
@@ -39,7 +40,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ConEmu.h"
 #include "VirtualConsole.h"
 #include "TrayIcon.h"
-#include "ConEmuChild.h"
+#include "VConChild.h"
+#include "Status.h"
 
 WARNING("!!! Запустили far, открыли edit, перешли в панель, открыли второй edit, ESC, ни одна вкладка не активна");
 // Более того, если есть еще одна консоль - активной станет первая вкладка следующей НЕАКТИВНОЙ консоли
@@ -69,26 +71,39 @@ WARNING("TB_GETIDEALSIZE - awailable on XP only, use insted TB_GETMAXSIZE");
 #define TB_GETIDEALSIZE         (WM_USER + 99)
 #endif
 
-#define TID_CREATE_CON   13
-#define TID_BUFFERHEIGHT 14
-#define TID_MINIMIZE 15
-#define TID_MAXIMIZE 16
-#define TID_APPCLOSE 17
-#define TID_COPYING 18
-#define TID_MINIMIZE_SEP 110
+enum ToolbarCommandIdx
+{
+	TID_ACTIVE_NUMBER = 1,
+	TID_CREATE_CON,
+	TID_ALTERNATIVE,
+	TID_SCROLL,
+	TID_MINIMIZE,
+	TID_MAXIMIZE,
+	TID_APPCLOSE,
+	TID_COPYING,
+	TID_MINIMIZE_SEP = 110,
+};
 
-#define BID_NEWCON_IDX 12
-#define BID_BUFHEIGHT_IDX 13
-#define BID_MINIMIZE_IDX 14
-#define BID_MAXIMIZE_IDX 15
-#define BID_RESTORE_IDX 16
-#define BID_APPCLOSE_IDX 17
-//#define BID_COPYING 18
+enum ToolbarMainBitmapIdx
+{
+	BID_FIST_CON = 0,
+	BID_LAST_CON = (MAX_CONSOLE_COUNT-1),
+	BID_NEWCON_IDX,
+	BID_ALTERNATIVE_IDX,
+	BID_MINIMIZE_IDX,
+	BID_MAXIMIZE_IDX,
+	BID_RESTORE_IDX,
+	BID_APPCLOSE_IDX,
+	BID_DUMMYBTN_IDX,
+	BID_TOOLBAR_LAST_IDX,
+};
 
 #define POST_UPDATE_TIMEOUT 2000
 
 #define FAILED_TABBAR_TIMERID 101
 #define FAILED_TABBAR_TIMEOUT 3000
+
+#define ACTIVATE_TAB_CRITICAL 300
 
 //typedef long (WINAPI* ThemeFunction_t)();
 
@@ -428,12 +443,19 @@ CVirtualConsole* TabBarClass::FarSendChangeTab(int tabIndex)
 	if (!gpConEmu->isActive(pVCon))
 		bNeedActivate = TRUE;
 
+	DWORD nCallStart = TimeGetTime(), nCallEnd = 0;
+
 	bChangeOk = pVCon->RCon()->ActivateFarWindow(wndIndex);
 
 	if (!bChangeOk)
 	{
 		// Всплыть тултип с руганью - не смогли активировать
 		ShowTabError(L"This tab can't be activated now!", tabIndex);
+	}
+	else
+	{
+		nCallEnd = TimeGetTime();
+		_ASSERTE((nCallEnd - nCallStart) < ACTIVATE_TAB_CRITICAL);
 	}
 
 	// Чтобы лишнее не мелькало - активируем консоль
@@ -461,9 +483,9 @@ CVirtualConsole* TabBarClass::FarSendChangeTab(int tabIndex)
 	return pVCon;
 }
 
-LRESULT TabBarClass::TabHitTest()
+LRESULT TabBarClass::TabHitTest(bool abForce /*= false*/)
 {
-	if ((gpSet->isHideCaptionAlways() || gpConEmu->mb_isFullScreen || (gpConEmu->isZoomed() && gpSet->isHideCaption))
+	if ((abForce || gpSet->isHideCaptionAlways() || gpConEmu->mb_isFullScreen || (gpConEmu->isZoomed() && gpSet->isHideCaption))
 	        && gpSet->isTabs)
 	{
 		if (gpConEmu->mp_TabBar->IsTabsShown())
@@ -521,10 +543,12 @@ LRESULT CALLBACK TabBarClass::ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 		case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_LBUTTONDBLCLK:
 		/*case WM_RBUTTONDOWN:*/ case WM_RBUTTONUP: //case WM_RBUTTONDBLCLK:
 
-			if ((gpSet->isHideCaptionAlways() || gpConEmu->mb_isFullScreen || (gpConEmu->isZoomed() && gpSet->isHideCaption))
-			        && gpSet->isTabs)
+			if (((uMsg == WM_RBUTTONUP)
+					|| gpSet->isHideCaptionAlways() || gpConEmu->mb_isFullScreen
+					|| (gpConEmu->isZoomed() && gpSet->isHideCaption))
+				&& gpSet->isTabs)
 			{
-				if (TabHitTest()==HTCAPTION)
+				if (TabHitTest(true)==HTCAPTION)
 				{
 					POINT ptScr; GetCursorPos(&ptScr);
 					lParam = MAKELONG(ptScr.x,ptScr.y);
@@ -652,10 +676,11 @@ LRESULT CALLBACK TabBarClass::ToolProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 
 			// If the return value is zero or a positive value, it is
 			// the zero-based index of the nonseparator item in which the point lies.
-			if (nIdx >= 0 && nIdx < MAX_CONSOLE_COUNT)
+			//if (nIdx >= 0 && nIdx < MAX_CONSOLE_COUNT)
+			_ASSERTE(TID_ACTIVE_NUMBER==1);
+			if (nIdx == (TID_ACTIVE_NUMBER-1))
 			{
-				// Пока кнопки не настраиваются - это будет строго номер консоли
-				CVirtualConsole* pVCon = gpConEmu->GetVCon(nIdx);
+				CVirtualConsole* pVCon = gpConEmu->ActiveCon(); //GetVCon(nIdx);
 
 				if (!gpConEmu->isActive(pVCon))
 				{
@@ -668,15 +693,28 @@ LRESULT CALLBACK TabBarClass::ToolProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 					}
 				}
 
-				ClientToScreen(hwnd, &pt);
-				pVCon->ShowPopupMenu(pt);
+				//ClientToScreen(hwnd, &pt);
+				RECT rcBtnRect = {0};
+				SendMessage(hwnd, TB_GETRECT, TID_ACTIVE_NUMBER, (LPARAM)&rcBtnRect);
+				MapWindowPoints(hwnd, NULL, (LPPOINT)&rcBtnRect, 2);
+				POINT pt = {rcBtnRect.right,rcBtnRect.bottom};
+
+				pVCon->ShowPopupMenu(pt, TPM_RIGHTALIGN|TPM_TOPALIGN);
 			}
 			else
 			{
-				LRESULT nCloseIdx = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_APPCLOSE, 0);
-
-				if (nIdx == nCloseIdx)
+				LRESULT nTestIdx = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_APPCLOSE, 0);
+				if (nIdx == nTestIdx)
+				{
 					Icon.HideWindowToTray();
+					return 0;
+				}
+
+				nTestIdx = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_CREATE_CON, 0);
+				if (nIdx == nTestIdx)
+				{
+					gpConEmu->RecreateAction(cra_CreateTab/*FALSE*/, TRUE);
+				}
 			}
 
 			return 0;
@@ -706,20 +744,6 @@ bool TabBarClass::IsTabsShown()
 	}
 	return _active && IsWindowVisible(mh_Tabbar);
 }
-
-//BOOL TabBarClass::IsAllowed()
-//{
-//    BOOL lbTabsAllowed = TRUE;
-//    TODO("пока убрал");
-//    //if (gpConEmu->BufferHeight) {
-//        CVirtualConsole* pCon = gpConEmu->ActiveCon();
-//        if (!pCon)
-//            lbTabsAllowed = FALSE;
-//        else
-//            lbTabsAllowed = !pCon->RCon()->isBufferHeight();
-//    //}
-//    return lbTabsAllowed;
-//}
 
 void TabBarClass::Activate()
 {
@@ -765,6 +789,8 @@ void TabBarClass::Update(BOOL abPosted/*=FALSE*/)
 		RequestPostUpdate();
 		return;
 	}
+
+	gpConEmu->mp_Status->UpdateStatusBar();
 
 	mb_PostUpdateCalled = FALSE;
 #ifdef _DEBUG
@@ -882,10 +908,12 @@ void TabBarClass::Update(BOOL abPosted/*=FALSE*/)
 			continue;
 		}
 
-		rFrom = bShowFarWindows ? 0 : pRCon->GetActiveTab();
+		// (Panels=1, Viewer=2, Editor=3) |(Elevated=0x100) |(NotElevated=0x200) |(Modal=0x400)
+		bool bAllWindows = (bShowFarWindows && !(pRCon->GetActiveTabType() & fwt_Modal));
+		rFrom = bAllWindows ? 0 : pRCon->GetActiveTab();
 		rFound = 0;
 		
-		for (I = rFrom; bShowFarWindows || !rFound; I++)
+		for (I = rFrom; bAllWindows || !rFound; I++)
 		{
 			#ifdef _DEBUG
 				if (!I && !V)
@@ -981,7 +1009,7 @@ void TabBarClass::Update(BOOL abPosted/*=FALSE*/)
 	DEBUGSTRTABS(szDbg);
 #endif
 
-	for(I = tabIdx; I < nCurCount; I++)
+	for (I = tabIdx; I < nCurCount; I++)
 	{
 #ifdef _DEBUG
 		_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"   Deleting tab=%i\n", I+1);
@@ -1170,6 +1198,9 @@ void TabBarClass::UpdateToolbarPos()
 	{
 		SIZE sz;
 		SendMessage(mh_Toolbar, TB_GETMAXSIZE, 0, (LPARAM)&sz);
+		// В Win2k имеет место быть глюк вычисления размера (разделители)
+		if ((gOSVer.dwMajorVersion == 5) && (gOSVer.dwMinorVersion == 0) && !gbIsWine)
+			sz.cx += 26;
 
 		if (mh_Rebar)
 		{
@@ -1242,11 +1273,13 @@ LRESULT TabBarClass::OnNotify(LPNMHDR nmhdr)
 
 		LPNMTBGETINFOTIP pDisp = (LPNMTBGETINFOTIP)nmhdr;
 
-		if (pDisp->iItem>=1 && pDisp->iItem<=MAX_CONSOLE_COUNT)
+		//if (pDisp->iItem>=1 && pDisp->iItem<=MAX_CONSOLE_COUNT)
+		if (pDisp->iItem == TID_ACTIVE_NUMBER)
 		{
-			if (!pDisp->pszText || !pDisp->cchTextMax) return false;
+			if (!pDisp->pszText || !pDisp->cchTextMax)
+				return false;
 
-			LPCWSTR pszTitle = gpConEmu->GetVCon(pDisp->iItem-1)->RCon()->GetTitle();
+			LPCWSTR pszTitle = gpConEmu->ActiveCon()->RCon()->GetTitle();
 
 			if (pszTitle)
 			{
@@ -1261,11 +1294,18 @@ LRESULT TabBarClass::OnNotify(LPNMHDR nmhdr)
 		{
 			lstrcpyn(pDisp->pszText, _T("Create new console"), pDisp->cchTextMax);
 		}
-		else if (pDisp->iItem == TID_BUFFERHEIGHT)
+		else if (pDisp->iItem == TID_ALTERNATIVE)
 		{
 			BOOL lbPressed = (SendMessage(mh_Toolbar, TB_GETSTATE, pDisp->iItem, 0) & TBSTATE_CHECKED) == TBSTATE_CHECKED;
 			lstrcpyn(pDisp->pszText,
-			         lbPressed ? L"BufferHeight mode is ON" : L"BufferHeight mode is off",
+			         lbPressed ? L"Alternative mode is ON (console freezed)" : L"Alternative mode is off",
+			         pDisp->cchTextMax);
+		}
+		else if (pDisp->iItem == TID_SCROLL)
+		{
+			BOOL lbPressed = (SendMessage(mh_Toolbar, TB_GETSTATE, pDisp->iItem, 0) & TBSTATE_CHECKED) == TBSTATE_CHECKED;
+			lstrcpyn(pDisp->pszText,
+			         lbPressed ? L"BufferHeight mode is ON (scrolling enabled)" : L"BufferHeight mode is off",
 			         pDisp->cchTextMax);
 		}
 		else if (pDisp->iItem == TID_MINIMIZE)
@@ -1291,7 +1331,16 @@ LRESULT TabBarClass::OnNotify(LPNMHDR nmhdr)
 	if (nmhdr->code == TBN_DROPDOWN
 	        && (mh_Toolbar && (nmhdr->hwndFrom == mh_Toolbar)))
 	{
-		OnNewConPopup();
+		LPNMTOOLBAR pBtn = (LPNMTOOLBAR)nmhdr;
+		switch (pBtn->iItem)
+		{
+		case TID_ACTIVE_NUMBER:
+			OnChooseTabPopup();
+			break;
+		case TID_CREATE_CON:
+			OnNewConPopup();
+			break;
+		}
 		return TBDDRET_DEFAULT;
 	}
 
@@ -1353,17 +1402,26 @@ void TabBarClass::OnCommand(WPARAM wParam, LPARAM lParam)
 	if (!gpSet->isMulti)
 		return;
 
-	if (wParam>=1 && wParam<=MAX_CONSOLE_COUNT)
+	if (wParam == TID_ACTIVE_NUMBER)
 	{
-		gpConEmu->ConActivate(wParam-1);
+		//gpConEmu->ConActivate(wParam-1);
+		OnChooseTabPopup();
 	}
 	else if (wParam == TID_CREATE_CON)
 	{
-		gpConEmu->Recreate(FALSE, gpSet->isMultiNewConfirm);
+		if (gpConEmu->IsGesturesEnabled())
+			OnNewConPopup();
+		else
+			gpConEmu->RecreateAction(cra_CreateTab/*FALSE*/, gpSet->isMultiNewConfirm || isPressed(VK_SHIFT));
 	}
-	else if (wParam == TID_BUFFERHEIGHT)
+	else if (wParam == TID_ALTERNATIVE)
 	{
-		SendMessage(mh_Toolbar, TB_CHECKBUTTON, TID_BUFFERHEIGHT, gpConEmu->ActiveCon()->RCon()->isBufferHeight());
+		SendMessage(mh_Toolbar, TB_CHECKBUTTON, TID_ALTERNATIVE, gpConEmu->ActiveCon()->RCon()->isAlternative());
+		gpConEmu->AskChangeAlternative();
+	}
+	else if (wParam == TID_SCROLL)
+	{
+		SendMessage(mh_Toolbar, TB_CHECKBUTTON, TID_SCROLL, gpConEmu->ActiveCon()->RCon()->isBufferHeight());
 		gpConEmu->AskChangeBufferHeight();
 	}
 	else if (wParam == TID_MINIMIZE)
@@ -1414,15 +1472,16 @@ void TabBarClass::OnMouse(int message, int x, int y)
 
 			if (pVCon)
 			{
+				CVConGuard guard(pVCon);
 				BOOL lbCtrlPressed = isPressed(VK_CONTROL);
 
 				if (message == WM_RBUTTONUP && !lbCtrlPressed)
 				{
-					pVCon->ShowPopupMenu(ptCur);
+					guard->ShowPopupMenu(ptCur);
 				}
 				else
 				{
-					pVCon->RCon()->CloseTab();
+					guard->RCon()->CloseTab();
 					//if (pVCon->RCon()->GetFarPID())
 					//{
 					//	pVCon->RCon()->PostMacro(gpSet->sTabCloseMacro ? gpSet->sTabCloseMacro : L"F10");
@@ -1435,6 +1494,9 @@ void TabBarClass::OnMouse(int message, int x, int y)
 					//	//gpConEmu->Recreate(TRUE, TRUE);
 					//}
 				}
+
+				// борьба с оптимизатором в релизе
+				gpConEmu->isValid(pVCon);
 			}
 		}
 	}
@@ -1482,65 +1544,114 @@ void TabBarClass::UpdateToolConsoles(bool abForcePos/*=false*/)
 {
 	if (!mh_Toolbar) return;
 
-	bool bPresent[MAX_CONSOLE_COUNT] = {};
-	MCHKHEAP
+	//bool bPresent[MAX_CONSOLE_COUNT] = {};
+	//MCHKHEAP
+	//for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
+	//{
+	//	bPresent[i-1] = (gpConEmu->GetVConTitle(i-1) != NULL);
+	//}
 
-	for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
-	{
-		bPresent[i-1] = (gpConEmu->GetVConTitle(i-1) != NULL);
-	}
+	//bool bRedraw = abForcePos;
+	//if (abForcePos)
+	//	SendMessage(mh_Toolbar, WM_SETREDRAW, FALSE, 0);
 
-	bool bRedraw = abForcePos;
-	if (abForcePos)
-		SendMessage(mh_Toolbar, WM_SETREDRAW, FALSE, 0);
+	int nNewActiveIdx = gpConEmu->ActiveConNum(); // 0-based
 
-	for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
-	{
-		bool bShown = (SendMessage(mh_Toolbar, TB_ISBUTTONHIDDEN, i, 0) == 0);
-		if (bShown != bPresent[i-1])
-		{
-			if (!bRedraw)
-			{
-				bRedraw = true;
-				SendMessage(mh_Toolbar, WM_SETREDRAW, FALSE, 0);
-			}
+	OnConsoleActivated(nNewActiveIdx);
 
-			SendMessage(mh_Toolbar, TB_HIDEBUTTON, i, !bPresent[i-1]);
-		}
-	}
+	//TBBUTTONINFO tbi = {sizeof(TBBUTTONINFO), TBIF_IMAGE};
+	//SendMessage(mh_Toolbar, TB_GETBUTTONINFO, TID_ACTIVE_NUMBER, (LPARAM)&tbi);
+	//if (tbi.iImage != nNewActiveIdx)
+	//{
+	//	if ((nNewActiveIdx >= BID_FIST_CON) && (nNewActiveIdx <= BID_LAST_CON))
+	//	{
+	//		tbi.iImage = nNewActiveIdx;
+	//	}
+	//	else
+	//	{
+	//		tbi.iImage = BID_DUMMYBTN_IDX;
+	//	}
+	//	//if (!bRedraw)
+	//	//{
+	//	//	bRedraw = true;
+	//	//	SendMessage(mh_Toolbar, WM_SETREDRAW, FALSE, 0);
+	//	//}
+	//	SendMessage(mh_Toolbar, TB_SETBUTTONINFO, TID_ACTIVE_NUMBER, (LPARAM)&tbi);
+	//}
 
-	if (bRedraw)
-	{
-		UpdateToolbarPos();
-		SendMessage(mh_Toolbar, WM_SETREDRAW, TRUE, 0);
-	}
+	//for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
+	//{
+	//	bool bShown = (SendMessage(mh_Toolbar, TB_ISBUTTONHIDDEN, i, 0) == 0);
+	//	if (bShown != bPresent[i-1])
+	//	{
+	//		if (!bRedraw)
+	//		{
+	//			bRedraw = true;
+	//			SendMessage(mh_Toolbar, WM_SETREDRAW, FALSE, 0);
+	//		}
+	//		SendMessage(mh_Toolbar, TB_HIDEBUTTON, i, !bPresent[i-1]);
+	//	}
+	//}
+
+	//if (bRedraw)
+	//{
+	//	UpdateToolbarPos();
+	//	SendMessage(mh_Toolbar, WM_SETREDRAW, TRUE, 0);
+	//}
 }
 
-// nConNumber - 1based
-void TabBarClass::OnConsoleActivated(int nConNumber/*, BOOL bAlternative*/)
+// nConNumber - 0-based
+void TabBarClass::OnConsoleActivated(int nConNumber)
 {
 	if (!mh_Toolbar) return;
 
-	UpdateToolConsoles(true);
-
-	//nConNumber = gpConEmu->ActiveConNum()+1; -- сюда пришел уже правильный номер!
-
-	if (nConNumber>=1 && nConNumber<=MAX_CONSOLE_COUNT)
+	TBBUTTONINFO tbi = {sizeof(TBBUTTONINFO), TBIF_IMAGE};
+	SendMessage(mh_Toolbar, TB_GETBUTTONINFO, TID_ACTIVE_NUMBER, (LPARAM)&tbi);
+	if (tbi.iImage != nConNumber)
 	{
-		SendMessage(mh_Toolbar, TB_CHECKBUTTON, nConNumber, 1);
+		if ((nConNumber >= BID_FIST_CON) && (nConNumber <= BID_LAST_CON))
+		{
+			tbi.iImage = nConNumber;
+		}
+		else
+		{
+			tbi.iImage = BID_DUMMYBTN_IDX;
+		}
+
+		//if (!bRedraw)
+		//{
+		//	bRedraw = true;
+		//	SendMessage(mh_Toolbar, WM_SETREDRAW, FALSE, 0);
+		//}
+
+		SendMessage(mh_Toolbar, TB_SETBUTTONINFO, TID_ACTIVE_NUMBER, (LPARAM)&tbi);
 	}
-	else
-	{
-		for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
-			SendMessage(mh_Toolbar, TB_CHECKBUTTON, i, 0);
-	}
+
+	//UpdateToolConsoles(true);
+	////nConNumber = gpConEmu->ActiveConNum()+1; -- сюда пришел уже правильный номер!
+	//if (nConNumber>=1 && nConNumber<=MAX_CONSOLE_COUNT)
+	//{
+	//	SendMessage(mh_Toolbar, TB_CHECKBUTTON, nConNumber, 1);
+	//}
+	//else
+	//{
+	//	for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
+	//		SendMessage(mh_Toolbar, TB_CHECKBUTTON, i, 0);
+	//}
 }
 
 void TabBarClass::OnBufferHeight(BOOL abBufferHeight)
 {
 	if (!mh_Toolbar) return;
 
-	SendMessage(mh_Toolbar, TB_CHECKBUTTON, TID_BUFFERHEIGHT, abBufferHeight);
+	SendMessage(mh_Toolbar, TB_CHECKBUTTON, TID_SCROLL, abBufferHeight);
+}
+
+void TabBarClass::OnAlternative(BOOL abAlternative)
+{
+	if (!mh_Toolbar) return;
+
+	SendMessage(mh_Toolbar, TB_CHECKBUTTON, TID_ALTERNATIVE, abAlternative);
 }
 
 HWND TabBarClass::CreateToolbar()
@@ -1561,46 +1672,84 @@ HWND TabBarClass::CreateToolbar()
 	SendMessage(mh_Toolbar, TB_SETEXTENDEDSTYLE, 0, lExStyle);
 	SendMessage(mh_Toolbar, TB_BUTTONSTRUCTSIZE, (WPARAM) sizeof(TBBUTTON), 0);
 	SendMessage(mh_Toolbar, TB_SETBITMAPSIZE, 0, MAKELONG(14,14));
-	TBADDBITMAP bmp = {g_hInstance,IDB_MAIN_TOOLBAR};
-	int nFirst = SendMessage(mh_Toolbar, TB_ADDBITMAP, TID_BUFFERHEIGHT, (LPARAM)&bmp);
-	bmp.nID = IDB_COPY;
-	int nCopyBmp = SendMessage(mh_Toolbar, TB_ADDBITMAP, 1, (LPARAM)&bmp);
-	WARNING("Чего-то там глючит. Должен 19 возвращать");
 
-	if (nCopyBmp < 19) nCopyBmp = 19;
+	TBADDBITMAP bmp = {g_hInstance,IDB_MAIN_TOOLBAR};
+	int nFirst = SendMessage(mh_Toolbar, TB_ADDBITMAP, BID_TOOLBAR_LAST_IDX, (LPARAM)&bmp);
+	_ASSERTE(BID_TOOLBAR_LAST_IDX==37);
+	
+	//DWORD nLoadErr = 0;
+	if (gnOsVer >= 0x600)
+	{
+		bmp.hInst = g_hInstance;
+		bmp.nID = IDB_COPY24;
+	}
+	else
+	{
+		bmp.hInst = NULL;
+		COLORMAP colorMap = {RGB(255,0,0),GetSysColor(COLOR_BTNFACE)};
+		bmp.nID = (UINT_PTR)CreateMappedBitmap(g_hInstance, IDB_COPY4, 0, &colorMap, 1);
+		//bmp.nID = (UINT_PTR)LoadImage(g_hInstance, MAKEINTRESOURCE(IDB_COPY24), IMAGE_BITMAP, 0,0, LR_LOADTRANSPARENT|LR_LOADMAP3DCOLORS);
+		//nLoadErr = GetLastError();
+	}
+	int nCopyBmp = SendMessage(mh_Toolbar, TB_ADDBITMAP, 1, (LPARAM)&bmp);
+	// Должен 37 возвращать
+	_ASSERTE(nCopyBmp == BID_TOOLBAR_LAST_IDX);
+	if (nCopyBmp < BID_TOOLBAR_LAST_IDX)
+		nCopyBmp = BID_TOOLBAR_LAST_IDX;
+
+	{
+		bmp.hInst = NULL;
+		COLORMAP colorMap = {0xC0C0C0,GetSysColor(COLOR_BTNFACE)};
+		bmp.nID = (UINT_PTR)CreateMappedBitmap(g_hInstance, IDB_SCROLL, 0, &colorMap, 1);
+	}
+	int nScrollBmp = SendMessage(mh_Toolbar, TB_ADDBITMAP, 1, (LPARAM)&bmp);
+	// Должен 38 возвращать
+	_ASSERTE(nScrollBmp == (BID_TOOLBAR_LAST_IDX+1));
+	if (nScrollBmp < (BID_TOOLBAR_LAST_IDX+1))
+		nScrollBmp = BID_TOOLBAR_LAST_IDX+1;
+		
 
 	//buttons
-	TBBUTTON btn = {0, 1, TBSTATE_ENABLED, TBSTYLE_CHECKGROUP};
-	TBBUTTON sep = {0, 100, TBSTATE_ENABLED, TBSTYLE_SEP};
+	TBBUTTON btn = {0, 0, TBSTATE_ENABLED, TBSTYLE_CHECKGROUP};
+	TBBUTTON sep = {0, TID_MINIMIZE_SEP+1, TBSTATE_ENABLED, TBSTYLE_SEP};
 	int nActiveCon = gpConEmu->ActiveConNum()+1;
 
 	// Console numbers
-	for(int i = 1; i <= 12; i++)
-	{
-		btn.iBitmap = nFirst + i-1;
-		btn.idCommand = i;
-		btn.fsState = TBSTATE_ENABLED
-		              | ((gpConEmu->GetVConTitle(i-1) == NULL) ? TBSTATE_HIDDEN : 0)
-		              | ((i == nActiveCon) ? TBSTATE_CHECKED : 0);
-		SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
-	}
+	btn.iBitmap = (gpConEmu->ActiveCon() ? (nFirst + BID_FIST_CON) : BID_DUMMYBTN_IDX);
+	btn.idCommand = TID_ACTIVE_NUMBER;
+	btn.fsStyle = BTNS_DROPDOWN;
+	btn.fsState = TBSTATE_ENABLED;
+	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
+	//for (int i = 1; i <= MAX_CONSOLE_COUNT; i++)
+	//{
+	//	btn.iBitmap = nFirst + i-1;
+	//	btn.idCommand = i;
+	//	btn.fsState = TBSTATE_ENABLED
+	//	              | ((gpConEmu->GetVConTitle(i-1) == NULL) ? TBSTATE_HIDDEN : 0)
+	//	              | ((i == nActiveCon) ? TBSTATE_CHECKED : 0);
+	//	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
+	//}
 
-	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&sep); sep.idCommand++;
+	//SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&sep); sep.idCommand++;
 	// New console
 	btn.fsStyle = BTNS_DROPDOWN; btn.idCommand = TID_CREATE_CON; btn.fsState = TBSTATE_ENABLED;
 	btn.iBitmap = nFirst + BID_NEWCON_IDX;
 	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
 	btn.fsStyle = BTNS_BUTTON;
-	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&sep); sep.idCommand++;
-#ifdef _DEBUG
+	//SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&sep); sep.idCommand++;
+#if 0 //defined(_DEBUG)
 	// Show copying state
 	btn.iBitmap = nCopyBmp; btn.idCommand = TID_COPYING;
 	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
 	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&sep); sep.idCommand++;
 #endif
 	// Buffer height mode
-	btn.iBitmap = nFirst + BID_BUFHEIGHT_IDX; btn.idCommand = TID_BUFFERHEIGHT; btn.fsState = TBSTATE_ENABLED;
+	btn.iBitmap = nFirst + BID_ALTERNATIVE_IDX; btn.idCommand = TID_ALTERNATIVE; btn.fsState = TBSTATE_ENABLED;
 	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
+	// Show copying state
+	btn.iBitmap = nScrollBmp; btn.idCommand = TID_SCROLL;
+	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&btn);
+	// Separator before min/max/close
 	sep.fsState |= TBSTATE_HIDDEN; sep.idCommand = TID_MINIMIZE_SEP;
 	SendMessage(mh_Toolbar, TB_ADDBUTTONS, 1, (LPARAM)&sep);
 	// Min,Max,Close
@@ -1857,16 +2006,22 @@ void TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 	int nMaxLen = 0; //gpSet->nTabLenMax - _tcslen(szFormat) + 2/* %s */;
 	int origLength = 0; //_tcslen(tFileName);
 
+	CRealConsole* pRCon = apVCon ? apVCon->RCon() : NULL;
+	bool bIsFar = pRCon ? pRCon->isFar() : false;
+
+
 	if (pTab->Name[0]==0 || (pTab->Type & 0xFF) == 1/*WTYPE_PANELS*/)
 	{
 		//_tcscpy(szFormat, _T("%s"));
-		lstrcpyn(szFormat, gpSet->szTabConsole, countof(szFormat));
+		lstrcpyn(szFormat, bIsFar ? gpSet->szTabPanels : gpSet->szTabConsole, countof(szFormat));
 		nMaxLen = gpSet->nTabLenMax - _tcslen(szFormat) + 2/* %s */;
 
 		if (pTab->Name[0] == 0)
 		{
-#ifdef _DEBUG
-			// Это должно случаться ТОЛЬКО при инициализации GUI
+			// Это может случаться при инициализации GUI или закрытии консоли
+			#if 0
+			_ASSERTE(!bIsFar);
+			
 			int nTabCount = GetItemCount();
 
 			if (nTabCount>0 && gpConEmu->ActiveCon()!=NULL)
@@ -1874,14 +2029,47 @@ void TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 				//_ASSERTE(pTab->Name[0] != 0);
 				nTabCount = nTabCount;
 			}
+			#endif
 
-#endif
 			//100930 - нельзя. GetLastTitle() вернет текущую консоль, а pTab может быть из любой консоли!
 			// -- _tcscpy(pTab->Name, gpConEmu->GetLastTitle()); //isFar() ? gpSet->szTabPanels : gpSet->pszTabConsole);
 			_tcscpy(pTab->Name, gpConEmu->GetDefaultTitle());
 		}
 
 		lstrcpyn(fileName, pTab->Name, countof(fileName));
+		if (gpSet->szTabSkipWords[0])
+		{
+			LPCWSTR pszWord = gpSet->szTabSkipWords;
+			while (pszWord && *pszWord)
+			{
+				LPCWSTR pszNext = wcschr(pszWord, L'|');
+				if (!pszNext) pszNext = pszWord + _tcslen(pszWord);
+				
+				int nLen = (int)(pszNext - pszWord);
+				if (nLen > 0)
+				{
+					lstrcpyn(dummy, pszWord, min((int)countof(dummy),(nLen+1)));
+					wchar_t* pszFound;
+					while ((pszFound = wcsstr(fileName, dummy)) != NULL)
+					{
+						size_t nLeft = _tcslen(pszFound);
+						if (nLeft <= (size_t)nLen)
+						{
+							*pszFound = NULL;
+							break;
+						}
+						else
+						{
+							wmemmove(pszFound, pszFound+(size_t)nLen, nLeft - nLen + 1);
+						}
+					}
+				}
+
+				if (!*pszNext)
+					break;
+				pszWord = pszNext + 1;
+			}
+		}
 		origLength = _tcslen(fileName);
 		//if (origLength>6) {
 		//    // Чтобы в заголовке было что-то вроде "{C:\Program Fil...- Far"
@@ -1907,9 +2095,14 @@ void TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 				lstrcpyn(szFormat, gpSet->szTabEditor, countof(szFormat));
 		}
 		else if ((pTab->Type & 0xFF) == 2/*WTYPE_VIEWER*/)
+		{
 			lstrcpyn(szFormat, gpSet->szTabViewer, countof(szFormat));
+		}
 		else
-			lstrcpyn(szFormat, gpSet->szTabConsole, countof(szFormat));
+		{
+			_ASSERTE(FALSE && "Must be processed in previous branch");
+			lstrcpyn(szFormat, bIsFar ? gpSet->szTabPanels : gpSet->szTabConsole, countof(szFormat));
+		}
 	}
 
 	// restrict length
@@ -1964,10 +2157,24 @@ void TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 	TCHAR* pszEnd = pTab->Name + countof(pTab->Name) - 1; // в конце еще нужно зарезервировать место для '\0'
 	
 	if (!pszFmt || !*pszFmt)
+	{
 		pszFmt = _T("%s");
+	}
 	*pszDst = 0;
+
+	bool bRenamedTab = false;
+	if (pTab->Type & fwt_Renamed)
+	{
+		if (wcsstr(pszFmt, L"%s") == NULL)
+		{
+			if (wcsstr(pszFmt, L"%n") != NULL)
+				bRenamedTab = true;
+			else
+				pszFmt = _T("%s");
+		}
+	}
 	
-	TCHAR szTmp[16];
+	TCHAR szTmp[64];
 	
 	while (*pszFmt && pszDst < pszEnd)
 	{
@@ -1997,11 +2204,18 @@ void TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 					break;
 				case _T('c'): case _T('C'):
 					{
-						int iCon = gpConEmu->IsVConValid(apVCon);
+						int iCon = gpConEmu->isVConValid(apVCon);
 						if (iCon > 0)
 							_wsprintf(szTmp, SKIPLEN(countof(szTmp)) _T("%u"), iCon);
 						else
 							wcscpy_c(szTmp, _T("?"));
+						pszText = szTmp;
+					}
+					break;
+				case _T('n'): case _T('N'):
+					{
+						pszText = bRenamedTab ? fileName : pRCon ? pRCon->GetActiveProcessName() : NULL;
+						wcscpy_c(szTmp, (pszText && *pszText) ? pszText : L"?");
 						pszText = szTmp;
 					}
 					break;
@@ -2328,6 +2542,8 @@ BOOL TabBarClass::OnKeyboard(UINT messg, WPARAM wParam, LPARAM lParam)
 			SwitchNext(lbAltPressed);
 		else
 			SwitchPrev(lbAltPressed);
+
+		return TRUE;
 	}
 	else if (mb_InKeySwitching && messg == WM_KEYDOWN && !lbAltPressed
 	        && (wParam == VK_UP || wParam == VK_DOWN || wParam == VK_LEFT || wParam == VK_RIGHT))
@@ -2337,9 +2553,11 @@ BOOL TabBarClass::OnKeyboard(UINT messg, WPARAM wParam, LPARAM lParam)
 		BOOL bForward = (wParam == VK_RIGHT || wParam == VK_DOWN);
 		Switch(bForward);
 		gpSet->isTabRecent = bRecent;
+
+		return TRUE;
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 void TabBarClass::SetRedraw(BOOL abEnableRedraw)
@@ -2447,47 +2665,107 @@ void TabBarClass::ShowTabError(LPCTSTR asInfo, int tabIndex)
 //	SelectObject(hdc, hOldPen);
 //}
 
-void TabBarClass::OnNewConPopup()
+void TabBarClass::OnChooseTabPopup()
+{
+	RECT rcBtnRect = {0};
+	SendMessage(mh_Toolbar, TB_GETRECT, TID_ACTIVE_NUMBER, (LPARAM)&rcBtnRect);
+	MapWindowPoints(mh_Toolbar, NULL, (LPPOINT)&rcBtnRect, 2);
+	POINT pt = {rcBtnRect.right,rcBtnRect.bottom};
+
+	gpConEmu->ChooseTabFromMenu(FALSE, pt, TPM_RIGHTALIGN|TPM_TOPALIGN);
+}
+
+void TabBarClass::OnNewConPopup(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 0*/)
 {
 	HMENU hPopup = CreatePopupMenu();
 	LPCWSTR pszCurCmd = NULL;
+	bool lbReverse = (nFlags & TPM_BOTTOMALIGN) == TPM_BOTTOMALIGN;
 
 	if (gpConEmu->ActiveCon() && gpConEmu->ActiveCon()->RCon())
 		pszCurCmd = gpConEmu->ActiveCon()->RCon()->GetCmd();
 
 	LPCWSTR pszHistory = gpSet->psCmdHistory;
-	int nLastID = 0;
-	//struct CmdHistory
-	//{
-	//	int nCmd;
-	//	LPCWSTR pszCmd;
-	//} History[MAX_CMD_HISTORY+1];
+	int nFirstID = 0, nLastID = 0, nFirstGroupID = 0, nLastGroupID = 0;
+	int nCreateID = 0, nSetupID = 0;
 
-	memset(History, 0, sizeof(History));
+	memset(m_CmdPopupMenu, 0, sizeof(m_CmdPopupMenu));
 
-	if (pszHistory)
+	//// Обновить группы команд
+	//gpSet->LoadCmdTasks(NULL);
+
+	int nGroup = 0;
+	const Settings::CommandTasks* pGrp = NULL;
+	while ((nGroup < MAX_CMD_GROUP_SHOW) && (pGrp = gpSet->CmdTaskGet(nGroup)))
 	{
-		while(*pszHistory && (nLastID < MAX_CMD_HISTORY_SHOW))
+		m_CmdPopupMenu[nLastID].nCmd = nLastID+1;
+		m_CmdPopupMenu[nLastID].pszCmd = pGrp->pszCommands;
+
+		if (nGroup < 9)
+			_wsprintf(m_CmdPopupMenu[nLastID].szShort, SKIPLEN(countof(m_CmdPopupMenu[nLastID].szShort)) L"&%i: ", nGroup+1);
+		else if (nGroup == 9)
+			wcscpy_c(m_CmdPopupMenu[nLastID].szShort, L"1&0: ");
+		else
+			m_CmdPopupMenu[nLastID].szShort[0] = 0;
+
+		int nCurLen = _tcslen(m_CmdPopupMenu[nLastID].szShort);
+
+		int nMaxShort = countof(m_CmdPopupMenu[nLastID].szShort); // wchar_t szShort[32];
+		int nLen = _tcslen(pGrp->pszName);
+		if ((nLen+nCurLen) < nMaxShort)
+		{
+			lstrcpyn(m_CmdPopupMenu[nLastID].szShort+nCurLen, pGrp->pszName, countof(m_CmdPopupMenu[nLastID].szShort)-nCurLen);
+		}
+		else
+		{
+			lstrcpyn(m_CmdPopupMenu[nLastID].szShort+nCurLen, pGrp->pszName, countof(m_CmdPopupMenu[nLastID].szShort)-1-nCurLen);
+			m_CmdPopupMenu[nLastID].szShort[nMaxShort-2] = /*…*/L'\x2026';
+			m_CmdPopupMenu[nLastID].szShort[nMaxShort-1] = 0;
+		}
+
+		InsertMenu(hPopup, lbReverse ? 0 : -1, MF_BYPOSITION | MF_STRING | MF_ENABLED, m_CmdPopupMenu[nLastID].nCmd, m_CmdPopupMenu[nLastID].szShort);
+		nLastID++; nGroup++;
+		nLastGroupID = nLastID;
+		if (!nFirstGroupID)
+			nFirstGroupID = nLastID;
+	}
+
+	nSetupID = ++nLastID;
+	InsertMenu(hPopup, lbReverse ? 0 : -1, MF_BYPOSITION | MF_STRING | MF_ENABLED, nSetupID, L"Setup tasks...");
+
+	nFirstID = nLastID+1;
+
+	if (pszHistory && *pszHistory)
+	{
+		bool bSeparator = false;
+		int nCount = 0;
+		while (*pszHistory && (nCount < MAX_CMD_HISTORY_SHOW))
 		{
 			// Текущий - будет первым
 			if (!pszCurCmd || lstrcmp(pszCurCmd, pszHistory))
 			{
-				History[nLastID].nCmd = nLastID+1;
-				History[nLastID].pszCmd = pszHistory;
+				m_CmdPopupMenu[nLastID].nCmd = nLastID+1;
+				m_CmdPopupMenu[nLastID].pszCmd = pszHistory;
 				int nLen = _tcslen(pszHistory);
-				int nMaxShort = countof(History[nLastID].szShort);
+				int nMaxShort = countof(m_CmdPopupMenu[nLastID].szShort);
 				if (nLen >= nMaxShort)
 				{
-					History[nLastID].szShort[0] = /*…*/L'\x2026';
-					_wcscpyn_c(History[nLastID].szShort+1, nMaxShort-1, pszHistory+nLen-nMaxShort+2, nMaxShort-1);
-					History[nLastID].szShort[nMaxShort-1] = 0;
+					m_CmdPopupMenu[nLastID].szShort[0] = /*…*/L'\x2026';
+					_wcscpyn_c(m_CmdPopupMenu[nLastID].szShort+1, nMaxShort-1, pszHistory+nLen-nMaxShort+2, nMaxShort-1);
+					m_CmdPopupMenu[nLastID].szShort[nMaxShort-1] = 0;
 				}
 				else
 				{
-					_wcscpyn_c(History[nLastID].szShort, nMaxShort, pszHistory, nMaxShort);
+					_wcscpyn_c(m_CmdPopupMenu[nLastID].szShort, nMaxShort, pszHistory, nMaxShort);
 				}
-				AppendMenu(hPopup, MF_STRING | MF_ENABLED, History[nLastID].nCmd, History[nLastID].szShort);
-				nLastID++;
+
+				if (!bSeparator)
+				{
+					bSeparator = true;
+					InsertMenu(hPopup, lbReverse ? 0 : -1, MF_BYPOSITION | MF_SEPARATOR, -1, NULL);
+				}
+
+				InsertMenu(hPopup, lbReverse ? 0 : -1, MF_BYPOSITION | MF_STRING | MF_ENABLED, m_CmdPopupMenu[nLastID].nCmd, m_CmdPopupMenu[nLastID].szShort);
+				nLastID++; nCount++;
 			}
 
 			pszHistory += _tcslen(pszHistory)+1;
@@ -2496,38 +2774,85 @@ void TabBarClass::OnNewConPopup()
 
 	if (pszCurCmd && *pszCurCmd)
 	{
-		History[nLastID].nCmd = nLastID+1;
-		History[nLastID].pszCmd = pszCurCmd;
+		m_CmdPopupMenu[nLastID].nCmd = nLastID+1;
+		m_CmdPopupMenu[nLastID].pszCmd = pszCurCmd;
 		int nLen = _tcslen(pszCurCmd);
-		int nMaxShort = countof(History[nLastID].szShort);
+		int nMaxShort = countof(m_CmdPopupMenu[nLastID].szShort);
 		if (nLen >= nMaxShort)
 		{
-			History[nLastID].szShort[0] = /*…*/L'\x2026';
-			_wcscpyn_c(History[nLastID].szShort+1, nMaxShort-1, pszCurCmd+nLen-nMaxShort+2, nMaxShort-1);
-			History[nLastID].szShort[nMaxShort-1] = 0;
+			m_CmdPopupMenu[nLastID].szShort[0] = /*…*/L'\x2026';
+			_wcscpyn_c(m_CmdPopupMenu[nLastID].szShort+1, nMaxShort-1, pszCurCmd+nLen-nMaxShort+2, nMaxShort-1);
+			m_CmdPopupMenu[nLastID].szShort[nMaxShort-1] = 0;
 		}
 		else
 		{
-			_wcscpyn_c(History[nLastID].szShort, nMaxShort, pszCurCmd, nMaxShort);
+			_wcscpyn_c(m_CmdPopupMenu[nLastID].szShort, nMaxShort, pszCurCmd, nMaxShort);
 		}
-		InsertMenu(hPopup, 0, MF_BYPOSITION|MF_ENABLED|MF_STRING, History[nLastID].nCmd, History[nLastID].szShort);
+		InsertMenu(hPopup, lbReverse ? -1 : 0, MF_BYPOSITION|MF_SEPARATOR, 0, 0);
+		InsertMenu(hPopup, lbReverse ? -1 : 0, MF_BYPOSITION|MF_ENABLED|MF_STRING, m_CmdPopupMenu[nLastID].nCmd, m_CmdPopupMenu[nLastID].szShort);
 		nLastID++;
-		InsertMenu(hPopup, 1, MF_BYPOSITION|MF_SEPARATOR, 0, 0);
+		nCreateID = ++nLastID;
+		InsertMenu(hPopup, lbReverse ? -1 : 0, MF_BYPOSITION|MF_ENABLED|MF_STRING, nCreateID, L"New console dialog...");
 	}
 
 	RECT rcBtnRect = {0};
-	SendMessage(mh_Toolbar, TB_GETRECT, TID_CREATE_CON, (LPARAM)&rcBtnRect);
-	MapWindowPoints(mh_Toolbar, NULL, (LPPOINT)&rcBtnRect, 2);
+	DWORD nAlign = TPM_RIGHTALIGN|TPM_TOPALIGN;
+
+	if (ptWhere)
+	{
+		rcBtnRect.right = ptWhere->x;
+		rcBtnRect.bottom = ptWhere->y;
+		if (nFlags)
+			nAlign = nFlags;
+	}
+	else if (IsTabsShown())
+	{
+		SendMessage(mh_Toolbar, TB_GETRECT, TID_CREATE_CON, (LPARAM)&rcBtnRect);
+		MapWindowPoints(mh_Toolbar, NULL, (LPPOINT)&rcBtnRect, 2);
+	}
+	else
+	{
+		GetClientRect(ghWnd, &rcBtnRect);
+		MapWindowPoints(ghWnd, NULL, (LPPOINT)&rcBtnRect, 2);
+		rcBtnRect.left = rcBtnRect.right;
+		rcBtnRect.bottom = rcBtnRect.top;
+	}
+
 	mb_InNewConPopup = true;
-	int nId = gpConEmu->trackPopupMenu(tmp_Cmd, hPopup, TPM_RIGHTALIGN|TPM_TOPALIGN|TPM_RETURNCMD/*|TPM_NONOTIFY*/,
+	int nId = gpConEmu->trackPopupMenu(tmp_Cmd, hPopup, nAlign|TPM_RETURNCMD/*|TPM_NONOTIFY*/,
 	                         rcBtnRect.right,rcBtnRect.bottom, 0, ghWnd, NULL);
 	mb_InNewConPopup = false;
 	//gpConEmu->mp_Tip->HideTip();
 	
-	if (nId >= 1 && nId <= nLastID)
+	if (nId == nCreateID)
+	{
+		gpConEmu->RecreateAction(cra_CreateTab/*FALSE*/, TRUE);
+	}
+	else if (nId == nSetupID)
+	{
+		CSettings::Dialog(IDD_SPG_CMDTASKS);
+	}
+	else if (nId >= 1 && nId <= nLastID)
 	{
 		RConStartArgs con;
-		con.pszSpecialCmd = lstrdup(History[nId-1].pszCmd);
+		if (nLastGroupID > 0 && nId <= nLastGroupID)
+		{
+			const Settings::CommandTasks* pGrp = gpSet->CmdTaskGet(nId-nFirstGroupID);
+			if (pGrp)
+			{
+				con.pszSpecialCmd = lstrdup(pGrp->pszName);
+				_ASSERTE(con.pszSpecialCmd && *con.pszSpecialCmd==TaskBracketLeft && con.pszSpecialCmd[lstrlen(con.pszSpecialCmd)-1]==TaskBracketRight);
+			}
+			else
+			{
+				MBoxAssert(pGrp!=NULL);
+				goto wrap;
+			}
+		}
+		else if (nId >= nFirstID)
+		{
+			con.pszSpecialCmd = lstrdup(m_CmdPopupMenu[nId-1].pszCmd);
+		}
 
 		if (isPressed(VK_SHIFT))
 		{
@@ -2544,9 +2869,10 @@ void TabBarClass::OnNewConPopup()
 		}
 
 		//Собственно, запуск
-		gpConEmu->CreateCon(&con);
+		gpConEmu->CreateCon(&con, TRUE);
 	}
 
+wrap:
 	DestroyMenu(hPopup);
 }
 
@@ -2554,10 +2880,10 @@ bool TabBarClass::OnMenuSelected(HMENU hMenu, WORD nID, WORD nFlags)
 {
 	if (mb_InNewConPopup)
 	{
-		if (nID >= 1 && nID <= countof(History) && History[nID-1].pszCmd)
+		if (nID >= 1 && nID <= countof(m_CmdPopupMenu) && m_CmdPopupMenu[nID-1].pszCmd)
 		{
-			LPCWSTR pszCmd = lstrdup(History[nID-1].pszCmd);
-			if (History[nID-1].szShort[0] && lstrcmp(pszCmd, History[nID-1].szShort))
+			LPCWSTR pszCmd = m_CmdPopupMenu[nID-1].pszCmd;
+			if (m_CmdPopupMenu[nID-1].szShort[0] && pszCmd && lstrcmp(pszCmd, m_CmdPopupMenu[nID-1].szShort))
 			{
 				POINT pt; GetCursorPos(&pt);
 				RECT rcMenuItem = {};
@@ -2611,7 +2937,7 @@ int TabBarClass::ActiveTabByName(int anType, LPCWSTR asName, CVirtualConsole** p
 	INT_PTR V, I;
 	int tabIdx = 0;
 	ConEmuTab tab = {0};
-	for(V = 0; V < MAX_CONSOLE_COUNT && nTab == -1; V++)
+	for (V = 0; V < MAX_CONSOLE_COUNT && nTab == -1; V++)
 	{
 		if (!(pVCon = gpConEmu->GetVCon(V))) continue;
 
@@ -2627,14 +2953,14 @@ int TabBarClass::ActiveTabByName(int anType, LPCWSTR asName, CVirtualConsole** p
 
 		CRealConsole *pRCon = pVCon->RCon();
 
-		for(I = 0; TRUE; I++)
+		for (I = 0; TRUE; I++)
 		{
 			if (!pRCon->GetTab(I, &tab))
 				break;
-			if (tab.Type == anType)
+			if (tab.Type == (anType & fwt_TypeMask))
 			{
 				LPCWSTR pszName = PointToName(tab.Name);
-				if (pszName && lstrcmpi(pszName, asName) == 0)
+				if ((pszName && (lstrcmpi(pszName, asName) == 0)) || (lstrcmpi(tab.Name, asName) == 0))
 				{
 					nTab = tabIdx;
 					break;
@@ -2679,4 +3005,36 @@ void TabBarClass::UpdateTabFont()
 	if (mh_TabFont)
 		DeleteObject(mh_TabFont);
 	mh_TabFont = hFont;
+}
+
+// Прямоугольник в клиентских координатах ghWnd!
+bool TabBarClass::GetRebarClientRect(RECT* rc)
+{
+	if (!IsTabsShown())
+		return false;
+
+	HWND hWnd = mh_Rebar ? mh_Rebar : mh_Tabbar;
+	GetWindowRect(hWnd, rc);
+	MapWindowPoints(NULL, ghWnd, (LPPOINT)rc, 2);
+
+	return true;
+}
+
+void TabBarClass::GetActiveTabRect(RECT* rcTab)
+{
+	if (!IsTabsShown())
+	{
+		_ASSERTE(IsTabsShown());
+		memset(rcTab, 0, sizeof(*rcTab));
+	}
+	else
+	{
+		TODO("TabBar: переделать после 'новых табов'");
+		int iSel = TabCtrl_GetCurSel(mh_Tabbar);
+		TabCtrl_GetItemRect(mh_Tabbar, iSel, rcTab);
+		MapWindowPoints(mh_Tabbar, NULL, (LPPOINT)rcTab, 2);
+		RECT rcBar = {}; GetWindowRect(mh_Rebar, &rcBar);
+		rcTab->bottom = min(rcTab->bottom, rcBar.bottom);
+		rcTab->left = max(rcTab->left-2, rcBar.left);
+	}
 }

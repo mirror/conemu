@@ -94,14 +94,14 @@ WARNING("WIN64 was not defined");
 #endif
 
 #ifdef USE_SEH
-	#if defined(_MSC_VER)
+	#if defined(_MSC_VER) && !defined(HIDE_USE_EXCEPTION_INFO)
 	#pragma message ("Compiling USING exception handler")
 	#endif
 
 	#define SAFETRY   __try
 	#define SAFECATCH __except(EXCEPTION_EXECUTE_HANDLER)
 #else
-	#if defined(_MSC_VER)
+	#if defined(_MSC_VER) && !defined(HIDE_USE_EXCEPTION_INFO)
 	#pragma message ("Compiling NOT using exception handler")
 	#endif
 
@@ -111,12 +111,16 @@ WARNING("WIN64 was not defined");
 
 
 #define isPressed(inp) ((GetKeyState(inp) & 0x8000) == 0x8000)
+bool isKey(DWORD wp,DWORD vk);
+
 #ifdef ARRAYSIZE
 #define countof(a) (ARRAYSIZE(a)) // (sizeof((a))/(sizeof(*(a))))
 #else
 #define countof(a) (sizeof((a))/(sizeof(*(a))))
 #endif
 #define ZeroStruct(s) memset(&(s), 0, sizeof(s))
+
+#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
 
 #define isDriveLetter(c) ((c>=L'A' && c<=L'Z') || (c>=L'a' && c<=L'z'))
 #define isDigit(c) (c>=L'0' && c<=L'9')
@@ -164,7 +168,7 @@ extern wchar_t gszDbgModLabel[6];
 	}
 #ifdef SHOWDEBUGSTR
 #define DEBUGSTR(s) { \
-	MCHKHEAP; CHEKCDBGMODLABEL; SYSTEMTIME st; GetLocalTime(&st); wchar_t szDEBUGSTRTime[1040]; _wsprintf(szDEBUGSTRTime, SKIPLEN(countof(szDEBUGSTRTime)) L"%i:%02i:%02i.%03i(%s.%i) ", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, gszDbgModLabel, GetCurrentThreadId()); \
+	MCHKHEAP; CHEKCDBGMODLABEL; SYSTEMTIME st; GetLocalTime(&st); wchar_t szDEBUGSTRTime[1040]; _wsprintf(szDEBUGSTRTime, SKIPLEN(countof(szDEBUGSTRTime)) L"%i:%02i:%02i.%03i(%s.%i.%i) ", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, gszDbgModLabel, GetCurrentProcessId(), GetCurrentThreadId()); \
 	if (lstrlen(s) < 1000) { \
 		wcscat_c(szDEBUGSTRTime, s); OutputDebugString(szDEBUGSTRTime); \
 	} else { \

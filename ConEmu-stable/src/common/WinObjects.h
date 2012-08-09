@@ -60,26 +60,79 @@ typedef BOOL (WINAPI* IsWindow_t)(HWND hWnd);
 extern IsWindow_t Is_Window;
 BOOL isWindow(HWND hWnd);
 
+typedef BOOL (WINAPI* AttachConsole_t)(DWORD dwProcessId);
+
+
 // Some WinAPI related functions
 wchar_t* GetShortFileNameEx(LPCWSTR asLong, BOOL abFavorLength=TRUE);
 BOOL FileExists(LPCWSTR asFilePath, DWORD* pnSize = NULL);
+BOOL DirectoryExists(LPCWSTR asPath);
+BOOL MyCreateDirectory(wchar_t* asPath);
 BOOL IsFilePath(LPCWSTR asFilePath);
 BOOL IsUserAdmin();
 BOOL GetLogonSID (HANDLE hToken, wchar_t **ppszSID);
-BOOL IsWindows64(BOOL *pbIsWow64Process = NULL);
+bool IsWine();
+bool IsDbcs();
+BOOL IsWindows64();
+int GetProcessBits(DWORD nPID, HANDLE hProcess = NULL);
 BOOL CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL abCheckModuleInfo);
+bool IsModuleValid(HMODULE module);
+typedef struct tagPROCESSENTRY32W PROCESSENTRY32W;
+bool GetProcessInfo(DWORD nPID, PROCESSENTRY32W* Info);
+bool isTerminalMode();
+bool IsFarExe(LPCWSTR asModuleName);
 
 void RemoveOldComSpecC();
 const wchar_t* PointToName(const wchar_t* asFullPath);
 const char* PointToName(const char* asFileOrPath);
 const wchar_t* PointToExt(const wchar_t* asFullPath);
 const wchar_t* Unquote(wchar_t* asPath);
+wchar_t* ExpandMacroValues(LPCWSTR pszFormat, LPCWSTR* pszValues, size_t nValCount);
+wchar_t* ExpandEnvStr(LPCWSTR pszCommand);
 
-BOOL IsExecutable(LPCWSTR aszFilePathName);
-BOOL IsNeedCmd(LPCWSTR asCmdLine, BOOL *rbNeedCutStartEndQuot, wchar_t (&szExe)[MAX_PATH+1],
+BOOL IsExecutable(LPCWSTR aszFilePathName, wchar_t** rsExpandedVars = NULL);
+BOOL IsNeedCmd(LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
+			   wchar_t (&szExe)[MAX_PATH+1],
 			   BOOL& rbRootIsCmdExe, BOOL& rbAlwaysConfirmExit, BOOL& rbAutoDisableConfirmExit);
 
 //BOOL FindConEmuBaseDir(wchar_t (&rsConEmuBaseDir)[MAX_PATH+1], wchar_t (&rsConEmuExe)[MAX_PATH+1]);
+
+
+COORD MyGetLargestConsoleWindowSize(HANDLE hConsoleOutput);
+
+#ifndef CONEMU_MINIMAL
+HANDLE DuplicateProcessHandle(DWORD anTargetPID);
+void ChangeScreenBufferSize(CONSOLE_SCREEN_BUFFER_INFO& sbi, SHORT VisibleX, SHORT VisibleY, SHORT BufferX, SHORT BufferY);
+BOOL GetConWindowSize(const CONSOLE_SCREEN_BUFFER_INFO& sbi, int nCurWidth, int nCurHeight, DWORD nCurScroll, int* pnNewWidth, int* pnNewHeight, DWORD* pnScroll);
+void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName, WORD anTextColors = 0, WORD anPopupColors = 0);
+int EvaluateDefaultFontWidth(int inSizeY, const wchar_t *asFontName);
+void EmergencyShow(HWND hConWnd);
+void FindComspec(ConEmuComspec* pOpt); // используется в GUI при загрузке настроек
+void UpdateComspec(ConEmuComspec* pOpt);
+void SetEnvVarExpanded(LPCWSTR asName, LPCWSTR asValue);
+#endif
+LPCWSTR GetComspecFromEnvVar(wchar_t* pszComspec, DWORD cchMax, ComSpecBits Bits = csb_SameOS);
+wchar_t* GetComspec(const ConEmuComspec* pOpt);
+
+struct MY_CONSOLE_SCREEN_BUFFER_INFOEX
+{
+	ULONG      cbSize;
+	COORD      dwSize;
+	COORD      dwCursorPosition;
+	WORD       wAttributes;
+	SMALL_RECT srWindow;
+	COORD      dwMaximumWindowSize;
+	WORD       wPopupAttributes;
+	BOOL       bFullscreenSupported;
+	COLORREF   ColorTable[16];
+};
+
+BOOL apiGetConsoleScreenBufferInfoEx(HANDLE hConsoleOutput, MY_CONSOLE_SCREEN_BUFFER_INFOEX* lpConsoleScreenBufferInfoEx);
+BOOL apiSetConsoleScreenBufferInfoEx(HANDLE hConsoleOutput, MY_CONSOLE_SCREEN_BUFFER_INFOEX* lpConsoleScreenBufferInfoEx);
+
+BOOL apiGetConsoleFontSize(HANDLE hOutput, int &SizeY, int &SizeX, wchar_t (&rsFontName)[LF_FACESIZE]); //Vista+ only!
+BOOL apiSetConsoleFontSize(HANDLE hOutput, int inSizeY, int inSizeX, const wchar_t *asFontName); //Vista+ only!
+BOOL apiFixFontSizeForBufferSize(HANDLE hOutput, COORD dwSize);
 
 //------------------------------------------------------------------------
 ///| Section |////////////////////////////////////////////////////////////
@@ -90,7 +143,9 @@ class MSection
 {
 	protected:
 		CRITICAL_SECTION m_cs;
+		CRITICAL_SECTION m_lock_cs;
 		DWORD mn_TID; // устанавливается только после EnterCriticalSection
+		HANDLE mh_ExclusiveThread;
 #ifdef _DEBUG
 		DWORD mn_UnlockedExclusiveTID;
 #endif
@@ -100,11 +155,14 @@ class MSection
 		friend class MSectionLock;
 		DWORD mn_LockedTID[10];
 		int   mn_LockedCount[10];
+		void Process_Lock();
+		void Process_Unlock();
 	public:
 		MSection();
 		~MSection();
 	public:
 		void ThreadTerminated(DWORD dwTID);
+		bool isLockedExclusive();
 	protected:
 		void AddRef(DWORD dwTID);
 		int ReleaseRef(DWORD dwTID);
@@ -153,12 +211,14 @@ class MConHandle
 		BOOL      mb_OpenFailed;
 		DWORD     mn_LastError;
 		DWORD     mn_StdMode;
+		HANDLE*   mpp_OutBuffer; // Устанавливается при SetConsoleActiveScreenBuffer
 
 	public:
 		operator const HANDLE();
 
 	public:
 		void Close();
+		void SetBufferPtr(HANDLE* ppOutBuffer);
 
 	public:
 		MConHandle(LPCWSTR asName);
@@ -222,7 +282,7 @@ class MFileMapping
 		}
 		#endif
 	public:
-		void InitName(const wchar_t *aszTemplate,DWORD Parm1=0,DWORD Parm2=0)
+		LPCWSTR InitName(const wchar_t *aszTemplate,DWORD Parm1=0,DWORD Parm2=0)
 		{
 			if (mh_Mapping) CloseMap();
 
@@ -232,6 +292,7 @@ class MFileMapping
 			//#else
 			//			msprintf(ms_MapName, SKIPLEN(countof(ms_MapName)) aszTemplate, Parm1, Parm2);
 			//#endif
+			return ms_MapName;
 		};
 		void ClosePtr()
 		{
@@ -383,13 +444,18 @@ class MPipe
 		T_IN m_In; // для справки...
 		T_OUT* mp_Out; DWORD mn_OutSize, mn_MaxOutSize;
 		T_OUT m_Tmp;
-		//DWORD mdw_Timeout;
+		DWORD mn_ErrCode;
+		void SaveErrorCode(DWORD nCode)
+		{
+			mn_ErrCode = nCode;
+		};
 	public:
 		MPipe()
 		{
 			ms_PipeName[0] = ms_Module[0] = 0;
 			mh_Pipe = NULL; memset(&m_In, 0, sizeof(m_In));
 			mp_Out = NULL; mn_OutSize = mn_MaxOutSize = 0;
+			mn_ErrCode = 0;
 			mh_Heap = GetProcessHeap();
 			_ASSERTE(mh_Heap!=NULL);
 		};
@@ -473,20 +539,23 @@ class MPipe
 				*rpOut = mp_Out;
 			}
 
-#ifdef _DEBUG
+			#ifdef _DEBUG
 			DWORD nStartTick = GetTickCount();
-#endif
+			#endif
+
 			WARNING("BLOKIROVKA! Inogda zavisaet pri zakrytii konsoli");
 			fSuccess = TransactNamedPipe(mh_Pipe, (LPVOID)apIn, anInSize, ptrOut, cbReadBuf, &cbRead, NULL);
 			dwErr = fSuccess ? 0 : GetLastError();
-#ifdef _DEBUG
+			SaveErrorCode(dwErr);
+
+			#ifdef _DEBUG
 			DWORD nEndTick = GetTickCount();
 			DWORD nDelta = nEndTick - nStartTick;
 			if (nDelta >= TRANSACT_WARN_TIMEOUT && !IsDebuggerPresent())
 			{
 				_ASSERTE(nDelta <= TRANSACT_WARN_TIMEOUT);
 			}
-#endif
+			#endif
 
 			if (!fSuccess && dwErr == ERROR_BROKEN_PIPE)
 			{
@@ -503,7 +572,7 @@ class MPipe
 				if (anInSize >= sizeof(CESERVER_REQ_HDR))
 					nCmd = ((CESERVER_REQ_HDR*)apIn)->nCmd;
 
-				msprintf(ms_Error, countof(ms_Error), L"%s: TransactNamedPipe failed, Cmd=%i, ErrCode = 0x%08X!", ms_Module, nCmd, dwErr);
+				msprintf(ms_Error, countof(ms_Error), L"%s: TransactNamedPipe failed, Cmd=%i, ErrCode=%u!", ms_Module, nCmd, dwErr);
 				Close(); // Поскольку произошла неизвестная ошибка - пайп лучше закрыть (чтобы потом переоткрыть)
 				return FALSE;
 			}
@@ -582,6 +651,7 @@ class MPipe
 					//WARNING: Если в буфере пайпа данных меньше чем nAllSize - повиснем!
 					fSuccess = ReadFile(mh_Pipe, ptrData, nAllSize, &cbRead, NULL);
 					dwErr = fSuccess ? 0 : GetLastError();
+					SaveErrorCode(dwErr);
 
 					// Exit if an error other than ERROR_MORE_DATA occurs.
 					if (!fSuccess && (dwErr != ERROR_MORE_DATA))
@@ -607,6 +677,7 @@ class MPipe
 					//	while (1) {
 					//		fSuccess = ReadFile( mh_Pipe, cbTemp, 512, &cbRead, NULL);
 					//		dwErr = GetLastError();
+					//		SaveErrorCode(dwErr);
 					//		// Exit if an error other than ERROR_MORE_DATA occurs.
 					//		if ( !fSuccess && (dwErr != ERROR_MORE_DATA))
 					//			break;
@@ -622,6 +693,10 @@ class MPipe
 		LPCWSTR GetErrorText()
 		{
 			return ms_Error;
+		};
+		DWORD GetErrorCode()
+		{
+			return mn_ErrCode;
 		};
 };
 

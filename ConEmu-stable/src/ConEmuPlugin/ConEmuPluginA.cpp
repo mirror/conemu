@@ -294,26 +294,48 @@ void ProcessDragToA()
 	if (InfoA == NULL)
 		return;
 
-	WindowInfo WInfo;
-	WInfo.Pos = 0;
+	WindowInfo WInfo = {};
+	//WInfo.Pos = 0;
+	WInfo.Pos = -1; // попробуем работать в диалогах и редакторе
 	_ASSERTE(GetCurrentThreadId() == gnMainThreadId);
 	InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETSHORTWINDOWINFO, (void*)&WInfo);
 
 	if (!WInfo.Current)
 	{
 		int ItemsCount=0;
-
-		//WriteFile(hPipe, &ItemsCount, sizeof(int), &cout, NULL);
 		if (gpCmdRet==NULL)
 			OutDataAlloc(sizeof(ItemsCount));
+		OutDataWrite(&ItemsCount,sizeof(ItemsCount));
+		return;
+	}
 
+	int nStructSize;
+
+	if ((WInfo.Type == WTYPE_DIALOG) || (WInfo.Type == WTYPE_EDITOR))
+	{
+		// разрешить дроп в виде текста
+		ForwardedPanelInfo DlgInfo = {};
+		DlgInfo.NoFarConsole = TRUE;
+		nStructSize = sizeof(DlgInfo);
+		if (gpCmdRet==NULL)
+			OutDataAlloc(nStructSize+sizeof(nStructSize));
+		OutDataWrite(&nStructSize, sizeof(nStructSize));
+		OutDataWrite(&DlgInfo, nStructSize);
+		return;
+	}
+	else if (WInfo.Type != WTYPE_PANELS)
+	{
+		// Иначе - дроп не разрешен
+		int ItemsCount=0;
+		if (gpCmdRet==NULL)
+			OutDataAlloc(sizeof(ItemsCount));
 		OutDataWrite(&ItemsCount,sizeof(ItemsCount));
 		return;
 	}
 
 	PanelInfo PAInfo = {}, PPInfo = {};
 	ForwardedPanelInfo *pfpi = NULL;
-	int nStructSize = sizeof(ForwardedPanelInfo)+4; // потом увеличим на длину строк
+	nStructSize = sizeof(ForwardedPanelInfo)+4; // потом увеличим на длину строк
 	//ZeroMemory(&fpi, sizeof(fpi));
 	BOOL lbAOK = FALSE, lbPOK = FALSE;
 
@@ -617,7 +639,7 @@ bool UpdateConEmuTabsA(int anEvent, bool losingFocus, bool editorSave, void *Par
 				TODO("Определение ИД редактора/вьювера");
 				lbCh |= AddTab(tabCount, losingFocus, editorSave,
 				               WInfo.Type, pszName, /*editorSave ? pszFileName :*/ NULL,
-				               WInfo.Current, WInfo.Modified, 0);
+				               WInfo.Current, WInfo.Modified, 0, 0);
 				//if (WInfo.Type == WTYPE_EDITOR && WInfo.Current) //2009-08-17
 				//	lastModifiedStateW = WInfo.Modified;
 			}
@@ -652,11 +674,12 @@ bool UpdateConEmuTabsA(int anEvent, bool losingFocus, bool editorSave, void *Par
 
 			if (WInfo.Type == WTYPE_EDITOR || WInfo.Type == WTYPE_VIEWER)
 			{
+				tabCount = 0;
 				MultiByteToWideChar(CP_OEMCP, 0, WInfo.Name, lstrlenA(WInfo.Name)+1, pszName, CONEMUTABMAX);
 				TODO("Определение ИД редактора/вьювера");
 				lbCh |= AddTab(tabCount, losingFocus, editorSave,
 				               WInfo.Type, pszName, /*editorSave ? pszFileName :*/ NULL,
-				               WInfo.Current, WInfo.Modified, 0);
+				               WInfo.Current, WInfo.Modified, 0, 0);
 			}
 		}
 		else if (WInfo.Type == WTYPE_PANELS)
@@ -692,6 +715,8 @@ int WINAPI _export ProcessDialogEvent(int Event, void *Param)
 
 void   WINAPI _export ExitFAR(void)
 {
+	ShutdownPluginStep(L"ExitFAR");
+
 	ExitFarCmn();
 	//ShutdownHooks();
 	//StopThread();
@@ -709,6 +734,17 @@ void   WINAPI _export ExitFAR(void)
 	}
 
 	gbExitFarCalled = TRUE;
+
+	ShutdownPluginStep(L"ExitFAR - done");
+}
+
+int ShowMessageA(LPCSTR asMsg, int aiButtons, bool bWarning)
+{
+	if (!InfoA || !InfoA->Message)
+		return -1;
+
+	return InfoA->Message(InfoA->ModuleNumber, FMSG_ALLINONE|FMSG_MB_OK|(bWarning ? FMSG_WARNING : 0), NULL,
+	                      (const char * const *)asMsg, 0, aiButtons);
 }
 
 int ShowMessageA(int aiMsg, int aiButtons)
@@ -716,8 +752,7 @@ int ShowMessageA(int aiMsg, int aiButtons)
 	if (!InfoA || !InfoA->Message)
 		return -1;
 
-	return InfoA->Message(InfoA->ModuleNumber, FMSG_ALLINONE|FMSG_MB_OK|FMSG_WARNING, NULL,
-	                      (const char * const *)InfoA->GetMsg(InfoA->ModuleNumber,aiMsg), 0, aiButtons);
+	return ShowMessageA(InfoA->GetMsg(InfoA->ModuleNumber,aiMsg), aiButtons, true);
 }
 
 //void ReloadMacroA()
@@ -758,61 +793,74 @@ void PostMacroA(char* asMacro, INPUT_RECORD* apRec)
 	InfoA->AdvControl(InfoA->ModuleNumber, ACTL_KEYMACRO, (void*)&mcr);
 }
 
-int ShowPluginMenuA()
+int ShowPluginMenuA(ConEmuPluginMenuItem* apItems, int Count)
 {
 	if (!InfoA)
 		return -1;
 
-	FarMenuItemEx items[] =
+	//FarMenuItemEx items[] =
+	//{
+	//	{MIF_USETEXTPTR|(ConEmuHwnd ? MIF_SELECTED : MIF_DISABLE)},
+	//	{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
+	//	{MIF_SEPARATOR},
+	//	{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
+	//	{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
+	//	{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
+	//	{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
+	//	{MIF_SEPARATOR},
+	//	{MIF_USETEXTPTR|0},
+	//	{MIF_SEPARATOR},
+	//	{MIF_USETEXTPTR|(ConEmuHwnd||IsTerminalMode() ? MIF_DISABLE : MIF_SELECTED)},
+	//	{MIF_SEPARATOR},
+	//	//#ifdef _DEBUG
+	//	//		{MIF_USETEXTPTR},
+	//	//#endif
+	//	{MIF_USETEXTPTR|(IsDebuggerPresent()||IsTerminalMode() ? MIF_DISABLE : 0)}
+	//};
+	//items[0].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuEditOutput);
+	//items[1].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuViewOutput);
+	//items[3].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuShowHideTabs);
+	//items[4].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuNextTab);
+	//items[5].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuPrevTab);
+	//items[6].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuCommitTab);
+	//items[8].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuGuiMacro);
+	//items[10].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuAttach);
+	////#ifdef _DEBUG
+	////items[10].Text.TextPtr = "&~. Raise exception";
+	////items[11].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuDebug);
+	////#else
+	//items[12].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuDebug);
+	////#endif
+	//int nCount = sizeof(items)/sizeof(items[0]);
+
+	FarMenuItemEx* items = (FarMenuItemEx*)calloc(Count, sizeof(*items));
+	for (int i = 0; i < Count; i++)
 	{
-		{MIF_USETEXTPTR|(ConEmuHwnd ? MIF_SELECTED : MIF_DISABLE)},
-		{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
-		{MIF_SEPARATOR},
-		{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
-		{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
-		{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
-		{MIF_USETEXTPTR|(ConEmuHwnd ? 0 : MIF_DISABLE)},
-		{MIF_SEPARATOR},
-		{MIF_USETEXTPTR|0},
-		{MIF_SEPARATOR},
-		{MIF_USETEXTPTR|(ConEmuHwnd||IsTerminalMode() ? MIF_DISABLE : MIF_SELECTED)},
-		{MIF_SEPARATOR},
-		//#ifdef _DEBUG
-		//		{MIF_USETEXTPTR},
-		//#endif
-		{MIF_USETEXTPTR|(IsDebuggerPresent()||IsTerminalMode() ? MIF_DISABLE : 0)}
-	};
-	items[0].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuEditOutput);
-	items[1].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuViewOutput);
-	items[3].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuShowHideTabs);
-	items[4].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuNextTab);
-	items[5].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuPrevTab);
-	items[6].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuCommitTab);
-	items[8].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuGuiMacro);
-	items[10].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuAttach);
-	//#ifdef _DEBUG
-	//items[10].Text.TextPtr = "&~. Raise exception";
-	//items[11].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuDebug);
-	//#else
-	items[12].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuDebug);
-	//#endif
-	int nCount = sizeof(items)/sizeof(items[0]);
+		if (apItems[i].Separator)
+		{
+			items[i].Flags = MIF_SEPARATOR;
+			continue;
+		}
+		items[i].Flags	= (apItems[i].Disabled ? MIF_DISABLE : 0)
+						| (apItems[i].Selected ? MIF_SELECTED : 0)
+						| (apItems[i].Checked  ? MIF_CHECKED : 0)
+						;
+		if (apItems[i].MsgText)
+		{
+			WideCharToMultiByte(CP_OEMCP, 0, apItems[i].MsgText, -1, items[i].Text.Text, countof(items[i].Text.Text), 0,0);
+		}
+		else
+		{
+			items[i].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber, apItems[i].MsgID);
+			items[i].Flags |= MIF_USETEXTPTR;
+		}
+	}
+
 	int nRc = InfoA->Menu(InfoA->ModuleNumber, -1,-1, 0,
 	                      FMENU_USEEXT|FMENU_AUTOHIGHLIGHT|FMENU_CHANGECONSOLETITLE|FMENU_WRAPMODE,
 	                      InfoA->GetMsg(InfoA->ModuleNumber,CEPluginName),
-	                      NULL, NULL, NULL, NULL, (FarMenuItem*)items, nCount);
-#ifdef _DEBUG
-
-	if (nRc == (nCount - 2))
-	{
-		// Вызвать исключение для проверки отладчика
-		LPVOID ptrSrc;
-		wchar_t szDst[MAX_PATH];
-		ptrSrc = NULL;
-		memmove(szDst, ptrSrc, sizeof(szDst));
-	}
-
-#endif
+	                      NULL, NULL, NULL, NULL, (FarMenuItem*)items, Count);
+	SafeFree(items);
 	return nRc;
 }
 
@@ -896,7 +944,7 @@ bool RunExternalProgramW(wchar_t* pszCommand, wchar_t* pszCurDir);
 
 bool RunExternalProgramA(char* pszCommand)
 {
-	char strTemp[MAX_PATH+1];;
+	char strTemp[MAX_PATH+1];
 
 	if (!pszCommand || !*pszCommand)
 	{
@@ -912,10 +960,42 @@ bool RunExternalProgramA(char* pszCommand)
 	wchar_t strCurDir[MAX_PATH+1]; GetCurrentDirectory(MAX_PATH, strCurDir);
 	int nLen = lstrlenA(pszCommand)+1;
 	wchar_t* pwszCommand = (wchar_t*)calloc(nLen,2);
+	if (!pwszCommand)
+		return TRUE;
 	MultiByteToWideChar(CP_OEMCP, 0, pszCommand, nLen, pwszCommand, nLen);
-	InfoA->Control(INVALID_HANDLE_VALUE,FCTL_GETUSERSCREEN,0);
-	RunExternalProgramW(pwszCommand, strCurDir);
-	InfoA->Control(INVALID_HANDLE_VALUE,FCTL_SETUSERSCREEN,0);
+
+	if (wcschr(pwszCommand, L'%'))
+	{
+		DWORD cchMax = nLen + MAX_PATH;
+		wchar_t* pszExpand = (wchar_t*)calloc(cchMax,sizeof(*pszExpand));
+		DWORD nExpLen = ExpandEnvironmentStrings(pwszCommand, pszExpand, cchMax);
+		if (nExpLen)
+		{
+			if (nExpLen > cchMax)
+			{
+				cchMax = nExpLen + 32;
+				pszExpand = (wchar_t*)realloc(pszExpand, cchMax*sizeof(*pszExpand));
+				nExpLen = ExpandEnvironmentStrings(pwszCommand, pszExpand, cchMax);
+			}
+			
+			if (nExpLen && (nExpLen <= cchMax))
+			{
+				free(pwszCommand);
+				pwszCommand = pszExpand;
+			}
+		}
+	}
+
+	
+	bool bSilent = (wcsstr(pwszCommand, L"-new_console") != NULL);
+	
+	if (!bSilent)
+		InfoA->Control(INVALID_HANDLE_VALUE,FCTL_GETUSERSCREEN,0);
+		
+	RunExternalProgramW(pwszCommand, strCurDir, bSilent);
+	
+	if (!bSilent)
+		InfoA->Control(INVALID_HANDLE_VALUE,FCTL_SETUSERSCREEN,0);
 	InfoA->AdvControl(InfoA->ModuleNumber,ACTL_REDRAWALL,0);
 	free(pwszCommand);
 	return true;
@@ -975,6 +1055,28 @@ void LoadFarColorsA(BYTE (&nFarColors)[col_LastIndex])
 	nFarColors[col_KeyBarNum] = FarConsoleColors[COL_KEYBARNUM];
 }
 
+static void LoadFarSettingsA(CEFarInterfaceSettings* pInterface, CEFarPanelSettings* pPanel)
+{
+	DWORD nSet;
+	
+	nSet = (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
+	if (pInterface)
+	{
+		pInterface->Raw = nSet;
+		_ASSERTE((pInterface->AlwaysShowMenuBar != 0) == ((nSet & FIS_ALWAYSSHOWMENUBAR) != 0));
+		_ASSERTE((pInterface->ShowKeyBar != 0) == ((nSet & FIS_SHOWKEYBAR) != 0));
+	}
+	    
+	nSet = (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
+	if (pPanel)
+	{
+		pPanel->Raw = nSet;
+		_ASSERTE((pPanel->ShowColumnTitles != 0) == ((nSet & FPS_SHOWCOLUMNTITLES) != 0));
+		_ASSERTE((pPanel->ShowStatusLine != 0) == ((nSet & FPS_SHOWSTATUSLINE) != 0));
+		_ASSERTE((pPanel->ShowSortModeLetter != 0) == ((nSet & FPS_SHOWSORTMODELETTER) != 0));
+	}
+}
+
 BOOL ReloadFarInfoA(/*BOOL abFull*/)
 {
 	if (!InfoA || !FSFA) return FALSE;
@@ -1011,13 +1113,11 @@ BOOL ReloadFarInfoA(/*BOOL abFull*/)
 	
 	LoadFarColorsA(gpFarInfo->nFarColors);
 
-	_ASSERTE(FPS_SHOWCOLUMNTITLES==0x20 && FPS_SHOWSTATUSLINE==0x40); //-V112
-	gpFarInfo->nFarInterfaceSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
-	gpFarInfo->nFarPanelSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
-	gpFarInfo->nFarConfirmationSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETCONFIRMATIONS, 0);
+	//_ASSERTE(FPS_SHOWCOLUMNTITLES==0x20 && FPS_SHOWSTATUSLINE==0x40); //-V112
+	LoadFarSettingsA(&gpFarInfo->FarInterfaceSettings, &gpFarInfo->FarPanelSettings);
+
+	//gpFarInfo->nFarConfirmationSettings =
+	//    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETCONFIRMATIONS, 0);
 	
 	gpFarInfo->bMacroActive = IsMacroActiveW995();
 	gpFarInfo->nMacroArea = fma_Unknown; // в Far 1.7x не поддерживается
@@ -1080,10 +1180,8 @@ void FillUpdateBackgroundA(struct PaintBackgroundArg* pFar)
 
 	LoadFarColorsA(pFar->nFarColors);
 
-	pFar->nFarInterfaceSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
-	pFar->nFarPanelSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
+	LoadFarSettingsA(&pFar->FarInterfaceSettings, &pFar->FarPanelSettings);
+
 	pFar->bPanelsAllowed = (0 != InfoA->Control(INVALID_HANDLE_VALUE, FCTL_CHECKPANELSEXIST, 0));
 
 	if (pFar->bPanelsAllowed)

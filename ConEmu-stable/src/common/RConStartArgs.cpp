@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "defines.h"
 #include "MAssert.h"
@@ -37,7 +38,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 RConStartArgs::RConStartArgs()
 {
-	bDetached = bRunAsAdministrator = bRunAsRestricted = bRecreate = bForceUserDialog = bBackgroundTab = FALSE;
+	bDetached = bRunAsAdministrator = bRunAsRestricted = FALSE;
+	bForceUserDialog = bBackgroundTab = bForceDosBox = FALSE;
+	#if 0
+	eSplit = eSplitNone; nSplitValue = DefaultSplitValue; nSplitPane = 0;
+	#endif
+	aRecreate = cra_CreateTab;
 	pszSpecialCmd = pszStartupDir = pszUserName = pszDomain = /*pszUserPassword =*/ NULL;
 	bBufHeight = FALSE; nBufHeight = 0;
 	eConfirmation = eConfDefault;
@@ -95,14 +101,18 @@ BOOL RConStartArgs::CheckUserToken(HWND hPwd)
 	return TRUE;
 }
 
-void RConStartArgs::ProcessNewConArg()
+// Returns ">0" - when changes was made
+//  0 - no changes
+// -1 - error
+int RConStartArgs::ProcessNewConArg()
 {
 	if (!pszSpecialCmd || !*pszSpecialCmd)
 	{
 		_ASSERTE(pszSpecialCmd && *pszSpecialCmd);
-		return;
+		return -1;
 	}
 
+	int nChanges = 0;
 	
 	// 120115 - Если первый аргумент - "ConEmu.exe" или "ConEmu64.exe" - не обрабатывать "-cur_console" и "-new_console"
 	{
@@ -116,7 +126,7 @@ void RConStartArgs::ProcessNewConArg()
 				|| lstrcmpi(pszTemp, L"ConEmu64.exe") == 0
 				|| lstrcmpi(pszTemp, L"ConEmu64") == 0)
 			{
-				return;
+				return 0;
 			}
 		}
 	}
@@ -129,7 +139,11 @@ void RConStartArgs::ProcessNewConArg()
 	int nNewConLen = lstrlen(pszNewCon);
 	_ASSERTE(lstrlen(pszCurCon)==nNewConLen);
 	wchar_t* pszFind;
-	while ((pszFind = wcsstr(pszSpecialCmd, pszNewCon)) != NULL || (pszFind = wcsstr(pszSpecialCmd, pszCurCon)) != NULL)
+	bool bStop = false;
+
+	while (!bStop
+		&& ((pszFind = wcsstr(pszSpecialCmd, pszNewCon)) != NULL || (pszFind = wcsstr(pszSpecialCmd, pszCurCon)) != NULL)
+		)
 	{
 		// Проверка валидности
 		_ASSERTE(pszFind > pszSpecialCmd);
@@ -157,29 +171,45 @@ void RConStartArgs::ProcessNewConArg()
 			}
 			else
 			{
+				if (*pszEnd == L':')
+				{
+					pszEnd++;
+				}
+				else
+				{
+					_ASSERTE(*pszEnd == L':');
+				}
+
 				// Обработка доп.параметров -new_console:xxx
 				bool lbReady = false;
 				while (!lbReady && *pszEnd)
 				{
 					switch (*(pszEnd++))
 					{
+					//case L'-':
+					//	bStop = true; // следующие "-new_console" - не трогать!
+					//	break;
 					case L'"':
 					case L' ':
 					case 0:
 						lbReady = true;
 						break;
+						
 					case L'b':
 						// b - background, не активировать таб
 						bBackgroundTab = TRUE;
 						break;
+						
 					case L'a':
 						// a - RunAs shell verb (as admin on Vista+, login/password in WinXP-)
 						bRunAsAdministrator = TRUE;
 						break;
+						
 					case L'r':
 						// r - run as restricted user
 						bRunAsRestricted = TRUE;
 						break;
+						
 					case L'h':
 						// "h0" - отключить буфер, "h9999" - включить буфер в 9999 строк
 						{
@@ -195,77 +225,82 @@ void RConStartArgs::ProcessNewConArg()
 							{
 								nBufHeight = 0;
 							}
-						}
+						} // L'h':
 						break;
+						
 					case L'n':
 						// n - отключить "Press Enter or Esc to close console"
 						eConfirmation = eConfNever;
 						break;
+						
 					case L'c':
 						// c - принудительно включить "Press Enter or Esc to close console"
 						eConfirmation = eConfAlways;
 						break;
-					case L'u':
-						// u - ConEmu choose user dialog
-						// u:<user>:<pwd> - specify user/pwd in args. MUST be last option
 						
-						lbReady = true; // последняя опция
-
-						SafeFree(pszUserName);
-						SafeFree(pszDomain);
-						if (szUserPassword[0]) SecureZeroMemory(szUserPassword, sizeof(szUserPassword));
+					case L'x':
+						// x - Force using dosbox for .bat files
+						bForceDosBox = TRUE;
+						break;
 						
-						if (*pszEnd == L':')
+					// "Long" code blocks below: 'd', 'u', 's' and so on (in future)
+					case L'd':
+						// d:<StartupDir>. MUST be last options
 						{
-							pszEnd++;
+							if (*pszEnd == L':')
+								pszEnd++;
+							const wchar_t* pszDir = pszEnd;
+							while ((*pszEnd) && (lbQuot || *pszEnd != L' ') && (*pszEnd != L'"'))
+								pszEnd++;
+							if (pszEnd > pszDir)
+							{
+								size_t cchLen = pszEnd - pszDir;
+								SafeFree(pszStartupDir);
+								pszStartupDir = (wchar_t*)malloc((cchLen+1)*sizeof(*pszStartupDir));
+								if (pszStartupDir)
+								{
+									wmemmove(pszStartupDir, pszDir, cchLen);
+									pszStartupDir[cchLen] = 0;
+									// Например, "%USERPROFILE%"
+									if (wcschr(pszStartupDir, L'%'))
+									{
+										wchar_t* pszExpand = NULL;
+										if (((pszExpand = ExpandEnvStr(pszStartupDir)) != NULL))
+										{
+											SafeFree(pszStartupDir);
+											pszStartupDir = pszExpand;
+										}
+									}
+								}
+							}
+						} // L'd':
+						break;
+					case L'u':
+						{
+							// u - ConEmu choose user dialog
+							// u:<user>:<pwd> - specify user/pwd in args. MUST be last option
 							
-							wchar_t szUser[MAX_PATH], *p = szUser, *p2 = szUser+countof(szUser)-1;
-							while (*pszEnd && (p < p2))
-							{
-								if ((*pszEnd == 0) || (*pszEnd == L':') || (*pszEnd == L'"'))
-								{
-									break;
-								}
-								//else if (*pszEnd == L'"' && *(pszEnd+1) == L'"')
-								//{
-								//	*(p++) = L'"'; pszEnd += 2;
-								//}
-								else if (*pszEnd == L'^')
-								{
-									pszEnd++;
-									*(p++) = *(pszEnd++);
-								}
-								else
-								{
-									*(p++) = *(pszEnd++);
-								}
-							}
-							*p = 0;
+							lbReady = true; // последняя опция
 
-							wchar_t* pszSlash = wcschr(szUser, L'\\');
-							if (pszSlash)
-							{
-								*pszSlash = 0;
-								pszDomain = lstrdup(szUser);
-								pszUserName = lstrdup(pszSlash+1);
-							}
-							else
-							{
-								pszUserName = lstrdup(szUser);
-							}
+							SafeFree(pszUserName);
+							SafeFree(pszDomain);
+							if (szUserPassword[0]) SecureZeroMemory(szUserPassword, sizeof(szUserPassword));
 							
 							if (*pszEnd == L':')
 							{
 								pszEnd++;
-								//lstrcpyn(szUserPassword, pszPwd, countof(szUserPassword));
-
-								p = szUserPassword; p2 = szUserPassword+countof(szUserPassword)-1;
+								
+								wchar_t szUser[MAX_PATH], *p = szUser, *p2 = szUser+countof(szUser)-1;
 								while (*pszEnd && (p < p2))
 								{
 									if ((*pszEnd == 0) || (*pszEnd == L':') || (*pszEnd == L'"'))
 									{
 										break;
 									}
+									//else if (*pszEnd == L'"' && *(pszEnd+1) == L'"')
+									//{
+									//	*(p++) = L'"'; pszEnd += 2;
+									//}
 									else if (*pszEnd == L'^')
 									{
 										pszEnd++;
@@ -278,12 +313,49 @@ void RConStartArgs::ProcessNewConArg()
 								}
 								*p = 0;
 
+								wchar_t* pszSlash = wcschr(szUser, L'\\');
+								if (pszSlash)
+								{
+									*pszSlash = 0;
+									pszDomain = lstrdup(szUser);
+									pszUserName = lstrdup(pszSlash+1);
+								}
+								else
+								{
+									pszUserName = lstrdup(szUser);
+								}
+								
+								if (*pszEnd == L':')
+								{
+									pszEnd++;
+									//lstrcpyn(szUserPassword, pszPwd, countof(szUserPassword));
+
+									p = szUserPassword; p2 = szUserPassword+countof(szUserPassword)-1;
+									while (*pszEnd && (p < p2))
+									{
+										if ((*pszEnd == 0) || (*pszEnd == L':') || (*pszEnd == L'"'))
+										{
+											break;
+										}
+										else if (*pszEnd == L'^')
+										{
+											pszEnd++;
+											*(p++) = *(pszEnd++);
+										}
+										else
+										{
+											*(p++) = *(pszEnd++);
+										}
+									}
+									*p = 0;
+
+								}
 							}
-						}
-						else
-						{
-							bForceUserDialog = TRUE;
-						}
+							else
+							{
+								bForceUserDialog = TRUE;
+							}
+						} // L'u'
 						break;
 					}
 				}
@@ -306,12 +378,16 @@ void RConStartArgs::ProcessNewConArg()
 					pszFind--;
 				//wmemset(pszFind, L' ', pszEnd - pszFind);
 				wmemmove(pszFind, pszEnd, (lstrlen(pszEnd)+1));
+				nChanges++;
 			}
 			else
 			{
 				_ASSERTE(pszEnd > pszFind);
 				*pszFind = 0;
+				nChanges++;
 			}
 		}
 	}
+
+	return nChanges;
 }

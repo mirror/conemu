@@ -63,6 +63,7 @@ extern DWORD   gnServerPID; // PID сервера (инициализируется на старте, при загр
 #include "../common/common.hpp"
 #include "../common/ConEmuCheck.h"
 #include "../common/WinObjects.h"
+#include "../common/InQueue.h"
 
 //extern MFileMapping<CESERVER_CONSOLE_MAPPING_HDR> *gpConMap;
 //extern CESERVER_CONSOLE_MAPPING_HDR* gpConInfo;
@@ -81,3 +82,44 @@ enum ConEmuHkDllState
 extern ConEmuHkDllState gnDllState;
 extern int gnDllThreadCount;
 extern BOOL gbDllStopCalled;
+
+int WINAPI RequestLocalServer(/*[IN/OUT]*/RequestLocalServerParm* Parm);
+struct AnnotationHeader;
+extern AnnotationHeader* gpAnnotationHeader;
+extern HANDLE ghCurrentOutBuffer;
+
+struct ReadConsoleInfo
+{
+	HANDLE hConsoleInput;
+	DWORD InReadConsoleTID;
+	DWORD LastReadConsoleTID;
+	HANDLE hConsoleInput2;
+	DWORD LastReadConsoleInputTID;
+	BOOL  bIsUnicode;
+	COORD crStartCursorPos;
+	DWORD nConInMode;
+	DWORD nConOutMode;
+};
+extern struct ReadConsoleInfo gReadConsoleInfo;
+BOOL OnReadConsoleClick(SHORT xPos, SHORT yPos, bool bForce, bool bBashMargin);
+BOOL OnExecutePromptCmd(LPCWSTR asCmd);
+
+/* ************ Globals for Far ************ */
+extern InQueue gInQueue;
+/* ************ Globals for clink ************ */
+
+/* ************ Globals for clink ************ */
+extern size_t   gcchLastWriteConsoleMax;
+extern wchar_t *gpszLastWriteConsole;
+/* ************ Globals for clink ************ */
+
+/* ************ Globals for powershell ************ */
+extern bool gbPowerShellMonitorProgress;
+extern WORD gnConsolePopupColors;
+extern int  gnPowerShellProgressValue;
+/* ************ Globals for powershell ************ */
+
+bool IsOutputHandle(HANDLE hFile, DWORD* pMode = NULL);
+void GuiSetProgress(WORD st, WORD pr);
+BOOL GetConsoleScreenBufferInfoCached(HANDLE hConsoleOutput, PCONSOLE_SCREEN_BUFFER_INFO lpConsoleScreenBufferInfo, BOOL bForced = FALSE);
+BOOL GetConsoleModeCached(HANDLE hConsoleHandle, LPDWORD lpMode, BOOL bForced = FALSE);

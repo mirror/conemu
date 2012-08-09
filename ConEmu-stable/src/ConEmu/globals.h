@@ -30,9 +30,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern const TCHAR *const gsClassName;
 extern const TCHAR *const gsClassNameParent;
+#if 0
+extern const TCHAR *const gsClassNameWork;
+extern const TCHAR *const gsClassNameBack;
+#endif
 extern const TCHAR *const gsClassNameApp;
-//extern const TCHAR *const gsClassNameBack;
-//extern const TCHAR *const gsClassNameScroll;
 
 struct Settings;
 class CSettings;
@@ -51,10 +53,33 @@ extern HINSTANCE g_hInstance;
 extern CConEmuMain *gpConEmu;
 //extern TCHAR Title[0x400];
 //extern bool isLBDown, /*isInDrag,*/ isDragProcessed;
-extern HWND ghWnd, ghConWnd, /*ghWnd DC,*/ ghOpWnd, ghWndApp;
+extern HWND ghWnd, ghWndWork, ghWndApp;
+extern HWND ghOpWnd;
+#ifdef _DEBUG
+extern HWND ghConWnd;
+#endif
 extern BOOL gbMessagingStarted, gbDontEnable;
+class DontEnable
+{
+private:
+	BOOL b;
+public:
+	DontEnable()
+	{
+		b = gbDontEnable; gbDontEnable = TRUE;
+	};
+	~DontEnable()
+	{
+		gbDontEnable = b;
+	};
+};
 //extern TabBarClass TabBar;
 extern OSVERSIONINFO gOSVer;
+extern WORD gnOsVer;
+extern bool gbIsWine;
+extern bool gbIsDBCS;
+extern wchar_t gsDefGuiFont[32];
+extern wchar_t gsDefConFont[32];
 //extern SECURITY_ATTRIBUTES* gpLocalSecurity;
 extern BOOL gbDebugLogStarted;
 extern BOOL gbDebugShowRects;

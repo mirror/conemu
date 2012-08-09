@@ -34,7 +34,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "Options.h"
 #include "RealConsole.h"
-#include "ConEmuChild.h"
+#include "VConChild.h"
 
 #define MAX_COUNT_PART_BRUSHES 16*16*4
 #define MAX_SPACES 0x400
@@ -43,8 +43,8 @@ class CBackground;
 class CTaskBarGhost;
 
 class CVirtualConsole :
-	public CConEmuChild,
-	public CVConRelease
+	public CVConRelease,
+	public CConEmuChild
 {
 	private:
 		// RealConsole
@@ -93,14 +93,19 @@ class CVirtualConsole :
 		bool    mb_IsForceUpdate; // Это устанавливается в InitDC, чтобы случайно isForce не потерялся
 		bool    mb_RequiredForceUpdate; // Сменился шрифт, например...
 		bool    isForce; // а это - сейчас (устанавливается по аргументу в Update)
+		bool    isFontSizeChanged;
 		DWORD   mn_LastBitsPixel;
+	protected:
+		friend class CConEmuChild;
+		HDC GetIntDC();
 	private:
 		bool    mb_InUpdate;
-		HDC     hDC;
+		CEDC    hDC;
 		HBITMAP hBitmap;
 		HBRUSH  hBrush0, hOldBrush, hSelectedBrush;
-		HFONT   hSelectedFont, hOldFont;
-		HFONT   mh_FontByIndex[MAX_FONT_STYLES+1]; // ссылки на Normal/Bold/Italic/Bold&Italic/...Underline
+		HBRUSH  CreateBackBrush(bool bGuiVisible, bool& rbNonSystem, COLORREF *pColors = NULL);
+		CEFONT  hSelectedFont, hOldFont;
+		CEFONT  mh_FontByIndex[MAX_FONT_STYLES+1]; // ссылки на Normal/Bold/Italic/Bold&Italic/...Underline
 		HFONT   mh_UCharMapFont; SMALL_RECT mrc_UCharMap;
 		wchar_t ms_LastUCharMapFont[32];
 		
@@ -201,12 +206,16 @@ class CVirtualConsole :
 		UINT mn_ConEmuSettingsMsg;
 
 		void CharAttrFromConAttr(WORD conAttr, CharAttr* pAttr);
+
+		#ifdef __GNUC__
+		AlphaBlend_t GdiAlphaBlend;
+		#endif
+
 	public:
 		const PanelViewInit* GetPanelView(bool abLeftPanel);
 
 	public:
 		// Плагин к фару может установить свою "картинку" для панелей (например, нарисовать в фоне букву диска)
-		bool PutBackgroundImage(CBackground* pBack, LONG X, LONG Y, LONG Width, LONG Height); // Положить в pBack свою картинку
 		//void FreeBackgroundImage(); // Освободить (если создан) HBITMAP для mp_BkImgData
 		SetBackgroundResult SetBackgroundImageData(CESERVER_REQ_SETBACKGROUND* apImgData); // вызывается при получении нового Background
 		bool HasBackgroundImage(LONG* pnBgWidth, LONG* pnBgHeight);
@@ -214,7 +223,6 @@ class CVirtualConsole :
 	protected:
 		bool mb_NeedBgUpdate;
 		bool mb_BgLastFade;
-		bool PrepareBackground(HDC* phBgDc, COORD* pbgBmpSize);
 		CBackground* mp_Bg;
 		MSection *mcs_BkImgData;
 		size_t mn_BkImgDataMax;
@@ -229,8 +237,12 @@ class CVirtualConsole :
 		//// Для проверки, что пришедшая в основную нить картинка является актуальной
 		//const CESERVER_REQ_SETBACKGROUND* mp_LastImgData;
 		UINT IsBackgroundValid(const CESERVER_REQ_SETBACKGROUND* apImgData, bool* rpIsEmf) const; // возвращает размер данных, или 0 при ошибке
+		bool PutBackgroundImage(CBackground* pBack, LONG X, LONG Y, LONG Width, LONG Height); // Положить в pBack свою картинку
+		bool PrepareBackground(HDC* phBgDc, COORD* pbgBmpSize);
 //public:
 		//MSection csBkImgData;
+
+		const Settings::AppSettings* mp_Set;
 
 	public:
 		bool isEditor, isViewer, isFilePanel, isFade, isForeground;
@@ -251,7 +263,7 @@ class CVirtualConsole :
 		bool Update(bool abForce = false, HDC *ahDc=NULL);
 		void UpdateCursor(bool& lRes);
 		void UpdateThumbnail(bool abNoSnapshoot = FALSE);
-		void SelectFont(HFONT hNew);
+		void SelectFont(CEFONT hNew);
 		void SelectBrush(HBRUSH hNew);
 		inline bool isCharBorder(wchar_t inChar);
 		static bool isCharBorderVertical(wchar_t inChar);
@@ -259,7 +271,8 @@ class CVirtualConsole :
 		static bool isCharScroll(wchar_t inChar);
 		static bool isCharNonSpacing(wchar_t inChar);
 		static bool isCharSpace(wchar_t inChar);
-		void BlitPictureTo(int inX, int inY, int inWidth, int inHeight);
+		static bool isCharRTL(wchar_t inChar);
+		void BlitPictureTo(int inX, int inY, int inWidth, int inHeight, COLORREF crBack);
 		bool CheckSelection(const CONSOLE_SELECTION_INFO& select, SHORT row, SHORT col);
 		//bool GetCharAttr(wchar_t ch, WORD atr, wchar_t& rch, BYTE& foreColorNum, BYTE& backColorNum, FONT* pFont);
 		void Paint(HDC hPaintDc, RECT rcClient);
@@ -279,7 +292,7 @@ class CVirtualConsole :
 		static void ClearPartBrushes();
 		HRGN GetExclusionRgn(bool abTestOnly=false);
 		COORD FindOpaqueCell();
-		void ShowPopupMenu(POINT ptCur);
+		void ShowPopupMenu(POINT ptCur, DWORD Align = TPM_LEFTALIGN);
 		void ExecPopupMenuCmd(int nCmd);
 		bool RegisterPanelView(PanelViewInit* ppvi);
 		void OnPanelViewSettingsChanged();
@@ -300,7 +313,7 @@ class CVirtualConsole :
 		uint TextLen;
 		bool isCursorValid, drawImage, textChanged, attrChanged;
 		DWORD nBgImageColors;
-		COORD bgBmpSize; HDC hBgDc;
+		COORD bgBmpSize; HDC hBgDc; // Это только ссылка, для удобства отрисовки
 		void UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, UINT dwSize);
 		bool UpdatePrepare(HDC *ahDc, MSectionLock *pSDC, MSectionLock *pSCON);
 		void UpdateText(); //, bool updateText, bool updateCursor);
@@ -336,7 +349,7 @@ class CVirtualConsole :
 		BYTE nFontCharSet;
 		BYTE nLastNormalBack;
 		//bool bExtendFonts, bExtendColors;
-		//BYTE nFontNormalColor, nFontBoldColor, nFontItalicColor, nExtendColor;
+		//BYTE nFontNormalColor, nFontBoldColor, nFontItalicColor, nExtendColorIdx;
 		struct _TransparentInfo
 		{
 			INT    nRectCount;

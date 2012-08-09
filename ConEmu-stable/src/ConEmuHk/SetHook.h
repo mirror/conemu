@@ -28,6 +28,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+//#ifdef _DEBUG
+//#define HOOK_ANSI_SEQUENCES
+//#else
+//	#undef HOOK_ANSI_SEQUENCES
+//#endif
+
 #ifndef ORIGINALSHOWCALL
 	#ifdef _DEBUG
 		//#define LOG_ORIGINAL_CALL
@@ -123,6 +129,7 @@ struct HookItem
 	const void*     NewAddress;
 	const char*     Name;
 	const wchar_t*  DllName;
+	char DllNameA[32];
 	
 	//HookExeOnly     ExeOnly;    // Some functions must be separated for Far.exe and Plugins
 	//const wchar_t*  ModuleOnly; // others - only for the one module.
@@ -156,11 +163,12 @@ typedef VOID (WINAPI* OnLibraryLoaded_t)(HMODULE ahModule);
 struct HookModeFar
 {
 	DWORD cbSize;            // размер структуры
-	BOOL  bFarHookMode;      // устанавливается в TRUE из плагина ConEmu.dll
+	BOOL  bFarHookMode;      // устанавливается в TRUE из плагина ConEmu.dll !!! MUST BE FIRST BOOL !!!
 	BOOL  bFARuseASCIIsort;  // -> OnCompareStringW
 	BOOL  bShellNoZoneCheck; // -> OnShellExecuteXXX
 	BOOL  bMonitorConsoleInput; // при (Read/Peek)ConsoleInput(A/W) послать инфу в GUI/Settings/Debug
 	BOOL  bPopupMenuPos;     // при вызове EMenu показать меню в позиции мышиного курсора
+	BOOL  bLongConsoleOutput; // при выполнении консольных программ из Far - увеличивать высоту буфера
 };
 
 #if defined(EXTERNAL_HOOK_LIBRARY) && !defined(DEFINE_HOOK_MACROS)

@@ -140,7 +140,7 @@ HANDLE WINAPI _export OpenPlugin(int OpenFrom,INT_PTR Item)
 		return INVALID_HANDLE_VALUE;
 
 	ReloadResourcesA();
-	EntryPoint(OpenFrom, Item);
+	EntryPoint(OpenFrom, Item, false);
 	return INVALID_HANDLE_VALUE;
 }
 
@@ -214,9 +214,11 @@ int ShowPluginMenuA()
 	{
 		{MIF_USETEXTPTR | (ghConEmuRoot ? 0 : MIF_DISABLE)},
 		{MIF_USETEXTPTR | (ghConEmuRoot ? 0 : MIF_DISABLE)},
+		{MIF_DISABLE /*MIF_USETEXTPTR | (ghConEmuRoot ? 0 : MIF_DISABLE)*/},
 	};
 	items[0].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuThumbnails);
 	items[1].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuTiles);
+	items[2].Text.TextPtr = InfoA->GetMsg(InfoA->ModuleNumber,CEMenuIcons);
 	int nCount = sizeof(items)/sizeof(items[0]);
 	CeFullPanelInfo* pi = IsThumbnailsActive(TRUE);
 
@@ -234,11 +236,19 @@ int ShowPluginMenuA()
 		{
 			items[1].Flags |= MIF_SELECTED|MIF_CHECKED;
 		}
+		else if (pi->PVM == pvm_Icons)
+		{
+			items[2].Flags |= MIF_SELECTED|MIF_CHECKED;
+		}
 		else
 		{
 			items[0].Flags |= MIF_SELECTED;
 		}
 	}
+
+	#ifndef _DEBUG
+	nCount--;
+	#endif
 
 	int nRc = InfoA->Menu(InfoA->ModuleNumber, -1,-1, 0,
 	                      FMENU_USEEXT|FMENU_AUTOHIGHLIGHT|FMENU_CHANGECONSOLETITLE|FMENU_WRAPMODE,
@@ -291,6 +301,28 @@ void LoadPanelItemInfoA(CeFullPanelInfo* pi, INT_PTR nItem)
 	return;
 }
 
+static void LoadFarSettingsA(CEFarInterfaceSettings* pInterface, CEFarPanelSettings* pPanel)
+{
+	DWORD nSet;
+	
+	nSet = (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
+	if (pInterface)
+	{
+		pInterface->Raw = nSet;
+		_ASSERTE((pInterface->AlwaysShowMenuBar != 0) == ((nSet & FIS_ALWAYSSHOWMENUBAR) != 0));
+		_ASSERTE((pInterface->ShowKeyBar != 0) == ((nSet & FIS_SHOWKEYBAR) != 0));
+	}
+	    
+	nSet = (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
+	if (pPanel)
+	{
+		pPanel->Raw = nSet;
+		_ASSERTE((pPanel->ShowColumnTitles != 0) == ((nSet & FPS_SHOWCOLUMNTITLES) != 0));
+		_ASSERTE((pPanel->ShowStatusLine != 0) == ((nSet & FPS_SHOWSTATUSLINE) != 0));
+		_ASSERTE((pPanel->ShowSortModeLetter != 0) == ((nSet & FPS_SHOWSORTMODELETTER) != 0));
+	}
+}
+
 BOOL LoadPanelInfoA(BOOL abActive)
 {
 	if (!InfoA) return FALSE;
@@ -335,17 +367,14 @@ BOOL LoadPanelInfoA(BOOL abActive)
 	pcefpi->ItemsNumber = pi.ItemsNumber; //-V101
 	pcefpi->CurrentItem = pi.CurrentItem; //-V101
 	pcefpi->TopPanelItem = pi.TopPanelItem; //-V101
-	pcefpi->Visible = pi.Visible;
+	pcefpi->Visible = (pi.PanelType == PTYPE_FILEPANEL) && pi.Visible;
 	pcefpi->ShortNames = pi.ShortNames;
 	pcefpi->Focus = pi.Focus;
 	pcefpi->Flags = pi.Flags; // CEPANELINFOFLAGS
 	pcefpi->PanelMode = pi.ViewMode;
 	pcefpi->IsFilePanel = (pi.PanelType == PTYPE_FILEPANEL);
 	// Настройки интерфейса
-	pcefpi->nFarInterfaceSettings = gnFarInterfaceSettings =
-	                                    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
-	pcefpi->nFarPanelSettings = gnFarPanelSettings =
-	                                (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
+	LoadFarSettingsA(&pcefpi->FarInterfaceSettings, &pcefpi->FarPanelSettings);
 	// Цвета фара
 	BYTE FarConsoleColors[0x100];
 	INT_PTR nColorSize = InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETARRAYCOLOR, FarConsoleColors);
@@ -477,12 +506,9 @@ BOOL CheckPanelSettingsA(BOOL abSilence)
 	if (!InfoA)
 		return FALSE;
 
-	gnFarPanelSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETPANELSETTINGS, 0);
-	gnFarInterfaceSettings =
-	    (DWORD)InfoA->AdvControl(InfoA->ModuleNumber, ACTL_GETINTERFACESETTINGS, 0);
+	LoadFarSettingsA(&gFarInterfaceSettings, &gFarPanelSettings);
 
-	if (!(gnFarPanelSettings & FPS_SHOWCOLUMNTITLES))
+	if (!(gFarPanelSettings.ShowColumnTitles))
 	{
 		// Для корректного определения положения колонок необходим один из флажков в настройке панели:
 		// [x] Показывать заголовки колонок [x] Показывать суммарную информацию

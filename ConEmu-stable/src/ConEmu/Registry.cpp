@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include <windows.h>
 #include "header.h"
 #include "registry.h"
@@ -89,6 +90,10 @@ bool SettingsRegistry::Load(const wchar_t *regName, LPBYTE value, DWORD nSize)
 	LONG lRc = RegQueryValueEx(regMy, regName, NULL, NULL, (LPBYTE)value, &nNewSize);
 	if (lRc == ERROR_SUCCESS)
 		return true;
+	
+	// Access denied может быть, если пытаемся _читать_ из ключа, открытого на _запись_
+	_ASSERTE(lRc != ERROR_ACCESS_DENIED);
+
 	if (lRc == ERROR_MORE_DATA && nSize == sizeof(BYTE) && nNewSize == sizeof(DWORD))
 	{
 		// если тип раньше был DWORD а стал - BYTE
@@ -163,11 +168,166 @@ void SettingsRegistry::Save(const wchar_t *regName, LPCBYTE value, DWORD nType, 
 	_ASSERTE(value && nSize);
 	RegSetValueEx(regMy, regName, NULL, nType, (LPBYTE)value, nSize);
 }
-void SettingsRegistry::Save(const wchar_t *regName, const wchar_t *value)
-{
-	if (!value) value = _T("");  // сюда мог придти и NULL
+//void SettingsRegistry::Save(const wchar_t *regName, const wchar_t *value)
+//{
+//	if (!value) value = _T("");  // сюда мог придти и NULL
+//
+//	RegSetValueEx(regMy, regName, NULL, REG_SZ, (LPBYTE)value, (lstrlenW(value)+1) * sizeof(wchar_t));
+//}
 
-	RegSetValueEx(regMy, regName, NULL, REG_SZ, (LPBYTE)value, (lstrlenW(value)+1) * sizeof(wchar_t));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* *************************** */
+
+SettingsINI::SettingsINI()
+{
+	mpsz_Section = NULL;
+	mpsz_IniFile = NULL;
+	lstrcpy(Type, L"[ini]");
+}
+SettingsINI::~SettingsINI()
+{
+	CloseKey();
+}
+
+
+
+bool SettingsINI::OpenKey(const wchar_t *regPath, uint access, BOOL abSilent /*= FALSE*/)
+{
+	SafeFree(mpsz_Section);
+
+	if (!regPath || !*regPath)
+	{
+		mpsz_IniFile = NULL;
+		return false;
+	}
+
+	mpsz_IniFile = gpConEmu->ConEmuIni();
+
+	if (!mpsz_IniFile || !*mpsz_IniFile)
+	{
+		mpsz_IniFile = NULL;
+		return false;
+	}
+
+	HANDLE hFile = CreateFile(mpsz_IniFile,
+		((access & KEY_WRITE) == KEY_WRITE) ? GENERIC_WRITE : GENERIC_READ,
+		FILE_SHARE_READ,
+		NULL,
+		((access & KEY_WRITE) == KEY_WRITE) ? OPEN_ALWAYS : OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL);
+
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		mpsz_IniFile = NULL;
+		return false;
+	}
+
+	CloseHandle(hFile);
+
+	wchar_t* pszDup = lstrdup(regPath);
+	if (!pszDup)
+	{
+		mpsz_IniFile = NULL;
+		return FALSE;
+	}
+	// Замена символов
+	wchar_t* psz = pszDup;
+	while ((psz = wcspbrk(psz, L" ?")))
+		*psz = L'_';
+	psz = pszDup;
+	while ((psz = wcspbrk(psz, L"/\\")))
+		*psz = L' ';
+
+
+	size_t cchMax = (_tcslen(pszDup)*3)+1;
+	char* pszSectionA = (char*)malloc(cchMax);
+	if (!pszSectionA)
+	{
+		mpsz_IniFile = NULL;
+		SafeFree(pszDup);
+		return false;
+	}
+
+	int nLen = WideCharToMultiByte(CP_UTF8, 0, pszDup, -1, pszSectionA, cchMax, 0,0);
+	mpsz_Section = (wchar_t*)malloc((nLen+1)*sizeof(*mpsz_Section));
+	if (!mpsz_Section)
+	{
+		SafeFree(pszSectionA);
+		SafeFree(pszDup);
+		return false;
+	}
+	MultiByteToWideChar(CP_ACP, 0, pszSectionA, -1, mpsz_Section, nLen+1);
+
+	SafeFree(pszSectionA);
+	SafeFree(pszDup);
+	return true;
+}
+void SettingsINI::CloseKey()
+{
+	SafeFree(mpsz_Section);
+}
+
+
+
+bool SettingsINI::Load(const wchar_t *regName, LPBYTE value, DWORD nSize)
+{
+	_ASSERTE(nSize>0);
+
+	return false;
+}
+// эта функция, если значения нет (или тип некорректный) *value НЕ трогает
+bool SettingsINI::Load(const wchar_t *regName, wchar_t **value)
+{
+	DWORD len = 0;
+
+
+	return false;
+}
+// эта функция, если значения нет (или тип некорректный) value НЕ трогает
+bool SettingsINI::Load(const wchar_t *regName, wchar_t *value, int maxLen)
+{
+	_ASSERTE(maxLen>1);
+	DWORD len = 0, dwType = 0;
+
+	return false;
+}
+
+
+
+void SettingsINI::Delete(const wchar_t *regName)
+{
+	if (mpsz_IniFile && *mpsz_IniFile && mpsz_Section && *mpsz_Section && regName && *regName)
+	{
+		//char szName[MAX_PATH*3] = {};
+		//WideCharToMultiByte(CP_UTF8, 0, regName, -1, szName, countof(szName), 0,0);
+		//if (*szName)
+		WritePrivateProfileString(mpsz_Section, regName, NULL, mpsz_IniFile);
+	}
+}
+
+
+
+void SettingsINI::Save(const wchar_t *regName, LPCBYTE value, DWORD nType, DWORD nSize)
+{
+	_ASSERTE(value && nSize);
 }
 
 
@@ -194,25 +354,122 @@ SettingsXML::~SettingsXML()
 	CloseKey();
 }
 
-bool SettingsXML::IsXmlAllowed()
+IXMLDOMDocument* SettingsXML::CreateDomDocument(wchar_t* pszErr /*= NULL*/, size_t cchErrMax /*= 0*/)
 {
 	HRESULT hr;
 	IXMLDOMDocument* pFile = NULL;
+	static HMODULE hMsXml3 = NULL;
+	typedef HRESULT (__stdcall* DllGetClassObject_t)(REFCLSID rclsid, REFIID riid, LPVOID *ppv);
+	static DllGetClassObject_t lpfnGetClassObject = NULL;
+	wchar_t szDllErr[128] = {};
+
 	hr = CoInitialize(NULL);
-	hr = CoCreateInstance(CLSID_DOMDocument30, NULL, CLSCTX_INPROC_SERVER, //-V519
-	                      IID_IXMLDOMDocument, (void**)&pFile);
+
+	// Если в прошлый раз обломались, и загрузили "msxml3.dll" - то и не дергаться
+	if (hMsXml3 && (hMsXml3 != (HMODULE)INVALID_HANDLE_VALUE))
+		hr = REGDB_E_CLASSNOTREG;
+	else
+		hr = CoCreateInstance(CLSID_DOMDocument30, NULL, CLSCTX_INPROC_SERVER, //-V519
+							  IID_IXMLDOMDocument, (void**)&pFile);
+
+	// Если msxml3.dll (Msxml2.DOMDocument.3.0) не зарегистрирована - будет такая ошибка
+	if (FAILED(hr)) // (hr == REGDB_E_CLASSNOTREG)
+	{
+		HRESULT hFact;
+		// Попробовать грузануть ее ручками
+		if (!hMsXml3)
+		{
+			wchar_t szDll[MAX_PATH+16];
+
+			_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s\\msxml3.dll", gpConEmu->ms_ConEmuExeDir);
+			hMsXml3 = LoadLibrary(szDll);
+			hFact = hMsXml3 ? 0 : (HRESULT)GetLastError();
+
+			if (!hMsXml3 
+				&& (((DWORD)hFact) == ERROR_MOD_NOT_FOUND
+					|| ((DWORD)hFact) == ERROR_BAD_EXE_FORMAT
+					|| ((DWORD)hFact) == ERROR_FILE_NOT_FOUND))
+			{
+				_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s\\msxml3.dll", gpConEmu->ms_ConEmuBaseDir);
+				hMsXml3 = LoadLibrary(szDll);
+				hFact = hMsXml3 ? 0 : (HRESULT)GetLastError();
+			}
+
+			if (!hMsXml3)
+			{
+				hMsXml3 = (HMODULE)INVALID_HANDLE_VALUE;
+				_wsprintf(szDllErr, SKIPLEN(countof(szDllErr)) L"\nLoadLibrary(\"msxml3.dll\") failed\nErrCode=0x%08X", (DWORD)hFact);
+			}
+		}
+
+		if (hMsXml3 && (hMsXml3 != (HMODULE)INVALID_HANDLE_VALUE))
+		{
+			if (!lpfnGetClassObject)
+				lpfnGetClassObject = (DllGetClassObject_t)GetProcAddress(hMsXml3, "DllGetClassObject");
+
+			if (!lpfnGetClassObject)
+			{
+				hFact = (HRESULT)GetLastError();
+				_wsprintf(szDllErr, SKIPLEN(countof(szDllErr)) L"\nGetProcAddress(\"DllGetClassObject\") failed\nErrCode=0x%08X", (DWORD)hFact);
+			}
+			else
+			{
+				IClassFactory* pFact = NULL;
+				hFact = lpfnGetClassObject(CLSID_DOMDocument30, IID_IClassFactory, (void**)&pFact);
+				if (SUCCEEDED(hFact) && pFact)
+				{
+					hFact = pFact->CreateInstance(NULL, IID_IXMLDOMDocument, (void**)&pFile);
+					if (SUCCEEDED(hFact))
+						hr = hFact;
+					else
+						_wsprintf(szDllErr, SKIPLEN(countof(szDllErr)) L"\nCreateInstance(IID_IXMLDOMDocument) failed\nErrCode=0x%08X", (DWORD)hFact);
+					pFact->Release();
+				}
+				else
+				{
+					_wsprintf(szDllErr, SKIPLEN(countof(szDllErr)) L"\nGetClassObject(CLSID_DOMDocument30) failed\nErrCode=0x%08X", (DWORD)hFact);
+				}
+			}
+		}
+	}
 
 	if (FAILED(hr) || !pFile)
 	{
-		wchar_t szErr[255];
-		_wsprintf(szErr, SKIPLEN(countof(szErr))
-		          L"XML setting file will be not used.\n\nCan't create IID_IXMLDOMDocument!\nErrCode=0x%08X", (DWORD)hr);
-		MBoxA(szErr);
-		return false;
+		wchar_t szErr[512];
+		bool bShowError = (pszErr == NULL);
+		if (pszErr == NULL)
+		{
+			pszErr = szErr; cchErrMax = countof(szErr);
+		}
+		_wsprintf(pszErr, SKIPLEN(cchErrMax)
+		          L"XML setting file can not be used!\n"
+				  L"Dynamic libraries 'msxml3.dll'/'msxml3r.dll' was not found!\n\n"
+				  L"Can't create IID_IXMLDOMDocument!\n"
+				  L"ErrCode=0x%08X %s", (DWORD)hr, szDllErr);
+
+		if (bShowError)
+		{
+			static bool bWarned = false;
+			if (!bWarned)
+			{
+				// Не задалбывать пользователя ошибками. Один раз - и хватит
+				bWarned = true;
+				MBoxError(szErr);
+			}
+		}
+
+		return NULL;
 	}
 
-	pFile->Release();
-	return true;
+	return pFile;
+}
+
+bool SettingsXML::IsXmlAllowed()
+{
+	IXMLDOMDocument* pFile = CreateDomDocument();
+	if (pFile)
+		pFile->Release();
+	return (pFile != NULL);
 }
 
 bool SettingsXML::OpenKey(const wchar_t *regPath, uint access, BOOL abSilent /*= FALSE*/)
@@ -283,13 +540,13 @@ bool SettingsXML::OpenKey(const wchar_t *regPath, uint access, BOOL abSilent /*=
 
 	SAFETRY
 	{
-		hr = CoInitialize(NULL);
-		hr = CoCreateInstance(CLSID_DOMDocument30, NULL, CLSCTX_INPROC_SERVER,
-		IID_IXMLDOMDocument, (void**)&mp_File);
+		_ASSERTE(mp_File == NULL);
+		mp_File = CreateDomDocument(szErr, countof(szErr));
 
 		if (FAILED(hr) || !mp_File)
 		{
-			_wsprintf(szErr, SKIPLEN(countof(szErr)) L"Can't create IID_IXMLDOMDocument!\nErrCode=0x%08X", (DWORD)hr);
+			//Ошибка уже в szErr
+			//_wsprintf(szErr, SKIPLEN(countof(szErr)) L"Can't create IID_IXMLDOMDocument!\nErrCode=0x%08X", (DWORD)hr);
 			goto wrap;
 		}
 
@@ -938,9 +1195,9 @@ bool SettingsXML::Load(const wchar_t *regName, LPBYTE value, DWORD nSize)
 	{
 		if (!lstrcmpi(bsType, L"string"))
 		{
-#ifdef _DEBUG
+			#ifdef _DEBUG
 			DWORD nLen = _tcslen(bsData) + 1;
-#endif
+			#endif
 			DWORD nMaxLen = nSize / 2;
 			lstrcpyn((wchar_t*)value, bsData, nMaxLen);
 			lbRc = true;
@@ -1074,12 +1331,12 @@ void SettingsXML::Delete(const wchar_t *regName)
 	Save(regName, NULL, REG_MULTI_SZ, 0);
 }
 
-void SettingsXML::Save(const wchar_t *regName, const wchar_t *value)
-{
-	if (!value) value = L"";  // сюда мог придти и NULL
-
-	Save(regName, (LPCBYTE)value, REG_SZ, (_tcslen(value)+1)*sizeof(wchar_t));
-}
+//void SettingsXML::Save(const wchar_t *regName, const wchar_t *value)
+//{
+//	if (!value) value = L"";  // сюда мог придти и NULL
+//
+//	Save(regName, (LPCBYTE)value, REG_SZ, (_tcslen(value)+1)*sizeof(wchar_t));
+//}
 void SettingsXML::Save(const wchar_t *regName, LPCBYTE value, DWORD nType, DWORD nSize)
 {
 	HRESULT hr = S_OK;

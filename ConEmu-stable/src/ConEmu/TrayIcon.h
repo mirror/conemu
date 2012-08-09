@@ -31,10 +31,36 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TRAY_ITEM_HIDE_NAME     L"Hide to &TSA"
 #define TRAY_ITEM_RESTORE_NAME  L"Restore from &TSA"
 
+enum TrayIconMsgSource
+{
+	tsa_Source_None = 0,
+	tsa_Source_Updater,
+	tsa_Config_Error,
+};
+
 class TrayIcon
 {
 	private:
-		NOTIFYICONDATA IconData;
+		struct NOTIFYICONDATA_Win2k
+		{
+			DWORD cbSize;
+			HWND hWnd;
+			UINT uID;
+			UINT uFlags;
+			UINT uCallbackMessage;
+			HICON hIcon;
+			WCHAR  szTip[128];
+			DWORD dwState;
+			DWORD dwStateMask;
+			WCHAR  szInfo[256];
+			union {
+				UINT  uTimeout;
+				UINT  uVersion;  // used with NIM_SETVERSION, values 0, 3 and 4
+			} DUMMYUNIONNAME;
+			WCHAR  szInfoTitle[64];
+			DWORD dwInfoFlags;
+		};
+		NOTIFYICONDATA_Win2k IconData;
 
 		void SetMenuItemText(HMENU hMenu, UINT nID, LPCWSTR pszText);
 
@@ -43,6 +69,10 @@ class TrayIcon
 
 		bool mb_InHidingToTray;
 		bool mb_WindowInTray;
+		TrayIconMsgSource m_MsgSource;
+		bool mb_SecondTimeoutMsg;
+		DWORD mn_BalloonShowTick;
+		HWND mh_Balloon;
 
 	public:
 		bool isWindowInTray() { return mb_WindowInTray; }
@@ -52,6 +82,7 @@ class TrayIcon
 		TrayIcon();
 		~TrayIcon();
 
+		void ShowTrayIcon(LPCTSTR asInfoTip = NULL, TrayIconMsgSource aMsgSource = tsa_Source_None);
 		void HideWindowToTray(LPCTSTR asInfoTip = NULL);
 		void RestoreWindowFromTray(BOOL abIconOnly = FALSE);
 		void LoadIcon(HWND inWnd, int inIconResource);
@@ -60,7 +91,7 @@ class TrayIcon
 		void SettingsChanged();
 		LRESULT OnTryIcon(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		void AddTrayIcon();
-		void RemoveTrayIcon();
+		void RemoveTrayIcon(bool bForceRemove = false);
 		
 		void OnTaskbarCreated();
 };

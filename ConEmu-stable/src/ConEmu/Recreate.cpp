@@ -26,6 +26,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
 #include <lm.h>
 #include <ShlObj.h>
@@ -34,9 +35,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "VirtualConsole.h"
 #include "RealConsole.h"
 #include "../common/WinObjects.h"
-
-HHOOK CRecreateDlg::mh_RecreateDlgKeyHook = NULL;
-BOOL CRecreateDlg::mb_SkipAppsInRecreate = FALSE;
 
 CRecreateDlg::CRecreateDlg()
 	: mh_Dlg(NULL)
@@ -76,16 +74,9 @@ int CRecreateDlg::RecreateDlg(RConStartArgs* apArgs)
 		return IDCANCEL;
 	}
 	
-	BOOL b = gbDontEnable;
-	gbDontEnable = TRUE;
+	DontEnable de;
 
-	if (isPressed(VK_APPS))
-	{
-		// Игнорировать одно следующее VK_APPS
-		mb_SkipAppsInRecreate = TRUE;
-		if (!mh_RecreateDlgKeyHook)
-			mh_RecreateDlgKeyHook = SetWindowsHookEx(WH_GETMESSAGE, RecreateDlgKeyHook, NULL, GetCurrentThreadId());
-	}
+	gpConEmu->SkipOneAppsRelease(true);
 
 	//if (!gpConEmu->mh_RecreatePasswFont)
 	//{
@@ -107,13 +98,8 @@ int CRecreateDlg::RecreateDlg(RConStartArgs* apArgs)
 	//	gpConEmu->mh_RecreatePasswFont = NULL;
 	//}
 
-	if (mh_RecreateDlgKeyHook)
-	{
-		UnhookWindowsHookEx(mh_RecreateDlgKeyHook);
-		mh_RecreateDlgKeyHook = NULL;
-	}
+	gpConEmu->SkipOneAppsRelease(false);
 
-	gbDontEnable = b;
 	return mn_DlgRc;
 }
 
@@ -130,29 +116,10 @@ void CRecreateDlg::Close()
 	}
 }
 
-LRESULT CRecreateDlg::RecreateDlgKeyHook(int code, WPARAM wParam, LPARAM lParam)
-{
-	if (code >= 0)
-	{
-		if (mb_SkipAppsInRecreate && lParam)
-		{
-			LPMSG pMsg = (LPMSG)lParam;
-
-			if (pMsg->message == WM_CONTEXTMENU)
-			{
-				pMsg->message = WM_NULL;
-				mb_SkipAppsInRecreate = FALSE;
-				return FALSE; // Skip one Apps
-			}
-		}
-	}
-
-	return CallNextHookEx(mh_RecreateDlgKeyHook, code, wParam, lParam);
-}
-
 INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam)
 {
 #define UM_USER_CONTROLS (WM_USER+121)
+#define UM_FILL_CMDLIST (WM_USER+122)
 
 	CRecreateDlg* pDlg = NULL;
 	if (messg == WM_INITDIALOG)
@@ -180,46 +147,57 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 			SendMessage(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hClassIcon);
 			SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hClassIconSm);
 
+			HMENU hSysMenu = GetSystemMenu(hDlg, FALSE);
+			InsertMenu(hSysMenu, 0, MF_BYPOSITION, MF_SEPARATOR, 0);
+			InsertMenu(hSysMenu, 0, MF_BYPOSITION | MF_STRING | MF_ENABLED
+					   | ((GetWindowLong(ghOpWnd,GWL_EXSTYLE)&WS_EX_TOPMOST) ? MF_CHECKED : 0),
+					   ID_RESETCMDHISTORY, _T("Reset command history..."));
+
+
 			SendDlgItemMessage(hDlg, tRunAsPassword, WM_SETFONT, (LPARAM)(HFONT)GetStockObject(DEFAULT_GUI_FONT), 0);
 
 			//#ifdef _DEBUG
 			//SetWindowPos(ghOpWnd, HWND_NOTOPMOST, 0,0,0,0, SWP_NOSIZE|SWP_NOMOVE);
 			//#endif
+
+			SendMessage(hDlg, UM_FILL_CMDLIST, TRUE, 0);
 			
 			RConStartArgs* pArgs = pDlg->mp_Args;
 			_ASSERTE(pArgs);
-
 			LPCWSTR pszCmd = pArgs->pszSpecialCmd
 			                 ? pArgs->pszSpecialCmd
 			                 : gpConEmu->ActiveCon()->RCon()->GetCmd();
-			int nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszCmd);
-
-			if (nId < 0) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, 0, (LPARAM)pszCmd);
-
+			//int nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszCmd);
+			//if (nId < 0) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, 0, (LPARAM)pszCmd);
 			LPCWSTR pszSystem = gpSet->GetCmd();
+			//if (pszSystem != pszCmd && (pszSystem && pszCmd && (lstrcmpi(pszSystem, pszCmd) != 0)))
+			//{
+			//	nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszSystem);
+			//	if (nId < 0) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, pArgs->pszSpecialCmd ? -1 : 0, (LPARAM)pszSystem);
+			//}
+			//LPCWSTR pszHistory = gpSet->HistoryGet();
+			//if (pszHistory)
+			//{
+			//	while (*pszHistory)
+			//	{
+			//		nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszHistory);
+			//		if (nId < 0)
+			//			SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, -1, (LPARAM)pszHistory);
+			//		pszHistory += _tcslen(pszHistory)+1;
+			//	}
+			//}
+			////// Обновить группы команд
+			////gpSet->LoadCmdTasks(NULL);
+			//int nGroup = 0;
+			//const Settings::CommandTasks* pGrp = NULL;
+			//while ((pGrp = gpSet->CmdTaskGet(nGroup++)))
+			//{
+			//	nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pGrp->pszName);
+			//	if (nId < 0)
+			//		SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, -1, (LPARAM)pGrp->pszName);
+			//}
 
-			if (pszSystem != pszCmd && (pszSystem && pszCmd && (lstrcmpi(pszSystem, pszCmd) != 0)))
-			{
-				nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszSystem);
-
-				if (nId < 0) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, pArgs->pszSpecialCmd ? -1 : 0, (LPARAM)pszSystem);
-			}
-
-			LPCWSTR pszHistory = gpSet->HistoryGet();
-
-			if (pszHistory)
-			{
-				while (*pszHistory)
-				{
-					nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszHistory);
-					if (nId < 0)
-						SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, -1, (LPARAM)pszHistory);
-
-					pszHistory += _tcslen(pszHistory)+1;
-				}
-			}
-
-			if (pArgs->bRecreate)
+			if (pArgs->aRecreate == cra_RecreateTab)
 			{
 				SetDlgItemText(hDlg, IDC_RESTART_CMD, pszCmd);
 				SetDlgItemText(hDlg, IDC_STARTUP_DIR, gpConEmu->ActiveCon()->RCon()->GetDir());
@@ -243,7 +221,7 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 			lstrcpy(szRbCaption, L"Run as current &user: "); lstrcat(szRbCaption, szCurUser);
 			SetDlgItemText(hDlg, rbCurrentUser, szRbCaption);
 
-			if (pArgs->bRecreate && gpConEmu->ActiveCon()->RCon()->GetUserPwd(&pszUser, &pszDomain, &bResticted))
+			if ((pArgs->aRecreate == cra_RecreateTab) && gpConEmu->ActiveCon()->RCon()->GetUserPwd(&pszUser, &pszDomain, &bResticted))
 			{
 				nChecked = rbAnotherUser;
 
@@ -312,19 +290,35 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 			SetClassLongPtr(hDlg, GCLP_HICON, (LONG_PTR)hClassIcon);
 
 			RECT rcBtnBox = {0};
-			if (pArgs->bRecreate)
+			if (pArgs->aRecreate == cra_RecreateTab)
 			{
 				//GCC hack. иначе не собирается
 				SetDlgItemTextA(hDlg, IDC_RESTART_MSG, "About to recreate console");
 				SendDlgItemMessage(hDlg, IDC_RESTART_ICON, STM_SETICON, (WPARAM)LoadIcon(NULL,IDI_EXCLAMATION), 0);
 				// Выровнять флажок по кнопке
 				GetWindowRect(GetDlgItem(hDlg, IDC_START), &rcBtnBox);
+				// Спрятать флажок "New window"
+				ShowWindow(GetDlgItem(hDlg, cbRunInNewWindow), SW_HIDE);
 				lbRc = TRUE;
 			}
 			else
 			{
 				//GCC hack. иначе не собирается
-				SetDlgItemTextA(hDlg, IDC_RESTART_MSG, "Create new console");
+				SetDlgItemTextA(hDlg, IDC_RESTART_MSG,  "Create new console");
+
+				CheckDlgButton(hDlg, cbRunInNewWindow, (pArgs->aRecreate == cra_CreateWindow) ? BST_CHECKED : BST_UNCHECKED);
+				//if (pArgs->aRecreate == cra_CreateWindow)
+				//{
+				//	SetWindowText(hDlg, L"ConEmu - Create new window");
+				//	//GCC hack. иначе не собирается
+				//	SetDlgItemTextA(hDlg, IDC_RESTART_MSG,  "Create new window");
+				//}
+				//else
+				//{
+				//	//GCC hack. иначе не собирается
+				//	SetDlgItemTextA(hDlg, IDC_RESTART_MSG,  "Create new console");
+				//}
+
 				SendDlgItemMessage(hDlg, IDC_RESTART_ICON, STM_SETICON, (WPARAM)LoadIcon(NULL,IDI_QUESTION), 0);
 				POINT pt = {0,0};
 				MapWindowPoints(GetDlgItem(hDlg, IDC_TERMINATE), hDlg, &pt, 1);
@@ -347,6 +341,15 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 				pt.y = rcBtnBox.top + ((rcBtnBox.bottom-rcBtnBox.top) - (rcBox.bottom-rcBox.top))/2;
 				SetWindowPos(GetDlgItem(hDlg, cbRunAsAdmin), NULL, pt.x, pt.y, 0,0, SWP_NOSIZE|SWP_NOZORDER);
 				SetFocus(GetDlgItem(hDlg, IDC_RESTART_CMD));
+			}
+
+			if (pArgs->aRecreate != cra_RecreateTab)
+			{
+				POINT pt = {};
+				MapWindowPoints(GetDlgItem(hDlg, cbRunAsAdmin), hDlg, &pt, 1);
+				RECT rcBox2; GetWindowRect(GetDlgItem(hDlg, cbRunInNewWindow), &rcBox2);
+				SetWindowPos(GetDlgItem(hDlg, cbRunInNewWindow), NULL,
+					pt.x-(rcBox2.right-rcBox2.left), pt.y, 0,0, SWP_NOSIZE);
 			}
 
 			RECT rect;
@@ -389,6 +392,59 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 		//	}
 
 		//	return 0;
+
+		case UM_FILL_CMDLIST:
+		{
+			RConStartArgs* pArgs = pDlg->mp_Args;
+			_ASSERTE(pArgs);
+
+			LPCWSTR pszCmd = pArgs->pszSpecialCmd
+			                 ? pArgs->pszSpecialCmd
+			                 : gpConEmu->ActiveCon()->RCon()->GetCmd();
+			int nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszCmd);
+
+			if (nId < 0) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, 0, (LPARAM)pszCmd);
+
+			LPCWSTR pszSystem = gpSet->GetCmd();
+
+			if (pszSystem != pszCmd && (pszSystem && pszCmd && (lstrcmpi(pszSystem, pszCmd) != 0)))
+			{
+				nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszSystem);
+
+				if (nId < 0) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, pArgs->pszSpecialCmd ? -1 : 0, (LPARAM)pszSystem);
+			}
+
+			if (wParam)
+			{
+				LPCWSTR pszHistory = gpSet->HistoryGet();
+
+				if (pszHistory)
+				{
+					while (*pszHistory)
+					{
+						nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pszHistory);
+						if (nId < 0)
+							SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, -1, (LPARAM)pszHistory);
+
+						pszHistory += _tcslen(pszHistory)+1;
+					}
+				}
+			}
+
+			//// Обновить группы команд
+			//gpSet->LoadCmdTasks(NULL);
+
+			int nGroup = 0;
+			const Settings::CommandTasks* pGrp = NULL;
+			while ((pGrp = gpSet->CmdTaskGet(nGroup++)))
+			{
+				nId = SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_FINDSTRINGEXACT, -1, (LPARAM)pGrp->pszName);
+				if (nId < 0)
+					SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, -1, (LPARAM)pGrp->pszName);
+			}
+		}
+		return 0;
+
 		case UM_USER_CONTROLS:
 		{
 			if (SendDlgItemMessage(hDlg, rbCurrentUser, BM_GETCHECK, 0, 0))
@@ -438,6 +494,27 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 				SetFocus(GetDlgItem(hDlg, tRunAsUser));
 		}
 		return 0;
+
+		case WM_SYSCOMMAND:
+			if (LOWORD(wParam) == ID_RESETCMDHISTORY)
+			{
+				if (IDYES == MessageBox(hDlg, L"Clear command history?", gpConEmu->GetDefaultTitle(), MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2))
+				{
+                	gpSet->HistoryReset();
+                	wchar_t* pszCmd = GetDlgItemText(hDlg, IDC_RESTART_CMD);
+                	SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_RESETCONTENT, 0,0);
+                	SendMessage(hDlg, UM_FILL_CMDLIST, FALSE, 0);
+                	if (pszCmd)
+                	{
+                		SetDlgItemText(hDlg, IDC_RESTART_CMD, pszCmd);
+                		free(pszCmd);
+                	}
+				}
+				SetWindowLongPtr(hDlg, DWLP_MSGRESULT, 0);
+				return 1;
+			}
+			break;
+
 		case WM_COMMAND:
 
 			if (HIWORD(wParam) == BN_CLICKED)
@@ -566,9 +643,22 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 
 						// StartupDir (может быть передан аргументом)
 						SafeFree(pArgs->pszStartupDir);
-						pArgs->pszStartupDir = GetDlgItemText(hDlg, IDC_STARTUP_DIR);
+						wchar_t* pszDir = GetDlgItemText(hDlg, IDC_STARTUP_DIR);
+						wchar_t* pszExpand = (pszDir && wcschr(pszDir, L'%')) ? ExpandEnvStr(pszDir) : NULL;
+						pArgs->pszStartupDir = pszExpand ? pszExpand : pszDir;
+						if (pszExpand)
+						{
+							SafeFree(pszDir)
+						}
 						// Vista+ (As Admin...)
 						pArgs->bRunAsAdministrator = SendDlgItemMessage(hDlg, cbRunAsAdmin, BM_GETCHECK, 0, 0);
+						if (pArgs->aRecreate != cra_RecreateTab)
+						{
+							if (SendDlgItemMessage(hDlg, cbRunInNewWindow, BM_GETCHECK, 0, 0))
+								pArgs->aRecreate = cra_CreateWindow;
+							else
+								pArgs->aRecreate = cra_CreateTab;
+						}
 						pDlg->mn_DlgRc = IDC_START;
 						EndDialog(hDlg, IDC_START);
 						return 1;

@@ -29,6 +29,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+
+#undef SHOW_SHUTDOWNSRV_STEPS
+#ifdef _DEBUG
+	#define SHOW_SHUTDOWNSRV_STEPS
+#endif
+
+
 #ifdef _DEBUG
 // Раскомментировать для вывода в консоль информации режима Comspec
 #define PRINT_COMSPEC(f,a) //wprintf(f,a)
@@ -77,6 +84,25 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <Shlwapi.h>
 #include <Tlhelp32.h>
 
+void ShutdownSrvStep(LPCWSTR asInfo, int nParm1 = 0, int nParm2 = 0, int nParm3 = 0, int nParm4 = 0);
+
+enum SetTerminateEventPlace
+{
+	ste_None = 0,
+	ste_ServerDone,
+	ste_ConsoleMain,
+	ste_ProcessCountChanged,
+	ste_CheckProcessCount,
+	ste_DebugThread,
+	ste_WriteMiniDump,
+	ste_CmdDetachCon,
+	ste_HandlerRoutine,
+};
+extern SetTerminateEventPlace gTerminateEventPlace;
+void SetTerminateEvent(SetTerminateEventPlace eFrom);
+
+BOOL WINAPI HandlerRoutine(DWORD dwCtrlType);
+int AttachDebuggingProcess();
 
 /*  Global  */
 extern DWORD   gnSelfPID;
@@ -84,7 +110,8 @@ extern DWORD   gnSelfPID;
 extern HWND    ghConWnd;
 extern HWND    ghConEmuWnd; // Root! window
 extern HWND    ghConEmuWndDC; // ConEmu DC window
-extern DWORD   gnServerPID; // PID сервера (инициализируется на старте, при загрузке Dll)
+extern DWORD   gnMainServerPID; // PID сервера (инициализируется на старте, при загрузке Dll)
+extern DWORD   gnAltServerPID; // PID сервера (инициализируется на старте, при загрузке Dll)
 extern BOOL    gbLogProcess; // (pInfo->nLoggingType == glt_Processes)
 extern BOOL    gbWasBufferHeight;
 extern BOOL    gbNonGuiMode;
@@ -115,6 +142,7 @@ extern HANDLE ghFarInExecuteEvent;
 #include "../common/ConEmuCheck.h"
 #include "../common/WinObjects.h"
 #include "../common/ConsoleAnnotation.h"
+#include "../common/InQueue.h"
 
 #ifdef _DEBUG
 extern wchar_t gszDbgModLabel[6];
@@ -184,17 +212,17 @@ extern wchar_t gszDbgModLabel[6];
 #define EVENT_CONSOLE_END_APPLICATION   0x4007
 #endif
 
-#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
+//#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
 
 //#undef USE_WINEVENT_SRV
 
 BOOL createProcess(BOOL abSkipWowChange, LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
 
-DWORD WINAPI InstanceThread(LPVOID);
-DWORD WINAPI ServerThread(LPVOID lpvParam);
+//DWORD WINAPI InstanceThread(LPVOID);
+//DWORD WINAPI ServerThread(LPVOID lpvParam);
 //DWORD WINAPI InputThread(LPVOID lpvParam);
-DWORD WINAPI InputPipeThread(LPVOID lpvParam);
-DWORD WINAPI GetDataThread(LPVOID lpvParam);
+//DWORD WINAPI InputPipeThread(LPVOID lpvParam);
+//DWORD WINAPI GetDataThread(LPVOID lpvParam);
 BOOL ProcessSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out);
 //#ifdef USE_WINEVENT_SRV
 //DWORD WINAPI WinEventThread(LPVOID lpvParam);
@@ -208,8 +236,8 @@ void CheckCursorPos();
 BOOL ReloadFullConsoleInfo(BOOL abForceSend);
 DWORD WINAPI RefreshThread(LPVOID lpvParam); // Нить, перечитывающая содержимое консоли
 //BOOL ReadConsoleData(CESERVER_CHAR* pCheck = NULL); //((LPRECT)1) или реальный LPRECT
-void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName);
-int ServerInit(BOOL abAlternative/*=FALSE*/); // Создать необходимые события и нити
+//void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName);
+int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/); // Создать необходимые события и нити
 void ServerDone(int aiRc, bool abReportShutdown = false);
 int ComspecInit();
 void ComspecDone(int aiRc);
@@ -218,6 +246,8 @@ void CreateLogSizeFile(int nLevel);
 void LogSize(COORD* pcrSize, LPCSTR pszLabel);
 void LogString(LPCSTR asText);
 void PrintExecuteError(LPCWSTR asCmd, DWORD dwErr, LPCWSTR asSpecialInfo=NULL);
+BOOL MyReadConsoleOutput(HANDLE hOut, CHAR_INFO *pData, COORD& bufSize, SMALL_RECT& rgn);
+BOOL MyWriteConsoleOutput(HANDLE hOut, CHAR_INFO *pData, COORD& bufSize, COORD& crBufPos, SMALL_RECT& rgn);
 
 
 #if defined(__GNUC__)
@@ -232,7 +262,7 @@ BOOL CorrectVisibleRect(CONSOLE_SCREEN_BUFFER_INFO* pSbi);
 WARNING("Вместо GetConsoleScreenBufferInfo нужно использовать MyGetConsoleScreenBufferInfo!");
 BOOL MyGetConsoleScreenBufferInfo(HANDLE ahConOut, PCONSOLE_SCREEN_BUFFER_INFO apsc);
 //void EnlargeRegion(CESERVER_CHAR_HDR& rgn, const COORD crNew);
-void CmdOutputStore();
+void CmdOutputStore(bool abCreateOnly = false);
 void CmdOutputRestore();
 //LPVOID Alloc(size_t nCount, size_t nSize);
 //void Free(LPVOID ptr);
@@ -279,13 +309,16 @@ int ParseCommandLine(LPCWSTR asCmdLine /*, wchar_t** psNewCmd, BOOL* pbRunInBack
 void Help();
 void DosBoxHelp();
 void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDontShowConsole);
+bool IsMainServerPID(DWORD nPID);
+
+bool AltServerWasStarted(DWORD nPID, HANDLE hAltServer, bool ForceThaw = false);
 
 int CreateMapHeader();
 void CloseMapHeader();
 void UpdateConsoleMapHeader();
 BOOL ReloadGuiSettings(ConEmuGuiMapping* apFromCmd);
 
-void EmergencyShow();
+//void EmergencyShow();
 
 //int CreateColorerHeader();
 
@@ -336,6 +369,8 @@ extern BOOL gbRootIsCmdExe;
 extern BOOL gbAttachFromFar;
 extern BOOL gbConsoleModeFlags;
 extern DWORD gnConsoleModeFlags;
+extern WORD  gnDefTextColors, gnDefPopupColors;
+extern BOOL  gbVisibleOnStartup;
 
 #ifdef WIN64
 #ifndef __GNUC__
@@ -349,63 +384,77 @@ extern DWORD gnConsoleModeFlags;
 #define NTVDMACTIVE (gpSrv->bNtvdmActive)
 #endif
 
+#include "../common/PipeServer.h"
+#include "../common/MMap.h"
+
+struct AltServerInfo
+{
+	DWORD  nPID; // Для информации
+	HANDLE hPrev;
+	DWORD  nPrevPID;
+};
+
 struct SrvInfo
 {
-	HANDLE hRootProcess, hRootThread; DWORD dwRootProcess, dwRootThread; DWORD dwRootStartTime;
-	HWND hRootProcessGui; // Если работаем в Gui-режиме (Notepad, Putty, ...), ((HWND)-1) пока фактичеки окно еще не создано, но exe-шник уже есть
-	BOOL bDebuggerActive, bDebuggerRequestDump; HANDLE hDebugThread, hDebugReady; DWORD dwDebugThreadId;
+	HANDLE hRootProcess, hRootThread;
+	DWORD dwRootProcess, dwRootThread; DWORD dwRootStartTime;
+	DWORD dwParentFarPID;
+	HANDLE hMainServer; DWORD dwMainServerPID;
+
+	HANDLE hAltServer, hCloseAltServer, hAltServerChanged;
+	DWORD dwAltServerPID; DWORD dwPrevAltServerPID;
+	MMap<DWORD,AltServerInfo> AltServers;
+
+	HANDLE hFreezeRefreshThread;
+	HWND   hRootProcessGui; // Если работаем в Gui-режиме (Notepad, Putty, ...), ((HWND)-1) пока фактичеки окно еще не создано, но exe-шник уже есть
+	BOOL   bDebuggerActive, bDebuggerRequestDump; HANDLE hDebugThread, hDebugReady; DWORD dwDebugThreadId;
 	DWORD  dwGuiPID; // GUI PID (ИД процесса графической части ConEmu)
-	DWORD nActiveFarPID; // PID последнего активного Far
-	BOOL bWasDetached; // Выставляется в TRUE при получении CECMD_DETACHCON
+	HWND   hGuiWnd; // передается через аргумент "/GHWND=%08X", чтобы окно не искать
+	BOOL   bRequestNewGuiWnd;
+	DWORD  nActiveFarPID; // PID последнего активного Far
+	BOOL   bWasDetached; // Выставляется в TRUE при получении CECMD_DETACHCON
+	BOOL   bWasReattached; // Если TRUE - то при следующем цикле нужно передернуть ReloadFullConsoleInfo(true)
 	//
-	HANDLE hServerThread;   DWORD dwServerThreadId; BOOL bServerTermination;
+	PipeServer<CESERVER_REQ> CmdServer;
 	HANDLE hRefreshThread;  DWORD dwRefreshThread;  BOOL bRefreshTermination;
-	//#ifdef USE_WINEVENT_SRV
-	//HANDLE hWinEventThread; DWORD dwWinEventThread; BOOL bWinEventTermination;
-	//#endif
-	//HANDLE hInputThread;    DWORD dwInputThreadId;
-	HANDLE hInputPipeThread; DWORD dwInputPipeThreadId; BOOL bInputPipeTermination; // Needed in Vista & administrator
-	HANDLE hGetDataPipeThread; DWORD dwGetDataPipeThreadId; BOOL bGetDataPipeTermination;
+	PipeServer<MSG64> InputServer;
+	PipeServer<CESERVER_REQ> DataServer;
 	//
 	OSVERSIONINFO osv;
 	BOOL bReopenHandleAllowed;
-	//UINT nMsgHookEnableDisable;
 	UINT nMaxFPS;
 	//
 	MSection *csProc;
-	//CRITICAL_SECTION csConBuf;
+	MSection *csAltSrv;
 	// Список процессов нам нужен, чтобы определить, когда консоль уже не нужна.
 	// Например, запустили FAR, он запустил Update, FAR перезапущен...
-	//std::vector<DWORD> nProcesses;
 	UINT nProcessCount, nMaxProcesses;
 	DWORD *pnProcesses, *pnProcessesGet, *pnProcessesCopy, nProcessStartTick;
 	DWORD dwProcessLastCheckTick;
 #ifndef WIN64
 	BOOL bNtvdmActive; DWORD nNtvdmPID;
 #endif
-	BOOL bTelnetActive;
+	//BOOL bTelnetActive;
 	//
 	wchar_t szPipename[MAX_PATH], szInputname[MAX_PATH], szGuiPipeName[MAX_PATH], szQueryname[MAX_PATH];
 	wchar_t szGetDataPipe[MAX_PATH], szDataReadyEvent[64];
-	HANDLE hInputPipe, hQueryPipe, hGetDataPipe;
+	HANDLE /*hInputPipe,*/ hQueryPipe/*, hGetDataPipe*/;
 	//
-	//HANDLE hFileMapping, hFileMappingData;
+	MFileMapping<CESERVER_CONSAVE_MAPHDR> *pStoredOutputHdr;
+	MFileMapping<CESERVER_CONSAVE_MAP> *pStoredOutputItem;
+	//
 	MFileMapping<CESERVER_CONSOLE_MAPPING_HDR> *pConsoleMap;
-	//CESERVER_CONSOLE_MAPPING_HDR *pConsoleInfo;  // Mapping
-	//CESERVER_REQ_CONINFO_DATA *pConsoleData; // Mapping
 	ConEmuGuiMapping guiSettings;
 	CESERVER_REQ_CONINFO_FULL *pConsole;
-	//CESERVER_CONSOLE_MAPPING_HDR *pConsoleInfoCopy;  // Local (Alloc)
 	CHAR_INFO *pConsoleDataCopy; // Local (Alloc)
-	//DWORD nConsoleDataSize;
-//	DWORD nFarInfoLastIdx;
 	// Input
 	HANDLE hInputThread, hInputEvent; DWORD dwInputThread; BOOL bInputTermination;
-	int nInputQueue, nMaxInputQueue;
-	INPUT_RECORD* pInputQueue;
-	INPUT_RECORD* pInputQueueEnd;
-	INPUT_RECORD* pInputQueueRead;
-	INPUT_RECORD* pInputQueueWrite;
+	//int nInputQueue, nMaxInputQueue;
+	//INPUT_RECORD* pInputQueue;
+	//INPUT_RECORD* pInputQueueEnd;
+	//INPUT_RECORD* pInputQueueRead;
+	//INPUT_RECORD* pInputQueueWrite;
+	InQueue InputQueue;
 	// TrueColorer buffer
 	//HANDLE hColorerMapping;
 	MFileMapping<const AnnotationHeader>* pColorerMapping; // поддержка Colorer TrueMod
@@ -413,13 +462,6 @@ struct SrvInfo
 	//
 	HANDLE hConEmuGuiAttached;
 	HWINEVENTHOOK /*hWinHook,*/ hWinHookStartEnd; //BOOL bWinHookAllow; int nWinHookMode;
-	//BOOL bContentsChanged; // Первое чтение параметров должно быть ПОЛНЫМ
-	//wchar_t* psChars;
-	//WORD* pnAttrs;
-	//DWORD nBufCharCount;  // максимальный размер (объем выделенной памяти)
-	//DWORD nOneBufferSize; // размер для отсылки в GUI (текущий размер)
-	//WORD* ptrLineCmp;
-	//DWORD nLineCmpSize;
 	DWORD dwCiRc; CONSOLE_CURSOR_INFO ci; // GetConsoleCursorInfo
 	DWORD dwConsoleCP, dwConsoleOutputCP, dwConsoleMode;
 	DWORD dwSbiRc; CONSOLE_SCREEN_BUFFER_INFO sbi; // MyGetConsoleScreenBufferInfo
@@ -428,7 +470,6 @@ struct SrvInfo
 	SHORT nTopVisibleLine; // Прокрутка в GUI может быть заблокирована. Если -1 - без блокировки, используем текущее значение
 	SHORT nVisibleHeight;  // По идее, должен быть равен (gcrBufferSize.Y). Это гарантированное количество строк psChars & pnAttrs
 	DWORD nMainTimerElapse;
-	//BOOL  bConsoleActive;
 	HANDLE hRefreshEvent; // ServerMode, перечитать консоль, и если есть изменения - отослать в GUI
 	HANDLE hRefreshDoneEvent; // ServerMode, выставляется после hRefreshEvent
 	HANDLE hDataReadyEvent; // Флаг, что в сервере есть изменения (GUI должен перечитать данные)
@@ -443,26 +484,12 @@ struct SrvInfo
 	SMALL_RECT rReqSizeNewRect;
 	LPCSTR sReqSizeLabel;
 	HANDLE hReqSizeChanged;
+	MSection* pReqSizeSection;
 	//
-	//HANDLE hChangingSize; // FALSE на время смены размера консоли
-	//CRITICAL_ SECTION csChangeSize; DWORD ncsTChangeSize;
-	//MSection cChangeSize;
 	HANDLE hAllowInputEvent; BOOL bInSyncResize;
-	//BOOL  bNeedFullReload;  // Нужен полный скан консоли
-	//BOOL  bForceFullSend; // Необходимо отослать ПОЛНОЕ содержимое консоли, а не только измененное
-	//BOOL  bRequestPostFullReload; // Во время чтения произошел ресайз - нужно запустить повторный цикл!
-	//DWORD nLastUpdateTick; // Для FORCE_REDRAW_FIX
-	DWORD nLastPacketID; // ИД пакета для отправки в GUI
-	// Если меняется только один символ... (но перечитаем всю линию)
-	//BOOL bCharChangedSet;
-	//CESERVER_CHAR CharChanged; CRITICAL_SECTION csChar;
-
-	// Буфер для отсылки в консоль
-	//DWORD nChangedBufferSize;
-	//CESERVER_CHAR *pChangedBuffer;
-
-	// Сохранненый Output последнего cmd...
 	//
+	DWORD nLastPacketID; // ИД пакета для отправки в GUI
+
 	// Keyboard layout name
 	wchar_t szKeybLayout[KL_NAMELENGTH+1];
 
@@ -490,15 +517,20 @@ struct SrvInfo
 };
 
 extern SrvInfo *gpSrv;
+extern OSVERSIONINFO gOSVer;
+extern WORD gnOsVer;
+extern bool gbIsWine;
+extern bool gbIsDBCS;
 
 #define USER_IDLE_TIMEOUT ((DWORD)1000)
 #define CHECK_IDLE_TIMEOUT 250 /* 1000 / 4 */
 #define USER_ACTIVITY ((gnBufferHeight == 0) || ((GetTickCount() - gpSrv->dwLastUserTick) <= USER_IDLE_TIMEOUT))
 
 
-#pragma pack(push, 1)
-extern CESERVER_CONSAVE* gpStoredOutput;
-#pragma pack(pop)
+//#pragma pack(push, 1)
+//extern CESERVER_CONSAVE* gpStoredOutput;
+//#pragma pack(pop)
+//extern MSection* gpcsStoredOutput;
 
 //typedef struct tag_CmdInfo
 //{
@@ -519,9 +551,9 @@ extern CESERVER_CONSAVE* gpStoredOutput;
 //
 //extern CmdInfo* gpSrv;
 
-extern COORD gcrBufferSize;
-extern BOOL  gbParmBufferSize;
-extern SHORT gnBufferHeight;
+extern COORD gcrVisibleSize;
+extern BOOL  gbParmVisibleSize, gbParmBufSize;
+extern SHORT gnBufferHeight, gnBufferWidth;
 extern wchar_t* gpszPrevConTitle;
 
 extern HANDLE ghLogSize;
