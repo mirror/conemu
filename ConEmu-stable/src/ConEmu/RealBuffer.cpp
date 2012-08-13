@@ -687,6 +687,9 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 			lbRc = TRUE; // менять ничего не нужно
 			goto wrap;
 		}
+
+		// При смене размера буфера - сбросить последнее мышиное событие
+		ResetLastMousePos();
 	}
 
 	//}
@@ -1594,7 +1597,7 @@ void CRealBuffer::SetBufferHeightMode(BOOL abBufferHeight, BOOL abIgnoreLock/*=F
 	con.bBufferHeight = abBufferHeight;
 
 	if (mp_RCon->isActive())
-		gpConEmu->OnBufferHeight();
+		OnBufferHeight();
 }
 
 // Вызывается из TabBar->ConEmu
@@ -1626,6 +1629,8 @@ void CRealBuffer::ChangeBufferHeightMode(BOOL abBufferHeight)
 			con.nBufferHeight = max(300,con.nTextHeight*2);
 		}
 	}
+
+	mcr_LastMousePos = MakeCoord(-1,-1);
 
 	USHORT nNewBufHeightSize = abBufferHeight ? con.nBufferHeight : 0;
 	SetConsoleSize(TextWidth(), TextHeight(), nNewBufHeightSize, CECMD_SETSIZESYNC);
@@ -2193,6 +2198,20 @@ BOOL CRealBuffer::BufferHeightTurnedOn(CONSOLE_SCREEN_BUFFER_INFO* psbi)
 	return lbTurnedOn;
 }
 
+void CRealBuffer::OnBufferHeight()
+{
+	if (!this)
+	{
+		_ASSERTE(this);
+		return;
+	}
+
+	// При смене высоты буфера - сбросить последнее мышиное событие
+	ResetLastMousePos();
+
+	gpConEmu->OnBufferHeight();
+}
+
 // Если включена прокрутка - скорректировать индекс ячейки из экранных в буферные
 COORD CRealBuffer::ScreenToBuffer(COORD crMouse)
 {
@@ -2215,8 +2234,21 @@ ExpandTextRangeType CRealBuffer::GetLastTextRangeType()
 	return con.etrLast;
 }
 
+void CRealBuffer::ResetLastMousePos()
+{
+	mcr_LastMousePos = MakeCoord(-1,-1);
+}
+
 bool CRealBuffer::ProcessFarHyperlink(UINT messg/*=WM_USER*/)
 {
+	if (mcr_LastMousePos.X == -1)
+	{
+		if (con.etrLast != etr_None)
+		{
+			StoreLastTextRange(etr_None);
+		}
+	}
+
 	return ProcessFarHyperlink(messg, mcr_LastMousePos);
 }
 
@@ -2247,6 +2279,21 @@ bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
 	//if (messg == WM_MOUSEMOVE || messg == WM_LBUTTONDOWN || messg == WM_LBUTTONUP || messg == WM_LBUTTONDBLCLK)
 	//{
 	COORD crStart = MakeCoord(crFrom.X - con.m_sbi.srWindow.Left, crFrom.Y - con.m_sbi.srWindow.Top);
+	// Во время скролла координата может быстро улететь
+	if ((crStart.Y < 0 || crStart.Y >= con.nTextHeight)
+		|| (crStart.X < 0 || crStart.X >= con.nTextWidth))
+	{
+		bool bChanged = false;
+		ResetLastMousePos();
+		if (con.etrLast != etr_None)
+		{
+			StoreLastTextRange(etr_None);
+			bChanged = true;
+		}
+		return bChanged;
+	}
+
+
 	COORD crEnd = crStart;
 	wchar_t szText[MAX_PATH+10];
 	ExpandTextRangeType rc = mp_RCon->isActive()

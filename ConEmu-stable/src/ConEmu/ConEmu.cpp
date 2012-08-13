@@ -84,7 +84,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DEBUGSTRMACRO(s) //DEBUGSTR(s)
 #define DEBUGSTRPANEL(s) //DEBUGSTR(s)
 #define DEBUGSTRPANEL2(s) //DEBUGSTR(s)
-#define DEBUGSTRFOCUS(s) //DEBUGSTR(s)
+#define DEBUGSTRFOCUS(s) LogFocusInfo(s)
 #define DEBUGSTRFOREGROUND(s) //DEBUGSTR(s)
 #define DEBUGSTRLLKB(s) //DEBUGSTR(s)
 #define DEBUGSTRTIMER(s) //DEBUGSTR(s)
@@ -139,6 +139,8 @@ gRegisteredHotKeys[] = {
 CConEmuMain::CConEmuMain()
 {
 	gpConEmu = this; // сразу!
+
+	getForegoundWindow();
 
 	_ASSERTE(gOSVer.dwMajorVersion>=5);
 	//memset(&gOSVer,0,sizeof(gOSVer));
@@ -518,6 +520,25 @@ CConEmuMain::CConEmuMain()
 	//wmInputLangChange = WM_INPUTLANGCHANGE;
 
 	InitFrameHolder();
+}
+
+void LogFocusInfo(LPCWSTR asInfo)
+{
+#ifdef _DEBUG
+	if (!asInfo)
+		return;
+
+	CVConGuard VCon;
+	if (gpConEmu->GetActiveVCon(&VCon) >= 0)
+	{
+		VCon->RCon()->LogString(asInfo, TRUE);
+	}
+
+	wchar_t szFull[255];
+	lstrcpyn(szFull, asInfo, countof(szFull)-3);
+	wcscat_c(szFull, L"\n");
+	DEBUGSTR(szFull);
+#endif
 }
 
 void CConEmuMain::RefreshConEmuCurDir()
@@ -2848,7 +2869,7 @@ void CConEmuMain::AskChangeBufferHeight()
 	#endif
 
 	// Обновить на тулбаре статусы Scrolling(BufferHeight) & Alternative
-	OnBufferHeight();
+	pRCon->OnBufferHeight();
 }
 
 void CConEmuMain::AskChangeAlternative()
@@ -2875,7 +2896,7 @@ void CConEmuMain::AskChangeAlternative()
 	}
 
 	// Обновить на тулбаре статусы Scrolling(BufferHeight) & Alternative
-	OnBufferHeight();
+	pRCon->OnBufferHeight();
 }
 
 /*!!!static!!*/
@@ -9623,7 +9644,7 @@ bool CConEmuMain::isMeForeground(bool abRealAlso/*=false*/, bool abDialogsAlso/*
 	static HWND hLastFore = NULL;
 	static bool isMe = false;
 	static bool bLastRealAlso, bLastDialogsAlso;
-	HWND h = GetForegroundWindow();
+	HWND h = getForegroundWindow();
 
 	if ((h != hLastFore) || (bLastRealAlso != abRealAlso) || (bLastDialogsAlso != abDialogsAlso))
 	{
@@ -11311,7 +11332,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	{
 		lbSetFocus = true;
 		#ifdef _DEBUG
-		_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_SETFOCUS(From=0x%08X)\n", (DWORD)wParam);
+		_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_SETFOCUS(From=0x%08X)", (DWORD)wParam);
 		DEBUGSTRFOCUS(szDbg);
 		#endif
 		pszMsgName = L"WM_SETFOCUS";
@@ -11366,9 +11387,9 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 
 		#ifdef _DEBUG
 		if (lbSetFocus)
-			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATE(From=0x%08X)\n", (DWORD)lParam);
+			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATE(From=0x%08X)", (DWORD)lParam);
 		else
-			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATE.WA_INACTIVE(To=0x%08X)\n", (DWORD)lParam);
+			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATE.WA_INACTIVE(To=0x%08X)", (DWORD)lParam);
 		DEBUGSTRFOCUS(szDbg);
 		#endif
 
@@ -11382,9 +11403,9 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 
 		#ifdef _DEBUG
 		if (lbSetFocus)
-			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATEAPP.Activate(FromTID=%i)\n", (DWORD)lParam);
+			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATEAPP.Activate(FromTID=%i)", (DWORD)lParam);
 		else
-			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATEAPP.Deactivate(ToTID=%i)\n", (DWORD)lParam);
+			_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_ACTIVATEAPP.Deactivate(ToTID=%i)", (DWORD)lParam);
 		DEBUGSTRFOCUS(szDbg);
 		#endif
 
@@ -11393,7 +11414,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	else if (messg == WM_KILLFOCUS)
 	{
 		#ifdef _DEBUG
-		_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_KILLFOCUS(To=0x%08X)\n", (DWORD)wParam);
+		_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"WM_KILLFOCUS(To=0x%08X)", (DWORD)wParam);
 		DEBUGSTRFOCUS(szDbg);
 		#endif
 		pszMsgName = L"WM_KILLFOCUS";
@@ -11427,6 +11448,12 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 
 		if (!lbSetFocus || mb_LastConEmuFocusState)
 		{
+			#ifdef _DEBUG
+			HWND hFocus = GetFocus();
+			wchar_t szInfo[128];
+			_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"Focus event skipped, lbSetFocus=%u, mb_LastConEmuFocusState=%u, ghWnd=x%08X, hFore=x%08X, hFocus=x%08X", lbSetFocus, mb_LastConEmuFocusState, (DWORD)ghWnd, (DWORD)hNewFocus, (DWORD)hFocus);
+			DEBUGSTRFOCUS(szInfo);
+			#endif
 			// Не дергаться
 			return 0;
 		}
@@ -11467,7 +11494,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 				}
 				else
 				{
-					DEBUGSTRFOCUS(L"Focus was returned to ConEmu\n");
+					DEBUGSTRFOCUS(L"Focus was returned to ConEmu");
 				}
 				#endif
 
@@ -11522,6 +11549,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	/****************************************************************/
 
 	mb_LastConEmuFocusState = lbSetFocus;
+	DEBUGSTRFOCUS(lbSetFocus ? L"mb_LastConEmuFocusState set to TRUE" : L"mb_LastConEmuFocusState set to FALSE");
 
 
 	// Если для активного и НЕактивного окна назначены разные значения
@@ -11547,7 +11575,10 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	}
 
 	if (mp_VActive && mp_VActive->RCon())
+	{
+		// Здесь будет вызван CRealConsole::UpdateServerActive
 		mp_VActive->RCon()->OnGuiFocused(lbSetFocus, (messg == WM_ACTIVATEAPP));
+	}
 
 	if ((gpSet->isQuakeStyle == 2)
 		&& (!lbSetFocus && !isMeForeground(true,true)) && !isIconic()
@@ -16973,7 +17004,11 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			}
 			else if (messg == gpConEmu->mn_MsgPostOnBufferHeight)
 			{
-				gpConEmu->OnBufferHeight();
+				CVConGuard VCon;
+				if (gpConEmu->GetActiveVCon(&VCon) >= 0)
+				{
+					VCon->RCon()->OnBufferHeight();
+				}
 				return 0;
 				//} else if (messg == gpConEmu->mn_MsgSetForeground) {
 				//	apiSetForegroundWindow((HWND)lParam);
