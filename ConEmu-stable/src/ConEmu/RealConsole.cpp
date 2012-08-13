@@ -6604,7 +6604,9 @@ void CRealConsole::UpdateServerActive(BOOL abActive, BOOL abImmediate /*= FALSE*
 			fSuccess = CallNamedPipe(ms_MainSrv_Pipe, pIn, pIn->hdr.cbSize, pOut, pOut->hdr.cbSize, &dwRead, 500);
 			gpSetCls->debugLogCommand(pIn, FALSE, dwTickStart, timeGetTime()-dwTickStart, ms_MainSrv_Pipe, pOut);
 
+#ifdef _DEBUG
 			DEBUGSTRFOCUS(szInfo);
+#endif
 		}
 		ExecuteFreeResult(pIn);
 		ExecuteFreeResult(pOut);

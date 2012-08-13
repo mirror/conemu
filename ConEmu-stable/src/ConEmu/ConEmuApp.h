@@ -33,8 +33,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 BOOL CreateMainWindow();
 BOOL CheckCreateAppWindow();
 
-HWND getForegoundWindow();
-
 void SkipOneShowWindow();
 
 void UpdateWin7TaskList(bool bForce);
