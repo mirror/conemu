@@ -1548,8 +1548,9 @@ DWORD CRealConsole::MonitorThread(LPVOID lpParameter)
 			gpSetCls->Performance(tPerfInterval, TRUE); // считается по своему
 
 		#ifdef _DEBUG
+		// 1-based console index
 		int nVConNo = gpConEmu->isVConValid(pRCon->mp_VCon);
-		nVConNo = nVConNo;
+		UNREFERENCED_PARAMETER(nVConNo);
 		#endif
 
 		// Проверка, вдруг осталась висеть "мертвая" консоль?
@@ -6604,9 +6605,9 @@ void CRealConsole::UpdateServerActive(BOOL abActive, BOOL abImmediate /*= FALSE*
 			fSuccess = CallNamedPipe(ms_MainSrv_Pipe, pIn, pIn->hdr.cbSize, pOut, pOut->hdr.cbSize, &dwRead, 500);
 			gpSetCls->debugLogCommand(pIn, FALSE, dwTickStart, timeGetTime()-dwTickStart, ms_MainSrv_Pipe, pOut);
 
-#ifdef _DEBUG
+			#ifdef _DEBUG
 			DEBUGSTRFOCUS(szInfo);
-#endif
+			#endif
 		}
 		ExecuteFreeResult(pIn);
 		ExecuteFreeResult(pOut);

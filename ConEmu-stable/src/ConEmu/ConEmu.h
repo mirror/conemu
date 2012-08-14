@@ -454,7 +454,7 @@ class CConEmuMain :
 		void AutoSizeFont(const RECT &rFrom, enum ConEmuRect tFrom);
 		RECT CalcMargins(DWORD/*enum ConEmuMargins*/ mg /*, CVirtualConsole* apVCon=NULL*/);
 		RECT CalcRect(enum ConEmuRect tWhat, CVirtualConsole* pVCon=NULL);
-		RECT CalcRect(enum ConEmuRect tWhat, const RECT &rFrom, enum ConEmuRect tFrom, CVirtualConsole* pVCon=NULL, RECT* prDC=NULL, enum ConEmuMargins tTabAction=CEM_TAB);
+		RECT CalcRect(enum ConEmuRect tWhat, const RECT &rFrom, enum ConEmuRect tFrom, CVirtualConsole* pVCon=NULL, const RECT* prDC=NULL, enum ConEmuMargins tTabAction=CEM_TAB);
 		POINT CalcTabMenuPos(CVirtualConsole* apVCon);
 		void CheckFocus(LPCWSTR asFrom);
 		bool CheckRequiredFiles();
@@ -574,7 +574,7 @@ class CConEmuMain :
 		//void StopLogCreateProcess();
 		//void UpdateLogCreateProcess();
 		//wchar_t ms_LogCreateProcess[MAX_PATH]; bool mb_CreateProcessLogged;
-		void SyncConsoleToWindow();
+		void SyncConsoleToWindow(LPRECT prcNewWnd=NULL);
 		void SyncNtvdm();
 		void SyncWindowToConsole();
 		void SwitchKeyboardLayout(DWORD_PTR dwNewKeybLayout);

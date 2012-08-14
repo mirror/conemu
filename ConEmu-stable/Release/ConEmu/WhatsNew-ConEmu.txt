@@ -9,6 +9,7 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 [%] CmdAutoAttach failed, if ConEmu.exe not installed.
 [+] «Show was hidden warning» option on «Features» page. «On» by default. May be turned «Off» for use with some desktop switchers (Dexpot e.g.).
 [%] Issue 674: Tab macro function going to console doesn't handle 1-based offsets properly.
+[%] После показа/скрытия TabBar (3-е состояние флажка) или StatusBar менялась высота окна ConEmu.
 
 
 2012.07.27c

@@ -639,8 +639,11 @@ LRESULT CALLBACK AppWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	return result;
 }
 
+// z120713 - В потоке CRealConsole::MonitorThread возвращаются 
+// отличные от основного потока HWND. В результате, а также из-за
+// отложенного выполнения, UpdateServerActive передавал Thaw==FALSE
 static HWND ghLastForegroundWindow = NULL;
-HWND getForegoundWindow()
+HWND getForegroundWindow()
 {
 	HWND h = NULL;
 	if (!ghWnd || gpConEmu->isMainThread())

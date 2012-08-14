@@ -140,7 +140,7 @@ CConEmuMain::CConEmuMain()
 {
 	gpConEmu = this; // сразу!
 
-	getForegoundWindow();
+	getForegroundWindow();
 
 	_ASSERTE(gOSVer.dwMajorVersion>=5);
 	//memset(&gOSVer,0,sizeof(gOSVer));
@@ -2323,7 +2323,11 @@ void CConEmuMain::UpdateGuiInfoMapping()
 		// Сначала - обработать что что поменяли (найти tcc и т.п.)
 		SetEnvVarExpanded(L"ComSpec", ms_ComSpecInitial); // т.к. функции могут ориентироваться на окружение
 		FindComspec(&gpSet->ComSpec);
+		wcscpy_c(gpSet->ComSpec.ConEmuBaseDir, gpConEmu->ms_ConEmuBaseDir);
 		UpdateComspec(&gpSet->ComSpec); // установит переменную окружения, если просили
+
+		// Скопируем всю структуру сначала, потом будет "править" то что нужно
+		m_GuiInfo.ComSpec = gpSet->ComSpec;
 
 		// Теперь перенести в мэппинг, для информирования других процессов
 		ComSpecType csType = gpSet->ComSpec.csType;
@@ -2375,6 +2379,11 @@ void CConEmuMain::UpdateGuiInfoMapping()
 				csType = cst_AutoTccCmd;
 			}
 		}
+		else
+		{
+			m_GuiInfo.ComSpec.ComspecExplicit[0] = 0; // избавимся от возможного мусора
+		}
+
 		//
 		if (csType == cst_Explicit)
 		{
@@ -2392,7 +2401,8 @@ void CConEmuMain::UpdateGuiInfoMapping()
 		// finalization
 		m_GuiInfo.ComSpec.csType = csType;
 		m_GuiInfo.ComSpec.csBits = csBits;
-		m_GuiInfo.ComSpec.isUpdateEnv = gpSet->ComSpec.isUpdateEnv;
+		//m_GuiInfo.ComSpec.isUpdateEnv = gpSet->ComSpec.isUpdateEnv;
+		//m_GuiInfo.ComSpec.isAddConEmu2Path = gpSet->ComSpec.isAddConEmu2Path;
 	}
 	// *******************
 	// *** ComSpec end ***
@@ -2803,7 +2813,9 @@ void CConEmuMain::AddMargins(RECT& rc, RECT& rcAddShift, BOOL abExpand/*=FALSE*/
 
 void CConEmuMain::AskChangeBufferHeight()
 {
-	CVConGuard VCon(mp_VActive);
+	CVConGuard VCon;
+	if (GetActiveVCon(&VCon) <= 0)
+		return;
 	CVirtualConsole *pVCon = VCon.VCon();
 	CRealConsole *pRCon = pVCon->RCon();
 	if (!pRCon) return;
@@ -2874,7 +2886,9 @@ void CConEmuMain::AskChangeBufferHeight()
 
 void CConEmuMain::AskChangeAlternative()
 {
-	CVConGuard VCon(mp_VActive);
+	CVConGuard VCon;
+	if (GetActiveVCon(&VCon) <= 0)
+		return;
 	CVirtualConsole *pVCon = VCon.VCon();
 	CRealConsole *pRCon = pVCon->RCon();
 	if (!pRCon || pRCon->GuiWnd())
@@ -3069,7 +3083,7 @@ RECT CConEmuMain::CalcRect(enum ConEmuRect tWhat, CVirtualConsole* pVCon/*=NULL*
 // Для точного расчета размеров - требуется (размер главного окна) и (размер окна отрисовки) для корректировки
 // на x64 возникают какие-то глюки с ",RECT rFrom,". Отладчик показывает мусор в rFrom,
 // но тем не менее, после "RECT rc = rFrom;", rc получает правильные значения >:|
-RECT CConEmuMain::CalcRect(enum ConEmuRect tWhat, const RECT &rFrom, enum ConEmuRect tFrom, CVirtualConsole* pVCon, RECT* prDC/*=NULL*/, enum ConEmuMargins tTabAction/*=CEM_TAB*/)
+RECT CConEmuMain::CalcRect(enum ConEmuRect tWhat, const RECT &rFrom, enum ConEmuRect tFrom, CVirtualConsole* pVCon, const RECT* prDC/*=NULL*/, enum ConEmuMargins tTabAction/*=CEM_TAB*/)
 {
 	_ASSERTE(this!=NULL);
 	RECT rc = rFrom; // инициализация, если уж не получится...
@@ -3174,12 +3188,16 @@ RECT CConEmuMain::CalcRect(enum ConEmuRect tWhat, const RECT &rFrom, enum ConEmu
 					tFromNow = CER_MAINCLIENT;
 				} break;
 				default:
+					_ASSERTE(FALSE && "Unexpected tWhat");
 					break;
 			}
 		}
 		return rc;
 		case CER_CONSOLE: // switch (tFrom)
 		{
+			// Тут считаем БЕЗОТНОСИТЕЛЬНО SplitScreen.
+			// Т.к. вызов, например, может идти из интерфейса диалога "Settings" и CVConGroup::SetAllConsoleWindowsSize
+
 			// Размер консоли в символах!
 			//MBoxAssert(!(rFrom.left || rFrom.top));
 			_ASSERTE(tWhat!=CER_CONSOLE);
@@ -3593,8 +3611,8 @@ POINT CConEmuMain::CalcTabMenuPos(CVirtualConsole* apVCon)
 		}
 		else
 		{
-			CVConGuard VCon(mp_VActive);
-			if (VCon.VCon())
+			CVConGuard VCon;
+			if (GetActiveVCon(&VCon) >= 0)
 			{
 				GetWindowRect(VCon->GetView(), &rcWnd);
 			}
@@ -3825,7 +3843,7 @@ void CConEmuMain::SetConsoleWindowSize(const COORD& size, bool updateInfo, CVirt
 }
 
 // Изменить размер консоли по размеру окна (главного)
-void CConEmuMain::SyncConsoleToWindow()
+void CConEmuMain::SyncConsoleToWindow(LPRECT prcNewWnd/*=NULL*/)
 {
 	if (mb_SkipSyncSize || isNtvdm() || !mp_VActive)
 		return;
@@ -3839,7 +3857,7 @@ void CConEmuMain::SyncConsoleToWindow()
 	}
 #endif
 
-	mp_VActive->RCon()->SyncConsole2Window();
+	mp_VActive->RCon()->SyncConsole2Window(FALSE, prcNewWnd);
 }
 
 void CConEmuMain::SyncNtvdm()
@@ -4049,7 +4067,8 @@ bool CConEmuMain::SetWindowMode(uint inMode, BOOL abForce /*= FALSE*/, BOOL abFi
 		}
 	}
 
-	CVConGuard VCon(mp_VActive);
+	CVConGuard VCon;
+	GetActiveVCon(&VCon);
 	CRealConsole* pRCon = (gpSetCls->isAdvLogging!=0) ? (VCon.VCon() ? VCon.VCon()->RCon() : NULL) : NULL;
 
 	if (pRCon) pRCon->LogString((inMode==rNormal) ? "SetWindowMode(rNormal)" :
@@ -4479,7 +4498,7 @@ bool CConEmuMain::SetWindowMode(uint inMode, BOOL abForce /*= FALSE*/, BOOL abFi
 		EnableWindow(GetDlgItem(ghOpWnd, tWndHeight), canEditWindowSizes);
 	}
 
-	//SyncConsoleToWindow(); 2009-09-10 А это вроде вообще не нужно - ресайз консоли уже сделан
+	//Sync ConsoleToWindow(); 2009-09-10 А это вроде вообще не нужно - ресайз консоли уже сделан
 	mb_PassSysCommand = false;
 	lbRc = true;
 wrap:
@@ -4518,7 +4537,7 @@ void CConEmuMain::ForceShowTabs(BOOL abShow)
 
 	if (abShow && !gpConEmu->mp_TabBar->IsTabsShown() && gpSet->isTabs && lbTabsAllowed)
 	{
-		gpConEmu->mp_TabBar->Activate();
+		gpConEmu->mp_TabBar->Activate(TRUE);
 		//ConEmuTab tab; memset(&tab, 0, sizeof(tab));
 		//tab.Pos=0;
 		//tab.Current=1;
@@ -4530,7 +4549,7 @@ void CConEmuMain::ForceShowTabs(BOOL abShow)
 	}
 	else if (!abShow)
 	{
-		gpConEmu->mp_TabBar->Deactivate();
+		gpConEmu->mp_TabBar->Deactivate(TRUE);
 		//gbPostUpdateWindowSize = true; // 2009-07-04 Resize выполняет сам TabBar
 	}
 
@@ -4549,7 +4568,7 @@ void CConEmuMain::ForceShowTabs(BOOL abShow)
 	//
 	//    if (gpSet->LogFont.lfWidth)
 	//    {
-	//        SyncConsoleToWindow();
+	//        Sync ConsoleToWindow();
 	//    }*/
 	//}
 }
@@ -4611,8 +4630,13 @@ void CConEmuMain::ReSize(BOOL abCorrect2Ideal /*= FALSE*/)
 			TODO("DoubleView: нужно с учетом видимых консолией");
 			if (mp_VActive)
 			{
-				rcConsole.right = mp_VActive->TextWidth;
-				rcConsole.bottom = mp_VActive->TextHeight;
+				//120813 - Иначе после отображения табов и уменьшения размера консоли
+				//         он возвращается к предыдущему (не скорректированному)
+				//         размеру, т.к. отрисовки еще не было и VCon не обновился.
+				//rcConsole.right = mp_VActive->TextWidth;
+				//rcConsole.bottom = mp_VActive->TextHeight;
+				rcConsole.right = mp_VActive->RCon()->TextWidth();
+				rcConsole.bottom = mp_VActive->RCon()->TextHeight();
 				rcCompWnd = CalcRect(CER_MAIN, rcConsole, CER_CONSOLE);
 				AutoSizeFont(rcCompWnd, CER_MAIN);
 			}
@@ -4753,8 +4777,8 @@ BOOL CConEmuMain::TrackMouse()
 	BOOL lbCapture = FALSE; // По умолчанию - мышь не перехватывать
 
 	TODO("DoubleView: переделать на обработку в видимых консолях");
-	CVConGuard VCon(mp_VActive);
-	if (VCon.VCon())
+	CVConGuard VCon;
+	if (GetActiveVCon(&VCon) >= 0)
 	{
 		if (VCon->TrackMouse())
 			lbCapture = TRUE;
@@ -5533,8 +5557,8 @@ void CConEmuMain::OnSizePanels(COORD cr)
 	wchar_t szKey[32];
 	bool bShifted = (mouse.state & MOUSE_DRAGPANEL_SHIFT) && isPressed(VK_SHIFT);
 	CRealConsole* pRCon = NULL;
-	CVConGuard VCon(mp_VActive);
-	if (VCon.VCon())
+	CVConGuard VCon;
+	if (GetActiveVCon(&VCon) >= 0)
 		pRCon = VCon->RCon();
 
 	if (!pRCon)
@@ -6633,8 +6657,8 @@ void CConEmuMain::PostMacro(LPCWSTR asMacro)
 	if (!asMacro || !*asMacro)
 		return;
 
-	CVConGuard VCon(mp_VActive);
-	if (VCon.VCon())
+	CVConGuard VCon;
+	if (GetActiveVCon(&VCon) >= 0)
 	{
 		VCon->RCon()->PostMacro(asMacro);
 	}

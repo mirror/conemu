@@ -580,6 +580,9 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 	if (!this) return FALSE;
 
 	_ASSERTE(m_Type == rbt_Primary);
+	#ifdef _DEBUG
+	int nVConNo = gpConEmu->isVConValid(mp_RCon->VCon());
+	#endif
 
 	if (!mp_RCon->hConWnd || mp_RCon->ms_ConEmuC_Pipe[0] == 0)
 	{
@@ -1024,7 +1027,7 @@ void CRealBuffer::SyncConsole2Window(USHORT wndSizeX, USHORT wndSizeY)
 	{
 		if (gpSetCls->isAdvLogging>=2)
 		{
-			char szInfo[128]; _wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "SyncConsoleToWindow(Cols=%i, Rows=%i, Current={%i,%i})", wndSizeX, wndSizeY, con.nTextWidth, con.nTextHeight);
+			char szInfo[128]; _wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "CRealBuffer::SyncConsole2Window(Cols=%i, Rows=%i, Current={%i,%i})", wndSizeX, wndSizeY, con.nTextWidth, con.nTextHeight);
 			mp_RCon->LogString(szInfo);
 		}
 
