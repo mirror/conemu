@@ -48,7 +48,9 @@ struct PSEUDO_HANDLE
 	PVOID BufferBase;
 	ULONG NextOffset;
 	ULONG BufferSize;
+   PVOID Buffer2;
 	bool Extended;
+	bool ReadDone;
 };
 
 HANDLE FindFirstFileInternal(const string& Name, FAR_FIND_DATA_EX& FindData)
@@ -75,8 +77,30 @@ HANDLE FindFirstFileInternal(const string& Name, FAR_FIND_DATA_EX& FindData)
 					{
 						LPCWSTR NamePtr = PointToName(Name);
 						Handle->Extended = true;
+						Handle->Buffer2 = nullptr;
+						Handle->ReadDone = false;
 
 						bool QueryResult = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileIdBothDirectoryInformation, FALSE, NamePtr, TRUE);
+						if (QueryResult) // try next read immediately to avoid M#2128 bug
+						{
+							Handle->Buffer2 = xf_malloc(Handle->BufferSize);
+							if (!Handle->Buffer2)
+								QueryResult = false;
+							else
+							{
+								bool QueryResult2 = Directory->NtQueryDirectoryFile(Handle->Buffer2, Handle->BufferSize, FileIdBothDirectoryInformation, FALSE, NamePtr, FALSE);
+								if (!QueryResult2)
+								{
+									xf_free(Handle->Buffer2);
+									Handle->Buffer2 = nullptr;
+									if (GetLastError() != ERROR_INVALID_LEVEL)
+										Handle->ReadDone = true;
+									else
+										QueryResult = false;
+								}
+							}
+						}
+
 						if(!QueryResult)
 						{
 							Handle->Extended = false;
@@ -165,7 +189,7 @@ bool FindNextFileInternal(HANDLE Find, FAR_FIND_DATA_EX& FindData)
 {
 	bool Result = false;
 	PSEUDO_HANDLE* Handle = static_cast<PSEUDO_HANDLE*>(Find);
-	bool Status = true;
+	bool Status = true, set_errcode = true;
 	PFILE_ID_BOTH_DIR_INFORMATION DirectoryInfo = static_cast<PFILE_ID_BOTH_DIR_INFORMATION>(Handle->BufferBase);
 	if(Handle->NextOffset)
 	{
@@ -173,13 +197,24 @@ bool FindNextFileInternal(HANDLE Find, FAR_FIND_DATA_EX& FindData)
 	}
 	else
 	{
-		File* Directory = static_cast<File*>(Handle->ObjectHandle);
-		Status = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, Handle->Extended? FileIdBothDirectoryInformation : FileBothDirectoryInformation, FALSE, nullptr, FALSE);
-		if (!Status && Handle->Extended)
+		if (Handle->ReadDone)
 		{
-			Status = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, FileBothDirectoryInformation, FALSE, nullptr, FALSE);
-			if (Status)
-				Handle->Extended = false;
+			Status = false;
+		}
+		else
+		{
+			if (Handle->Buffer2)
+			{
+				xf_free(Handle->BufferBase);
+				DirectoryInfo = reinterpret_cast<PFILE_ID_BOTH_DIR_INFORMATION>(Handle->BufferBase = Handle->Buffer2);
+				Handle->Buffer2 = nullptr;
+			}
+			else
+			{
+				File* Directory = static_cast<File*>(Handle->ObjectHandle);
+				Status = Directory->NtQueryDirectoryFile(Handle->BufferBase, Handle->BufferSize, Handle->Extended? FileIdBothDirectoryInformation : FileBothDirectoryInformation, FALSE, nullptr, FALSE);
+				set_errcode = false;
+			}
 		}
 	}
 
@@ -226,12 +261,17 @@ bool FindNextFileInternal(HANDLE Find, FAR_FIND_DATA_EX& FindData)
 		Handle->NextOffset = DirectoryInfo->NextEntryOffset?Handle->NextOffset+DirectoryInfo->NextEntryOffset:0;
 		Result = true;
 	}
+
+	if (set_errcode)
+		SetLastError(Result ? ERROR_SUCCESS : ERROR_NO_MORE_FILES);
+
 	return Result;
 }
 
 bool FindCloseInternal(HANDLE Find)
 {
 	PSEUDO_HANDLE* Handle = static_cast<PSEUDO_HANDLE*>(Find);
+   xf_free(Handle->Buffer2);
 	xf_free(Handle->BufferBase);
 	File* Directory = static_cast<File*>(Handle->ObjectHandle);
 	delete Directory;
@@ -369,6 +409,41 @@ bool File::Write(LPCVOID Buffer, DWORD NumberOfBytesToWrite, DWORD& NumberOfByte
 	return Result;
 }
 
+bool File::Read(LPVOID Buffer, size_t Nr, size_t& NumberOfBytesRead)
+{
+	bool Result = false;
+	NumberOfBytesRead = 0;
+	while (Nr)
+	{
+		DWORD nread = 0, nr = (Nr >= 2*1024*1024*1024U ? 1024*1024*1024 : static_cast<DWORD>(Nr));
+		Result = Read(Buffer, nr, nread);
+		NumberOfBytesRead += nread;
+		if (!Result)
+			break;
+		Buffer = static_cast<LPVOID>(static_cast<char *>(Buffer) + nread);
+		Nr -= nread;
+	}
+	return Result;
+}
+
+bool File::Write(LPCVOID Buffer, size_t Nw, size_t& NumberOfBytesWritten)
+{
+	bool Result = false;
+	NumberOfBytesWritten = 0;
+	while (Nw)
+	{
+		DWORD written = 0, nw = (Nw >= 2*1024*1024*1024U ? 1024*1024*1024 : static_cast<DWORD>(Nw));
+		Result = Write(Buffer, nw, written);
+		NumberOfBytesWritten += written;
+		if (!Result)
+			break;
+		Buffer = static_cast<LPCVOID>(static_cast<const char *>(Buffer) + written);
+		Nw -= written;
+	}
+	return Result;
+}
+
+
 bool File::SetPointer(INT64 DistanceToMove, PINT64 NewFilePointer, DWORD MoveMethod)
 {
 	INT64 OldPointer = Pointer;
@@ -491,7 +566,7 @@ FileSize(0),
 	AllocSize(0),
 	ProcessedSize(0),
 	CurrentChunk(nullptr),
-	ChunkSize(ChunkSize),
+	ChunkSize(0),
 	Sparse(false)
 {
 	SingleChunk.Offset = 0;
@@ -568,7 +643,8 @@ bool FileWalker::Step()
 		if(NewOffset < FileSize)
 		{
 			CurrentChunk->Offset = NewOffset;
-			CurrentChunk->Size = Min(static_cast<DWORD>(FileSize - NewOffset), ChunkSize);
+			UINT64 rest = FileSize - NewOffset;
+			CurrentChunk->Size = (rest>=ChunkSize)?ChunkSize:rest;
 			ProcessedSize += CurrentChunk->Size;
 			Result = true;
 		}
@@ -671,9 +747,13 @@ BOOL apiCopyFileEx(
 		strTo += PointToName(strFrom);
 	}
 	BOOL Result = CopyFileEx(strFrom, strTo, lpProgressRoutine, lpData, pbCancel, dwCopyFlags);
-	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
+	if(!Result)
 	{
-		Result = Elevation.fCopyFileEx(strFrom, strTo, lpProgressRoutine, lpData, pbCancel, dwCopyFlags);
+		if (STATUS_FILE_IS_A_DIRECTORY == GetLastNtStatus())
+			SetLastError(ERROR_FILE_EXISTS);
+
+		else if (ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
+			Result = Elevation.fCopyFileEx(strFrom, strTo, lpProgressRoutine, lpData, pbCancel, dwCopyFlags);
 	}
 	return Result;
 }
@@ -708,9 +788,19 @@ BOOL apiMoveFileEx(
 		strTo += PointToName(strFrom);
 	}
 	BOOL Result = MoveFileEx(strFrom, strTo, dwFlags);
-	if(!Result && ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
+	if(!Result)
 	{
-		Result = Elevation.fMoveFileEx(strFrom, strTo, dwFlags);
+		if (ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
+		{
+			// exclude fake elevation request for: move file over existing directory with same name
+			DWORD f = apiGetFileAttributes(strFrom);
+			DWORD t = apiGetFileAttributes(strTo);
+
+			if (f!=INVALID_FILE_ATTRIBUTES && t!=INVALID_FILE_ATTRIBUTES && 0==(f & FILE_ATTRIBUTE_DIRECTORY) && 0!=(t & FILE_ATTRIBUTE_DIRECTORY))
+				SetLastError(ERROR_FILE_EXISTS); // existing directory name == moved file name
+			else
+				Result = Elevation.fMoveFileEx(strFrom, strTo, dwFlags);
+		}
 	}
 	return Result;
 }
@@ -1076,27 +1166,29 @@ int apiGetFileTypeByName(const string& Name)
 	return Type;
 }
 
-BOOL apiGetDiskSize(const string& Path,unsigned __int64 *TotalSize, unsigned __int64 *TotalFree, unsigned __int64 *UserFree)
+bool apiGetDiskSize(const string& Path,unsigned __int64 *TotalSize, unsigned __int64 *TotalFree, unsigned __int64 *UserFree)
 {
-	int ExitCode=0;
+	bool Result = false;
 	unsigned __int64 uiTotalSize,uiTotalFree,uiUserFree;
 	uiUserFree=0;
 	uiTotalSize=0;
 	uiTotalFree=0;
 	NTPath strPath(Path);
 	AddEndSlash(strPath);
-	ExitCode=GetDiskFreeSpaceEx(strPath,(PULARGE_INTEGER)&uiUserFree,(PULARGE_INTEGER)&uiTotalSize,(PULARGE_INTEGER)&uiTotalFree);
+	if(GetDiskFreeSpaceEx(strPath,(PULARGE_INTEGER)&uiUserFree,(PULARGE_INTEGER)&uiTotalSize,(PULARGE_INTEGER)&uiTotalFree))
+	{
+		Result = true;
 
-	if (TotalSize)
-		*TotalSize = uiTotalSize;
+		if (TotalSize)
+			*TotalSize = uiTotalSize;
 
-	if (TotalFree)
-		*TotalFree = uiTotalFree;
+		if (TotalFree)
+			*TotalFree = uiTotalFree;
 
-	if (UserFree)
-		*UserFree = uiUserFree;
-
-	return ExitCode;
+		if (UserFree)
+			*UserFree = uiUserFree;
+	}
+	return Result;
 }
 
 HANDLE apiFindFirstFileName(const string& FileName, DWORD dwFlags, string& LinkName)

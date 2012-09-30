@@ -1465,13 +1465,13 @@ public:
 	{
 		string namedb(L"plugincache"
 #if 1
-#if   defined(_M_IA64)
+#if   defined(_M_IA64) || defined(__ia64)|| defined(__ia64__)
 			L"IA64"
-#elif defined(_M_AMD64)	|| defined(_M_X64)
+#elif defined(_M_AMD64)|| defined(_M_X64)|| defined(__amd64)|| defined(__amd64__)|| defined(__x86_64)|| defined(__x86_64__)
 			L"64"
-#elif defined(_M_ARM)
+#elif defined(_M_ARM)  || defined(__arm) || defined(__arm__)|| defined(_ARM_)
 			L"ARM"
-#elif defined(_M_IX86)
+#elif defined(_M_IX86) || defined(__i386)|| defined(__i386__)
 			L"32"
 #endif
 #endif
@@ -1514,7 +1514,7 @@ public:
 			)
 		) return false;
 
-		
+
 		//get menu item text and guid statement
 		bool ok = InitStmt(stmtGetMenuItem, L"SELECT name, guid FROM menuitems WHERE cid=?1 AND type=?2 AND number=?3;");
 
@@ -1609,7 +1609,7 @@ public:
 
 		//enum cache names statement
 		ok = ok && InitStmt(stmtEnumCache, L"SELECT name FROM cachename ORDER BY name;");
-		
+
 		if (ok)
 			return true;
 
@@ -2427,14 +2427,14 @@ public:
 		return nid;
 	}
 
-	unsigned __int64 SetEditorPos(const wchar_t *Name, int Line, int LinePos, int ScreenLine, int LeftPos, UINT CodePage)
+	unsigned __int64 SetEditorPos(const wchar_t *Name, int Line, int LinePos, int ScreenLine, int LeftPos, uintptr_t CodePage)
 	{
 		if (stmtSetEditorPos.Bind(Name).Bind(GetCurrentUTCTimeInUI64()).Bind(Line).Bind(LinePos).Bind(ScreenLine).Bind(LeftPos).Bind((int)CodePage).StepAndReset())
 			return LastInsertRowID();
 		return 0;
 	}
 
-	unsigned __int64 GetEditorPos(const wchar_t *Name, int *Line, int *LinePos, int *ScreenLine, int *LeftPos, UINT *CodePage)
+	unsigned __int64 GetEditorPos(const wchar_t *Name, int *Line, int *LinePos, int *ScreenLine, int *LeftPos, uintptr_t *CodePage)
 	{
 		unsigned __int64 id=0;
 		if (stmtGetEditorPos.Bind(Name).Step())
@@ -2469,14 +2469,14 @@ public:
 		return b;
 	}
 
-	unsigned __int64 SetViewerPos(const wchar_t *Name, __int64 FilePos, __int64 LeftPos, int Hex_Wrap, UINT CodePage)
+	unsigned __int64 SetViewerPos(const wchar_t *Name, __int64 FilePos, __int64 LeftPos, int Hex_Wrap, uintptr_t CodePage)
 	{
 		if (stmtSetViewerPos.Bind(Name).Bind(GetCurrentUTCTimeInUI64()).Bind(FilePos).Bind(LeftPos).Bind(Hex_Wrap).Bind((int)CodePage).StepAndReset())
 			return LastInsertRowID();
 		return 0;
 	}
 
-	unsigned __int64 GetViewerPos(const wchar_t *Name, __int64 *FilePos, __int64 *LeftPos, int *Hex, UINT *CodePage)
+	unsigned __int64 GetViewerPos(const wchar_t *Name, __int64 *FilePos, __int64 *LeftPos, int *Hex, uintptr_t *CodePage)
 	{
 		unsigned __int64 id=0;
 		if (stmtGetViewerPos.Bind(Name).Step())
@@ -3107,7 +3107,7 @@ bool ExportImportConfig(bool Export, const wchar_t *XML)
 
 	bool ret = false;
 
-	int mc;
+	intptr_t mc;
 	SMatch m[2];
 	RegExp re;
 	re.Compile(L"/^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/", OP_PERLSTYLE|OP_OPTIMIZE);

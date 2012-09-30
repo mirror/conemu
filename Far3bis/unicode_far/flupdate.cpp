@@ -186,13 +186,10 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 	TotalFileSize=0;
 	CacheSelIndex=-1;
 	CacheSelClearIndex=-1;
-
+	FreeDiskSize = -1;
 	if (Opt.ShowPanelFree)
 	{
-		unsigned __int64 TotalSize,TotalFree;
-
-		if (!apiGetDiskSize(strCurDir,&TotalSize,&TotalFree,&FreeDiskSize))
-			FreeDiskSize=0;
+		apiGetDiskSize(strCurDir, nullptr, nullptr, &FreeDiskSize);
 	}
 
 	if (FileCount>0)
@@ -316,7 +313,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 				TotalFileSize += NewPtr->FileSize;
 
 				if (ReadNumLinks)
-					NewPtr->NumberOfLinks=GetNumberOfLinks(fdata.strFileName);
+					NewPtr->NumberOfLinks = GetNumberOfLinks(fdata.strFileName, true);
 			}
 			else
 			{
@@ -350,7 +347,7 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 //      FileCount++;
 
 			DWORD CurTime = GetTickCount();
-			if (CurTime - StartTime > RedrawTimeout)
+			if (CurTime - StartTime > (DWORD)Opt.RedrawTimeout)
 			{
 				StartTime = CurTime;
 				if (IsVisible())
@@ -484,8 +481,15 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 	InitFSWatcher(false);
 	CorrectPosition();
 
+   string strLastSel, strGetSel;
+
 	if (KeepSelection || PrevSelFileCount>0)
 	{
+		if (LastSelPosition >= 0 && LastSelPosition < OldFileCount)
+			strLastSel = OldData[LastSelPosition]->strName;
+		if (GetSelPosition >= 0 && GetSelPosition < OldFileCount)
+			strGetSel = OldData[GetSelPosition]->strName;
+
 		MoveSelection(ListData,FileCount,OldData,OldFileCount);
 		DeleteListData(OldData,OldFileCount);
 	}
@@ -500,6 +504,11 @@ void FileList::ReadFileNames(int KeepSelection, int IgnoreVisible, int DrawMessa
 	}
 
 	SortFileList(FALSE);
+
+	if (!strLastSel.IsEmpty())
+		LastSelPosition = FindFile(strLastSel, FALSE);
+	if (!strGetSel.IsEmpty())
+		GetSelPosition = FindFile(strGetSel, FALSE);
 
 	if (CurFile>=FileCount || StrCmpI(ListData[CurFile]->strName,strCurName))
 		if (!GoToFile(strCurName) && !strNextCurName.IsEmpty())
@@ -582,9 +591,9 @@ void FileList::InitFSWatcher(bool CheckTree)
 	}
 }
 
-void FileList::StartFSWatcher()
+void FileList::StartFSWatcher(bool got_focus)
 {
-	FSWatcher.Watch();
+	FSWatcher.Watch(got_focus);
 }
 
 void FileList::StopFSWatcher()
@@ -592,7 +601,7 @@ void FileList::StopFSWatcher()
 	FSWatcher.Release();
 }
 
-static int WINAPI SortSearchList(const void *el1,const void *el2,void*)
+static intptr_t WINAPI SortSearchList(const void *el1,const void *el2,void*)
 {
 	FileListItem **SPtr1=(FileListItem **)el1,**SPtr2=(FileListItem **)el2;
 	return StrCmp(SPtr1[0]->strName,SPtr2[0]->strName);
@@ -651,14 +660,12 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 	OpenPanelInfo Info;
 	CtrlObject->Plugins->GetOpenPanelInfo(hPlugin,&Info);
 
-	FreeDiskSize=0;
+	FreeDiskSize=-1;
 	if (Opt.ShowPanelFree)
 	{
 		if (Info.Flags & OPIF_REALNAMES)
 		{
-			unsigned __int64 TotalSize,TotalFree;
-			if (!apiGetDiskSize(strCurDir,&TotalSize,&TotalFree,&FreeDiskSize))
-				FreeDiskSize=0;
+			apiGetDiskSize(strCurDir, nullptr, nullptr, &FreeDiskSize);
 		}
 		else if (Info.Flags & OPIF_USEFREESIZE)
 			FreeDiskSize=Info.FreeSize;
@@ -827,10 +834,17 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 		ReadDiz(PanelData,static_cast<int>(PluginFileCount),RDF_NO_UPDATE);
 
 	CorrectPosition();
-	CtrlObject->Plugins->FreeFindData(hPlugin,PanelData,PluginFileCount);
+	CtrlObject->Plugins->FreeFindData(hPlugin,PanelData,PluginFileCount,false);
+
+	string strLastSel, strGetSel;
 
 	if (KeepSelection || PrevSelFileCount>0)
 	{
+		if (LastSelPosition >= 0 && LastSelPosition < OldFileCount)
+			strLastSel = OldData[LastSelPosition]->strName;
+		if (GetSelPosition >= 0 && GetSelPosition < OldFileCount)
+			strGetSel = OldData[GetSelPosition]->strName;
+
 		MoveSelection(ListData,FileCount,OldData,OldFileCount);
 		DeleteListData(OldData,OldFileCount);
 	}
@@ -842,6 +856,11 @@ void FileList::UpdatePlugin(int KeepSelection, int IgnoreVisible)
 	}
 
 	SortFileList(FALSE);
+
+	if (!strLastSel.IsEmpty())
+		LastSelPosition = FindFile(strLastSel, FALSE);
+	if (!strGetSel.IsEmpty())
+		GetSelPosition = FindFile(strGetSel, FALSE);
 
 	if (CurFile>=FileCount || StrCmpI(ListData[CurFile]->strName,strCurName))
 		if (!GoToFile(strCurName) && !strNextCurName.IsEmpty())
@@ -922,7 +941,7 @@ void FileList::ReadDiz(PluginPanelItem *ItemList,int ItemLength,DWORD dwFlags)
 			/* $ 25.02.2001 VVM
 			    + Обработка флага RDF_NO_UPDATE */
 			if (!ItemList && !(dwFlags & RDF_NO_UPDATE))
-				CtrlObject->Plugins->FreeFindData(hPlugin,PanelData,PluginFileCount);
+				CtrlObject->Plugins->FreeFindData(hPlugin,PanelData,PluginFileCount,true);
 		}
 	}
 

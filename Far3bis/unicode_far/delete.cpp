@@ -324,7 +324,7 @@ void ShellDelete(Panel *SrcPanel,bool Wipe)
 					{
 						DWORD CurTime=GetTickCount();
 
-						if (ItemsCount > 1 && (CurTime-StartTime>RedrawTimeout || FirstTime))
+						if (ItemsCount > 1 && (CurTime-StartTime>(DWORD)Opt.RedrawTimeout || FirstTime))
 						{
 							StartTime=CurTime;
 							FirstTime=false;
@@ -370,7 +370,7 @@ void ShellDelete(Panel *SrcPanel,bool Wipe)
 
 			DWORD CurTime=GetTickCount();
 			int TotalPercent = (Opt.DelOpt.DelShowTotal && ItemsCount >1)?(ProcessedItems*100/ItemsCount):-1;
-			if (CurTime-StartTime>RedrawTimeout || FirstTime)
+			if (CurTime-StartTime>(DWORD)Opt.RedrawTimeout || FirstTime)
 			{
 				StartTime=CurTime;
 				FirstTime=false;
@@ -441,7 +441,7 @@ void ShellDelete(Panel *SrcPanel,bool Wipe)
 					{
 						DWORD CurTime=GetTickCount();
 						int TotalPercent = (Opt.DelOpt.DelShowTotal && ItemsCount >1)?(ProcessedItems*100/ItemsCount):-1;
-						if (CurTime-StartTime>RedrawTimeout)
+						if (CurTime-StartTime>(DWORD)Opt.RedrawTimeout)
 						{
 							StartTime=CurTime;
 
@@ -984,7 +984,7 @@ bool WipeFile(const string& Name, int TotalPercent, bool& Cancel)
 				DWORD Written;
 				WipeFile.Write(Buf, WipeFile.GetChunkSize(), Written);
 				DWORD CurTime=GetTickCount();
-				if (CurTime-StartTime>RedrawTimeout)
+				if (CurTime-StartTime>(DWORD)Opt.RedrawTimeout)
 				{
 					StartTime=CurTime;
 

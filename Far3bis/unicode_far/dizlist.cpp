@@ -54,7 +54,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static DizRecord **SearchDizData;
 static int _cdecl SortDizIndex(const void *el1,const void *el2);
-static int WINAPI SortDizSearch(const void *key,const void *elem,void*);
+static intptr_t WINAPI SortDizSearch(const void *key,const void *elem,void*);
 
 DizList::DizList():
 	DizData(nullptr),
@@ -137,7 +137,7 @@ void DizList::Read(const string& Path, const string* DizName)
 			wchar_t *DizText;
 			int DizLength;
 			clock_t StartTime=clock();
-			UINT CodePage=CP_DEFAULT;
+			uintptr_t CodePage=CP_DEFAULT;
 			bool bSigFound=false;
 
 			if (!GetFileFormat(DizFile,CodePage,&bSigFound,false) || !bSigFound)
@@ -382,7 +382,7 @@ int _cdecl SortDizIndex(const void *el1,const void *el2)
 }
 
 
-int WINAPI SortDizSearch(const void *key,const void *elem,void*)
+intptr_t WINAPI SortDizSearch(const void *key,const void *elem,void*)
 {
 	const string* strKey = reinterpret_cast<const string*>(key);
 	const wchar_t *SearchName = strKey->CPtr();
@@ -496,7 +496,7 @@ bool DizList::Flush(const string& Path,const string* DizName)
 	// Don't use CreationDisposition=CREATE_ALWAYS here - it's kills alternate streams
 	if(DizCount && DizFile.Open(strDizFileName, GENERIC_WRITE, FILE_SHARE_READ, nullptr, FileAttr==INVALID_FILE_ATTRIBUTES?CREATE_NEW:TRUNCATE_EXISTING))
 	{
-		UINT CodePage = Opt.Diz.SaveInUTF ? CP_UTF8 : (Opt.Diz.AnsiByDefault ? CP_ACP : CP_OEMCP);
+		uintptr_t CodePage = Opt.Diz.SaveInUTF ? CP_UTF8 : (Opt.Diz.AnsiByDefault ? CP_ACP : CP_OEMCP);
 
 		CachedWrite Cache(DizFile);
 

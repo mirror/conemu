@@ -255,14 +255,8 @@ void FileList::FileListToPluginItem(FileListItem *fi,PluginPanelItem *pi)
 	pi->CustomColumnNumber=fi->CustomColumnNumber;
 	pi->Description=fi->DizText; //BUGBUG???
 
-	if (fi->UserData && (fi->UserFlags & PPIF_USERDATA))
-	{
-		DWORD Size=*(DWORD *)fi->UserData;
-		pi->UserData=(intptr_t)xf_malloc(Size);
-		memcpy((void *)pi->UserData,(void *)fi->UserData,Size);
-	}
-	else
-		pi->UserData=fi->UserData;
+	pi->UserData.Data=fi->UserData;
+	pi->UserData.FreeData=fi->Callback;
 
 	pi->CRC32=fi->CRC32;
 	pi->Reserved[0]=pi->Reserved[1]=0;
@@ -272,21 +266,12 @@ void FileList::FileListToPluginItem(FileListItem *fi,PluginPanelItem *pi)
 void FileList::FreePluginPanelItem(PluginPanelItem *pi)
 {
 	::FreePluginPanelItem(pi);
-
-	if (pi->UserData && (pi->Flags & PPIF_USERDATA))
-	{
-		xf_free((void*)pi->UserData);
-	}
 }
 
 size_t FileList::FileListToPluginItem2(FileListItem *fi,FarGetPluginPanelItem *gpi)
 {
 	size_t size=ALIGN(sizeof(PluginPanelItem)),offset=size;
 	size+=fi->CustomColumnNumber*sizeof(wchar_t*);
-	if (fi->UserData && (fi->UserFlags & PPIF_USERDATA))
-	{
-		size+=ALIGN(*(DWORD *)fi->UserData);
-	}
 	size+=sizeof(wchar_t)*(fi->strName.GetLength()+1);
 	size+=sizeof(wchar_t)*(fi->strShortName.GetLength()+1);
 	for (size_t ii=0; ii<fi->CustomColumnNumber; ii++)
@@ -319,15 +304,8 @@ size_t FileList::FileListToPluginItem2(FileListItem *fi,FarGetPluginPanelItem *g
 			gpi->Item->CustomColumnData=(wchar_t**)data;
 			data+=fi->CustomColumnNumber*sizeof(wchar_t*);
 
-			if (fi->UserData&&(fi->UserFlags&PPIF_USERDATA))
-			{
-				DWORD Size=*(DWORD *)fi->UserData;
-				gpi->Item->UserData=(intptr_t)data;
-				memcpy((void *)gpi->Item->UserData,(void *)fi->UserData,Size);
-				data+=ALIGN(Size);
-			}
-			else
-				gpi->Item->UserData=fi->UserData;
+			gpi->Item->UserData.Data=fi->UserData;
+			gpi->Item->UserData.FreeData=fi->Callback;
 
 			gpi->Item->FileName=wcscpy((wchar_t*)data,fi->strName);
 			data+=sizeof(wchar_t)*(fi->strName.GetLength()+1);
@@ -399,14 +377,8 @@ void FileList::PluginToFileListItem(PluginPanelItem *pi,FileListItem *fi)
 	fi->NumberOfStreams=1;
 	fi->UserFlags=pi->Flags;
 
-	if (pi->UserData && (pi->Flags & PPIF_USERDATA))
-	{
-		DWORD Size=*(DWORD *)pi->UserData;
-		fi->UserData=(intptr_t)xf_malloc(Size);
-		memcpy((void *)fi->UserData,(void *)pi->UserData,Size);
-	}
-	else
-		fi->UserData=pi->UserData;
+	fi->UserData=pi->UserData.Data;
+	fi->Callback=pi->UserData.FreeData;
 
 	if (pi->CustomColumnNumber>0)
 	{
@@ -801,7 +773,7 @@ void FileList::PluginHostGetFiles()
 				}
 
 				_ALGO(SysLog(L"call Plugins.FreeFindData()"));
-				CtrlObject->Plugins->FreeFindData(hCurPlugin,ItemList,ItemNumber);
+				CtrlObject->Plugins->FreeFindData(hCurPlugin,ItemList,ItemNumber,true);
 				tree.insert(new Plugin*(ph->pPlugin));
 			}
 
@@ -1052,7 +1024,7 @@ int FileList::ProcessOneHostFile(int Idx)
 			_ALGO(SysLog(L"call Plugins.ProcessHostFile"));
 			Done=CtrlObject->Plugins->ProcessHostFile(hNewPlugin,ItemList,ItemNumber,OPM_TOPLEVEL);
 			_ALGO(SysLog(L"call Plugins.FreeFindData"));
-			CtrlObject->Plugins->FreeFindData(hNewPlugin,ItemList,ItemNumber);
+			CtrlObject->Plugins->FreeFindData(hNewPlugin,ItemList,ItemNumber,true);
 		}
 
 		_ALGO(SysLog(L"call Plugins.ClosePanel"));

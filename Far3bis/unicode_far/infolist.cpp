@@ -181,7 +181,7 @@ void InfoList::DisplayObject()
 		LPSERVER_INFO_101 ServerInfo = nullptr;
 		if(NetServerGetInfo(nullptr, 101, reinterpret_cast<LPBYTE*>(&ServerInfo)) == NERR_Success)
 		{
-			if(*ServerInfo->sv101_comment)
+			if(ServerInfo->sv101_comment && *ServerInfo->sv101_comment)
 			{
 				GotoXY(X1+2,CurY++);
 				PrintText(MInfoCompDescription);
@@ -211,7 +211,7 @@ void InfoList::DisplayObject()
 			LPUSER_INFO_1 UserInfo = nullptr;
 			if(NetUserGetInfo(nullptr, strUserName, 1, reinterpret_cast<LPBYTE*>(&UserInfo)) == NERR_Success)
 			{
-				if(*UserInfo->usri1_comment)
+				if(UserInfo->usri1_comment && *UserInfo->usri1_comment)
 				{
 					GotoXY(X1+2,CurY++);
 					PrintText(MInfoUserDescription);
@@ -345,9 +345,9 @@ void InfoList::DisplayObject()
 	if (SectionState[ILSS_DISKINFO].Show)
 	{
 		/* #2.2 - disk info: size */
-		unsigned __int64 TotalSize,TotalFree,UserFree;
+		unsigned __int64 TotalSize, UserFree;
 
-		if (apiGetDiskSize(strCurDir,&TotalSize,&TotalFree,&UserFree))
+		if (apiGetDiskSize(strCurDir,&TotalSize, nullptr, &UserFree))
 		{
 			GotoXY(X1+2,CurY++);
 			PrintText(MInfoDiskTotal);
@@ -966,7 +966,7 @@ bool InfoList::ShowPluginDescription(int YPos)
 		Text(VertcalLine);
 		GotoXY(X1+2,Y);
 
-		if (InfoLine->Separator)
+		if (InfoLine->Flags&IPLFLAGS_SEPARATOR)
 		{
 			string strTitle;
 

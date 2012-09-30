@@ -213,8 +213,12 @@ enum LNGID:int;
 #if 1
 //Maxmus: Для отлова ошибок - кидаем ассерты. Пока StructSize на равенство, а там посмотрим
 template <typename T>
-bool CheckStructSize(const T* s) {_ASSERTE(!s || (s->StructSize==sizeof(*s))); return s && (s->StructSize >= sizeof(T));}
+bool CheckNullOrStructSize(const T* s) {_ASSERTE(!s || (s->StructSize==sizeof(*s))); return !s || (s->StructSize >= sizeof(T));}
+template <typename T>
+bool CheckStructSize(const T* s) {_ASSERTE(s && (s->StructSize==sizeof(*s))); return s && (s->StructSize >= sizeof(T));}
 #else
+template <typename T>
+bool CheckNullOrStructSize(const T* s) {return !s || (s->StructSize >= sizeof(T));}
 template <typename T>
 bool CheckStructSize(const T* s) {return s && (s->StructSize >= sizeof(T));}
 #endif

@@ -1384,7 +1384,6 @@ int PluginManager::ProcessMacro(const GUID& guid,ProcessMacroInfo *Info)
 }
 #endif
 
-#if defined(MANTIS_0001687)
 int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 {
 	//Maximus: Наверное нефиг плагинам ковыряться, когда клавиша на макрос назначается
@@ -1427,7 +1426,6 @@ int PluginManager::ProcessConsoleInput(ProcessConsoleInputInfo *Info)
 
 	return nResult;
 }
-#endif
 
 
 int PluginManager::GetFindData(
@@ -1447,11 +1445,12 @@ int PluginManager::GetFindData(
 void PluginManager::FreeFindData(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    size_t ItemsNumber
+    size_t ItemsNumber,
+    bool FreeUserData
 )
 {
 	PluginHandle *ph = (PluginHandle *)hPlugin;
-	ph->pPlugin->FreeFindData(ph->hPlugin, PanelItem, ItemsNumber);
+	ph->pPlugin->FreeFindData(ph->hPlugin, PanelItem, ItemsNumber, FreeUserData);
 }
 
 
@@ -2779,22 +2778,28 @@ size_t PluginManager::GetPluginInformation(Plugin *pPlugin, FarGetPluginInformat
 		}
 	}
 
-	FarGetPluginInformation Temp;
+	struct
+	{
+		FarGetPluginInformation fgpi;
+		PluginInfo PInfo;
+		GlobalInfo GInfo;
+	} Temp;
 	char* Buffer = nullptr;
 	size_t Rest = 0;
+	size_t Size = sizeof(Temp);
 
 	if (pInfo)
 	{
-		Rest = BufferSize - sizeof(FarGetPluginInformation);
-		Buffer = reinterpret_cast<char*>(pInfo+1);
+		Rest = BufferSize - Size;
+		Buffer = reinterpret_cast<char*>(pInfo) + Size;
 	}
 	else
 	{
-		pInfo = &Temp;
+		pInfo = &Temp.fgpi;
 	}
 
-	size_t Size = sizeof(FarGetPluginInformation);
-
+	pInfo->PInfo = reinterpret_cast<PluginInfo*>(pInfo+1);
+	pInfo->GInfo = reinterpret_cast<GlobalInfo*>(pInfo->PInfo+1);
 	pInfo->ModuleName = StrToBuf(pPlugin->GetModuleName(), Buffer, Rest, Size);
 
 	pInfo->Flags = 0;
@@ -2818,23 +2823,23 @@ size_t PluginManager::GetPluginInformation(Plugin *pPlugin, FarGetPluginInformat
 	}
 #endif // NO_WRAPPER
 
-	pInfo->GInfo.StructSize = sizeof(GlobalInfo);
-	pInfo->GInfo.Guid = pPlugin->GetGUID();
-	pInfo->GInfo.Version = pPlugin->GetVersion();
-	pInfo->GInfo.Title = StrToBuf(pPlugin->strTitle, Buffer, Rest, Size);
-	pInfo->GInfo.Description = StrToBuf(pPlugin->strDescription, Buffer, Rest, Size);
-	pInfo->GInfo.Author = StrToBuf(pPlugin->strAuthor, Buffer, Rest, Size);
+	pInfo->GInfo->StructSize = sizeof(GlobalInfo);
+	pInfo->GInfo->Guid = pPlugin->GetGUID();
+	pInfo->GInfo->Version = pPlugin->GetVersion();
+	pInfo->GInfo->Title = StrToBuf(pPlugin->strTitle, Buffer, Rest, Size);
+	pInfo->GInfo->Description = StrToBuf(pPlugin->strDescription, Buffer, Rest, Size);
+	pInfo->GInfo->Author = StrToBuf(pPlugin->strAuthor, Buffer, Rest, Size);
 
-	pInfo->PInfo.StructSize = sizeof(PluginInfo);
-	pInfo->PInfo.Flags = Flags;
-	pInfo->PInfo.CommandPrefix = StrToBuf(Prefix, Buffer, Rest, Size);
+	pInfo->PInfo->StructSize = sizeof(PluginInfo);
+	pInfo->PInfo->Flags = Flags;
+	pInfo->PInfo->CommandPrefix = StrToBuf(Prefix, Buffer, Rest, Size);
 #if defined(MANTIS_0000466)
-	pInfo->PInfo.MacroFunctions = StrToBuf(MacroFunc, Buffer, Rest, Size);
+	pInfo->PInfo->MacroFunctions = StrToBuf(MacroFunc, Buffer, Rest, Size);
 #endif
 
-	ItemsToBuf(pInfo->PInfo.DiskMenu, DiskNames, DiskGuids, Buffer, Rest, Size);
-	ItemsToBuf(pInfo->PInfo.PluginMenu, MenuNames, MenuGuids, Buffer, Rest, Size);
-	ItemsToBuf(pInfo->PInfo.PluginConfig, ConfNames, ConfGuids, Buffer, Rest, Size);
+	ItemsToBuf(pInfo->PInfo->DiskMenu, DiskNames, DiskGuids, Buffer, Rest, Size);
+	ItemsToBuf(pInfo->PInfo->PluginMenu, MenuNames, MenuGuids, Buffer, Rest, Size);
+	ItemsToBuf(pInfo->PInfo->PluginConfig, ConfNames, ConfGuids, Buffer, Rest, Size);
 
 	return Size;
 }
@@ -3108,7 +3113,8 @@ int PluginManager::ProcessCommandLine(const wchar_t *CommandParam,Panel *Target)
 		CtrlObject->CmdLine->SetString(L"");
 		string strPluginCommand=strCommand.CPtr()+(PData->PluginFlags & PF_FULLCMDLINE ? 0:PrefixLength+1);
 		RemoveTrailingSpaces(strPluginCommand);
-		HANDLE hPlugin=Open(PData->pPlugin,OPEN_COMMANDLINE,FarGuid,(intptr_t)strPluginCommand.CPtr()); //BUGBUG
+		OpenCommandLineInfo info={sizeof(OpenCommandLineInfo),strPluginCommand.CPtr()}; //BUGBUG
+		HANDLE hPlugin=Open(PData->pPlugin,OPEN_COMMANDLINE,FarGuid,(intptr_t)&info);
 
 		if (hPlugin)
 		{
@@ -3375,7 +3381,8 @@ int PluginManager::CallPluginItem(const GUID& Guid, CallPluginInfo *Data, int *R
 				{
 					ActivePanel=CtrlObject->Cp()->ActivePanel;
 					string command=Data->Command; // Нужна копия строки
-					hPlugin=Open(Data->pPlugin,OPEN_COMMANDLINE,FarGuid,(intptr_t)command.CPtr());
+					OpenCommandLineInfo info={sizeof(OpenCommandLineInfo),command.CPtr()};
+					hPlugin=Open(Data->pPlugin,OPEN_COMMANDLINE,FarGuid,(intptr_t)&info);
 
 					Result=TRUE;
 					break;

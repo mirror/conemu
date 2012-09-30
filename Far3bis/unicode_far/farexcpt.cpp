@@ -104,9 +104,7 @@ LPCWSTR GetFunctionName(int ExceptFunctionType)
 #if defined(MANTIS_0000466)
 		case EXCEPT_PROCESSMACRO: return L"ProcessMacro";
 #endif
-#if defined(MANTIS_0001687)
 		case EXCEPT_PROCESSCONSOLEINPUT: return L"ProcessConsoleInput";
-#endif
 	}
 
 	return L"";
@@ -125,7 +123,7 @@ static DWORD Flags=0;                  // дополнительные флаги - пока только оди
 
 extern void CreatePluginStartupInfo(const Plugin *pPlugin, PluginStartupInfo *PSI, FarStandardFunctions *FSF);
 
-intptr_t WINAPI ExcDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI ExcDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -277,9 +275,7 @@ static DWORD WINAPI _xfilter(LPVOID dummy=nullptr)
 #if defined(MANTIS_0000466)
 						PlugRec.FuncFlags|=Module->HasProcessMacro()?PICFF_PROCESSMACRO:0;
 #endif
-#if defined(MANTIS_0001687)
 						PlugRec.FuncFlags|=Module->HasProcessConsoleInput()?PICFF_PROCESSCONSOLEINPUT:0;
-#endif
 					}
 
 					Res=p(xp,(Module?&PlugRec:nullptr),&LocalStartupInfo,&Result);

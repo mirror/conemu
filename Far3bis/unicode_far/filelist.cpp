@@ -121,23 +121,26 @@ FileList::FileList():
 	LastCurFile(-1),
 	ReturnCurrentFile(FALSE),
 	SelFileCount(0),
-	GetSelPosition(0),
+	GetSelPosition(0), LastSelPosition(-1),
 	TotalFileCount(0),
 	SelFileSize(0),
 	TotalFileSize(0),
-	FreeDiskSize(0),
+	FreeDiskSize(-1),
 	LastUpdateTime(0),
 	Height(0),
 	LeftPos(0),
 	ShiftSelection(-1),
 	MouseSelection(0),
 	SelectedFirst(0),
+	IsEmpty(TRUE),
 	AccessTimeUpdateRequired(FALSE),
 	UpdateRequired(FALSE),
+	UpdateRequiredMode(0),
 	UpdateDisabled(0),
+	SortGroupsRead(FALSE),
 	InternalProcessKey(FALSE),
-	CacheSelIndex(-1),
-	CacheSelClearIndex(-1)
+	CacheSelIndex(-1), CacheSelPos(0),
+	CacheSelClearIndex(-1), CacheSelClearPos(0)
 {
 	_OT(SysLog(L"[%p] FileList::FileList()", this));
 	{
@@ -210,8 +213,11 @@ void FileList::DeleteListData(FileListItem **(&ListData),int &FileCount)
 				delete[] ListData[I]->CustomColumnData;
 			}
 
-			if (ListData[I]->UserFlags & PPIF_USERDATA)
-				xf_free((void *)ListData[I]->UserData);
+			if (PanelMode==PLUGIN_PANEL&&ListData[I]->Callback)
+			{
+				FarPanelItemFreeInfo info={sizeof(FarPanelItemFreeInfo),hPlugin};
+				ListData[I]->Callback(ListData[I]->UserData,&info);
+			}
 
 			if (ListData[I]->DizText && ListData[I]->DeleteDiz)
 				delete[] ListData[I]->DizText;
@@ -1036,8 +1042,8 @@ int FileList::ProcessKey(int Key)
 		case KEY_GOTFOCUS:
 			if (Opt.SmartFolderMonitor)
 			{
-				StartFSWatcher();
-				CtrlObject->Cp()->GetAnotherPanel(this)->StartFSWatcher();
+				StartFSWatcher(true);
+				CtrlObject->Cp()->GetAnotherPanel(this)->StartFSWatcher(true);
 			}
 			break;
 
@@ -1567,7 +1573,7 @@ int FileList::ProcessKey(int Key)
 				if (!PluginMode)
 					strPluginData.Clear();
 
-				UINT codepage = CP_DEFAULT;
+				uintptr_t codepage = CP_DEFAULT;
 
 				if (Key==KEY_SHIFTF4)
 				{
@@ -2271,10 +2277,15 @@ int FileList::ProcessKey(int Key)
 			assert(CurFile<FileCount);
 			CurPtr=ListData[CurFile];
 			Select(CurPtr,!CurPtr->Selected);
+			bool avoid_up_jump = SelectedFirst && (CurFile > 0) && (CurFile+1 == FileCount) && CurPtr->Selected;
 			Down(1);
 
 			if (SelectedFirst)
+			{
 				SortFileList(TRUE);
+				if (avoid_up_jump)
+					Down(0x10000000);
+			}
 
 			ShowFileList(TRUE);
 			return TRUE;
@@ -4961,7 +4972,7 @@ bool FileList::ApplyCommand()
 
 	string CommandLine;
 	CtrlObject->CmdLine->GetString(CommandLine);
-	int SelStart, SelEnd;
+	intptr_t SelStart, SelEnd;
 	CtrlObject->CmdLine->GetSelection(SelStart, SelEnd);
 	int CursorPosition = CtrlObject->CmdLine->GetCurPos();
 	int LeftPosition = CtrlObject->CmdLine->GetLeftPos();
@@ -5350,7 +5361,7 @@ int FileList::PluginPanelHelp(HANDLE hPlugin)
 	PluginHandle *ph = (PluginHandle*)hPlugin;
 	strPath = ph->pPlugin->GetModuleName();
 	CutToSlash(strPath);
-	UINT nCodePage = CP_OEMCP;
+	uintptr_t nCodePage = CP_OEMCP;
 	FILE *HelpFile=OpenLangFile(strPath,HelpFileMask,Opt.strHelpLanguage,strFileName, nCodePage);
 
 	if (!HelpFile)

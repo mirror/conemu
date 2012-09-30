@@ -46,6 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "message.hpp"
 #include "dirmix.hpp"
 #include "strmix.hpp"
+#include "mix.hpp"
 #include "FarGuid.hpp"
 
 typedef void   (WINAPI *iClosePanelPrototype)          (const ClosePanelInfo *Info);
@@ -78,9 +79,7 @@ typedef int    (WINAPI *iProcessSynchroEventPrototype) (const ProcessSynchroEven
 #if defined(MANTIS_0000466)
 typedef int    (WINAPI *iProcessMacroPrototype)        (const ProcessMacroInfo *Info);
 #endif
-#if defined(MANTIS_0001687)
 typedef int    (WINAPI *iProcessConsoleInputPrototype) (const ProcessConsoleInputInfo *Info);
-#endif
 typedef HANDLE (WINAPI *iAnalysePrototype)             (const AnalyseInfo *Info);
 typedef int    (WINAPI *iGetCustomDataPrototype)       (const wchar_t *FilePath, wchar_t **CustomData);
 typedef void   (WINAPI *iFreeCustomDataPrototype)      (wchar_t *CustomData);
@@ -122,9 +121,7 @@ typedef void*  (WINAPI *iWrapperFunction2Prototype)    (HMODULE hModule, LPCSTR 
 #if defined(MANTIS_0000466)
 #define EXP_PROCESSMACRO        "ProcessMacroW"
 #endif
-#if defined(MANTIS_0001687)
 #define EXP_PROCESSCONSOLEINPUT "ProcessConsoleInputW"
-#endif
 #define EXP_ANALYSE             "AnalyseW"
 #define EXP_GETCUSTOMDATA       "GetCustomDataW"
 #define EXP_FREECUSTOMDATA      "FreeCustomDataW"
@@ -171,9 +168,7 @@ static const char* _ExportsNamesA[i_LAST] =
 #if defined(MANTIS_0000466)
 	EXP_PROCESSMACRO,
 #endif
-#if defined(MANTIS_0001687)
 	EXP_PROCESSCONSOLEINPUT,
-#endif
 	EXP_ANALYSE,
 	EXP_GETCUSTOMDATA,
 	EXP_FREECUSTOMDATA,
@@ -221,9 +216,7 @@ static const wchar_t* _ExportsNamesW[i_LAST] =
 #if defined(MANTIS_0000466)
 	W(EXP_PROCESSMACRO),
 #endif
-#if defined(MANTIS_0001687)
 	W(EXP_PROCESSCONSOLEINPUT),
-#endif
 	W(EXP_ANALYSE),
 	W(EXP_GETCUSTOMDATA),
 	W(EXP_FREECUSTOMDATA),
@@ -250,7 +243,7 @@ static void CheckScreenLock()
 {
 	if (ScrBuf.GetLockCount() > 0 && !CtrlObject->Macro.PeekKey())
 	{
-		ScrBuf.SetLockCount(0);
+//		ScrBuf.SetLockCount(0);
 		ScrBuf.Flush();
 	}
 }
@@ -263,7 +256,11 @@ FarStandardFunctions NativeFSF =
 	pluginapi::apiItoa,
 	pluginapi::apiItoa64,
 	pluginapi::apiSprintf,
-	swscanf,
+#ifndef _MSC_VER
+	pluginapi::apiSscanf,
+#else
+	(FARSTDSSCANF)swscanf,
+#endif
 	pluginapi::apiQsort,
 	pluginapi::apiBsearch,
 	pluginapi::apiSnprintf,
@@ -298,7 +295,6 @@ FarStandardFunctions NativeFSF =
 	pluginapi::apiGetNumberOfLinks,
 	pluginapi::apiRecursiveSearch,
 	pluginapi::apiMkTemp,
-	pluginapi::apiDeleteBuffer,
 	pluginapi::apiProcessName,
 	pluginapi::apiMkLink,
 	pluginapi::apiConvertPath,
@@ -335,7 +331,6 @@ PluginStartupInfo NativeInfo =
 	pluginapi::apiDialogFree,
 	pluginapi::apiSendDlgMessage,
 	pluginapi::apiDefDlgProc,
-	0, //Reserved
 	pluginapi::apiViewerControl,
 	pluginapi::apiPluginsControl,
 	pluginapi::apiFileFilterControl,
@@ -413,9 +408,7 @@ bool Plugin::SaveToCache()
 #if defined(MANTIS_0000466)
 		Exports[iProcessMacro] ||
 #endif
-#if defined(MANTIS_0001687)
 		Exports[iProcessConsoleInput] ||
-#endif
 		Exports[iAnalyse] ||
 		#if 0
 		Exports[iGetCustomData]
@@ -500,9 +493,7 @@ bool Plugin::SaveToCache()
 #if defined(MANTIS_0000466)
 		OPT_SETEXPORT(iProcessMacro);
 #endif
-#if defined(MANTIS_0001687)
 		OPT_SETEXPORT(iProcessConsoleInput);
-#endif
 		OPT_SETEXPORT(iConfigure);
 		OPT_SETEXPORT(iAnalyse);
 		OPT_SETEXPORT(iGetCustomData);
@@ -553,9 +544,7 @@ void Plugin::InitExports()
 #if defined(MANTIS_0000466)
 	OPT_GetProcAddress(iProcessMacro);
 #endif
-#if defined(MANTIS_0001687)
 	OPT_GetProcAddress(iProcessConsoleInput);
-#endif
 	OPT_GetProcAddress(iAnalyse);
 	OPT_GetProcAddress(iGetCustomData);
 	OPT_GetProcAddress(iFreeCustomData);
@@ -823,9 +812,7 @@ bool Plugin::LoadFromCache(const FAR_FIND_DATA_EX &FindData)
 #if defined(MANTIS_0000466)
 		OPT_GETEXPORT(iProcessMacro);
 #endif
-#if defined(MANTIS_0001687)
 		OPT_GETEXPORT(iProcessConsoleInput);
-#endif
 		OPT_GETEXPORT(iConfigure);
 		OPT_GETEXPORT(iAnalyse);
 		OPT_GETEXPORT(iGetCustomData);
@@ -1215,7 +1202,6 @@ int Plugin::ProcessMacro(
 }
 #endif
 
-#if defined(MANTIS_0001687)
 int Plugin::ProcessConsoleInput(
 	ProcessConsoleInputInfo *Info
 )
@@ -1235,7 +1221,6 @@ int Plugin::ProcessConsoleInput(
 
 	return nResult;
 }
-#endif
 
 
 int Plugin::GetVirtualFindData(
@@ -1514,7 +1499,8 @@ int Plugin::GetFindData(
 void Plugin::FreeFindData(
     HANDLE hPlugin,
     PluginPanelItem *PanelItem,
-    size_t ItemsNumber
+    size_t ItemsNumber,
+    bool FreeUserData
 )
 {
 	if (Exports[iFreeFindData] && !ProcessException)
@@ -1525,6 +1511,7 @@ void Plugin::FreeFindData(
 		Info.hPanel = hPlugin;
 		Info.PanelItem = PanelItem;
 		Info.ItemsNumber = ItemsNumber;
+		if (FreeUserData) FreePluginPanelItemsUserData(hPlugin,PanelItem,ItemsNumber);
 		EXECUTE_FUNCTION(FUNCTION(iFreeFindData)(&Info), es);
 	}
 }

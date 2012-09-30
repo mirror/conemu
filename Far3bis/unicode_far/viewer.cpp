@@ -80,7 +80,7 @@ static int utf8_to_WideChar(const char *s, int nc, wchar_t *w1,wchar_t *w2, int 
 #define BOM_CHAR      0xFEFF // Zero Length Space
 #define ZERO_CHAR     (ViOpt.Visible0x00 && ViOpt.ZeroChar > 0 ? (wchar_t)(ViOpt.ZeroChar) : L' ')
 
-Viewer::Viewer(bool bQuickView, UINT aCodePage):
+Viewer::Viewer(bool bQuickView, uintptr_t aCodePage):
 	ViOpt(Opt.ViOpt),
 	Reader(ViewFile, (Opt.ViOpt.MaxLineSize*2*64 > 64*1024 ? Opt.ViOpt.MaxLineSize*2*64 : 64*1024)),
 	m_bQuickView(bQuickView)
@@ -134,7 +134,7 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	vgetc_cb = vgetc_ib = 0;
 	vgetc_composite = L'\0';
 
-	vread_buffer_size = Max(MAX_VIEWLINEB, 8192);
+	vread_buffer_size = Max(MAX_VIEWLINEB, (intptr_t)8192);
 	vread_buffer = new char[vread_buffer_size];
 
 	lcache_first = lcache_last = -1;
@@ -144,14 +144,14 @@ Viewer::Viewer(bool bQuickView, UINT aCodePage):
 	lcache_ready = false;
 	lcache_wrap = lcache_wwrap = lcache_width = -1;
 
-	int cached_buffer_size = 64*Max(Opt.ViOpt.MaxLineSize*2, 1024);
+	int cached_buffer_size = 64*Max(Opt.ViOpt.MaxLineSize*2, (intptr_t)1024);
 	max_backward_size = ViewerOptions::eMaxLineSize*3;
 	if ( max_backward_size > cached_buffer_size/2 )
 		max_backward_size = cached_buffer_size / 2;
 	llengths_size = max_backward_size / 40;
 	llengths = new int[llengths_size];
 
-	Search_buffer_size = 3 * Max(MAX_VIEWLINEB, 8000);
+	Search_buffer_size = 3 * Max(MAX_VIEWLINEB, (intptr_t)8000);
 	Search_buffer = new wchar_t[Search_buffer_size];
 
 	ClearStruct(vString);
@@ -208,6 +208,9 @@ Viewer::~Viewer()
 		CtrlObject->Plugins->CurViewer=this; //HostFileViewer;
 		CtrlObject->Plugins->ProcessViewerEvent(VE_CLOSE,nullptr,ViewerID);
 	}
+
+	if (this == CtrlObject->Plugins->CurViewer)
+		CtrlObject->Plugins->CurViewer = nullptr;
 }
 
 
@@ -239,7 +242,6 @@ void Viewer::KeepInitParameters()
 	Opt.ViOpt.ViewerIsWrap=VM.Wrap != 0;
 	Opt.ViOpt.ViewerWrap=VM.WordWrap != 0;
 	Opt.ViOpt.SearchRegexp=LastSearchRegexp;
-	//InitHex=VM.Hex;
 }
 
 
@@ -360,7 +362,7 @@ int Viewer::OpenFile(const wchar_t *Name,int warning)
 	//if(ViOpt.AutoDetectTable)
 	{
 		bool Detect=false;
-		UINT CodePage=0;
+		uintptr_t CodePage=0;
 
 		if (VM.CodePage == CP_DEFAULT || IsUnicodeOrUtfCodePage(VM.CodePage))
 		{
@@ -1643,7 +1645,7 @@ int Viewer::ProcessKey(int Key)
 		}
 		case KEY_SHIFTF8:
 		{
-			UINT nCodePage = SelectCodePage(VM.CodePage, true, true, false, true);
+			uintptr_t nCodePage = SelectCodePage(VM.CodePage, true, true, false, true);
 			if (nCodePage != static_cast<UINT>(-1))
 			{
 				if (nCodePage == (CP_DEFAULT & 0xffff))
@@ -2475,7 +2477,7 @@ struct MyDialogData
 	bool      recursive;
 };
 
-intptr_t WINAPI ViewerSearchDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI ViewerSearchDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -2503,15 +2505,16 @@ intptr_t WINAPI ViewerSearchDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 			int show = 1;
 			if ( Param1 )
 			{
-				int tlen = (int)SendDlgMessage(hDlg, DM_GETTEXTPTR, SD_EDIT_TEXT, 0);
+				int tlen = (int)SendDlgMessage(hDlg, DM_GETTEXT, SD_EDIT_TEXT, 0);
 				show = 0;
 				if ( tlen > 0 )
 				{
 					RegExp re;
 					wchar_t t[128], *tmp = t;
-					if (tlen > (int)ARRAYSIZE(t))
-						tmp = new wchar_t[tlen];
-					SendDlgMessage(hDlg, DM_GETTEXTPTR, SD_EDIT_TEXT, tmp);
+					if (tlen > (int)(ARRAYSIZE(t)-1))
+						tmp = new wchar_t[tlen+1];
+					FarDialogItemData item = {sizeof(FarDialogItemData), static_cast<size_t>(tlen), tmp};
+					SendDlgMessage(hDlg, DM_GETTEXT, SD_EDIT_TEXT, &item);
 					string sre = tmp;
 					InsertRegexpQuote(sre);
 					show = re.Compile(sre.CPtr(), OP_PERLSTYLE);
@@ -2550,7 +2553,7 @@ intptr_t WINAPI ViewerSearchDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 					int sd_dst = new_hex ? SD_EDIT_HEX : SD_EDIT_TEXT;
 					int sd_src = new_hex ? SD_EDIT_TEXT : SD_EDIT_HEX;
 
-					EditorSetPosition esp;
+					EditorSetPosition esp={sizeof(EditorSetPosition)};
 					esp.CurPos = -1;
 					SendDlgMessage(hDlg, DM_GETEDITPOSITION, sd_src, &esp);
 					const wchar_t *ps = (const wchar_t *)SendDlgMessage(hDlg, DM_GETCONSTTEXTPTR, sd_src, 0);
@@ -2684,7 +2687,7 @@ static void ss2hex(string& to, const char *c1, int len, wchar_t sep = L' ')
 	}
 }
 
-static int hex2ss(const wchar_t *from, char *c1, int mb, int *pos = 0)
+static int hex2ss(const wchar_t *from, char *c1, int mb, intptr_t *pos = 0)
 {
 	int nb, i, v, sub = 0, ps = 0, p0 = (pos ? *pos : -1), p1 = -1;
 	wchar_t ch;
@@ -2731,7 +2734,7 @@ static int hex2ss(const wchar_t *from, char *c1, int mb, int *pos = 0)
 	return nb;
 }
 
-void Viewer::SearchTextTransform( UnicodeString &to, const wchar_t *from, bool hex2text, int &pos )
+void Viewer::SearchTextTransform( UnicodeString &to, const wchar_t *from, bool hex2text, intptr_t &pos )
 {
 	int nb;
 	char c1[128];
@@ -3149,7 +3152,7 @@ int Viewer::search_regex_forward( search_data* sd )
 			break;
 
 		SMatch m[1];
-		int n = static_cast<int>(ARRAYSIZE(m));
+		intptr_t n = static_cast<int>(ARRAYSIZE(m));
 		if ( !sd->pRex->SearchEx(line, line+off, line+nw, m, n) )  // doesn't match
 			break;
 
@@ -3205,7 +3208,7 @@ int Viewer::search_regex_backward( search_data* sd )
 			break;
 
 		SMatch m[1];
-		int n = static_cast<int>(ARRAYSIZE(m));
+		intptr_t n = ARRAYSIZE(m);
 		if ( !sd->pRex->SearchEx(line, line+off, line+nw, m, n) )
 			break;
 
@@ -3500,7 +3503,7 @@ void Viewer::Search(int Next,int FirstChar)
 				break;
 
 			DWORD cur_time = GetTickCount();
-			if ( cur_time - start_time > RedrawTimeout )
+			if ( cur_time - start_time > (DWORD)Opt.RedrawTimeout )
 			{
 				start_time = cur_time;
 
@@ -4207,23 +4210,28 @@ void Viewer::SelectText(const __int64 &match_pos,const __int64 &search_len, cons
 }
 
 
-int Viewer::ViewerControl(int Command,void *Param)
+int Viewer::ViewerControl(int Command, intptr_t Param1, void *Param2)
 {
 	switch (Command)
 	{
 		case VCTL_GETINFO:
 		{
-			ViewerInfo *Info=(ViewerInfo *)Param;
+			ViewerInfo *Info=(ViewerInfo *)Param2;
 			if (CheckStructSize(Info))
 			{
 				memset(&Info->ViewerID,0,Info->StructSize-sizeof(Info->StructSize));
 				Info->ViewerID=Viewer::ViewerID;
-				Info->FileName=strFullFileName;
 				Info->WindowSizeX=ObjWidth;
 				Info->WindowSizeY=Y2-Y1+1;
 				Info->FilePos=FilePos;
 				Info->FileSize=FileSize;
-				Info->CurMode=VM;
+				Info->CurMode.CodePage=VM.CodePage;
+				Info->CurMode.Flags=0;
+				if (VM.Wrap) Info->CurMode.Flags|=VMF_WRAP;
+				if (VM.WordWrap) Info->CurMode.Flags|=VMF_WORDWRAP;
+				Info->CurMode.Type=VMT_TEXT;
+				if (1==VM.Hex) Info->CurMode.Type=VMT_HEX;
+				if (2==VM.Hex) Info->CurMode.Type=VMT_DUMP;
 				Info->Options=0;
 
 				if (Opt.ViOpt.SavePos)   Info->Options|=VOPT_SAVEFILEPOSITION;
@@ -4238,15 +4246,15 @@ int Viewer::ViewerControl(int Command,void *Param)
 			break;
 		}
 		/*
-		   Param = ViewerSetPosition
+		   Param2 = ViewerSetPosition
 		           сюда же будет записано новое смещение
 		           В основном совпадает с переданным
 		*/
 		case VCTL_SETPOSITION:
 		{
-			if (Param)
+			ViewerSetPosition *vsp=(ViewerSetPosition*)Param2;
+			if (CheckStructSize(vsp))
 			{
-				ViewerSetPosition *vsp=(ViewerSetPosition*)Param;
 				bool isReShow=vsp->StartPos != FilePos;
 
 				if ((LeftPos=vsp->LeftPos) < 0)
@@ -4268,12 +4276,12 @@ int Viewer::ViewerControl(int Command,void *Param)
 
 			break;
 		}
-		// Param=ViewerSelect
+		// Param2=ViewerSelect
 		case VCTL_SELECT:
 		{
-			if (Param)
+			ViewerSelect *vs=(ViewerSelect *)Param2;
+			if (CheckStructSize(vs))
 			{
-				ViewerSelect *vs=(ViewerSelect *)Param;
 				__int64 SPos=vs->BlockStartPos;
 				int SSize=vs->BlockLen;
 
@@ -4289,7 +4297,7 @@ int Viewer::ViewerControl(int Command,void *Param)
 					return TRUE;
 				}
 			}
-			else
+			else if (!Param2)
 			{
 				SelectSize = -1;
 				Show();
@@ -4298,31 +4306,32 @@ int Viewer::ViewerControl(int Command,void *Param)
 			break;
 		}
 		/* Функция установки Keybar Labels
-		     Param = nullptr - восстановить, пред. значение
-		     Param = -1   - обновить полосу (перерисовать)
-		     Param = KeyBarTitles
+		     Param2 = nullptr - восстановить, пред. значение
+		     Param2 = -1   - обновить полосу (перерисовать)
+		     Param2 = KeyBarTitles
 		*/
 		case VCTL_SETKEYBAR:
 		{
-			KeyBarTitles *Kbt=(KeyBarTitles*)Param;
+			FarSetKeyBarTitles *Kbt=(FarSetKeyBarTitles*)Param2;
 
 			if (!Kbt)
 			{        // восстановить пред значение!
 				if (HostFileViewer)
 					HostFileViewer->InitKeyBar();
 			}
-			else
+			else if(CheckStructSize(Kbt))
 			{
-				if ((intptr_t)Param != (intptr_t)-1) // не только перерисовать?
-					ViewKeyBar->Change(Kbt);
+				if ((intptr_t)Param2 != (intptr_t)-1) // не только перерисовать?
+					ViewKeyBar->Change(Kbt->Titles);
 
 				ViewKeyBar->Show();
 				ScrBuf.Flush(); //?????
 			}
+			else return FALSE;
 
 			return TRUE;
 		}
-		// Param=0
+		// Param2=0
 		case VCTL_REDRAW:
 		{
 			ChangeViewKeyBar();
@@ -4330,7 +4339,7 @@ int Viewer::ViewerControl(int Command,void *Param)
 			ScrBuf.Flush();
 			return TRUE;
 		}
-		// Param=0
+		// Param2=0
 		case VCTL_QUIT:
 		{
 			/* $ 28.12.2002 IS
@@ -4352,13 +4361,13 @@ int Viewer::ViewerControl(int Command,void *Param)
 			}
 		}
 		/* Функция установки режимов
-		     Param = ViewerSetMode
+		     Param2 = ViewerSetMode
 		*/
 		case VCTL_SETMODE:
 		{
-			ViewerSetMode *vsmode=(ViewerSetMode *)Param;
+			ViewerSetMode *vsmode=(ViewerSetMode *)Param2;
 
-			if (vsmode)
+			if (CheckStructSize(vsmode))
 			{
 				bool isRedraw=vsmode->Flags&VSMFL_REDRAW?true:false;
 
@@ -4377,6 +4386,15 @@ int Viewer::ViewerControl(int Command,void *Param)
 			}
 
 			return FALSE;
+		}
+		case VCTL_GETFILENAME:
+		{
+			if (Param2&&(size_t)Param1>strFullFileName.GetLength())
+			{
+				wcscpy(static_cast<LPWSTR>(Param2),strFullFileName);
+			}
+
+			return static_cast<int>(strFullFileName.GetLength()+1);
 		}
 	}
 

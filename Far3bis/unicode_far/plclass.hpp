@@ -123,9 +123,7 @@ enum EXPORTS_ENUM
 #if defined(MANTIS_0000466)
 	iProcessMacro,
 #endif
-#if defined(MANTIS_0001687)
 	iProcessConsoleInput,
-#endif
 	iAnalyse,
 	iGetCustomData,
 	iFreeCustomData,
@@ -166,7 +164,7 @@ public:
 	virtual int GetCustomData(const wchar_t *FilePath, wchar_t **CustomData);
 	virtual void FreeCustomData(wchar_t *CustomData);
 	virtual void GetOpenPanelInfo(HANDLE hPlugin, OpenPanelInfo *Info);
-	virtual void FreeFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
+	virtual void FreeFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber, bool FreeUserData);
 	virtual void FreeVirtualFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
 	virtual void ClosePanel(HANDLE hPlugin);
 	virtual int ProcessEditorInput(const INPUT_RECORD *D);
@@ -177,9 +175,7 @@ public:
 #if defined(MANTIS_0000466)
 	virtual int ProcessMacro(ProcessMacroInfo *Info);
 #endif
-#if defined(MANTIS_0001687)
 	virtual int ProcessConsoleInput(ProcessConsoleInputInfo *Info);
-#endif
 	virtual HANDLE Analyse(const AnalyseInfo *Info);
 	virtual void CloseAnalyse(HANDLE hHandle);
 	virtual bool GetPluginInfo(PluginInfo *pi);
@@ -227,9 +223,7 @@ public:
 #if defined(MANTIS_0000466)
 	bool HasProcessMacro()        const { return Exports[iProcessMacro]!=nullptr; }
 #endif
-#if defined(MANTIS_0001687)
 	bool HasProcessConsoleInput() const { return Exports[iProcessConsoleInput]!=nullptr; }
-#endif
 	bool HasAnalyse()             const { return Exports[iAnalyse]!=nullptr; }
 	bool HasGetCustomData()       const { return Exports[iGetCustomData]!=nullptr; }
 	bool HasFreeCustomData()      const { return Exports[iFreeCustomData]!=nullptr; }

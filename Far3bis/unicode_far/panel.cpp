@@ -392,7 +392,7 @@ static void ConfigureChangeDriveMode()
 }
 
 
-intptr_t WINAPI ChDiskDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI ChDiskDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -549,9 +549,9 @@ int Panel::ChangeDiskMenu(int Pos,int FirstCall)
 			if (Opt.ChangeDriveMode & (DRIVE_SHOW_SIZE|DRIVE_SHOW_SIZE_FLOAT))
 			{
 				string strTotalText, strFreeText;
-				unsigned __int64 TotalSize = 0, TotalFree = 0, UserFree = 0;
+				unsigned __int64 TotalSize = 0, UserFree = 0;
 
-				if (ShowDisk && apiGetDiskSize(strRootDir,&TotalSize,&TotalFree,&UserFree))
+				if (ShowDisk && apiGetDiskSize(strRootDir,&TotalSize, nullptr, &UserFree))
 				{
 					if (Opt.ChangeDriveMode & DRIVE_SHOW_SIZE)
 					{
@@ -2385,7 +2385,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 
 		case FCTL_GETPANELITEM:
 		{
-			Result=(int)((FileList*)this)->PluginGetPanelItem(Param1,(FarGetPluginPanelItem*)Param2);
+			Result=CheckNullOrStructSize((FarGetPluginPanelItem*)Param2)?(int)((FileList*)this)->PluginGetPanelItem(Param1,(FarGetPluginPanelItem*)Param2):0;
 			break;
 		}
 
@@ -2400,7 +2400,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 
 		case FCTL_GETSELECTEDPANELITEM:
 		{
-			Result=(int)((FileList*)this)->PluginGetSelectedPanelItem(Param1,(FarGetPluginPanelItem*)Param2);
+			Result=CheckNullOrStructSize((FarGetPluginPanelItem*)Param2)?(int)((FileList*)this)->PluginGetSelectedPanelItem(Param1,(FarGetPluginPanelItem*)Param2):0;
 			break;
 		}
 
@@ -2409,7 +2409,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 			PanelInfo Info;
 			FileList *DestPanel = ((FileList*)this);
 			DestPanel->PluginGetPanelInfo(Info);
-			Result = (int)DestPanel->PluginGetPanelItem(static_cast<int>(Info.CurrentItem),(FarGetPluginPanelItem*)Param2);
+			Result = CheckNullOrStructSize((FarGetPluginPanelItem*)Param2)?(int)DestPanel->PluginGetPanelItem(static_cast<int>(Info.CurrentItem),(FarGetPluginPanelItem*)Param2):0;
 			break;
 		}
 
@@ -2466,7 +2466,7 @@ int Panel::SetPluginCommand(int Command,int Param1,void* Param2)
 		{
 			PanelRedrawInfo *Info=(PanelRedrawInfo *)Param2;
 
-			if (Info)
+			if (CheckStructSize(Info))
 			{
 				CurFile=static_cast<int>(Info->CurrentItem);
 				#if 1

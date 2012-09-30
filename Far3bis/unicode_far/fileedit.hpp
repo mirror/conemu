@@ -82,8 +82,8 @@ enum FFILEEDIT_FLAGS
 class FileEditor : public Frame
 {
 	public:
-		FileEditor(const string&  Name, UINT codepage, DWORD InitFlags,int StartLine=-1,int StartChar=-1,const string* PluginData=nullptr,int OpenModeExstFile=FEOPMODE_QUERY);
-		FileEditor(const string&  Name, UINT codepage, DWORD InitFlags,int StartLine,int StartChar,const string* Title,int X1,int Y1,int X2,int Y2,int DeleteOnClose=0,int OpenModeExstFile=FEOPMODE_QUERY);
+		FileEditor(const string&  Name, uintptr_t codepage, DWORD InitFlags,int StartLine=-1,int StartChar=-1,const string* PluginData=nullptr,int OpenModeExstFile=FEOPMODE_QUERY);
+		FileEditor(const string&  Name, uintptr_t codepage, DWORD InitFlags,int StartLine,int StartChar,const string* Title,int X1,int Y1,int X2,int Y2,int DeleteOnClose=0,int OpenModeExstFile=FEOPMODE_QUERY);
 		virtual ~FileEditor();
 
 		void ShowStatus();
@@ -96,8 +96,8 @@ class FileEditor : public Frame
 		void SetSaveToSaveAs(int ToSaveAs) { Flags.Change(FFILEEDIT_SAVETOSAVEAS,ToSaveAs); InitKeyBar(); }
 		virtual BOOL IsFileModified() const { return m_editor->IsFileModified(); };
 		virtual int GetTypeAndName(string &strType, string &strName);
-		int EditorControl(int Command,void *Param);
-		bool SetCodePage(UINT codepage);  //BUGBUG
+		intptr_t EditorControl(int Command, intptr_t Param1, void *Param2);
+		bool SetCodePage(uintptr_t codepage);  //BUGBUG
 		BOOL IsFileChanged() const { return m_editor->IsFileChanged(); };
 		virtual __int64 VMProcess(int OpCode,void *vParam=nullptr,__int64 iParam=0);
 		void GetEditorOptions(EditorOptions& EdOpt);
@@ -129,7 +129,7 @@ class FileEditor : public Frame
 		bool bEE_READ_Sent;
 		bool m_bAddSignature;
 		bool BadConversion;
-		UINT m_codepage; //BUGBUG
+		uintptr_t m_codepage; //BUGBUG
 
 		virtual void DisplayObject();
 		int  ProcessQuitKey(int FirstSave,BOOL NeedQuestion=TRUE);
@@ -142,7 +142,7 @@ class FileEditor : public Frame
 		void SetDeleteOnClose(int NewMode);
 		int ReProcessKey(int Key,int CalledFromControl=TRUE);
 		bool AskOverwrite(const string& FileName);
-		void Init(const string& Name, UINT codepage, const string* Title, DWORD InitFlags, int StartLine, int StartChar, const string* PluginData, int DeleteOnClose, int OpenModeExstFile);
+		void Init(const string& Name, uintptr_t codepage, const string* Title, DWORD InitFlags, int StartLine, int StartChar, const string* PluginData, int DeleteOnClose, int OpenModeExstFile);
 		virtual void InitKeyBar();
 		virtual int ProcessKey(int Key);
 		virtual int ProcessMouse(MOUSE_EVENT_RECORD *MouseEvent);
@@ -160,7 +160,7 @@ class FileEditor : public Frame
 		virtual void ResizeConsole();
 		int LoadFile(const string& Name, int &UserBreak);
 		//TextFormat, Codepage и AddSignature используются ТОЛЬКО, если bSaveAs = true!
-		int SaveFile(const string& Name, int Ask, bool bSaveAs, int TextFormat = 0, UINT Codepage = CP_UNICODE, bool AddSignature=false);
+		int SaveFile(const string& Name, int Ask, bool bSaveAs, int TextFormat = 0, uintptr_t Codepage = CP_UNICODE, bool AddSignature=false);
 		void SetTitle(const string* Title);
 		virtual string &GetTitle(string &Title,int SubLen=-1,int TruncSize=0);
 		BOOL SetFileName(const string& NewFileName);
@@ -173,4 +173,4 @@ class FileEditor : public Frame
 		void SaveToCache();
 };
 
-bool dlgOpenEditor(string &strFileName, UINT &codepage);
+bool dlgOpenEditor(string &strFileName, uintptr_t &codepage);

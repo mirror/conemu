@@ -233,7 +233,7 @@ int Help::ReadHelp(const wchar_t *Mask)
 		return TRUE;
 	}
 
-	UINT nCodePage = CP_OEMCP;
+	uintptr_t nCodePage = CP_OEMCP;
 	FILE *HelpFile=OpenLangFile(strPath,(!*Mask?HelpFileMask:Mask),Opt.strHelpLanguage,strFullHelpPathName, nCodePage);
 
 	if (!HelpFile)
@@ -444,6 +444,16 @@ int Help::ReadHelp(const wchar_t *Mask)
 			{
 				TopicFound=1;
 				NearTopicFound=1;
+			}
+			else // redirection @SearchTopic=RealTopic
+			{
+				size_t n1 = StackData.strHelpTopic.GetLength();
+				size_t n2 = strReadStr.GetLength();
+				if (1+n1+1 < n2 && !StrCmpNI(strReadStr.CPtr()+1, StackData.strHelpTopic.CPtr(), (int)n1) && strReadStr.At(1+n1) == L'=')
+				{
+					StackData.strHelpTopic = strReadStr.SubStr(1+n1+1);
+					continue;
+				}
 			}
 		}
 		else
@@ -1841,7 +1851,7 @@ void Help::ReadDocumentsHelp(int TypeIndex)
 			{
 				strPath = CtrlObject->Plugins->GetPlugin(I)->GetModuleName();
 				CutToSlash(strPath);
-				UINT nCodePage = CP_OEMCP;
+				uintptr_t nCodePage = CP_OEMCP;
 				FILE *HelpFile=OpenLangFile(strPath,HelpFileMask,Opt.strHelpLanguage,strFullFileName, nCodePage);
 
 				if (HelpFile)

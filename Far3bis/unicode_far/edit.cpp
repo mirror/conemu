@@ -125,7 +125,7 @@ Edit::~Edit()
 }
 
 
-DWORD Edit::SetCodePage( UINT codepage, bool check_only, char * &decoded, int &bsize )
+DWORD Edit::SetCodePage(uintptr_t codepage, bool check_only, char * &decoded, int &bsize)
 {
 	DWORD Ret = SETCP_NOERROR;
 	if (codepage == m_codepage)
@@ -194,7 +194,7 @@ DWORD Edit::SetCodePage( UINT codepage, bool check_only, char * &decoded, int &b
 }
 
 
-UINT Edit::GetCodePage()
+uintptr_t Edit::GetCodePage()
 {
 	return m_codepage;
 }
@@ -377,9 +377,20 @@ void Edit::FastShow()
 		wchar_t *p=OutStrTmp;
 		wchar_t *e=OutStrTmp+OutStrLength;
 
+		wchar_t *TrailingSpaces = e - 1;
+		if (Flags.Check(FEDITLINE_PARENT_SINGLELINE|FEDITLINE_PARENT_MULTILINE) && !Mask && (e > p))
+		{
+			while(IsSpace(*TrailingSpaces))
+				TrailingSpaces--;
+		}
+		else
+		{
+			TrailingSpaces = nullptr;
+		}
+
 		for (OutStrLength=0; OutStrLength<EditLength && p<e; p++)
 		{
-			if (Flags.Check(FEDITLINE_SHOWWHITESPACE) && Flags.Check(FEDITLINE_EDITORMODE))
+			if ((Flags.Check(FEDITLINE_SHOWWHITESPACE) && Flags.Check(FEDITLINE_EDITORMODE)) || (TrailingSpaces && p > TrailingSpaces))
 			{
 				if (*p==L' ') // *p==L'\xA0' ==> NO-BREAK SPACE
 				{
@@ -390,7 +401,7 @@ void Edit::FastShow()
 			if (*p == L'\t')
 			{
 				int S=TabSize-((UnfixedLeftPos+OutStrLength) % TabSize);
-				OutStr[OutStrLength]=(Flags.Check(FEDITLINE_SHOWWHITESPACE) && Flags.Check(FEDITLINE_EDITORMODE) && (OutStrLength || S==TabSize))?L'\x2192':L' ';
+				OutStr[OutStrLength]=(((Flags.Check(FEDITLINE_SHOWWHITESPACE) && Flags.Check(FEDITLINE_EDITORMODE)) || (TrailingSpaces && p > TrailingSpaces)) && (OutStrLength || S==TabSize))?L'\x2192':L' ';
 				OutStrLength++;
 				for (int i=1; i<S && OutStrLength<EditLength; i++,OutStrLength++)
 				{
@@ -1916,7 +1927,7 @@ void Edit::SetBinaryString(const wchar_t *Str,int Length)
 	Changed();
 }
 
-void Edit::GetBinaryString(const wchar_t **Str,const wchar_t **EOL,int &Length)
+void Edit::GetBinaryString(const wchar_t **Str,const wchar_t **EOL,intptr_t &Length)
 {
 	*Str=this->Str;
 
@@ -2239,7 +2250,7 @@ int Edit::Search(const string& Str,string& ReplaceStr,int Position,int Case,int 
 				return FALSE;
 
 			SMatch m[10*2], *pm = m;
-			int n = re.GetBracketsCount();
+			intptr_t n = re.GetBracketsCount();
 			if (n > static_cast<int>(ARRAYSIZE(m)/2))
 			{
 				pm = (SMatch *)xf_malloc(2*n*sizeof(SMatch));
@@ -2595,7 +2606,7 @@ void Edit::AddSelect(int Start,int End)
 }
 
 
-void Edit::GetSelection(int &Start,int &End)
+void Edit::GetSelection(intptr_t &Start,intptr_t &End)
 {
 	/* $ 17.09.2002 SKV
 	  Мало того, что это нарушение правил OO design'а,
@@ -2617,7 +2628,7 @@ void Edit::GetSelection(int &Start,int &End)
 }
 
 
-void Edit::GetRealSelection(int &Start,int &End)
+void Edit::GetRealSelection(intptr_t &Start,intptr_t &End)
 {
 	Start=SelStart;
 	End=SelEnd;
@@ -2839,8 +2850,8 @@ void Edit::ApplyColor()
 	int XPos = 0;
 	if(Flags.Check(FEDITLINE_EDITORMODE))
 	{
-		EditorInfo ei={};
-		CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETINFO, &ei);
+		EditorInfo ei={sizeof(EditorInfo)};
+		CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETINFO, 0, &ei);
 		XPos = ei.CurTabPos - ei.LeftPos;
 	}
 
@@ -3165,7 +3176,7 @@ void EditControl::SetMenuPos(VMenu& menu)
 {
 	if(ScrY-Y1<Min(Opt.Dialogs.CBoxMaxHeight.Get(),menu.GetItemCount())+2 && Y1>ScrY/2)
 	{
-		menu.SetPosition(X1,Max(0,Y1-1-Min(Opt.Dialogs.CBoxMaxHeight.Get(),menu.GetItemCount())-1),Min(ScrX-2,X2),Y1-1);
+		menu.SetPosition(X1,Max((intptr_t)0,Y1-1-Min(Opt.Dialogs.CBoxMaxHeight.Get(),menu.GetItemCount())-1),Min(ScrX-2,X2),Y1-1);
 	}
 	else
 	{
@@ -3442,7 +3453,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 	string CurrentLine;
 	size_t EventsCount = 0;
 	Console.GetNumberOfInputEvents(EventsCount);
-	if(ECFlags.Check(EC_ENABLEAUTOCOMPLETE) && *Str && !Reenter && !EventsCount && (CtrlObject->Macro.GetCurRecord(nullptr,nullptr) == MACROMODE_NOMACRO || Manual)) 
+	if(ECFlags.Check(EC_ENABLEAUTOCOMPLETE) && *Str && !Reenter && !EventsCount && (CtrlObject->Macro.GetCurRecord(nullptr,nullptr) == MACROMODE_NOMACRO || Manual))
 	{
 		Reenter++;
 
@@ -3636,7 +3647,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,int& BackKey, int Ar
 							// "классический" перебор
 							case KEY_CTRLEND:
 							case KEY_RCTRLEND:
-							
+
 							case KEY_CTRLSPACE:
 							case KEY_RCTRLSPACE:
 								{

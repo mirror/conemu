@@ -1900,9 +1900,9 @@ TVar KeyMacro::FARPseudoVariable(UINT64 Flags,DWORD CheckCode,DWORD& Err)
 						}
 						else if (CheckCode == MCODE_V_EDITORVALUE)
 						{
-							EditorGetString egs;
+							EditorGetString egs={sizeof(EditorGetString)};
 							egs.StringNumber=-1;
-							CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETSTRING,&egs);
+							CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETSTRING,0,&egs);
 							Cond=egs.StringText;
 						}
 						else if (CheckCode == MCODE_V_EDITORSELVALUE)
@@ -2692,7 +2692,7 @@ static bool msgBoxFunc(const TMacroFunction*)
 }
 
 
-static int WINAPI CompareItems(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
+static intptr_t WINAPI CompareItems(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
 	if (((*el1)->Flags & LIF_SEPARATOR) || ((*el2)->Flags & LIF_SEPARATOR))
 		return 0;
@@ -3295,7 +3295,7 @@ static bool dlggetvalueFunc(const TMacroFunction*)
 		if (typeInfoID == vtUnknown || (typeInfoID == vtInteger && InfoID < 0))
 			InfoID=0;
 
-		FarGetValue fgv={InfoID,FMVT_UNKNOWN};
+		FarGetValue fgv={sizeof(FarGetValue),InfoID,FMVT_UNKNOWN};
 		unsigned DlgItemCount=((Dialog*)CurFrame)->GetAllItemCount();
 		const DialogItemEx **DlgItem=((Dialog*)CurFrame)->GetAllItem();
 		bool CallDialog=true;
@@ -3475,8 +3475,8 @@ static bool editorposFunc(const TMacroFunction*)
 
 	if (CtrlObject->Macro.GetMode()==MACRO_EDITOR && CtrlObject->Plugins->CurEditor && CtrlObject->Plugins->CurEditor->IsVisible())
 	{
-		EditorInfo ei;
-		CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETINFO,&ei);
+		EditorInfo ei={sizeof(EditorInfo)};
+		CtrlObject->Plugins->CurEditor->EditorControl(ECTL_GETINFO,0,&ei);
 
 		switch (Op)
 		{
@@ -3508,7 +3508,7 @@ static bool editorposFunc(const TMacroFunction*)
 			}
 			case 1: // set
 			{
-				EditorSetPosition esp;
+				EditorSetPosition esp={sizeof(EditorSetPosition)};
 				esp.CurLine=-1;
 				esp.CurPos=-1;
 				esp.CurTabPos=-1;
@@ -3562,10 +3562,10 @@ static bool editorposFunc(const TMacroFunction*)
 						break;
 				}
 
-				int Result=CtrlObject->Plugins->CurEditor->EditorControl(ECTL_SETPOSITION,&esp);
+				int Result=CtrlObject->Plugins->CurEditor->EditorControl(ECTL_SETPOSITION,0,&esp);
 
 				if (Result)
-					CtrlObject->Plugins->CurEditor->EditorControl(ECTL_REDRAW,nullptr);
+					CtrlObject->Plugins->CurEditor->EditorControl(ECTL_REDRAW,0,nullptr);
 
 				Ret=Result;
 				break;
@@ -3669,13 +3669,13 @@ static bool editorsetFunc(const TMacroFunction*)
 				case 7:  // CursorBeyondEOL;
 					EdOpt.CursorBeyondEOL=longState != 0; break;
 				case 8:  // BSLikeDel;
-					EdOpt.BSLikeDel=longState != 0; break;
+					EdOpt.BSLikeDel=(longState != 0); break;
 				case 9:  // CharCodeBase;
 					EdOpt.CharCodeBase=longState; break;
 				case 10: // SavePos;
-					EdOpt.SavePos=longState; break;
+					EdOpt.SavePos=(longState != 0); break;
 				case 11: // SaveShortPos;
-					EdOpt.SaveShortPos=longState; break;
+					EdOpt.SaveShortPos=(longState != 0); break;
 				case 12: // char WordDiv[256];
 					EdOpt.strWordDiv = Value.toString(); break;
 				case 13: // F7Rules;
@@ -4614,9 +4614,9 @@ static bool editorundoFunc(const TMacroFunction*)
 
 	if (CtrlObject->Macro.GetMode()==MACRO_EDITOR && CtrlObject->Plugins->CurEditor && CtrlObject->Plugins->CurEditor->IsVisible())
 	{
-		EditorUndoRedo eur;
+		EditorUndoRedo eur={sizeof(EditorUndoRedo)};
 		eur.Command=static_cast<EDITOR_UNDOREDO_COMMANDS>(Action.toInteger());
-		Ret=(__int64)CtrlObject->Plugins->CurEditor->EditorControl(ECTL_UNDOREDO,&eur);
+		Ret=(__int64)CtrlObject->Plugins->CurEditor->EditorControl(ECTL_UNDOREDO,0,&eur);
 	}
 
 	VMStack.Push(Ret);
@@ -4637,7 +4637,7 @@ static bool editorsettitleFunc(const TMacroFunction*)
 			Title=L"";
 			Title.toString();
 		}
-		Ret=(__int64)CtrlObject->Plugins->CurEditor->EditorControl(ECTL_SETTITLE,(void*)Title.s());
+		Ret=(__int64)CtrlObject->Plugins->CurEditor->EditorControl(ECTL_SETTITLE,0,(void*)Title.s());
 	}
 
 	VMStack.Push(Ret);
@@ -5427,7 +5427,7 @@ done:
 				INPUT_RECORD *inRec=&Work.cRec;
 				if (!inRec->EventType)
 					inRec->EventType = KEY_EVENT;
-				if(inRec->EventType == KEY_EVENT || inRec->EventType == FARMACRO_KEY_EVENT)
+				if(inRec->EventType == MOUSE_EVENT || inRec->EventType == KEY_EVENT || inRec->EventType == FARMACRO_KEY_EVENT)
 					aKey=ShieldCalcKeyCode(inRec,FALSE,nullptr);
 			}
 			else
@@ -7300,7 +7300,7 @@ void KeyMacro::RunStartMacro()
 }
 
 // обработчик диалогового окна назначения клавиши
-intptr_t WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI KeyMacro::AssignMacroDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	string strKeyText;
 	static int LastKey=0;
@@ -7625,7 +7625,7 @@ enum MACROSETTINGSDLG
 	MS_BUTTON_CANCEL,
 };
 
-intptr_t WINAPI KeyMacro::ParamMacroDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI KeyMacro::ParamMacroDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	static DlgParam *KMParam=nullptr;
 

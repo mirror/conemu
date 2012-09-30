@@ -66,10 +66,10 @@ class FileViewer:public Frame
 		FileViewer(
 			const wchar_t *Name,int EnableSwitch=FALSE,int DisableHistory=FALSE,
 			int DisableEdit=FALSE,__int64 ViewStartPos=-1,const wchar_t *PluginData=nullptr,
-			NamesList *ViewNamesList=nullptr,int ToSaveAs=FALSE,UINT aCodePage=CP_DEFAULT,
+			NamesList *ViewNamesList=nullptr,int ToSaveAs=FALSE,uintptr_t aCodePage=CP_DEFAULT,
 			const wchar_t *Title=nullptr, int DeleteOnClose=0);
 		FileViewer(const wchar_t *Name,int EnableSwitch,int DisableHistory,
-			const wchar_t *Title,int X1,int Y1,int X2,int Y2,UINT aCodePage=CP_DEFAULT);
+			const wchar_t *Title,int X1,int Y1,int X2,int Y2,uintptr_t aCodePage=CP_DEFAULT);
 		virtual ~FileViewer();
 
 	public:
@@ -102,7 +102,7 @@ class FileViewer:public Frame
 		  архива для клавиши F2 сделать вызов ShiftF2.
 		*/
 		void SetSaveToSaveAs(int ToSaveAs) { SaveToSaveAs=ToSaveAs; InitKeyBar(); }
-		int  ViewerControl(int Command,void *Param);
+		int  ViewerControl(int Command, intptr_t Param1, void *Param2);
 		bool IsFullScreen() {return FullScreen;}
 		virtual string &GetTitle(string &Title,int SubLen=-1,int TruncSize=0);
 		__int64 GetViewFileSize() const;

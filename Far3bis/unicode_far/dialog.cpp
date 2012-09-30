@@ -170,7 +170,7 @@ static void ConvertItemSmall(const DialogItemEx& From, FarDialogItem& To)
 	To.Data = nullptr;
 	To.History = nullptr;
 	To.Mask = nullptr;
-	To.Reserved = From.Reserved;
+	To.Reserved0 = From.Reserved0;
 	To.UserData = From.UserData;
 }
 
@@ -377,6 +377,8 @@ Dialog::~Dialog()
 		CtrlObject->Macro.SetMode(PrevMacroMode);
 
 	Hide();
+	if (Opt.Clock && FrameManager->IsPanelsActive(true))
+		ShowTime(0);
 	ScrBuf.Flush();
 
 	if (HelpTopic)
@@ -2352,7 +2354,7 @@ __int64 Dialog::VMProcess(int OpCode,void *vParam,__int64 iParam)
 					return 0;
 			}
 
-			FarGetValue fgv={OpCode==MCODE_V_ITEMCOUNT?11:7,{FMVT_INTEGER}};
+			FarGetValue fgv={sizeof(FarGetValue),OpCode==MCODE_V_ITEMCOUNT?11:7,{FMVT_INTEGER}};
 			fgv.Value.Integer=Ret;
 
 			if (SendDlgMessage((HANDLE)this,DN_GETVALUE,FocusPos,&fgv))
@@ -2423,6 +2425,34 @@ int Dialog::ProcessKey(int Key)
 
 	if (!(/*(Key>=KEY_MACRO_BASE && Key <=KEY_MACRO_ENDBASE) ||*/ ((unsigned int)Key>=KEY_OP_BASE && (unsigned int)Key <=KEY_OP_ENDBASE)) && !DialogMode.Check(DMODE_KEY))
 	{
+#if 1	// wrap-stop mode for user lists
+		if ((Key==KEY_UP || Key==KEY_NUMPAD8 || Key==KEY_DOWN || Key==KEY_NUMPAD2) && IsRepeatedKey())
+		{
+			int n = -1, pos = -1;
+
+			FarGetValue fgv = {sizeof(FarGetValue),11, {FMVT_INTEGER}}; // Item Count
+			fgv.Value.Integer = -1;
+			if (SendDlgMessage((HANDLE)this,DN_GETVALUE,FocusPos,&fgv) && fgv.Value.Type==FMVT_INTEGER)
+				n = static_cast<int>(fgv.Value.Integer);
+
+			if (n > 1)
+			{
+				fgv.Type = 7; // Current Item
+				fgv.Value.Integer = -1;
+				if (SendDlgMessage((HANDLE)this,DN_GETVALUE,FocusPos,&fgv) && fgv.Value.Type==FMVT_INTEGER)
+					pos = static_cast<int>(fgv.Value.Integer);
+
+				bool up = (Key==KEY_UP || Key==KEY_NUMPAD8);
+
+				if ((pos==1 && up) || (pos==n && !up))
+					return TRUE;
+				else if (pos==2 && up)   // workaround for first not selectable
+					Key = KEY_HOME;
+				else if (pos==n-1 && !up) // workaround for last not selectable
+					Key = KEY_END;
+			}
+		}
+#endif
 		INPUT_RECORD rec;
 		if (KeyToInputRecord(Key,&rec) && DlgProc(this,DN_CONTROLINPUT,FocusPos,&rec))
 			return TRUE;
@@ -2918,7 +2948,7 @@ int Dialog::ProcessKey(int Key)
 							{
 								int CurPos=edt->GetCurPos();
 								int Length=edt->GetLength();
-								int SelStart, SelEnd;
+								intptr_t SelStart, SelEnd;
 								edt->GetSelection(SelStart, SelEnd);
 								edt->GetString(strStr);
 
@@ -4517,13 +4547,13 @@ void Dialog::ResizeConsole()
 //  }
 //};
 
-intptr_t WINAPI Dialog::DlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI Dialog::DlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	if (DialogMode.Check(DMODE_ENDLOOP))
 		return 0;
 
 	intptr_t Result;
-	FarDialogEvent de={hDlg,Msg,Param1,Param2,0};
+	FarDialogEvent de={sizeof(FarDialogEvent),hDlg,Msg,Param1,Param2,0};
 
 	if(!static_cast<Dialog*>(hDlg)->CheckDialogMode(DMODE_NOPLUGINS))
 	{
@@ -4546,7 +4576,7 @@ intptr_t WINAPI Dialog::DlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
    Вот именно эта функция и является последним рубежом обработки диалога.
    Т.е. здесь должна быть ВСЯ обработка ВСЕХ сообщений!!!
 */
-intptr_t WINAPI DefDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI DefDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	_DIALOG(CleverSysLog CL(L"Dialog.DefDlgProc()"));
 	_DIALOG(SysLog(L"hDlg=%p, Msg=%s, Param1=%d (0x%08X), Param2=%d (0x%08X)",hDlg,_DLGMSG_ToName(Msg),Param1,Param1,Param2,Param2));
@@ -4554,7 +4584,7 @@ intptr_t WINAPI DefDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 	if (!hDlg || hDlg==INVALID_HANDLE_VALUE)
 		return 0;
 
-	FarDialogEvent de={hDlg,Msg,Param1,Param2,0};
+	FarDialogEvent de={sizeof(FarDialogEvent),hDlg,Msg,Param1,Param2,0};
 
 	if(!static_cast<Dialog*>(hDlg)->CheckDialogMode(DMODE_NOPLUGINS))
 	{
@@ -4692,7 +4722,7 @@ intptr_t Dialog::CallDlgProc(int nMsg, int nParam1, void* nParam2)
    Некоторые сообщения эта функция обрабатывает сама, не передавая управление
    обработчику диалога.
 */
-intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI SendDlgMessage(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	if (!hDlg)
 		return 0;
@@ -5103,7 +5133,7 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						{
 							FarList *ListItems=(FarList *)Param2;
 
-							if (!ListItems)
+							if (!CheckStructSize(ListItems))
 								return FALSE;
 
 							Ret=ListBox->AddItem(ListItems);
@@ -5112,7 +5142,7 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						case DM_LISTDELETE: // Param1=ID Param2=FarListDelete: StartIndex=BeginIndex, Count=количество (<=0 - все!)
 						{
 							FarListDelete *ListItems=(FarListDelete *)Param2;
-							if(nullptr==ListItems || CheckStructSize(ListItems))
+							if(CheckNullOrStructSize(ListItems))
 							{
 								int Count;
 								if (!ListItems || (Count=ListItems->Count) <= 0)
@@ -5202,7 +5232,7 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						{
 							FarList *ListItems=(FarList *)Param2;
 
-							if (!ListItems)
+							if (!CheckStructSize(ListItems))
 								return FALSE;
 
 							ListBox->DeleteItems();
@@ -5435,14 +5465,17 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 				else
 				{
 					EditorSetPosition *esp=(EditorSetPosition *)Param2;
-					DlgEdit *EditPtr=(DlgEdit *)(CurItem->ObjPtr);
-					esp->CurLine=0;
-					esp->CurPos=EditPtr->GetCurPos();
-					esp->CurTabPos=EditPtr->GetTabCurPos();
-					esp->TopScreenLine=0;
-					esp->LeftPos=EditPtr->GetLeftPos();
-					esp->Overtype=EditPtr->GetOvertypeMode();
-					return TRUE;
+					if (CheckStructSize(esp))
+					{
+						DlgEdit *EditPtr=(DlgEdit *)(CurItem->ObjPtr);
+						esp->CurLine=0;
+						esp->CurPos=EditPtr->GetCurPos();
+						esp->CurTabPos=EditPtr->GetTabCurPos();
+						esp->TopScreenLine=0;
+						esp->LeftPos=EditPtr->GetLeftPos();
+						esp->Overtype=EditPtr->GetOvertypeMode();
+						return TRUE;
+					}
 				}
 			}
 
@@ -5461,14 +5494,17 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 				else
 				{
 					EditorSetPosition *esp=(EditorSetPosition *)Param2;
-					DlgEdit *EditPtr=(DlgEdit *)(CurItem->ObjPtr);
-					EditPtr->SetCurPos(esp->CurPos);
-					EditPtr->SetTabCurPos(esp->CurTabPos);
-					EditPtr->SetLeftPos(esp->LeftPos);
-					EditPtr->SetOvertypeMode(esp->Overtype);
-					Dlg->ShowDialog(Param1);
-					ScrBuf.Flush();
-					return TRUE;
+					if (CheckStructSize(esp))
+					{
+						DlgEdit *EditPtr=(DlgEdit *)(CurItem->ObjPtr);
+						EditPtr->SetCurPos(esp->CurPos);
+						EditPtr->SetTabCurPos(esp->CurTabPos);
+						EditPtr->SetLeftPos(esp->LeftPos);
+						EditPtr->SetOvertypeMode(esp->Overtype);
+						Dlg->ShowDialog(Param1);
+						ScrBuf.Flush();
+						return TRUE;
+					}
 				}
 			}
 
@@ -5705,15 +5741,6 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 			return (intptr_t)Ptr;
 		}
 		/*****************************************************************/
-		case DM_GETTEXTPTR:
-
-			if (Param2)
-			{
-				FarDialogItemData IData={sizeof(FarDialogItemData),0,(wchar_t *)Param2};
-				return SendDlgMessage(hDlg,DM_GETTEXT,Param1,&IData);
-			}
-
-			/*****************************************************************/
 		case DM_GETTEXT:
 		{
 			FarDialogItemData *did=(FarDialogItemData*)Param2;
@@ -5741,7 +5768,7 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 					case DI_CHECKBOX:
 					case DI_RADIOBUTTON:
 					case DI_BUTTON:
-						Len=StrLength(Ptr)+1;
+						Len=StrLength(Ptr);
 
 						if (Type == DI_BUTTON)
 						{
@@ -5759,12 +5786,12 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						if (!did->PtrLength)
 							did->PtrLength=Len;
 						else if (Len > did->PtrLength)
-							Len=did->PtrLength+1; // Прибавим 1, чтобы учесть нулевой байт.
+							Len=did->PtrLength;
 
-						if (Len > 0 && did->PtrData)
+						if (did->PtrData)
 						{
 							wmemmove(did->PtrData,Ptr,Len);
-							did->PtrData[Len-1]=0;
+							did->PtrData[Len]=L'\0';
 						}
 
 						break;
@@ -5784,15 +5811,10 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 						break;
 				}
 
-				return Len-(!Len?0:1);
+				return Len;
 			}
 
-			// здесь умышленно не ставим return, т.к. хотим получить размер
-			// следовательно сразу должен идти "case DM_GETTEXTLENGTH"!!!
-			/*****************************************************************/
-		}
-		case DM_GETTEXTLENGTH:
-		{
+			//получаем размер
 			switch (Type)
 			{
 				case DI_BUTTON:
@@ -5999,7 +6021,7 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		case DM_GETDLGITEM:
 		{
 			FarGetDialogItem* Item = (FarGetDialogItem*)Param2;
-			return (!Item||CheckStructSize(Item))?(intptr_t)ConvertItemEx2(CurItem, Item):0;
+			return (CheckNullOrStructSize(Item))?(intptr_t)ConvertItemEx2(CurItem, Item):0;
 		}
 		/*****************************************************************/
 		case DM_GETDLGITEMSHORT:
@@ -6201,11 +6223,11 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 		case DM_GETSELECTION: // Msg=DM_GETSELECTION, Param1=ID, Param2=*EditorSelect
 		case DM_SETSELECTION: // Msg=DM_SETSELECTION, Param1=ID, Param2=*EditorSelect
 		{
-			if (IsEdit(Type) && Param2)
+			EditorSelect *EdSel=(EditorSelect *)Param2;
+			if (IsEdit(Type) && CheckStructSize(EdSel))
 			{
 				if (Msg == DM_GETSELECTION)
 				{
-					EditorSelect *EdSel=(EditorSelect *)Param2;
 					DlgEdit *EditLine=(DlgEdit *)(CurItem->ObjPtr);
 					EdSel->BlockStartLine=0;
 					EdSel->BlockHeight=1;
@@ -6223,27 +6245,23 @@ intptr_t WINAPI SendDlgMessage(HANDLE hDlg,int Msg,int Param1,void* Param2)
 				}
 				else
 				{
-					if (Param2)
+					DlgEdit *EditLine=(DlgEdit *)(CurItem->ObjPtr);
+
+					//EdSel->BlockType=BTYPE_STREAM;
+					//EdSel->BlockStartLine=0;
+					//EdSel->BlockHeight=1;
+					if (EdSel->BlockType==BTYPE_NONE)
+						EditLine->Select(-1,0);
+					else
+						EditLine->Select(EdSel->BlockStartPos,EdSel->BlockStartPos+EdSel->BlockWidth);
+
+					if (Dlg->DialogMode.Check(DMODE_SHOW)) //???
 					{
-						EditorSelect *EdSel=(EditorSelect *)Param2;
-						DlgEdit *EditLine=(DlgEdit *)(CurItem->ObjPtr);
-
-						//EdSel->BlockType=BTYPE_STREAM;
-						//EdSel->BlockStartLine=0;
-						//EdSel->BlockHeight=1;
-						if (EdSel->BlockType==BTYPE_NONE)
-							EditLine->Select(-1,0);
-						else
-							EditLine->Select(EdSel->BlockStartPos,EdSel->BlockStartPos+EdSel->BlockWidth);
-
-						if (Dlg->DialogMode.Check(DMODE_SHOW)) //???
-						{
-							Dlg->ShowDialog(Param1);
-							ScrBuf.Flush();
-						}
-
-						return TRUE;
+						Dlg->ShowDialog(Param1);
+						ScrBuf.Flush();
 					}
+
+					return TRUE;
 				}
 			}
 
@@ -6295,7 +6313,7 @@ void Dialog::SetComboBoxPos(DialogItemEx* CurItem)
 			EditX2=EditX1+20;
 
 		if (ScrY-EditY1<Min(Opt.Dialogs.CBoxMaxHeight.Get(),CurItem->ListPtr->GetItemCount())+2 && EditY1>ScrY/2)
-			CurItem->ListPtr->SetPosition(EditX1,Max(0,EditY1-1-Min(Opt.Dialogs.CBoxMaxHeight.Get(),CurItem->ListPtr->GetItemCount())-1),EditX2,EditY1-1);
+			CurItem->ListPtr->SetPosition(EditX1,Max((intptr_t)0,EditY1-1-Min(Opt.Dialogs.CBoxMaxHeight.Get(),CurItem->ListPtr->GetItemCount())-1),EditX2,EditY1-1);
 		else
 			CurItem->ListPtr->SetPosition(EditX1,EditY1+1,EditX2,0);
 	}

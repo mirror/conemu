@@ -3,6 +3,13 @@
 .Options CtrlColorChar=\
 .Options CtrlStartPosChar=^<wrap>
 
+@ConfirmationsSettings=ConfirmDlg
+@InterfaceSettings=InterfSettings
+@ScreenSettings=InterfSettings
+@DescriptionsSettings=FileDiz
+@CodepagesSettings=CodepagesMenu
+@Interface.CompletionSettings=AutoCompleteSettings
+
 @Contents
 $^#File and archive manager#
 `$^#'FULLVERSIONNOBRACES`#'
@@ -185,6 +192,9 @@ user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
   #/ma#
   Macros with the "Run after Far start" option set will not be run when Far is started.
 
+  #/s <path> [<localpath>]#
+  Custom location for Far configuration files - overrides Far.exe.ini.
+
   #/u <username>#
   Allows to have separate registry settings for different users.
   Affects only 1.x Far Manager plugins
@@ -208,12 +218,13 @@ in the input stream until you press Ctrl-Break.
   Disable exception handling. This option has been designed for plugin developers,
 and it is not recommended to specify it during normal operation.
 
-  #/clearcache [profilepath]#
+  #/clearcache [profilepath [localprofilepath]]#
   Очистить кэш плагинов и завершить работу.
   Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
+Параметр localprofilepath перекрывает значение UserLocalProfileDir из Far.exe.ini.
 
-  #/export <out.farconfig> [profilepath]#
+  #/export <out.farconfig> [profilepath [localprofilepath]]#
   Экспортировать все настройки в файл out.farconfig и завершить работу.
   Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
@@ -222,6 +233,7 @@ and it is not recommended to specify it during normal operation.
   Импортировать все настройки из файла in.farconfig и завершить работу.
   Необязательный параметр profilepath задает полный путь к конфигурационным файлам.
 Параметр profilepath перекрывает значение UserProfileDir из Far.exe.ini.
+Параметр localprofilepath перекрывает значение UserLocalProfileDir из Far.exe.ini.
 
   #/ro#
   Работа без сохранения изменений в базах настроек. Этот режим позволяет работать
@@ -1432,11 +1444,24 @@ $ #Menus: options menu#
 
    #Command line settings# Shows ~command line settings~@CmdlineSettings@ dialog.
 
+   #AutoComplete settings# Shows ~auto complete settings~@AutoCompleteSettings@.
+   
+   #Настройки#            Вызывает диалог 
+   #информационной#       ~настроек информационной панели~@VMenuSettings@.
+   #панели#
+
+
    #Languages#             Select main and help language.
                          Use "Save setup" to save selected languages.
 
    #Plugins#               Configure ~plugins~@Plugins@.
    #configuration#
+
+   #Plugin manager#        Shows ~plugin manager settings~@PluginsManagerSettings@.
+   #settings#
+
+   #File group mask#       Shows ~file group mask settings~@MaskGroupsSettings@.
+   #settings#
 
    #Confirmation#          Switch on or off ~confirmations~@ConfirmDlg@ for
                          some operations.
@@ -1452,6 +1477,9 @@ $ #Menus: options menu#
    #Viewer settings#       External and internal ~viewer settings~@ViewerSettings@.
 
    #Editor settings#       External and internal ~editor settings~@EditorSettings@.
+
+   #Codepages#             Shows ~codepages menu~@CodePagesMenu@
+
 
    #Colors#                Allows to select colors for different
                          interface items, to change the entire Far
@@ -1547,8 +1575,9 @@ options are disabled and their values doesn't affect the search process.
     Выпадающий список #Используя кодовую страницу# позволяет выбрать конкретную
 кодовую страницу, применяемую для поиска текста. Если в выпадающем списке выбрать
 пункт #Все кодовые страницы#, то Far будет использовать для поиска все стандартные
-и #Любимые# кодовые страницы (список #Любимых# кодовых страниц можно настроить в
-меню выбора кодовой страницы редактора или программы просмотра). Если перечень
+(ANSI, OEM, UTF-8, UTF-16, UTF-16 BE) и #Любимые# кодовые страницы (список #Любимых#
+кодовых страниц можно настроить в ~меню выбора кодовой страницы~@CodepagesMenu@
+настроек, редактора или программы просмотра). Если перечень
 кодовых страниц, поиск по которым производится при выборе пункта #Все кодовые#
 #страницы#, является для вас избыточным, то вы можете, при помощи клавиш #Ins# и
 #Space#, выбрать из списка стандартных и #Любимых# кодовых страниц только те кодовые
@@ -2548,6 +2577,11 @@ $ #Settings dialog: AutoComplete#
   #Подставлять первый подходящий вариант#
   По мере ввода строка будет дополняться первым подходящим значением.
 
+  Кроме того есть три параметра, для управления тем, что используется для построения списка автозавершения:
+#Interface.Completion.UseFilesystem#, #Interface.Completion.UseHistory# и #Interface.Completion.UsePath#.
+Все параметры могут принимаеть 3 состояния - да, нет, только в ручном режиме (после #Ctrl-Space#).
+Управлять этими параметрами можно через ~far:config~@FarConfig@
+
 
 @CommandPrompt
 $ #Command line prompt format#
@@ -2870,10 +2904,6 @@ $ #Editor: search/replace#
       #Regular expressions# - ^<wrap>treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@).
 Поиск построчный, поэтому многострочные конструкции и переводы строк не будут найдены.
 
-    The following option is available in search dialog only:
-
-      #Select found#        - ^<wrap>found text is selected
-
     При нажатии кнопки #Всё# будет показано ~меню~@FindAllMenu@ с результатами поиска всех вхождений.
 
 
@@ -2900,11 +2930,35 @@ $ #Редактор: меню с результатами поиска всех 
 $ #Editor: Open/Create file#
     With #Shift-F4#, one can open the existing file or create a new file.
 
-    According to ~editor settings~@EditorSettings@, newly created file
-is assigned to OEM or ANSI codepage. You can change the codepage with #Shift-F8#.
+    Если файл с заданным именем не найден, то создаётся новый.
+По умолчанию используется кодовая страница ANSI или OEM
+(в зависимости от ~настроек редактора~@EditorSettings@).
+При необходимости из #списка# можно выбрать другую кодовую страницу.
 
-    For existing file, changing the codepage has sense if it hasn't been
-correctly detected at open.
+    При открытии существующего файла кодовая страница выбирается
+по ряду правил (см. Примечания).
+При необходимости требуемую кодовую страницу можно задать явно, выбрав её из #списка#.
+Там же доступно и "~Автоматическое определение~@CodePageAuto@".
+
+    Примечания.
+
+    Если при открытии существующего файла не задавать кодовую страницу явно (активен пункт "По умолчанию"),
+то кодовая страница будет выбрана исходя из следующих правил:
+
+    1) Если файл открывался ранее, то возможно для него уже сохранена информация о
+кодовой странице (зависит от состояния параметра "[x] Сохранять позицию файла"
+в ~настройках редактора~@EditorSettings@).
+В этом случае используется запомненная ранее кодовая страница.
+
+    2) Если запомненной кодовой страницы нет, то файл проверяется на
+юникодность по наличию Byte Order Mark. Таким образом могут быть определены
+страницы UTF-8, UTF-16 (Little endian), UTF-16 (big endian).
+
+    3) Если BOM отсутствует, то будет произведена попытка определить определить кодовую
+страницу ~автоматически~@CodePageAuto@.
+
+    4) Если автоматическое определение кодовой страницы отключено,
+то используется ANSI или OEM (в зависимости от ~настроек редактора~@EditorSettings@).
 
 
 @FileSaveAs
@@ -3019,6 +3073,10 @@ $ #Code pages menu#
 
     The menu has two modes: full mode with visible #Other# section and brief
 mode with hidden #Other# section. The modes can be switched by pressing #Ctrl-H#.
+
+    Current menu mode state corresponds to ~far:config~@FarConfig@ parameter #Codepages.CPMenuMode#.
+It can alter the way of ~codepage autodetect~@CodePageAuto@ in builtin Editor/Viewer.
+See also ~far:config Codepages.NoAutoDetectCP~@Codepages.NoAutoDetectCP@ parameter.
 
     #Ins# keypress moves codepage from #Other# to #Favorites#, #Del# moves the
 codepage back. Клавиша #F4# позволяет изменять отображаемые
@@ -3304,8 +3362,8 @@ $ #Settings dialog: viewer#
   #Search dialog#           Always returns focus to search text field in
   #auto-focus#              the ~Viewer~@Viewer@ search dialog.
 
-  #Visible '\0'#            Shows visible character (configurable) instead of space
-                          for '\0' character.
+  #Visible '\0'#            Shows visible character instead of space for '\0' character.
+                          Character can be set in ~far:config~@FarConfig@ #Viewer.ZeroChar#
 
   #Tab size#                Number of spaces in a tab character.
 
@@ -3316,7 +3374,7 @@ $ #Settings dialog: viewer#
   #Maximum line width#      Maximum number of columns for text mode viewer.
                           Min=100, Max=100000, Default=10000.
 
-  #Auto detect#             ~Auto detect~@CodePage@ the code page of
+  #Auto detect#             ~Auto detect~@CodePageAuto@ the code page of
   #code page#               the file being viewed.
 
   #Use ANSI code page#      Use ANSI code page for viewing files,
@@ -3400,7 +3458,9 @@ $ #Settings dialog: editor#
                           поиска будет подставляться слово, на
                           котором стоит курсор.
 
-  #Auto detect#             ~Auto detect~@CodePage@ the code page of
+  #Select found#            Found text is selected
+
+  #Auto detect#             ~Auto detect~@CodePageAuto@ the code page of
   #code page#               the file being edited.
 
   #Edit files opened#       Allows to edit files that are opened
@@ -3436,11 +3496,13 @@ by pressing #Alt-Shift-F9#. The changes will come into force immediately but
 will affect only the current session.
 
 
-@CodePage
+@CodePageAuto
 $ #Auto detect code pages#
     Far will try to choose the correct code page for viewing/editing a file.
 Note that correct detection is not guaranteed, especially for small or
 non-typical text files.
+
+    See also ~codepages~@CodePagesMenu@ and ~far:config Codepages.NoAutoDetectCP~@Codepages.NoAutoDetectCP@
 
 
 @FileAttrDlg
@@ -4287,7 +4349,6 @@ to child processes:
 
     #FARADMINMODE#       ^<wrap>equals "1" if Far Manager was run by an administrator
 
-
 @RegExp
 $ #Regular expressions#
     The regular expressions syntax is almost equal to Perl regexp`s.
@@ -4942,6 +5003,475 @@ $ #Макросы: Автодополнение в диалогах#
 <!Macro:Dialog.AutoCompletion!>
 
     См. так же ~«Список установленных макросов»~@KeyMacroList@
+
+
+@FarConfig
+$ #Редактор конфигурации#
+    Запускается из командной строки #far:config#
+
+    Позволяет просмотреть и изменить все настройки Far Manager.
+    Большинство настроек можно изменить через ~Меню параметров~@OptMenu@, но некоторые доступны только отсюда или через импорт конфигурации.
+Параметры показаны в виде единого списка, состоящего из трёх полей: имя в формате SectionName.ParamName (например Editor.TabSize),
+тип (boolean, 3-state, integer, string) и значение параметра (для типа integer дополнительно отображаются шестнадцатиричное и символьное представления).
+Если значение параметра отличается от значения по умолчанию, он помечается символом '*' слева от имени.
+
+    Кроме клавиш перемещения по списку доступны следующие сочетания:
+
+    #Enter# или #F4#  изменить значение параметра,
+                  boolean и 3-state на месте,
+                  для integer и string вызывается диалог
+
+    #Shift-F4#      Для типа integer вызывается диалог ввода шестнадцатиричного числа,
+                  всё прочее как для F4
+    #Ctrl-H#        Скрыть/показать параметры, значения которых не изменены (соответствуют значениям по умолчанию)
+
+    #Shift-F1#      Показать описание параметра, если оно доступно.
+
+    #Ctrl-Alt-F#    Включить/Выключить режим фильтрации
+
+
+@Codepages.NoAutoDetectCP
+$ #far:config Codepages.NoAutoDetectCP#
+    Это строка, при помощи которой можно задать кодовые страницы, которые будут исключены
+из автоопределения кодовой страницы UCD (Universal Codepage Detector). Иногда (особенно на
+небольших файлах) UCD назойливо выбирает неподходящие кодовые страницы.
+
+    Умолчательное значение это пустая строка #""#, в этом случае все кодовые страницы которые
+может выдать UCD (около двух десятков - гораздо меньше чем может быть установлено на компьютере)
+разрешены.
+
+    Если параметр равен строке #"-1"#, то в зависимости от того включён или нет показ
+только 'любимых' (favorites) кодовых страниц (#Ctrl-H# в ~меню кодовых страниц~@CodePagesMenu@),
+будут разрешены только стандартные (ANSI, OEM, Unicode) и любимые, либо все.
+
+    В противном случае параметр должен быть списком запрещённых номеров кодовых страниц.
+Например "1250,1252,1253,1255,855,10005,28592,28595,28597,28598,38598".
+
+    Юникодные кодовые страницы (1200, 1201, 65001) проверяются отдельно от UCD, поэтому не могут быть
+отключены, даже если они есть в списке исключения.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Help.ActivateURL
+$ #far:config Help.ActivateURL#
+    Параметр позволяет управлять активацией URL ссылок в HLF-файлах:
+
+     0 - отключить активацию.
+     1 - активация включена.
+     2 - активация включена, но выдавать предупреждающее сообщение.
+
+    Если активация включена и ничего не происходит - попробуйте к имеющемуся
+значению прибавить 256. Будет задействован второй вариант активатора.
+
+    По умолчанию значение = 1 (разрешено).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Confirmations.EscTwiceToInterrupt
+$ #far:config Confirmations.EscTwiceToInterrupt#
+    Параметр позволяет менять поведение при нажатии Esc в диалоге подтверждения прерывания операции.
+
+    Может быть одним из следующих значений:
+
+     0 - ^<wrap>Нажатие кнопки ESC закрывает сообщение и продолжает выполнение операции.
+     1 - ^<wrap>Нажатие кнопки ESC закрывает сообщение и прерывает выполнение операции
+
+    По умолчанию значение = 0 (закрыть сообщение и продолжить выполнение операции).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.AllCtrlAltShiftRule
+$ #far:config System.AllCtrlAltShiftRule#
+    Параметр задаёт поведение комбинации Ctrl-Alt-Shift для временного гашения объектов интерфейса.
+
+    Номера битов:
+     0 - Панели.
+     1 - Редактор.
+     2 - Внутренняя программа просмотра.
+     3 - Окно подсказки.
+     4 - Диалоги.
+
+    Если бит установлен, гашение разрешено.
+
+    По умолчанию разрешено гашение всех объектов.
+
+    См. так же ~System.CASRule~@System.CASRule@
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.CASRule
+$ #far:config System.CASRule#
+    Параметр позволяет отключать комбинацию Ctrl-Alt-Shift для временного гашения объектов интерфейса.
+    Различаются комбинации левого и правого Ctrl-Alt-Shift.
+
+    Номера битов:
+      0 - левая комбинация Ctrl-Alt-Shift.
+      1 - правая комбинация Ctrl-Alt-Shift.
+
+    Если бит установлен, срабатывает гашение экрана.
+
+    По умолчанию разрешены обе комбинации.
+
+    См. так же ~System.AllCtrlAltShiftRule~@System.AllCtrlAltShiftRule@
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Panel.ShellRightLeftArrowsRule
+$ #far:config Panel.ShellRightLeftArrowsRule#
+    Параметр позволяет управлять поведением стрелок влево/вправо (как на основной, так и на дополнительной клавиатуре).
+
+    Значения:
+      0 - ^<wrap>поведение как у 1.70: если командная строка непустая, то клавиши
+Left/Right и Num4/Num6 действуют по-разному в зависимости от
+режима панели: если имена файлов отображаются в несколько колонок
+(по умолчанию режимы 2 и 3), то команды вправо/влево применяются
+к панели (как и при пустой командной строке); а если имена файлов
+отображаются в одну колонку (по умолчанию все остальные режимы),
+то команды вправо/влево применяются к командной строке.
+      1 - ^<wrap>клавиши Left/Right и Num4/Num6 при включённой панели всегда
+применяются только к ней, независимо от содержимого командной
+строки и режима панели.
+          Примечание: в командной строке есть CtrlD/CtrlS.
+
+    По умолчанию значение = 0.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Panel.Layout.ScrollbarMenu
+$ #far:config Panel.ShellRightLeftArrowsRule#
+    Параметр разрешает показ полосы прокрутки в меню, если пунктов больше, чем высота меню. Если значение =0, то Far не будет отображать полосу прокрутки.
+
+    По умолчанию значение = 1 (отображать полосу прокрутки).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Panel.CtrlFRule
+$ #far:config Panel.CtrlFRule#
+    Параметр задаёт поведение Ctrl-F.
+
+    Если = 0, то название файла помещается в командную строку как есть,
+иначе - с учётом отображения на панелях (т.е. может приводиться к
+нижнему регистру или к короткому имени).
+    
+    По умолчанию значение = 0.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Panel.CtrlAltShiftRule
+$ #far:config Panel.CtrlAltShiftRule#
+    Параметр задаёт поведение комбинации Ctrl-Alt-Shift для временного гашения панелей:
+
+     0 - гасить только панели (подобно Ctrl-O).
+     1 - гасить панели и командную строку.
+     2 - гасить панели, командную строку и KeyBar.
+
+    По умолчанию действует правило 0.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Panel.RightClickRule
+$ #far:config Panel.RightClickRule#
+    Параметр задаёт поведение правой кнопки мыши для случая, если нажали кнопку на пустой колонке панели:
+
+     0 - ^<wrap>позиционирование и пометка последнего файла в предыдущей колонке.
+     1 - ^<wrap>в предыдущей колонке файл позиционируется без пометки (аналогично нажатию левой кнопки мыши).
+     2 - ^<wrap>не изменять позицию и не помечать файл (по умолчанию).
+
+    В любом случае - если колонка не пуста, то происходит пометка файла.
+
+    По умолчанию значение = 2.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.ExcludeCmdHistory
+$ #far:config System.ExcludeCmdHistory#
+    Параметр позволяет определять, какие типы команд не будут помещаться в историю. 
+Проверка идёт по битовой маске. Если бит установлен, данный тип команд в историю не помещается.
+
+    Номера битов:
+
+     0 - не помещать в историю команды ассоциаций Windows
+     1 - не помещать в историю команды ассоциаций Far
+     2 - не помещать в историю команды запуска с панели
+     3 - не помещать в историю команды запуска из командной строки
+    
+    По умолчанию значение = 0 (помещать в историю все команды).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.Executor.RestoreCP
+$ #far:config System.Executor.RestoreCP#
+    Параметр позволяет управлять восстановлением кодовой страницы после запуска и отработки внешних
+программ в окне Far Manager.
+
+    Некоторые программы изменяют кодовую страницу консольного окна и после
+своей обработки не восстанавливают предыдущее значение. Может быть одним из следующих значений:
+
+     0 - "оставить всё как есть" (не восстанавливать значение)
+     1 - восстанавливать предыдущее значение кодовой страницы
+
+    По умолчанию значение = 1 (восстанавливать значение).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.Executor.UseAppPath
+$ #far:config System.Executor.UseAppPath#
+    При запуске на исполнение содержимого командной строки Far ищет
+исполняемый модуль по  следующей логике (попеременно подставляя расширения, перечисленные в переменной окружения  %PATHEXT%):
+
+     1. Текущий каталог
+     2. Каталоги, которые перечислены в переменной окружения %PATH%
+     3. Windows 95: Системный каталог Windows (SYSTEM).
+        Windows NT: 32-битный системный каталог Windows (SYSTEM32)
+     4. Windows NT: 16-битный системный каталог Windows (SYSTEM)
+     5. Каталог Windows.
+
+     Если параметр "System.Executor.UseAppPath" равен 1, то дополнительно производится поиск исполняемых модулей в реестре:
+
+     6. Содержимое ветки реестра:
+        [HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths]
+
+     7. Содержимое ветки реестра:
+        [HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths]
+
+    Независимо от состояния этого параметра, модуль, прописанный в "App Paths", будет запущен проводником, если для запуска
+используется комбинация Shift-Enter.
+
+    По умолчанию значение = 1 (проверять ветки реестра)
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.Executor.ExcludeCmds
+$ #far:config System.Executor.ExcludeCmds#
+    Параметр позволяет задавать набор команд которые будут сразу передаваться 
+в %comspec% для выполнения, поиск в PATH и т.п. не будет произведён. 
+    
+    Разделитель команд - символ ';'. Например, если "System.Executor.ExcludeCmds" задан списком "DATE;ECHO",  
+то при вводе 'date' будет исполнена внутренняя команда CMD.EXE/COMMAND.COM. Для исполнения внешней команды 
+"date.exe" необходимо точно написать её название. В тоже время, если "date.exe" доступно в %PATH% и из списка
+"ExcludeCmds" убрать "DATE", то внутренняя команда ком.процессора никогда не будет исполнена.
+
+    Готовые настройки для CMD.EXE, COMMAND.COM и TCCLE.EXE (известный ранее как 4NT.EXE) находятся в каталоге Addons\\SetUp, файлы "Executor.???.farconfig".
+
+    Команды "CLS", "REM", "CD" и "CHDIR" Far обрабатывает самостоятельно. Эти команды не включены в "Executor.???.farconfig".
+
+    Команды "IF", "CHCP" и "SET" Far обрабатывает с ограниченной функциональностью - если синтаксис 
+отличается от приведённого в разделе "~Команды операционной системы~@OSCommands@", то команда 
+передаётся на дальнейшую обработку ком.процессору.
+
+    По умолчанию список "ExcludeCmds" пуст.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.Executor.FullTitle
+$ #far:config System.Executor.FullTitle#
+    Параметр позволяет задавать вид заголовка консоли при запуске файла на исполнение.
+
+    Может быть одним из следующих значений:
+
+      0 - в заголовке консоли отображается то, что вводил пользователь.
+      1 - в заголовке консоли отображается полный путь к исполняемому файлу.
+
+    По умолчанию значение = 0 (то, что вводил пользователь).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Interface.FormatNumberSeparators
+$ #far:config Interface.FormatNumberSeparators#
+    Параметр позволяет определять символы, используемые в качестве разделителей групп разрядов и целой/дробной части чисел.
+    Старшее слово - код символа разделителя групп разрядов.
+    Младшее слово - код символа разделителя целой и дробной части.
+
+    По умолчанию значение - 0 (использовать региональные настройки ОС).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.Executor.BatchType
+$ #far:config System.Executor.BatchType#
+    Параметр позволяет задавать список расширений файлов, по которым Far Manager будет различать какие
+файлы являются пакетными (Batch-файлы, обрабатываемые командным процессором) и будут исполняться 
+в консоли Far Manager при нажатии Enter на соответствующем элементе панели  
+(прочие - в отдельном консольном окне).
+
+    Формат параметра: <.><Расширение><;>[<.><Расширение><;>]
+    Разделитель расширений - символ ';'.
+    Одиночный символ ";" задаёт пустой список (в этом случае ни один Batch-файл Far не будет исполнять).
+
+    Например, список ".BAT;.BTM;" указывает, что Batch-файлами являются файлы "*.BAT" и "*.BTM".
+
+    В DOS/Windows 9x пакетными файлами считаются файлы, имеющие расширение ".BAT". В линейке Windows на базе NT - ".BAT" и ".CMD".  
+Командный процессор TCC/LE (известный ранее как 4NT; ~http://jpsoft.com~@http://jpsoft.com@) считает Batch-файлами файлы с расширением ".BTM". 
+Если в списке указано расширение ".BTM", но в системе не прописаны настройки для этого типа файлов (например, не
+установлен TCCLE/4NT), то штатный командный процессор (command.com или cmd.exe) не будет исполнять такие пакетные файлы.
+
+    По умолчанию значение = ".BAT;.CMD;".
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.CmdHistoryRule
+$ #far:config System.CmdHistoryRule#
+    Параметр задаёт поведение выбора истории команд в командной строке, если после Ctrl-E/Ctrl-X нажали Esc:
+
+      0 - Изменять положение в History.
+      1 - Не изменять положение в History.
+
+    По умолчанию действует правило 0.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.ConsoleDetachKey
+$ #far:config System.ConsoleDetachKey#
+    Параметр позволяет задавать сочетание клавиш для отделения консоли Far Manager от не интерактивного процесса, запущенного в ней.
+    
+    Если в консоли Far'а был запущен длительный процесс, например архивация, и по тем или иным причинам именно 
+эта копия Far Manager нужна (редактор в фоне), или нежелательно запускать новый Far, то если у вас установлена 
+эта опция, можно создать новую консоль для Far, где он продолжит  работу как если бы запущенный процесс уже 
+завершился, а сам процесс продолжит работу в старой консоли.
+    
+    Например, значение "System.ConsoleDetachKey" равное "CtrlAltX" назначает процессу разделения сочетание клавиш Ctrl-Alt-X.
+
+    По умолчанию значение = "CtrlShiftTab"
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.QuotedSymbols
+$ #far:config System.QuotedSymbols#
+    Параметр позволяет задавать набор символов, присутствие которых в именах файлов/папок заставит Far Manager заключать такие имена в кавычки.
+
+    Максимум 32 символа.
+
+    По умолчанию значение = " &()[]{}^=;!'+,`" и символ с кодом 0xA0.
+
+    См. так же ~System.QuotedName~@System.QuotedName@
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@System.QuotedName
+$ #far:config System.QuotedName#
+    Имена файлов/папок (содержащие символы, перечисленные в правиле 34) при
+вставке в редактор/командную строку или в буфер обмена заключатся в кавычки.
+    
+    Параметр "System.QuotedName" управляет этим поведением:
+
+    Биты:
+      0 - ^<wrap>если установлен, то заключать имена файлов/папок в кавычки при вставке в редактор или командную строку;
+      1 - ^<wrap>если установлен, то заключать имена файлов/папок в кавычки при запоминании в буфере обмена.
+
+    По умолчанию значение  =  0xFFFFFFFF (заключать имена файлов/папок в кавычки)
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Interface.AltF9
+$ #far:config Interface.AltF9#
+    Параметр позволяет выбрать механизм работы комбинации Alt-F9 (Изменение размера экрана) в оконном режиме:
+
+     1 - ^<wrap>использовать усовершенствованный механизм - окно Far Manager
+будет переключаться с нормального на максимально доступный размер
+консольного окна и обратно. Размер шрифта консольного окна
+меняться не будет.
+     0 - ^<wrap>использовать механизм, совместимый с Far версии 1.65 и
+ниже, т.е. переключение 25/50 линий.
+
+    Данный параметр влияет только на оконный режим работы Far Manager.
+
+    По умолчанию значение = 1
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Dialog.CBoxMaxHeight
+$ #far:config Dialog.CBoxMaxHeight#
+    Параметр задаёт максимальную высоту открываемого списка истории в диалогах.
+
+    По умолчанию значение = 8
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Editor.EditorUndoSize
+$ #far:config Editor.EditorUndoSize#
+    Параметр позволяет ограничить количество операций отмены действий в редакторе.
+
+    По умолчанию значение = 0 (ограничений на размер действий нет).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Editor.CharCodeBase
+$ #far:config Editor.CharCodeBase#
+    Параметр позволяет менять представление кода символа под курсором в статусной строке в редакторе.
+
+    Может принимать следующие значения:
+
+      0 - восьмеричное значение (3 символа с ведущим нулями)
+      1 - десятеричное значение (3 символа с ведущими пробелами)
+      2 - шестнадцатеричное значение (2 символа под цифру + символ 'h')
+
+    По умолчанию значение = 1 (десятеричное значение).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Editor.BSLikeDel
+$ #far:config Editor.BSLikeDel#
+    Параметр позволяет управлять поведением клавиши BackSpace в редакторе, когда выделен вертикальный блок. 
+    
+    Если значение отлично от 0, то BS удаляет вертикальный блок подобно клавише Del.
+
+    По умолчанию значение = 1 (BS удаляет помеченный вертикальный блок).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Editor.EditorF7Rules
+$ #far:config Editor.EditorF7Rules#
+    Параметр позволяет управлять поведением функции поиска в редакторе.
+
+    Если значение равно 1, то прямой поиск (F7, опция "Обратный поиск" отключена) будет начинаться 
+со следующей позиции курсора, если  значение равно 0, то указанный поиск будет начинаться с текущей позиции курсора.
+
+    По умолчанию значение = 1.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Editor.AllowEmptySpaceAfterEof
+$ #far:config Editor.AllowEmptySpaceAfterEof#
+    Окончание файла в редакторе всегда находится внизу экрана, если строк в файле больше чем строк экрана. 
+При построчном скроллировании вниз (например, с помощью Ctrl-Down), скроллирование прекращается, когда
+показывается последняя строка.
+
+    Параметр "Editor.AllowEmptySpaceAfterEof" позволяет изменить такое поведение редактора.
+
+    Может принимать следующие значения:
+    
+    0 - прекратить скроллинг, если последняя строка внизу экрана
+    1 - продолжать скроллинг, при этом:
+        a) поместить курсор за пределы файла по прежнему нельзя
+        b) скроллинг с помощью Ctrl-Down сдвинет текст до курсора
+
+    По умолчанию значение = 0 (прекратить скроллинг).
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Interface.RedrawTimeout
+$ #far:config Interface.RedrawTimeout#
+    Параметр  "Interface.RedrawTimeout" позволяет контролировать время обновления (в мс) 
+сообщения в процессе копирования файлов, применения прав доступа после перемещения файлов или папок, 
+удаления и поиска файлов, сканирование файловой системы.
+
+    Чем больше значение "Interface.RedrawTimeout", тем реже выводится информацию о процессе и тем быстрее проходит этот самый процесс.
+
+    По умолчанию значение = 200 мс.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
+
+@Interface.ShiftsKeyRules
+$ #far:config Interface.ShiftsKeyRules#
+    Параметр позволяет выбрать механизм обработки клавиш в неанглоязычной раскладке клавиатуры с 
+модификаторами Alt-, Ctrl-, Alt-Shift-, Ctrl-Shift-, Ctrl-Alt-.
+
+     1 - ^<wrap>использовать усовершенствованный механизм обработки клавиш. 
+         Например, Alt-НеЛатинскийСимвол будет транслироваться в Alt-ЛатинскийСимвол (кроме быстрого поиска в панелях),
+     0 - ^<wrap>использовать механизм, совместимый с Far версии 1.70 beta 2 и ниже.
+
+    По умолчанию значение = 1.
+
+    Изменение этого параметра возможно через ~far:config~@FarConfig@
 
 @Index
 $ #Index help file#

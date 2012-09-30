@@ -89,7 +89,7 @@ static void show_help()
 		L" /ma  Do not execute auto run macros.\n"
 		L" /p[<path>]\n"
 		L"      Search for \"common\" plugins in the directory, specified by <path>.\n"
-		L" /s <path>\n"
+		L" /s <path> [<localpath>]\n"
 		L"      Custom location for Far configuration files - overrides Far.exe.ini.\n"
 #ifndef NO_WRAPPER
 		L" /u <username>\n"
@@ -102,9 +102,9 @@ static void show_help()
 		L" /x   Disable exception handling.\n"
 		L" /clearcache [profilepath]\n"
 		L"      Clear plugins cache.\n"
-		L" /export <out.farconfig> [profilepath]\n"
+		L" /export <out.farconfig> [profilepath [localprofilepath]]\n"
 		L"      Export settings.\n"
-		L" /import <in.farconfig> [profilepath]\n"
+		L" /import <in.farconfig> [profilepath [localprofilepath]]\n"
 		L"      Import settings.\n"
 #ifdef _DEBUGEXC
 		L" /xd  Enable exception handling.\n"
@@ -341,13 +341,19 @@ int MainProcessSEH(string& strEditName,string& strViewName,string& DestName1,str
 DWORD gnMainThreadId = 0;
 #endif
 
-void InitProfile(string &strProfilePath)
+void InitProfile(string &strProfilePath, string strLocalProfilePath)
 {
 	if (!strProfilePath.IsEmpty())
 	{
 		apiExpandEnvironmentStrings(strProfilePath, strProfilePath);
 		Unquote(strProfilePath);
 		ConvertNameToFull(strProfilePath,strProfilePath);
+	}
+	if (!strLocalProfilePath.IsEmpty())
+	{
+		apiExpandEnvironmentStrings(strLocalProfilePath, strLocalProfilePath);
+		Unquote(strLocalProfilePath);
+		ConvertNameToFull(strLocalProfilePath,strLocalProfilePath);
 	}
 
 	if (strProfilePath.IsEmpty())
@@ -387,22 +393,28 @@ void InitProfile(string &strProfilePath)
 		}
 		else
 		{
-			string strUserProfileDir;
+			string strUserProfileDir, strUserLocalProfileDir;
 			strUserProfileDir.ReleaseBuffer(GetPrivateProfileString(L"General", L"UserProfileDir", L"%FARHOME%\\Profile", strUserProfileDir.GetBuffer(NT_MAX_PATH), NT_MAX_PATH, g_strFarINI));
+			strUserLocalProfileDir.ReleaseBuffer(GetPrivateProfileString(L"General", L"UserLocalProfileDir", strUserProfileDir.CPtr(), strUserLocalProfileDir.GetBuffer(NT_MAX_PATH), NT_MAX_PATH, g_strFarINI));
 			apiExpandEnvironmentStrings(strUserProfileDir, strUserProfileDir);
+			apiExpandEnvironmentStrings(strUserLocalProfileDir, strUserLocalProfileDir);
 			Unquote(strUserProfileDir);
+			Unquote(strUserLocalProfileDir);
 			ConvertNameToFull(strUserProfileDir, strUserProfileDir);
+			ConvertNameToFull(strUserLocalProfileDir, strUserLocalProfileDir);
 			Opt.ProfilePath = strUserProfileDir;
-			Opt.LocalProfilePath = Opt.ProfilePath;
+			Opt.LocalProfilePath = strUserLocalProfileDir;
 		}
 	}
 	else
 	{
 		Opt.ProfilePath = strProfilePath;
-		Opt.LocalProfilePath = strProfilePath;
+		Opt.LocalProfilePath = strLocalProfilePath.IsEmpty() ? strProfilePath : strLocalProfilePath;
 	}
 
 	CreatePath(Opt.ProfilePath + L"\\PluginsData", true);
+	if (Opt.ProfilePath != Opt.LocalProfilePath)
+		CreatePath(Opt.LocalProfilePath, true);
 
 	Opt.LoadPlug.strPersonalPluginsPath = Opt.ProfilePath + L"\\Plugins";
 
@@ -413,11 +425,11 @@ void InitProfile(string &strProfilePath)
 		Opt.ReadOnlyConfig = GetPrivateProfileInt(L"General", L"ReadOnlyConfig", FALSE, g_strFarINI);
 }
 
-int ExportImportMain(bool Export, const wchar_t *XML, const wchar_t *ProfilePath)
+int ExportImportMain(bool Export, const wchar_t *XML, const wchar_t *ProfilePath, const wchar_t *LocalProfilePath)
 {
-	string strProfilePath = ProfilePath;
+	string strProfilePath = ProfilePath, strLocalProfilePath = LocalProfilePath;
 
-	InitProfile(strProfilePath);
+	InitProfile(strProfilePath, strLocalProfilePath);
 	InitDb(true);
 
 	bool ret = ExportImportConfig(Export, XML);
@@ -433,6 +445,9 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 	//Maximus: для отладки
 	gnMainThreadId = GetCurrentThreadId();
 	#endif
+
+	ErrorMode=SEM_FAILCRITICALERRORS|SEM_NOOPENFILEERRORBOX;
+	SetErrorMode(ErrorMode);
 
 	std::set_new_handler(nullptr);
 	QueryPerformanceCounter(&FarUpTime);
@@ -482,21 +497,22 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 	{
 		return ElevationMain(Argv[2], _wtoi(Argv[3]), *Argv[4]==L'1');
 	}
-	else if (Argc==4 || Argc==3)
+	else if (Argc==5 || Argc==4 || Argc==3)
 	{
 		if (!StrCmpI(Argv[1], L"/export"))
 		{
-			return ExportImportMain(true, Argv[2], Argc==4 ? Argv[3] : L"");
+			return ExportImportMain(true, Argv[2], Argc>3 ? Argv[3] : L"", Argc>4 ? Argv[4] : L"");
 		}
 		else if (!StrCmpI(Argv[1], L"/import"))
 		{
-			return ExportImportMain(false, Argv[2], Argc==4 ? Argv[3] : L"");
+			return ExportImportMain(false, Argv[2], Argc>3 ? Argv[3] : L"", Argc>4 ? Argv[4] : L"");
 		}
 	}
-	else if ((Argc==2 || Argc==3) && !StrCmpI(Argv[1], L"/clearcache"))
+	else if ((Argc==2 || Argc==3 || Argc==4) && !StrCmpI(Argv[1], L"/clearcache"))
 	{
-		string strProfilePath = Argc==3 ? Argv[2] : L"";
-		InitProfile(strProfilePath);
+		string strProfilePath = Argc>2 ? Argv[2] : L"";
+		string strLocalProfilePath = Argc>3 ? Argv[3] : L"";
+		InitProfile(strProfilePath, strLocalProfilePath);
 		ClearPluginsCache();
 		return 0;
 	}
@@ -541,7 +557,7 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 
 	Opt.ReadOnlyConfig = -1; // not initialized
 
-	string strProfilePath;
+	string strProfilePath, strLocalProfilePath;
 
 	for (int I=1; I<Argc; I++)
 	{
@@ -638,6 +654,11 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 					{
 						strProfilePath = Argv[I+1];
 						I++;
+						if (I+1<Argc && Argv[I+1][0] != L'-'  && Argv[I+1][0] != L'/')
+						{
+							strLocalProfilePath = Argv[I+1];
+							I++;
+						}
 					}
 					break;
 
@@ -729,7 +750,7 @@ int _cdecl wmain(int Argc, wchar_t *Argv[])
 		}
 	}
 
-	InitProfile(strProfilePath);
+	InitProfile(strProfilePath, strLocalProfilePath);
 
 	InitDb();
 

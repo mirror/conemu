@@ -57,7 +57,6 @@ int GetSearchReplaceString(
     bool& Case,
     bool& WholeWords,
     bool& Reverse,
-    bool& SelectFound,
     bool& Regexp,
     const wchar_t *HelpTopic)
 {
@@ -169,19 +168,18 @@ int GetSearchReplaceString(
 		03   |                                                                    |
 		04   +--------------------------------------------------------------------+
 		05   | [ ] Case sensitive                 [ ] Regular expressions         |
-		06   | [ ] Whole words                    [ ] Select found                |
-		07   | [ ] Reverse search                                                 |
-		08   +--------------------------------------------------------------------+
-		09   |                       [ Search ]  [ Cancel ]                       |
-		10   +--------------------------------------------------------------------+
+		06   | [ ] Whole words                    [ ] Reverse search              |
+		07   +--------------------------------------------------------------------+
+		08   |                       [ Search ]  [ Cancel ]                       |
+		09   +--------------------------------------------------------------------+
 		*/
 		FarDialogItem SearchDlgData[]=
 		{
 			#if 1
 			//Maximus: поддержка "узких" дисплеев
-			{DI_DOUBLEBOX,3,1,BorderW,10,0,nullptr,nullptr,0,MSG(MEditSearchTitle)},
+			{DI_DOUBLEBOX,3,1,BorderW,9,0,nullptr,nullptr,0,MSG(MEditSearchTitle)},
 			#else
-			{DI_DOUBLEBOX,3,1,72,10,0,nullptr,nullptr,0,MSG(MEditSearchTitle)},
+			{DI_DOUBLEBOX,3,1,72,9,0,nullptr,nullptr,0,MSG(MEditSearchTitle)},
 			#endif
 			{DI_TEXT,5,2,0,2,0,nullptr,nullptr,0,MSG(MEditSearchFor)},
 			#if 1
@@ -193,28 +191,27 @@ int GetSearchReplaceString(
 			{DI_TEXT,3,4,0,4,0,nullptr,nullptr,DIF_SEPARATOR,L""},
 			{DI_CHECKBOX,5,5,0,5,Case,nullptr,nullptr,0,MSG(MEditSearchCase)},
 			{DI_CHECKBOX,5,6,0,6,WholeWords,nullptr,nullptr,0,MSG(MEditSearchWholeWords)},
-			{DI_CHECKBOX,5,7,0,7,Reverse,nullptr,nullptr,0,MSG(MEditSearchReverse)},
 			#if 1
 			//Maximus: поддержка "узких" дисплеев
 			{DI_CHECKBOX,ElemX2,5,0,5,Regexp,nullptr,nullptr,0,MSG(MEditSearchRegexp)},
-			{DI_CHECKBOX,ElemX2,6,0,6,SelectFound,nullptr,nullptr,0,MSG(MEditSearchSelFound)},
+			{DI_CHECKBOX,ElemX2,6,0,6,Reverse,nullptr,nullptr,0,MSG(MEditSearchReverse)},
 			#else
 			{DI_CHECKBOX,40,5,0,5,Regexp,nullptr,nullptr,0,MSG(MEditSearchRegexp)},
-			{DI_CHECKBOX,40,6,0,6,SelectFound,nullptr,nullptr,0,MSG(MEditSearchSelFound)},
+			{DI_CHECKBOX,40,6,0,6,Reverse,nullptr,nullptr,0,MSG(MEditSearchReverse)},
 			#endif
-			{DI_TEXT,3,8,0,8,0,nullptr,nullptr,DIF_SEPARATOR,L""},
-			{DI_BUTTON,0,9,0,9,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MEditSearchSearch)},
-			{DI_BUTTON,0,9,0,9,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MEditSearchAll)},
-			{DI_BUTTON,0,9,0,9,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MEditSearchCancel)},
+			{DI_TEXT,3,7,0,7,0,nullptr,nullptr,DIF_SEPARATOR,L""},
+			{DI_BUTTON,0,8,0,8,0,nullptr,nullptr,DIF_DEFAULTBUTTON|DIF_CENTERGROUP,MSG(MEditSearchSearch)},
+			{DI_BUTTON,0,8,0,8,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MEditSearchAll)},
+			{DI_BUTTON,0,8,0,8,0,nullptr,nullptr,DIF_CENTERGROUP,MSG(MEditSearchCancel)},
 		};
 		MakeDialogItemsEx(SearchDlgData,SearchDlg);
 
 		Dialog Dlg(SearchDlg,ARRAYSIZE(SearchDlg));
 		#if 1
 		//Maximus: поддержка "узких" дисплеев
-		Dlg.SetPosition(-1,-1,BorderW+4,12);
+		Dlg.SetPosition(-1,-1,BorderW+4,11);
 		#else
-		Dlg.SetPosition(-1,-1,76,12);
+		Dlg.SetPosition(-1,-1,76,11);
 		#endif
 
 		if (HelpTopic && *HelpTopic)
@@ -223,16 +220,15 @@ int GetSearchReplaceString(
 		Dlg.Process();
 		int ExitCode = Dlg.GetExitCode();
 
-		if (ExitCode == 10 || ExitCode == 11)
+		if (ExitCode == 9 || ExitCode == 10)
 		{
-			Result = ExitCode == 10? 1 : 2;
+			Result = ExitCode == 9? 1 : 2;
 			SearchStr = SearchDlg[2].strData;
 			ReplaceStr.Clear();
 			Case=SearchDlg[4].Selected == BSTATE_CHECKED;
 			WholeWords=SearchDlg[5].Selected == BSTATE_CHECKED;
-			Reverse=SearchDlg[6].Selected == BSTATE_CHECKED;
-			Regexp=SearchDlg[7].Selected == BSTATE_CHECKED;
-			SelectFound=SearchDlg[8].Selected == BSTATE_CHECKED;
+			Regexp=SearchDlg[6].Selected == BSTATE_CHECKED;
+			Reverse=SearchDlg[7].Selected == BSTATE_CHECKED;
 		}
 	}
 
@@ -241,7 +237,7 @@ int GetSearchReplaceString(
 
 
 // Функция для коррекции аля Shift-F4 Shift-Enter без отпускания Shift ;-)
-static intptr_t WINAPI GetStringDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+static intptr_t WINAPI GetStringDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	/*
 	  if(Msg == DM_KEY)
@@ -512,7 +508,7 @@ int OperationFailed(const string& Object, LNGID Title, const wchar_t* Descriptio
 	DWORD Error = GetLastError();
 	if(Error == ERROR_ACCESS_DENIED ||
 		Error == ERROR_SHARING_VIOLATION ||
-		Error == ERROR_LOCK_VIOLATION || 
+		Error == ERROR_LOCK_VIOLATION ||
 		Error == ERROR_DRIVE_LOCKED)
 	{
 		GuardLastError gl;
@@ -570,7 +566,7 @@ int OperationFailed(const string& Object, LNGID Title, const wchar_t* Descriptio
 					{
 						nProcInfo = nProcInfoNeeded;
 						delete[] rgpi;
-						rgpi = new RM_PROCESS_INFO[nProcInfo]; 
+						rgpi = new RM_PROCESS_INFO[nProcInfo];
 					}
 					if(RmGetListResult ==ERROR_SUCCESS)
 					{
@@ -630,7 +626,7 @@ int OperationFailed(const string& Object, LNGID Title, const wchar_t* Descriptio
 		Msgs[LineCount-2] = MSG(MDeleteFileSkipAll);
 	}
 	Msgs[LineCount-1] = MSG(MDeleteCancel);
-	
+
 	int Result = -1;
 	for(;;)
 	{

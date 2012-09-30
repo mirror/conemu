@@ -133,7 +133,7 @@ void MenuListToFile(DList<UserMenuItem> *Menu, CachedWrite& CW)
 	}
 }
 
-void MenuFileToList(DList<UserMenuItem> *Menu, File& MenuFile, GetFileString& GetStr, UINT MenuCP = CP_UNICODE)
+void MenuFileToList(DList<UserMenuItem> *Menu, File& MenuFile, GetFileString& GetStr, uintptr_t MenuCP = CP_UNICODE)
 {
 	INT64 Pos = MenuFile.GetPointer();
 	if (!Pos)
@@ -719,7 +719,7 @@ int UserMenu::ProcessSingleMenu(DList<UserMenuItem> *Menu, int MenuPos, DList<Us
 		CtrlObject->CmdLine->GetString(strOldCmdLine);
 		int OldCmdLineCurPos = CtrlObject->CmdLine->GetCurPos();
 		int OldCmdLineLeftPos = CtrlObject->CmdLine->GetLeftPos();
-		int OldCmdLineSelStart, OldCmdLineSelEnd;
+		intptr_t OldCmdLineSelStart, OldCmdLineSelEnd;
 		CtrlObject->CmdLine->GetSelection(OldCmdLineSelStart,OldCmdLineSelEnd);
 		CtrlObject->CmdLine->LockUpdatePanel(TRUE);
 
@@ -868,7 +868,7 @@ enum EditMenuItems
 	EM_BUTTON_CANCEL,
 };
 
-intptr_t WINAPI EditMenuDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI EditMenuDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 #if defined(PROJECT_DI_MEMOEDIT)
 	Dialog* Dlg=(Dialog*)hDlg;

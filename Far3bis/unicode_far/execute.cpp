@@ -943,12 +943,13 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 	COORD ConsoleSize={};
 	int ConsoleCP = CP_OEMCP;
 	int ConsoleOutputCP = CP_OEMCP;
+	int add_show_clock = 0;
 
 	if(!Silent)
 	{
 		int X1, X2, Y1, Y2;
 		CtrlObject->CmdLine->GetPosition(X1, Y1, X2, Y2);
-		ProcessShowClock++;
+		ProcessShowClock += (add_show_clock = 1);
 		CtrlObject->CmdLine->ShowBackground();
 		CtrlObject->CmdLine->Redraw();
 		GotoXY(X2+1,Y1);
@@ -1210,31 +1211,9 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 		{
 			ScrBuf.FillBuf();
 			CtrlObject->CmdLine->SaveBackground();
-			ProcessShowClock--;
 		}
 	}
-	else
-	{
-
-		if (!Silent)
-		{
-			CtrlObject->Cp()->Redraw();
-			if (Opt.ShowKeyBar)
-			{
-				CtrlObject->MainKeyBar->Show();
-			}
-		}
-
-		SetMessageHelp(L"ErrCannotExecute");
-		if(DirectRun)
-		{
-			Message(MSG_WARNING|MSG_ERRORTYPE|MSG_INSERT_STR2, 1,MSG(MError), MSG(MCannotExecute), strNewCmdStr, MSG(MOk));
-		}
-		else
-		{
-			Message(MSG_WARNING|MSG_ERRORTYPE|MSG_INSERT_STR2, 1, MSG(MError), MSG(MCannotInvokeComspec), strComspec, MSG(MCheckComspecVar), MSG(MOk));
-		}
-	}
+	ProcessShowClock -= add_show_clock;
 
 	SetFarConsoleMode(TRUE);
 	/* Принудительная установка курсора, т.к. SetCursorType иногда не спасает
@@ -1280,6 +1259,30 @@ int Execute(const string& CmdStr,  // Ком.строка для исполнения
 	}
 
 	Console.SetTextAttributes(ColorIndexToColor(COL_COMMANDLINEUSERSCREEN));
+
+	if(dwError)
+	{
+		if (!Silent)
+		{
+			CtrlObject->Cp()->Redraw();
+			if (Opt.ShowKeyBar)
+			{
+				CtrlObject->MainKeyBar->Show();
+			}
+			if (Opt.Clock)
+				ShowTime(1);
+		}
+
+		SetMessageHelp(L"ErrCannotExecute");
+		if(DirectRun)
+		{
+			Message(MSG_WARNING|MSG_ERRORTYPE|MSG_INSERT_STR2, 1,MSG(MError), MSG(MCannotExecute), strNewCmdStr, MSG(MOk));
+		}
+		else
+		{
+			Message(MSG_WARNING|MSG_ERRORTYPE|MSG_INSERT_STR2, 1, MSG(MError), MSG(MCannotInvokeComspec), strComspec, MSG(MCheckComspecVar), MSG(MOk));
+		}
+	}
 
 	return nResult;
 }
@@ -1373,6 +1376,8 @@ int CommandLine::ExecString(const string& CmdLine, bool AlwaysWaitFinish, bool S
 			CtrlObject->MainKeyBar->Show();
 		}
 	}
+	if (Opt.Clock)
+		ShowTime(0);
 	ScrBuf.Flush();
 	return Code;
 }

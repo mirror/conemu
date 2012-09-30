@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CriticalSections.hpp"
 #include "console.hpp"
 #include "farversion.hpp"
+#include "scrbuf.hpp"
 
 static const string& GetFarTitleAddons()
 {
@@ -145,11 +146,11 @@ void ConsoleTitle::SetFarTitle(const wchar_t *Title, bool Force)
 		TitleModified=true;
 
 		if (StrCmp(strOldFarTitle, strFarTitle) &&
-		        ((CtrlObject->Macro.IsExecuting() && !CtrlObject->Macro.IsDsableOutput()) ||
-		         !CtrlObject->Macro.IsExecuting() || CtrlObject->Macro.IsExecutingLastKey()))
+		        /*((CtrlObject->Macro.IsExecuting() && !CtrlObject->Macro.IsDsableOutput()) ||
+		         !CtrlObject->Macro.IsExecuting() || CtrlObject->Macro.IsExecutingLastKey())*/ ScrBuf.GetLockCount()==0)
 		{
 			DWORD CurTime=GetTickCount();
-			if(CurTime-ShowTime>RedrawTimeout || Force)
+			if(CurTime-ShowTime>(DWORD)Opt.RedrawTimeout || Force)
 			{
 				ShowTime=CurTime;
 				Console.SetTitle(strFarTitle);
@@ -157,7 +158,7 @@ void ConsoleTitle::SetFarTitle(const wchar_t *Title, bool Force)
 			}
 		}
 	}
-	else
+	else if(ScrBuf.GetLockCount()==0)
 	{
 		/*
 			Title=nullptr для случая, когда нужно выставить пред.заголовок

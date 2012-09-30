@@ -309,13 +309,6 @@ static void CopyPluginDirItem(PluginPanelItem *CurPanelItem)
 	PluginPanelItem *DestItem=PluginDirList+DirListItemsNumber;
 	*DestItem=*CurPanelItem;
 
-	if (CurPanelItem->UserData && (CurPanelItem->Flags & PPIF_USERDATA))
-	{
-		DWORD Size=*(DWORD *)CurPanelItem->UserData;
-		DestItem->UserData=(intptr_t)xf_malloc(Size);
-		memcpy((void *)DestItem->UserData,(void *)CurPanelItem->UserData,Size);
-	}
-
 	DestItem->FileName = xf_wcsdup(strFullName);
 	DestItem->AlternateFileName=nullptr;
 	DirListItemsNumber++;
@@ -417,7 +410,7 @@ static void ScanPluginDir()
 		}
 	}
 
-	CtrlObject->Plugins->FreeFindData(hDirListPlugin,PanelData,ItemCount);
+	CtrlObject->Plugins->FreeFindData(hDirListPlugin,PanelData,ItemCount,true);
 }
 
 int GetPluginDirList(Plugin* PluginNumber, HANDLE hPlugin, const wchar_t *Dir, PluginPanelItem **pPanelItem, size_t *pItemsNumber)
@@ -483,7 +476,7 @@ int GetPluginDirList(Plugin* PluginNumber, HANDLE hPlugin, const wchar_t *Dir, P
 
 					if (CtrlObject->Plugins->GetFindData(hDirListPlugin,&PanelData,&ItemCount,OPM_SILENT))
 					{
-						CtrlObject->Plugins->FreeFindData(hDirListPlugin,PanelData,ItemCount);
+						CtrlObject->Plugins->FreeFindData(hDirListPlugin,PanelData,ItemCount,true);
 					}
 
 					CtrlObject->Plugins->SetDirectory(hDirListPlugin,strPrevDir,OPM_SILENT);
@@ -524,7 +517,7 @@ int GetPluginDirInfo(HANDLE hPlugin,const wchar_t *DirName,unsigned long &DirCou
 
 	if (PanelItem)
 	{
-		pluginapi::apiFreePluginDirList(PanelItem, ItemsNumber);
+		pluginapi::apiFreePluginDirList(ph->hPlugin, PanelItem, ItemsNumber);
 		if (PanelItem==PluginDirList) // Mantins#0002077
 		{
 			PluginDirList=nullptr;

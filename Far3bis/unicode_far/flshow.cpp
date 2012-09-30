@@ -562,7 +562,16 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 	InsertCommas(TotalFileSize,strFormSize);
 
 	if (Opt.ShowPanelFree && (PanelMode!=PLUGIN_PANEL || (Info.Flags & OPIF_REALNAMES)))
-		InsertCommas(FreeDiskSize,strFreeSize);
+	{
+		if(FreeDiskSize != static_cast<unsigned __int64>(-1))
+		{
+			InsertCommas(FreeDiskSize,strFreeSize);
+		}
+		else
+		{
+			strFreeSize = L"?";
+		}
+	}
 
 	if (Opt.ShowPanelTotals)
 	{
@@ -578,7 +587,14 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 
 			if ((int)str.GetLength() > X2-X1-1)
 			{
-				InsertCommas(FreeDiskSize>>20,strFreeSize);
+				if(FreeDiskSize != static_cast<unsigned __int64>(-1))
+				{
+					InsertCommas(FreeDiskSize>>20,strFreeSize);
+				}
+				else
+				{
+					strFreeSize = L"?";
+				}
 				InsertCommas(TotalFileSize>>20,strFormSize);
 				str.Clear();
 				str << L" " << strFormSize << L" " << MSG(MListMb) << L" (" << TotalFileCount << L") " << DHLine << L" " << strFreeSize << L" " << MSG(MListMb) << L" ";
@@ -588,7 +604,7 @@ void FileList::ShowTotalSize(OpenPanelInfo &Info)
 	}
 	else
 	{
-		strTotalStr = LangString(MListFreeSize) << (!strFreeSize.IsEmpty()? strFreeSize : L"???");
+		strTotalStr = LangString(MListFreeSize) << (!strFreeSize.IsEmpty()? strFreeSize : L"?");
 	}
 	SetColor(COL_PANELTOTALINFO);
 	/* $ 01.08.2001 VVM
@@ -1579,12 +1595,21 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 						case NUMLINK_COLUMN:
 						{
-							#if 1
-							//Maximus: многострочная статусная область
-							strLine<<fmt::ExactWidth(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
-							#else
-							FS<<fmt::ExactWidth(ColumnWidth)<<ListData[ListPos]->NumberOfLinks;
-							#endif
+							int nlink = ListData[ListPos]->NumberOfLinks;
+							if (nlink >= 0)
+								#if 1
+								//Maximus: многострочная статусная область
+								strLine<<fmt::ExactWidth(ColumnWidth) << nlink;
+								#else
+								FS<<fmt::ExactWidth(ColumnWidth) << nlink;
+								#endif
+							else
+								#if 1
+								//Maximus: многострочная статусная область
+								strLine<<fmt::ExactWidth(ColumnWidth) << "?";
+								#else
+								FS<<fmt::ExactWidth(ColumnWidth) << "?";
+								#endif
 							break;
 						}
 

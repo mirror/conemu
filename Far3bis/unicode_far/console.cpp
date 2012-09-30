@@ -227,7 +227,7 @@ virtual UINT GetInputCodepage() const
 	return GetConsoleCP();
 }
 
-virtual bool SetInputCodepage(UINT Codepage) const
+virtual bool SetInputCodepage(uintptr_t Codepage) const
 {
 	return SetConsoleCP(Codepage)!=FALSE;
 }
@@ -237,7 +237,7 @@ virtual UINT GetOutputCodepage() const
 	return GetConsoleOutputCP();
 }
 
-virtual bool SetOutputCodepage(UINT Codepage) const
+virtual bool SetOutputCodepage(uintptr_t Codepage) const
 {
 	return SetConsoleOutputCP(Codepage)!=FALSE;
 }
@@ -865,10 +865,10 @@ bool console::GetWorkingRect(SMALL_RECT& WorkingRect) const {return Core->GetWor
 bool console::GetTitle(string &strTitle) const {return Core->GetTitle(strTitle);}
 bool console::SetTitle(LPCWSTR Title) const {return Core->SetTitle(Title);}
 bool console::GetKeyboardLayoutName(string &strName) const {return Core->GetKeyboardLayoutName(strName);}
-UINT console::GetInputCodepage() const {return Core->GetInputCodepage();}
-bool console::SetInputCodepage(UINT Codepage) const {return Core->SetInputCodepage(Codepage);}
-UINT console::GetOutputCodepage() const {return Core->GetOutputCodepage();}
-bool console::SetOutputCodepage(UINT Codepage) const {return Core->SetOutputCodepage(Codepage);}
+uintptr_t console::GetInputCodepage() const {return Core->GetInputCodepage();}
+bool console::SetInputCodepage(uintptr_t Codepage) const {return Core->SetInputCodepage(Codepage);}
+uintptr_t console::GetOutputCodepage() const {return Core->GetOutputCodepage();}
+bool console::SetOutputCodepage(uintptr_t Codepage) const {return Core->SetOutputCodepage(Codepage);}
 bool console::SetControlHandler(PHANDLER_ROUTINE HandlerRoutine, bool Add) const {return Core->SetControlHandler(HandlerRoutine, Add);}
 bool console::GetMode(HANDLE ConsoleHandle, DWORD& Mode) const {return Core->GetMode(ConsoleHandle, Mode);}
 bool console::SetMode(HANDLE ConsoleHandle, DWORD Mode) const {return Core->SetMode(ConsoleHandle, Mode);}

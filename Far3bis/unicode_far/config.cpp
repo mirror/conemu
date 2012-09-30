@@ -306,7 +306,7 @@ void InterfaceSettings()
 	Builder.AddCheckbox(MConfigCopyTotal, Opt.CMOpt.CopyShowTotal);
 	Builder.AddCheckbox(MConfigCopyTimeRule, Opt.CMOpt.CopyTimeRule);
 	Builder.AddCheckbox(MConfigDeleteTotal, Opt.DelOpt.DelShowTotal);
-	Builder.AddCheckbox(MConfigPgUpChangeDisk, Opt.PgUpChangeDisk, 0, true);
+	Builder.AddCheckbox(MConfigPgUpChangeDisk, Opt.PgUpChangeDisk);
 	#if 1
 	//Настройка всплытия пароля при обломе перехода в сетевую папку
 	Builder.AddCheckbox(MConfigRemoteAutoLogin, Opt.RemoteAutoLogin);
@@ -671,8 +671,7 @@ void PluginsManagerSettings()
 #endif // NO_WRAPPER
 	Builder.AddCheckbox(MPluginsManagerScanSymlinks, Opt.LoadPlug.ScanSymlinks);
 	Builder.AddSeparator(MPluginConfirmationTitle);
-	DialogItemEx *ConfirmOFP = Builder.AddCheckbox(MPluginsManagerOFP, Opt.PluginConfirm.OpenFilePlugin);
-	ConfirmOFP->Flags|=DIF_3STATE;
+	Builder.AddCheckbox(MPluginsManagerOFP, Opt.PluginConfirm.OpenFilePlugin);
 	DialogItemEx *StandardAssoc = Builder.AddCheckbox(MPluginsManagerStdAssoc, Opt.PluginConfirm.StandardAssociation);
 	DialogItemEx *EvenIfOnlyOne = Builder.AddCheckbox(MPluginsManagerEvenOne, Opt.PluginConfirm.EvenIfOnlyOnePlugin);
 	StandardAssoc->Indent(2);
@@ -783,18 +782,20 @@ void EditorConfig(EditorOptions &EdOpt,bool Local)
 
 	Builder.StartColumns();
 	Builder.AddCheckbox(MEditConfigPersistentBlocks, EdOpt.PersistentBlocks);
-	DialogItemEx *SavePos = Builder.AddCheckbox(MEditConfigSavePos, EdOpt.SavePos);
+	Builder.AddCheckbox(MEditConfigDelRemovesBlocks, EdOpt.DelRemovesBlocks);
 	Builder.AddCheckbox(MEditConfigAutoIndent, EdOpt.AutoIndent);
 	DialogItemEx *TabSize = Builder.AddIntEditField(EdOpt.TabSize, 3);
 	Builder.AddTextAfter(TabSize, MEditConfigTabSize);
-	Builder.AddCheckbox(MEditShowWhiteSpace, EdOpt.ShowWhiteSpace, 0, true);
+	Builder.AddCheckbox(MEditShowWhiteSpace, EdOpt.ShowWhiteSpace);
+	Builder.AddCheckbox(MEditConfigScrollbar, EdOpt.ShowScrollBar);
 	Builder.ColumnBreak();
-	Builder.AddCheckbox(MEditConfigDelRemovesBlocks, EdOpt.DelRemovesBlocks);
+	Builder.AddCheckbox(MEditCursorBeyondEnd, EdOpt.CursorBeyondEOL);
+	DialogItemEx *SavePos = Builder.AddCheckbox(MEditConfigSavePos, EdOpt.SavePos);
 	DialogItemEx *SaveShortPos = Builder.AddCheckbox(MEditConfigSaveShortPos, EdOpt.SaveShortPos);
 	Builder.LinkFlags(SavePos, SaveShortPos, DIF_DISABLE);
-	Builder.AddCheckbox(MEditCursorBeyondEnd, EdOpt.CursorBeyondEOL);
-	Builder.AddCheckbox(MEditConfigScrollbar, EdOpt.ShowScrollBar);
 	Builder.AddCheckbox(MEditConfigPickUpWord, EdOpt.SearchPickUpWord);
+	Builder.AddCheckbox(MEditConfigSelFound, EdOpt.SearchSelFound);
+	Builder.AddCheckbox(MEditConfigCursorAtEnd, EdOpt.SearchCursorAtEnd);
 	Builder.EndColumns();
 
 	if (!Local)
@@ -838,6 +839,7 @@ void SetFolderInfoFiles()
 template<class T>const GeneralConfig::OptionType TypeId(const T& Type);
 
 template<>const GeneralConfig::OptionType TypeId<BoolOption>(const BoolOption& Type){return GeneralConfig::TYPE_BOOLEAN;}
+template<>const GeneralConfig::OptionType TypeId<Bool3Option>(const Bool3Option& Type){return GeneralConfig::TYPE_BOOLEAN3;}
 template<>const GeneralConfig::OptionType TypeId<IntOption>(const IntOption& Type){return GeneralConfig::TYPE_INTEGER;}
 template<>const GeneralConfig::OptionType TypeId<StringOption>(const StringOption& Type){return GeneralConfig::TYPE_STRING;}
 
@@ -848,7 +850,7 @@ static struct FARConfig
 	const wchar_t *KeyName;
 	const wchar_t *ValName;
 	Option* Value;   // адрес переменной, куда помещаем данные
-	GeneralConfig::OptionType ValueType;  // TYPE_BOOLEAN, TYPE_INTEGER, TYPE_STRING
+	GeneralConfig::OptionType ValueType;  // TYPE_BOOLEAN, TYPE_BOOLEAN3, TYPE_INTEGER, TYPE_STRING
 	union
 	{
 		const void* Default;
@@ -904,7 +906,7 @@ static struct FARConfig
 	{FSSF_PRIVATE,       NKeyDialog,L"MouseButton", AddressAndType(Opt.Dialogs.MouseButton), Default(0xFFFF)},
 	{FSSF_PRIVATE,       NKeyDialog,L"SelectFromHistory", AddressAndType(Opt.Dialogs.SelectFromHistory), Default(0)},
 
-	{FSSF_PRIVATE,       NKeyEditor,L"AllowEmptySpaceAfterEof", AddressAndType(Opt.EdOpt.AllowEmptySpaceAfterEof),0,},
+	{FSSF_PRIVATE,       NKeyEditor,L"AllowEmptySpaceAfterEof", AddressAndType(Opt.EdOpt.AllowEmptySpaceAfterEof),Default(0)},
 	{FSSF_PRIVATE,       NKeyEditor,L"AnsiCodePageAsDefault", AddressAndType(Opt.EdOpt.AnsiCodePageAsDefault), Default(1)},
 	{FSSF_PRIVATE,       NKeyEditor,L"AnsiCodePageForNewFile", AddressAndType(Opt.EdOpt.AnsiCodePageForNewFile), Default(1)},
 	{FSSF_PRIVATE,       NKeyEditor,L"AutoDetectCodePage", AddressAndType(Opt.EdOpt.AutoDetectCodePage), Default(1)},
@@ -927,6 +929,7 @@ static struct FARConfig
 	{FSSF_PRIVATE,       NKeyEditor,L"SearchPickUpWord", AddressAndType(Opt.EdOpt.SearchPickUpWord), Default(0)},
 	{FSSF_PRIVATE,       NKeyEditor,L"SearchRegexp", AddressAndType(Opt.EdOpt.SearchRegexp), Default(0)},
 	{FSSF_PRIVATE,       NKeyEditor,L"SearchSelFound", AddressAndType(Opt.EdOpt.SearchSelFound), Default(0)},
+	{FSSF_PRIVATE,       NKeyEditor,L"SearchCursorAtEnd", AddressAndType(Opt.EdOpt.SearchCursorAtEnd), Default(0)},
 	{FSSF_PRIVATE,       NKeyEditor,L"ShowKeyBar", AddressAndType(Opt.EdOpt.ShowKeyBar), Default(1)},
 	{FSSF_PRIVATE,       NKeyEditor,L"ShowScrollBar", AddressAndType(Opt.EdOpt.ShowScrollBar), Default(0)},
 	{FSSF_PRIVATE,       NKeyEditor,L"ShowTitleBar", AddressAndType(Opt.EdOpt.ShowTitleBar), Default(1)},
@@ -968,8 +971,7 @@ static struct FARConfig
 	{FSSF_PRIVATE,       NKeyInterface, L"ShiftsKeyRules", AddressAndType(Opt.ShiftsKeyRules), Default(1)},
 	{FSSF_PRIVATE,       NKeyInterface, L"ShowDotsInRoot", AddressAndType(Opt.ShowDotsInRoot), Default(0)},
 	{FSSF_INTERFACE,     NKeyInterface, L"ShowMenuBar", AddressAndType(Opt.ShowMenuBar), Default(0)},
-	{FSSF_PRIVATE,       NKeyInterface, L"ShowTimeoutDACLFiles", AddressAndType(Opt.ShowTimeoutDACLFiles), Default(50)},
-	{FSSF_PRIVATE,       NKeyInterface, L"ShowTimeoutDelFiles", AddressAndType(Opt.ShowTimeoutDelFiles), Default(50)},
+	{FSSF_PRIVATE,       NKeyInterface, L"RedrawTimeout", AddressAndType(Opt.RedrawTimeout), Default(200)},
 	{FSSF_PRIVATE,       NKeyInterface, L"TitleAddons", AddressAndType(Opt.strTitleAddons), Default(L"%Ver.%Build %Platform %Admin")},
 	{FSSF_PRIVATE,       NKeyInterface, L"UseVk_oem_x", AddressAndType(Opt.UseVk_oem_x), Default(1)},
 	{FSSF_PRIVATE,       NKeyInterface, L"ViewerTitleFormat", AddressAndType(Opt.strViewerTitleFormat), Default(L"%Lng %File")},
@@ -1513,6 +1515,7 @@ inline const wchar_t* TypeToText(GeneralConfig::OptionType Type)
 	static const wchar_t* OptionTypeNames[] =
 	{
 		L"boolean",
+		L"3-state",
 		L"integer",
 		L"string",
 	};
@@ -1523,7 +1526,7 @@ inline const wchar_t* TypeToText(GeneralConfig::OptionType Type)
 void FillListItem(FarListItem& Item, FormatString& fs, FARConfig& cfg)
 {
 	Item.Flags = 0;
-	Item.Reserved[0] = Item.Reserved[1] = Item.Reserved[2] = 0;
+	Item.Reserved[0] = Item.Reserved[1] = 0;
 	fs.Clear();
 	fs << fmt::ExactWidth(42) << fmt::LeftAlign() << (string(cfg.KeyName) + "." + cfg.ValName) << BoxSymbols[BS_V1]
 	<< fmt::ExactWidth(7) << fmt::LeftAlign() << TypeToText(cfg.ValueType) << BoxSymbols[BS_V1];
@@ -1534,8 +1537,23 @@ void FillListItem(FarListItem& Item, FormatString& fs, FARConfig& cfg)
 	case GeneralConfig::TYPE_BOOLEAN:
 		Changed = static_cast<BoolOption*>(cfg.Value)->Get() != cfg.bDefault;
 		break;
+	case GeneralConfig::TYPE_BOOLEAN3:
+		Changed = static_cast<Bool3Option*>(cfg.Value)->Get() != cfg.iDefault;
+		break;
 	case GeneralConfig::TYPE_INTEGER:
 		Changed = static_cast<IntOption*>(cfg.Value)->Get() != cfg.iDefault;
+		{
+			int v = static_cast<IntOption*>(cfg.Value)->Get();
+			wchar_t w1 = static_cast<wchar_t>(v);
+			wchar_t w2 = static_cast<wchar_t>(v >> 16);
+			fs << L" = 0x" << fmt::MaxWidth(8) << fmt::Radix(16) << v;
+			if (w1 > 0x001f && w1 < 0x8000)
+			{
+				fs << L" = '" << w1;
+				if (w2 > 0x001f && w2 < 0x8000) fs << w2;
+				fs << L"'";
+			}
+		}
 		break;
 	case GeneralConfig::TYPE_STRING:
 		Changed = static_cast<StringOption*>(cfg.Value)->Get() != cfg.sDefault;
@@ -1548,7 +1566,7 @@ void FillListItem(FarListItem& Item, FormatString& fs, FARConfig& cfg)
 	Item.Text = fs;
 }
 
-intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Param2)
+intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, intptr_t Msg, intptr_t Param1, void* Param2)
 {
 	static FormatString* fs;
 	switch (Msg)
@@ -1574,8 +1592,27 @@ intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Pa
 				int key = InputRecordToKey(record);
 				switch(key)
 				{
+				case KEY_SHIFTF1:
+					{
+						FarListInfo ListInfo = {sizeof(ListInfo)};
+						SendDlgMessage(hDlg, DM_LISTINFO, Param1, &ListInfo);
+
+						string HelpTopic = string(CFG[ListInfo.SelectPos].KeyName) + L"." + CFG[ListInfo.SelectPos].ValName;
+						Help hlp(HelpTopic.CPtr(), nullptr, FHELP_NOSHOWERROR);
+						if (hlp.GetError())
+						{
+							HelpTopic = string(CFG[ListInfo.SelectPos].KeyName) + L"Settings";
+							Help hlp1(HelpTopic.CPtr(), nullptr, FHELP_NOSHOWERROR);
+						}
+					}
+					break;
+
 				case KEY_F4:
 					SendDlgMessage(hDlg, DM_CLOSE, 0, nullptr);
+					break;
+
+				case KEY_SHIFTF4:
+					SendDlgMessage(hDlg, DM_CLOSE, 1, nullptr);
 					break;
 
 				case KEY_CTRLH:
@@ -1621,10 +1658,10 @@ intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Pa
 		break;
 
 	case DN_CLOSE:
-		if (Param1 == 0) // BUGBUG, magic
+		if (Param1 == 0 || Param1 == 1) // BUGBUG, magic
 		{
 			FarListInfo ListInfo = {sizeof(ListInfo)};
-			SendDlgMessage(hDlg, DM_LISTINFO, Param1, &ListInfo);
+			SendDlgMessage(hDlg, DM_LISTINFO, 0, &ListInfo);
 
 			bool Changed = false;
 
@@ -1633,6 +1670,11 @@ intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Pa
 				Changed = true;
 				*static_cast<BoolOption*>(CFG[ListInfo.SelectPos].Value) = !*static_cast<BoolOption*>(CFG[ListInfo.SelectPos].Value);
 			}
+			else if(CFG[ListInfo.SelectPos].ValueType == GeneralConfig::TYPE_BOOLEAN3)
+			{
+				Changed = true;
+				++(*static_cast<Bool3Option*>(CFG[ListInfo.SelectPos].Value));
+			}
 			else
 			{
 				DialogBuilder Builder;
@@ -1640,10 +1682,14 @@ intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Pa
 				switch(CFG[ListInfo.SelectPos].ValueType)
 				{
 				case GeneralConfig::TYPE_BOOLEAN:
+				case GeneralConfig::TYPE_BOOLEAN3:
 					// only to suppress C4062, TYPE_BOOLEAN is handled above
 					break;
 				case GeneralConfig::TYPE_INTEGER:
-					Builder.AddIntEditField(*static_cast<IntOption*>(CFG[ListInfo.SelectPos].Value), 40);
+					if (Param1)
+						Builder.AddHexEditField(*static_cast<IntOption*>(CFG[ListInfo.SelectPos].Value), 40);
+					else
+						Builder.AddIntEditField(*static_cast<IntOption*>(CFG[ListInfo.SelectPos].Value), 40);
 					break;
 				case GeneralConfig::TYPE_STRING:
 					Builder.AddEditField(*static_cast<StringOption*>(CFG[ListInfo.SelectPos].Value), 40);
@@ -1660,6 +1706,7 @@ intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Pa
 						switch(CFG[ListInfo.SelectPos].ValueType)
 						{
 						case GeneralConfig::TYPE_BOOLEAN:
+						case GeneralConfig::TYPE_BOOLEAN3:
 							// only to suppress C4062, TYPE_BOOLEAN is handled above
 							break;
 						case GeneralConfig::TYPE_INTEGER:
@@ -1678,9 +1725,9 @@ intptr_t WINAPI AdvancedConfigDlgProc(HANDLE hDlg, int Msg, int Param1, void* Pa
 				SendDlgMessage(hDlg, DM_ENABLEREDRAW, 0 , 0);
 				FarListUpdate flu = {sizeof(flu), ListInfo.SelectPos};
 				FillListItem(flu.Item, fs[ListInfo.SelectPos], CFG[ListInfo.SelectPos]);
-				SendDlgMessage(hDlg, DM_LISTUPDATE, Param1, &flu);
+				SendDlgMessage(hDlg, DM_LISTUPDATE, 0, &flu);
 				FarListPos flp = {sizeof(flp), ListInfo.SelectPos, ListInfo.TopPos};
-				SendDlgMessage(hDlg, DM_LISTSETCURPOS, Param1, &flp);
+				SendDlgMessage(hDlg, DM_LISTSETCURPOS, 0, &flp);
 				SendDlgMessage(hDlg, DM_ENABLEREDRAW, 1 , 0);
 			}
 			return FALSE;
@@ -1702,7 +1749,7 @@ bool AdvancedConfig()
 	};
 	MakeDialogItemsEx(AdvancedConfigDlgData,AdvancedConfigDlg);
 
-	FarList Items;
+	FarList Items={sizeof(FarList)};
 	Items.ItemsNumber = ARRAYSIZE(CFG);
 	Items.Items = new FarListItem[Items.ItemsNumber];
 
@@ -1715,7 +1762,7 @@ bool AdvancedConfig()
 	AdvancedConfigDlg[0].ListItems = &Items;
 
 	Dialog Dlg(AdvancedConfigDlg,ARRAYSIZE(AdvancedConfigDlg), AdvancedConfigDlgProc, &fs);
-	//Dlg.SetHelp(L"");
+	Dlg.SetHelp(L"FarConfig");
 	Dlg.SetPosition(-1, -1, DlgWidth, DlgHeight);
 	Dlg.Process();
 	delete[] Items.Items;
@@ -1736,7 +1783,20 @@ bool BoolOption::StoreValue(const wchar_t* KeyName, const wchar_t* ValueName)
 	return !Changed() || GeneralCfg->SetValue(KeyName, ValueName, Get());
 }
 
-bool IntOption::ReceiveValue(const wchar_t* KeyName, const wchar_t* ValueName, int Default)
+bool Bool3Option::ReceiveValue(const wchar_t* KeyName, const wchar_t* ValueName, int Default)
+{
+	int CfgValue = Default;
+	bool Result = GeneralCfg->GetValue(KeyName, ValueName, &CfgValue, CfgValue);
+	Set(CfgValue);
+	return Result;
+}
+
+bool Bool3Option::StoreValue(const wchar_t* KeyName, const wchar_t* ValueName)
+{
+	return !Changed() || GeneralCfg->SetValue(KeyName, ValueName, Get());
+}
+
+bool IntOption::ReceiveValue(const wchar_t* KeyName, const wchar_t* ValueName, intptr_t Default)
 {
 	int CfgValue = Default;
 	bool Result = GeneralCfg->GetValue(KeyName, ValueName, &CfgValue, CfgValue);

@@ -115,6 +115,8 @@ public:
 	bool Open(const string& Object, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDistribution, DWORD dwFlagsAndAttributes=0, File* TemplateFile=nullptr, bool ForceElevation=false);
 	bool Read(LPVOID Buffer, DWORD NumberOfBytesToRead, DWORD& NumberOfBytesRead, LPOVERLAPPED Overlapped = nullptr);
 	bool Write(LPCVOID Buffer, DWORD NumberOfBytesToWrite, DWORD& NumberOfBytesWritten, LPOVERLAPPED Overlapped = nullptr);
+	bool Read(LPVOID Buffer, size_t Nr, size_t& NumberOfBytesRead);
+	bool Write(LPCVOID Buffer, size_t Nw, size_t& NumberOfBytesWritten);
 	bool SetPointer(INT64 DistanceToMove, PINT64 NewFilePointer, DWORD MoveMethod);
 	INT64 GetPointer(){return Pointer;}
 	bool SetEnd();
@@ -278,7 +280,7 @@ int apiGetFileTypeByName(
     const string& Name
 );
 
-BOOL apiGetDiskSize(
+bool apiGetDiskSize(
     const string& Path,
     unsigned __int64 *TotalSize,
     unsigned __int64 *TotalFree,

@@ -67,6 +67,14 @@ struct ViewerUndoData
 	__int64 UndoLeft;
 };
 
+struct ViewerModeInternal
+{
+ 	uintptr_t CodePage;
+	int Wrap;
+	int WordWrap;
+	int Hex;
+};
+
 enum SHOW_MODES
 {
 	SHOW_RELOAD,
@@ -107,7 +115,7 @@ class Viewer:public ScreenObject
 		int LastSearchDirection;
 		__int64 StartSearchPos;
 
-		struct ViewerMode VM;
+		ViewerModeInternal VM;
 
 		__int64 FilePos;
 		__int64 SecondPos;
@@ -141,7 +149,7 @@ class Viewer:public ScreenObject
 
 		bool m_bQuickView;
 
-		UINT DefCodePage;
+		uintptr_t DefCodePage;
 
 		int update_check_period;
 		DWORD last_update_check;
@@ -231,7 +239,7 @@ class Viewer:public ScreenObject
 		void SavePosition();
 
 	public:
-		Viewer(bool bQuickView = false, UINT aCodePage = CP_DEFAULT);
+		Viewer(bool bQuickView = false, uintptr_t aCodePage = CP_DEFAULT);
 		virtual ~Viewer();
 
 	public:
@@ -265,7 +273,7 @@ class Viewer:public ScreenObject
 		void SetPluginData(const wchar_t *PluginData);
 		void SetNamesList(NamesList *List);
 
-		int  ViewerControl(int Command,void *Param);
+		int  ViewerControl(int Command, intptr_t Param1, void *Param2);
 		void SetHostFileViewer(FileViewer *Viewer) {HostFileViewer=Viewer;};
 
 		void GoTo(int ShowDlg=TRUE,__int64 NewPos=0,UINT64 Flags=0);
@@ -278,7 +286,7 @@ class Viewer:public ScreenObject
 
 		int GetHexMode() const { return VM.Hex; }
 
-		UINT GetCodePage() const { return VM.CodePage; }
+		uintptr_t GetCodePage() const { return VM.CodePage; }
 
 		NamesList *GetNamesList() { return &ViewNamesList; }
 
@@ -291,5 +299,5 @@ class Viewer:public ScreenObject
 		int ProcessWrapMode(int newMode, bool isRedraw=TRUE);
 		int ProcessTypeWrapMode(int newMode, bool isRedraw=TRUE);
 
-		void SearchTextTransform(UnicodeString &to, const wchar_t *from, bool hex2text, int &pos);
+		void SearchTextTransform(UnicodeString &to, const wchar_t *from, bool hex2text, intptr_t &pos);
 };

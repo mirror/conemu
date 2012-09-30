@@ -263,7 +263,7 @@ void VMenu::UpdateItemFlags(int Pos, UINT64 NewFlags)
 }
 
 // переместить курсор c учётом пунктов которые не могу получать фокус
-int VMenu::SetSelectPos(int Pos, int Direct)
+int VMenu::SetSelectPos(int Pos, int Direct, bool stop_on_edge)
 {
 	CriticalSectionLock Lock(CS);
 
@@ -312,6 +312,9 @@ int VMenu::SetSelectPos(int Pos, int Direct)
 			Pass++;
 	}
 
+	if (stop_on_edge && CheckFlags(VMENU_WRAPMODE) && ((Direct>0 && Pos<SelectPos) || (Direct<0 && Pos>SelectPos)))
+		return SelectPos;
+
 	UpdateItemFlags(Pos, Item[Pos]->Flags|LIF_SELECTED);
 
 	SetFlags(VMENU_UPDATEREQUIRED);
@@ -324,7 +327,8 @@ int VMenu::SetSelectPos(FarListPos *ListPos, int Direct)
 {
 	CriticalSectionLock Lock(CS);
 
-	int Ret = SetSelectPos(ListPos->SelectPos,Direct ? Direct : ListPos->SelectPos > SelectPos? 1 : -1);
+	int pos = Min(ItemCount-1, Max((intptr_t)0, ListPos->SelectPos));
+	int Ret = SetSelectPos(pos, Direct ? Direct : pos > SelectPos? 1 : -1);
 
 	if (Ret >= 0)
 	{
@@ -463,7 +467,7 @@ int VMenu::AddItem(const wchar_t *NewStrItem)
 		FarListItem0.Text=NewStrItem;
 	}
 
-	FarList FarList0={1,&FarListItem0};
+	FarList FarList0={sizeof(FarList),1,&FarListItem0};
 
 	return AddItem(&FarList0)-1; //-1 потому что AddItem(FarList) возвращает количество элементов
 }
@@ -778,8 +782,11 @@ void VMenu::FilterStringUpdated(bool bLonger)
 			strName=CurItem->strName;
 			RemoveExternalSpaces(strName);
 			RemoveChar(strName,L'&',TRUE);
-			if ((bFilterMaskMode && !pluginapi::apiProcessName(strMaskFilter.CPtr(), (wchar_t *) strName.CPtr(), 0, PN_CMPNAMELIST)) ||
-				     (!bFilterMaskMode && !StrStrI(strName, strFilter)))
+			if ((bFilterMaskMode
+					&& !pluginapi::apiProcessName(strMaskFilter.CPtr(), (wchar_t *) strName.CPtr(), 0, PN_SKIPPATH|PN_CMPNAMELIST)
+					&& !pluginapi::apiProcessName(strMaskFilter.CPtr(), (wchar_t *) strName.CPtr(), 0, PN_CMPNAMELIST)
+					)
+				|| (!bFilterMaskMode && !StrStrI(strName, strFilter)))
 			{
 				CurItem->Flags |= LIF_HIDDEN;
 				ItemHiddenCount++;
@@ -1788,7 +1795,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_LEFT:         case KEY_NUMPAD4:
 		case KEY_UP:           case KEY_NUMPAD8:
 		{
-			SetSelectPos(SelectPos-1,-1);
+			SetSelectPos(SelectPos-1,-1,IsRepeatedKey());
 			ShowMenu(true);
 			break;
 		}
@@ -1796,7 +1803,7 @@ int VMenu::ProcessKey(int Key)
 		case KEY_RIGHT:        case KEY_NUMPAD6:
 		case KEY_DOWN:         case KEY_NUMPAD2:
 		{
-			SetSelectPos(SelectPos+1,1);
+			SetSelectPos(SelectPos+1,1,IsRepeatedKey());
 			ShowMenu(true);
 			break;
 		}
@@ -2669,7 +2676,7 @@ void VMenu::ShowMenu(bool IsParent)
 				int SepWidth = X2-X1+1;
 				wchar_t *TmpStr = strTmpStr.GetBuffer(SepWidth+1);
 				wchar_t *Ptr = TmpStr+1;
-
+				
 				MakeSeparator(SepWidth,TmpStr,BoxType==NO_BOX?0:(BoxType==SINGLE_BOX||BoxType==SHORT_SINGLE_BOX?2:1));
 
 				if (!CheckFlags(VMENU_NOMERGEBORDER) && I>0 && I<ItemCount-1 && SepWidth>3)
@@ -3407,7 +3414,6 @@ BOOL VMenu::GetVMenuInfo(FarListInfo* Info)
 		Info->TopPos = TopPos;
 		Info->MaxHeight = MaxHeight;
 		Info->MaxLength = MaxLength;
-		ClearArray(Info->Reserved);
 		return TRUE;
 	}
 
@@ -3415,13 +3421,13 @@ BOOL VMenu::GetVMenuInfo(FarListInfo* Info)
 }
 
 // функция обработки меню (по умолчанию)
-intptr_t WINAPI VMenu::DefMenuProc(HANDLE hVMenu, int Msg, int Param1, void* Param2)
+intptr_t WINAPI VMenu::DefMenuProc(HANDLE hVMenu, intptr_t Msg, intptr_t Param1, void* Param2)
 {
 	return 0;
 }
 
 // функция посылки сообщений меню
-intptr_t WINAPI VMenu::SendMenuMessage(HANDLE hVMenu, int Msg, int Param1, void* Param2)
+intptr_t WINAPI VMenu::SendMenuMessage(HANDLE hVMenu, intptr_t Msg, intptr_t Param1, void* Param2)
 {
 	CriticalSectionLock Lock(((VMenu*)hVMenu)->CS);
 
@@ -3603,7 +3609,7 @@ static int WINAPI SortItem(const MenuItemEx **el1, const MenuItemEx **el2, const
 	return (Param->Direction?(Res<0?1:(Res>0?-1:0)):Res);
 }
 
-static int WINAPI SortItemDataDWORD(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
+static intptr_t WINAPI SortItemDataDWORD(const MenuItemEx **el1, const MenuItemEx **el2, const SortItemParam *Param)
 {
 	int Res;
 	DWORD Dw1=(DWORD)(intptr_t)((*el1)->UserData);
@@ -3625,7 +3631,7 @@ void VMenu::SortItems(int Direction, int Offset, BOOL SortForDataDWORD)
 {
 	CriticalSectionLock Lock(CS);
 
-	typedef int (WINAPI *qsortex_fn)(const void*,const void*,void*);
+	typedef intptr_t (WINAPI *qsortex_fn)(const void*,const void*,void*);
 
 	SortItemParam Param;
 	Param.Direction=Direction;
@@ -3663,7 +3669,7 @@ void VMenu::SortItems(TMENUITEMEXCMPFUNC user_cmp_func,int Direction,int Offset)
 {
 	CriticalSectionLock Lock(CS);
 
-	typedef int (WINAPI *qsortex_fn)(const void*,const void*,void*);
+	typedef intptr_t (WINAPI *qsortex_fn)(const void*,const void*,void*);
 
 	SortItemParam Param;
 	Param.Direction=Direction;

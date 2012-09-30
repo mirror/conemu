@@ -582,8 +582,8 @@ void GetOpenPanelInfo_Dump(const wchar_t *Title,const OpenPanelInfo *Info,FILE *
 		{
 			for (size_t I=0; I<Info->InfoLinesNumber; ++I)
 			{
-				fwprintf(fp,L"\t\t%u) Text=[%s], Data=[%s], Separator=[%d]\n",static_cast<unsigned>(I),
-				         NullToEmpty(Info->InfoLines[I].Text),NullToEmpty(Info->InfoLines[I].Data),Info->InfoLines[I].Separator);
+				fwprintf(fp,L"\t\t%u) Text=[%s], Data=[%s], Flags=[0x%I64X]\n",static_cast<unsigned>(I),
+				         NullToEmpty(Info->InfoLines[I].Text),NullToEmpty(Info->InfoLines[I].Data),Info->InfoLines[I].Flags);
 			}
 		}
 
@@ -1481,7 +1481,6 @@ string __DLGMSG_ToName(DWORD Msg)
 		DEF_DM_(GETDLGITEM),
 		DEF_DM_(GETDLGRECT),
 		DEF_DM_(GETTEXT),
-		DEF_DM_(GETTEXTLENGTH),
 		DEF_DM_(KEY),
 		DEF_DM_(MOVEDIALOG),
 		DEF_DM_(SETDLGDATA),
@@ -1494,7 +1493,6 @@ string __DLGMSG_ToName(DWORD Msg)
 		DEF_DM_(GETFOCUS),
 		DEF_DM_(GETCURSORPOS),
 		DEF_DM_(SETCURSORPOS),
-		DEF_DM_(GETTEXTPTR),
 		DEF_DM_(SETTEXTPTR),
 		DEF_DM_(SHOWITEM),
 		DEF_DM_(ADDHISTORY),

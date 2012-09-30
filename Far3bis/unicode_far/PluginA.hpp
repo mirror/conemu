@@ -63,7 +63,7 @@ public:
 	virtual int GetCustomData(const wchar_t *FilePath, wchar_t **CustomData) { return 0; }
 	virtual void FreeCustomData(wchar_t *CustomData) {}
 	virtual void GetOpenPanelInfo(HANDLE hPlugin, OpenPanelInfo *Info);
-	virtual void FreeFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
+	virtual void FreeFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber, bool FreeUserData);
 	virtual void FreeVirtualFindData(HANDLE hPlugin, PluginPanelItem *PanelItem, size_t ItemsNumber);
 	virtual void ClosePanel(HANDLE hPlugin);
 	virtual int ProcessEditorInput(const INPUT_RECORD *D);
@@ -74,9 +74,7 @@ public:
 #if defined(MANTIS_0000466)
 	virtual int ProcessMacro(ProcessMacroInfo *Info) {return 0;}
 #endif
-#if defined(MANTIS_0001687)
 	virtual int ProcessConsoleInput(ProcessConsoleInputInfo *Info) {return 0;}
-#endif
 	virtual HANDLE Analyse(const AnalyseInfo *Info) { return nullptr; }
 	virtual void CloseAnalyse(HANDLE hHandle) {}
 	virtual bool GetPluginInfo(PluginInfo *pi);

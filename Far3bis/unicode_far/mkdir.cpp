@@ -70,7 +70,7 @@ enum
 	MKDIR_CANCEL,
 };
 
-intptr_t WINAPI MkDirDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI MkDirDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	switch (Msg)
 	{
@@ -125,7 +125,7 @@ intptr_t WINAPI MkDirDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
 
 void ShellMakeDir(Panel *SrcPanel)
 {
-	FarList ComboList;
+	FarList ComboList={sizeof(FarList)};
 	FarListItem LinkTypeItems[3]={};
 	ComboList.ItemsNumber=ARRAYSIZE(LinkTypeItems);
 	ComboList.Items=LinkTypeItems;

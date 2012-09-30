@@ -52,6 +52,14 @@ struct InternalEditorSessionBookMark
 	InternalEditorSessionBookMark *prev, *next;
 };
 
+struct InternalEditorBookmark
+{
+	intptr_t Line;
+	intptr_t Cursor;
+	intptr_t ScreenLine;
+	intptr_t LeftPos;
+};
+
 struct EditorUndoData
 {
 	int Type;
@@ -196,9 +204,9 @@ class Editor:public ScreenObject
 		/* $ 30.07.2000 KM
 		   Новая переменная для поиска "Whole words"
 		*/
-		bool LastSearchCase,LastSearchWholeWords,LastSearchReverse,LastSearchSelFound,LastSearchRegexp;
+		bool LastSearchCase,LastSearchWholeWords,LastSearchReverse, LastSearchRegexp;
 
-		UINT m_codepage; //BUGBUG
+		uintptr_t m_codepage; //BUGBUG
 
 		int StartLine;
 		int StartChar;
@@ -274,8 +282,10 @@ class Editor:public ScreenObject
 		int PushSessionBookMark();
 		int PopSessionBookMark();
 		int CurrentSessionBookmarkIdx();
-		int GetSessionBookmark(int iIdx,EditorBookMarks *Param);
-		int GetSessionBookmarks(EditorBookMarks *Param);
+		int GetSessionBookmark(int iIdx,InternalEditorBookmark *Param);
+		int GetSessionBookmarks(EditorBookmarks *Param);
+		size_t GetSessionBookmarksForPlugin(EditorBookmarks *Param);
+		static bool InitSessionBookmarksForPlugin(EditorBookmarks *Param,size_t Count,size_t& Size);
 
 		int BlockStart2NumLine(int *Pos);
 		int BlockEnd2NumLine(int *Pos);
@@ -296,8 +306,9 @@ class Editor:public ScreenObject
 		void SetCacheParams(EditorPosCache &pc, bool count_bom=false);
 		void GetCacheParams(EditorPosCache &pc);
 
-		bool SetCodePage(UINT codepage, bool check_only);  //BUGBUG
-		UINT GetCodePage();  //BUGBUG
+		bool TryCodePage(uintptr_t codepage, int &X, int &Y);
+		bool SetCodePage(uintptr_t codepage);  //BUGBUG
+		uintptr_t GetCodePage();  //BUGBUG
 
 		int SetRawData(const wchar_t *SrcBuf,int SizeSrcBuf,int TextFormat); // преобразование из буфера в список
 		int GetRawData(wchar_t **DestBuf,int& SizeDestBuf,int TextFormat=0);   // преобразование из списка в буфер
@@ -312,12 +323,13 @@ class Editor:public ScreenObject
 		BOOL IsFileChanged() const;
 		void SetTitle(const wchar_t *Title);
 		long GetCurPos( bool file_pos=false, bool add_bom=false );
-		int EditorControl(int Command,void *Param);
+		int EditorControl(int Command, intptr_t Param1, void *Param2);
 		void SetHostFileEditor(FileEditor *Editor) {HostFileEditor=Editor;};
 		static void SetReplaceMode(bool Mode);
 		FileEditor *GetHostFileEditor() {return HostFileEditor;};
 		void PrepareResizedConsole() {Flags.Set(FEDITOR_ISRESIZEDCONSOLE);}
 
+		void SetOptions(const EditorOptions& Options) {EdOpt = Options;}
 		void SetTabSize(int NewSize);
 		int  GetTabSize() const {return EdOpt.TabSize; }
 
@@ -351,6 +363,8 @@ class Editor:public ScreenObject
 		void SetShowScrollBar(bool NewMode) {EdOpt.ShowScrollBar=NewMode;}
 
 		void SetSearchPickUpWord(bool NewMode) {EdOpt.SearchPickUpWord=NewMode;}
+
+		void SetSearchCursorAtEnd(bool NewMode) {EdOpt.SearchCursorAtEnd=NewMode;}
 
 		void SetWordDiv(const wchar_t *WordDiv) { EdOpt.strWordDiv = WordDiv; }
 		const wchar_t *GetWordDiv() { return EdOpt.strWordDiv; }

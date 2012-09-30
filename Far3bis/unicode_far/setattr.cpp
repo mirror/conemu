@@ -138,7 +138,7 @@ enum
 	DM_SETATTR = DM_USER+1,
 };
 
-intptr_t WINAPI SetAttrDlgProc(HANDLE hDlg,int Msg,int Param1,void* Param2)
+intptr_t WINAPI SetAttrDlgProc(HANDLE hDlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
 	SetAttrDlgParam *DlgParam=reinterpret_cast<SetAttrDlgParam*>(SendDlgMessage(hDlg,DM_GETDLGDATA,0,0));
 
@@ -707,7 +707,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 		}
 	}
 
-	FarList NameList={};
+	FarList NameList={sizeof(FarList)};
 	string *strLinks=nullptr;
 
 	if (!DlgParam.Plugin)
@@ -1386,7 +1386,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 		//    SelName,FileAttr,SetAttr,ClearAttr,((FileAttr|SetAttr)&(~ClearAttr))));
 						DWORD CurTime=GetTickCount();
 
-						if (CurTime-LastTime>RedrawTimeout)
+						if (CurTime-LastTime>(DWORD)Opt.RedrawTimeout)
 						{
 							LastTime=CurTime;
 							ShellSetFileAttributesMsg(strSelName);
@@ -1505,7 +1505,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 								{
 									CurTime=GetTickCount();
 
-									if (CurTime-LastTime2>RedrawTimeout)
+									if (CurTime-LastTime2>(DWORD)Opt.RedrawTimeout)
 									{
 										LastTime2=CurTime;
 										ShellSetFileAttributesMsg(strFullName);
@@ -1644,7 +1644,7 @@ bool ShellSetFileAttributes(Panel *SrcPanel, const string* Object)
 				seInfo.fMask = SEE_MASK_INVOKEIDLIST;
 				// "\\?\c:\" fails on old windows
 				bool Root;
-				string strFullName((ParsePath(strSelName, nullptr, &Root) == PATH_DRIVELETTERUNC && Root)?strSelName:NTPath(strSelName));
+				string strFullName((ParsePath(strSelName, nullptr, &Root) == PATH_DRIVELETTER && Root)?strSelName:NTPath(strSelName));
 				if(FindData.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)
 				{
 					AddEndSlash(strFullName);
