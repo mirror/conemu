@@ -9,6 +9,12 @@ rem   SetProgress 1 <Percents>
 rem     -- Set progress to specified value (0..100)
 rem   SetProgress 2
 rem     -- Set progress error state
+rem   SetProgress 3
+rem     -- Set progress indeterminate state
+rem   SetProgress 4 <Name>
+rem     -- Start progress for some long process
+rem   SetProgress 5 <Name>
+rem     -- Stop progress started with "3"
 
 rem Run this file in cmd.exe or tcc.exe to change
 rem Title of console window.
@@ -37,6 +43,10 @@ call :set_pr 1 60
 echo %ESC%[u%ESC%[KPress enter to set Error state
 pause>nul
 call :set_pr 2
+
+echo %ESC%[u%ESC%[KPress enter to set Indeterminate state
+pause>nul
+call :set_pr 3
 
 echo %ESC%[u%ESC%[KPress enter to remove progress
 pause>nul
