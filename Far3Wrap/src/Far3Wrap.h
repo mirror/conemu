@@ -20,7 +20,9 @@ typedef int (WINAPI* _GetFilesWrap)(struct WrapPluginInfo* wpi, GetFilesInfo *In
 typedef int (WINAPI* _GetFindDataWrap)(struct WrapPluginInfo* wpi, GetFindDataInfo *Info);
 typedef void (WINAPI* _FreeFindDataWrap)(struct WrapPluginInfo* wpi, const FreeFindDataInfo *Info);
 typedef void (WINAPI* _GetOpenPanelInfoWrap)(struct WrapPluginInfo* wpi, OpenPanelInfo *Info);
+#if MVV_3<=2798
 typedef int (WINAPI* _GetVirtualFindDataWrap)(struct WrapPluginInfo* wpi, GetVirtualFindDataInfo *Info);
+#endif
 typedef int (WINAPI* _MakeDirectoryWrap)(struct WrapPluginInfo* wpi, MakeDirectoryInfo *Info);
 typedef int (WINAPI* _ProcessDialogEventWrap)(struct WrapPluginInfo* wpi, const struct ProcessDialogEventInfo *Info);
 typedef int (WINAPI* _ProcessEditorEventWrap)(struct WrapPluginInfo* wpi, const struct ProcessEditorEventInfo *Info);
@@ -67,6 +69,8 @@ typedef int (WINAPI* _FarApiFileFilterControlWrap)(WrapPluginInfo* wpi, HANDLE h
 typedef int (WINAPI* _FarApiRegExpControlWrap)(WrapPluginInfo* wpi, HANDLE hHandle, int Command, LONG_PTR Param);
 typedef int (WINAPI* _FarStdGetFileOwnerWrap)(WrapPluginInfo* wpi, const wchar_t *Computer,const wchar_t *Name,wchar_t *Owner,int Size);
 typedef int (WINAPI* _FarStdGetPathRootWrap)(WrapPluginInfo* wpi, const wchar_t *Path,wchar_t *Root, int DestSize);
+typedef int (WINAPI* _FarStdCopyToClipboardWrap)(WrapPluginInfo* wpi, const wchar_t *Data);
+typedef wchar_t *(WINAPI* _FarStdPasteFromClipboardWrap)(WrapPluginInfo* wpi);
 typedef wchar_t* (WINAPI* _FarStdXlat)(WrapPluginInfo* wpi, wchar_t *Line,int StartPos,int EndPos,DWORD Flags);
 typedef int (WINAPI* _GetNumberOfLinksWrap)(WrapPluginInfo* wpi, const wchar_t *Name);
 typedef void (WINAPI* _FarStdRecursiveSearchWrap)(WrapPluginInfo* wpi, const wchar_t *InitDir,const wchar_t *Mask,Far2::FRSUSERFUNC Func,DWORD Flags,void *Param);
@@ -132,6 +136,8 @@ struct Far3WrapFunctions
 	Far2::FARGETREPARSEPOINTINFO FarGetReparsePointInfo;
 	Far2::FARSTDGETFILEOWNER FarStdGetFileOwner;
 	Far2::FARSTDGETPATHROOT FarStdGetPathRoot;
+	Far2::FARSTDCOPYTOCLIPBOARD FarStdCopyToClipboard;
+	Far2::FARSTDPASTEFROMCLIPBOARD FarStdPasteFromClipboard;
 	Far2::FARSTDMKLINK FarStdMkLink;
 	Far2::FARSTDMKTEMP FarStdMkTemp;
 	Far2::FARSTDPROCESSNAME FarStdProcessName;
@@ -161,7 +167,9 @@ struct Far3WrapFunctions
 	_GetFindDataWrap GetFindDataWrap;
 	_FreeFindDataWrap FreeFindDataWrap;
 	_GetOpenPanelInfoWrap GetOpenPanelInfoWrap;
+	#if MVV_3<=2798
 	_GetVirtualFindDataWrap GetVirtualFindDataWrap;
+	#endif
 	_MakeDirectoryWrap MakeDirectoryWrap;
 	_ProcessDialogEventWrap ProcessDialogEventWrap;
 	_ProcessEditorEventWrap ProcessEditorEventWrap;
@@ -208,6 +216,8 @@ struct Far3WrapFunctions
 	_FarApiRegExpControlWrap FarApiRegExpControlWrap;
 	_FarStdGetFileOwnerWrap FarStdGetFileOwnerWrap;
 	_FarStdGetPathRootWrap FarStdGetPathRootWrap;
+	_FarStdCopyToClipboardWrap FarStdCopyToClipboardWrap;
+	_FarStdPasteFromClipboardWrap FarStdPasteFromClipboardWrap;
 	_FarStdXlat FarStdXlatWrap;
 	_GetNumberOfLinksWrap GetNumberOfLinksWrap;
 	_FarStdRecursiveSearchWrap FarStdRecursiveSearchWrap;

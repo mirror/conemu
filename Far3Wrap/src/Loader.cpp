@@ -73,6 +73,8 @@ namespace Far2
 	#include "pluginW3#2540.hpp"
 #elif MVV_3<=2566
 	#include "pluginW3#2566.hpp"
+#elif MVV_3<=2798
+	#include "pluginW3#2798.hpp"
 #else
 	#include "pluginW3.hpp"
 #endif
@@ -478,12 +480,14 @@ void   WINAPI GetOpenPanelInfoW(OpenPanelInfo *Info)
 		fwf.GetOpenPanelInfoWrap(fwf.wpi, Info);
 }
 
+#if MVV_3<=2798
 int    WINAPI GetVirtualFindDataW(GetVirtualFindDataInfo *Info)
 {
 	if (fwf.GetVirtualFindDataWrap)
 		return fwf.GetVirtualFindDataWrap(fwf.wpi, Info);
 	return 0;
 }
+#endif
 
 int    WINAPI MakeDirectoryW(MakeDirectoryInfo *Info)
 {
