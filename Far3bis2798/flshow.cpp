@@ -1595,6 +1595,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 						case NUMLINK_COLUMN:
 						{
+							int nlink = ListData[ListPos]->NumberOfLinks;
 							#if 1
 							//Maximus: многострочная статусная область
 							if (nlink >= 0)

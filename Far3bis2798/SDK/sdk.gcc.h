@@ -33,115 +33,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// ntddstor.h
-typedef enum _STORAGE_MEDIA_TYPE {
-    DDS_4mm = 0x20,            // Tape - DAT DDS1,2,... (all vendors)
-    MiniQic,                   // Tape - miniQIC Tape
-    Travan,                    // Tape - Travan TR-1,2,3,...
-    QIC,                       // Tape - QIC
-    MP_8mm,                    // Tape - 8mm Exabyte Metal Particle
-    AME_8mm,                   // Tape - 8mm Exabyte Advanced Metal Evap
-    AIT1_8mm,                  // Tape - 8mm Sony AIT1
-    DLT,                       // Tape - DLT Compact IIIxt, IV
-    NCTP,                      // Tape - Philips NCTP
-    IBM_3480,                  // Tape - IBM 3480
-    IBM_3490E,                 // Tape - IBM 3490E
-    IBM_Magstar_3590,          // Tape - IBM Magstar 3590
-    IBM_Magstar_MP,            // Tape - IBM Magstar MP
-    STK_DATA_D3,               // Tape - STK Data D3
-    SONY_DTF,                  // Tape - Sony DTF
-    DV_6mm,                    // Tape - 6mm Digital Video
-    DMI,                       // Tape - Exabyte DMI and compatibles
-    SONY_D2,                   // Tape - Sony D2S and D2L
-    CLEANER_CARTRIDGE,         // Cleaner - All Drive types that support Drive Cleaners
-    CD_ROM,                    // Opt_Disk - CD
-    CD_R,                      // Opt_Disk - CD-Recordable (Write Once)
-    CD_RW,                     // Opt_Disk - CD-Rewriteable
-    DVD_ROM,                   // Opt_Disk - DVD-ROM
-    DVD_R,                     // Opt_Disk - DVD-Recordable (Write Once)
-    DVD_RW,                    // Opt_Disk - DVD-Rewriteable
-    MO_3_RW,                   // Opt_Disk - 3.5" Rewriteable MO Disk
-    MO_5_WO,                   // Opt_Disk - MO 5.25" Write Once
-    MO_5_RW,                   // Opt_Disk - MO 5.25" Rewriteable (not LIMDOW)
-    MO_5_LIMDOW,               // Opt_Disk - MO 5.25" Rewriteable (LIMDOW)
-    PC_5_WO,                   // Opt_Disk - Phase Change 5.25" Write Once Optical
-    PC_5_RW,                   // Opt_Disk - Phase Change 5.25" Rewriteable
-    PD_5_RW,                   // Opt_Disk - PhaseChange Dual Rewriteable
-    ABL_5_WO,                  // Opt_Disk - Ablative 5.25" Write Once Optical
-    PINNACLE_APEX_5_RW,        // Opt_Disk - Pinnacle Apex 4.6GB Rewriteable Optical
-    SONY_12_WO,                // Opt_Disk - Sony 12" Write Once
-    PHILIPS_12_WO,             // Opt_Disk - Philips/LMS 12" Write Once
-    HITACHI_12_WO,             // Opt_Disk - Hitachi 12" Write Once
-    CYGNET_12_WO,              // Opt_Disk - Cygnet/ATG 12" Write Once
-    KODAK_14_WO,               // Opt_Disk - Kodak 14" Write Once
-    MO_NFR_525,                // Opt_Disk - Near Field Recording (Terastor)
-    NIKON_12_RW,               // Opt_Disk - Nikon 12" Rewriteable
-    IOMEGA_ZIP,                // Mag_Disk - Iomega Zip
-    IOMEGA_JAZ,                // Mag_Disk - Iomega Jaz
-    SYQUEST_EZ135,             // Mag_Disk - Syquest EZ135
-    SYQUEST_EZFLYER,           // Mag_Disk - Syquest EzFlyer
-    SYQUEST_SYJET,             // Mag_Disk - Syquest SyJet
-    AVATAR_F2,                 // Mag_Disk - 2.5" Floppy
-    MP2_8mm,                   // Tape - 8mm Hitachi
-    DST_S,                     // Ampex DST Small Tapes
-    DST_M,                     // Ampex DST Medium Tapes
-    DST_L,                     // Ampex DST Large Tapes
-    VXATape_1,                 // Ecrix 8mm Tape
-    VXATape_2,                 // Ecrix 8mm Tape
-    STK_EAGLE,                 // STK Eagle
-    LTO_Ultrium,               // IBM, HP, Seagate LTO Ultrium
-    LTO_Accelis                // IBM, HP, Seagate LTO Accelis
-} STORAGE_MEDIA_TYPE, *PSTORAGE_MEDIA_TYPE;
-
-typedef struct _DEVICE_MEDIA_INFO {
-    union {
-        struct {
-            LARGE_INTEGER Cylinders;
-            STORAGE_MEDIA_TYPE MediaType;
-            DWORD TracksPerCylinder;
-            DWORD SectorsPerTrack;
-            DWORD BytesPerSector;
-            DWORD NumberMediaSides;
-            DWORD MediaCharacteristics; // Bitmask of MEDIA_XXX values.
-        } DiskInfo;
-
-        struct {
-            LARGE_INTEGER Cylinders;
-            STORAGE_MEDIA_TYPE MediaType;
-            DWORD TracksPerCylinder;
-            DWORD SectorsPerTrack;
-            DWORD BytesPerSector;
-            DWORD NumberMediaSides;
-            DWORD MediaCharacteristics; // Bitmask of MEDIA_XXX values.
-        } RemovableDiskInfo;
-
-        struct {
-            STORAGE_MEDIA_TYPE MediaType;
-            DWORD   MediaCharacteristics; // Bitmask of MEDIA_XXX values.
-            DWORD   CurrentBlockSize;
-            STORAGE_BUS_TYPE BusType;
-
-            //
-            // Bus specific information describing the medium supported.
-            //
-
-            union {
-                struct {
-                    BYTE  MediumType;
-                    BYTE  DensityCode;
-                } ScsiInformation;
-            } BusSpecificData;
-
-        } TapeInfo;
-    } DeviceSpecific;
-} DEVICE_MEDIA_INFO, *PDEVICE_MEDIA_INFO;
-
-typedef struct _GET_MEDIA_TYPES {
-    DWORD DeviceType;              // FILE_DEVICE_XXX values
-    DWORD MediaInfoCount;
-    DEVICE_MEDIA_INFO MediaInfo[1];
-} GET_MEDIA_TYPES, *PGET_MEDIA_TYPES;
-
+#ifndef _W32API_OLD
 typedef struct _FILE_ALLOCATED_RANGE_BUFFER {
 
     LARGE_INTEGER FileOffset;
@@ -155,22 +47,14 @@ typedef struct _FILE_SET_SPARSE_BUFFER
 }
 FILE_SET_SPARSE_BUFFER, *PFILE_SET_SPARSE_BUFFER;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef DecryptFile
- WINBASEAPI BOOL WINAPI DecryptFileW(LPCWSTR,DWORD);
+EXTERN_C WINBASEAPI BOOL WINAPI DecryptFileW(LPCWSTR,DWORD);
  #define DecryptFile DecryptFileW
 #endif
 
 #ifndef GetConsoleAlias
- WINBASEAPI DWORD WINAPI GetConsoleAliasW(LPWSTR,LPWSTR,DWORD,LPWSTR);
+EXTERN_C WINBASEAPI DWORD WINAPI GetConsoleAliasW(LPWSTR,LPWSTR,DWORD,LPWSTR);
  #define GetConsoleAlias GetConsoleAliasW
-#endif
-
-#ifdef __cplusplus
-}
 #endif
 
 // winuser.h
@@ -194,6 +78,7 @@ typedef struct _WIN32_FIND_STREAM_DATA
 	WCHAR cStreamName[MAX_PATH+36];
 }
 WIN32_FIND_STREAM_DATA,*PWIN32_FIND_STREAM_DATA;
+#endif //_W32API_OLD
 
 typedef struct _IO_STATUS_BLOCK
 {
@@ -269,6 +154,46 @@ OBJECT_INFORMATION_CLASS;
 #define FILE_ATTRIBUTE_VIRTUAL 0x00010000
 #endif
 
+#ifndef JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK
+#define JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK 0x00001000
+#endif
+
+#ifndef IO_REPARSE_TAG_DFS
+#define IO_REPARSE_TAG_DFS (0x8000000AL)
+#endif
+
+#ifndef IO_REPARSE_TAG_DFSR
+#define IO_REPARSE_TAG_DFSR (0x80000012L)
+#endif
+
+#ifndef IO_REPARSE_TAG_HSM
+#define IO_REPARSE_TAG_HSM (0xC0000004L)
+#endif
+
+#ifndef IO_REPARSE_TAG_HSM2
+#define IO_REPARSE_TAG_HSM2 (0x80000006L)
+#endif
+
+#ifndef IO_REPARSE_TAG_SIS
+#define IO_REPARSE_TAG_SIS (0x80000007L)
+#endif
+
+#ifndef IO_REPARSE_TAG_WIM
+#define IO_REPARSE_TAG_WIM (0x80000008L)
+#endif
+
+#ifndef IO_REPARSE_TAG_CSV
+#define IO_REPARSE_TAG_CSV (0x80000009L)
+#endif
+
+#if defined(_WIN64) || defined(_M_ALPHA)
+#define MAX_NATURAL_ALIGNMENT sizeof(ULONGLONG)
+#define MEMORY_ALLOCATION_ALIGNMENT 16
+#else
+#define MAX_NATURAL_ALIGNMENT sizeof(DWORD)
+#define MEMORY_ALLOCATION_ALIGNMENT 8
+#endif
+
 // winbase.h
 #ifndef FIND_FIRST_EX_LARGE_FETCH
 #define FIND_FIRST_EX_LARGE_FETCH 0x00000002
@@ -335,9 +260,11 @@ typedef enum _FILE_INFORMATION_CLASS
 	FileBothDirectoryInformation=3,
 	FileBasicInformation=4,
 	FileStreamInformation=22,
+	FileIdBothDirectoryInformation=37,
 }
 FILE_INFORMATION_CLASS, *PFILE_INFORMATION_CLASS;
 
+#if !defined(_W32API_OLD) || (_GCC_VER < GCC_VER_(4,5,3))
 // ShObjIdl.h
 typedef enum tagASSOCIATIONLEVEL
 {
@@ -354,27 +281,43 @@ typedef enum tagASSOCIATIONTYPE
 	AT_MIMETYPE,
 } ASSOCIATIONTYPE;
 
+// shobjidl.h
 
-const IID IID_IApplicationAssociationRegistration = { 0x4E530B0A, 0xE611, 0x4C77, 0xA3, 0xAC, 0x90, 0x31, 0xD0, 0x22, 0x28, 0x1B };
-#define INTERFACE IApplicationAssociationRegistration
+const IID IID_IApplicationAssociationRegistration = {0x4E530B0A, 0xE611, 0x4C77, {0xA3, 0xAC, 0x90, 0x31, 0xD0, 0x22, 0x28, 0x1B}};
 DECLARE_INTERFACE_(IApplicationAssociationRegistration,IUnknown)
 {
-  STDMETHOD(QueryInterface)(THIS_ REFIID,PVOID*) PURE;
-  STDMETHOD_(ULONG,AddRef)(THIS) PURE;
-  STDMETHOD_(ULONG,Release)(THIS) PURE;
-  STDMETHOD(QueryCurrentDefault)(THIS_ LPCWSTR, ASSOCIATIONTYPE, ASSOCIATIONLEVEL, LPWSTR *) PURE;
-  STDMETHOD(QueryAppIsDefault)(THIS_ LPCWSTR, ASSOCIATIONTYPE, ASSOCIATIONLEVEL, LPCWSTR, BOOL *) PURE;
-  STDMETHOD(QueryAppIsDefaultAll)(THIS_ ASSOCIATIONLEVEL, LPCWSTR, BOOL *) PURE;
-  STDMETHOD(SetAppAsDefault)(THIS_ LPCWSTR, LPCWSTR, ASSOCIATIONTYPE) PURE;
-  STDMETHOD(SetAppAsDefaultAll)(THIS_ LPCWSTR) PURE;
-  STDMETHOD(ClearUserAssociations)(THIS) PURE;
+	virtual HRESULT STDMETHODCALLTYPE QueryCurrentDefault(PCWSTR pszQuery, ASSOCIATIONTYPE atQueryType, ASSOCIATIONLEVEL alQueryLevel, LPWSTR *ppszAssociation) = 0;
+	virtual HRESULT STDMETHODCALLTYPE QueryAppIsDefault(LPCWSTR pszQuery, ASSOCIATIONTYPE atQueryType, ASSOCIATIONLEVEL alQueryLevel, LPCWSTR pszAppRegistryName, BOOL *pfDefault) = 0;
+	virtual HRESULT STDMETHODCALLTYPE QueryAppIsDefaultAll(ASSOCIATIONLEVEL alQueryLevel, LPCWSTR pszAppRegistryName, BOOL *pfDefault) = 0;
+	virtual HRESULT STDMETHODCALLTYPE SetAppAsDefault(LPCWSTR pszAppRegistryName, LPCWSTR pszSet, ASSOCIATIONTYPE atSetType) = 0;
+	virtual HRESULT STDMETHODCALLTYPE SetAppAsDefaultAll(LPCWSTR pszAppRegistryName) = 0;
+	virtual HRESULT STDMETHODCALLTYPE ClearUserAssociations() = 0;
 };
-#undef INTERFACE
+#endif
 
+#if !defined(_W32API_OLD)
+const CLSID CLSID_TaskbarList = {0x56FDF344, 0xFD6D, 0x11d0, {0x95, 0x8A, 0x00, 0x60, 0x97, 0xC9, 0xA0, 0x90}};
 
-#ifndef __ITaskbarList3_INTERFACE_DEFINED__
-#define __ITaskbarList3_INTERFACE_DEFINED__
+const IID IID_ITaskbarList = {0x56FDF342, 0xFD6D, 0x11d0, {0x95, 0x8A, 0x00, 0x60, 0x97, 0xC9, 0xA0, 0x90}};
+DECLARE_INTERFACE_(ITaskbarList,IUnknown)
+{
+public:
+	virtual HRESULT STDMETHODCALLTYPE HrInit() = 0;
+	virtual HRESULT STDMETHODCALLTYPE AddTab(HWND hwnd) = 0;
+	virtual HRESULT STDMETHODCALLTYPE DeleteTab(HWND hwnd) = 0;
+	virtual HRESULT STDMETHODCALLTYPE ActivateTab(HWND hwnd) = 0;
+	virtual HRESULT STDMETHODCALLTYPE SetActiveAlt(HWND hwnd) = 0;
+};
 
+const IID IID_ITaskbarList2 = {0x602D4995, 0xB13A, 0x429b, {0xA6, 0x6E, 0x19, 0x35, 0xE4, 0x4F, 0x43, 0x17}};
+DECLARE_INTERFACE_(ITaskbarList2,ITaskbarList)
+{
+public:
+	virtual HRESULT STDMETHODCALLTYPE MarkFullscreenWindow(HWND hwnd,BOOL fFullscreen)=0;
+};
+#endif
+
+#if !defined(_W32API_OLD) || (_GCC_VER < GCC_VER_(4,5,3))
 typedef enum TBPFLAG
 {
 	TBPF_NOPROGRESS    = 0,
@@ -392,9 +335,8 @@ typedef enum TBATFLAG
 }
 TBATFLAG;
 
-const IID IID_ITaskbarList3  = { 0xEA1AFB91, 0x9E28, 0x4B86, 0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF };
-
-DECLARE_INTERFACE_(ITaskbarList3,IUnknown) //BUGBUG, ITaskbarList2
+const IID IID_ITaskbarList3 = {0xEA1AFB91, 0x9E28, 0x4B86, {0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF}};
+DECLARE_INTERFACE_(ITaskbarList3,ITaskbarList2)
 {
 public:
 	virtual HRESULT STDMETHODCALLTYPE SetProgressValue(HWND hwnd,ULONGLONG ullCompleted,ULONGLONG ullTotal)=0;
@@ -411,18 +353,59 @@ public:
 	virtual HRESULT STDMETHODCALLTYPE SetThumbnailClip(HWND hwnd,RECT *prcClip)=0;
 };
 
+// will create a compiler error if wrong level of indirection is used.
+template<typename T>
+void** IID_PPV_ARGS_Helper(T** pp)
+{
+	// make sure everyone derives from IUnknown
+	IUnknown* I = static_cast<IUnknown*>(*pp); I = 0; (void)I;
+	return reinterpret_cast<void**>(pp);
+}
+#endif //_W32API_OLD
+
+#ifndef OF_CAP_CANSWITCHTO
+typedef enum FILE_USAGE_TYPE
+{
+	FUT_PLAYING = 0,
+	FUT_EDITING = (FUT_PLAYING + 1),
+	FUT_GENERIC = (FUT_EDITING + 1),
+}
+FILE_USAGE_TYPE;
+
+#define OF_CAP_CANSWITCHTO 0x0001
+#define OF_CAP_CANCLOSE    0x0002
+
+const IID IID_IFileIsInUse = {0x64A1CBF0, 0x3A1A, 0x4461, {0x91, 0x58, 0x37, 0x69, 0x69, 0x69, 0x39, 0x50}};
+DECLARE_INTERFACE_(IFileIsInUse,IUnknown)
+{
+public:
+	virtual HRESULT STDMETHODCALLTYPE GetAppName(LPWSTR *ppszName) = 0;
+	virtual HRESULT STDMETHODCALLTYPE GetUsage(FILE_USAGE_TYPE *pfut) = 0;
+	virtual HRESULT STDMETHODCALLTYPE GetCapabilities(DWORD *pdwCapFlags) = 0;
+	virtual HRESULT STDMETHODCALLTYPE GetSwitchToHWND(HWND *phwnd) = 0;
+	virtual HRESULT STDMETHODCALLTYPE CloseFile() = 0;
+};
+#endif //OF_CAP_CANSWITCHTO
+
+template <typename T, size_t N>
+char (*RtlpNumberOf(T(&)[N]))[N];
+#undef ARRAYSIZE
+#define ARRAYSIZE(A) (sizeof(*RtlpNumberOf(A)))
+
 // shellapi.h
 #ifndef SEE_MASK_NOASYNC
 #define SEE_MASK_NOASYNC 0x00000100
 #endif
 
-#define ARRAYSIZE(A) (sizeof(A)/sizeof((A)[0]))
-
-#endif // __ITaskbarList3_INTERFACE_DEFINED__
+// WinIoCtl.h
+#ifndef VolumeClassGuid
+DEFINE_GUID(GUID_DEVINTERFACE_VOLUME, 0x53f5630dL, 0xb6bf, 0x11d0, 0x94, 0xf2, 0x00, 0xa0, 0xc9, 0x1e, 0xfb, 0x8b);
+#endif
 
 // virtdisk.h
-#ifndef VIRT_DISK_API_DEF
+#if !defined(VIRT_DISK_API_DEF) && !defined(_INC_VIRTDISK)
 #define VIRT_DISK_API_DEF
+#define _INC_VIRTDISK
 typedef enum _GET_STORAGE_DEPENDENCY_FLAG
 {
 	GET_STORAGE_DEPENDENCY_FLAG_NONE         = 0x00000000,
@@ -452,7 +435,7 @@ typedef enum _DEPENDENT_DISK_FLAG
 	DEPENDENT_DISK_FLAG_NO_DRIVE_LETTER      = 0x00000080,
 	DEPENDENT_DISK_FLAG_PARENT               = 0x00000100,
 	DEPENDENT_DISK_FLAG_NO_HOST_DISK         = 0x00000200,
-	DEPENDENT_DISK_FLAG_PERMANENT_LIFETIME   = 0x00000400 
+	DEPENDENT_DISK_FLAG_PERMANENT_LIFETIME   = 0x00000400
 }
 DEPENDENT_DISK_FLAG;
 
@@ -548,5 +531,139 @@ typedef enum _DETACH_VIRTUAL_DISK_FLAG
 }
 DETACH_VIRTUAL_DISK_FLAG;
 
+DEFINE_GUID(VIRTUAL_STORAGE_TYPE_VENDOR_MICROSOFT, 0xec984aec, 0xa0f9, 0x47e9, 0x90, 0x1f, 0x71, 0x41, 0x5a, 0x66, 0x34, 0x5b);
+
 #endif
 
+#ifdef _W32API_OLD
+/* Object Attributes */
+typedef struct _OBJECT_ATTRIBUTES {
+  ULONG Length;
+  HANDLE RootDirectory;
+  PUNICODE_STRING ObjectName;
+  ULONG Attributes;
+  PVOID SecurityDescriptor;
+  PVOID SecurityQualityOfService;
+} OBJECT_ATTRIBUTES, *POBJECT_ATTRIBUTES;
+typedef CONST OBJECT_ATTRIBUTES *PCOBJECT_ATTRIBUTES;
+
+/* Helper Macro */
+#define InitializeObjectAttributes(p,n,a,r,s) { \
+  (p)->Length = sizeof(OBJECT_ATTRIBUTES); \
+  (p)->RootDirectory = (r); \
+  (p)->Attributes = (a); \
+  (p)->ObjectName = (n); \
+  (p)->SecurityDescriptor = (s); \
+  (p)->SecurityQualityOfService = NULL; \
+}
+
+typedef struct _REPARSE_DATA_BUFFER {
+  ULONG ReparseTag;
+  USHORT ReparseDataLength;
+  USHORT Reserved;
+  _ANONYMOUS_UNION union {
+    struct {
+      USHORT SubstituteNameOffset;
+      USHORT SubstituteNameLength;
+      USHORT PrintNameOffset;
+      USHORT PrintNameLength;
+      ULONG Flags;
+      WCHAR PathBuffer[1];
+    } SymbolicLinkReparseBuffer;
+    struct {
+      USHORT SubstituteNameOffset;
+      USHORT SubstituteNameLength;
+      USHORT PrintNameOffset;
+      USHORT PrintNameLength;
+      WCHAR PathBuffer[1];
+    } MountPointReparseBuffer;
+    struct {
+      UCHAR DataBuffer[1];
+    } GenericReparseBuffer;
+  } DUMMYUNIONNAME;
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
+
+#define REPARSE_DATA_BUFFER_HEADER_SIZE   FIELD_OFFSET(REPARSE_DATA_BUFFER, GenericReparseBuffer)
+
+/* Reserved reparse tags */
+#define IO_REPARSE_TAG_RESERVED_ZERO            (0)
+#define IO_REPARSE_TAG_RESERVED_ONE             (1)
+#define IO_REPARSE_TAG_RESERVED_RANGE           IO_REPARSE_TAG_RESERVED_ONE
+
+#define IO_REPARSE_TAG_VALID_VALUES             (0xF000FFFF)
+
+#define IsReparseTagValid(tag) (                               \
+                  !((tag) & ~IO_REPARSE_TAG_VALID_VALUES) &&   \
+                  ((tag) > IO_REPARSE_TAG_RESERVED_RANGE)      \
+                )
+#endif
+
+#ifndef ENABLE_EXTENDED_FLAGS
+# define ENABLE_QUICK_EDIT_MODE 64
+# define ENABLE_EXTENDED_FLAGS  128
+#endif
+
+#if !defined(_W32API_OLD)
+typedef struct _CONSOLE_SCREEN_BUFFER_INFOEX
+{
+	ULONG cbSize;
+	COORD dwSize;
+	COORD dwCursorPosition;
+	WORD wAttributes;
+	SMALL_RECT srWindow;
+	COORD dwMaximumWindowSize;
+	WORD wPopupAttributes;
+	BOOL bFullscreenSupported;
+	COLORREF ColorTable[16];
+}
+CONSOLE_SCREEN_BUFFER_INFOEX, *PCONSOLE_SCREEN_BUFFER_INFOEX;
+#endif
+
+#define _WIN32_WINNT_WIN2K    0x0500
+#define _WIN32_WINNT_WINXP    0x0501
+#define _WIN32_WINNT_WS03     0x0502
+#define _WIN32_WINNT_WIN6     0x0600
+#define _WIN32_WINNT_VISTA    0x0600
+#define _WIN32_WINNT_WS08     0x0600
+#define _WIN32_WINNT_LONGHORN 0x0600
+#define _WIN32_WINNT_WIN7     0x0601
+
+#define RM_SESSION_KEY_LEN  sizeof(GUID)
+#define CCH_RM_SESSION_KEY  RM_SESSION_KEY_LEN*2
+#define CCH_RM_MAX_APP_NAME 255
+#define CCH_RM_MAX_SVC_NAME 63
+
+typedef enum _RM_APP_TYPE
+{
+	RmUnknownApp = 0,
+	RmMainWindow = 1,
+	RmOtherWindow = 2,
+	RmService = 3,
+	RmExplorer = 4,
+	RmConsole = 5,
+	RmCritical = 1000,
+}
+RM_APP_TYPE;
+
+typedef struct _RM_UNIQUE_PROCESS
+{
+	DWORD dwProcessId;
+	FILETIME ProcessStartTime;
+}
+RM_UNIQUE_PROCESS, *PRM_UNIQUE_PROCESS;
+
+typedef struct _RM_PROCESS_INFO
+{
+	RM_UNIQUE_PROCESS Process;
+	WCHAR strAppName[CCH_RM_MAX_APP_NAME+1];
+	WCHAR strServiceShortName[CCH_RM_MAX_SVC_NAME+1];
+	RM_APP_TYPE ApplicationType;
+	ULONG AppStatus;
+	DWORD TSSessionId;
+	BOOL bRestartable;
+}
+RM_PROCESS_INFO, *PRM_PROCESS_INFO;
+
+#ifndef PROCESS_QUERY_LIMITED_INFORMATION
+#define PROCESS_QUERY_LIMITED_INFORMATION  0x1000
+#endif

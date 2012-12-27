@@ -80,6 +80,26 @@ typedef struct _FILE_BOTH_DIR_INFORMATION
 }
 FILE_BOTH_DIR_INFORMATION, *PFILE_BOTH_DIR_INFORMATION;
 
+typedef struct _FILE_ID_BOTH_DIR_INFORMATION
+{
+	ULONG NextEntryOffset;
+	ULONG FileIndex;
+	LARGE_INTEGER CreationTime;
+	LARGE_INTEGER LastAccessTime;
+	LARGE_INTEGER LastWriteTime;
+	LARGE_INTEGER ChangeTime;
+	LARGE_INTEGER EndOfFile;
+	LARGE_INTEGER AllocationSize;
+	ULONG FileAttributes;
+	ULONG FileNameLength;
+	ULONG EaSize;
+	CCHAR ShortNameLength;
+	WCHAR ShortName[12];
+	LARGE_INTEGER FileId;
+	WCHAR FileName[1];
+}
+FILE_ID_BOTH_DIR_INFORMATION, *PFILE_ID_BOTH_DIR_INFORMATION;
+
 typedef struct _FILE_STREAM_INFORMATION
 {
 	ULONG NextEntryOffset;
