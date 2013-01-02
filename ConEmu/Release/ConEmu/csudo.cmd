@@ -15,6 +15,10 @@ rem You may set NO here, if confirmation is not needed
 set ConfirmClose=YES
 
 
+rem You may override default settings in batch-file "csudo_parms.cmd"
+if exist "%~dp0csudo_parms.cmd" call "%~dp0csudo_parms.cmd"
+
+
 rem When possible - use Ansi Esc sequences to print errors
 rem Let set "ESC" variable to char with code \x1B
 set ESC=
