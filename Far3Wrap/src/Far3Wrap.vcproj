@@ -82,7 +82,7 @@
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
 				AdditionalDependencies="Advapi32.lib Rpcrt4.lib"
-				OutputFile="\Far3.2110\Far3Wrap.dll"
+				OutputFile="\Far30\Far3Wrap.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				ModuleDefinitionFile="Far3Wrap.def"
@@ -475,6 +475,10 @@
 				RelativePath=".\Memory.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\SetHook.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -525,6 +529,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\SetHook.h"
+				>
+			</File>
+			<File
 				RelativePath=".\TranslateKeyToVK.h"
 				>
 			</File>
@@ -567,7 +575,11 @@
 			>
 		</File>
 		<File
-			RelativePath="..\Changelog"
+			RelativePath="..\Far3Wrap_Changelog"
+			>
+		</File>
+		<File
+			RelativePath="..\Far3Wrap_Readme.txt"
 			>
 		</File>
 		<File

@@ -1,3 +1,62 @@
+ver 1.39.3000
+[+] Поддержка Far 3.0 build 3000. Часть спасиб уходит к CyberShadow.
+
+ver 1.38.2573
+[*] И еще про YAC. Нефиг ему делать в Far3-native плагинах.
+
+ver 1.37.2573
+[*] Добавил обработку OPIF_SHORTCUT/OPEN_SHORTCUT.
+
+ver 1.36.2573
+[%] ListItemData для <=sizeof(DWORD).
+[+] Хукается GetProcAddress. Заработал YAC.
+
+ver 1.35.2573
+[*] Ошибка в возвращаемом значении для callplugin.
+[*] DM_GETTEXT/DM_SETTEXT.
+
+ver 1.34.2573
+[*] Очепятка в OPEN_ANALYSE.
+
+ver 1.32.2573
+[*] Far3 build 2573.
+
+ver 1.31.2559
+[*] Far3 build 2559.
+[*] Вернул FIS_ALWAYSSHOWMENUBAR, FPS_SHOWCOLUMNTITLES, FPS_SHOWSTATUSLINE, FPS_SHOWSORTMODELETTER.
+
+ver 1.30.2542
+[!] В связи с 'массовыми захоронениями' настроек в Far3 плагинам будет доступно только то, что есть...
+[*] Поправлен EE_REDRAW (теперь опять приходит EEREDRAW_CHANGE).
+
+ver 1.29.2462
+[*] Падение при отмене входа в 'архив', если плагин экспортировал AnalyseW.
+[*] Убираем OutputDebugString.
+
+ver 1.28.2462
+[*] VCTL_SELECT.
+
+ver 1.27.2462
+[!] Far3 build 2462.
+
+ver 1.26.2460
+[!] Far3 build 2460.
+
+ver 1.25.2448
+[!] Far3 build 2448 (Editor API).
+
+ver 1.24.2376
+[!] Far3 build 2376 (MCMD_CHECKMACRO, MCTL_GETLASTERROR).
+
+ver 1.23.2347
+[!] Far3 build 2347 (FCTL_GETPANELDIRECTORY/CTL_SETPANELDIRECTORY, AllocationSize).
+[%] При открытии результатов поиска в TempPanel ошибочно активировались другие плагины (например Anamorphosis).
+[%] DM_GETDLGITEMSHORT не возвращал ListPos.
+
+ver 1.22.2321
+[!] Far3 build 2321.
+[%] Exception при вызове GetPluginInfoW.
+
 ver 1.21.2311
 [!] Far3 build 2311.
 [+] В ini-шнике добавлен опциональный ключ "DoNotFreeLibrary=1" (для Anamorphosis).

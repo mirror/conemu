@@ -1,2 +1,3 @@
-Loader.def All exports
 makefile_vc Loader
+Loader.def All exports
+vc.build.release.bat Wrap&Loader

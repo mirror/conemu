@@ -13,6 +13,9 @@ Usage
 
 Sample wrapper ini files are included in distribution.
 
+Q. How to generate unique GUID?
+A. i.e. C:\Program Files\Microsoft SDKs\Windows\v7.0\Bin\Uuidgen.Exe
+
 
 License
 =======

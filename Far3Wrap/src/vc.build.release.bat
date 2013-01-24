@@ -29,6 +29,7 @@ nmake /A /B /F %MAKEFILE%
 rem nmake /F %MAKEFILE% DEBUG=%DEBUG%
 
 
+
 set BUILD_RC=ERROR
 
 set CONF="ReleaseW3|Win32" "ReleaseW3|x64"

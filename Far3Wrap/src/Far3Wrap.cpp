@@ -1727,7 +1727,7 @@ InfoPanelLine* WrapPluginInfo::InfoLines_2_3(const Far2::InfoPanelLine *InfoLine
 	m_InfoLinesNumber = 0;
 	if (InfoLines && InfoLinesNumber > 0)
 	{	
-		m_InfoLines = (InfoPanelLine*)calloc(InfoLinesNumber, sizeof(*InfoLines));
+		m_InfoLines = (InfoPanelLine*)calloc(InfoLinesNumber, sizeof(*m_InfoLines));
 		for (int i = 0; i < InfoLinesNumber; i++)
 		{
 			m_InfoLines[i].Text = InfoLines[i].Text;
@@ -1754,7 +1754,7 @@ PanelMode* WrapPluginInfo::PanelModes_2_3(const Far2::PanelMode *PanelModesArray
 	m_PanelModesNumber = 0;
 	if (PanelModesArray && PanelModesNumber > 0)
 	{
-		m_PanelModesArray = (PanelMode*)calloc(PanelModesNumber, sizeof(*PanelModesArray));
+		m_PanelModesArray = (PanelMode*)calloc(PanelModesNumber, sizeof(*m_PanelModesArray));
 		for (int i = 0; i < PanelModesNumber; i++)
 		{
 			#if MVV_3<=2798
@@ -3024,7 +3024,7 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 				const Far2::FarListItem* pi2 = p2->Param.ListItems->Items;
 				if (pi2 != NULL)
 				{
-					pList3->Items = (FarListItem*)calloc(nItems,sizeof(FarListItem));
+					pList3->Items = (FarListItem*)calloc(nItems,sizeof(*pList3->Items));
 					FarListItem* pi3 = pList3->Items;
 					for (int j = 0; j < nItems; j++, pi2++, pi3++)
 					{
@@ -3065,8 +3065,6 @@ void WrapPluginInfo::FarDialogItem_2_3(const Far2::FarDialogItem *p2, FarDialogI
 	{
 		#if MVV_3<=2798
 		p3->Reserved = p2->Param.Reserved;
-		#else
-		_ASSERTE(p2->Param.Reserved==0);
 		#endif
 	}
 }
@@ -3124,7 +3122,7 @@ void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAlloca
 				const FarListItem* pi3 = p3->ListItems->Items;
 				if (pi3 != NULL)
 				{
-					pList2->Items = (Far2::FarListItem*)calloc(nItems,sizeof(FarListItem));
+					pList2->Items = (Far2::FarListItem*)calloc(nItems,sizeof(*pList2->Items));
 					Far2::FarListItem* pi2 = pList2->Items;
 					for (int j = 0; j < nItems; j++, pi2++, pi3++)
 					{
@@ -3179,6 +3177,19 @@ void WrapPluginInfo::FarDialogItem_3_2(const FarDialogItem *p3, /*size_t nAlloca
 	}
 }
 
+// VP 2013.01.20: Many structs differ only by a StructSize field at the beginning.
+// This macro copies an otherwise-identical structure.
+#define ADD_STRUCTSIZE(Struct, Temporary, Pointer)	\
+	if (sizeof(size_t)+sizeof(Far2::Struct)!=sizeof(Struct)) AssertStructSize(sizeof(Struct), sizeof(size_t)+sizeof(Far2::Struct), L#Struct, __FILE__, __LINE__); \
+	Temporary.StructSize = sizeof(Temporary); \
+	memcpy(((size_t*)(&Temporary)) + 1, (void*)Pointer, sizeof(Far2::Struct)); \
+	*(Struct**)&Pointer = &Temporary;
+
+// VP 2013.01.20: As above, but declare a temporary variable locally.
+// Warning: "Pointer" will be left dangling once it leaves the current scope.
+#define ADD_STRUCTSIZE_HERE(Struct, Pointer)			\
+	Struct Struct##_Temporary;							\
+	ADD_STRUCTSIZE(Struct, Struct##_Temporary, Pointer)
 
 //int gnMsg_2 = 0, gnParam1_2 = 0, gnParam1_3 = 0;
 //FARMESSAGE gnMsg_3 = DM_FIRST;
@@ -3247,6 +3258,8 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 	WRAP_FAR_CHAR_INFO pfci = {};
 	FarDialogItemData fdid3;
 	WrapListItemData* pwlid2 = NULL;
+	EditorSelect es;
+	EditorSetPosition esp;
 
 	//TODO: Сохранять gnMsg_2/gnMsg_3 только если они <DM_USER!
 	if (Msg2 == gnMsg_2 && gnMsg_3 != DM_FIRST
@@ -3717,21 +3730,31 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 			Msg3 = DM_SETCURSORSIZE; break;
 		case Far2::DM_LISTGETDATASIZE:
 			Msg3 = DM_LISTGETDATASIZE; break;
-		case Far2::DM_GETSELECTION:
+		case Far2::DM_GETSELECTION: // Msg3 = DM_GETSELECTION; break;
+		case Far2::DM_SETSELECTION: // Msg3 = DM_SETSELECTION; break;
+			#if MVV_3<2801
 			ASSERTSTRUCT(EditorSelect);
-			Msg3 = DM_GETSELECTION;
+			#else
+			ADD_STRUCTSIZE(EditorSelect, es, Param2);
+			#endif
+			switch (Msg2)
+			{
+			case Far2::DM_GETSELECTION: Msg3 = DM_GETSELECTION; break;
+			case Far2::DM_SETSELECTION: Msg3 = DM_SETSELECTION; break;
+			}
 			break;
-		case Far2::DM_SETSELECTION:
-			ASSERTSTRUCT(EditorSelect);
-			Msg3 = DM_SETSELECTION;
-			break;
-		case Far2::DM_GETEDITPOSITION:
+		case Far2::DM_GETEDITPOSITION: // Msg3 = DM_GETEDITPOSITION; break;
+		case Far2::DM_SETEDITPOSITION: // Msg3 = DM_SETEDITPOSITION; break;
+			#if MVV_3<2801
 			ASSERTSTRUCT(EditorSetPosition);
-			Msg3 = DM_GETEDITPOSITION;
-			break;
-		case Far2::DM_SETEDITPOSITION:
-			ASSERTSTRUCT(EditorSetPosition);
-			Msg3 = DM_SETEDITPOSITION;
+			#else
+			ADD_STRUCTSIZE(EditorSetPosition, esp, Param2);
+			#endif
+			switch (Msg2)
+			{
+			case Far2::DM_GETEDITPOSITION: Msg3 = DM_GETEDITPOSITION; break;
+			case Far2::DM_SETEDITPOSITION: Msg3 = DM_SETEDITPOSITION; break;
+			}
 			break;
 		case Far2::DM_SETCOMBOBOXEVENT:
 			Msg3 = DM_SETCOMBOBOXEVENT; break;
@@ -4067,6 +4090,12 @@ LONG_PTR WrapPluginInfo::CallDlgProc_2_3(FARAPIDEFDLGPROC DlgProc3, HANDLE hDlg2
 		free(pwlid2);
 	return lRc;
 }
+
+// VP 2013.01.20: Many structs differ only by a StructSize field at the beginning.
+// This macro moves the pointer towards an otherwise-identical structure.
+#define STRIP_STRUCTSIZE(Struct, Pointer)	\
+	if (sizeof(size_t)+sizeof(Far2::Struct)!=sizeof(Struct)) AssertStructSize(sizeof(Struct), sizeof(size_t)+sizeof(Far2::Struct), L#Struct, __FILE__, __LINE__); \
+	(*(size_t**)&Pointer)++;
 
 Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int Param1, void*& Param2, Far2Dialog* pDlg)
 {
@@ -4474,21 +4503,31 @@ Far2::FarMessagesProc WrapPluginInfo::FarMessage_3_2(const int Msg3, const int P
 			Msg2 = Far2::DM_SETCURSORSIZE; break;
 		case DM_LISTGETDATASIZE:
 			Msg2 = Far2::DM_LISTGETDATASIZE; break;
-		case DM_GETSELECTION:
+		case DM_GETSELECTION: // Msg2 = Far2::DM_GETSELECTION; break;
+		case DM_SETSELECTION: // Msg2 = Far2::DM_SETSELECTION; break;
+			#if MVV_3<2801
 			ASSERTSTRUCT(EditorSelect);
-			Msg2 = Far2::DM_GETSELECTION;
+			#else
+			STRIP_STRUCTSIZE(EditorSelect, Param2);
+			#endif
+			switch (Msg2)
+			{
+			case DM_GETSELECTION: Msg2 = Far2::DM_GETSELECTION; break;
+			case DM_SETSELECTION: Msg2 = Far2::DM_SETSELECTION; break;
+			}
 			break;
-		case DM_SETSELECTION:
-			ASSERTSTRUCT(EditorSelect);
-			Msg2 = Far2::DM_SETSELECTION;
-			break;
-		case DM_GETEDITPOSITION:
+		case DM_GETEDITPOSITION: // Msg2 = Far2::DM_GETEDITPOSITION; break;
+		case DM_SETEDITPOSITION: // Msg2 = Far2::DM_SETEDITPOSITION; break;
+			#if MVV_3<2801
 			ASSERTSTRUCT(EditorSetPosition);
-			Msg2 = Far2::DM_GETEDITPOSITION;
-			break;
-		case DM_SETEDITPOSITION:
-			ASSERTSTRUCT(EditorSetPosition);
-			Msg2 = Far2::DM_SETEDITPOSITION;
+			#else
+			STRIP_STRUCTSIZE(EditorSetPosition, Param2);
+			#endif
+			switch (Msg2)
+			{
+			case DM_GETEDITPOSITION: Msg2 = Far2::DM_GETEDITPOSITION; break;
+			case DM_SETEDITPOSITION: Msg2 = Far2::DM_SETEDITPOSITION; break;
+			}
 			break;
 		case DM_SETCOMBOBOXEVENT:
 			Msg2 = Far2::DM_SETCOMBOBOXEVENT; break;
@@ -5173,7 +5212,19 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 	case Far2::FCTL_UPDATEPANEL:
 		iRc = psi3.PanelControl(hPlugin, FCTL_UPDATEPANEL, Param1, (void*)Param2); break;
 	case Far2::FCTL_REDRAWPANEL:
-		iRc = psi3.PanelControl(hPlugin, FCTL_REDRAWPANEL, Param1, (void*)Param2); break;
+		{
+		#if MVV_3>2800
+		PanelRedrawInfo ri;
+		if (Param2)
+		{
+			ADD_STRUCTSIZE(PanelRedrawInfo, ri, Param2);
+		}
+		#else
+		ASSERTSTRUCT(PanelRedrawInfo);
+		#endif
+		iRc = psi3.PanelControl(hPlugin, FCTL_REDRAWPANEL, Param1, (void*)Param2);
+		}
+		break;
 	case Far2::FCTL_GETCMDLINE:
 		iRc = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, Param1, (void*)Param2); break;
 	case Far2::FCTL_SETCMDLINE:
@@ -5205,7 +5256,13 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 		iRc = psi3.PanelControl(hPlugin, FCTL_SETSORTORDER, Param1, (void*)Param2); break;
 	case Far2::FCTL_GETCMDLINESELECTEDTEXT:
 		{
-			CmdLineSelect sel = {0};
+			CmdLineSelect sel =
+			{
+				#if MVV_3>=2799
+				sizeof(CmdLineSelect),
+				#endif
+				0
+			};
 			int iSel = psi3.PanelControl(hPlugin, FCTL_GETCMDLINESELECTION, 0, &sel);
 			int nLen = ((sel.SelEnd > sel.SelStart)
 					? (sel.SelEnd - sel.SelStart + 1)
@@ -5217,7 +5274,7 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 			else
 			{
 				int nCmdLen = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, 0, NULL);
-				wchar_t* psz = (wchar_t*)calloc(nCmdLen+1,sizeof(wchar_t));
+				wchar_t* psz = (wchar_t*)calloc(nCmdLen+1,sizeof(*psz));
 				nCmdLen = psi3.PanelControl(hPlugin, FCTL_GETCMDLINE, nCmdLen, psz);
 				lstrcpyn((wchar_t*)Param2, psz+((sel.SelEnd > sel.SelStart) ? sel.SelStart : sel.SelEnd),
 					min((nLen+1),Param1));
@@ -5257,7 +5314,13 @@ int WrapPluginInfo::FarApiControl(HANDLE hPlugin, int Command, int Param1, LONG_
 			else if (nItemSize)
 			{
 				Far2::PluginPanelItem* p2 = (Far2::PluginPanelItem*)Param2;
-				FarGetPluginPanelItem p3 = {nItemSize};
+				FarGetPluginPanelItem p3 =
+				{
+					#if MVV_3>=2799
+					sizeof(FarGetPluginPanelItem),
+					#endif
+					nItemSize
+				};
 				p3.Item = (PluginPanelItem*)malloc(nItemSize);
 				if (p3.Item)
 				{
@@ -6185,19 +6248,39 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 				size_t nStrLen = 2, nKeyLen;
 				for (i = 0; i < p2->Count; i++)
 					nStrLen += FarKeyToName3(p2->Sequence[i], NULL, 0)+1;
+				#if MVV_3>=2799
+				nStrLen += 10; // Keys('...')
+				#endif
 				wchar_t* pszMacro = (wchar_t*)malloc(nStrLen*sizeof(wchar_t));
 				if (pszMacro)
 				{
 					wchar_t* psz = pszMacro;
+					#if MVV_3>=2799
+					lstrcpy(psz, L"Keys('");
+					psz += 6;
+					#endif
 					for (i = 0; i < p2->Count; i++)
 					{
-						nKeyLen = FarKeyToName3(p2->Sequence[i], psz, nStrLen);
+						*psz = 0;
+						// Не факт, что именно оно возвращает...
+						FarKeyToName3(p2->Sequence[i], psz, nStrLen);
+						nKeyLen = lstrlen(psz);
+						#if MVV_3>=2799
+						_ASSERTE(nKeyLen && psz[nKeyLen-1]!=L'\''); // обрабатывать одинарную кавычку для lua?
+						#endif
 						psz += nKeyLen;
 						if (nKeyLen)
 							*(psz++) = L' ';
 						nStrLen -= nKeyLen + 1;
 					}
+					if ((psz > pszMacro) && (*(psz-1) == L' '))
+						psz--;
+					#if MVV_3>=2799
+					lstrcpy(psz, L"')");
+					#else
 					*psz = 0;
+					#endif
+					
 					
 					if (*pszMacro)
 					{
@@ -6292,6 +6375,9 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 		{
 			Far2::FarSetColors* p2 = (Far2::FarSetColors*)Param;
 			FarSetColors p3 = {};
+			#if MVV_3>2798
+			p3.StructSize = sizeof(p3);
+			#endif
 			p3.Flags = (p2->Flags & Far2::FCLR_REDRAW) ? FSETCLR_REDRAW : FSETCLR_NONE;
 			p3.Colors = (FarColor*)calloc(p2->ColorCount,sizeof(*p3.Colors));
 			for (int i = 0; i < p2->ColorCount; i++)
@@ -6387,9 +6473,24 @@ INT_PTR WrapPluginInfo::FarApiAdvControl(INT_PTR ModuleNumber, int Command, void
 	case Far2::ACTL_SYNCHRO:
 		iRc = psi3.AdvControl(&guid, ACTL_SYNCHRO, 0, Param); break;
 	case Far2::ACTL_SETPROGRESSSTATE:
-		iRc = psi3.AdvControl(&guid, ACTL_SETPROGRESSSTATE, 0, Param); break;
+		iRc = psi3.AdvControl(&guid, ACTL_SETPROGRESSSTATE, 0, Param);
+		break;
 	case Far2::ACTL_SETPROGRESSVALUE:
-		iRc = psi3.AdvControl(&guid, ACTL_SETPROGRESSVALUE, 0, Param); break;
+		{
+		#if MVV_3>2800
+		Far2::PROGRESSVALUE *pv2 = (Far2::PROGRESSVALUE*)Param;
+		ProgressValue pv3 = {};
+		if (Param)
+		{
+			pv3.StructSize = sizeof(pv3);
+			pv3.Completed = pv2->Completed;
+			pv3.Total = pv2->Total;
+			Param = &pv3;
+		}
+		#endif
+		iRc = psi3.AdvControl(&guid, ACTL_SETPROGRESSVALUE, 0, Param);
+		}
+		break;
 	case Far2::ACTL_QUIT:
 		iRc = psi3.AdvControl(&guid, ACTL_QUIT, 0, Param); break;
 	case Far2::ACTL_GETFARRECT:
@@ -6466,8 +6567,11 @@ int WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 		{
 			const Far2::ViewerSetPosition* p2 = (const Far2::ViewerSetPosition*)Param;
 			//TODO: Конвертация флагов
-			ViewerSetPosition p3 = {(VIEWER_SETPOS_FLAGS)p2->Flags};
-			_ASSERTE(p3.Flags == (VIEWER_SETPOS_FLAGS)p2->Flags); // добавят cbStructSize?
+			ViewerSetPosition p3 = {};
+			#if MVV_3>2799
+			p3.StructSize = sizeof(p3);
+			#endif
+			p3.Flags = (VIEWER_SETPOS_FLAGS)p2->Flags;
 			p3.StartPos = p2->StartPos;
 			p3.LeftPos = p2->LeftPos;
 			nRc = psi3.ViewerControl(-1, VCTL_SETPOSITION, 0, &p3);
@@ -6477,10 +6581,15 @@ int WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 		{
 			//ASSERTSTRUCT(ViewerSelect);
 			ViewerSelect vs3 = {};
-			_ASSERTE(sizeof(vs3)==16 && sizeof(vs3.BlockStartPos)==8 && sizeof(vs3.BlockLen)==4);
 			if (Param)
 			{
 				Far2::ViewerSelect* pvs2 = (Far2::ViewerSelect*)Param;
+				#if MVV_3<=2798
+				_ASSERTE(sizeof(vs3)==16 && sizeof(vs3.BlockStartPos)==8 && sizeof(vs3.BlockLen)==4);
+				#else
+				_ASSERTE(sizeof(vs3)==(16+sizeof(size_t)) && sizeof(vs3.BlockStartPos)==8 && sizeof(vs3.BlockLen)==4);
+				vs3.StructSize = sizeof(vs3);
+				#endif
 				vs3.BlockStartPos = pvs2->BlockStartPos;
 				vs3.BlockLen = pvs2->BlockLen;
 				Param = &vs3;
@@ -6492,8 +6601,11 @@ int WrapPluginInfo::FarApiViewerControl(int Command, void *Param)
 		{
 			const Far2::ViewerSetMode* p2 = (const Far2::ViewerSetMode*)Param;
 			//TODO: Конвертация типа
-			ViewerSetMode p3 = {(VIEWER_SETMODE_TYPES)p2->Type};
-			_ASSERTE(p3.Type == (VIEWER_SETMODE_TYPES)p2->Type); // добавят cbStructSize?
+			ViewerSetMode p3 = {};
+			#if MVV_3>2799
+			p3.StructSize = sizeof(p3);
+			#endif
+			p3.Type = (VIEWER_SETMODE_TYPES)p2->Type;
 			p3.wszParam = p2->Param.wszParam; // наиболее толстый из union
 			//TODO: Конвертация флагов
 			p3.Flags = p2->Flags;
@@ -6516,6 +6628,9 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 			{
 				EditorGetString egs3 = {};
 				Far2::EditorGetString* egs2 = (Far2::EditorGetString*)Param;
+				#if MVV_3>2800
+				egs3.StructSize = sizeof(egs3);
+				#endif
 				egs3.StringNumber = egs2->StringNumber;
 				egs3.StringText = egs2->StringText;
 				egs3.StringEOL = egs2->StringEOL;
@@ -6542,6 +6657,9 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 			{
 				EditorSetString ess3 = {};
 				Far2::EditorSetString* ess2 = (Far2::EditorSetString*)Param;
+				#if MVV_3>2800
+				ess3.StructSize = sizeof(ess3);
+				#endif
 				ess3.StringNumber = ess2->StringNumber;
 				ess3.StringText = ess2->StringText;
 				ess3.StringEOL = ess2->StringEOL;
@@ -6575,6 +6693,9 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 		{
 			Far2::EditorInfo* p2 = (Far2::EditorInfo*)Param;
 			EditorInfo p3 = {0};
+			#if MVV_3>2800
+			p3.StructSize = sizeof(p3);
+			#endif
 			p3.EditorID = p2->EditorID;
 			nRc = psi3.EditorControl(-1, ECTL_GETINFO, 0, &p3);
 			p2->EditorID = p3.EditorID;
@@ -6601,22 +6722,35 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 		}
 		break;
 	case Far2::ECTL_SETPOSITION:
+		#if MVV_3>2800
+		ADD_STRUCTSIZE_HERE(EditorSetPosition, Param);
+		#else
 		ASSERTSTRUCT(EditorSetPosition);
+		#endif
 		nRc = psi3.EditorControl(-1, ECTL_SETPOSITION, 0, (void*)Param);
 		break;
 	case Far2::ECTL_SELECT:
+		#if MVV_3>2800
+		ADD_STRUCTSIZE_HERE(EditorSelect, Param);
+		#else
 		ASSERTSTRUCT(EditorSelect);
+		#endif
 		nRc = psi3.EditorControl(-1, ECTL_SELECT, 0, (void*)Param);
 		break;
 	case Far2::ECTL_REDRAW:
 		nRc = psi3.EditorControl(-1, ECTL_REDRAW, 0, (void*)Param); break;
 	case Far2::ECTL_TABTOREAL:
-		ASSERTSTRUCT(EditorConvertPos);
-		nRc = psi3.EditorControl(-1, ECTL_TABTOREAL, 0, (void*)Param);
-		break;
 	case Far2::ECTL_REALTOTAB:
+		#if MVV_3>2800
+		ADD_STRUCTSIZE_HERE(EditorConvertPos, Param);
+		#else
 		ASSERTSTRUCT(EditorConvertPos);
-		nRc = psi3.EditorControl(-1, ECTL_REALTOTAB, 0, (void*)Param);
+		#endif
+		switch (Command)
+		{
+		case Far2::ECTL_TABTOREAL: nRc = psi3.EditorControl(-1, ECTL_TABTOREAL, 0, (void*)Param); break;
+		case Far2::ECTL_REALTOTAB: nRc = psi3.EditorControl(-1, ECTL_REALTOTAB, 0, (void*)Param); break;
+		}
 		break;
 	case Far2::ECTL_EXPANDTABS:
 		nRc = psi3.EditorControl(-1, ECTL_EXPANDTABS, 0, (void*)Param); break;
@@ -6674,7 +6808,11 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 		}
 		break;
 	case Far2::ECTL_SAVEFILE:
+		#if MVV_3>2800
+		ADD_STRUCTSIZE_HERE(EditorSaveFile, Param);
+		#else
 		ASSERTSTRUCT(EditorSaveFile);
+		#endif
 		nRc = psi3.EditorControl(-1, ECTL_SAVEFILE, 0, (void*)Param);
 		break;
 	case Far2::ECTL_QUIT:
@@ -6705,7 +6843,11 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 	case Far2::ECTL_SETPARAM:
 		{
 			const Far2::EditorSetParameter* p2 = (const Far2::EditorSetParameter*)Param;
-			EditorSetParameter p3 = {(EDITOR_SETPARAMETER_TYPES)-1};
+			EditorSetParameter p3 = {};
+			#if MVV_3>2800
+			p3.StructSize = sizeof(p3);
+			#endif
+			p3.Type = (EDITOR_SETPARAMETER_TYPES)-1;
 			p3.wszParam = p2->Param.wszParam; // наиболее "объемный" из union
 			//TODO: Конвертация флагов?
 			p3.Flags = p2->Flags;
@@ -6755,7 +6897,10 @@ int WrapPluginInfo::FarApiEditorControl(int Command, void *Param)
 	case Far2::ECTL_UNDOREDO:
 		{
 			const Far2::EditorUndoRedo* p2 = (const Far2::EditorUndoRedo*)Param;
-			EditorUndoRedo p3 = {(EDITOR_UNDOREDO_COMMANDS)0};
+			EditorUndoRedo p3 = {};
+			#if MVV_3>2800
+			p3.StructSize = sizeof(p3);
+			#endif
 			//TODO: Конвертация команды
 			p3.Command = (EDITOR_UNDOREDO_COMMANDS)p2->Command;
 			nRc = psi3.EditorControl(-1, ECTL_UNDOREDO, 0, &p3);
@@ -7529,7 +7674,14 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 		&& (ms_ForcePrefix[0] && (!m_Info.CommandPrefix || !*m_Info.CommandPrefix) && OpenFilePluginW))
 	{
 		// Сюда мы попадаем только если архивный плагин экспортит OpenFilePluginW, но не удосужился объявить префикс
-		h = OpenFilePluginHelper((LPCWSTR)Info->Data);
+		LPCWSTR wszCmdLine;
+		#if MVV_3>2801
+		OpenCommandLineInfo* pocli = (OpenCommandLineInfo*)Info->Data;
+		wszCmdLine = pocli->CommandLine;
+		#else
+		wszCmdLine = (LPCWSTR)Info->Data;
+		#endif
+		h = OpenFilePluginHelper(wszCmdLine);
 		goto trap;
 	}
 
@@ -7627,7 +7779,12 @@ HANDLE WrapPluginInfo::OpenW3(const OpenInfo *Info)
 			}
 			break;
 		case OPEN_COMMANDLINE:
-			h = OpenPluginW(Far2::OPEN_COMMANDLINE, Info->Data); break;
+			#if MVV_3>2801
+			h = OpenPluginW(Far2::OPEN_COMMANDLINE, (INT_PTR)((OpenCommandLineInfo*)Info->Data)->CommandLine);
+			#else
+			h = OpenPluginW(Far2::OPEN_COMMANDLINE, Info->Data);
+			#endif
+			break;
 		case OPEN_EDITOR:
 			h = OpenPluginW(Far2::OPEN_EDITOR, Info->Data); break;
 		case OPEN_VIEWER:
@@ -7800,7 +7957,11 @@ HANDLE    WrapPluginInfo::AnalyseW3(const AnalyseInfo *Info)
 		if (m_AnalyzeMode == 3)
 		{
 			MacroSendMacroText mcr = {sizeof(MacroSendMacroText)};
+			#if MVV_3>2850
+			mcr.SequenceText = L"if Area.Menu then Keys('Esc') end";
+			#else
 			mcr.SequenceText = L"$if (Menu) Esc $end";
+			#endif
 			mcr.Flags = KMFLAGS_DISABLEOUTPUT;
 			psi3.MacroControl(MCTLARG(mguid_Plugin), MCTL_SENDSTRING, 0, &mcr);
 		}
@@ -8912,7 +9073,7 @@ HANDLE Far2Dialog::InitDlg()
 		m_Items3 = (FarDialogItem*)calloc(m_ItemsNumber, sizeof(*m_Items3));
 		if (!mp_ListInit3)
 		{
-			mp_ListInit3 = (FarList*)calloc(m_ItemsNumber,sizeof(FarList));
+			mp_ListInit3 = (FarList*)calloc(m_ItemsNumber,sizeof(*mp_ListInit3));
 		}
 		Far2::FarDialogItem *p2 = m_Items2;
 		FarDialogItem *p3 = m_Items3;
