@@ -296,6 +296,10 @@ CConEmuUpdate::~CConEmuUpdate()
 		// Обязательно двойное окавычивание. cmd.exe отбрасывает кавычки,
 		// и при наличии разделителей (пробелы, скобки,...) получаем проблемы
 		_wsprintf(pszParm, SKIPLEN(cchParmMax) L"/c \"\"%s\"\"", mpsz_PendingBatchFile);
+
+		// Наверное на Elevated процесс это не распространится, но для четкости - взведем флажок
+		SetEnvironmentVariable(ENV_CONEMU_INUPDATE, ENV_CONEMU_INUPDATE_YES);
+
 		// ghWnd уже закрыт
 		INT_PTR nShellRc = (INT_PTR)ShellExecute(NULL, bNeedRunElevation ? L"runas" : L"open", pszCmd, pszParm, NULL, SW_SHOWMINIMIZED);
 		if (nShellRc <= 32)
@@ -446,7 +450,11 @@ bool CConEmuUpdate::ShowConfirmation()
 {
 	bool lbConfirm = false;
 
-	gpConEmu->UpdateProgress();
+	// May be null, if update package was dropped on ConEmu icon
+	if (ghWnd)
+	{
+		gpConEmu->UpdateProgress();
+	}
 
 	if (ms_LastErrorInfo && *ms_LastErrorInfo)
 	{
@@ -474,7 +482,11 @@ bool CConEmuUpdate::ShowConfirmation()
 	if (!lbConfirm)
 	{
 		mb_RequestTerminate = true;
-		gpConEmu->UpdateProgress();
+		// May be null, if update package was dropped on ConEmu icon
+		if (ghWnd)
+		{
+			gpConEmu->UpdateProgress();
+		}
 	}
 
 	return lbConfirm;
@@ -497,7 +509,11 @@ DWORD CConEmuUpdate::CheckThreadProc(LPVOID lpParameter)
 	}
 	
 	pUpdate->mb_InCheckProcedure = FALSE;
-	gpConEmu->UpdateProgress();
+	// May be null, if update package was dropped on ConEmu icon
+	if (ghWnd)
+	{
+		gpConEmu->UpdateProgress();
+	}
 	return nRc;
 }
 
@@ -539,6 +555,53 @@ bool CConEmuUpdate::CanUpdateInstallation()
 }
 #endif
 
+// static
+bool CConEmuUpdate::LocalUpdate(LPCWSTR asDownloadedPackage)
+{
+	bool bOk = false;
+
+	if (!gpUpd)
+		gpUpd = new CConEmuUpdate;
+
+	if (gpUpd)
+		bOk = gpUpd->StartLocalUpdate(asDownloadedPackage);
+
+	return bOk;
+}
+
+// static
+bool CConEmuUpdate::IsUpdatePackage(LPCWSTR asFilePath)
+{
+	bool bIsUpdatePackage = false;
+
+	if (asFilePath && *asFilePath && lstrlen(asFilePath) <= MAX_PATH)
+	{
+		wchar_t szName[MAX_PATH+1];
+		LPCWSTR pszName = PointToName(asFilePath);
+		if (pszName && *pszName)
+		{
+			lstrcpyn(szName, pszName, countof(szName));
+			CharLowerBuff(szName, lstrlen(szName));
+			LPCWSTR pszExt = PointToExt(szName);
+			if (pszExt)
+			{
+				if ((wcsncmp(szName, L"conemupack.", 11) == 0)
+					&& (wcscmp(pszExt, L".7z") == 0))
+				{
+					bIsUpdatePackage = true;
+				}
+				else if ((wcsncmp(szName, L"conemusetup.", 12) == 0)
+					&& (wcscmp(pszExt, L".exe") == 0))
+				{
+					bIsUpdatePackage = true;
+				}
+			}
+		}
+	}
+
+	return bIsUpdatePackage;
+}
+
 bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 {
 	bool bRc = false;
@@ -547,6 +610,11 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 	wchar_t *pszLocalPackage = NULL, *pszBatchFile = NULL;
 	DWORD nLocalCRC = 0;
 	BOOL lbDownloadRc = FALSE, lbExecuteRc = FALSE;
+
+	LPCWSTR pszPackPref = L"conemupack.";
+	size_t lnPackPref = _tcslen(pszPackPref);
+	LPCWSTR pszSetupPref = L"conemusetup.";
+	size_t lnSetupPref = _tcslen(pszSetupPref);
 
 	_ASSERTE(gpConEmu->isMainThread());
 
@@ -588,11 +656,6 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 
 	ms_NewVersion[0] = 0;
 
-	LPCWSTR pszPackPref = L"conemupack.";
-	size_t lnPackPref = _tcslen(pszPackPref);
-	LPCWSTR pszSetupPref = L"conemusetup.";
-	size_t lnSetupPref = _tcslen(pszSetupPref);
-
 	if ((lstrcmpni(pszName, pszPackPref, lnPackPref) == 0)
 		&& (lstrcmpi(pszExt, L".7z") == 0)
 		&& (((pszExt - pszName) - lnPackPref + 1) < sizeof(ms_NewVersion)))
@@ -608,6 +671,12 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 				goto wrap;
 			}
 		}
+
+		if (!Check7zipInstalled())
+			goto wrap; // Error already reported
+
+		// Forcing usage of 7zip package!
+		mp_Set->isUpdateDownloadSetup = 2;
 
 		//if (!CanUpdateInstallation())
 		//{
@@ -678,7 +747,8 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 		goto wrap;
 	}
 
-	Assert(mb_ManualCallMode==NULL && mpsz_PendingBatchFile==NULL);
+	Assert(mb_ManualCallMode==TRUE);
+	Assert(mpsz_PendingBatchFile==NULL);
 
 	mpsz_PendingPackageFile = pszLocalPackage;
 	pszLocalPackage = NULL;
@@ -857,6 +927,10 @@ DWORD CConEmuUpdate::CheckProcInt()
 	if (mb_RequestTerminate)
 		goto wrap;
 
+	// It returns true, if updating with "exe" installer.
+	if (!Check7zipInstalled())
+		goto wrap; // Error already reported
+
 	if (!QueryConfirmation(us_ConfirmDownload, pszSource))
 	{
 		// Если пользователь отказался от обновления в этом сеансе - не предлагать ту же версию при ежечасных проверках
@@ -866,7 +940,11 @@ DWORD CConEmuUpdate::CheckProcInt()
 
 	mn_InternetContentReady = mn_InternetContentLen = 0;
 	m_UpdateStep = us_Downloading;
-	gpConEmu->UpdateProgress();
+	// May be null, if update package was dropped on ConEmu icon
+	if (ghWnd)
+	{
+		gpConEmu->UpdateProgress();
+	}
 
 	pszFileName = wcsrchr(pszSource, lbSourceLocal ? L'\\' : L'/');
 	if (!pszFileName)
@@ -1025,6 +1103,9 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 	
 	WRITE_BATCH_A("@echo off\r\n");
 
+	// "set ConEmuInUpdate=YES"
+	WRITE_BATCH_W(L"\r\nset " ENV_CONEMU_INUPDATE L"=" ENV_CONEMU_INUPDATE_YES L"\r\n");
+
 	WRITE_BATCH_A("cd /d \"");
 	WRITE_BATCH_W(gpConEmu->ms_ConEmuExeDir);
 	WRITE_BATCH_A("\\\"\r\necho Current folder\r\ncd\r\necho .\r\n\r\necho Starting update...\r\n");
@@ -1121,6 +1202,9 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 		WRITE_BATCH_A("\r\n");
 	}
 
+	// Сброс переменной окружения: "set ConEmuInUpdate="
+	WRITE_BATCH_W(L"\r\nset " ENV_CONEMU_INUPDATE L"=\r\n");
+
 	// Перезапуск ConEmu
 	WRITE_BATCH_A("\r\necho Starting ConEmu...\r\nstart \"ConEmu\" \"");
 	WRITE_BATCH_W(gpConEmu->ms_ConEmuExe);
@@ -1151,8 +1235,9 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 		WRITE_BATCH_A("\"\r\n");
 	}
 
-	// Грохнуть сам батч
-	WRITE_BATCH_A("del \"%~0\"\r\n");
+	// Грохнуть сам батч и позвать "exit" чтобы в консоли
+	// не появлялось "Batch not found" при попытке выполнить следующую строку файла
+	WRITE_BATCH_A("del \"%~0\" & exit\r\n");
 
 	//// Для отладки
 	//WRITE_BATCH_A("\r\npause\r\n");
@@ -1464,6 +1549,7 @@ BOOL CConEmuUpdate::DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDst
 			// Proxy User/Password
 			if (ProxyName)
 			{
+				// Похоже, что установка логина/пароля для mh_Internet смысла не имеет
 				if (mp_Set->szUpdateProxyUser && *mp_Set->szUpdateProxyUser)
 				{
 					if (!wi->_InternetSetOptionW(mh_Internet, INTERNET_OPTION_PROXY_USERNAME, (LPVOID)mp_Set->szUpdateProxyUser, lstrlen(mp_Set->szUpdateProxyUser)))
@@ -1543,31 +1629,34 @@ BOOL CConEmuUpdate::DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDst
 			goto wrap;
 		}
 
-		//if (ProxyName)
-		//{
-		//	if (mp_Set->szUpdateProxyUser && *mp_Set->szUpdateProxyUser)
-		//	{
-		//		if (!wi->_InternetSetOptionW(mh_Connect, INTERNET_OPTION_PROXY_USERNAME, (LPVOID)mp_Set->szUpdateProxyUser, lstrlen(mp_Set->szUpdateProxyUser)))
-		//		{
-		//			ReportError(L"ProxyUserName failed, code=%u", GetLastError());
-		//			goto wrap;
-		//		}
-		//	}
-		//	if (mp_Set->szUpdateProxyPassword && *mp_Set->szUpdateProxyPassword)
-		//	{
-		//		if (!wi->_InternetSetOptionW(mh_Connect, INTERNET_OPTION_PROXY_PASSWORD, (LPVOID)mp_Set->szUpdateProxyPassword, lstrlen(mp_Set->szUpdateProxyPassword)))
-		//		{
-		//			ReportError(L"ProxyPassword failed, code=%u", GetLastError());
-		//			goto wrap;
-		//		}
-		//	}
-		//}
+		if (ProxyName)
+		{
+			// Похоже, что установка логина/пароля для mh_Internet смысла не имеет
+			// Поэтому повторяем здесь для хэндла mh_Connect
+			if (mp_Set->szUpdateProxyUser && *mp_Set->szUpdateProxyUser)
+			{
+				if (!wi->_InternetSetOptionW(mh_Connect, INTERNET_OPTION_PROXY_USERNAME, (LPVOID)mp_Set->szUpdateProxyUser, lstrlen(mp_Set->szUpdateProxyUser)))
+				{
+					ReportError(L"ProxyUserName failed, code=%u", GetLastError());
+					goto wrap;
+				}
+			}
+			if (mp_Set->szUpdateProxyPassword && *mp_Set->szUpdateProxyPassword)
+			{
+				if (!wi->_InternetSetOptionW(mh_Connect, INTERNET_OPTION_PROXY_PASSWORD, (LPVOID)mp_Set->szUpdateProxyPassword, lstrlen(mp_Set->szUpdateProxyPassword)))
+				{
+					ReportError(L"ProxyPassword failed, code=%u", GetLastError());
+					goto wrap;
+				}
+			}
+		}
 
-		//if (!wi->_InternetSetOptionW(mh_Connect, INTERNET_OPTION_HTTP_VERSION, &httpver, sizeof(httpver)))
-		//{
-		//	ReportError(L"HttpVersion failed, code=%u", GetLastError());
-		//	goto wrap;
-		//}
+		// Повторим для mh_Connect, на всякий случай
+		if (!wi->_InternetSetOptionW(mh_Connect, INTERNET_OPTION_HTTP_VERSION, &httpver, sizeof(httpver)))
+		{
+			ReportError(L"HttpVersion failed, code=%u", GetLastError());
+			goto wrap;
+		}
 
 		//INTERNET_OPTION_RECEIVE_TIMEOUT - Sets or retrieves an unsigned long integer value that contains the time-out value, in milliseconds");
 		//nConnTimeout, nConnTimeoutSet, nFileTimeout, nFileTimeoutSet
@@ -1709,7 +1798,12 @@ BOOL CConEmuUpdate::DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDst
 		}
 
 		mn_InternetContentReady += nRead;
-		gpConEmu->UpdateProgress();
+
+		// May be null, if update package was dropped on ConEmu icon
+		if (ghWnd)
+		{
+			gpConEmu->UpdateProgress();
+		}
 	}
 	
 	// Succeeded
@@ -1950,6 +2044,28 @@ void CConEmuUpdate::DeleteBadTempFiles()
 		DeleteFile(mpsz_DeleteBatchFile);
 		SafeFree(mpsz_DeleteBatchFile);
 	}
+}
+
+bool CConEmuUpdate::Check7zipInstalled()
+{
+	if (mp_Set->UpdateDownloadSetup() == 1)
+		return true; // Инсталлер, архиватор не требуется!
+
+	LPCWSTR pszCmd = mp_Set->UpdateArcCmdLine();
+	wchar_t sz7zip[MAX_PATH+1];
+	if (NextArg(&pszCmd, sz7zip) != 0)
+	{
+		ReportError(L"Invalid update command\nGoto 'Update' page and check 7-zip command", 0);
+		return false;
+	}
+
+	if (FileExistsSearch(sz7zip, countof(sz7zip)))
+		return true;
+
+	WARNING("TODO: Suggest to download 7zip");
+
+	ReportError(L"7zip or WinRar not found! Not installed?\n%s\nGoto 'Update' page and check 7-zip command", sz7zip, 0);
+	return false;
 }
 
 bool CConEmuUpdate::QueryConfirmation(CConEmuUpdate::UpdateStep step, LPCWSTR asParm)

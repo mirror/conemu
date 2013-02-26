@@ -100,7 +100,9 @@ public:
 	void StopChecking();
 	void ShowLastError();
 	bool ShowConfirmation();
-	bool StartLocalUpdate(LPCWSTR asDownloadedPackage);
+	
+	static bool LocalUpdate(LPCWSTR asDownloadedPackage);
+	static bool IsUpdatePackage(LPCWSTR asFilePath);
 
 	enum UpdateStep
 	{
@@ -123,7 +125,9 @@ protected:
 	bool QueryConfirmation(UpdateStep step, LPCWSTR asParm = NULL);
 	bool QueryConfirmationInt(LPCWSTR asConfirmInfo);
 	void WaitAllInstances();
+	bool Check7zipInstalled();
 	#if 0
 	bool CanUpdateInstallation();
 	#endif
+	bool StartLocalUpdate(LPCWSTR asDownloadedPackage);
 };

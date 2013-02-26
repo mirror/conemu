@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _COMMON_HEADER_HPP_
 
 // Версия интерфейса
-#define CESERVER_REQ_VER    122
+#define CESERVER_REQ_VER    123
 
 #include "defines.h"
 #include "ConEmuColors.h"
@@ -100,6 +100,8 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define ENV_CONEMU_HOOKS L"ConEmuHooks" // when this is "OFF" - don't set hooks from "ConEmuHk.dll"
 #define ENV_CONEMU_HOOKS_ENABLED L"Enabled" // Informational
 #define ENV_CONEMU_HOOKS_DISABLED L"OFF" // This is only significant value
+#define ENV_CONEMU_INUPDATE L"ConEmuInUpdate" // This is set to "YES" during AutoUpdate script execution
+#define ENV_CONEMU_INUPDATE_YES L"YES" // This is set to "YES" during AutoUpdate script execution
 
 
 
@@ -191,6 +193,23 @@ enum ConEmuStatusCommand
 {
 	csc_ShowHide = 0,
 	csc_SetStatusText = 1,
+};
+
+enum ConEmuWindowCommand
+{
+	cwc_Current     = 0,
+	cwc_Restore     = 1,  // wmNormal
+	cwc_Minimize    = 2,  // SC_MINIMIZE
+	cwc_MinimizeTSA = 3,  // HideWindowToTray
+	cwc_Maximize    = 4,  // wmMaximized
+	cwc_FullScreen  = 5,  // wmFullScreen
+	cwc_TileLeft    = 6,  // Same as Win+Left in Win7
+	cwc_TileRight   = 7,  // Same as Win+Right in Win7
+	cwc_TileHeight  = 8,  // Same as Win+Shift+Up in Win7
+	cwc_PrevMonitor = 9,  // Same as Win+Shift+Left in Win7
+	cwc_NextMonitor = 10, // Same as Win+Shift+Right in Win7
+	// for comparision
+	cwc_LastCmd
 };
 
 enum CONSOLE_KEY_ID
@@ -878,6 +897,7 @@ enum GuiLoggingType
 	glt_Input = 2,
 	glt_Commands = 3,
 	glt_Debugger = 4,
+	glt_Ansi = 5,
 	// glt_Files, ...
 };
 
@@ -1380,6 +1400,19 @@ struct CESERVER_REQ_SETGUIEXTERN
 	//RECT rcOldPos; // Если bDetach - здесь передается "старое" положение окна
 };
 
+enum SrvStartStopType
+{
+	srv_Started = 1,
+	srv_Stopped = 101,
+};
+
+struct CESERVER_REQ_SRVSTARTSTOP
+{
+	SrvStartStopType Started;
+	HWND2 hConWnd;
+	DWORD dwKeybLayout;
+};
+
 enum StartStopType
 {
 	sst_ServerStart    = 0,
@@ -1404,6 +1437,7 @@ struct CESERVER_REQ_STARTSTOP
 	BOOL  bRootIsCmdExe;
 	BOOL  bUserIsAdmin;
 	BOOL  bMainServerClosing; // if (nStarted == sst_AltServerStop)
+	DWORD dwKeybLayout; // Только при запуске сервера
 	// А это приходит из консоли, вдруго консольная программа успела поменять размер буфера
 	CONSOLE_SCREEN_BUFFER_INFO sbi;
 	// Максимальный размер консоли на текущем шрифте
@@ -1735,6 +1769,7 @@ struct CESERVER_REQ
 		CESERVER_REQ_RETSIZE SetSizeRet;
 		CESERVER_REQ_OUTPUTFILE OutputFile;
 		CESERVER_REQ_NEWCMD NewCmd;
+		CESERVER_REQ_SRVSTARTSTOP SrvStartStop;
 		CESERVER_REQ_STARTSTOP StartStop;
 		CESERVER_REQ_STARTSTOPRET StartStopRet;
 		CESERVER_REQ_CONEMUTAB Tabs;

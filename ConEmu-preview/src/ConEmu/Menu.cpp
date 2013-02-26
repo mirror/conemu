@@ -455,7 +455,7 @@ void CConEmuMenu::OnNewConPopupMenuRClick(HMENU hMenu, UINT nItemPos)
 
 	DestroyMenu(hPopup);
 
-	if (nRetID >= (nStartID+1) && nRetID <= (int)(nStartID+nLastID))
+	if (nRetID >= (int)(nStartID+1) && nRetID <= (int)(nStartID+nLastID))
 	{
 		// Need to close parentmenu
 		if (hMenuWnd)
@@ -1207,6 +1207,7 @@ HMENU CConEmuMenu::CreateDebugMenuPopup()
 	#ifdef _DEBUG
 	AppendMenu(hDebug, MF_SEPARATOR, 0, NULL);
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_TRAP, _T("Raise exception"));
+	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_ASSERT, _T("Show assertion"));
 	#endif
 	#ifdef TRACK_MEMORY_ALLOCATIONS
 	AppendMenu(hDebug, MF_SEPARATOR, 0, NULL);
@@ -1502,10 +1503,10 @@ LPCWSTR CConEmuMenu::MenuAccel(int DescrID, LPCWSTR asText)
 	
 	const ConEmuHotKey* pHK = NULL;
 	DWORD VkMod = gpSet->GetHotkeyById(DescrID, &pHK);
-	if (!gpSet->GetHotkey(VkMod) || !pHK)
+	if (!ConEmuHotKey::GetHotkey(VkMod) || !pHK)
 		return asText;
 
-	gpSet->GetHotkeyName(pHK, szKey);
+	pHK->GetHotkeyName(szKey);
 	if (!*szKey)
 		return asText;
 	int nLen = lstrlen(szKey);
@@ -1685,6 +1686,9 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		case ID_DEBUG_TRAP:
 			MyAssertTrap();
 			return 0;
+		case ID_DEBUG_ASSERT:
+			Assert(FALSE && "This is test assertion");
+			return 0;
 		#endif
 
 		case ID_DUMP_MEM_BLK:
@@ -1753,7 +1757,7 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 		case ID_TOMONITOR:
 		{
-			if (gpSet->isQuakeStyle || gpConEmu->mp_Inside)
+			if (!gpConEmu->IsSizeFree())
 				return 0;
 			if (!IsWindowVisible(ghWnd))
 				Icon.RestoreWindowFromTray();

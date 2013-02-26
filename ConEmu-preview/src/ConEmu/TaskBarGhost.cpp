@@ -40,7 +40,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define UPDATE_DELTA 1000
 
-ATOM CTaskBarGhost::mh_Class = NULL;
+ATOM CTaskBarGhost::mh_Class = 0;
 
 CTaskBarGhost::CTaskBarGhost(CVirtualConsole* apVCon)
 {
@@ -258,7 +258,7 @@ BOOL CTaskBarGhost::CreateTabSnapshoot()
 	        mbmi_Snap.bmiHeader.biPlanes = 1;
 	        mbmi_Snap.bmiHeader.biBitCount = 32;
 
-	        mh_Snap = CreateDIBSection(hdcMem, &mbmi_Snap, DIB_RGB_COLORS, (VOID**)&mpb_DS, NULL, NULL);
+	        mh_Snap = CreateDIBSection(hdcMem, &mbmi_Snap, DIB_RGB_COLORS, (VOID**)&mpb_DS, NULL, 0);
 
 			// Чтобы в созданном mh_Snap гарантировано не было "мусора"
 			if (mh_Snap && mpb_DS)
@@ -295,6 +295,7 @@ BOOL CTaskBarGhost::CreateTabSnapshoot()
 
 				if (!bLockSnapshoot)
 				{
+					WARNING("TODO: Use WM_PRINT & WM_PRINTCLIENT?");
 					// Нужно фото экрана
 					#if 1
 					// Этот метод вроде срабатывает, но
@@ -317,7 +318,7 @@ BOOL CTaskBarGhost::CreateTabSnapshoot()
 			{
 				// Просто отрисуем "консоль" на нашем DC
 				RECT rcPaint = m_TabSize.UsedRect;
-				mp_VCon->PaintVCon(hdcMem, rcPaint);
+				mp_VCon->PrintClient(hdcMem, true, &rcPaint);
 			}
 
 			SelectObject(hdcMem, hOld);
@@ -404,7 +405,7 @@ HBITMAP CTaskBarGhost::CreateThumbnail(int nWidth, int nHeight)
         bmi.bmiHeader.biBitCount = 32;
 
         PBYTE pbDS = NULL;
-        hbm = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, (VOID**)&pbDS, NULL, NULL);
+        hbm = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, (VOID**)&pbDS, NULL, 0);
         if (hbm != NULL)
         {
 			HBITMAP hOldMem = (HBITMAP)SelectObject(hdcMem, hbm);
@@ -626,6 +627,7 @@ LRESULT CTaskBarGhost::OnActivate(WPARAM wParam, LPARAM lParam)
 {
 	LRESULT lResult = 0;
 	HRESULT hr = S_FALSE;
+
 	// The taskbar will activate this window, so pass along the activation
 	// to the tab window outer frame.
 	if (LOWORD(wParam) == WA_ACTIVE)
@@ -663,6 +665,8 @@ LRESULT CTaskBarGhost::OnActivate(WPARAM wParam, LPARAM lParam)
 		// Forward message
 		SendMessage(ghWnd, WM_ACTIVATE, wParam, lParam);
 	}
+
+	UNREFERENCED_PARAMETER(hr);
 	return lResult;
 }
 
@@ -737,6 +741,7 @@ LRESULT CTaskBarGhost::OnDwmSendIconicThumbnail(short anWidth, short anHeight)
 		DeleteObject(hThumb);
 	}
 
+	UNREFERENCED_PARAMETER(hr);
 	return 0;
 }
 
@@ -866,6 +871,7 @@ LRESULT CTaskBarGhost::OnDwmSendIconicLivePreviewBitmap()
 		hr = gpConEmu->DwmSetIconicLivePreviewBitmap(mh_Ghost, mh_Snap, &ptOffset);
 	}
 
+	UNREFERENCED_PARAMETER(hr);
 	return 0;
 }
 
@@ -958,7 +964,7 @@ LRESULT CTaskBarGhost::GhostProc(UINT message, WPARAM wParam, LPARAM lParam)
 				{
 					ResetEvent(mh_SkipActivateEvent);
 					mb_WasSkipActivate = false;
-					OnActivate(WA_ACTIVE, NULL);
+					OnActivate(WA_ACTIVE, 0);
 				}
 			}
 			lResult = ::DefWindowProcW(mh_Ghost, message, wParam, lParam);

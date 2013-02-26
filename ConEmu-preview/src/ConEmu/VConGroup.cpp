@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Inside.h"
 #include "Options.h"
 #include "RealConsole.h"
+#include "RunQueue.h"
 #include "Status.h"
 #include "TabBar.h"
 #include "Update.h"
@@ -1286,6 +1287,7 @@ void CVConGroup::InvalidateAll()
 	for (size_t i = 0; i < countof(gp_VCon); i++)
 	{
 		CVConGuard VCon(gp_VCon[i]);
+
 		if (VCon.VCon() && isVisible(VCon.VCon()))
 			VCon.VCon()->Invalidate();
 	}
@@ -1320,8 +1322,8 @@ void CVConGroup::RePaint()
 			if (hView)
 			{
 				HDC hDc = GetDC(hView);
-				RECT rcClient = pVCon->GetDcClientRect();
-				pVCon->PaintVCon(hDc, rcClient);
+				//RECT rcClient = pVCon->GetDcClientRect();
+				pVCon->PaintVCon(hDc/*, rcClient*/);
 				ReleaseDC(ghWnd, hDc);
 			}
 		}
@@ -2205,7 +2207,7 @@ void CVConGroup::OnUpdateProcessDisplay(HWND hInfo)
 }
 
 // Возвращает HWND окна отрисовки
-HWND CVConGroup::DoSrvCreated(DWORD nServerPID, HWND hWndCon, DWORD& t1, DWORD& t2, DWORD& t3, int& iFound, HWND& hWndBack)
+HWND CVConGroup::DoSrvCreated(DWORD nServerPID, HWND hWndCon, DWORD dwKeybLayout, DWORD& t1, DWORD& t2, DWORD& t3, int& iFound, HWND& hWndBack)
 {
 	HWND hWndDC = NULL;
 
@@ -2222,7 +2224,7 @@ HWND CVConGroup::DoSrvCreated(DWORD nServerPID, HWND hWndCon, DWORD& t1, DWORD& 
 				iFound = i;
 				t1 = timeGetTime();
 				
-				pRCon->OnServerStarted(hWndCon, nServerPID);
+				pRCon->OnServerStarted(hWndCon, nServerPID, dwKeybLayout);
 				
 				t2 = timeGetTime();
 				
@@ -2756,6 +2758,9 @@ void CVConGroup::OnCreateGroupEnd()
 {
 	gn_CreateGroupStartVConIdx = 0;
 	gb_InCreateGroup = false;
+
+	// А вот теперь можно начинать запускать процессы
+	gpConEmu->mp_RunQueue->ProcessRunQueue(true);
 }
 
 CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts /*= false*/, bool abForceCurConsole /*= false*/)
@@ -3716,6 +3721,16 @@ void CVConGroup::Redraw()
 
 void CVConGroup::InvalidateGaps()
 {
+	if (ghWndWork)
+	{
+		InvalidateRect(ghWndWork, NULL, FALSE);
+	}
+	else
+	{
+		_ASSERTE(ghWndWork!=NULL);
+	}
+
+#if 0
 	int iRc = SIMPLEREGION;
 
 	RECT rc = {};
@@ -3767,6 +3782,7 @@ void CVConGroup::InvalidateGaps()
 
 wrap:
 	DeleteObject(h);
+#endif
 }
 
 // Должно вызываться ТОЛЬКО для DC в ghWndWork!!!

@@ -28,6 +28,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #define HOOKS_VIRTUAL_ALLOC
+#ifdef _DEBUG
+	#define REPORT_VIRTUAL_ALLOC
+#else
+	#undef REPORT_VIRTUAL_ALLOC
+#endif
+
 #define DROP_SETCP_ON_WIN2K3R2
 //#define SHOWDEBUGSTR -- специально отключено, CONEMU_MINIMAL, OutputDebugString могут нарушать работу процессов
 //#define SKIPHOOKLOG
@@ -76,6 +82,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/ConsoleAnnotation.h"
 #include "../common/clink.h"
 #include "../common/UnicodeChars.h"
+#include "../common/WinConsole.h"
 
 
 bool USE_INTERNAL_QUEUE = true;
@@ -179,7 +186,7 @@ wchar_t *gpszLastWriteConsole = NULL;
 HMODULE  ghClinkDll = NULL;
 call_readline_t gpfnClinkReadLine = NULL;
 bool     gbClinkInitialized = false;
-DWORD    gnAllowClinkUsage = 0; // cmd.exe only
+DWORD    gnAllowClinkUsage = 0; // cmd.exe only. 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
 /* ************ Globals for clink ************ */
 
 /* ************ Globals for powershell ************ */
@@ -271,7 +278,7 @@ int WINAPI OnCompareStringW(LCID Locale, DWORD dwCmpFlags, LPCWSTR lpString1, in
 DWORD WINAPI OnGetConsoleAliasesW(LPWSTR AliasBuffer, DWORD AliasBufferLength, LPWSTR ExeName);
 BOOL WINAPI OnReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
 BOOL WINAPI OnReadConsoleA(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID pInputControl);
-BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID pInputControl);
+BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, PCONSOLE_READCONSOLE_CONTROL pInputControl);
 BOOL WINAPI OnGetNumberOfConsoleInputEvents(HANDLE hConsoleInput, LPDWORD lpcNumberOfEvents);
 BOOL WINAPI OnFlushConsoleInputBuffer(HANDLE hConsoleInput);
 BOOL WINAPI OnPeekConsoleInputA(HANDLE hConsoleInput, PINPUT_RECORD lpBuffer, DWORD nLength, LPDWORD lpNumberOfEventsRead);
@@ -3618,13 +3625,15 @@ LONG WINAPI OnRegQueryValueExW(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserve
 	return lRc;
 }
 
-BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID pInputControl)
+
+BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, PCONSOLE_READCONSOLE_CONTROL pInputControl)
 {
-	typedef BOOL (WINAPI* OnReadConsoleW_t)(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID pInputControl);
+	typedef BOOL (WINAPI* OnReadConsoleW_t)(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, PCONSOLE_READCONSOLE_CONTROL pInputControl);
 	SUPPRESSORIGINALSHOWCALL;
 	ORIGINAL(ReadConsoleW);
 	BOOL lbRc = FALSE, lbProcessed = FALSE;
 	DWORD nErr = GetLastError();
+	DWORD nStartTick = GetTickCount(), nEndTick = 0;
 
 	OnReadConsoleStart(TRUE, hConsoleInput, lpBuffer, nNumberOfCharsToRead, lpNumberOfCharsRead, pInputControl);
 
@@ -3677,11 +3686,15 @@ BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberO
 	{
 		lbRc = F(ReadConsoleW)(hConsoleInput, lpBuffer, nNumberOfCharsToRead, lpNumberOfCharsRead, pInputControl);
 		nErr = GetLastError();
+		// Debug purposes
+		nEndTick = GetTickCount();
 	}
 
 	OnReadConsoleEnd(lbRc, TRUE, hConsoleInput, lpBuffer, nNumberOfCharsToRead, lpNumberOfCharsRead, pInputControl);
 	SetLastError(nErr);
 
+	UNREFERENCED_PARAMETER(nStartTick);
+	UNREFERENCED_PARAMETER(nEndTick);
 	return lbRc;
 }
 
@@ -4100,6 +4113,15 @@ BOOL WINAPI OnReadConsoleInputA(HANDLE hConsoleInput, PINPUT_RECORD lpBuffer, DW
 	//if (gpFarInfo && bMainThread)
 	//	TouchReadPeekConsoleInputs(0);
 	BOOL lbRc = FALSE;
+
+	#if defined(_DEBUG)
+	#if 1
+	UINT nCp = GetConsoleCP();
+	UINT nOutCp = GetConsoleOutputCP();
+	UINT nOemCp = GetOEMCP();
+	UINT nAnsiCp = GetACP();
+	#endif
+	#endif
 
 	if (ph && ph->PreCallBack)
 	{
@@ -4862,19 +4884,24 @@ LPVOID WINAPI OnVirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocation
 		//_ASSERTE(lpResult != NULL);
 		wchar_t szText[MAX_PATH*2], szTitle[64];
 		msprintf(szTitle, countof(szTitle), L"ConEmuHk, PID=%u, TID=%u", GetCurrentProcessId(), GetCurrentThreadId());
-		msprintf(szText, countof(szText), L"VirtualAlloc failed (0x%08X..0x%08X)\nErrorCode=0x%08X\n\nWarning! This will be an error in Release!\n\n",
-			(DWORD)lpAddress, (DWORD)((LPBYTE)lpAddress+dwSize));
+		msprintf(szText, countof(szText),
+			L"\nVirtualAlloc " WIN3264TEST(L"%u",L"x%X%08X") L" bytes failed (0x%08X..0x%08X)\nErrorCode=%u %s\n\nWarning! This will be an error in Release!\n\n",
+			WIN3264WSPRINT(dwSize),
+			(DWORD)lpAddress, (DWORD)((LPBYTE)lpAddress+dwSize),
+			nErr, (nErr == 487) ? L"(ERROR_INVALID_ADDRESS)" : L"");
 		GetModuleFileName(NULL, szText+lstrlen(szText), MAX_PATH);
-#if 1
+
+	#if defined(REPORT_VIRTUAL_ALLOC)
 		int iBtn = GuiMessageBox(NULL, szText, szTitle, MB_SYSTEMMODAL|MB_OKCANCEL|MB_ICONSTOP);
 		SetLastError(nErr);
 		if (iBtn == IDOK)
 		{
 			lpResult = F(VirtualAlloc)(NULL, dwSize, flAllocationType, flProtect);
 		}
-#else
+	#else
+		OutputDebugString(szText);
 		SetLastError(nErr);
-#endif
+	#endif
 	}
 	return lpResult;
 }

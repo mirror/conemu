@@ -63,6 +63,7 @@ enum ConEmuWindowMode;
 class CDefaultTerminal;
 class CConEmuMenu;
 class CConEmuInside;
+class CRunQueue;
 struct CEFindDlg;
 
 
@@ -70,6 +71,7 @@ struct MsgSrvStartedArg
 {
 	HWND  hConWnd;
 	DWORD nSrcPID;
+	DWORD dwKeybLayout;
 	DWORD timeStart;
 	DWORD timeRecv;
 	DWORD timeFin;
@@ -91,15 +93,15 @@ typedef BOOL (WINAPI* ImmSetCompositionWindow_t)(HIMC hIMC, LPCOMPOSITIONFORM lp
 typedef HIMC (WINAPI* ImmGetContext_t)(HWND hWnd);
 
 
-struct GuiShellExecuteExArg
-{
-	CVirtualConsole* pVCon;
-	SHELLEXECUTEINFO* lpShellExecute;
-	HANDLE hReadyEvent;
-	BOOL bInProcess;
-	BOOL bResult;
-	DWORD dwErrCode;
-};
+//struct GuiShellExecuteExArg
+//{
+//	CVirtualConsole* pVCon;
+//	SHELLEXECUTEINFO* lpShellExecute;
+//	HANDLE hReadyEvent;
+//	BOOL bInProcess;
+//	BOOL bResult;
+//	DWORD dwErrCode;
+//};
 
 
 
@@ -167,9 +169,20 @@ class CConEmuMain :
 		int mn_QuakePercent; // 0 - отключен, иначе (>0 && <=100) - идет анимация Quake
 		bool mb_InCreateWindow;
 		HMONITOR mh_MinFromMonitor;
+		bool mb_InShowMinimized; // true на время выполнения ShowWindow(SW_SHOWMIN...)
 	public:
 		bool InCreateWindow();
 		bool InQuakeAnimation();
+		UINT IsQuakeVisible();
+		bool InMinimizing();
+	protected:
+		struct WindowsOverQuake
+		{
+			RECT rcWnd;
+			HRGN hRgn;
+			int  iRc;
+		};
+		static BOOL CALLBACK EnumWindowsOverQuake(HWND hWnd, LPARAM lpData);
 	public:
 		//CConEmuChild *m_Child;
 		//CConEmuBack  *m_Back;
@@ -182,6 +195,7 @@ class CConEmuMain :
 		MFileLog *mp_Log;
 		CDefaultTerminal *mp_DefTrm;
 		CEFindDlg *mp_Find;
+		CRunQueue *mp_RunQueue;
 
 		void CreateLog();
 		void LogString(LPCWSTR asInfo, bool abWriteTime = true, bool abWriteLine = true);
@@ -199,7 +213,7 @@ class CConEmuMain :
 		bool isRestoreFromMinimized;
 		bool isWndNotFSMaximized; // ставится в true, если при переходе в FullScreen - был Maximized
 		bool isQuakeMinimized;    // изврат, для случая когда "Quake" всегда показывается на таскбаре
-		HMONITOR GetNearestMonitor(MONITORINFO* pmi = NULL, LPRECT prcWnd = NULL);
+		HMONITOR GetNearestMonitor(MONITORINFO* pmi = NULL, LPCRECT prcWnd = NULL);
 		HMONITOR GetPrimaryMonitor(MONITORINFO* pmi = NULL);
 		void StorePreMinimizeMonitor();
 
@@ -434,6 +448,7 @@ class CConEmuMain :
 		void CtrlWinAltSpace();
 	protected:
 		friend class CConEmuCtrl;
+		friend class CRunQueue;
 		//BOOL LowLevelKeyHook(UINT nMsg, UINT nVkKeyCode);
 		//DWORD_PTR mn_CurrentKeybLayout;
 		// Registered messages
@@ -457,7 +472,7 @@ class CConEmuMain :
 		UINT mn_MsgWinKeyFromHook;
 		//UINT mn_MsgConsoleHookedKey;
 		UINT mn_MsgSheelHook;
-		UINT mn_ShellExecuteEx;
+		//UINT mn_ShellExecuteEx;
 		UINT mn_PostConsoleResize;
 		UINT mn_ConsoleLangChanged;
 		UINT mn_MsgPostOnBufferHeight;
@@ -480,6 +495,9 @@ class CConEmuMain :
 		UINT mn_MsgTaskBarCreated;
 		UINT mn_MsgPanelViewMapCoord;
 		UINT mn_MsgTaskBarBtnCreated;
+		UINT mn_MsgRequestRunProcess;
+
+		void SetRunQueueTimer(bool bSet, UINT uElapse);
 
 		//
 		virtual void OnUseGlass(bool abEnableGlass);
@@ -493,10 +511,13 @@ class CConEmuMain :
 		static INT_PTR CALLBACK aboutProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lParam);
 
 		//
-		CRITICAL_SECTION mcs_ShellExecuteEx;
-		MArray<GuiShellExecuteExArg*> m_ShellExecuteQueue;
-		void GuiShellExecuteExQueue();
-		bool mb_InShellExecuteQueue;
+		//CRITICAL_SECTION mcs_ShellExecuteEx;
+		//MArray<GuiShellExecuteExArg*> m_ShellExecuteQueue;
+		//void GuiShellExecuteExQueue();
+		//bool mb_InShellExecuteQueue;
+
+		bool ExecuteProcessPrepare();
+		void ExecuteProcessFinished(bool bOpt);
 
 	public:
 		DWORD CheckProcesses();
@@ -573,7 +594,7 @@ class CConEmuMain :
 		void SetWindowStyleEx(HWND ahWnd, DWORD anStyleEx);
 		DWORD GetWorkWindowStyle();
 		DWORD GetWorkWindowStyleEx();
-		LRESULT GuiShellExecuteEx(SHELLEXECUTEINFO* lpShellExecute, CVirtualConsole* apVCon);
+		//LRESULT GuiShellExecuteEx(SHELLEXECUTEINFO* lpShellExecute, CVirtualConsole* apVCon);
 		BOOL Init();
 		void InitInactiveDC(CVirtualConsole* apVCon);
 		void Invalidate(CVirtualConsole* apVCon);
@@ -650,6 +671,10 @@ class CConEmuMain :
 		ConEmuWindowMode GetWindowMode();
 		bool SetWindowMode(ConEmuWindowMode inMode, BOOL abForce = FALSE, BOOL abFirstShow = FALSE);
 		bool SetQuakeMode(BYTE NewQuakeMode, ConEmuWindowMode nNewWindowMode = wmNotChanging, bool bFromDlg = false);
+		bool SetTileMode(ConEmuWindowCommand Tile);
+		ConEmuWindowCommand GetTileMode(bool Estimate);
+		bool IsSizeFree(ConEmuWindowMode CheckMode = wmFullScreen);
+		bool JumpNextMonitor(bool Next);
 	private:
 		struct {
 			bool bWasSaved;
@@ -660,6 +685,12 @@ class CConEmuMain :
 			ConEmuWindowMode WindowMode;
 			IdealRectInfo rcIdealInfo;
 		} m_QuakePrevSize;
+		ConEmuWindowCommand m_TileMode;
+		struct {
+			RECT rcNewPos;
+			bool bInJump;
+			bool bFullScreen, bMaximized;
+		} m_JumpMonitor;
 	public:
 		//void ShowMenuHint(HMENU hMenu, WORD nID, WORD nFlags);
 		//void ShowKeyBarHint(HMENU hMenu, WORD nID, WORD nFlags);
@@ -709,7 +740,7 @@ class CConEmuMain :
 		void OnAltF9(BOOL abPosted=FALSE);
 		void OnMinimizeRestore(SingleInstanceShowHideType ShowHideType = sih_None);
 		void OnForcedFullScreen(bool bSet = true);
-		void OnSwitchGuiFocus(int DescrID);
+		void OnSwitchGuiFocus(SwitchGuiFocusOp FocusOp);
 		void OnAlwaysOnTop();
 		void OnAlwaysShowScrollbar(bool abSync = true);
 		void OnBufferHeight();

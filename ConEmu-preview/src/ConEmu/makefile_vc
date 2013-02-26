@@ -47,21 +47,25 @@ $(INTDIR)\FindDlg.obj \
 $(INTDIR)\FrameHolder.obj \
 $(INTDIR)\GestureEngine.obj \
 $(INTDIR)\GuiServer.obj \
+$(INTDIR)\Hotkeys.obj \
 $(INTDIR)\Inside.obj \
 $(INTDIR)\LoadImg.obj \
 $(INTDIR)\Macro.obj \
 $(INTDIR)\Menu.obj \
 $(INTDIR)\MAssert.obj \
 $(INTDIR)\Memory.obj \
+$(INTDIR)\Monitors.obj \
 $(INTDIR)\MSecurity.obj \
 $(INTDIR)\MStrSafe.obj \
 $(INTDIR)\Options.obj \
 $(INTDIR)\OptionsClass.obj \
 $(INTDIR)\OptionsFast.obj \
+$(INTDIR)\OptionsHelp.obj \
 $(INTDIR)\RConStartArgs.obj \
 $(INTDIR)\RealBuffer.obj \
 $(INTDIR)\RealConsole.obj \
 $(INTDIR)\RealServer.obj \
+$(INTDIR)\RunQueue.obj \
 $(INTDIR)\Recreate.obj \
 $(INTDIR)\Registry.obj \
 $(INTDIR)\RgnDetect.obj \
@@ -78,6 +82,7 @@ $(INTDIR)\VConChild.obj \
 $(INTDIR)\VConGroup.obj \
 $(INTDIR)\VConRelease.obj \
 $(INTDIR)\VirtualConsole.obj \
+$(INTDIR)\WinConsole.obj \
 $(INTDIR)\WinObjects.obj
 
 
@@ -268,6 +273,8 @@ $(INTDIR)\GestureEngine.obj: GestureEngine.cpp GestureEngine.h
 
 $(INTDIR)\GuiServer.obj: GuiServer.cpp GuiServer.h ConEmu.h RealConsole.h VirtualConsole.h
 
+$(INTDIR)\Hotkeys.obj: Hotkeys.cpp Hotkeys.h
+
 $(INTDIR)\Inside.obj: Inside.cpp Inside.h
 
 $(INTDIR)\LoadImg.obj: LoadImg.cpp LoadImg.h
@@ -280,6 +287,8 @@ $(INTDIR)\MAssert.obj: ../common/MAssert.cpp
 
 $(INTDIR)\Memory.obj: ../common/Memory.cpp
 
+$(INTDIR)\Monitors.obj: ../common/Monitors.cpp
+
 $(INTDIR)\MSecurity.obj: ../common/MSecurity.cpp
 
 $(INTDIR)\MStrSafe.obj: ../common/MStrSafe.cpp
@@ -290,6 +299,8 @@ $(INTDIR)\OptionsClass.obj: OptionsClass.cpp OptionsClass.h Options.h Background
 
 $(INTDIR)\OptionsFast.obj: OptionsFast.cpp OptionsFast.h Options.h
 
+$(INTDIR)\OptionsHelp.obj: OptionsHelp.cpp OptionsHelp.h
+
 $(INTDIR)\RConStartArgs.obj: ../common/RConStartArgs.cpp ../common/RConStartArgs.h
 
 $(INTDIR)\RealBuffer.obj: RealBuffer.cpp RealBuffer.h RealConsole.h  ../common/Common.hpp
@@ -297,6 +308,8 @@ $(INTDIR)\RealBuffer.obj: RealBuffer.cpp RealBuffer.h RealConsole.h  ../common/C
 $(INTDIR)\RealConsole.obj: RealConsole.cpp RealConsole.h RealServer.h ../common/RConStartArgs.h ../common/Common.hpp ../common/PipeServer.h
 
 $(INTDIR)\RealServer.obj: RealServer.cpp RealConsole.h RealServer.h ../common/Common.hpp ../common/PipeServer.h
+
+$(INTDIR)\RunQueue.obj: RunQueue.cpp RunQueue.h
 
 $(INTDIR)\Recreate.obj: Recreate.cpp Recreate.h
 
@@ -329,6 +342,8 @@ $(INTDIR)\VConGroup.obj: VConGroup.cpp VConRelease.h VirtualConsole.h VConChild.
 $(INTDIR)\VConRelease.obj: VConRelease.cpp VConRelease.h VirtualConsole.h VConChild.h
 
 $(INTDIR)\VirtualConsole.obj: VirtualConsole.cpp VConRelease.h VirtualConsole.h VConChild.h VConGroup.h
+
+$(INTDIR)\WinConsole.obj: ../common/WinConsole.cpp
 
 $(INTDIR)\WinObjects.obj: ../common/WinObjects.cpp
 

@@ -138,7 +138,6 @@ extern size_t gnHeapUsed, gnHeapMax;
 extern HANDLE ghFarInExecuteEvent;
 #endif
 
-//#include <vector>
 #include "../common/common.hpp"
 #include "../common/ConEmuCheck.h"
 #include "../common/WinObjects.h"
@@ -277,6 +276,7 @@ HWND FindConEmuByPID();
 typedef BOOL (__stdcall *FGetConsoleKeyboardLayoutName)(wchar_t*);
 extern FGetConsoleKeyboardLayoutName pfnGetConsoleKeyboardLayoutName;
 void CheckKeyboardLayout();
+bool IsKeyboardLayoutChanged(DWORD* pdwLayout);
 int CALLBACK FontEnumProc(ENUMLOGFONTEX *lpelfe, NEWTEXTMETRICEX *lpntme, DWORD FontType, LPARAM lParam);
 typedef DWORD (WINAPI* FGetConsoleProcessList)(LPDWORD lpdwProcessList, DWORD dwProcessCount);
 extern FGetConsoleProcessList pfnGetConsoleProcessList;
@@ -330,6 +330,8 @@ void DisableAutoConfirmExit(BOOL abFromFarPlugin=FALSE);
 
 int MySetWindowRgn(CESERVER_REQ_SETWINDOWRGN* pRgn);
 
+bool IsAutoAttachAllowed();
+
 //int InjectHooks(PROCESS_INFORMATION pi, BOOL abForceGui);
 
 #ifdef _DEBUG
@@ -365,6 +367,7 @@ typedef enum tag_RunMode
 
 extern RunMode gnRunMode;
 
+extern BOOL gbDumpServerInitStatus;
 extern BOOL gbNoCreateProcess;
 extern BOOL gbDebugProcess;
 extern int  gnCmdUnicodeMode;

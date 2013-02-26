@@ -67,8 +67,8 @@ CDragDrop::CDragDrop()
 	mp_DataObject = NULL;
 	//mb_selfdrag = NULL;
 	m_DesktopID.mkid.cb = 0;
-	mh_Overlapped = NULL; mh_BitsDC = NULL; mh_BitsBMP = mh_BitsBMP_Old = NULL;
-	mp_Bits = NULL;
+	//mh_Overlapped = NULL; mh_BitsDC = NULL; mh_BitsBMP = mh_BitsBMP_Old = NULL;
+	//mp_Bits = NULL;
 	mn_AllFiles = 0; mn_CurWritten = 0; mn_CurFile = 0;
 	mb_DragWithinNow = FALSE;
 	mn_ExtractIconsTID = 0;
@@ -87,8 +87,8 @@ void CDragDrop::DebugLog(LPCWSTR asInfo, BOOL abErrorSeverity/*=FALSE*/)
 
 CDragDrop::~CDragDrop()
 {
-	DestroyDragImageBits();
-	DestroyDragImageWindow();
+	//DestroyDragImageBits();
+	//DestroyDragImageWindow();
 
 	if (mb_DragDropRegistered && ghWnd)
 	{
@@ -107,14 +107,20 @@ CDragDrop::~CDragDrop()
 		{
 			// Terminate all shell (copying) threads
 			EnterCriticalSection(&m_CrThreads);
-			std::vector<ThInfo>::iterator iter = m_OpThread.begin();
+			//std::vector<ThInfo>::iterator iter = m_OpThread.begin();
 
-			while (iter != m_OpThread.end())
+			//while (iter != m_OpThread.end())
+			while (m_OpThread.size() > 0)
 			{
+				INT_PTR j = m_OpThread.size()-1;
+				const ThInfo* iter = &(m_OpThread[j]);
+				
 				HANDLE hThread = iter->hThread;
 				TerminateThread(hThread, 100);
 				CloseHandle(hThread);
-				iter = m_OpThread.erase(iter);
+
+				//iter = m_OpThread.erase(iter);
+				m_OpThread.erase(j);
 			}
 
 			LeaveCriticalSection(&m_CrThreads);
@@ -154,7 +160,7 @@ void CDragDrop::Drag(BOOL abClickNeed, COORD crMouseDC)
 	DWORD dwAllowedEffects = 0, dwResult = 0, dwEffect = 0;;
 	IDropSource *pDropSource = NULL;
 #ifdef PRESIST_OVL
-	_ASSERTE(mh_Overlapped!=NULL);
+	//_ASSERTE(mh_Overlapped!=NULL);
 #endif
 
 	if (!gpSet->isDragEnabled /*|| isInDrag */|| gpConEmu->isDragging())
@@ -243,68 +249,41 @@ wrap:
 	return;
 }
 
-wchar_t* CDragDrop::FileCreateName(BOOL abActive, BOOL abWide, BOOL abFolder, LPCWSTR asSubFolder, LPVOID asFileName)
+wchar_t* CDragDrop::FileCreateName(BOOL abActive, BOOL abFolder, LPCWSTR asSubFolder, LPCWSTR asFileName)
 {
-	if (!asFileName ||
-	        (abWide && ((wchar_t*)asFileName)[0] == 0) ||
-	        (!abWide && ((char*)asFileName)[0] == 0))
+	if (!asFileName || !*asFileName)
 	{
-		MBoxA(_T("Can't drop file! Filename is empty!"));
+		AssertMsg(L"Can't drop file! Filename is empty!");
 		return NULL;
 	}
 
 	wchar_t *pszFullName = NULL;
-	wchar_t* pszNameW = (wchar_t*)asFileName;
-	char* pszNameA = (char*)asFileName;
+	LPCWSTR pszNameW = asFileName;
 	INT_PTR nSize = 0;
 	LPCWSTR pszPanelPath = abActive ? m_pfpi->pszActivePath : m_pfpi->pszPassivePath;
 	INT_PTR nPathLen = _tcslen(pszPanelPath) + 1;
 	INT_PTR nSubFolderLen = (asSubFolder && *asSubFolder) ? _tcslen(asSubFolder) : 0;
-	nSize = nPathLen + nSubFolderLen + 16;
+	nSize = nPathLen + nSubFolderLen + 17;
 
-	if (abWide)
+
+	LPCWSTR pszSlash = wcsrchr(pszNameW, L'\\');
+
+	if (pszSlash)
 	{
-		wchar_t* pszSlash = wcsrchr(pszNameW, L'\\');
-
-		if (pszSlash)
+		if (!abFolder)
 		{
-			if (!abFolder)
-			{
-				_ASSERTE(abFolder || (pszSlash == NULL) || wcsncmp(pszNameW, asSubFolder, _tcslen(asSubFolder))==0);
-				pszNameW = pszSlash+1;
-			}
+			_ASSERTE(abFolder || (pszSlash == NULL) || wcsncmp(pszNameW, asSubFolder, _tcslen(asSubFolder))==0);
+			pszNameW = pszSlash+1;
 		}
-
-		if (!*pszNameW)
-		{
-			MBoxA(_T("Can't drop file! Filename is empty (W)!"));
-			return NULL;
-		}
-
-		nSize += _tcslen(pszNameW)+1;
 	}
-	else
+
+	if (!*pszNameW)
 	{
-		char* pszSlash = strrchr(pszNameA, '\\');
-
-		if (pszSlash)
-		{
-			if (!abFolder)
-			{
-				_ASSERTE(abFolder || (pszSlash == NULL));
-				//_ASSERTE(strncmp(pszNameW, asSubFolder, strlen(asSubFolder))==0);
-				pszNameA = pszSlash+1;
-			}
-		}
-
-		if (!*pszNameA)
-		{
-			MBoxA(_T("Can't drop file! Filename is empty (A)!"));
-			return NULL;
-		}
-
-		nSize += strlen(pszNameA)+1;
+		MBoxA(_T("Can't drop file! Filename is empty (W)!"));
+		return NULL;
 	}
+
+	nSize += _tcslen(pszNameW)+1;
 
 	MCHKHEAP;
 	pszFullName = (wchar_t*)calloc(nSize, 2);
@@ -362,14 +341,22 @@ wchar_t* CDragDrop::FileCreateName(BOOL abActive, BOOL abWide, BOOL abFolder, LP
 		}
 	}
 
-	if (abWide)
+
+	wcscpy(pszFullName+nPathLen, pszNameW);
+
+	// Отрезать хвостовые пробелы. Гррр....
+	INT_PTR nTotal = _tcslen(pszFullName);
+	while ((nTotal > 0) && (pszFullName[nTotal-1] == L' '))
 	{
-		wcscpy(pszFullName+nPathLen, pszNameW);
+		pszFullName[--nTotal] = 0;
 	}
-	else
+	if (!abFolder && ((nTotal <= 0) || (pszFullName[nTotal - 1] == L'\\')))
 	{
-		MultiByteToWideChar(CP_ACP, 0, pszNameA, -1, pszFullName+nPathLen, nSize - nPathLen);
+		Assert((nTotal > 0) && (pszFullName[nTotal - 1] != L'\\'));
+		free(pszFullName);
+		return NULL;
 	}
+
 
 	MCHKHEAP;
 	// Путь готов, проверяем наличие файла?
@@ -415,8 +402,9 @@ wchar_t* CDragDrop::FileCreateName(BOOL abActive, BOOL abWide, BOOL abFolder, LP
 			FILETIME ftl;
 			FileTimeToLocalFileTime(&fnd.ftLastWriteTime, &ftl);
 			SYSTEMTIME st; FileTimeToSystemTime(&ftl, &st);
-			_wsprintf(pszMsg, SKIPLEN(nCchSize) L"File already exists!\n\n%s\nSize: %I64i\nDate: %02i.%02i.%i %02i:%02i:%02i\n\nOverwrite?",
-			          pszFullName, liSize.QuadPart, st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
+			_wsprintf(pszMsg, SKIPLEN(nCchSize)
+				L"File already exists!\n\n%s\nSize: %I64i\nDate: %02i.%02i.%i %02i:%02i:%02i\n\nOverwrite?",
+				pszFullName, liSize.QuadPart, st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute, st.wSecond);
 			int nRc = MessageBox(ghWnd, pszMsg, gpConEmu->GetDefaultTitle(), MB_ICONEXCLAMATION|MB_YESNO);
 			free(pszMsg);
 
@@ -430,6 +418,18 @@ wchar_t* CDragDrop::FileCreateName(BOOL abActive, BOOL abWide, BOOL abFolder, LP
 			if (fnd.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_READONLY))
 				SetFileAttributes(pszFullName, FILE_ATTRIBUTE_NORMAL);
 		}
+	}
+
+	// Folder? Add trailing slash
+	if (abFolder)
+	{
+		nTotal = _tcslen(pszFullName);
+		if ((nTotal > 0) && (pszFullName[nTotal-1] != L'\\'))
+		{
+			pszFullName[nTotal++] = L'\\';
+			pszFullName[nTotal] = 0;
+		}
+		_ASSERTE((nTotal > 0) && (pszFullName[nTotal-1] == L'\\'));
 	}
 
 	MCHKHEAP;
@@ -557,12 +557,22 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 			fmtetc.cfFormat = RegisterClipboardFormat(CFSTR_FILECONTENTS);
 			wchar_t szSubFolder[32768]; szSubFolder[0] = 0;
 
-			for(mn_CurFile = 0; mn_CurFile<mn_AllFiles; mn_CurFile++)
+			int nLastProgress = -1;
+
+			for (mn_CurFile = 0; mn_CurFile<mn_AllFiles; mn_CurFile++)
 			{
+				int nProgress = (mn_CurFile * 100 / mn_AllFiles);
+				if (nLastProgress != nProgress)
+				{
+					gpConEmu->Taskbar_SetProgressValue(nProgress);
+					nLastProgress = nProgress;
+				}
+
 				BOOL lbKnownMedium = FALSE;
 				BOOL lbFolder = FALSE;
 				fmtetc.lindex = mn_CurFile;
 
+				// Well, here we may get different structures...
 				if (lbWide)
 				{
 					ptrFileName = (LPVOID)(pDescW->fgd[mn_CurFile].cFileName);
@@ -574,7 +584,140 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 					lbFolder = (pDescA->fgd[mn_CurFile].dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY;
 				}
 
-				wchar_t* pszNewFileName = FileCreateName(abActive, lbWide, lbFolder, lbFolder ? NULL : szSubFolder, ptrFileName);
+				// But we need UNICODE strings
+				wchar_t* pszWideBuf = lbWide ? NULL : lstrdupW((LPCSTR)ptrFileName);
+				LPCWSTR pszWideName = lbWide ? (LPCWSTR)ptrFileName : pszWideBuf;
+
+				bool bCreateFolder = lbFolder;
+				wchar_t* pszNewFolder = NULL;
+
+				if (!lbFolder)
+				{
+					// Файл? Сменилась подпапка?
+					LPCWSTR pszSlash = wcsrchr(pszWideName, L'\\');
+
+					if (pszSlash)
+					{
+						INT_PTR nFolderLen = pszSlash - pszWideName; // БЕЗ слеша
+						INT_PTR nCurFolderLen = _tcslen(szSubFolder); // с учетом слеша
+						int nCmp = wcsncmp(pszWideName, szSubFolder, nCurFolderLen);
+
+						if (((nFolderLen + 1) != nCurFolderLen) && (nCmp == 0))
+						{
+							// OK, папка уже была создана
+						}
+						else
+						{
+							//_ASSERTE(FALSE && "Folder was not processed from DragObject?");
+							
+							// Поместить новый путь в SubFolder
+
+							if ((nFolderLen + 1) >= (INT_PTR)countof(szSubFolder))
+							{
+								_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i contains too long path!", mn_CurFile+1);
+								DebugLog(sUnknownError, TRUE);
+								SafeFree(pszWideBuf);
+								continue;
+							}
+
+							wmemmove(szSubFolder, pszWideName, (nFolderLen + 1)*sizeof(*szSubFolder));
+							szSubFolder[(nFolderLen + 1)] = 0;
+
+							pszNewFolder = FileCreateName(abActive, true, NULL, szSubFolder);
+							_ASSERTE(pszNewFolder!=NULL);
+							bCreateFolder = (pszNewFolder != NULL);
+						}
+					}
+					else
+					{
+						_ASSERTE((szSubFolder[0]==0) && "Files in stream must contains local paths?");
+						// Сброс папки. По идее, файлы должны указываться с относительными путями.
+						szSubFolder[0] = 0;
+					}
+				}
+				else
+				{
+					pszNewFolder = FileCreateName(abActive, true, NULL, pszWideName);
+					_ASSERTE(pszNewFolder!=NULL);
+					bCreateFolder = (pszNewFolder != NULL);
+				}
+
+				// Folders must be created
+				if (bCreateFolder)
+				{
+					//SafeFree(pszWideBuf);
+
+					if (!pszNewFolder)
+					{
+						Assert(pszNewFolder!=NULL);
+
+						if (sUnknownError[0] == 0)
+							_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i has invalid file name!", mn_CurFile+1);
+
+						SafeFree(pszWideBuf);
+						continue;
+					}
+
+					// if !lbFolder - szSubFolder already processed
+					if (lbFolder)
+					{
+						// Запомнить текущий путь в SubFolder
+						INT_PTR nFolderLen = _tcslen(pszWideName);
+
+						if ((nFolderLen + 1) >= (INT_PTR)countof(szSubFolder))
+						{
+							_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i contains too long path!", mn_CurFile+1);
+							DebugLog(sUnknownError, TRUE);
+							SafeFree(pszNewFolder);
+							SafeFree(pszWideBuf);
+							continue;
+						}
+
+						wcscpy_c(szSubFolder, pszWideName);
+
+						if (szSubFolder[nFolderLen-1] != L'\\')
+						{
+							szSubFolder[nFolderLen++] = L'\\';
+							szSubFolder[nFolderLen] = 0;
+						}
+					}
+
+					// Раз это папка - просто создать
+					if (!MyCreateDirectory(pszNewFolder))
+					{
+						DWORD nErr = GetLastError();
+
+						if (nErr != ERROR_ALREADY_EXISTS)
+						{
+							INT_PTR nLen = _tcslen(pszNewFolder) + 128;
+							wchar_t* pszErr = (wchar_t*)malloc(nLen*sizeof(*pszErr));
+							_wsprintf(pszErr, SKIPLEN(nLen) L"Can't create directory for drag item #%i!\n%s\nError code=0x%08X", mn_CurFile+1, pszNewFolder, nErr);
+							
+							AssertMsg(pszErr);
+
+							SafeFree(pszErr);
+							SafeFree(pszNewFolder);
+							SafeFree(pszWideBuf);
+							break;
+						}
+					}
+
+					MCHKHEAP;
+					SafeFree(pszNewFolder);
+
+					if (lbFolder)
+					{
+						SafeFree(pszWideBuf);
+						continue; // переходим к следующему файлу/папке
+					}
+				}
+
+
+				// Files now
+
+				wchar_t* pszNewFileName = FileCreateName(abActive, false, szSubFolder, pszWideName);
+
+				SafeFree(pszWideBuf);
 
 				if (!pszNewFileName)
 				{
@@ -582,49 +725,6 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 						_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i has invalid file name!", mn_CurFile+1);
 
 					continue;
-				}
-
-				if (lbFolder)
-				{
-					// Запомнить текущий путь в SubFolder
-					INT_PTR nFolderLen = lbWide ? (_tcslen((LPCWSTR)ptrFileName)) : (strlen((LPCSTR)ptrFileName));
-
-					if ((nFolderLen + 1) >= (INT_PTR)countof(szSubFolder))
-					{
-						_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i contains too long path!", mn_CurFile+1);
-						DebugLog(sUnknownError, TRUE);
-						free(pszNewFileName); pszNewFileName = NULL;
-						continue;
-					}
-
-					if (lbWide)
-						lstrcpy(szSubFolder, (LPCWSTR)ptrFileName);
-					else
-						MultiByteToWideChar(CP_ACP, 0, (LPCSTR)ptrFileName, -1, szSubFolder, MAX_PATH);
-
-					if (szSubFolder[nFolderLen-1] != L'\\')
-						lstrcat(szSubFolder, L"\\");
-
-					// Раз это папка - просто создать
-					if (!CreateDirectory(pszNewFileName, NULL))
-					{
-						DWORD nErr = GetLastError();
-
-						if (nErr != ERROR_ALREADY_EXISTS)
-						{
-							INT_PTR nLen = _tcslen(pszNewFileName) + 128;
-							wchar_t* pszErr = (wchar_t*)malloc(nLen*2);
-							_wsprintf(pszErr, SKIPLEN(nLen) L"Can't create directory for drag item #%i!\n%s\nError code=0x%08X", mn_CurFile+1, pszNewFileName, nErr);
-							MessageBox(NULL, pszErr, gpConEmu->GetDefaultTitle(), MB_OK|MB_ICONSTOP|MB_SYSTEMMODAL);
-							free(pszErr);
-							free(pszNewFileName); pszNewFileName = NULL;
-							break;
-						}
-					}
-
-					MCHKHEAP;
-					free(pszNewFileName); pszNewFileName = NULL;
-					continue; // переходим к следующему файлу
 				}
 
 				// !! The caller then assumes responsibility for releasing the STGMEDIUM structure.
@@ -771,6 +871,8 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 	ReportUnknownData(pDataObject, L"Drag object does not contains known formats!");
 wrap:
 	SafeFree(cBuffer);
+	gpConEmu->Taskbar_SetProgressState(0);
+	gpConEmu->UpdateTitle();
 	return S_OK;
 }
 
@@ -1035,13 +1137,13 @@ HRESULT STDMETHODCALLTYPE CDragDrop::Drop(IDataObject * pDataObject,DWORD grfKey
 	HRESULT hrHelper = S_FALSE; UNREFERENCED_PARAMETER(hrHelper);
 
 	mb_DragWithinNow = FALSE;
-	DestroyDragImageBits();
-
-	#ifdef PERSIST_OVL
-	MoveDragWindow(FALSE);
-	#else
-	DestroyDragImageWindow();
-	#endif
+	//DestroyDragImageBits();
+//
+	//#ifdef PERSIST_OVL
+	//MoveDragWindow(FALSE);
+	//#else
+	//DestroyDragImageWindow();
+	//#endif
 
 	gpConEmu->SetDragCursor(NULL);
 	//PostMessage(ghWnd, WM_SETCURSOR, -1, -1);
@@ -1070,14 +1172,8 @@ HRESULT STDMETHODCALLTYPE CDragDrop::Drop(IDataObject * pDataObject,DWORD grfKey
 		_ASSERTE(!mb_IsUpdatePackage || mpsz_UpdatePackage);
 		if (mb_IsUpdatePackage && mpsz_UpdatePackage)
 		{
-			if (!gpUpd)
-				gpUpd = new CConEmuUpdate;
-
-			if (gpUpd)
-			{
-				gpUpd->StartLocalUpdate(mpsz_UpdatePackage);
-				return S_OK;
-			}
+			CConEmuUpdate::LocalUpdate(mpsz_UpdatePackage);
+			return S_OK;
 		}
 		return S_FALSE;
 	}
@@ -1140,7 +1236,8 @@ HRESULT STDMETHODCALLTYPE CDragDrop::Drop(IDataObject * pDataObject,DWORD grfKey
 	{
 		if (mb_selfdrag || lbDropFileNamesOnly)
 		{
-			MBoxA(_T("Drag object does not contains known formats!"));
+			//MBoxA(_T("Drag object does not contains known formats!"));
+			ReportUnknownData(pDataObject, L"Drag object does not contains real file names!\nCan't drop here from containers like Zip or Outlook!");
 			return S_OK;
 		}
 
@@ -1329,18 +1426,22 @@ DWORD CDragDrop::ShellOpThreadProc(LPVOID lpParameter)
 	delete sfop;
 	HANDLE hTh = NULL;
 	EnterCriticalSection(&pDragDrop->m_CrThreads);
-	std::vector<ThInfo>::iterator iter = pDragDrop->m_OpThread.begin();
+	//std::vector<ThInfo>::iterator iter = pDragDrop->m_OpThread.begin();
 
-	while (iter != pDragDrop->m_OpThread.end())
+	//while (iter != pDragDrop->m_OpThread.end())
+	for (INT_PTR j = 0; j < pDragDrop->m_OpThread.size(); j++)
 	{
+		const ThInfo* iter = &(pDragDrop->m_OpThread[j]);
+
 		if (dwThreadId == iter->dwThreadId)
 		{
 			hTh = iter->hThread;
-			iter = pDragDrop->m_OpThread.erase(iter);
+			//iter = pDragDrop->m_OpThread.erase(iter);
+			pDragDrop->m_OpThread.erase(j);
 			break;
 		}
 
-		++iter;
+		//++iter;
 	}
 
 	LeaveCriticalSection(&pDragDrop->m_CrThreads);
@@ -1500,28 +1601,28 @@ HRESULT CDragDrop::DragOverInt(DWORD grfKeyState,POINTL pt,DWORD * pdwEffect)
 	DEBUGSTROVERINT(szDbgInfo);
 #endif
 
-	if (!mb_selfdrag)
-	{
-		if (*pdwEffect == DROPEFFECT_NONE)
-		{
-			MoveDragWindow(FALSE);
-		}
-		else if (mh_Overlapped && mp_Bits)
-		{
-			MoveDragWindow(!UseTargetHelper(mb_selfdrag));
-		}
-		else if (mp_Bits)
-		{
-			#if defined(USE_CHILD_OVL)
-			if (!mh_Overlapped)
-				CreateDragImageWindow();
-			#elif defined(PERSIST_OVL)
-			_ASSERTE(mh_Overlapped); // должно быть создано при запуске ConEmu
-			#else
-			CreateDragImageWindow();
-			#endif
-		}
-	}
+	//if (!mb_selfdrag)
+	//{
+	//	if (*pdwEffect == DROPEFFECT_NONE)
+	//	{
+	//		MoveDragWindow(FALSE);
+	//	}
+	//	else if (mh_Overlapped && mp_Bits)
+	//	{
+	//		MoveDragWindow(!UseTargetHelper(mb_selfdrag));
+	//	}
+	//	else if (mp_Bits)
+	//	{
+	//		#if defined(USE_CHILD_OVL)
+	//		if (!mh_Overlapped)
+	//			CreateDragImageWindow();
+	//		#elif defined(PERSIST_OVL)
+	//		_ASSERTE(mh_Overlapped); // должно быть создано при запуске ConEmu
+	//		#else
+	//		CreateDragImageWindow();
+	//		#endif
+	//	}
+	//}
 
 	DEBUGSTRSTEP(_T("DnD: DragOverInt ok"));
 	return hr;
@@ -1547,7 +1648,7 @@ HRESULT STDMETHODCALLTYPE CDragDrop::DragEnter(IDataObject * pDataObject,DWORD g
 
 	CheckIsUpdatePackage(pDataObject);
 
-	bool bNeedLoadImg = false;
+	//bool bNeedLoadImg = false;
 
 	if (gpSet->isDropEnabled /*&& !mb_selfdrag*/ && NeedRefreshToInfo(pt))
 	{
@@ -1573,23 +1674,23 @@ HRESULT STDMETHODCALLTYPE CDragDrop::DragEnter(IDataObject * pDataObject,DWORD g
 			//// Скорректировать допустимые действия
 			//DragOverInt(grfKeyState, pt, pdwEffect);
 
-			if (LoadDragImageBits(pDataObject))
-			{
-				#ifdef PERSIST_OVL
-				if (!mh_Overlapped || !IsWindow(mh_Overlapped))
-				{
-					_ASSERTE(mh_Overlapped); // должно быть создано при запуске ConEmu
-					mh_Overlapped = NULL;
-					CreateDragImageWindow();
-				}
-				else
-				{
-					InvalidateRect(mh_Overlapped, NULL, TRUE);
-				}
-				#else
-				CreateDragImageWindow();
-				#endif
-			}
+			//if (LoadDragImageBits(pDataObject))
+			//{
+			//	#ifdef PERSIST_OVL
+			//	if (!mh_Overlapped || !IsWindow(mh_Overlapped))
+			//	{
+			//		_ASSERTE(mh_Overlapped); // должно быть создано при запуске ConEmu
+			//		mh_Overlapped = NULL;
+			//		CreateDragImageWindow();
+			//	}
+			//	else
+			//	{
+			//		InvalidateRect(mh_Overlapped, NULL, TRUE);
+			//	}
+			//	#else
+			//	CreateDragImageWindow();
+			//	#endif
+			//}
 		}
 	}
 	else
@@ -1619,20 +1720,20 @@ HRESULT STDMETHODCALLTYPE CDragDrop::DragLeave(void)
 
 	mb_DragWithinNow = FALSE;
 
-	if (mb_selfdrag)
-	{
-		MoveDragWindow(FALSE);
-	}
-	else
-	{
-		DestroyDragImageBits();
-
-		#ifdef PERSIST_OVL
-		MoveDragWindow(FALSE);
-		#else
-		DestroyDragImageWindow();
-		#endif
-	}
+	//if (mb_selfdrag)
+	//{
+	//	MoveDragWindow(FALSE);
+	//}
+	//else
+	//{
+	//	DestroyDragImageBits();
+//
+	//	#ifdef PERSIST_OVL
+	//	MoveDragWindow(FALSE);
+	//	#else
+	//	DestroyDragImageWindow();
+	//	#endif
+	//}
 
 	#ifdef USE_DROP_HELPER
 	if (UseTargetHelper(mb_selfdrag))

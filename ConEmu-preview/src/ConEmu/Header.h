@@ -39,12 +39,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <windows.h>
 #include <Shlwapi.h>
-#include <vector>
+//#include <vector>
 //#if !defined(__GNUC__)
 //#include <crtdbg.h>
 //#endif
 
 #include "../common/Memory.h"
+#include "../common/MAssert.h"
 
 #ifdef __GNUC__
 #define wmemmove_s(d,ds,s,ss) wmemmove(d,s,ss)
@@ -299,6 +300,8 @@ struct SettingsStorage
 #define IsWindows7 ((gOSVer.dwMajorVersion > 6) || (gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion > 0))
 #define IsWindows8 ((gOSVer.dwMajorVersion > 6) || (gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion > 1))
 
+#define SafeRelease(p) if ((p)!=NULL) { (p)->Release(); (p)=NULL; }
+
 // GNU C HEADER PATCH
 #ifdef __GNUC__
 typedef BOOL (WINAPI* AlphaBlend_t)(HDC hdcDest, int xoriginDest, int yoriginDest, int wDest, int hDest, HDC hdcSrc, int xoriginSrc, int yoriginSrc, int wSrc, int hSrc, BLENDFUNCTION ftn);
@@ -465,9 +468,70 @@ enum ToolbarCommandIdx
 	TID_MINIMIZE_SEP = 110,
 };
 
+enum SwitchGuiFocusOp
+{
+	sgf_None = 0,
+	sgf_FocusSwitch,
+	sgf_FocusGui,
+	sgf_FocusChild,
+	sgf_Last
+};
+
 bool CheckLockFrequentExecute(DWORD& Tick, DWORD Interval);
 #define LockFrequentExecute(Interval) static DWORD LastExecuteTick; if (CheckLockFrequentExecute(LastExecuteTick,Interval))
 
 extern const wchar_t* gsHomePage;  // = L"http://conemu-maximus5.googlecode.com";
 extern const wchar_t* gsReportBug; // = L"http://code.google.com/p/conemu-maximus5/issues/entry";
 extern const wchar_t* gsWhatsNew;  // = L"http://code.google.com/p/conemu-maximus5/wiki/Whats_New";
+
+template <class T>
+T GetMinMax(T a, int v1, int v2)
+{
+	if (a < (T)v1)
+		a = (T)v1;
+	else if (a > (T)v2)
+		a = (T)v2;
+	return a;
+}
+
+template <class T>
+void MinMax(T &a, int v1, int v2)
+{
+	if (a < (T)v1)
+		a = (T)v1;
+	else if (a > (T)v2)
+		a = (T)v2;
+}
+
+template <class T>
+void MinMax(T &a, int v2)
+{
+	if (a > (T)v2)
+		a = (T)v2;
+}
+
+
+#include <pshpack1.h>
+typedef struct tagMYRGB
+{
+	union
+	{
+		COLORREF color;
+		struct
+		{
+			BYTE    rgbBlue;
+			BYTE    rgbGreen;
+			BYTE    rgbRed;
+			BYTE    rgbReserved;
+		};
+	};
+} MYRGB, MYCOLORREF;
+#include <poppack.h>
+
+#define CmdFilePrefix     L'@'
+#define DropLnkPrefix     L'?'
+#define TaskBracketLeft   L'{'
+#define TaskBracketRight  L'}'
+#define AutoStartTaskName L"<Startup>"
+
+bool NextLine(const wchar_t*& pszFrom, wchar_t** pszLine);

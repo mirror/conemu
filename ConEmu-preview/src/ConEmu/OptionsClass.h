@@ -29,6 +29,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include "../Common/MArray.h"
 #include "../Common/WinObjects.h"
 #include <commctrl.h>
 
@@ -37,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class CBackground;
 struct DebugLogShellActivity;
+struct CEHelpPopup;
 
 enum SingleInstanceArgEnum
 {
@@ -96,72 +98,6 @@ class CSettings
 		HFONT CreateOtherFont(const wchar_t* asFontName);
 		void GetMainLogFont(LOGFONT& lf);
 	private:
-		//struct CEFontRange
-		//{
-		//public:
-		//	bool    bUsed;              // Для быстрого включения/отключения
-		//	wchar_t sTitle[64];         // "Title"="Borders and scrollbars"
-		//	wchar_t sRange[1024];       // "CharRange"="2013-25C4;"
-		//	wchar_t sFace[LF_FACESIZE]; // "FontFace"="Andale Mono"
-		//	LONG    nHeight;            // "Height"=dword:00000012
-		//	LONG    nWidth;             // "Width"=dword:00000000
-		//	LONG    nLoadHeight;        // Для корректного вычисления относительных размеров шрифта при
-		//	LONG    nLoadWidth;         // ресайзе GUI, или изменения из макроса - запомнить исходные
-		//	BYTE    nCharset;           // "Charset"=hex:00
-		//	bool    bBold;              // "Bold"=hex:00
-		//	bool    bItalic;            // "Italic"=hex:00
-		//	BYTE    nQuality;           // "Anti-aliasing"=hex:03
-		//	/*    */
-		//private:
-		//	LOGFONT LF;
-		//public:
-		//	LOGFONT& LogFont()
-		//	{
-		//		LF.lfHeight = nHeight;
-		//		LF.lfWidth = nWidth;
-		//		LF.lfEscapement = 0;
-		//		LF.lfOrientation = 0;
-		//		LF.lfWeight = bBold?FW_BOLD:FW_NORMAL;
-		//		LF.lfItalic = bItalic ? 1 : 0;
-		//		LF.lfUnderline = 0;
-		//		LF.lfStrikeOut = 0;
-		//		LF.lfQuality = nQuality;
-		//		LF.lfCharSet = nCharset;
-		//		LF.lfOutPrecision = OUT_TT_PRECIS;
-		//		LF.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-		//		LF.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
-		//		lstrcpyn(LF.lfFaceName, sFace, countof(LF.lfFaceName));
-		//		return LF;
-		//	};
-		//	void Scale(LONG anMainHeight, LONG anMainLoadHeight)
-		//	{
-		//		// Высота
-		//		if (nLoadHeight == 0 || !anMainLoadHeight)
-		//		{
-		//			nHeight = anMainHeight; // Высота равна высоте в Main
-		//		}
-		//		else
-		//		{
-		//			nHeight = nLoadHeight * anMainHeight / anMainLoadHeight;
-		//		}
-		//		// Ширина
-		//		if (nLoadWidth == 0 || !anMainLoadHeight)
-		//		{
-		//			nWidth = 0;
-		//		}
-		//		else
-		//		{
-		//			nWidth = nLoadWidth * anMainHeight / anMainLoadHeight;
-		//		}
-		//	};
-		//	/*    */
-		//	HFONT hFonts[MAX_FONT_STYLES]; //normal/(bold|italic|underline)
-		//	/*    */
-		//	BYTE RangeData[0x10000];
-		//};
-		//CEFontRange m_Fonts[MAX_FONT_GROUPS]; // 0-Main, 1-Borders, 2 и более - user defined
-		//BOOL FontRangeLoad(SettingsBase* reg, int Idx);
-		//BOOL FontRangeSave(SettingsBase* reg, int Idx);
 		LOGFONT LogFont, LogFont2;
 		LONG mn_AutoFontWidth, mn_AutoFontHeight; // размеры шрифтов, которые были запрошены при авторесайзе шрифта
 		LONG mn_FontWidth, mn_FontHeight, mn_BorderFontWidth; // реальные размеры шрифтов
@@ -255,18 +191,6 @@ class CSettings
 		//bool isModifierPressed(DWORD vk);
 		//bool isSelectionModifierPressed();
 	protected:
-		//bool mb_HideCaptionAlways;
-		//typedef struct tag_CharRanges
-		//{
-		//	bool bUsed;
-		//	wchar_t cBegin, cEnd;
-		//} CharRanges;
-		//wchar_t mszCharRanges[120];
-		//CharRanges icFixFarBorderRanges[10];
-		//int ParseCharRanges(LPCWSTR asRanges, BYTE (&Chars)[0x10000], BYTE abValue = TRUE); // например, L"2013-25C3,25C4"
-		//wchar_t* CreateCharRanges(BYTE (&Chars)[0x10000]); // caller must free(result)
-		//BYTE mpc_FixFarBorderValues[0x10000];
-		//BYTE m_isKeyboardHooks;
 		
 		BYTE isMonospaceSelected; // 0 - proportional, 1 - monospace, 2 - forcemonospace
 	public:
@@ -340,6 +264,7 @@ class CSettings
 
 		//static void CenterDialog(HWND hWnd2);
 		void OnClose();
+		DWORD BalloonStyle();
 		// IDD_SETTINGS
 		static INT_PTR CALLBACK wndOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lParam);
 		// Вкладки настроек: IDD_SPG_MAIN, IDD_SPG_FEATURE, и т.д.
@@ -566,7 +491,7 @@ class CSettings
 			BOOL    bHasBorders;          // Имеет ли данный шрифт символы рамок
 			BOOL    bAlreadyInSystem;     // Шрифт с таким именем уже был зарегистрирован в системе
 		} RegFont;
-		std::vector<RegFont> m_RegFonts;
+		MArray<RegFont> m_RegFonts;
 		BOOL mb_StopRegisterFonts;
 		////
 		//COLORREF Colors[0x20];
@@ -597,7 +522,7 @@ class CSettings
 		static void CenterMoreDlg(HWND hWnd2);
 		static bool IsAlmostMonospace(LPCWSTR asFaceName, int tmMaxCharWidth, int tmAveCharWidth, int tmHeight);
 	private:
-		DWORD MakeHotKey(BYTE Vk, BYTE vkMod1=0, BYTE vkMod2=0, BYTE vkMod3=0) { return gpSet->MakeHotKey(Vk, vkMod1, vkMod2, vkMod3); };
+		DWORD MakeHotKey(BYTE Vk, BYTE vkMod1=0, BYTE vkMod2=0, BYTE vkMod3=0) { return ConEmuHotKey::MakeHotKey(Vk, vkMod1, vkMod2, vkMod3); };
 		//#define MAKEMODIFIER2(vk1,vk2) ((DWORD)vk1&0xFF)|(((DWORD)vk2&0xFF)<<8)
 		//#define MAKEMODIFIER3(vk1,vk2,vk3) ((DWORD)vk1&0xFF)|(((DWORD)vk2&0xFF)<<8)|(((DWORD)vk3&0xFF)<<16)
 		ConEmuHotKey *m_HotKeys;
@@ -608,6 +533,11 @@ class CSettings
 		const ConEmuHotKey* GetHotKeyInfo(DWORD VkMod, bool bKeyDown, CRealConsole* pRCon);
 		bool HasSingleWinHotkey();
 		void UpdateWinHookSettings(HMODULE hLLKeyHookDll);
+	public:
+		bool isDialogMessage(MSG &Msg);
+	private:
+		CEHelpPopup* mp_HelpPopup;
+		INT_PTR ProcessTipHelp(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lParam);
 	private:
 
 		enum KeyListColumns
@@ -648,6 +578,11 @@ class CSettings
 			lcc_PID,
 			lcc_Pipe,
 			lcc_Extra,
+		};
+		enum LogAnsiColumns
+		{
+			lac_Time = 0,
+			lac_Sequence,
 		};
 		struct LogCommandsData
 		{
@@ -697,8 +632,9 @@ class CSettings
 			int              PageID;       // Dialog ID
 			int              Level;        // 0, 1
 			wchar_t          PageName[64]; // Label in treeview
-			//HWND     *hPage;
 			TabHwndIndex     PageIndex;    // mh_Tabs[...]
+			bool             Collapsed;
+			// Filled after creation
 			HTREEITEM        hTI;
 			ConEmuSetupItem* pItems;
 		};

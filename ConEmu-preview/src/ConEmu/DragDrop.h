@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "BaseDragDrops.h"
 #include "DragDropData.h"
 //#include "virtualconsole.h"
+#include "../common/MArray.h"
 
 
 class CDragDrop :
@@ -62,7 +63,7 @@ class CDragDrop :
 		//ITEMIDLIST m_DesktopID;
 		DWORD mn_AllFiles, mn_CurFile; __int64 mn_CurWritten;
 		HANDLE FileStart(LPCWSTR pszFullName);
-		wchar_t* FileCreateName(BOOL abActive, BOOL abWide, BOOL abFolder, LPCWSTR asSubFolder, LPVOID asFileName);
+		wchar_t* FileCreateName(BOOL abActive, BOOL abFolder, LPCWSTR asSubFolder, LPCWSTR asFileName);
 		HRESULT FileWrite(HANDLE ahFile, DWORD anSize, LPVOID apData);
 		//void EnumDragFormats(IDataObject * pDataObject);
 		void ReportUnknownData(IDataObject * pDataObject, LPCWSTR sUnknownError);
@@ -74,7 +75,7 @@ class CDragDrop :
 			HANDLE hThread;
 			DWORD  dwThreadId;
 		} ThInfo;
-		std::vector<ThInfo> m_OpThread;
+		MArray<ThInfo> m_OpThread;
 		CRITICAL_SECTION m_CrThreads;
 		typedef struct _ShlOpInfo
 		{

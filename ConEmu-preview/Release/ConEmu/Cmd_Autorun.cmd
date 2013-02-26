@@ -9,15 +9,50 @@ rem If ConEmu (GUI) was not started yes, new instance will be started.
 set FORCE_NEW_WND=NO
 set FORCE_NEW_WND_CMD=
 
+rem Detect our server executable
+if defined PROCESSOR_ARCHITEW6432 goto x64
+if "%PROCESSOR_ARCHITECTURE%"=="AMD64" goto x64
+goto x86
+:x64
+set ConEmuC1=%~dp0ConEmuC64.exe
+set ConEmuC2=%~dp0ConEmuC.exe
+set ConEmuC3=ConEmuC64.exe
+goto con_find
+:x86
+set ConEmuC1=%~dp0ConEmuC.exe
+set ConEmuC2=%~dp0ConEmuC.exe
+set ConEmuC3=ConEmuC.exe
+goto con_find
+:con_find
+set ConEmuPath=%ConEmuC1%
+if exist "%ConEmuPath%" goto con_found
+set ConEmuPath=%ConEmuC2%
+if exist "%ConEmuPath%" goto con_found
+set ConEmuPath=%ConEmuC3%
+if exist "%ConEmuPath%" goto con_found
+set ConEmuPath=
+goto notfound
+:con_found
+
+
 if "%~1"=="" goto noparm
 goto checkparm
 
 :noparm
-rem чтобы не раздражать лишним текстом, когда ConEmu уже запущено...
-rem так определять не совсем корректно. cmd могли запустить из ConEmu
-rem в режиме создания новой консоли... ну да ладно, пока так...
+rem AutoUpdate in progress?
+if defined ConEmuInUpdate (
+echo ConEmu auto update in progress, Cmd_Autorun skipped
+goto :EOF
+)
+
+rem First, check ConEmuHWND variable, if it is absent - we are not in ConEmu
 if "%ConEmuHWND%"=="" goto noconemu
-rem TODO: IsConEmu
+
+rem But we also need to check, is console is really in ConEmu tab,
+rem or just "ConEmuHWND" was set (or inherited) to any value?
+call "%ConEmuPath%" /GuiMacro IsConEmu > nul
+if errorlevel 1 goto noconemu
+
 goto conemufound
 
 
@@ -52,28 +87,10 @@ rem [HKEY_CURRENT_USER\Software\HoopoePG_2x]
 rem "CreateInNewEnvironment"=dword:00000000
 
 :noconemu
-if defined PROCESSOR_ARCHITEW6432 goto x64
-if "%PROCESSOR_ARCHITECTURE%"=="AMD64" goto x64
-goto x86
-:x64
-set ConEmuC1=%~dp0ConEmuC64.exe
-set ConEmuC2=%~dp0ConEmuC.exe
-set ConEmuC3=ConEmuC64.exe
-goto con_find
-:x86
-set ConEmuC1=%~dp0ConEmuC.exe
-set ConEmuC2=%~dp0ConEmuC.exe
-set ConEmuC3=ConEmuC.exe
-goto con_find
-:con_find
-set ConEmuPath=%ConEmuC1%
-if exist "%ConEmuPath%" goto con_found
-set ConEmuPath=%ConEmuC2%
-if exist "%ConEmuPath%" goto con_found
-set ConEmuPath=%ConEmuC3%
-if exist "%ConEmuPath%" goto con_found
+set ConEmuHWND=
+if exist "%ConEmuPath%" goto srv_ok
 goto notfound
-:con_found
+:srv_ok
 rem Message moved to ConEmuC.exe
 rem echo ConEmu autorun (c) Maximus5
 rem echo Starting "%ConEmuPath%" in "Attach" mode (NewWnd=%FORCE_NEW_WND%)

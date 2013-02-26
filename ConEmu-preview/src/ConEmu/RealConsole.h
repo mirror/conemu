@@ -33,6 +33,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../Common/RgnDetect.h"
 //#include "../Common/WinObjects.h"
 #include "../Common/MArray.h"
+#include "../Common/MPipe.h"
 
 #define DEFINE_EXIT_DESC
 #include "../ConEmuCD/ExitCodes.h"
@@ -301,7 +302,7 @@ class CRealConsole
 		BYTE GetDefaultTextColorIdx() { return this ? (mn_TextColorIdx & 0xF) : 7; };
 		BYTE GetDefaultBackColorIdx() { return this ? (mn_BackColorIdx & 0xF) : 0; };
 
-		BOOL PreInit(BOOL abCreateBuffers=TRUE);
+		BOOL PreInit();
 		void DumpConsole(HANDLE ahFile);
 		bool LoadDumpConsole(LPCWSTR asDumpFile);
 		
@@ -383,7 +384,7 @@ class CRealConsole
 		void SyncConsole2Window(BOOL abNtvdmOff=FALSE, LPRECT prcNewWnd=NULL);
 		void SyncGui2Window(RECT* prcClient=NULL);
 		//void OnWinEvent(DWORD anEvent, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
-		void OnServerStarted(HWND ahConWnd, DWORD anServerPID);
+		void OnServerStarted(HWND ahConWnd, DWORD anServerPID, DWORD dwKeybLayout);
 		void OnDosAppStartStop(enum StartStopType sst, DWORD anPID);
 		int  GetProcesses(ConProcess** ppPrc);
 		DWORD GetFarPID(bool abPluginRequired=false);
@@ -403,13 +404,13 @@ class CRealConsole
 		bool isServerAlive();
 		DWORD GetServerPID(bool bMainOnly = false);
 		DWORD GetMonitorThreadID();
-		bool isServerCreated();
+		bool isServerCreated(bool bFullRequired = false);
 		bool isServerAvailable();
 		bool isServerClosing();
 		LRESULT OnScroll(int nDirection);
 		LRESULT OnSetScrollPos(WPARAM wParam);
 		bool GetConsoleSelectionInfo(CONSOLE_SELECTION_INFO *sel);
-		BOOL isConSelectMode();
+		bool isConSelectMode();
 		bool isFar(bool abPluginRequired=false);
 		bool isFarBufferSupported();
 		bool isFarInStack();
@@ -430,7 +431,7 @@ class CRealConsole
 		void ShowGuiClientExt(int nMode, BOOL bDetach = FALSE); // -1 Toggle, 0 - Hide, 1 - Show
 		void ShowGuiClientInt(bool bShow);
 		void ChildSystemMenu();
-		BOOL isDetached();
+		bool isDetached();
 		BOOL AttachConemuC(HWND ahConWnd, DWORD anConemuC_PID, const CESERVER_REQ_STARTSTOP* rStartStop, CESERVER_REQ_STARTSTOPRET* pRet);
 		BOOL RecreateProcess(RConStartArgs *args);
 		void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight);
@@ -473,6 +474,7 @@ class CRealConsole
 		int GetModifiedEditors();
 		BOOL ActivateFarWindow(int anWndIndex);
 		DWORD CanActivateFarWindow(int anWndIndex);
+		void OnConsoleKeyboardLayout(DWORD dwNewLayout);
 		void SwitchKeyboardLayout(WPARAM wParam,DWORD_PTR dwNewKeybLayout);
 		void CloseConsole(bool abForceTerminate, bool abConfirm);
 		void CloseConsoleWindow(bool abConfirm);
@@ -542,6 +544,8 @@ class CRealConsole
 
 		//static void Box(LPCTSTR szText, DWORD nBtns = 0);
 
+		void OnStartProcessAllowed();
+
 	protected:
 		CVirtualConsole* mp_VCon; // соответствующая виртуальная консоль
 
@@ -549,6 +553,8 @@ class CRealConsole
 		void SetAltSrvPID(DWORD anAltSrvPID/*, HANDLE ahAltSrv*/);
 		// Сервер и альтернативный сервер
 		DWORD mn_MainSrv_PID; HANDLE mh_MainSrv;
+		bool  mb_MainSrv_Ready; // Сервер готов принимать команды?
+		DWORD mn_ActiveLayout;
 		DWORD mn_AltSrv_PID;  //HANDLE mh_AltSrv;
 		HANDLE mh_SwitchActiveServer, mh_ActiveServerSwitched;
 		bool mb_SwitchActiveServer;
@@ -591,6 +597,7 @@ class CRealConsole
 
 		// Нить наблюдения за консолью
 		static DWORD WINAPI MonitorThread(LPVOID lpParameter);
+		DWORD MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCreated);
 		HANDLE mh_MonitorThread; DWORD mn_MonitorThreadID;
 		HANDLE mh_MonitorThreadEvent;
 		HANDLE mh_UpdateServerActiveEvent;
@@ -601,8 +608,11 @@ class CRealConsole
 		//HANDLE mh_InputThread; DWORD mn_InputThreadID;
 
 		HANDLE mh_TermEvent, mh_ApplyFinished;
+		HANDLE mh_StartExecuted;
+		BOOL mb_StartResult, mb_WaitingRootStartup;
 		BOOL mb_FullRetrieveNeeded; //, mb_Detached;
 		RConStartArgs m_Args;
+		BOOL mb_WasStartDetached;
 		wchar_t ms_RootProcessName[MAX_PATH];
 		// Replace in asCmd some env.vars (!ConEmuBackHWND! and so on)
 		wchar_t* ParseConEmuSubst(LPCWSTR asCmd);
@@ -771,7 +781,7 @@ class CRealConsole
 		void CloseMapHeader();
 		BOOL ApplyConsoleInfo();
 		BOOL mb_DataChanged;
-		void OnServerStarted(DWORD anServerPID, HANDLE ahServerHandle);
+		void OnServerStarted(DWORD anServerPID, HANDLE ahServerHandle, DWORD dwKeybLayout);
 		void OnRConStartedSuccess();
 		BOOL mb_RConStartedSuccess;
 		//

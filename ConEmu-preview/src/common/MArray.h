@@ -89,12 +89,42 @@ class MArray
             return ((_Ty*)mp_Elements)[_P];
         }
 
-        void push_back(const _Ty& _X)
+        INT_PTR push_back(const _Ty& _X)
+        {
+            if (mn_TySize==0)
+            {
+                _ARRAY_ASSERTE(!(mn_TySize==0));
+                return -1;
+            }
+            MCHKHEAP;
+            if (mn_MaxSize<=mn_Elements)
+            {
+            	_ARRAY_ASSERTE(mn_MaxSize==mn_Elements);
+                addsize(max(256,mn_MaxSize));
+            }
+			INT_PTR nPos = mn_Elements++;
+            memmove(
+                ((_Ty*)mp_Elements)+
+                nPos,
+                &_X, mn_TySize);
+            MCHKHEAP;
+			return nPos;
+        }
+        void insert(INT_PTR nPos, const _Ty& _X)
         {
             if (mn_TySize==0)
             {
                 _ARRAY_ASSERTE(!(mn_TySize==0));
                 return;
+            }
+            if ((nPos < 0) || (nPos > mn_Elements))
+            {
+            	_ARRAY_ASSERTE((nPos >= 0) && (nPos <= mn_Elements));
+            }
+            if (nPos == mn_Elements)
+            {
+            	push_back(_X);
+            	return;
             }
             MCHKHEAP;
             if (mn_MaxSize<=mn_Elements)
@@ -103,9 +133,13 @@ class MArray
                 addsize(max(256,mn_MaxSize));
             }
             memmove(
-                ((_Ty*)mp_Elements)+
-                (mn_Elements++),
+                ((_Ty*)mp_Elements)+1,
+                ((_Ty*)mp_Elements),
+                mn_TySize*mn_Elements);
+            memmove(
+                ((_Ty*)mp_Elements),
                 &_X, mn_TySize);
+            mn_Elements++;
             MCHKHEAP;
         }
         void pop_back(_Ty& _X)
@@ -167,6 +201,11 @@ class MArray
         INT_PTR size() const
         {
             return mn_Elements;
+        };
+
+        bool empty() const
+        {
+        	return (mn_Elements == 0);
         };
 
         void addsize(INT_PTR nElements)

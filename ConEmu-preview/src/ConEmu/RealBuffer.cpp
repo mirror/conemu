@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/ConEmuCheck.h"
 #include "../common/Execute.h"
 #include "../common/RgnDetect.h"
+#include "../common/WinConsole.h"
 #include "ConEmu.h"
 #include "ConEmuApp.h"
 #include "ConEmuPipe.h"
@@ -117,7 +118,12 @@ CRealBuffer::CRealBuffer(CRealConsole* apRCon, RealBufferType aType/*=rbt_Primar
 	mb_BuferModeChangeLocked = FALSE;
 	mcr_LastMousePos = MakeCoord(-1,-1);
 
-	mr_LeftPanel = mr_LeftPanelFull = mr_RightPanel = mr_RightPanel = MakeRect(-1,-1);
+	RECT rcNil = MakeRect(-1,-1);
+	mr_LeftPanel = rcNil;
+	mr_LeftPanelFull = rcNil;
+	mr_RightPanel = rcNil;
+	mr_RightPanel = rcNil;
+
 	mb_LeftPanel = mb_RightPanel = FALSE;
 	
 	ZeroStruct(dump);
@@ -129,6 +135,8 @@ CRealBuffer::CRealBuffer(CRealConsole* apRCon, RealBufferType aType/*=rbt_Primar
 
 CRealBuffer::~CRealBuffer()
 {
+	Assert(con.bInGetConsoleData==FALSE);
+
 	if (con.pConChar)
 		{ Free(con.pConChar); con.pConChar = NULL; }
 
@@ -165,6 +173,8 @@ void CRealBuffer::DumpConsole(HANDLE ahFile)
 		lbRc = WriteFile(ahFile, con.pConChar, nSize, &dw, NULL);
 		lbRc = WriteFile(ahFile, con.pConAttr, nSize, &dw, NULL); //-V519
 	}
+
+	UNREFERENCED_PARAMETER(lbRc);
 }
 
 
@@ -608,22 +618,22 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 
 	BOOL lbRc = FALSE;
 	BOOL fSuccess = FALSE;
-	DWORD dwRead = 0;
+	//DWORD dwRead = 0;
 	DWORD dwTickStart = 0;
 	DWORD nCallTimeout = 0;
-	int nInSize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_SETSIZE);
-	int nOutSize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_RETSIZE);
+	DWORD nInSize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_SETSIZE);
+	DWORD nOutSize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_RETSIZE);
 	CESERVER_REQ* pIn = ExecuteNewCmd(anCmdID, nInSize);
-	CESERVER_REQ* pOut = ExecuteNewCmd(anCmdID, nOutSize);
+	CESERVER_REQ* pOut = NULL; //ExecuteNewCmd(anCmdID, nOutSize);
 	SMALL_RECT rect = {0};
-	bool bLargestReached = false;
+	//bool bLargestReached = false;
 	bool bSecondTry = false;
 
 	_ASSERTE(anCmdID==CECMD_SETSIZESYNC || anCmdID==CECMD_SETSIZENOSYNC || anCmdID==CECMD_CMDSTARTED || anCmdID==CECMD_CMDFINISHED);
 	//ExecutePrepareCmd(&lIn.hdr, anCmdID, lIn.hdr.cbSize);
-	if (!pIn || !pOut)
+	if (!pIn /*|| !pOut*/)
 	{
-		_ASSERTE(pIn && pOut);
+		_ASSERTE(pIn);
 		goto wrap;
 	}
 
@@ -725,7 +735,7 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 	}
 
 	#ifdef _DEBUG
-	wchar_t szDbgCmd[128]; _wsprintf(szDbgCmd, SKIPLEN(countof(szDbgCmd)) L"SetConsoleSize.CallNamedPipe(cx=%i, cy=%i, buf=%i, cmd=%i)\n",
+	wchar_t szDbgCmd[128]; _wsprintf(szDbgCmd, SKIPLEN(countof(szDbgCmd)) L"SetConsoleSize.ExecuteCmd(cx=%i, cy=%i, buf=%i, cmd=%i)\n",
 	                                 sizeX, sizeY, sizeBuffer, anCmdID);
 	DEBUGSTRSIZE(szDbgCmd);
 	#endif
@@ -734,9 +744,12 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 	// С таймаутом
 	nCallTimeout = RELEASEDEBUGTEST(500,30000);
 
-	fSuccess = CallNamedPipe(mp_RCon->ms_ConEmuC_Pipe, pIn, pIn->hdr.cbSize, pOut, pOut->hdr.cbSize, &dwRead, nCallTimeout);
+	/*fSuccess = CallNamedPipe(mp_RCon->ms_ConEmuC_Pipe, pIn, pIn->hdr.cbSize, pOut, pOut->hdr.cbSize, &dwRead, nCallTimeout);*/
+	_ASSERTE(pOut==NULL);
+	pOut = ExecuteCmd(mp_RCon->ms_ConEmuC_Pipe, pIn, nCallTimeout, ghWnd);
+	fSuccess = (pOut != NULL);
 
-	if (fSuccess && (dwRead == (DWORD)nOutSize))
+	if (fSuccess /*&& (dwRead == (DWORD)nOutSize)*/)
 	{
 		int nSetWidth = sizeX, nSetHeight = sizeY;
 		if (GetConWindowSize(pOut->SetSizeRet.SetSizeRet, &nSetWidth, &nSetHeight, NULL))
@@ -761,7 +774,10 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 				// Try again with lesser size?
 				if (bSecondTry)
 				{
-					fSuccess = CallNamedPipe(mp_RCon->ms_ConEmuC_Pipe, pIn, pIn->hdr.cbSize, pOut, pOut->hdr.cbSize, &dwRead, nCallTimeout);
+					/*fSuccess = CallNamedPipe(mp_RCon->ms_ConEmuC_Pipe, pIn, pIn->hdr.cbSize, pOut, pOut->hdr.cbSize, &dwRead, nCallTimeout);*/
+					ExecuteFreeResult(pOut);
+					pOut = ExecuteCmd(mp_RCon->ms_ConEmuC_Pipe, pIn, nCallTimeout, ghWnd);
+					fSuccess = (pOut != NULL);
 				}
 				// Inform user
 				Icon.ShowTrayIcon(L"Maximum real console size was reached\nDecrease font size in the real console properties", tsa_Console_Size);
@@ -771,16 +787,16 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 
 	gpSetCls->debugLogCommand(pIn, FALSE, dwTickStart, timeGetTime()-dwTickStart, mp_RCon->ms_ConEmuC_Pipe, pOut);
 
-	if (!fSuccess || dwRead<(DWORD)nOutSize)
+	if (!fSuccess || (pOut->hdr.cbSize < nOutSize))
 	{
 		if (gpSetCls->isAdvLogging)
 		{
 			char szInfo[128]; DWORD dwErr = GetLastError();
-			_wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "SetConsoleSizeSrv.CallNamedPipe FAILED!!! ErrCode=0x%08X, Bytes read=%i", dwErr, dwRead);
+			_wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "SetConsoleSizeSrv.ExecuteCmd FAILED!!! ErrCode=0x%08X, Bytes read=%i", dwErr, pOut->hdr.cbSize);
 			mp_RCon->LogString(szInfo);
 		}
 
-		DEBUGSTRSIZE(L"SetConsoleSize.CallNamedPipe FAILED!!!\n");
+		DEBUGSTRSIZE(L"SetConsoleSize.ExecuteCmd FAILED!!!\n");
 	}
 	else
 	{
@@ -1218,10 +1234,19 @@ BOOL CRealBuffer::PreInit()
 	MCHKHEAP;
 	RECT rcCon;
 
-	if (gpConEmu->isIconic())
+	// "!(gpConEmu->isZoomed() || gpConEmu->isFullScreen())" дает не то...
+
+	// Если настроенно-развернутое окно запускается минимизированным
+	// то брать нужно "максимизированные" размеры, а не wndWidth/wndHeight
+	if (gpConEmu->isWindowNormal() && gpConEmu->isIconic())
+	{
+		// Сюда попадаем только при wmNormal&Minimized
 		rcCon = MakeRect(gpConEmu->wndWidth, gpConEmu->wndHeight);
+	}
 	else
+	{
 		rcCon = gpConEmu->CalcRect(CER_CONSOLE_CUR, mp_RCon->mp_VCon);
+	}
 
 	_ASSERTE(rcCon.right!=0 && rcCon.bottom!=0);
 
@@ -1237,7 +1262,10 @@ BOOL CRealBuffer::PreInit()
 	con.nTextWidth = rcCon.right;
 	con.nTextHeight = rcCon.bottom;
 
+	con.nTopVisibleLine = 0;
+
 	con.m_sbi.wAttributes = 7;
+	con.m_sbi.srWindow.Left = con.m_sbi.srWindow.Top = 0;
 	con.m_sbi.srWindow.Right = rcCon.right-1; con.m_sbi.srWindow.Bottom = rcCon.bottom-1;
 	con.m_sbi.dwMaximumWindowSize = con.m_sbi.dwSize;
 	con.m_ci.dwSize = 15; con.m_ci.bVisible = TRUE;
@@ -1255,7 +1283,7 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 	
 	#ifdef _DEBUG
 	DWORD dwCurThId = GetCurrentThreadId();
-	_ASSERTE(mp_RCon->mn_MonitorThreadID==0 || dwCurThId==mp_RCon->mn_MonitorThreadID
+	_ASSERTE((mp_RCon->mn_MonitorThreadID==0 || dwCurThId==mp_RCon->mn_MonitorThreadID || mp_RCon->mb_WaitingRootStartup)
 		|| ((m_Type==rbt_DumpScreen || m_Type==rbt_Alternative || m_Type==rbt_Selection || m_Type==rbt_Find) && gpConEmu->isMainThread()));
 	#endif
 
@@ -1296,6 +1324,8 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 		MCHKHEAP;
 		con.LastStartInitBuffersTick = GetTickCount();
 
+		Assert(con.bInGetConsoleData==FALSE);
+
 		if (con.pConChar)
 			{ Free(con.pConChar); con.pConChar = NULL; }
 
@@ -1318,6 +1348,8 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 		wmemset((wchar_t*)con.pConAttr, nDefTextAttr, cchCharMax);
 
 		con.LastEndInitBuffersTick = GetTickCount();
+
+		Assert(con.bInGetConsoleData==FALSE);
 
 		sc.Unlock();
 		_ASSERTE(con.pConChar!=NULL);
@@ -2347,6 +2379,8 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 		mp_RCon->UpdateScrollInfo();
 	}
 
+	UNREFERENCED_PARAMETER(bBufRecreated);
+
 	return lbChanged;
 }
 
@@ -2415,6 +2449,9 @@ COORD CRealBuffer::ScreenToBuffer(COORD crMouse)
 
 	if (isScroll())
 	{
+		// Прокрутка может быть заблокирована?
+		_ASSERTE(con.nTopVisibleLine == con.m_sbi.srWindow.Top);
+
 		crMouse.X += con.m_sbi.srWindow.Left;
 		crMouse.Y += con.m_sbi.srWindow.Top;
 	}
@@ -2486,13 +2523,15 @@ bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
 		
 	bool lbProcessed = false;
 	
-	//if (messg == WM_MOUSEMOVE || messg == WM_LBUTTONDOWN || messg == WM_LBUTTONUP || messg == WM_LBUTTONDBLCLK)
-	//{
-	COORD crStart = MakeCoord(crFrom.X - con.m_sbi.srWindow.Left, crFrom.Y - con.m_sbi.srWindow.Top);
+	// переходим на абсолютные координаты
+	COORD crStart = crFrom; // MakeCoord(crFrom.X - con.m_sbi.srWindow.Left, crFrom.Y - con.m_sbi.srWindow.Top);
+
 	// Во время скролла координата может быстро улететь
-	if ((crStart.Y < 0 || crStart.Y >= con.nTextHeight)
-		|| (crStart.X < 0 || crStart.X >= con.nTextWidth))
+	if ((crStart.Y < 0 || crStart.Y >= GetBufferHeight())
+		|| (crStart.X < 0 || crStart.X >= GetBufferWidth()))
 	{
+		_ASSERTE((crStart.X==-1 && crStart.Y==-1) && "Must not get here");
+
 		bool bChanged = false;
 		ResetLastMousePos();
 		if (con.etrLast != etr_None)
@@ -2948,9 +2987,12 @@ bool CRealBuffer::OnMouseSelection(UINT messg, WPARAM wParam, int x, int y)
 	}
 
 	// Получить известные координаты символов
-	COORD cr = mp_RCon->mp_VCon->ClientToConsole(x,y);
-	if (cr.X<0) cr.X = 0; else if (cr.X >= (int)TextWidth()) cr.X = TextWidth()-1;
-	if (cr.Y<0) cr.Y = 0; else if (cr.Y >= (int)TextHeight()) cr.Y = TextHeight()-1;
+	COORD crScreen = mp_RCon->mp_VCon->ClientToConsole(x,y);
+	MinMax(crScreen.X, 0, TextWidth()-1);
+	MinMax(crScreen.Y, 0, TextHeight()-1);
+
+	COORD cr = ScreenToBuffer(crScreen);
+
 
 	if (messg == WM_LBUTTONDOWN)
 	{
@@ -3024,12 +3066,12 @@ bool CRealBuffer::OnMouseSelection(UINT messg, WPARAM wParam, int x, int y)
 		// 2. DblClick. Генерятся WM_LBUTTONUP WM_LBUTTONDBLCLK. Выделение "Слова".
 		// 3. TripleCLick. Генерятся WM_LBUTTONUP WM_LBUTTONDBLCLK WM_LBUTTONDOWN WM_LBUTTONUP. Выделение "Строки".
 
-		TODO("Горизонтальная прокрутка?");
-		// Если мыша за пределами окна консоли - скорректировать координаты (MinMax)
-		if (cr.X<0 || cr.X>=(int)TextWidth())
-			cr.X = GetMinMax(cr.X, 0, TextWidth());
-		if (cr.Y<0 || cr.Y>=(int)TextHeight())
-			cr.Y = GetMinMax(cr.Y, 0, TextHeight());
+		//TODO("Горизонтальная прокрутка?");
+		//// Если мыша за пределами окна консоли - скорректировать координаты (MinMax)
+		//if (cr.X<0 || cr.X>=(int)TextWidth())
+		//	cr.X = GetMinMax(cr.X, 0, TextWidth());
+		//if (cr.Y<0 || cr.Y>=(int)TextHeight())
+		//	cr.Y = GetMinMax(cr.Y, 0, TextHeight());
 
 		// Теперь проверки Double/Triple.
 		if ((messg == WM_LBUTTONUP)
@@ -3153,7 +3195,8 @@ void CRealBuffer::MarkFindText(int nDirection, LPCWSTR asText, bool abCaseSensit
 
 		if (isSelectionPresent())
 		{
-			nFrom = con.m_sel.srSelection.Left + (con.m_sel.srSelection.Top * nWidth);
+			COORD crSelScrn = BufferToScreen(MakeCoord(con.m_sel.srSelection.Left, con.m_sel.srSelection.Top));
+			nFrom = crSelScrn.X + (crSelScrn.Y * nWidth);
 			_ASSERTE(nFrom>=0);
 
 			if (nDirection >= 0)
@@ -3301,11 +3344,13 @@ done:
 	else
 	{
 		con.m_sel.dwFlags = CONSOLE_SELECTION_IN_PROGRESS | CONSOLE_TEXT_SELECTION;
-		con.m_sel.dwSelectionAnchor = crStart;
-		con.m_sel.srSelection.Left = crStart.X;
-		con.m_sel.srSelection.Top = crStart.Y;
-		con.m_sel.srSelection.Right = crEnd.X;
-		con.m_sel.srSelection.Bottom = crEnd.Y;
+		COORD crStartBuf = ScreenToBuffer(crStart);
+		COORD crEndBuf = ScreenToBuffer(crEnd);
+		con.m_sel.dwSelectionAnchor = crStartBuf;
+		con.m_sel.srSelection.Left = crStartBuf.X;
+		con.m_sel.srSelection.Top = crStartBuf.Y;
+		con.m_sel.srSelection.Right = crEndBuf.X;
+		con.m_sel.srSelection.Bottom = crEndBuf.Y;
 	}
 
 	UpdateSelection();
@@ -3313,6 +3358,8 @@ done:
 
 void CRealBuffer::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*=-1*/, BOOL abByMouse/*=FALSE*/, UINT anFromMsg/*=0*/, COORD *pcrTo/*=NULL*/)
 {
+	_ASSERTE(anY==-1 || anY>=con.nTopVisibleLine);
+
 	if (!(con.m_sel.dwFlags & (CONSOLE_BLOCK_SELECTION|CONSOLE_TEXT_SELECTION)) && gpSet->isCTSFreezeBeforeSelect)
 	{
 		if (m_Type == rbt_Primary)
@@ -3338,28 +3385,41 @@ void CRealBuffer::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*=
 	WARNING("Доработать для режима с прокруткой - выделение протяжкой, как в обычной консоли");
 	if (anX == -1 && anY == -1)
 	{
-		anX = con.m_sbi.dwCursorPosition.X - con.m_sbi.srWindow.Left;
-		anY = con.m_sbi.dwCursorPosition.Y - con.m_sbi.srWindow.Top;
+		// Absolute coordinates now!
+		anX = con.m_sbi.dwCursorPosition.X; // - con.m_sbi.srWindow.Left;
+		anY = con.m_sbi.dwCursorPosition.Y; // - con.m_sbi.srWindow.Top;
 	}
+	
 	// Если начало выделение не видимо - ставим ближайший угол
 	if (anX < 0)
-		anX = 0;
-	else if (anX >= TextWidth())
-		anX = TextWidth()-1;
-	if (anY < 0)
-		anY = anX = 0;
-	else if (anY >= TextHeight())
 	{
+		_ASSERTE(FALSE && "Started (x) in not visible area?");
 		anX = 0;
-		anY = TextHeight()-1;
+	}
+	else if (anX >= GetBufferWidth())
+	{
+		_ASSERTE(FALSE && "Started beyond right margin");
+		anX = GetBufferWidth()-1;
+	}
+
+	if (anY < 0)
+	{
+		_ASSERTE(FALSE && "Started (y) in not visible area?");
+		anY = anX = 0;
+	}
+	else if (anY >= GetBufferHeight())
+	{
+		_ASSERTE(FALSE && "Started beyond bottom margin");
+		anX = 0;
+		anY = GetBufferHeight()-1;
 	}
 
 	COORD cr = {anX,anY};
 
-	if (cr.X<0 || cr.X>=TextWidth() || cr.Y<0 || cr.Y>=TextHeight())
+	if (cr.X<0 || cr.X>=GetBufferWidth() || cr.Y<0 || cr.Y>=GetBufferHeight())
 	{
-		_ASSERTE(cr.X>=0 && cr.X<TextWidth());
-		_ASSERTE(cr.Y>=0 && cr.Y<TextHeight());
+		_ASSERTE(cr.X>=0 && cr.X<GetBufferWidth());
+		_ASSERTE(cr.Y>=0 && cr.Y<GetBufferHeight());
 		return; // Ошибка в координатах
 	}
 
@@ -3376,6 +3436,8 @@ void CRealBuffer::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*=
 	con.m_sel.dwSelectionAnchor = cr;
 	con.m_sel.srSelection.Left = con.m_sel.srSelection.Right = cr.X;
 	con.m_sel.srSelection.Top = con.m_sel.srSelection.Bottom = cr.Y;
+	_ASSERTE(cr.Y>=con.nTopVisibleLine && cr.Y<GetBufferHeight());
+
 	UpdateSelection();
 
 	if ((anFromMsg == WM_LBUTTONDBLCLK) || (pcrTo && (con.m_sel.dwFlags & CONSOLE_DBLCLICK_SELECTION)))
@@ -3408,12 +3470,15 @@ void CRealBuffer::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*=
 void CRealBuffer::ExpandSelection(SHORT anX/*=-1*/, SHORT anY/*=-1*/)
 {
 	_ASSERTE(con.m_sel.dwFlags!=0);
+	// Добавил "-3" чтобы на прокрутку не ругалась
+	_ASSERTE(anY==-1 || anY>=(con.nTopVisibleLine-3));
+
 	COORD cr = {anX,anY};
 
-	if (cr.X<0 || cr.X>=(int)TextWidth() || cr.Y<0 || cr.Y>=(int)TextHeight())
+	if (cr.X<0 || cr.X>=GetBufferWidth() || cr.Y<0 || cr.Y>=GetBufferHeight())
 	{
-		_ASSERTE(cr.X>=0 && cr.X<(int)TextWidth());
-		_ASSERTE(cr.Y>=0 && cr.Y<(int)TextHeight());
+		_ASSERTE(cr.X>=0 && cr.X<GetBufferWidth());
+		_ASSERTE(cr.Y>=0 && cr.Y<GetBufferHeight());
 		return; // Ошибка в координатах
 	}
 
@@ -3484,11 +3549,75 @@ void CRealBuffer::DoSelectionStop()
 
 bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 {
+	bool bRc = false;
+
+	RealBufferType bufType = m_Type;
+
 	if (!con.m_sel.dwFlags)
 	{
 		MBoxAssert(con.m_sel.dwFlags != 0);
-		return false;
 	}
+	else
+	{
+		bool  lbStreamMode = (con.m_sel.dwFlags & CONSOLE_TEXT_SELECTION) == CONSOLE_TEXT_SELECTION;
+		bool  lbProcessed = false;
+
+		// Сначала проверим, помещается ли "выделенная область" в "ВИДИМУЮ область"
+		if (m_Type == rbt_Primary)
+		{
+			COORD crStart = BufferToScreen(MakeCoord(con.m_sel.srSelection.Left, con.m_sel.srSelection.Top));
+			COORD crEnd = BufferToScreen(MakeCoord(con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom));
+
+			int nTextWidth = this->GetTextWidth();
+			int nTextHeight = this->GetTextHeight();
+
+			if ((crStart.X < 0) || (crStart.X >= nTextWidth)
+				|| (crStart.Y < 0) || (crStart.Y >= nTextHeight)
+				|| (crEnd.X < 0) || (crEnd.X >= nTextWidth)
+				|| (crEnd.Y < 0) || (crEnd.Y >= nTextHeight))
+			{
+				if (mp_RCon->LoadAlternativeConsole(lam_FullBuffer) && (mp_RCon->mp_ABuf != this))
+				{
+					bRc = mp_RCon->mp_ABuf->DoSelectionCopyInt(bCopyAll, lbStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top, con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom);
+					lbProcessed = true;
+					bufType = rbt_Selection;
+				}
+				else
+				{
+					_ASSERTE(FALSE && "Failed to load full console data?");
+				}
+			}
+		}
+		
+		if (!lbProcessed)
+		{
+			bRc = DoSelectionCopyInt(bCopyAll, lbStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top, con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom);
+		}
+	}
+
+	// Fin, Сбрасываем
+	if (bRc)
+	{
+		DoSelectionStop(); // con.m_sel.dwFlags = 0;
+		
+		if (bufType == rbt_Selection)
+		{
+			mp_RCon->SetActiveBuffer(rbt_Primary);
+			// Сразу на выход!
+		}
+		
+		if (m_Type == rbt_Primary)
+		{
+			UpdateSelection(); // обновить на экране
+		}
+	}
+
+	return bRc;
+}
+
+bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2)
+{
+	// Warning!!! Здесь уже нельзя ориентироваться на con.m_sel !!!
 
 	LPCWSTR pszDataStart = NULL;
 	int nTextWidth = 0, nTextHeight = 0;
@@ -3499,6 +3628,14 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 		nTextWidth = this->GetTextWidth();
 		nTextHeight = this->GetTextHeight();
 		_ASSERTE(pszDataStart[nTextWidth*nTextHeight] == 0); // Должно быть ASCIIZ
+
+		// Выделение "с прокруткой" обрабатываем только в альтернативных буферах,
+		// а здесь нам нужны только "экранные" координаты
+
+		COORD cr = BufferToScreen(MakeCoord(srSelection_X1, srSelection_Y1));
+		srSelection_X1 = cr.X; srSelection_Y1 = cr.Y;
+		cr = BufferToScreen(MakeCoord(srSelection_X2, srSelection_Y2));
+		srSelection_X2 = cr.X; srSelection_Y2 = cr.Y;
 	}
 	else if (dump.pszBlock1)
 	{
@@ -3509,8 +3646,8 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 		//nTextHeight = this->GetTextHeight();
 		_ASSERTE(dump.pszBlock1[nTextWidth*nTextHeight] == 0); // Должно быть ASCIIZ
 
-		pszDataStart = dump.pszBlock1 + con.m_sbi.srWindow.Top * nTextWidth;
-		nTextHeight = min((dump.crSize.Y-con.m_sbi.srWindow.Top),(con.m_sbi.srWindow.Bottom - con.m_sbi.srWindow.Top + 1));
+		pszDataStart = dump.pszBlock1; // + con.m_sbi.srWindow.Top * nTextWidth; -- работаем с полным буфером
+		//nTextHeight = min((dump.crSize.Y-con.m_sbi.srWindow.Top),(con.m_sbi.srWindow.Bottom - con.m_sbi.srWindow.Top + 1));
 	}
 
 	//if (!con.pConChar)
@@ -3548,22 +3685,20 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 	DWORD dwErr = 0;
 	BOOL  lbRc = FALSE;
 	bool  Result = false;
-	BOOL lbStreamMode = (con.m_sel.dwFlags & CONSOLE_TEXT_SELECTION) == CONSOLE_TEXT_SELECTION;
-	int nSelWidth = con.m_sel.srSelection.Right - con.m_sel.srSelection.Left;
-	int nSelHeight = con.m_sel.srSelection.Bottom - con.m_sel.srSelection.Top;
-	//int nTextWidth = con.nTextWidth;
+	int   nSelWidth = srSelection_X2 - srSelection_X1;
+	int   nSelHeight = srSelection_Y2 - srSelection_Y1;
 
-	//if (nSelWidth<0 || nSelHeight<0)
-	if (con.m_sel.srSelection.Left > (con.m_sel.srSelection.Right+(con.m_sel.srSelection.Bottom-con.m_sel.srSelection.Top)*nTextWidth))
+
+	if (srSelection_X1 > (srSelection_X2+(srSelection_Y2-srSelection_Y1)*nTextWidth))
 	{
-		Assert(con.m_sel.srSelection.Left <= (con.m_sel.srSelection.Right+(con.m_sel.srSelection.Bottom-con.m_sel.srSelection.Top)*nTextWidth));
+		Assert(srSelection_X1 <= (srSelection_X2+(srSelection_Y2-srSelection_Y1)*nTextWidth));
 		return false;
 	}
 
 	nSelWidth++; nSelHeight++;
 	int nCharCount = 0;
 
-	if (!lbStreamMode)
+	if (!bStreamMode)
 	{
 		nCharCount = ((nSelWidth+2/* "\r\n" */) * nSelHeight) - 2; // после последней строки "\r\n" не ставится
 	}
@@ -3576,13 +3711,13 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 		else if (nSelHeight == 2)
 		{
 			// На первой строке - до конца строки, вторая строка - до окончания блока, + "\r\n"
-			nCharCount = (con.nTextWidth - con.m_sel.srSelection.Left) + (con.m_sel.srSelection.Right + 1) + 2;
+			nCharCount = (con.nTextWidth - srSelection_X1) + (srSelection_X2 + 1) + 2;
 		}
 		else
 		{
 			Assert(nSelHeight>2);
 			// На первой строке - до конца строки, последняя строка - до окончания блока, + "\r\n"
-			nCharCount = (con.nTextWidth - con.m_sel.srSelection.Left) + (con.m_sel.srSelection.Right + 1) + 2
+			nCharCount = (con.nTextWidth - srSelection_X1) + (srSelection_X2 + 1) + 2
 			             + ((nSelHeight - 2) * (con.nTextWidth + 2)); // + серединка * (длину консоли + "\r\n")
 		}
 	}
@@ -3605,21 +3740,22 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 	}
 
 	// Заполнить данными
-	if ((con.m_sel.srSelection.Left + nSelWidth) > con.nTextWidth)
+	if ((srSelection_X1 + nSelWidth) > nTextWidth)
 	{
-		Assert((con.m_sel.srSelection.Left + nSelWidth) <= con.nTextWidth);
-		nSelWidth = con.nTextWidth - con.m_sel.srSelection.Left;
+		Assert((srSelection_X1 + nSelWidth) <= nTextWidth);
+		nSelWidth = nTextWidth - srSelection_X1;
 	}
 
-	if ((con.m_sel.srSelection.Top + nSelHeight) > con.nTextHeight)
+	if ((srSelection_Y1 + nSelHeight) > nTextHeight)
 	{
-		Assert((con.m_sel.srSelection.Top + nSelHeight) <= con.nTextHeight);
-		nSelHeight = con.nTextHeight - con.m_sel.srSelection.Top;
+		Assert((srSelection_Y1 + nSelHeight) <= nTextHeight);
+		nSelHeight = nTextHeight - srSelection_Y1;
 	}
+
 
 	nSelHeight--;
 
-	if (!lbStreamMode)
+	if (!bStreamMode)
 	{
 		// Блоковое выделение
 		for (int Y = 0; Y <= nSelHeight; Y++)
@@ -3628,12 +3764,12 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 
 			if (m_Type == rbt_Primary)
 			{
-				pszCon = con.pConChar + con.nTextWidth*(Y+con.m_sel.srSelection.Top) + con.m_sel.srSelection.Left;
+				pszCon = con.pConChar + con.nTextWidth*(Y+srSelection_Y1) + srSelection_X1;
 			}
 			else if (pszDataStart && (Y < nTextHeight))
 			{
 				WARNING("Проверить для режима с прокруткой!");
-				pszCon = pszDataStart + dump.crSize.X*(Y+con.m_sel.srSelection.Top) + con.m_sel.srSelection.Left;
+				pszCon = pszDataStart + dump.crSize.X*(Y+srSelection_Y1) + srSelection_X1;
 			}
 
 			int nMaxX = nSelWidth - 1;
@@ -3650,7 +3786,9 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 				if (nTrimTailing == 1)
 				{
 					while ((pch > pchStart) && (*(pch-1) == L' '))
+					{
 						*(--pch) = 0;
+					}
 				}
 			}
 			else if (nTrimTailing != 1)
@@ -3690,21 +3828,21 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 		//}
 		for (int Y = 0; Y <= nSelHeight; Y++)
 		{
-			nX1 = (Y == 0) ? con.m_sel.srSelection.Left : 0;
-			nX2 = (Y == nSelHeight) ? con.m_sel.srSelection.Right : (con.nTextWidth-1);
+			nX1 = (Y == 0) ? srSelection_X1 : 0;
+			nX2 = (Y == nSelHeight) ? srSelection_X2 : (con.nTextWidth-1);
 			LPCWSTR pszCon = NULL;
 			LPCWSTR pszNextLine = NULL;
 			
 			if (m_Type == rbt_Primary)
 			{
-				pszCon = con.pConChar + con.nTextWidth*(Y+con.m_sel.srSelection.Top) + nX1;
-				pszNextLine = ((Y + 1) <= nSelHeight) ? (con.pConChar + con.nTextWidth*(Y+1+con.m_sel.srSelection.Top)) : NULL;
+				pszCon = con.pConChar + con.nTextWidth*(Y+srSelection_Y1) + nX1;
+				pszNextLine = ((Y + 1) <= nSelHeight) ? (con.pConChar + con.nTextWidth*(Y+1+srSelection_Y1)) : NULL;
 			}
 			else if (pszDataStart && (Y < nTextHeight))
 			{
 				WARNING("Проверить для режима с прокруткой!");
-				pszCon = pszDataStart + dump.crSize.X*(Y+con.m_sel.srSelection.Top) + nX1;
-				pszNextLine = ((Y + 1) <= nSelHeight) ? (pszDataStart + dump.crSize.X*(Y+1+con.m_sel.srSelection.Top)) : NULL;
+				pszCon = pszDataStart + dump.crSize.X*(Y+srSelection_Y1) + nX1;
+				pszNextLine = ((Y + 1) <= nSelHeight) ? (pszDataStart + dump.crSize.X*(Y+1+srSelection_Y1)) : NULL;
 			}
 
 			wchar_t* pchStart = pch;
@@ -3751,7 +3889,9 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 					if (nTrimTailing)
 					{
 						while ((pch > pchStart) && (*(pch-1) == L' '))
+						{
 							*(--pch) = 0;
+						}
 					}
 
 					switch (nEOL)
@@ -3770,7 +3910,9 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 				if (nTrimTailing)
 				{
 					while ((pch > pchStart) && (*(pch-1) == L' '))
+					{
 						*(--pch) = 0;
+					}
 				}
 			}
 		}
@@ -3807,22 +3949,6 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 
 	lbRc = CloseClipboard();
 
-	// Fin, Сбрасываем
-	if (Result)
-	{
-		DoSelectionStop(); // con.m_sel.dwFlags = 0;
-		
-		if (m_Type == rbt_Selection)
-		{
-			mp_RCon->SetActiveBuffer(rbt_Primary);
-			// Сразу на выход!
-		}
-		else
-		{
-			UpdateSelection(); // обновить на экране
-		}
-	}
-
 	return Result;
 }
 
@@ -3835,7 +3961,7 @@ void CRealBuffer::UpdateSelection()
 	mp_RCon->mp_VCon->Redraw();
 }
 
-BOOL CRealBuffer::isConSelectMode()
+bool CRealBuffer::isConSelectMode()
 {
 	if (!this) return false;
 
@@ -3852,14 +3978,14 @@ BOOL CRealBuffer::isConSelectMode()
 	return false;
 }
 
-BOOL CRealBuffer::isSelfSelectMode()
+bool CRealBuffer::isSelfSelectMode()
 {
 	if (!this) return false;
 	
 	return (con.m_sel.dwFlags != 0);
 }
 
-BOOL CRealBuffer::isStreamSelection()
+bool CRealBuffer::isStreamSelection()
 {
 	if (!this) return false;
 	
@@ -3911,13 +4037,15 @@ bool CRealBuffer::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 		else
 		{
 			COORD cr; ConsoleCursorPos(&cr);
-			// Поправить
-			cr.Y -= con.nTopVisibleLine;
+
+			// -- координаты нужны абсолютные
+			//// Поправить
+			//cr.Y -= con.nTopVisibleLine;
 
 			if (wParam == VK_LEFT)  { if (cr.X>0) cr.X--; }
-			else if (wParam == VK_RIGHT) { if (cr.X<(con.nTextWidth-1)) cr.X++; }
+			else if (wParam == VK_RIGHT) { if (cr.X<(GetBufferWidth()-1)) cr.X++; }
 			else if (wParam == VK_UP)    { if (cr.Y>0) cr.Y--; }
-			else if (wParam == VK_DOWN)  { if (cr.Y<(con.nTextHeight-1)) cr.Y++; }
+			else if (wParam == VK_DOWN)  { if (cr.Y<(GetBufferHeight()-1)) cr.Y++; }
 
 			// Теперь - двигаем
 			BOOL bShift = isPressed(VK_SHIFT);
@@ -4179,8 +4307,12 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 	
 	lcaTable = lcaTableOrg;
 
+	con.bInGetConsoleData = TRUE;
+
 	MSectionLock csData; csData.Lock(&csCON);
+
 	con.LastStartReadBufferTick = GetTickCount();
+
 	HEAPVAL
 	wchar_t wSetChar = L' ';
 	CharAttr lcaDef;
@@ -4259,8 +4391,18 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 			TODO("Во время ресайза консоль может подглючивать - отдает не то что нужно...");
 			//_ASSERTE(*con.pConChar!=ucBoxDblVert);
 			nYMax = min(nHeight,con.nTextHeight);
+
 			wchar_t  *pszSrc = con.pConChar;
 			WORD     *pnSrc = con.pConAttr;
+
+			// Т.к. есть блокировка (csData), то con.pConChar и con.pConAttr
+			// не должны меняться во время выполнения этой функции
+			const wchar_t* const pszSrcStart = con.pConChar;
+			WORD* const pnSrcStart = con.pConAttr;
+			size_t nSrcCells = (con.nTextWidth * con.nTextHeight);
+
+			Assert(pszSrcStart==pszSrc && pnSrcStart==pnSrc);
+
 			const AnnotationInfo *pcolSrc = NULL;
 			const AnnotationInfo *pcolEnd = NULL;
 			BOOL bUseColorData = FALSE, bStartUseColorData = FALSE;
@@ -4484,6 +4626,10 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 				pszDst += nWidth; pszSrc += cnSrcLineLen;
 				pcaDst += nWidth; //pnSrc += con.nTextWidth;
 			}
+
+			UNREFERENCED_PARAMETER(pszSrcStart);
+			UNREFERENCED_PARAMETER(pnSrcStart);
+			UNREFERENCED_PARAMETER(nSrcCells);
 		}
 	} // rbt_Primary
 
@@ -4530,12 +4676,16 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 
 		if (con.m_sel.dwFlags)
 		{
-			BOOL lbStreamMode = (con.m_sel.dwFlags & CONSOLE_TEXT_SELECTION) == CONSOLE_TEXT_SELECTION;
-			SMALL_RECT rc = con.m_sel.srSelection;
-			if (rc.Left<0) rc.Left = 0; else if (rc.Left>=nWidth) rc.Left = nWidth-1;
-			if (rc.Top<0) rc.Top = 0; else if (rc.Top>=nHeight) rc.Top = nHeight-1;
-			if (rc.Right<0) rc.Right = 0; else if (rc.Right>=nWidth) rc.Right = nWidth-1;
-			if (rc.Bottom<0) rc.Bottom = 0; else if (rc.Bottom>=nHeight) rc.Bottom = nHeight-1;
+			bool lbStreamMode = (con.m_sel.dwFlags & CONSOLE_TEXT_SELECTION) == CONSOLE_TEXT_SELECTION;
+			// srSelection in Absolute coordinates now!
+			// Поскольку здесь нас интересует только отображение - можно поступить просто
+			COORD crStart = BufferToScreen(MakeCoord(con.m_sel.srSelection.Left, con.m_sel.srSelection.Top));
+			COORD crEnd = BufferToScreen(MakeCoord(con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom));
+
+			SMALL_RECT rc = {crStart.X, crStart.Y, crEnd.X, crEnd.Y};
+			// Коррекция по видимой области
+			MinMax(rc.Left, 0, nWidth-1); MinMax(rc.Right, 0, nWidth-1);
+			MinMax(rc.Top, 0, nHeight-1); MinMax(rc.Bottom, 0, nHeight-1);
 
 			// для прямоугольника выделения сбрасываем прозрачность и ставим стандартный цвет выделения (lcaSel)
 			//CharAttr lcaSel = lcaTable[gpSet->isCTSColorIndex]; // Black on LtGray
@@ -4545,11 +4695,12 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 			COLORREF crBackColor = mp_RCon->mp_VCon->mp_Colors[nBackIdx];
 			int nX1, nX2;
 
-			// Block mode
+			
 			for (nY = rc.Top; nY <= rc.Bottom; nY++)
 			{
 				if (!lbStreamMode)
 				{
+					// Block mode
 					nX1 = rc.Left; nX2 = rc.Right;
 				}
 				else
@@ -4560,7 +4711,7 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 
 				pcaDst = pAttr + nWidth*nY + nX1;
 
-				for(nX = nX1; nX <= nX2; nX++, pcaDst++)
+				for (nX = nX1; nX <= nX2; nX++, pcaDst++)
 				{
 					//pcaDst[nX] = lcaSel; -- чтобы не сбрасывать флаги рамок и диалогов - ставим по полям
 					pcaDst->crForeColor = pcaDst->crOrigForeColor = crForeColor;
@@ -4610,6 +4761,7 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 
 	//FIN
 	HEAPVAL
+	con.bInGetConsoleData = FALSE;
 	csData.Unlock();
 	return;
 }
@@ -5195,15 +5347,17 @@ void CRealBuffer::ConsoleCursorPos(COORD *pcr)
 	if (con.m_sel.dwFlags)
 	{
 		// В режиме выделения - положение курсора ставим сами
+		// con.m_sel.srSelection уже содержит "абсолютные" координаты
+
 		if (con.m_sel.dwSelectionAnchor.X == con.m_sel.srSelection.Left)
 			pcr->X = con.m_sel.srSelection.Right;
 		else
 			pcr->X = con.m_sel.srSelection.Left;
 
 		if (con.m_sel.dwSelectionAnchor.Y == con.m_sel.srSelection.Top)
-			pcr->Y = con.m_sel.srSelection.Bottom + con.nTopVisibleLine;
+			pcr->Y = con.m_sel.srSelection.Bottom; // + con.nTopVisibleLine;
 		else
-			pcr->Y = con.m_sel.srSelection.Top + con.nTopVisibleLine;
+			pcr->Y = con.m_sel.srSelection.Top; // + con.nTopVisibleLine;
 	}
 	else
 	{
@@ -5296,6 +5450,10 @@ bool CRealBuffer::FindRangeStart(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[In/Out
 {
 	bool lbRc = false;
 
+	WARNING("Тут пока работаем в экранных координатах");
+	_ASSERTE(crFrom.Y>=0 && crFrom.Y<GetTextHeight());
+	_ASSERTE(crTo.Y>=0 && crTo.Y<GetTextHeight());
+
 	// Курсор над комментарием?
 	// Попробуем найти начало имени файла
 	while ((crFrom.X) > 0 && !wcschr(bUrlMode ? pszUrlDelim : pszBreak, pChar[crFrom.X-1]))
@@ -5358,6 +5516,10 @@ bool CRealBuffer::CheckValidUrl(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[In/Out]
 {
 	bool lbRc = false;
 
+	WARNING("Тут пока работаем в экранных координатах");
+	_ASSERTE(crFrom.Y>=0 && crFrom.Y<GetTextHeight());
+	_ASSERTE(crTo.Y>=0 && crTo.Y<GetTextHeight());
+
 	// URL? (Курсор мог стоять над протоколом)
 	while ((crTo.X < nLen) && wcschr(pszProtocol, pChar[crTo.X]))
 		crTo.X++;
@@ -5406,24 +5568,28 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 {
 	ExpandTextRangeType result = etr_None;
 
-	crTo = crFrom; // Initialize
+	WARNING("Тут пока работаем в экранных координатах, а приходят - абсолютные буферные");
+	_ASSERTE(crFrom.Y>=con.m_sbi.srWindow.Top && crFrom.Y<GetBufferHeight());
 
-	COORD crMouse = crFrom; // Save
+	COORD lcrFrom = BufferToScreen(crFrom);
+	COORD lcrTo = lcrFrom;
+
+	//COORD crMouse = lcrFrom; // Save
 
 	// Нужно получить строку
 	MSectionLock csData; csData.Lock(&csCON);
 	wchar_t* pChar = NULL;
 	int nLen = 0;
 
-	if (mp_RCon->mp_VCon && GetConsoleLine(crFrom.Y, &pChar, /*NULL,*/ &nLen, &csData) && pChar)
+	if (mp_RCon->mp_VCon && GetConsoleLine(lcrFrom.Y, &pChar, /*NULL,*/ &nLen, &csData) && pChar)
 	{
 		TODO("Проверить на ошибки после добавления горизонтальной прокрутки");
 		if (etr == etr_Word)
 		{
-			while ((crFrom.X) > 0 && !(mp_RCon->mp_VCon->isCharSpace(pChar[crFrom.X-1]) || mp_RCon->mp_VCon->isCharNonSpacing(pChar[crFrom.X-1])))
-				crFrom.X--;
-			while (((crTo.X+1) < nLen) && !(mp_RCon->mp_VCon->isCharSpace(pChar[crTo.X]) || mp_RCon->mp_VCon->isCharNonSpacing(pChar[crTo.X])))
-				crTo.X++;
+			while ((lcrFrom.X) > 0 && !(mp_RCon->mp_VCon->isCharSpace(pChar[lcrFrom.X-1]) || mp_RCon->mp_VCon->isCharNonSpacing(pChar[lcrFrom.X-1])))
+				lcrFrom.X--;
+			while (((lcrTo.X+1) < nLen) && !(mp_RCon->mp_VCon->isCharSpace(pChar[lcrTo.X]) || mp_RCon->mp_VCon->isCharNonSpacing(pChar[lcrTo.X])))
+				lcrTo.X++;
 			result = etr; // OK
 		}
 		else if (etr == etr_FileAndLine)
@@ -5458,16 +5624,16 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 
 			// Курсор над комментарием?
 			// Попробуем найти начало имени файла
-			if (!FindRangeStart(crFrom, crTo, bUrlMode, pszBreak, pszUrlDelim, pszSpacing, pszUrl, pszProtocol, pChar, nLen))
+			if (!FindRangeStart(lcrFrom, lcrTo, bUrlMode, pszBreak, pszUrlDelim, pszSpacing, pszUrl, pszProtocol, pChar, nLen))
 				goto wrap;
 
 			// URL? (Курсор мог стоять над протоколом)
-			if (!CheckValidUrl(crFrom, crTo, bUrlMode, pszUrlDelim, pszUrl, pszProtocol, pChar, nLen))
+			if (!CheckValidUrl(lcrFrom, lcrTo, bUrlMode, pszUrlDelim, pszUrl, pszProtocol, pChar, nLen))
 				goto wrap;
 
 
 			// Чтобы корректно флаги обработались (типа наличие расширения и т.п.)
-			crTo.X = crFrom.X;
+			lcrTo.X = lcrFrom.X;
 
 			// Теперь - найти конец.
 			// Считаем, что для файлов конец это двоеточие, после которого идет описание ошибки
@@ -5508,30 +5674,30 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 			// Поехали
 			if (bUrlMode)
 			{
-				while (((crTo.X+1) < nLen) && !wcschr(pszUrlDelim, pChar[crTo.X+1]))
-					crTo.X++;
+				while (((lcrTo.X+1) < nLen) && !wcschr(pszUrlDelim, pChar[lcrTo.X+1]))
+					lcrTo.X++;
 			}
-			else while ((crTo.X+1) < nLen)
-				//&& ((pChar[crTo.X] != L':') || (pChar[crTo.X] == L':' && wcschr(pszDigits, pChar[crTo.X+1]))))
+			else while ((lcrTo.X+1) < nLen)
+				//&& ((pChar[lcrTo.X] != L':') || (pChar[lcrTo.X] == L':' && wcschr(pszDigits, pChar[lcrTo.X+1]))))
 			{
-				if ((pChar[crTo.X] == L'/') && ((crTo.X+1) < nLen) && (pChar[crTo.X+1] == L'/')
-					&& !((crTo.X > 1) && (pChar[crTo.X] == L':'))) // и НЕ URL адрес
+				if ((pChar[lcrTo.X] == L'/') && ((lcrTo.X+1) < nLen) && (pChar[lcrTo.X+1] == L'/')
+					&& !((lcrTo.X > 1) && (pChar[lcrTo.X] == L':'))) // и НЕ URL адрес
 				{
 					goto wrap; // Не оно (комментарий в строке)
 				}
 
 				if (bWasSeparator 
-					&& ((pChar[crTo.X] >= L'0' && pChar[crTo.X] <= L'9')
-						|| (bDigits && (pChar[crTo.X] == L',')))) // FarCtrl.pas(1002,49) Error: 
+					&& ((pChar[lcrTo.X] >= L'0' && pChar[lcrTo.X] <= L'9')
+						|| (bDigits && (pChar[lcrTo.X] == L',')))) // FarCtrl.pas(1002,49) Error: 
 				{
 					if (bLineNumberFound)
 					{
 						// gcc такие строки тоже может выкинуть
 						// file.cpp:29:29: error
-						crTo.X--;
+						lcrTo.X--;
 						break;
 					}
-					if (!bDigits && (crFrom.X < crTo.X) /*&& (pChar[crTo.X-1] == L':')*/)
+					if (!bDigits && (lcrFrom.X < lcrTo.X) /*&& (pChar[lcrTo.X-1] == L':')*/)
 					{
 						bDigits = true;
 					}
@@ -5542,13 +5708,13 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 					{
 						if (!iExtFound)
 						{
-							if (pChar[crTo.X] == L'.')
+							if (pChar[lcrTo.X] == L'.')
 								iExtFound = 1;
 						}
 						else
 						{
 							// Не особо заморачиваясь с точками и прочим. Просто небольшая страховка от ложных срабатываний...
-							if ((pChar[crTo.X] >= L'a' && pChar[crTo.X] <= L'z') || (pChar[crTo.X] >= L'A' && pChar[crTo.X] <= L'Z'))
+							if ((pChar[lcrTo.X] >= L'a' && pChar[lcrTo.X] <= L'z') || (pChar[lcrTo.X] >= L'A' && pChar[lcrTo.X] <= L'Z'))
 							{
 								iExtFound = 2;
 								iBracket = 0;
@@ -5558,19 +5724,19 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 
 					if (iExtFound == 2)
 					{
-						if (pChar[crTo.X] == L'.')
+						if (pChar[lcrTo.X] == L'.')
 						{
 							iExtFound = 1;
 							iBracket = 0;
 						}
-						else if (wcschr(pszSlashes, pChar[crTo.X]) != NULL)
+						else if (wcschr(pszSlashes, pChar[lcrTo.X]) != NULL)
 						{
 							// Был слеш, значит расширения - еще нет
 							iExtFound = 0;
 							iBracket = 0;
 							bWasSeparator = false;
 						}
-						else if (wcschr(pszSpacing, pChar[crTo.X]) && wcschr(pszSpacing, pChar[crTo.X+1]))
+						else if (wcschr(pszSpacing, pChar[lcrTo.X]) && wcschr(pszSpacing, pChar[lcrTo.X+1]))
 						{
 							// Слишком много пробелов
 							iExtFound = 0;
@@ -5578,21 +5744,21 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 							bWasSeparator = false;
 						}
 						else
-							bWasSeparator = (wcschr(pszSeparat, pChar[crTo.X]) != NULL);
+							bWasSeparator = (wcschr(pszSeparat, pChar[lcrTo.X]) != NULL);
 					}
 
 					// Расчитано на закрывающие : или ) или ,
 					_ASSERTE(pszTermint[0]==L':' && pszTermint[1]==L')' && pszTermint[2]==L',' && pszTermint[3]==0);
-					if (bDigits && wcschr(pszTermint, pChar[crTo.X]) /*pChar[crTo.X] == L':'*/)
+					if (bDigits && wcschr(pszTermint, pChar[lcrTo.X]) /*pChar[lcrTo.X] == L':'*/)
 					{
 						// Если номер строки обрамлен скобками - скобки должны быть сбалансированы
-						if (((pChar[crTo.X] == L':')
-								&& (wcschr(pszSpacing, pChar[crTo.X+1])
-									|| wcschr(pszDigits, pChar[crTo.X+1])))
-						|| ((pChar[crTo.X] == L')') && (iBracket == 1)
-								&& ((pChar[crTo.X+1] == L':')
-									|| wcschr(pszSpacing, pChar[crTo.X+1])
-									|| wcschr(pszDigits, pChar[crTo.X+1])))
+						if (((pChar[lcrTo.X] == L':')
+								&& (wcschr(pszSpacing, pChar[lcrTo.X+1])
+									|| wcschr(pszDigits, pChar[lcrTo.X+1])))
+						|| ((pChar[lcrTo.X] == L')') && (iBracket == 1)
+								&& ((pChar[lcrTo.X+1] == L':')
+									|| wcschr(pszSpacing, pChar[lcrTo.X+1])
+									|| wcschr(pszDigits, pChar[lcrTo.X+1])))
 							)
 						{
 							_ASSERTE(bLineNumberFound==false);
@@ -5602,7 +5768,7 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 					}
 					bDigits = false;
 
-					switch (pChar[crTo.X])
+					switch (pChar[lcrTo.X])
 					{
 					case L'(': iBracket++; break;
 					case L')': iBracket--; break;
@@ -5612,26 +5778,26 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 						{
 							bMaybeMail = false;
 						}
-						else if (((crTo.X > 0) && wcschr(pszEMail, pChar[crTo.X-1]))
-							&& (((crTo.X+1) < nLen) && wcschr(pszEMail, pChar[crTo.X+1])))
+						else if (((lcrTo.X > 0) && wcschr(pszEMail, pChar[lcrTo.X-1]))
+							&& (((lcrTo.X+1) < nLen) && wcschr(pszEMail, pChar[lcrTo.X+1])))
 						{
 							bMaybeMail = true;
-							MailX = crTo.X;
+							MailX = lcrTo.X;
 						}
 						break;
 					}
 
-					if (pChar[crTo.X] == L':')
+					if (pChar[lcrTo.X] == L':')
 						nColons++;
-					else if (pChar[crTo.X] == L'\\' || pChar[crTo.X] == L'/')
+					else if (pChar[lcrTo.X] == L'\\' || pChar[lcrTo.X] == L'/')
 						nColons = 0;
 				}
 
 				if (nColons >= 2)
 					break;
 
-				crTo.X++;
-				if (wcschr(bUrlMode ? pszUrlDelim : pszBreak, pChar[crTo.X]))
+				lcrTo.X++;
+				if (wcschr(bUrlMode ? pszUrlDelim : pszBreak, pChar[lcrTo.X]))
 				{
 					if (bMaybeMail)
 						break;
@@ -5652,19 +5818,19 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 				if (bLineNumberFound)
 					bMaybeMail = false;
 
-				if ((pChar[crTo.X] != L':' && pChar[crTo.X] != L' ' && !(pChar[crTo.X] == L')' && iBracket == 1)) || !bLineNumberFound || (nColons > 2))
+				if ((pChar[lcrTo.X] != L':' && pChar[lcrTo.X] != L' ' && !(pChar[lcrTo.X] == L')' && iBracket == 1)) || !bLineNumberFound || (nColons > 2))
 				{
 					if (!bMaybeMail)
 						goto wrap;
 				}
-				if (bMaybeMail || (!bMaybeMail && pChar[crTo.X] != L')'))
-					crTo.X--;
+				if (bMaybeMail || (!bMaybeMail && pChar[lcrTo.X] != L')'))
+					lcrTo.X--;
 				// Откатить ненужные пробелы
-				while ((crFrom.X < crTo.X) && wcschr(pszSpacing, pChar[crFrom.X]))
-					crFrom.X++;
-				while ((crTo.X > crFrom.X) && wcschr(pszSpacing, pChar[crTo.X]))
-					crTo.X--;
-				if ((crFrom.X + 4) > crTo.X) // 1.c:1: //-V112
+				while ((lcrFrom.X < lcrTo.X) && wcschr(pszSpacing, pChar[lcrFrom.X]))
+					lcrFrom.X++;
+				while ((lcrTo.X > lcrFrom.X) && wcschr(pszSpacing, pChar[lcrTo.X]))
+					lcrTo.X--;
+				if ((lcrFrom.X + 4) > lcrTo.X) // 1.c:1: //-V112
 				{
 					// Слишком коротко, считаем что не оно
 					goto wrap;
@@ -5672,8 +5838,8 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 				if (!bMaybeMail)
 				{
 					// Проверить, чтобы был в наличии номер строки
-					if (!(pChar[crTo.X] >= L'0' && pChar[crTo.X] <= L'9') // ConEmuC.cpp:49:
-						&& !(pChar[crTo.X] == L')' && (pChar[crTo.X-1] >= L'0' && pChar[crTo.X-1] <= L'9'))) // ConEmuC.cpp(49) :
+					if (!(pChar[lcrTo.X] >= L'0' && pChar[lcrTo.X] <= L'9') // ConEmuC.cpp:49:
+						&& !(pChar[lcrTo.X] == L')' && (pChar[lcrTo.X-1] >= L'0' && pChar[lcrTo.X-1] <= L'9'))) // ConEmuC.cpp(49) :
 					{
 						goto wrap; // Номера строки нет
 					}
@@ -5681,7 +5847,7 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 					// 29.11.2011 18:31:47
 					{
 						bool bNoDigits = false;
-						for (int i = crFrom.X; i <= crTo.X; i++)
+						for (int i = lcrFrom.X; i <= lcrTo.X; i++)
 						{
 							if (pChar[i] < L'0' || pChar[i] > L'9')
 							{
@@ -5692,8 +5858,8 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 							goto wrap;
 					}
 					// -- уже включены // Для красивости в VC включить скобки
-					//if ((pChar[crTo.X] == L')') && (pChar[crTo.X+1] == L':'))
-					//	crTo.X++;
+					//if ((pChar[lcrTo.X] == L')') && (pChar[lcrTo.X+1] == L':'))
+					//	lcrTo.X++;
 				}
 				else // bMaybeMail
 				{
@@ -5701,16 +5867,16 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 					int x = MailX - 1; _ASSERTE(x>=0);
 					while ((x > 0) && wcschr(pszEMail, pChar[x-1]))
 						x--;
-					crFrom.X = x;
+					lcrFrom.X = x;
 					x = MailX + 1; _ASSERTE(x<nLen);
 					while (((x+1) < nLen) && wcschr(pszEMail, pChar[x+1]))
 						x++;
-					crTo.X = x;
+					lcrTo.X = x;
 				}
 			} // end "else / if (bUrlMode)"
 
 			// Check mouse pos, it must be inside region
-			if ((crMouse.X < crFrom.X) || (crMouse.X > crTo.X))
+			if ((crFrom.X < lcrFrom.X) || (crFrom.X > lcrTo.X))
 			{
 				goto wrap;
 			}
@@ -5720,7 +5886,7 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 			{
 				_ASSERTE(!bMaybeMail || !bUrlMode); // Одновременно - флаги не могут быть выставлены!
 				int iMailTo = (bMaybeMail && !bUrlMode) ? lstrlen(L"mailto:") : 0;
-				if ((crTo.X - crFrom.X + 1 + iMailTo) >= (INT_PTR)cchTextMax)
+				if ((lcrTo.X - lcrFrom.X + 1 + iMailTo) >= (INT_PTR)cchTextMax)
 					goto wrap; // Недостаточно места под текст
 				if (iMailTo)
 				{
@@ -5730,8 +5896,8 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 					cchTextMax -= iMailTo;
 					bUrlMode = true;
 				}
-				memmove(pszText, pChar+crFrom.X, (crTo.X - crFrom.X + 1)*sizeof(*pszText));
-				pszText[crTo.X - crFrom.X + 1] = 0;
+				memmove(pszText, pChar+lcrFrom.X, (lcrTo.X - lcrFrom.X + 1)*sizeof(*pszText));
+				pszText[lcrTo.X - lcrFrom.X + 1] = 0;
 
 				#ifdef _DEBUG
 				if (!bUrlMode && wcsstr(pszText, L"//")!=NULL)
@@ -5747,7 +5913,14 @@ wrap:
 	// Fail?
 	if (result == etr_None)
 	{
-		crFrom = crTo = MakeCoord(0,0);
+		// Reset coordinates
+		crFrom = MakeCoord(0,0);
+		crTo = MakeCoord(0,0);
+	}
+	else
+	{
+		crFrom = ScreenToBuffer(lcrFrom);
+		crTo = ScreenToBuffer(lcrTo);
 	}
 	StoreLastTextRange(result);
 	return result;
@@ -6022,7 +6195,7 @@ LRESULT CRealBuffer::OnScroll(int nDirection, short nTrackPos /*= -1*/, UINT nCo
 		while (true)
 		{
 			WARNING("Переделать в команду пайпа");
-			mp_RCon->PostConsoleMessage(mp_RCon->hConWnd, WM_VSCROLL, wParm, NULL);
+			mp_RCon->PostConsoleMessage(mp_RCon->hConWnd, WM_VSCROLL, wParm, 0);
 
 			if ((nCount <= 1) || (nDirection != SB_LINEUP && nDirection != SB_LINEDOWN) /*|| mp_RCon->isFar()*/)
 				break;

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="ConEmu"
 	ProjectGUID="{EEE25AC6-D94D-472D-8D4A-3C6C382CFD3D}"
 	RootNamespace="conemu"
@@ -1668,13 +1668,6 @@
 			<File
 				RelativePath=".\ConfirmDlg.cpp"
 				>
-				<FileConfiguration
-					Name="Debug_C|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\CustomFonts.cpp"
@@ -1717,6 +1710,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Hotkeys.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\Inside.cpp"
 				>
 			</File>
@@ -1741,6 +1738,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\common\Monitors.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\common\MSecurity.cpp"
 				>
 			</File>
@@ -1758,6 +1759,10 @@
 			</File>
 			<File
 				RelativePath=".\OptionsFast.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\OptionsHelp.cpp"
 				>
 			</File>
 			<File
@@ -1786,6 +1791,10 @@
 			</File>
 			<File
 				RelativePath="..\common\RgnDetect.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\RunQueue.cpp"
 				>
 			</File>
 			<File
@@ -2005,6 +2014,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\common\WinConsole.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\common\WinObjects.cpp"
 				>
 			</File>
@@ -2052,6 +2065,10 @@
 			</File>
 			<File
 				RelativePath=".\ConEmuPipe.h"
+				>
+			</File>
+			<File
+				RelativePath="..\common\ConEmuPipeMode.h"
 				>
 			</File>
 			<File
@@ -2127,6 +2144,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Hotkeys.h"
+				>
+			</File>
+			<File
 				RelativePath=".\Inside.h"
 				>
 			</File>
@@ -2155,6 +2176,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\common\Monitors.h"
+				>
+			</File>
+			<File
+				RelativePath="..\common\MPipe.h"
+				>
+			</File>
+			<File
 				RelativePath="..\common\MSecurity.h"
 				>
 			</File>
@@ -2172,6 +2201,10 @@
 			</File>
 			<File
 				RelativePath=".\OptionsFast.h"
+				>
+			</File>
+			<File
+				RelativePath=".\OptionsHelp.h"
 				>
 			</File>
 			<File
@@ -2204,6 +2237,10 @@
 			</File>
 			<File
 				RelativePath="..\common\RgnDetect.h"
+				>
+			</File>
+			<File
+				RelativePath=".\RunQueue.h"
 				>
 			</File>
 			<File
@@ -2446,6 +2483,10 @@
 			</File>
 			<File
 				RelativePath=".\VirtualConsole.h"
+				>
+			</File>
+			<File
+				RelativePath="..\common\WinConsole.h"
 				>
 			</File>
 			<File

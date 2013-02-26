@@ -953,17 +953,20 @@
     <ClCompile Include="FrameHolder.cpp" />
     <ClCompile Include="GestureEngine.cpp" />
     <ClCompile Include="GuiServer.cpp" />
+    <ClCompile Include="Hotkeys.cpp" />
     <ClCompile Include="Inside.cpp" />
     <ClCompile Include="LoadImg.cpp" />
     <ClCompile Include="Macro.cpp" />
     <ClCompile Include="..\common\MAssert.cpp" />
     <ClCompile Include="..\common\Memory.cpp" />
     <ClCompile Include="Menu.cpp" />
+    <ClCompile Include="..\common\Monitors.cpp" />
     <ClCompile Include="..\common\MSecurity.cpp" />
     <ClCompile Include="..\common\MStrSafe.cpp" />
     <ClCompile Include="Options.cpp" />
     <ClCompile Include="OptionsClass.cpp" />
     <ClCompile Include="OptionsFast.cpp" />
+    <ClCompile Include="OptionsHelp.cpp" />
     <ClCompile Include="..\common\RConStartArgs.cpp" />
     <ClCompile Include="RealBuffer.cpp" />
     <ClCompile Include="RealConsole.cpp" />
@@ -971,6 +974,7 @@
     <ClCompile Include="Recreate.cpp" />
     <ClCompile Include="Registry.cpp" />
     <ClCompile Include="..\common\RgnDetect.cpp" />
+    <ClCompile Include="RunQueue.cpp" />
     <ClCompile Include="ScreenDump.cpp" />
     <ClCompile Include="Status.cpp" />
     <ClCompile Include="TabBar.cpp" />
@@ -984,6 +988,7 @@
     <ClCompile Include="VConGroup.cpp" />
     <ClCompile Include="VConRelease.cpp" />
     <ClCompile Include="VirtualConsole.cpp" />
+    <ClCompile Include="..\common\WinConsole.cpp" />
     <ClCompile Include="..\common\WinObjects.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -1014,17 +1019,21 @@
     <ClInclude Include="..\ConEmuCD\GuiHooks.h" />
     <ClInclude Include="Header.h" />
     <ClInclude Include="kl_parts.h" />
+    <ClInclude Include="Hotkeys.h" />
     <ClInclude Include="Inside.h" />
     <ClInclude Include="LoadImg.h" />
     <ClInclude Include="Macro.h" />
     <ClInclude Include="..\common\Memory.h" />
     <ClInclude Include="Menu.h" />
     <ClInclude Include="MenuIds.h" />
+    <ClInclude Include="..\common\MPipe.h" />
+    <ClInclude Include="..\common\Monitors.h" />
     <ClInclude Include="..\common\MSecurity.h" />
     <ClInclude Include="..\common\MStrSafe.h" />
     <ClInclude Include="Options.h" />
     <ClInclude Include="OptionsClass.h" />
     <ClInclude Include="OptionsFast.h" />
+    <ClInclude Include="OptionsHelp.h" />
     <ClInclude Include="..\common\PipeServer.h" />
     <ClInclude Include="..\common\RConStartArgs.h" />
     <ClInclude Include="RealBuffer.h" />
@@ -1034,6 +1043,7 @@
     <ClInclude Include="Registry.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="..\common\RgnDetect.h" />
+    <ClInclude Include="RunQueue.h" />
     <ClInclude Include="ScreenDump.h" />
     <ClInclude Include="Status.h" />
     <ClInclude Include="TabBar.h" />
@@ -1050,6 +1060,7 @@
     <ClInclude Include="VConGroup.h" />
     <ClInclude Include="VConRelease.h" />
     <ClInclude Include="VirtualConsole.h" />
+    <ClInclude Include="..\common\WinConsole.h" />
     <ClInclude Include="..\common\WinObjects.h" />
     <ClInclude Include="version.h" />
   </ItemGroup>

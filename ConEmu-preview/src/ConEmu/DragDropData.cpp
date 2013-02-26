@@ -32,6 +32,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "Header.h"
 #include <shlobj.h>
+#ifdef __GNUC__
+#include "ShObjIdl_Part.h"
+#endif
 
 #include "DragDropData.h"
 #include "DragDrop.h"
@@ -84,8 +87,10 @@ CDragDropData::CDragDropData()
 	m_pfpi = NULL; mp_LastRCon = NULL; mn_PfpiSizeMax = 0;
 	mp_DataObject = NULL;
 	m_DesktopID.mkid.cb = 0;
-	mh_Overlapped = NULL; mh_BitsDC = NULL; mh_BitsBMP = mh_BitsBMP_Old = NULL;
+	//mh_Overlapped = NULL; mh_BitsDC = NULL; mh_BitsBMP = mh_BitsBMP_Old = NULL;
+	#if !defined(USE_DRAG_HELPER)
 	mp_Bits = NULL;
+	#endif
 	mb_DragWithinNow = FALSE;
 	mn_ExtractIconsTID = 0;
 	mh_ExtractIcons = NULL;
@@ -124,8 +129,8 @@ CDragDropData::~CDragDropData()
 	}
 	#endif
 
-	DestroyDragImageBits();
-	DestroyDragImageWindow();
+	//DestroyDragImageBits();
+	//DestroyDragImageWindow();
 
 	// Final release, no more need
 	if (m_pfpi) free(m_pfpi); m_pfpi = NULL;
@@ -159,7 +164,7 @@ BOOL CDragDropData::Register()
 	}
 
 #ifdef PERSIST_OVL
-	CreateDragImageWindow();
+//	CreateDragImageWindow();
 #endif
 
 #ifdef USE_DROP_HELPER
@@ -694,20 +699,22 @@ BOOL CDragDropData::AddFmt_DragImageBits(wchar_t* pszDraggedPath, UINT nFilesCou
 			}
 
 			hr = mp_SourceHelper->InitializeFromBitmap(&info, mp_DataObject);
+
+			Assert(SUCCEEDED(hr));
 		}
 	}
 #endif
 
-	if (FAILED(hr))
-	{
-		// Must be GlobalAlloc'ed
-		DragImageBits *pDragBits = CreateDragImageBits(pszDraggedPath);
+	//if (FAILED(hr))
+	//{
+		//// Must be GlobalAlloc'ed
+		//DragImageBits *pDragBits = CreateDragImageBits(pszDraggedPath);
 
-		if (!pDragBits)
-			return FALSE;
+		//if (!pDragBits)
+		//	return FALSE;
 
-		hr = mp_DataObject->SetDataInt(L"DragImageBits", pDragBits);
-	}
+		//hr = mp_DataObject->SetDataInt(L"DragImageBits", pDragBits);
+	//}
 
 	return SUCCEEDED(hr);
 }
@@ -785,6 +792,9 @@ BOOL CDragDropData::PrepareDrag(BOOL abClickNeed, COORD crMouseDC, DWORD* pdwAll
 	//	RetrieveDragToInfo();
 	//}
 
+#if 1
+	mb_DragWithinNow = TRUE;
+#else
 	if (LoadDragImageBits(mp_DataObject))
 	{
 		mb_DragWithinNow = TRUE;
@@ -795,6 +805,7 @@ BOOL CDragDropData::PrepareDrag(BOOL abClickNeed, COORD crMouseDC, DWORD* pdwAll
 		CreateDragImageWindow();
 #endif
 	}
+#endif
 
 	//gpConEmu->DebugStep(_T("DnD: Finally, DoDragDrop"));
 	gpConEmu->DebugStep(NULL);
@@ -1163,31 +1174,12 @@ bool CDragDropData::CheckIsUpdatePackage(IDataObject * pDataObject)
 
 			if (SUCCEEDED(hr) && stgMedium.hGlobal)
 			{
+				// Нас интересует только первый файл (больше одного быть не может)
 				LPCWSTR pszFileNames = (LPCWSTR)GlobalLock(stgMedium.hGlobal);
 
-				if (pszFileNames && *pszFileNames && lstrlen(pszFileNames) <= MAX_PATH)
+				if (pszFileNames && *pszFileNames)
 				{
-					wchar_t szName[MAX_PATH+1];
-					LPCWSTR pszName = PointToName(pszFileNames);
-					if (pszName && *pszName)
-					{
-						lstrcpyn(szName, pszName, countof(szName));
-						CharLowerBuff(szName, lstrlen(szName));
-						LPCWSTR pszExt = PointToExt(szName);
-						if (pszExt)
-						{
-							if ((wcsncmp(szName, L"conemupack.", 11) == 0)
-								&& (wcscmp(pszExt, L".7z") == 0))
-							{
-								bHasUpdatePackage = true;
-							}
-							else if ((wcsncmp(szName, L"conemusetup.", 12) == 0)
-								&& (wcscmp(pszExt, L".exe") == 0))
-							{
-								bHasUpdatePackage = true;
-							}
-						}
-					}
+					bHasUpdatePackage = CConEmuUpdate::IsUpdatePackage(pszFileNames);
 
 					if (bHasUpdatePackage)
 					{
@@ -1427,11 +1419,13 @@ void CDragDropData::RetrieveDragToInfo(POINTL pt)
 	}
 }
 
+#if 0
 BOOL CDragDropData::CreateDragImageBits(IDataObject * pDataObject)
 {
 	AssertMsg(L"CreateDragImageBits(IDataObject) - NOT IMPLEMENTED\n");
 	return FALSE;
 }
+#endif
 
 #include <pshpack1.h>
 typedef struct tag_MyRgbQuad
@@ -1450,6 +1444,7 @@ typedef struct tag_MyRgbQuad
 } MyRgbQuad;
 #include <poppack.h>
 
+#if 0
 bool CDragDropData::AllocDragImageBits()
 {
 	if (mp_Bits)
@@ -1462,11 +1457,12 @@ bool CDragDropData::AllocDragImageBits()
 
 	return (mp_Bits!=NULL);
 }
+#endif
 
 BOOL CDragDropData::PaintDragImageBits(wchar_t* pszFiles, HDC& hDrawDC, HBITMAP& hBitmap, HBITMAP& hOldBitmap, int nWidth, int nHeight, int* pnMaxX, int* pnMaxY, POINT* ptCursor, bool bUseColorKey, COLORREF clrKey)
 {
 	HDC hScreenDC = ::GetDC(NULL);
-	bool bCreateDC = false, bCreateBmp = false;
+	bool bCreateDC = false; //, bCreateBmp = false;
 
 	if (!hDrawDC)
 	{
@@ -1791,6 +1787,7 @@ BOOL CDragDropData::PaintDragImageBits(wchar_t* pszFiles, HDC& hDrawDC, HBITMAP&
 	return TRUE;
 }
 
+#if 0
 // Result Must be GlobalAlloc'ed
 DragImageBits* CDragDropData::CreateDragImageBits(wchar_t* pszFiles)
 {
@@ -2120,6 +2117,7 @@ DragImageBits* CDragDropData::CreateDragImageBits(wchar_t* pszFiles)
 
 	return pBits;
 }
+#endif
 
 BOOL CDragDropData::DrawImageBits(HDC hDrawDC, wchar_t* pszFile, int *nMaxX, int nX, int *nMaxY)
 {
@@ -2176,6 +2174,7 @@ BOOL CDragDropData::DrawImageBits(HDC hDrawDC, wchar_t* pszFile, int *nMaxX, int
 	return TRUE;
 }
 
+#if 0
 BOOL CDragDropData::LoadDragImageBits(IDataObject * pDataObject)
 {
 	if (UseTargetHelper(false))
@@ -2359,7 +2358,9 @@ BOOL CDragDropData::LoadDragImageBits(IDataObject * pDataObject)
 
 	return lbRc;
 }
+#endif
 
+#if 0
 void CDragDropData::DestroyDragImageBits()
 {
 	if (mh_BitsDC || mh_BitsBMP || mp_Bits)
@@ -2479,13 +2480,17 @@ BOOL CDragDropData::CreateDragImageWindow()
 	MoveDragWindow(FALSE);
 	return TRUE;
 }
+#endif
 
 void CDragDropData::OnTaskbarCreated()
 {
+#if 0
 	if (mh_Overlapped)
 		MoveDragWindowToTop();
+#endif
 }
 
+#if 0
 void CDragDropData::MoveDragWindowToTop()
 {
 	if (mh_Overlapped)
@@ -2577,7 +2582,9 @@ void CDragDropData::MoveDragWindow(BOOL abVisible/*=TRUE*/)
 	//apiSetForegroundWindow(ghWnd); // после создания окна фокус уходит из GUI
 #endif
 }
+#endif
 
+#if 0
 void CDragDropData::DestroyDragImageWindow()
 {
 	if (mh_Overlapped)
@@ -2669,6 +2676,7 @@ LRESULT CDragDropData::DragBitsWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPA
 #endif
 	return DefWindowProc(hWnd, messg, wParam, lParam);
 }
+#endif
 
 BOOL CDragDropData::InDragDrop()
 {
@@ -2700,12 +2708,12 @@ void CDragDropData::DragFeedBack(DWORD dwEffect)
 		#endif
 
 		mb_DragWithinNow = FALSE;
-#ifdef PERSIST_OVL
-		MoveDragWindow(FALSE);
-#else
-		DestroyDragImageWindow();
-#endif
-		DestroyDragImageBits();
+//#ifdef PERSIST_OVL
+//		MoveDragWindow(FALSE);
+//#else
+//		DestroyDragImageWindow();
+//#endif
+//		DestroyDragImageBits();
 		gpConEmu->SetDragCursor(NULL);
 	}
 	else
@@ -2759,24 +2767,24 @@ void CDragDropData::DragFeedBack(DWORD dwEffect)
 
 		if (dwEffect == DROPEFFECT_NONE)
 		{
-			MoveDragWindow(FALSE);
+			//MoveDragWindow(FALSE);
 		}
 		else
 		{
-			if (!mh_Overlapped && mp_Bits)
-			{
-				#ifdef PERSIST_OVL
-				//CreateDragImageWindow(); -- должно быть создано при запуске ConEmu
-				_ASSERTE(mh_Overlapped!=NULL);
-				#else
-				CreateDragImageWindow();
-				#endif
-			}
+			//if (!mh_Overlapped && mp_Bits)
+			//{
+			//	#ifdef PERSIST_OVL
+			//	//CreateDragImageWindow(); -- должно быть создано при запуске ConEmu
+			//	_ASSERTE(mh_Overlapped!=NULL);
+			//	#else
+			//	CreateDragImageWindow();
+			//	#endif
+			//}
 
-			if (mh_Overlapped)
-			{
-				MoveDragWindow(!UseTargetHelper(mb_selfdrag));
-			}
+			//if (mh_Overlapped)
+			//{
+			//	MoveDragWindow(!UseTargetHelper(mb_selfdrag));
+			//}
 		}
 	}
 
@@ -2820,12 +2828,14 @@ BOOL CDragDropData::IsDragStarting()
 		return FALSE;
 
 	BOOL lbDragStarting = FALSE;
-	std::vector<CEDragSource*>::iterator iter;
+	//std::vector<CEDragSource*>::iterator iter;
 	CEDragSource* pds = NULL;
 
-	for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	//for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	for (INT_PTR j = 0; j < m_Sources.size(); j++)
 	{
-		pds = *iter;
+		//pds = *iter;
+		pds = m_Sources[j];
 
 		if (pds->hThread && pds->bInDrag)
 		{
@@ -2846,12 +2856,14 @@ BOOL CDragDropData::ForwardMessage(UINT messg, WPARAM wParam, LPARAM lParam)
 		return FALSE;
 
 	BOOL lbDragStarting = FALSE;
-	std::vector<CEDragSource*>::iterator iter;
+	//std::vector<CEDragSource*>::iterator iter;
 	CEDragSource* pds = NULL;
 
-	for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	//for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	for (INT_PTR j = 0; j < m_Sources.size(); j++)
 	{
-		pds = *iter;
+		//pds = *iter;
+		pds = m_Sources[j];
 
 		if (pds->hThread && pds->bInDrag)
 		{
@@ -3005,12 +3017,14 @@ CDragDropData::CEDragSource* CDragDropData::InitialCreateSource()
 
 CDragDropData::CEDragSource* CDragDropData::GetFreeSource()
 {
-	std::vector<CEDragSource*>::iterator iter;
+	//std::vector<CEDragSource*>::iterator iter;
 	CEDragSource* pds = NULL;
 
-	for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	//for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	for (INT_PTR j = 0; j < m_Sources.size(); j++)
 	{
-		pds = *iter;
+		//pds = *iter;
+		pds = m_Sources[j];
 
 		if (!pds->hThread || pds->bInDrag) continue;  // ищем готовый поток
 
@@ -3042,13 +3056,15 @@ CDragDropData::CEDragSource* CDragDropData::GetFreeSource()
 
 void CDragDropData::TerminateDrag()
 {
-	std::vector<CEDragSource*>::iterator iter;
+	//std::vector<CEDragSource*>::iterator iter;
 	CEDragSource* pds = NULL;
 
 	// Сначала во все нити послать QUIT
-	for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	//for (iter = m_Sources.begin(); iter != m_Sources.end(); ++iter)
+	for (INT_PTR j = 0; j < m_Sources.size(); j++)
 	{
-		pds = *iter;
+		//pds = *iter;
+		pds = m_Sources[j];
 
 		if (!pds->hThread) continue;
 
@@ -3057,9 +3073,12 @@ void CDragDropData::TerminateDrag()
 	}
 
 	// После этого попробовать немного подождать, и Terminate...
-	for(iter = m_Sources.begin(); iter != m_Sources.end(); iter = m_Sources.erase(iter))
+	//for (INT_PTR iter = m_Sources.begin(); iter != m_Sources.end(); iter = m_Sources.erase(iter))
+	while (!m_Sources.empty())
 	{
-		pds = *iter;
+		INT_PTR j = m_Sources.size()-1;
+		//pds = *iter;
+		pds = m_Sources[j];
 
 		if (pds->hThread)
 		{
@@ -3073,5 +3092,7 @@ void CDragDropData::TerminateDrag()
 
 		CloseHandle(pds->hReady);
 		free(pds);
+
+		m_Sources.erase(j);
 	}
 }
