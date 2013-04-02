@@ -96,16 +96,17 @@ rem echo ConEmu autorun (c) Maximus5
 rem echo Starting "%ConEmuPath%" in "Attach" mode (NewWnd=%FORCE_NEW_WND%)
 call "%ConEmuPath%" /AUTOATTACH %FORCE_NEW_WND_CMD%
 rem echo errorlevel=%errorlevel%
-if errorlevel 132 if not errorlevel 133 goto rc_nocon
-if errorlevel 121 if not errorlevel 122 goto rc_ok
-echo ConEmu attach failed
+rem Issue 1003: Non zero exit codes leads to problems in some applications...
+rem if errorlevel 132 if not errorlevel 133 goto rc_nocon
+rem if errorlevel 121 if not errorlevel 122 goto rc_ok
+rem echo ConEmu attach failed
 goto fin
 :rc_nocon
 rem This occurs while VS build or run from telnet
 rem echo ConEmu attach not available (no console window)
 goto fin
 :rc_ok
-echo ConEmu attach succeeded
+rem echo ConEmu attach succeeded
 goto fin
 
 
