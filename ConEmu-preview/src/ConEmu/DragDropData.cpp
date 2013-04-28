@@ -657,6 +657,8 @@ BOOL CDragDropData::AddFmt_DragImageBits(wchar_t* pszDraggedPath, UINT nFilesCou
 #endif
 
 	HRESULT hr = E_FAIL;
+	BOOL DragFullWindows = (BOOL)-1;
+	SystemParametersInfo(SPI_GETDRAGFULLWINDOWS, 0, &DragFullWindows, 0);
 
 #if defined(USE_DRAG_HELPER)
 	if (UseSourceHelper())
@@ -700,7 +702,15 @@ BOOL CDragDropData::AddFmt_DragImageBits(wchar_t* pszDraggedPath, UINT nFilesCou
 
 			hr = mp_SourceHelper->InitializeFromBitmap(&info, mp_DataObject);
 
-			Assert(SUCCEEDED(hr));
+			if (hr == E_FAIL)
+			{
+				// ёзер мог отключить "Show window contents while dragging"
+				Assert(SUCCEEDED(hr) || (DragFullWindows==FALSE));
+			}
+			else
+			{
+				Assert(SUCCEEDED(hr));
+			}
 		}
 	}
 #endif
@@ -1352,6 +1362,7 @@ void CDragDropData::RetrieveDragToInfo(POINTL pt)
 		|| ((pVCon = VCon.VCon()) == NULL)
 		|| ((pRCon = pVCon->RCon()) == NULL))
 	{
+		DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> NULL\n");
 		SetDragToInfo(NULL, 0, NULL);
 		return;
 	}
@@ -1364,10 +1375,13 @@ void CDragDropData::RetrieveDragToInfo(POINTL pt)
 	if (nFarPID == 0)
 	{
 		//SetDragToInfo(NULL, 0, pRCon);
+		DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> (nFarPID == 0)\n");
 	}
 	else if (!pRCon->isAlive())
 	{
+		DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> (!pRCon->isAlive())\n");
 		gpConEmu->DebugStep(_T("DnD: Far is not alive, drop disabled"));
+		_ASSERTE(FALSE && "DnD: Far is not alive, drop disabled");
 		//SetDragToInfo(NULL, 0, pRCon);
 	}
 	else
@@ -1406,8 +1420,24 @@ void CDragDropData::RetrieveDragToInfo(POINTL pt)
 							free(pBuf);
 						}
 					}
+					else
+					{
+						DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> cbStructSize failed\n");
+					}
+				}
+				else
+				{
+					DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> pipe.Read failed\n");
 				}
 			}
+			else
+			{
+				DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> pipe.Execute failed\n");
+			}
+		}
+		else
+		{
+			DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> pipe.Init failed\n");
 		}
 
 		gpConEmu->DebugStep(NULL);

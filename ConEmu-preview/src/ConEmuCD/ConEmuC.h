@@ -97,11 +97,10 @@ enum SetTerminateEventPlace
 	ste_WriteMiniDump,
 	ste_CmdDetachCon,
 	ste_HandlerRoutine,
+	ste_Attach2GuiFailed,
 };
 extern SetTerminateEventPlace gTerminateEventPlace;
 void SetTerminateEvent(SetTerminateEventPlace eFrom);
-
-int AttachDebuggingProcess();
 
 /*  Global  */
 extern DWORD   gnSelfPID;
@@ -123,7 +122,8 @@ extern bool    gbQuit;           // когда мы в процессе закрытия (юзер уже нажал
 extern int     gnConfirmExitParm;
 extern BOOL    gbAlwaysConfirmExit, gbInShutdown, gbAutoDisableConfirmExit;
 extern int     gbRootWasFoundInCon;
-extern BOOL    gbAttachMode; // сервер запущен НЕ из conemu.exe (а из плагина, из CmdAutoAttach, или -new_console)
+enum AttachModeEnum { am_None = 0, am_Simple, am_Auto };
+extern AttachModeEnum gbAttachMode; // сервер запущен НЕ из conemu.exe (а из плагина, из CmdAutoAttach, или -new_console)
 extern BOOL    gbAlienMode;  // сервер НЕ является владельцем консоли (корневым процессом этого консольного окна)
 extern BOOL    gbForceHideConWnd;
 extern DWORD   gdwMainThreadId;
@@ -170,6 +170,7 @@ extern wchar_t gszDbgModLabel[6];
 #define ATTACH2GUI_TIMEOUT 10000
 #define GUIATTACHEVENT_TIMEOUT 250
 #define REFRESH_FELL_SLEEP_TIMEOUT 3000
+#define LOCK_READOUTPUT_TIMEOUT 10000
 
 //#define IMAGE_SUBSYSTEM_DOS_EXECUTABLE  255
 
@@ -212,31 +213,18 @@ extern wchar_t gszDbgModLabel[6];
 #define EVENT_CONSOLE_END_APPLICATION   0x4007
 #endif
 
-//#define SafeCloseHandle(h) { if ((h)!=NULL) { HANDLE hh = (h); (h) = NULL; if (hh!=INVALID_HANDLE_VALUE) CloseHandle(hh); } }
-
 //#undef USE_WINEVENT_SRV
 
 BOOL createProcess(BOOL abSkipWowChange, LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
 
-//DWORD WINAPI InstanceThread(LPVOID);
-//DWORD WINAPI ServerThread(LPVOID lpvParam);
-//DWORD WINAPI InputThread(LPVOID lpvParam);
-//DWORD WINAPI InputPipeThread(LPVOID lpvParam);
-//DWORD WINAPI GetDataThread(LPVOID lpvParam);
 BOOL ProcessSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out);
 //#ifdef USE_WINEVENT_SRV
 //DWORD WINAPI WinEventThread(LPVOID lpvParam);
 //void WINAPI WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD anEvent, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
 //#endif
 void CheckCursorPos();
-//void SendConsoleChanges(CESERVER_REQ* pOut);
-//CESERVER_REQ* CreateConsoleInfo(CESERVER_CHAR* pRgnOnly, BOOL bCharAttrBuff);
-//BOOL ReloadConsoleInfo(CESERVER_CHAR* pChangedRgn=NULL); // возвращает TRUE в случае изменений
-//BOOL ReloadFullConsoleInfo(/*CESERVER_CHAR* pCharOnly=NULL*/); // В том числе перечитывает содержимое
 BOOL ReloadFullConsoleInfo(BOOL abForceSend);
 DWORD WINAPI RefreshThread(LPVOID lpvParam); // Нить, перечитывающая содержимое консоли
-//BOOL ReadConsoleData(CESERVER_CHAR* pCheck = NULL); //((LPRECT)1) или реальный LPRECT
-//void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName);
 int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/); // Создать необходимые события и нити
 void ServerDone(int aiRc, bool abReportShutdown = false);
 BOOL ServerInitConsoleMode();
@@ -249,7 +237,6 @@ void LogString(LPCSTR asText);
 void PrintExecuteError(LPCWSTR asCmd, DWORD dwErr, LPCWSTR asSpecialInfo=NULL);
 BOOL MyReadConsoleOutput(HANDLE hOut, CHAR_INFO *pData, COORD& bufSize, SMALL_RECT& rgn);
 BOOL MyWriteConsoleOutput(HANDLE hOut, CHAR_INFO *pData, COORD& bufSize, COORD& crBufPos, SMALL_RECT& rgn);
-//LPCSTR GetCpInfoLeads(DWORD nCP, UINT* pnMaxCharSize);
 
 
 #if defined(__GNUC__)
@@ -266,11 +253,8 @@ SHORT CorrectTopVisible(int nY);
 BOOL CorrectVisibleRect(CONSOLE_SCREEN_BUFFER_INFO* pSbi);
 WARNING("Вместо GetConsoleScreenBufferInfo нужно использовать MyGetConsoleScreenBufferInfo!");
 BOOL MyGetConsoleScreenBufferInfo(HANDLE ahConOut, PCONSOLE_SCREEN_BUFFER_INFO apsc);
-//void EnlargeRegion(CESERVER_CHAR_HDR& rgn, const COORD crNew);
 void CmdOutputStore(bool abCreateOnly = false);
 void CmdOutputRestore();
-//LPVOID Alloc(size_t nCount, size_t nSize);
-//void Free(LPVOID ptr);
 void CheckConEmuHwnd();
 HWND FindConEmuByPID();
 typedef BOOL (__stdcall *FGetConsoleKeyboardLayoutName)(wchar_t*);
@@ -283,10 +267,6 @@ extern FGetConsoleProcessList pfnGetConsoleProcessList;
 //BOOL HookWinEvents(int abEnabled);
 BOOL CheckProcessCount(BOOL abForce = FALSE);
 BOOL ProcessAdd(DWORD nPID, MSectionLock *pCS = NULL);
-//BOOL IsExecutable(LPCWSTR aszFilePathName);
-//BOOL IsNeedCmd(LPCWSTR asCmdLine, BOOL *rbNeedCutStartEndQuot, wchar_t (&szExe)[MAX_PATH+1]);
-//BOOL FileExists(LPCWSTR asFile);
-//extern bool GetImageSubsystem(const wchar_t *FileName,DWORD& ImageSubsystem,DWORD& ImageBits/*16/32/64*/,DWORD& FileAttrs);
 void SendStarted();
 CESERVER_REQ* SendStopped(CONSOLE_SCREEN_BUFFER_INFO* psbi = NULL);
 BOOL SendConsoleEvent(INPUT_RECORD* pr, UINT nCount);
@@ -321,6 +301,7 @@ bool AltServerWasStarted(DWORD nPID, HANDLE hAltServer, bool ForceThaw = false);
 
 int CreateMapHeader();
 void CloseMapHeader();
+void CopySrvMapFromGuiMap();
 void UpdateConsoleMapHeader();
 BOOL ReloadGuiSettings(ConEmuGuiMapping* apFromCmd);
 
@@ -331,8 +312,6 @@ void DisableAutoConfirmExit(BOOL abFromFarPlugin=FALSE);
 int MySetWindowRgn(CESERVER_REQ_SETWINDOWRGN* pRgn);
 
 bool IsAutoAttachAllowed();
-
-//int InjectHooks(PROCESS_INFORMATION pi, BOOL abForceGui);
 
 #ifdef _DEBUG
 	#undef WAIT_INPUT_READY
@@ -369,7 +348,6 @@ extern RunMode gnRunMode;
 
 extern BOOL gbDumpServerInitStatus;
 extern BOOL gbNoCreateProcess;
-extern BOOL gbDebugProcess;
 extern int  gnCmdUnicodeMode;
 extern BOOL gbUseDosBox;
 extern BOOL gbRootIsCmdExe;
@@ -401,12 +379,13 @@ struct AltServerInfo
 	DWORD  nPrevPID;
 };
 
+#include "Debugger.h"
+
 struct SrvInfo
 {
 	HANDLE hRootProcess, hRootThread;
 	DWORD dwRootProcess, dwRootThread; DWORD dwRootStartTime;
 	DWORD dwParentFarPID;
-	LPWSTR pszDebuggingCmdLine;
 
 	HANDLE hMainServer; DWORD dwMainServerPID;
 	HANDLE hServerStartedEvent;
@@ -417,7 +396,7 @@ struct SrvInfo
 
 	HANDLE hFreezeRefreshThread;
 	HWND   hRootProcessGui; // Если работаем в Gui-режиме (Notepad, Putty, ...), ((HWND)-1) пока фактичеки окно еще не создано, но exe-шник уже есть
-	BOOL   bDebuggerActive, bDebuggerRequestDump; HANDLE hDebugThread, hDebugReady; DWORD dwDebugThreadId;
+	DebuggerInfo DbgInfo;
 	DWORD  dwGuiPID; // GUI PID (ИД процесса графической части ConEmu)
 	DWORD  dwGuiAID; // ConEmu internal ID of started CRealConsole
 	HWND   hGuiWnd; // передается через аргумент "/GHWND=%08X", чтобы окно не искать
@@ -440,6 +419,7 @@ struct SrvInfo
 	// Список процессов нам нужен, чтобы определить, когда консоль уже не нужна.
 	// Например, запустили FAR, он запустил Update, FAR перезапущен...
 	UINT nProcessCount, nMaxProcesses;
+	UINT nConhostPID; // Windows 7 and higher: "conhost.exe"
 	DWORD *pnProcesses, *pnProcessesGet, *pnProcessesCopy, nProcessStartTick;
 	DWORD dwProcessLastCheckTick;
 #ifndef WIN64
@@ -459,7 +439,7 @@ struct SrvInfo
 	ConEmuGuiMapping guiSettings;
 	CESERVER_REQ_CONINFO_FULL *pConsole;
 	CHAR_INFO *pConsoleDataCopy; // Local (Alloc)
-	MSection *csReadConsoleInfo;
+	CRITICAL_SECTION csReadConsoleInfo;
 	// Input
 	HANDLE hInputThread;
 	DWORD dwInputThread; BOOL bInputTermination;
@@ -541,13 +521,13 @@ struct SrvInfo
 	void InitFields()
 	{
 		InitializeCriticalSection(&csColorerMappingCreate);
-		csReadConsoleInfo = new MSection();
+		InitializeCriticalSection(&csReadConsoleInfo);
 		AltServers.Init();
 	};
 	void FinalizeFields()
 	{
 		DeleteCriticalSection(&csColorerMappingCreate);
-		SafeDelete(csReadConsoleInfo);
+		DeleteCriticalSection(&csReadConsoleInfo);
 	};
 };
 
@@ -557,6 +537,8 @@ extern OSVERSIONINFO gOSVer;
 extern WORD gnOsVer;
 extern bool gbIsWine;
 extern bool gbIsDBCS;
+extern BOOL gbRootAliveLess10sec;
+extern BOOL	gbTerminateOnCtrlBreak;
 
 extern HMODULE ghOurModule;
 
@@ -564,6 +546,7 @@ extern HMODULE ghOurModule;
 #define CHECK_IDLE_TIMEOUT 250 /* 1000 / 4 */
 #define USER_ACTIVITY ((gnBufferHeight == 0) || ((GetTickCount() - gpSrv->dwLastUserTick) <= USER_IDLE_TIMEOUT))
 
+void PrintVersion();
 
 //#pragma pack(push, 1)
 //extern CESERVER_CONSAVE* gpStoredOutput;

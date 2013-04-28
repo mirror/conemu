@@ -36,7 +36,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/Execute.h"
 #include "../common/MStrSafe.h"
 #include "../common/WinConsole.h"
-#include "TokenHelper.h"
+//#include "TokenHelper.h"
 #include "SrvPipes.h"
 #include "Queue.h"
 
@@ -160,6 +160,7 @@ BOOL LoadGuiSettings(ConEmuGuiMapping& GuiMapping)
 				&& pInfo->nProtocolVersion == CESERVER_REQ_VER)
 			{
 				memmove(&GuiMapping, pInfo, pInfo->cbSize);
+				_ASSERTE(GuiMapping.ComSpec.ConEmuExeDir[0]!=0 && GuiMapping.ComSpec.ConEmuBaseDir[0]!=0);
 				lbRc = TRUE;
 			}
 		}
@@ -181,17 +182,22 @@ BOOL ReloadGuiSettings(ConEmuGuiMapping* apFromCmd)
 	else
 	{
 		gpSrv->guiSettings.cbSize = sizeof(ConEmuGuiMapping);
-		lbRc = LoadGuiSettings(gpSrv->guiSettings) && (gpSrv->guiSettingsChangeNum != gpSrv->guiSettings.nChangeNum);
+		lbRc = LoadGuiSettings(gpSrv->guiSettings)
+			&& ((gpSrv->guiSettingsChangeNum != gpSrv->guiSettings.nChangeNum)
+				|| (gpSrv->pConsole && gpSrv->pConsole->hdr.ComSpec.ConEmuExeDir[0] == 0));
 	}
 
 	if (lbRc)
 	{
+		gpSrv->guiSettingsChangeNum = gpSrv->guiSettings.nChangeNum;
+
 		gbLogProcess = (gpSrv->guiSettings.nLoggingType == glt_Processes);
 
 		UpdateComspec(&gpSrv->guiSettings.ComSpec); // isAddConEmu2Path, ...
 
-		SetEnvironmentVariableW(ENV_CONEMUDIR_VAR_W, gpSrv->guiSettings.sConEmuDir);
-		SetEnvironmentVariableW(ENV_CONEMUBASEDIR_VAR_W, gpSrv->guiSettings.sConEmuBaseDir);
+		_ASSERTE(gpSrv->guiSettings.ComSpec.ConEmuExeDir[0]!=0 && gpSrv->guiSettings.ComSpec.ConEmuBaseDir[0]!=0);
+		SetEnvironmentVariableW(ENV_CONEMUDIR_VAR_W, gpSrv->guiSettings.ComSpec.ConEmuExeDir);
+		SetEnvironmentVariableW(ENV_CONEMUBASEDIR_VAR_W, gpSrv->guiSettings.ComSpec.ConEmuBaseDir);
 
 		// Не будем ставить сами, эту переменную заполняет Gui при своем запуске
 		// соответственно, переменная наследуется серверами
@@ -202,29 +208,7 @@ BOOL ReloadGuiSettings(ConEmuGuiMapping* apFromCmd)
 
 		if (gpSrv->pConsole)
 		{
-			// !!! Warning !!! Изменил здесь, поменяй и CreateMapHeader() !!!
-			
-			gpSrv->pConsole->hdr.nLoggingType = gpSrv->guiSettings.nLoggingType;
-			gpSrv->pConsole->hdr.bDosBox = gpSrv->guiSettings.bDosBox;
-			gpSrv->pConsole->hdr.bUseInjects = gpSrv->guiSettings.bUseInjects;
-			gpSrv->pConsole->hdr.bUseTrueColor = gpSrv->guiSettings.bUseTrueColor;
-			gpSrv->pConsole->hdr.bProcessAnsi = gpSrv->guiSettings.bProcessAnsi;
-			gpSrv->pConsole->hdr.bUseClink = gpSrv->guiSettings.bUseClink;
-			
-			// Обновить пути к ConEmu
-			wcscpy_c(gpSrv->pConsole->hdr.sConEmuExe, gpSrv->guiSettings.sConEmuExe);
-			wcscpy_c(gpSrv->pConsole->hdr.sConEmuBaseDir, gpSrv->guiSettings.sConEmuBaseDir);
-
-			// И настройки командного процессора
-			gpSrv->pConsole->hdr.ComSpec = gpSrv->guiSettings.ComSpec;
-
-			// Проверить, нужно ли реестр хукать
-			gpSrv->pConsole->hdr.isHookRegistry = gpSrv->guiSettings.isHookRegistry;
-			wcscpy_c(gpSrv->pConsole->hdr.sHiveFileName, gpSrv->guiSettings.sHiveFileName);
-			gpSrv->pConsole->hdr.hMountRoot = gpSrv->guiSettings.hMountRoot;
-			wcscpy_c(gpSrv->pConsole->hdr.sMountKey, gpSrv->guiSettings.sMountKey);
-
-			// !!! Warning !!! Изменил здесь, поменяй и CreateMapHeader() !!!
+			CopySrvMapFromGuiMap();
 			
 			UpdateConsoleMapHeader();
 		}
@@ -248,14 +232,14 @@ bool IsAutoAttachAllowed()
 	return true;
 }
 
-// Вызывается при запуске сервера: (gbNoCreateProcess && (gbAttachMode || gpSrv->bDebuggerActive))
+// Вызывается при запуске сервера: (gbNoCreateProcess && (gbAttachMode || gpSrv->DbgInfo.bDebuggerActive))
 int AttachRootProcess()
 {
 	DWORD dwErr = 0;
 
 	_ASSERTE((gpSrv->hRootProcess == NULL || gpSrv->hRootProcess == GetCurrentProcess()) && "Must not be opened yet");
 
-	if (!gpSrv->bDebuggerActive && !IsWindowVisible(ghConWnd) && !(gpSrv->dwGuiPID || gbAttachFromFar))
+	if (!gpSrv->DbgInfo.bDebuggerActive && !IsWindowVisible(ghConWnd) && !(gpSrv->dwGuiPID || gbAttachFromFar))
 	{
 		PRINT_COMSPEC(L"Console windows is not visible. Attach is unavailable. Exiting...\n", 0);
 		DisableAutoConfirmExit();
@@ -267,15 +251,15 @@ int AttachRootProcess()
 		return CERR_RUNNEWCONSOLE;
 	}
 
-	if (gpSrv->dwRootProcess == 0 && !gpSrv->bDebuggerActive)
+	if (gpSrv->dwRootProcess == 0 && !gpSrv->DbgInfo.bDebuggerActive)
 	{
 		// Нужно попытаться определить PID корневого процесса.
 		// Родительским может быть cmd (comspec, запущенный из FAR)
 		DWORD dwParentPID = 0, dwFarPID = 0;
 		DWORD dwServerPID = 0; // Вдруг в этой консоли уже есть сервер?
-		_ASSERTE(!gpSrv->bDebuggerActive);
+		_ASSERTE(!gpSrv->DbgInfo.bDebuggerActive);
 
-		if (gpSrv->nProcessCount >= 2 && !gpSrv->bDebuggerActive)
+		if (gpSrv->nProcessCount >= 2 && !gpSrv->DbgInfo.bDebuggerActive)
 		{
 			HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);
 
@@ -419,7 +403,7 @@ int AttachRootProcess()
 	}
 	else
 	{
-		int iAttachRc = AttachDebuggingProcess();
+		int iAttachRc = AttachRootProcessHandle();
 		if (iAttachRc != 0)
 			return iAttachRc;
 	}
@@ -459,6 +443,8 @@ int ServerInitCheckExisting(bool abAlternative)
 	CESERVER_CONSOLE_MAPPING_HDR test = {};
 
 	BOOL lbExist = LoadSrvMapping(ghConWnd, test);
+	_ASSERTE(!lbExist || (test.ComSpec.ConEmuExeDir[0] && test.ComSpec.ConEmuBaseDir[0]));
+
 	if (abAlternative == FALSE)
 	{
 		_ASSERTE(gnRunMode==RM_SERVER);
@@ -569,7 +555,8 @@ int ServerInitAttach2Gui()
 	if (!hDcWnd)
 	{
 		//_printf("Available ConEmu GUI window not found!\n"); -- не будем гадить в консоль
-		gbAlwaysConfirmExit = TRUE; gbInShutdown = TRUE;
+		gbInShutdown = TRUE;
+		DisableAutoConfirmExit();
 		iRc = CERR_ATTACHFAILED; goto wrap;
 	}
 
@@ -578,7 +565,7 @@ wrap:
 }
 
 // Дернуть ConEmu, чтобы он отдал HWND окна отрисовки
-// (!gbAttachMode && !gpSrv->bDebuggerActive)
+// (!gbAttachMode && !gpSrv->DbgInfo.bDebuggerActive)
 int ServerInitGuiTab()
 {
 	int iRc = 0;
@@ -692,6 +679,16 @@ int ServerInitGuiTab()
 			SetConEmuWindows(pOut->StartStopRet.hWndDc, pOut->StartStopRet.hWndBack);
 			gpSrv->dwGuiPID = pOut->StartStopRet.dwPID;
 			
+			// Обновить настройки через GuiMapping
+			if (ghConEmuWnd)
+			{
+				ReloadGuiSettings(NULL);
+			}
+			else
+			{
+				_ASSERTE(ghConEmuWnd!=NULL && "Must be set!");
+			}
+
 			#ifdef _DEBUG
 			DWORD nGuiPID; GetWindowThreadProcessId(ghConEmuWnd, &nGuiPID);
 			_ASSERTEX(pOut->hdr.nSrcPID==nGuiPID);
@@ -820,6 +817,27 @@ void ServerInitEnvVars()
 	//if ((nRc == 0) && (GetLastError() == ERROR_ENVVAR_NOT_FOUND)) ...
 
 	SetEnvironmentVariable(ENV_CONEMU_HOOKS, ENV_CONEMU_HOOKS_ENABLED);
+
+	if (gpSrv && (gpSrv->guiSettings.cbSize == sizeof(gpSrv->guiSettings)))
+	{
+		_ASSERTE(gpSrv->guiSettings.ComSpec.ConEmuExeDir[0]!=0 && gpSrv->guiSettings.ComSpec.ConEmuBaseDir[0]!=0);
+		SetEnvironmentVariableW(ENV_CONEMUDIR_VAR_W, gpSrv->guiSettings.ComSpec.ConEmuExeDir);
+		SetEnvironmentVariableW(ENV_CONEMUBASEDIR_VAR_W, gpSrv->guiSettings.ComSpec.ConEmuBaseDir);
+
+		// Не будем ставить сами, эту переменную заполняет Gui при своем запуске
+		// соответственно, переменная наследуется серверами
+		//SetEnvironmentVariableW(L"ConEmuArgs", pInfo->sConEmuArgs);
+
+		wchar_t szHWND[16]; _wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", gpSrv->guiSettings.hGuiWnd.u);
+		SetEnvironmentVariableW(ENV_CONEMUHWND_VAR_W, szHWND);
+
+		bool bAnsi = ((gpSrv->guiSettings.Flags & CECF_ProcessAnsi) != 0);
+		SetEnvironmentVariable(ENV_CONEMUANSI_VAR_W, bAnsi ? L"ON" : L"OFF");
+	}
+	else
+	{
+		//_ASSERTE(gpSrv && (gpSrv->guiSettings.cbSize == sizeof(gpSrv->guiSettings)));
+	}
 }
 
 
@@ -863,9 +881,9 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 			}
 		}
 
-		// Set up some environment variables
-		DumpInitStatus("\nServerInit: ServerInitEnvVars");
-		ServerInitEnvVars();
+		//// Set up some environment variables
+		//DumpInitStatus("\nServerInit: ServerInitEnvVars");
+		//ServerInitEnvVars();
 	}
 
 
@@ -897,7 +915,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	}
 
 	// Шрифт в консоли нужно менять в самом начале, иначе могут быть проблемы с установкой размера консоли
-	if ((anWorkMode == 0) && !gpSrv->bDebuggerActive && !gbNoCreateProcess)
+	if ((anWorkMode == 0) && !gpSrv->DbgInfo.bDebuggerActive && !gbNoCreateProcess)
 		//&& (!gbNoCreateProcess || (gbAttachMode && gbNoCreateProcess && gpSrv->dwRootProcess))
 		//)
 	{
@@ -949,7 +967,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	// при показе консоли через Ctrl+Win+Alt+Space
 	// Но вот если консоль уже видима, и это "/root", тогда
 	// попытаемся поставить окну консоли флаг "OnTop"
-	if (!gbNoCreateProcess && !gbDebugProcess && !gbIsWine /*&& !gnDefPopupColors*/)
+	if (!gbNoCreateProcess && !gpSrv->DbgInfo.bDebugProcess && !gbIsWine /*&& !gnDefPopupColors*/)
 	{
 		//if (!gbVisibleOnStartup)
 		//	ShowWindow(ghConWnd, SW_HIDE);
@@ -984,7 +1002,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	}
 
 	//2009-08-27 Перенес снизу
-	if (!gpSrv->hConEmuGuiAttached && (!gbDebugProcess || gpSrv->dwGuiPID || gpSrv->hGuiWnd))
+	if (!gpSrv->hConEmuGuiAttached && (!gpSrv->DbgInfo.bDebugProcess || gpSrv->dwGuiPID || gpSrv->hGuiWnd))
 	{
 		wchar_t szTempName[MAX_PATH];
 		_wsprintf(szTempName, SKIPLEN(countof(szTempName)) CEGUIRCONSTARTED, (DWORD)ghConWnd); //-V205
@@ -1055,7 +1073,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	// в принципе, серверный режим может быть вызван из фара, чтобы подцепиться к GUI.
 	// больше двух процессов в консоли вполне может быть, например, еще не отвалился
 	// предыдущий conemuc.exe, из которого этот запущен немодально.
-	_ASSERTE(gpSrv->bDebuggerActive || (gpSrv->nProcessCount<=2) || ((gpSrv->nProcessCount>2) && gbAttachMode && gpSrv->dwRootProcess));
+	_ASSERTE(gpSrv->DbgInfo.bDebuggerActive || (gpSrv->nProcessCount<=2) || ((gpSrv->nProcessCount>2) && gbAttachMode && gpSrv->dwRootProcess));
 	// Запустить нить обработки событий (клавиатура, мышь, и пр.)
 	gpSrv->hInputEvent = CreateEvent(NULL,FALSE,FALSE,NULL);
 	gpSrv->hInputWasRead = CreateEvent(NULL,FALSE,FALSE,NULL);
@@ -1108,7 +1126,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	}
 
 
-	if (!gbAttachMode && !gpSrv->bDebuggerActive)
+	if (!gbAttachMode && !gpSrv->DbgInfo.bDebuggerActive)
 	{
 		DumpInitStatus("\nServerInit: ServerInitGuiTab");
 		iRc = ServerInitGuiTab();
@@ -1118,7 +1136,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 
 	// Если "корневой" процесс консоли запущен не нами (аттач или дебаг)
 	// то нужно к нему "подцепиться" (открыть HANDLE процесса)
-	if (gbNoCreateProcess && (gbAttachMode || (gpSrv->bDebuggerActive && (gpSrv->hRootProcess == NULL))))
+	if (gbNoCreateProcess && (gbAttachMode || (gpSrv->DbgInfo.bDebuggerActive && (gpSrv->hRootProcess == NULL))))
 	{
 		DumpInitStatus("\nServerInit: AttachRootProcess");
 		iRc = AttachRootProcess();
@@ -1252,6 +1270,9 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 		iRc = CERR_CREATESERVERTHREAD; goto wrap;
 	}
 
+	// Set up some environment variables
+	DumpInitStatus("\nServerInit: ServerInitEnvVars");
+	ServerInitEnvVars();
 
 	// Пометить мэппинг, как готовый к отдаче данных
 	gpSrv->pConsole->hdr.bDataReady = TRUE;
@@ -1259,7 +1280,7 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	//DumpInitStatus("\nServerInit: UpdateConsoleMapHeader");
 	UpdateConsoleMapHeader();
 
-	if (!gpSrv->bDebuggerActive)
+	if (!gpSrv->DbgInfo.bDebuggerActive)
 	{
 		DumpInitStatus("\nServerInit: SendStarted");
 		SendStarted();
@@ -1379,11 +1400,11 @@ void ServerDone(int aiRc, bool abReportShutdown /*= false*/)
 	}
 
 	// Остановить отладчик, иначе отлаживаемый процесс тоже схлопнется
-	if (gpSrv->bDebuggerActive)
+	if (gpSrv->DbgInfo.bDebuggerActive)
 	{
 		if (pfnDebugActiveProcessStop) pfnDebugActiveProcessStop(gpSrv->dwRootProcess);
 
-		gpSrv->bDebuggerActive = FALSE;
+		gpSrv->DbgInfo.bDebuggerActive = FALSE;
 	}
 
 
@@ -1943,37 +1964,12 @@ void CmdOutputStore(bool abCreateOnly /*= false*/)
 	// Запомнить/обновить sbi
 	pData->info = lsbi;
 
-	MSectionLock csRead; csRead.Lock(gpSrv->csReadConsoleInfo, TRUE, 1000);
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 	pData->Succeeded = MyReadConsoleOutput(ghConOut, pData->Data, BufSize, ReadRect);
+	
 	csRead.Unlock();
-
-#if 0
-	// [Roman Kuzmin]
-	// In FAR Manager source code this is mentioned as "fucked method". Yes, it is.
-	// Functions ReadConsoleOutput* fail if requested data size exceeds their buffer;
-	// MSDN says 64K is max but it does not say how much actually we can request now.
-	// Experiments show that this limit is floating and it can be much less than 64K.
-	// The solution below is not optimal when a user sets small font and large window,
-	// but it is safe and practically optimal, because most of users set larger fonts
-	// for large window and ReadConsoleOutput works OK. More optimal solution for all
-	// cases is not that difficult to develop but it will be increased complexity and
-	// overhead often for nothing, not sure that we really should use it.
-
-	if ((nReadLen > MAX_CONREAD_SIZE)
-		!ReadConsoleOutput(ghConOut, pData->Data, BufSize, coord, &nbActuallyRead)
-		|| (nbActuallyRead != nReadLen))
-	{
-		DEBUGSTR(L"--- Full block read failed: read line by line\n");
-		wchar_t* ConCharNow = gpStoredOutput->Data;
-		nReadLen = lsbi.dwSize.X;
-
-		for(int y = 0; y < (int)lsbi.dwSize.Y; y++, coord.Y++)
-		{
-			ReadConsoleOutputCharacter(ghConOut, ConCharNow, nReadLen, coord, &nbActuallyRead);
-			ConCharNow += lsbi.dwSize.X;
-		}
-	}
-#endif
 
 	DEBUGSTR(L"--- CmdOutputStore end\n");
 }
@@ -2179,7 +2175,7 @@ void CheckConEmuHwnd()
 	//HWND hWndFocus = GetFocus();
 	DWORD dwGuiThreadId = 0;
 
-	if (gpSrv->bDebuggerActive)
+	if (gpSrv->DbgInfo.bDebuggerActive)
 	{
 		HWND  hDcWnd = NULL;
 		ghConEmuWnd = FindConEmuByPID();
@@ -2345,33 +2341,50 @@ bool TryConnect2Gui(HWND hGui, HWND& hDcWnd, CESERVER_REQ* pIn)
 			_ASSERTE(pMap->hConEmuRoot==NULL || pMap->nGuiPID!=0);
 		}
 
-		//DisableAutoConfirmExit();
-
-		// В принципе, консоль может действительно запуститься видимой. В этом случае ее скрывать не нужно
-		// Но скорее всего, консоль запущенная под Админом в Win7 будет отображена ошибочно
-		// 110807 - Если gbAttachMode, тоже консоль нужно спрятать
-		if (gbForceHideConWnd || gbAttachMode)
-			apiShowWindow(ghConWnd, SW_HIDE);
-
-		// Установить шрифт в консоли
-		if (pOut->StartStopRet.Font.cbSize == sizeof(CESERVER_REQ_SETFONT))
+		// Только если подцепились успешно
+		if (ghConEmuWnd)
 		{
-			lstrcpy(gpSrv->szConsoleFont, pOut->StartStopRet.Font.sFontName);
-			gpSrv->nConFontHeight = pOut->StartStopRet.Font.inSizeY;
-			gpSrv->nConFontWidth = pOut->StartStopRet.Font.inSizeX;
-			ServerInitFont();
+			//DisableAutoConfirmExit();
+
+			// В принципе, консоль может действительно запуститься видимой. В этом случае ее скрывать не нужно
+			// Но скорее всего, консоль запущенная под Админом в Win7 будет отображена ошибочно
+			// 110807 - Если gbAttachMode, тоже консоль нужно спрятать
+			if (gbForceHideConWnd || gbAttachMode)
+				apiShowWindow(ghConWnd, SW_HIDE);
+
+			// Установить шрифт в консоли
+			if (pOut->StartStopRet.Font.cbSize == sizeof(CESERVER_REQ_SETFONT))
+			{
+				lstrcpy(gpSrv->szConsoleFont, pOut->StartStopRet.Font.sFontName);
+				gpSrv->nConFontHeight = pOut->StartStopRet.Font.inSizeY;
+				gpSrv->nConFontWidth = pOut->StartStopRet.Font.inSizeX;
+				ServerInitFont();
+			}
+
+			COORD crNewSize = {(SHORT)pOut->StartStopRet.nWidth, (SHORT)pOut->StartStopRet.nHeight};
+			//SMALL_RECT rcWnd = {0,pIn->StartStop.sbi.srWindow.Top};
+			SMALL_RECT rcWnd = {0};
+			SetConsoleSize((USHORT)pOut->StartStopRet.nBufferHeight, crNewSize, rcWnd, "Attach2Gui:Ret");
 		}
 
-		COORD crNewSize = {(SHORT)pOut->StartStopRet.nWidth, (SHORT)pOut->StartStopRet.nHeight};
-		//SMALL_RECT rcWnd = {0,pIn->StartStop.sbi.srWindow.Top};
-		SMALL_RECT rcWnd = {0};
-		SetConsoleSize((USHORT)pOut->StartStopRet.nBufferHeight, crNewSize, rcWnd, "Attach2Gui:Ret");
 		// Установить переменную среды с дескриптором окна
 		SetConEmuEnvVar(ghConEmuWnd);
-		CheckConEmuHwnd();
-		ExecuteFreeResult(pOut);
 		
-		bConnected = true;
+		// Только если подцепились успешно
+		if (ghConEmuWnd)
+		{
+			CheckConEmuHwnd();
+			bConnected = true;
+		}
+		else
+		{
+			//-- не надо, это сделает вызывающая функция
+			//SetTerminateEvent(ste_Attach2GuiFailed);
+			//DisableAutoConfirmExit();
+			bConnected = false;
+		}
+
+		ExecuteFreeResult(pOut);
 	}
 
 	return bConnected;
@@ -2520,6 +2533,17 @@ HWND Attach2Gui(DWORD nTimeout)
 			return NULL;
 		}
 
+		lstrcpyn(gpSrv->guiSettings.sConEmuExe, pszSelf, countof(gpSrv->guiSettings.sConEmuExe));
+		lstrcpyn(gpSrv->guiSettings.ComSpec.ConEmuExeDir, pszSelf, countof(gpSrv->guiSettings.ComSpec.ConEmuExeDir));
+		wchar_t* pszCut = wcsrchr(gpSrv->guiSettings.ComSpec.ConEmuExeDir, L'\\');
+		if (pszCut)
+			*pszCut = 0;
+		if (gpSrv->pConsole)
+		{
+			lstrcpyn(gpSrv->pConsole->hdr.sConEmuExe, pszSelf, countof(gpSrv->pConsole->hdr.sConEmuExe));
+			lstrcpyn(gpSrv->pConsole->hdr.ComSpec.ConEmuExeDir, gpSrv->guiSettings.ComSpec.ConEmuExeDir, countof(gpSrv->pConsole->hdr.ComSpec.ConEmuExeDir));
+		}
+
 		if (wcschr(pszSelf, L' '))
 		{
 			*(--pszSelf) = L'"';
@@ -2562,7 +2586,11 @@ HWND Attach2Gui(DWORD nTimeout)
 	DWORD dwStart = GetTickCount(), dwDelta = 0, dwCur = 0;
 	CESERVER_REQ *pIn = NULL;
 	_ASSERTE(sizeof(CESERVER_REQ_STARTSTOP) >= sizeof(CESERVER_REQ_STARTSTOPRET));
-	DWORD nInSize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_STARTSTOP)+(gpszRunCmd ? lstrlen(gpszRunCmd) : 0)*sizeof(wchar_t);
+	DWORD cchCmdMax = max((gpszRunCmd ? lstrlen(gpszRunCmd) : 0),(MAX_PATH + 2)) + 1;
+	DWORD nInSize =
+		sizeof(CESERVER_REQ_HDR)
+		+sizeof(CESERVER_REQ_STARTSTOP)
+		+cchCmdMax*sizeof(wchar_t);
 	pIn = ExecuteNewCmd(CECMD_ATTACH2GUI, nInSize);
 	pIn->StartStop.nStarted = sst_ServerStart;
 	pIn->StartStop.hWnd = ghConWnd;
@@ -2584,6 +2612,15 @@ HWND Attach2Gui(DWORD nTimeout)
 		IsNeedCmd(gpszRunCmd, NULL, &lbNeedCutQuot, pIn->StartStop.sModuleName, lbRootIsCmd, lbConfirmExit, lbAutoDisable);
 		lstrcpy(pIn->StartStop.sCmdLine, gpszRunCmd);
 	}
+	else if (gpSrv->dwRootProcess)
+	{
+		PROCESSENTRY32 pi;
+		if (GetProcessInfo(gpSrv->dwRootProcess, &pi))
+		{
+			msprintf(pIn->StartStop.sCmdLine, cchCmdMax, L"\"%s\"", pi.szExeFile);
+		}
+	}
+	_ASSERTE(pIn->StartStop.sCmdLine[0]!=0); // Должно быть указано, а то в ConEmu может неправильно AppDistinct инициализироваться
 
 	// Если GUI запущен не от имени админа - то он обломается при попытке
 	// открыть дескриптор процесса сервера. Нужно будет ему помочь.
@@ -2642,6 +2679,55 @@ HWND Attach2Gui(DWORD nTimeout)
 }
 
 
+
+void CopySrvMapFromGuiMap()
+{
+	if (!gpSrv || !gpSrv->pConsole)
+	{
+		// Должно быть уже создано!
+		_ASSERTE(gpSrv && gpSrv->pConsole);
+		return;
+	}
+
+	if (!gpSrv->guiSettings.cbSize)
+	{
+		_ASSERTE(gpSrv->guiSettings.cbSize==sizeof(ConEmuGuiMapping));
+		return;
+	}
+
+	// настройки командного процессора
+	_ASSERTE(gpSrv->guiSettings.ComSpec.ConEmuExeDir[0]!=0 && gpSrv->guiSettings.ComSpec.ConEmuBaseDir[0]!=0);
+	gpSrv->pConsole->hdr.ComSpec = gpSrv->guiSettings.ComSpec;
+	
+	// Путь к GUI
+	if (gpSrv->guiSettings.sConEmuExe[0] != 0)
+	{
+		wcscpy_c(gpSrv->pConsole->hdr.sConEmuExe, gpSrv->guiSettings.sConEmuExe);
+	}
+	else
+	{
+		_ASSERTE(gpSrv->guiSettings.sConEmuExe[0]!=0);
+	}
+
+	gpSrv->pConsole->hdr.nLoggingType = gpSrv->guiSettings.nLoggingType;
+	gpSrv->pConsole->hdr.bUseInjects = gpSrv->guiSettings.bUseInjects;
+	//gpSrv->pConsole->hdr.bDosBox = gpSrv->guiSettings.bDosBox;
+	//gpSrv->pConsole->hdr.bUseTrueColor = gpSrv->guiSettings.bUseTrueColor;
+	//gpSrv->pConsole->hdr.bProcessAnsi = gpSrv->guiSettings.bProcessAnsi;
+	//gpSrv->pConsole->hdr.bUseClink = gpSrv->guiSettings.bUseClink;
+	gpSrv->pConsole->hdr.Flags = gpSrv->guiSettings.Flags;
+	
+	// Обновить пути к ConEmu
+	_ASSERTE(gpSrv->guiSettings.sConEmuExe[0]!=0);
+	wcscpy_c(gpSrv->pConsole->hdr.sConEmuExe, gpSrv->guiSettings.sConEmuExe);
+	//wcscpy_c(gpSrv->pConsole->hdr.sConEmuBaseDir, gpSrv->guiSettings.sConEmuBaseDir);
+
+	// Проверить, нужно ли реестр хукать
+	gpSrv->pConsole->hdr.isHookRegistry = gpSrv->guiSettings.isHookRegistry;
+	wcscpy_c(gpSrv->pConsole->hdr.sHiveFileName, gpSrv->guiSettings.sHiveFileName);
+	gpSrv->pConsole->hdr.hMountRoot = gpSrv->guiSettings.hMountRoot;
+	wcscpy_c(gpSrv->pConsole->hdr.sMountKey, gpSrv->guiSettings.sMountKey);
+}
 
 
 /*
@@ -2747,6 +2833,40 @@ int CreateMapHeader()
 		goto wrap;
 	}
 
+	gpSrv->pConsoleMap = new MFileMapping<CESERVER_CONSOLE_MAPPING_HDR>;
+
+	if (!gpSrv->pConsoleMap)
+	{
+		_printf("ConEmuC: calloc(MFileMapping<CESERVER_CONSOLE_MAPPING_HDR>) failed, pConsoleMap is null", 0); //-V576
+		goto wrap;
+	}
+
+	gpSrv->pConsoleMap->InitName(CECONMAPNAME, (DWORD)ghConWnd); //-V205
+
+	BOOL lbCreated;
+	if (gnRunMode == RM_SERVER)
+		lbCreated = (gpSrv->pConsoleMap->Create() != NULL);
+	else
+		lbCreated = (gpSrv->pConsoleMap->Open() != NULL);
+
+	if (!lbCreated)
+	{
+		_wprintf(gpSrv->pConsoleMap->GetErrorText());
+		delete gpSrv->pConsoleMap; gpSrv->pConsoleMap = NULL;
+		iRc = CERR_CREATEMAPPINGERR; goto wrap;
+	}
+	else if (gnRunMode == RM_ALTSERVER)
+	{
+		// На всякий случай, перекинем параметры
+		if (gpSrv->pConsoleMap->GetTo(&gpSrv->pConsole->hdr))
+		{
+			if (gpSrv->pConsole->hdr.ComSpec.ConEmuExeDir[0] && gpSrv->pConsole->hdr.ComSpec.ConEmuBaseDir[0])
+			{
+				gpSrv->guiSettings.ComSpec = gpSrv->pConsole->hdr.ComSpec;
+			}
+		}
+	}
+
 	// !!! Warning !!! Изменил здесь, поменяй и ReloadGuiSettings() !!!
 	gpSrv->pConsole->cbMaxSize = nTotalSize;
 	//gpSrv->pConsole->cbActiveSize = ((LPBYTE)&(gpSrv->pConsole->data)) - ((LPBYTE)gpSrv->pConsole);
@@ -2774,6 +2894,17 @@ int CreateMapHeader()
 	if (ghConEmuWnd) // если уже известен - тогда можно
 		ReloadGuiSettings(NULL);
 
+	// По идее, уже должно быть настроено
+	if (gpSrv->guiSettings.cbSize == sizeof(ConEmuGuiMapping))
+	{
+		CopySrvMapFromGuiMap();
+	}
+	else
+	{
+		_ASSERTE(gpSrv->guiSettings.cbSize==sizeof(ConEmuGuiMapping) || (gbAttachMode && !ghConEmuWnd));
+	}
+
+
 	//WARNING! В начале структуры info идет CESERVER_REQ_HDR для унификации общения через пайпы
 	gpSrv->pConsole->info.cmd.cbSize = sizeof(gpSrv->pConsole->info); // Пока тут - только размер заголовка
 	gpSrv->pConsole->info.hConWnd = ghConWnd; _ASSERTE(ghConWnd!=NULL);
@@ -2783,29 +2914,7 @@ int CreateMapHeader()
 	
 	//WARNING! Сразу ставим флаг измененности чтобы данные сразу пошли в GUI
 	gpSrv->pConsole->bDataChanged = TRUE;
-	
-	gpSrv->pConsoleMap = new MFileMapping<CESERVER_CONSOLE_MAPPING_HDR>;
 
-	if (!gpSrv->pConsoleMap)
-	{
-		_printf("ConEmuC: calloc(MFileMapping<CESERVER_CONSOLE_MAPPING_HDR>) failed, pConsoleMap is null", 0); //-V576
-		goto wrap;
-	}
-
-	gpSrv->pConsoleMap->InitName(CECONMAPNAME, (DWORD)ghConWnd); //-V205
-
-	BOOL lbCreated;
-	if (gnRunMode == RM_SERVER)
-		lbCreated = (gpSrv->pConsoleMap->Create() != NULL);
-	else
-		lbCreated = (gpSrv->pConsoleMap->Open() != NULL);
-
-	if (!lbCreated)
-	{
-		_wprintf(gpSrv->pConsoleMap->GetErrorText());
-		delete gpSrv->pConsoleMap; gpSrv->pConsoleMap = NULL;
-		iRc = CERR_CREATEMAPPINGERR; goto wrap;
-	}
 
 	//gpSrv->pConsoleMap->SetFrom(&(gpSrv->pConsole->hdr));
 	UpdateConsoleMapHeader();
@@ -2877,6 +2986,26 @@ void UpdateConsoleMapHeader()
 
 		if (gpSrv->pConsoleMap)
 		{
+			if (gpSrv->pConsole->hdr.ComSpec.ConEmuExeDir[0]==0 || gpSrv->pConsole->hdr.ComSpec.ConEmuBaseDir[0]==0)
+			{
+				_ASSERTE((gpSrv->pConsole->hdr.ComSpec.ConEmuExeDir[0]!=0 && gpSrv->pConsole->hdr.ComSpec.ConEmuBaseDir[0]!=0) || (gbAttachMode && !ghConEmuWnd));
+				wchar_t szSelfPath[MAX_PATH+1];
+				if (GetModuleFileName(NULL, szSelfPath, countof(szSelfPath)))
+				{
+					wchar_t* pszSlash = wcsrchr(szSelfPath, L'\\');
+					if (pszSlash)
+					{
+						*pszSlash = 0;
+						lstrcpy(gpSrv->pConsole->hdr.ComSpec.ConEmuBaseDir, szSelfPath);
+					}
+				}
+			}
+
+			if (gpSrv->pConsole->hdr.sConEmuExe[0] == 0)
+			{
+				_ASSERTE((gpSrv->pConsole->hdr.sConEmuExe[0]!=0) || (gbAttachMode && !ghConEmuWnd));
+			}
+
 			gpSrv->pConsoleMap->SetFrom(&(gpSrv->pConsole->hdr));
 		}
 	}
@@ -3566,9 +3695,17 @@ BOOL ReloadFullConsoleInfo(BOOL abForceSend)
 	if (abForceSend)
 		gpSrv->pConsole->bDataChanged = TRUE;
 
-	MSectionLock csRead; csRead.Lock(gpSrv->csReadConsoleInfo, TRUE, 1000);
+	DWORD nTick1 = GetTickCount(), nTick2 = 0, nTick3 = 0, nTick4 = 0, nTick5 = 0;
+
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
+	nTick2 = GetTickCount();
+
+	// Read sizes flags and other information
 	int iInfoRc = ReadConsoleInfo();
-	csRead.Unlock();
+
+	nTick3 = GetTickCount();
 
 	if (iInfoRc == -1)
 	{
@@ -3579,8 +3716,11 @@ BOOL ReloadFullConsoleInfo(BOOL abForceSend)
 		if (iInfoRc == 1)
 			lbChanged = TRUE;
 
+		// Read chars and attributes for visible (or locked) area
 		if (ReadConsoleData())
 			lbChanged = lbDataChanged = TRUE;
+
+		nTick4 = GetTickCount();
 
 		if (lbChanged && !gpSrv->pConsole->hdr.bDataReady)
 		{
@@ -3612,8 +3752,17 @@ BOOL ReloadFullConsoleInfo(BOOL abForceSend)
 			//	//			gpSrv->nFarInfoLastIdx = gpSrv->pConsole->info.nFarInfoIdx;
 			//}
 		}
+
+		nTick5 = GetTickCount();
 	}
 
+	csRead.Unlock();
+
+	UNREFERENCED_PARAMETER(nTick1);
+	UNREFERENCED_PARAMETER(nTick2);
+	UNREFERENCED_PARAMETER(nTick3);
+	UNREFERENCED_PARAMETER(nTick4);
+	UNREFERENCED_PARAMETER(nTick5);
 	return lbChanged;
 }
 
@@ -3949,11 +4098,11 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 		}
 
 		if ((ghConWnd == gpSrv->guiSettings.hActiveCon) || (gpSrv->guiSettings.hActiveCon == NULL) || bConsoleVisible)
-			bNewActive = gpSrv->guiSettings.bGuiActive || !gpSrv->guiSettings.bSleepInBackg;
+			bNewActive = gpSrv->guiSettings.bGuiActive || !(gpSrv->guiSettings.Flags & CECF_SleepInBackg);
 		else
 			bNewActive = FALSE;
 
-		bNewFellInSleep = gpSrv->guiSettings.bSleepInBackg && !bNewActive;
+		bNewFellInSleep = (gpSrv->guiSettings.Flags & CECF_SleepInBackg) && !bNewActive;
 
 		//if (gpSrv->pConsoleMap->IsValid())
 		//{
@@ -4035,7 +4184,7 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 
 		// Если можем - проверим текущую раскладку в консоли
 		// 120507 - Если крутится альт.сервер - то игнорировать
-		if (!nAltWait && !gpSrv->bDebuggerActive)
+		if (!nAltWait && !gpSrv->DbgInfo.bDebuggerActive)
 		{
 			if (pfnGetConsoleKeyboardLayoutName)
 				CheckKeyboardLayout();
@@ -4045,7 +4194,7 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 		/* Перечитать консоль */
 		/* ****************** */
 		// 120507 - Если крутится альт.сервер - то игнорировать
-		if (!nAltWait && !gpSrv->bDebuggerActive)
+		if (!nAltWait && !gpSrv->DbgInfo.bDebuggerActive)
 		{
 			bool lbReloadNow = true;
 			#if defined(TEST_REFRESH_DELAYED)

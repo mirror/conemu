@@ -116,9 +116,9 @@ void CAttachDlg::AttachDlg()
 		return;
 	}
 	
-	gpConEmu->SetSkipOnFocus(TRUE);
+	bool bPrev = gpConEmu->SetSkipOnFocus(true);
 	mh_Dlg = CreateDialogParam(g_hInstance, MAKEINTRESOURCE(IDD_ATTACHDLG), NULL, AttachDlgProc, (LPARAM)this);
-	gpConEmu->SetSkipOnFocus(FALSE);
+	gpConEmu->SetSkipOnFocus(bPrev);
 
 	//DWORD_PTR nAttachParm[3] = {};
 	//int nRc = DialogBoxParam(nAttachParm);
@@ -152,6 +152,8 @@ void CAttachDlg::Close()
 		delete mp_ProcessData;
 		mp_ProcessData = NULL;
 	}
+
+	gpConEmu->OnOurDialogClosed();
 }
 
 bool CAttachDlg::OnStartAttach()
@@ -199,11 +201,11 @@ bool CAttachDlg::OnStartAttach()
 		goto wrap;
 	}
 
-	// „тобы клик от мышки в консоль не провалилс€
-	WARNING(" лик от мышки в консоль проваливаетс€");
-	gpConEmu->mouse.nSkipEvents[0] = WM_LBUTTONUP;
-	gpConEmu->mouse.nSkipEvents[1] = 0;
-	gpConEmu->mouse.nReplaceDblClk = 0;
+	//// „тобы клик от мышки в консоль не провалилс€
+	//WARNING(" лик от мышки в консоль проваливаетс€");
+	//gpConEmu->mouse.nSkipEvents[0] = WM_LBUTTONUP;
+	//gpConEmu->mouse.nSkipEvents[1] = 0;
+	//gpConEmu->mouse.nReplaceDblClk = 0;
 
 	// ¬се, диалог закрываем, чтобы не мешалс€
 	Close();
@@ -435,6 +437,8 @@ INT_PTR CAttachDlg::AttachDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM l
 	{
 		case WM_INITDIALOG:
 		{
+			gpConEmu->OnOurDialogOpened();
+
 			// ≈сли ConEmu - AlwaysOnTop, то и диалогу нужно выставит этот флаг
 			if (GetWindowLongPtr(ghWnd, GWL_EXSTYLE) & WS_EX_TOPMOST)
 				SetWindowPos(hDlg, HWND_TOPMOST, 0,0,0,0, SWP_NOMOVE|SWP_NOSIZE);
@@ -552,6 +556,14 @@ INT_PTR CAttachDlg::AttachDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM l
 				if (lpnmitem->hdr.code == (UINT)NM_DBLCLK)
 				{
 					PostMessage(hDlg, WM_COMMAND, IDOK, 0);
+
+					// ≈сли мышка над консолью - то клик (LBtnUp) может в нее провалитьс€, а не должен
+					POINT ptCur; GetCursorPos(&ptCur);
+					RECT rcWnd; GetWindowRect(ghWnd, &rcWnd);
+					if (PtInRect(&rcWnd, ptCur))
+					{
+						gpConEmu->SetSkipMouseEvent(WM_MOUSEMOVE, WM_LBUTTONUP, 0);
+					}
 				}
 			}
 			break;
@@ -627,6 +639,15 @@ bool CAttachDlg::StartAttach(HWND ahAttachWnd, DWORD anPID, DWORD anBits, Attach
 	{
 		MBoxAssert(ahAttachWnd && anPID && anBits && anType);
 		goto wrap;
+	}
+
+	if (gpSetCls->isAdvLogging)
+	{
+		wchar_t szInfo[128];
+		_wsprintf(szInfo, SKIPLEN(countof(szInfo))
+			L"CAttachDlg::StartAttach HWND=x%08X, PID=%u, Bits%u, Type=%u, AltMode=%u",
+			(DWORD)(DWORD_PTR)ahAttachWnd, anPID, anBits, (UINT)anType, abAltMode);
+		gpConEmu->LogString(szInfo);
 	}
 
 	if (LoadSrvMapping(ahAttachWnd, srv))

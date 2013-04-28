@@ -930,8 +930,10 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 	}
 
 	//wcscpy_c(gpSet->ComSpec.ConEmuDir, gpConEmu->ms_ConEmuDir);
-	wcscpy_c(gpSet->ComSpec.ConEmuBaseDir, gpConEmu->ms_ConEmuBaseDir);
-	UpdateComspec(&gpSet->ComSpec);
+	gpConEmu->InitComSpecStr(gpSet->ComSpec);
+	// -- должно вообще вызываться в UpdateGuiInfoMapping
+	//UpdateComspec(&gpSet->ComSpec);
+
 	// Обновить реестр на предмет поддержки UNC путей в cmd.exe
 	if (gpSet->ComSpec.isAllowUncPaths)
 	{
@@ -1036,6 +1038,11 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 			gpConEmu->wndY = rcWnd.top + nShift;
 			break; // нашли, сдвинулись, выходим
 		}
+	}
+
+	if (!gpConEmu->InCreateWindow())
+	{
+		gpConEmu->OnGlobalSettingsChanged();
 	}
 
 	MCHKHEAP
@@ -1890,10 +1897,6 @@ LRESULT CSettings::OnInitDialog_Show(HWND hWnd2, bool abInitial)
 
 	//checkDlgButton(hWnd2, cbAlwaysShowTrayIcon, gpSet->isAlwaysShowTrayIcon);
 
-	//checkDlgButton(hWnd2, cbMultiLeaveOnClose, gpSet->isMultiLeaveOnClose);
-	//checkDlgButton(hWnd2, cbMultiHideOnClose, gpSet->isMultiHideOnClose);
-	//EnableWindow(GetDlgItem(hWnd2, cbMultiHideOnClose), gpSet->isMultiLeaveOnClose);
-
 	//checkRadioButton(hWnd2, rbTaskbarBtnActive, rbTaskbarBtnHidden, 
 	//	(gpSet->m_isTabsOnTaskBar == 3) ? rbTaskbarBtnHidden :
 	//	(gpSet->m_isTabsOnTaskBar == 2) ? rbTaskbarBtnWin7 :
@@ -1954,6 +1957,8 @@ LRESULT CSettings::OnInitDialog_Show(HWND hWnd2, bool abInitial)
 	checkDlgButton(hWnd2, cbSingleInstance, IsSingleInstanceArg());
 	EnableDlgItem(hWnd2, cbSingleInstance, (gpSet->isQuakeStyle == 0));
 
+	checkDlgButton(hWnd2, cbShowHelpTooltips, gpSet->isShowHelpTooltips);
+
 	return 0;
 }
 
@@ -1964,10 +1969,6 @@ LRESULT CSettings::OnInitDialog_Taskbar(HWND hWnd2, bool abInitial)
 
 	checkDlgButton(hWnd2, cbAlwaysShowTrayIcon, gpSet->isAlwaysShowTrayIcon);
 
-	//checkDlgButton(hWnd2, cbMultiLeaveOnClose, gpSet->isMultiLeaveOnClose);
-	//checkDlgButton(hWnd2, cbMultiHideOnClose, gpSet->isMultiHideOnClose);
-	//EnableWindow(GetDlgItem(hWnd2, cbMultiHideOnClose), gpSet->isMultiLeaveOnClose);
-
 	checkRadioButton(hWnd2, rbTaskbarBtnActive, rbTaskbarBtnHidden, 
 		(gpSet->m_isTabsOnTaskBar == 3) ? rbTaskbarBtnHidden :
 		(gpSet->m_isTabsOnTaskBar == 2) ? rbTaskbarBtnWin7 :
@@ -1975,8 +1976,16 @@ LRESULT CSettings::OnInitDialog_Taskbar(HWND hWnd2, bool abInitial)
 		: rbTaskbarBtnActive);
 	checkDlgButton(hWnd2, cbTaskbarShield, gpSet->isTaskbarShield);
 
-	checkRadioButton(hWnd2, rbMultiLastClose, rbMultiLastTSA,
-		gpSet->isMultiLeaveOnClose ? (gpSet->isMultiHideOnClose ? rbMultiLastTSA : rbMultiLastLeave) : rbMultiLastClose);
+	//checkRadioButton(hWnd2, rbMultiLastClose, rbMultiLastTSA,
+	//	gpSet->isMultiLeaveOnClose ? (gpSet->isMultiHideOnClose ? rbMultiLastTSA : rbMultiLastLeave) : rbMultiLastClose);
+	checkDlgButton(hWnd2, cbCloseConEmuWithLastTab, (gpSet->isMultiLeaveOnClose == 0) ? BST_CHECKED : BST_UNCHECKED);
+	checkDlgButton(hWnd2, cbCloseConEmuOnCrossClicking, (gpSet->isMultiLeaveOnClose != 1) ? BST_CHECKED : BST_UNCHECKED);
+	checkDlgButton(hWnd2, cbMinimizeOnLastTabClose, (gpSet->isMultiLeaveOnClose && gpSet->isMultiHideOnClose != 0) ? BST_CHECKED : BST_UNCHECKED);
+	checkDlgButton(hWnd2, cbHideOnLastTabClose, (gpSet->isMultiLeaveOnClose && gpSet->isMultiHideOnClose == 1) ? BST_CHECKED : BST_UNCHECKED);
+	//
+	EnableDlgItem(hWnd2, cbCloseConEmuOnCrossClicking, (gpSet->isMultiLeaveOnClose != 0));
+	EnableDlgItem(hWnd2, cbMinimizeOnLastTabClose, (gpSet->isMultiLeaveOnClose != 0));
+	EnableDlgItem(hWnd2, cbHideOnLastTabClose, (gpSet->isMultiLeaveOnClose != 0) && (gpSet->isMultiHideOnClose != 0));
 
 
 	checkDlgButton(hWnd2, cbMinimizeOnLoseFocus, gpSet->mb_MinimizeOnLoseFocus);
@@ -2376,7 +2385,8 @@ LRESULT CSettings::OnInitDialog_Comspec(HWND hWnd2, bool abInitial)
 	checkRadioButton(hWnd2, rbComspec_OSbit, rbComspec_x32, rbComspec_OSbit+gpSet->ComSpec.csBits);
 
 	checkDlgButton(hWnd2, cbComspecUpdateEnv, gpSet->ComSpec.isUpdateEnv ? BST_CHECKED : BST_UNCHECKED);
-	checkDlgButton(hWnd2, cbAddConEmu2Path, gpSet->ComSpec.isAddConEmu2Path ? BST_CHECKED : BST_UNCHECKED);
+	checkDlgButton(hWnd2, cbAddConEmu2Path, (gpSet->ComSpec.AddConEmu2Path & CEAP_AddConEmuExeDir) ? BST_CHECKED : BST_UNCHECKED);
+	checkDlgButton(hWnd2, cbAddConEmuBase2Path, (gpSet->ComSpec.AddConEmu2Path & CEAP_AddConEmuBaseDir) ? BST_CHECKED : BST_UNCHECKED);
 	checkDlgButton(hWnd2, cbComspecUncPaths, gpSet->ComSpec.isAllowUncPaths ? BST_CHECKED : BST_UNCHECKED);
 
 	// Cmd.exe output cp
@@ -3599,6 +3609,8 @@ INT_PTR CSettings::pageOpProc_Integr(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 			wchar_t* pszApps = gpSet->GetDefaultTerminalApps();
 			_ASSERTE(pszApps!=NULL);
 			SetDlgItemText(hWnd2, tDefaultTerminal, pszApps);
+			if (wcschr(pszApps, L',') != NULL && wcschr(pszApps, L'|') == NULL)
+				Icon.ShowTrayIcon(L"List of hooked executables must be delimited with \"|\" but not commas", tsa_Default_Term);
 			SafeFree(pszApps);
 
 			bSkipCbSel = false;
@@ -3702,6 +3714,12 @@ INT_PTR CSettings::pageOpProc_Integr(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 					if (!bSkipCbSel)
 					{
 						wchar_t* pszApps = GetDlgItemText(hWnd2, tDefaultTerminal);
+						if (!pszApps || !*pszApps)
+						{
+							SafeFree(pszApps);
+							pszApps = lstrdup(DEFAULT_TERMINAL_APPS/*L"explorer.exe"*/);
+							SetDlgItemText(hWnd2, tDefaultTerminal, pszApps);
+						}
 						gpSet->SetDefaultTerminalApps(pszApps);
 						SafeFree(pszApps);
 					}
@@ -4421,7 +4439,8 @@ LRESULT CSettings::OnInitDialog_Update(HWND hWnd2)
 	checkDlgButton(hWnd2, cbUpdateCheckOnStartup, p->isUpdateCheckOnStartup);
 	checkDlgButton(hWnd2, cbUpdateCheckHourly, p->isUpdateCheckHourly);
 	checkDlgButton(hWnd2, cbUpdateConfirmDownload, !p->isUpdateConfirmDownload);
-	checkRadioButton(hWnd2, rbUpdateStableOnly, rbUpdateLatestAvailable, (p->isUpdateUseBuilds==1) ? rbUpdateStableOnly : rbUpdateLatestAvailable);
+	checkRadioButton(hWnd2, rbUpdateStableOnly, rbUpdateLatestAvailable,
+		(p->isUpdateUseBuilds==1) ? rbUpdateStableOnly : (p->isUpdateUseBuilds==3) ? rbUpdatePreview : rbUpdateLatestAvailable);
 	
 	checkDlgButton(hWnd2, cbUpdateUseProxy, p->isUpdateUseProxy);
 	OnButtonClicked(hWnd2, cbUpdateUseProxy, 0); // Enable/Disable proxy fields
@@ -4612,6 +4631,9 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		case cbSingleInstance:
 			gpSet->isSingleInstance = IsChecked(hWnd2, cbSingleInstance);
 			break;
+		case cbShowHelpTooltips:
+			gpSet->isShowHelpTooltips = IsChecked(hWnd2, cbShowHelpTooltips);
+			break;
 		case cbMultiCon:
 			gpSet->isMulti = IsChecked(hWnd2, cbMultiCon);
 			gpConEmu->UpdateWinHookSettings();
@@ -4699,7 +4721,11 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpConEmu->OnGlobalSettingsChanged();
 			break;
 		case cbAddConEmu2Path:
-			gpSet->ComSpec.isAddConEmu2Path = IsChecked(hWnd2, cbAddConEmu2Path);
+			SetConEmuFlags(gpSet->ComSpec.AddConEmu2Path, CEAP_AddConEmuExeDir, IsChecked(hWnd2, cbAddConEmu2Path) ? CEAP_AddConEmuExeDir : CEAP_None);
+			gpConEmu->OnGlobalSettingsChanged();
+			break;
+		case cbAddConEmuBase2Path:
+			SetConEmuFlags(gpSet->ComSpec.AddConEmu2Path, CEAP_AddConEmuBaseDir, IsChecked(hWnd2, cbAddConEmuBase2Path) ? CEAP_AddConEmuBaseDir : CEAP_None);
 			gpConEmu->OnGlobalSettingsChanged();
 			break;
 		case cbComspecUncPaths:
@@ -5220,12 +5246,52 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpSet->bShowFarWindows = IsChecked(hWnd2, cbShowFarWindows);
 			gpConEmu->mp_TabBar->Update(TRUE);
 			break;
-		case rbMultiLastClose:
-		case rbMultiLastLeave:
-		case rbMultiLastTSA:
-			gpSet->isMultiHideOnClose = IsChecked(hWnd2, rbMultiLastTSA);
-			gpSet->isMultiLeaveOnClose = gpSet->isMultiHideOnClose || IsChecked(hWnd2, rbMultiLastLeave);
+
+		case cbCloseConEmuWithLastTab:
+			if (IsChecked(hWnd2, CB))
+			{
+				gpSet->isMultiLeaveOnClose = 0;
+			}
+			else
+			{
+				_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1/2}");
+				gpSet->isMultiLeaveOnClose = IsChecked(hWnd2, cbCloseConEmuOnCrossClicking) ? 2 : 1;
+			}
+			gpConEmu->LogString(L"isMultiLeaveOnClose changed from dialog (cbCloseConEmuWithLastTab)");
+
+			checkDlgButton(hWnd2, cbMinimizeOnLastTabClose, (gpSet->isMultiLeaveOnClose && gpSet->isMultiHideOnClose != 0) ? BST_CHECKED : BST_UNCHECKED);
+			checkDlgButton(hWnd2, cbHideOnLastTabClose, (gpSet->isMultiLeaveOnClose && gpSet->isMultiHideOnClose == 1) ? BST_CHECKED : BST_UNCHECKED);
+			EnableDlgItem(hWnd2, cbCloseConEmuOnCrossClicking, (gpSet->isMultiLeaveOnClose != 0));
+			EnableDlgItem(hWnd2, cbMinimizeOnLastTabClose, (gpSet->isMultiLeaveOnClose != 0));
+			EnableDlgItem(hWnd2, cbHideOnLastTabClose, (gpSet->isMultiLeaveOnClose != 0) && (gpSet->isMultiHideOnClose != 0));
 			break;
+
+		case cbCloseConEmuOnCrossClicking:
+			if (!IsChecked(hWnd2, cbCloseConEmuWithLastTab))
+			{
+				_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1/2}");
+				gpSet->isMultiLeaveOnClose = IsChecked(hWnd2, cbCloseConEmuOnCrossClicking) ? 2 : 1;
+				gpConEmu->LogString(L"isMultiLeaveOnClose changed from dialog (cbCloseConEmuOnCrossClicking)");
+			}
+			break;
+
+		case cbMinimizeOnLastTabClose:
+		case cbHideOnLastTabClose:
+			if (!IsChecked(hWnd2, cbCloseConEmuWithLastTab))
+			{
+				if (!IsChecked(hWnd2, cbMinimizeOnLastTabClose))
+				{
+					gpSet->isMultiHideOnClose = 0;
+				}
+				else
+				{
+					gpSet->isMultiHideOnClose = IsChecked(hWnd2, cbHideOnLastTabClose) ? 1 : 2;
+				}
+				checkDlgButton(hWnd2, cbHideOnLastTabClose, (gpSet->isMultiLeaveOnClose && gpSet->isMultiHideOnClose == 1) ? BST_CHECKED : BST_UNCHECKED);
+				EnableDlgItem(hWnd2, cbHideOnLastTabClose, (gpSet->isMultiLeaveOnClose != 0) && (gpSet->isMultiHideOnClose != 0));
+			}
+			break;
+
 		case rbMinByEscNever:
 		case rbMinByEscEmpty:
 		case rbMinByEscAlways:
@@ -5235,13 +5301,6 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		case cbMapShiftEscToEsc:
 			gpSet->isMapShiftEscToEsc = IsChecked(hWnd2, CB);
 			break;
-		//case cbMultiLeaveOnClose:
-		//	gpSet->isMultiLeaveOnClose = IsChecked(hWnd2, cbMultiLeaveOnClose);
-		//	EnableWindow(GetDlgItem(hWnd2, cbMultiHideOnClose), gpSet->isMultiLeaveOnClose);
-		//	break;
-		//case cbMultiHideOnClose:
-		//	gpSet->isMultiHideOnClose = IsChecked(hWnd2, cbMultiHideOnClose);
-		//	break;
 
 		case cbGuiMacroHelp:
 			gpConEmu->OnInfo_About(L"Macro");
@@ -5726,8 +5785,9 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpSet->UpdSet.isUpdateConfirmDownload = (IsChecked(hWnd2, CB) == BST_UNCHECKED);
 			break;
 		case rbUpdateStableOnly:
+		case rbUpdatePreview:
 		case rbUpdateLatestAvailable:
-			gpSet->UpdSet.isUpdateUseBuilds = IsChecked(hWnd2, rbUpdateStableOnly) ? 1 : 2;
+			gpSet->UpdSet.isUpdateUseBuilds = IsChecked(hWnd2, rbUpdateStableOnly) ? 1 : IsChecked(hWnd2, rbUpdateLatestAvailable) ? 2 : 3;
 			break;
 		case cbUpdateUseProxy:
 			gpSet->UpdSet.isUpdateUseProxy = IsChecked(hWnd2, CB);
@@ -6705,7 +6765,8 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		{
 			temp[31] = 0; // страховка
 
-			if (wcsstr(temp, L"%s") || wcsstr(temp, L"%n"))
+			//03.04.2013, via gmail, просили не добавлять автоматом %s
+			//if (wcsstr(temp, L"%s") || wcsstr(temp, L"%n"))
 			{
 				if (TB == tTabConsole)
 					wcscpy_c(gpSet->szTabConsole, temp);
@@ -7951,6 +8012,8 @@ void CSettings::OnClose()
 		gpConEmu->RegisterHooks();
 	else if (gpSet->m_isKeyboardHooks == 2)
 		gpConEmu->UnRegisterHooks();
+
+	gpConEmu->OnOurDialogClosed();
 }
 
 void CSettings::OnResetOrReload(BOOL abResetOnly)
@@ -8028,9 +8091,16 @@ INT_PTR CSettings::ProcessTipHelp(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM 
 	}
 	else
 	{
-		mp_HelpPopup->GetItemHelp(0, (HWND)lpnmtdi->hdr.idFrom, szHint, countof(szHint));
+		if (gpSet->isShowHelpTooltips)
+		{
+			mp_HelpPopup->GetItemHelp(0, (HWND)lpnmtdi->hdr.idFrom, szHint, countof(szHint));
 
-		lpnmtdi->lpszText = szHint;
+			lpnmtdi->lpszText = szHint;
+		}
+		else
+		{
+			szHint[0] = 0;
+		}
 	}
 
 	lpnmtdi->szText[0] = 0;
@@ -8044,6 +8114,7 @@ INT_PTR CSettings::wndOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPara
 	switch (messg)
 	{
 		case WM_INITDIALOG:
+			gpConEmu->OnOurDialogOpened();
 			ghOpWnd = hWnd2;
 			SendMessage(hWnd2, WM_SETICON, ICON_BIG, (LPARAM)hClassIcon);
 			SendMessage(hWnd2, WM_SETICON, ICON_SMALL, (LPARAM)hClassIconSm);
@@ -10562,6 +10633,9 @@ void CSettings::RegisterTipsFor(HWND hChildDlg)
 
 		if (!hwndTip) return;  // не смогли создать
 
+		//if (!gpSet->isShowHelpTooltips)
+		//	return;
+
 		HWND hChild = NULL, hEdit = NULL;
 		BOOL lbRc = FALSE;
 		//TCHAR szText[0x200];
@@ -10583,7 +10657,7 @@ void CSettings::RegisterTipsFor(HWND hChildDlg)
 				toolInfo.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
 				toolInfo.uId = (UINT_PTR)hChild;
 
-				// Use ProcessTipHelp dynamically
+				// Use CSettings::ProcessTipHelp dynamically
 				toolInfo.lpszText = LPSTR_TEXTCALLBACK;
 
 				lbRc = SendMessage(hwndTip, TTM_ADDTOOL, 0, (LPARAM)&toolInfo);

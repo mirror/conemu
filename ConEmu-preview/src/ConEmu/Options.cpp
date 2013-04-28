@@ -297,6 +297,7 @@ Settings::~Settings()
 
 void Settings::InitSettings()
 {
+	if (gpConEmu) gpConEmu->LogString(L"Settings::InitSettings()");
 	MCHKHEAP
 
 	// Освободить память, т.к. функция может быть вызвана из окна интерфейса настроек	
@@ -312,6 +313,7 @@ void Settings::InitSettings()
 	nHostkeyNumberModifier = VK_LWIN; //TestHostkeyModifiers(nHostkeyNumberModifier);
 	nHostkeyArrowModifier = VK_LWIN; //TestHostkeyModifiers(nHostkeyArrowModifier);
 	isSingleInstance = false;
+	isShowHelpTooltips = true;
 	isMulti = true;
 	isMultiShowButtons = true;
 	isNumberInCaption = false;
@@ -322,7 +324,10 @@ void Settings::InitSettings()
 	//vmMinimizeRestore = 'C' | (nMultiHotkeyModifier << 8);
 	//vmMultiClose = VK_DELETE | (nMultiHotkeyModifier << 8);
 	//vmMultiCmd = 'X' | (nMultiHotkeyModifier << 8);
-	isMultiAutoCreate = false; isMultiLeaveOnClose = isMultiHideOnClose = false; isMultiIterate = true;
+	isMultiAutoCreate = false;
+	isMultiLeaveOnClose = 0;
+	isMultiHideOnClose = 0;
+	isMultiIterate = true;
 	isMultiMinByEsc = 2; isMapShiftEscToEsc = true; // isMapShiftEscToEsc used only when isMultiMinByEsc==1 and only for console apps
 	isMultiNewConfirm = true;
 	isUseWinNumber = true; isUseWinArrows = false; isUseWinTab = false;
@@ -341,7 +346,7 @@ void Settings::InitSettings()
 	isMonitorConsoleLang = 3;
 	DefaultBufferHeight = 1000; AutoBufferHeight = true;
 	nCmdOutputCP = 0;
-	ComSpec.isAddConEmu2Path = TRUE;
+	ComSpec.AddConEmu2Path = CEAP_AddAll;
 	{
 		ComSpec.isAllowUncPaths = FALSE;
 		// Load defaults from windows registry (Command Processor settings)
@@ -532,13 +537,13 @@ void Settings::InitSettings()
 	wndCascade = true;
 	isAutoSaveSizePos = false; mb_SizePosAutoSaved = false;
 	isConVisible = false; //isLockRealConsolePos = false;
-	isUseInjects = false; // гррр... Disclaimer#2
+	isUseInjects = true; // Fuck... Features or speed. User must choose!
 
 	isSetDefaultTerminal = false;
 	isRegisterOnOsStartup = false;
 	isDefaultTerminalNoInjects = false;
 	nDefaultTerminalConfirmClose = 1 /* Always */;
-	SetDefaultTerminalApps(NULL/* to default value */); // "|"-delimited string -> MSZ
+	SetDefaultTerminalApps(L"explorer.exe"/* to default value */); // "|"-delimited string -> MSZ
 
 	isProcessAnsi = true;
 	mb_UseClink = true;
@@ -1946,6 +1951,8 @@ void Settings::FreeProgresses()
 
 void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 {
+	if (gpConEmu) gpConEmu->LogString(L"Settings::LoadSettings");
+
 	MCHKHEAP
 	mb_CharSetWasSet = FALSE;
 
@@ -2061,7 +2068,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		{
 		wchar_t* pszApps = NULL;
 		reg->Load(L"DefaultTerminalApps", &pszApps);
-		SetDefaultTerminalApps(pszApps); // "|"-delimited string -> MSZ
+		SetDefaultTerminalApps((pszApps && *pszApps) ? pszApps : DEFAULT_TERMINAL_APPS); // "|"-delimited string -> MSZ
 		SafeFree(pszApps);
 		}
 
@@ -2125,6 +2132,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 
 		reg->Load(L"CmdLineHistory", &psCmdHistory); nCmdHistorySize = 0; HistoryCheck();
 		reg->Load(L"SingleInstance", isSingleInstance);
+		reg->Load(L"ShowHelpTooltips", isShowHelpTooltips);
 		reg->Load(L"Multi", isMulti);
 		reg->Load(L"Multi.ShowButtons", isMultiShowButtons);
 		reg->Load(L"Multi.NumberInCaption", isNumberInCaption);
@@ -2239,9 +2247,13 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"ComSpec.UpdateEnv", nVal);
 		ComSpec.isUpdateEnv = (nVal != 0);
 		//
-		nVal = ComSpec.isAddConEmu2Path;
+		nVal = (BYTE)((ComSpec.AddConEmu2Path & CEAP_AddConEmuBaseDir) == CEAP_AddConEmuBaseDir);
 		reg->Load(L"ComSpec.EnvAddPath", nVal);
-		ComSpec.isAddConEmu2Path = (nVal != 0);
+		SetConEmuFlags(ComSpec.AddConEmu2Path, CEAP_AddConEmuBaseDir, nVal ? CEAP_AddConEmuBaseDir : CEAP_None);
+		//
+		nVal = (BYTE)((ComSpec.AddConEmu2Path & CEAP_AddConEmuExeDir) == CEAP_AddConEmuExeDir);
+		reg->Load(L"ComSpec.EnvAddExePath", nVal);
+		SetConEmuFlags(ComSpec.AddConEmu2Path, CEAP_AddConEmuExeDir, nVal ? CEAP_AddConEmuExeDir : CEAP_None);
 		//
 		nVal = ComSpec.isAllowUncPaths;
 		reg->Load(L"ComSpec.UncPaths", nVal);
@@ -2251,7 +2263,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		//-- wcscpy_c(ComSpec.ComspecInitial, gpConEmu->ms_ComSpecInitial);
 		// Обработать 32/64 (найти tcc.exe и т.п.)
 		FindComspec(&ComSpec);
-		//UpdateComspec(&ComSpec); --> CSettings::SettingsLoaded
+		//Update Comspec(&ComSpec); --> CSettings::SettingsLoaded
 
 		reg->Load(L"ConsoleTextSelection", isConsoleTextSelection); if (isConsoleTextSelection>2) isConsoleTextSelection = 2;
 
@@ -2569,7 +2581,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"Update.CheckOnStartup", UpdSet.isUpdateCheckOnStartup);
 		reg->Load(L"Update.CheckHourly", UpdSet.isUpdateCheckHourly);
 		reg->Load(L"Update.ConfirmDownload", UpdSet.isUpdateConfirmDownload);
-		reg->Load(L"Update.UseBuilds", UpdSet.isUpdateUseBuilds); if (UpdSet.isUpdateUseBuilds>2) UpdSet.isUpdateUseBuilds = 2; // 1-stable only, 2-latest
+		reg->Load(L"Update.UseBuilds", UpdSet.isUpdateUseBuilds); if (UpdSet.isUpdateUseBuilds>3) UpdSet.isUpdateUseBuilds = 3; // 1-stable only, 2-latest, 3-preview
 		reg->Load(L"Update.UseProxy", UpdSet.isUpdateUseProxy);
 		reg->Load(L"Update.Proxy", &UpdSet.szUpdateProxy);
 		reg->Load(L"Update.ProxyUser", &UpdSet.szUpdateProxyUser);
@@ -2911,6 +2923,8 @@ void Settings::SaveStatusSettings(SettingsBase* reg)
 
 BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* apStorage /*= NULL*/)
 {
+	if (gpConEmu) gpConEmu->LogString(L"Settings::SaveSettings");
+
 	BOOL lbRc = FALSE;
 
 	gpSetCls->SettingsPreSave();
@@ -2987,6 +3001,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 			reg->SaveMSZ(L"CmdLineHistory", psCmdHistory, nCmdHistorySize);
 
 		reg->Save(L"SingleInstance", isSingleInstance);
+		reg->Save(L"ShowHelpTooltips", isShowHelpTooltips);
 		reg->Save(L"Multi", isMulti);
 		reg->Save(L"Multi.ShowButtons", isMultiShowButtons);
 		reg->Save(L"Multi.NumberInCaption", isNumberInCaption);
@@ -3086,7 +3101,8 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"ComSpec.Type", (BYTE)ComSpec.csType);
 		reg->Save(L"ComSpec.Bits", (BYTE)ComSpec.csBits);
 		reg->Save(L"ComSpec.UpdateEnv", (bool)ComSpec.isUpdateEnv);
-		reg->Save(L"ComSpec.EnvAddPath", (bool)ComSpec.isAddConEmu2Path);
+		reg->Save(L"ComSpec.EnvAddPath", (bool)((ComSpec.AddConEmu2Path & CEAP_AddConEmuBaseDir) == CEAP_AddConEmuBaseDir));
+		reg->Save(L"ComSpec.EnvAddExePath", (bool)((ComSpec.AddConEmu2Path & CEAP_AddConEmuExeDir) == CEAP_AddConEmuExeDir));
 		reg->Save(L"ComSpec.UncPaths", (bool)ComSpec.isAllowUncPaths);
 		reg->Save(L"ComSpec.Path", ComSpec.ComspecExplicit);
 		reg->Save(L"ConsoleTextSelection", isConsoleTextSelection);
@@ -4750,7 +4766,10 @@ void Settings::SetDefaultTerminalApps(const wchar_t* apszApps)
 {
 	SafeFree(psDefaultTerminalApps);
 	if (!apszApps || !*apszApps)
-		apszApps = L"explorer.exe";
+	{
+		_ASSERTE(apszApps && *apszApps);
+		apszApps = DEFAULT_TERMINAL_APPS/*L"explorer.exe"*/;
+	}
 
 	// "|" delimited String -> MSZ
 	INT_PTR nLen = _tcslen(apszApps);
@@ -4784,6 +4803,11 @@ void Settings::SetDefaultTerminalApps(const wchar_t* apszApps)
 
 			psDefaultTerminalApps = pszDst;
 		}
+	}
+
+	if (gpConEmu)
+	{
+		gpConEmu->OnDefaultTermChanged();
 	}
 }
 

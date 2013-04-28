@@ -138,8 +138,9 @@ struct CEStartupEnv
 #ifndef CONEMU_MINIMAL
 HANDLE DuplicateProcessHandle(DWORD anTargetPID);
 void FindComspec(ConEmuComspec* pOpt); // используется в GUI при загрузке настроек
-void UpdateComspec(ConEmuComspec* pOpt);
+void UpdateComspec(ConEmuComspec* pOpt, bool DontModifyPath = false);
 void SetEnvVarExpanded(LPCWSTR asName, LPCWSTR asValue);
+wchar_t* GetEnvVar(LPCWSTR VarName, DWORD cchDefaultMax = 2000);
 #endif
 LPCWSTR GetComspecFromEnvVar(wchar_t* pszComspec, DWORD cchMax, ComSpecBits Bits = csb_SameOS);
 wchar_t* GetComspec(const ConEmuComspec* pOpt);
@@ -209,6 +210,26 @@ class MSectionLock
 		MSectionLock();
 		~MSectionLock();
 };
+
+
+#ifndef CONEMU_MINIMAL
+class MSectionLockSimple
+{
+	protected:
+		CRITICAL_SECTION* mp_S;
+		#ifdef _DEBUG
+		DWORD mn_LockTID, mn_LockTick;
+		#endif
+		bool mb_Locked;
+	public:
+		BOOL Lock(CRITICAL_SECTION* apS, DWORD anTimeout=-1);
+		void Unlock();
+		BOOL isLocked();
+	public:
+		MSectionLockSimple();
+		~MSectionLockSimple();
+};
+#endif
 
 
 #ifndef CONEMU_MINIMAL
@@ -521,7 +542,7 @@ class MFileLog
 		MFileLog(LPCWSTR asName, LPCWSTR asDir = NULL, DWORD anPID = 0);
 		~MFileLog();
 		void CloseLogFile();
-		HRESULT CreateLogFile(LPCWSTR asName = NULL, DWORD anPID = 0); // Returns 0 if succeeded, otherwise - GetLastError() code
+		HRESULT CreateLogFile(LPCWSTR asName = NULL, DWORD anPID = 0, DWORD anLevel = 0); // Returns 0 if succeeded, otherwise - GetLastError() code
 		LPCWSTR GetLogFileName();
 		void LogString(LPCSTR asText, bool abWriteTime = true, LPCSTR asThreadName = NULL, bool abNewLine = true, UINT anCP = CP_ACP);
 		void LogString(LPCWSTR asText, bool abWriteTime = true, LPCWSTR asThreadName = NULL, bool abNewLine = true);

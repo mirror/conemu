@@ -314,13 +314,16 @@ BOOL CShellProc::LoadSrvMapping(BOOL bLightCheck /*= FALSE*/)
 		m_SrvMapping.nGuiPID = m_GuiMapping.nGuiPID;
 		m_SrvMapping.nProtocolVersion = m_GuiMapping.nProtocolVersion;
 		lstrcpy(m_SrvMapping.sConEmuExe, m_GuiMapping.sConEmuExe);
-		lstrcpy(m_SrvMapping.sConEmuBaseDir, m_GuiMapping.sConEmuBaseDir);
+		//lstrcpy(m_SrvMapping.sConEmuBaseDir, m_GuiMapping.sConEmuBaseDir);
+		m_SrvMapping.ComSpec = m_GuiMapping.ComSpec;
 		m_SrvMapping.hConEmuRoot = ghConEmuWnd;
 		m_SrvMapping.hConEmuWndDc = NULL/*ghConEmuWndDC*/; // ???
 		m_SrvMapping.hConEmuWndBack = NULL;
-		m_SrvMapping.bDosBox = m_GuiMapping.bDosBox;       // DosBox установлен, можно пользоваться
+		//m_SrvMapping.bDosBox = m_GuiMapping.bDosBox;       // DosBox установлен, можно пользоваться
+		m_SrvMapping.Flags = m_GuiMapping.Flags;
 		m_SrvMapping.bUseInjects = 1;   // 0-off, 1-on, 3-exe only. Далее могут быть доп.флаги (битмаск)? chcp, Hook HKCU\FAR[2] & HKLM\FAR and translate them to hive, ...
-		m_SrvMapping.ComSpec = m_GuiMapping.ComSpec;
+
+		_ASSERTE(m_SrvMapping.ComSpec.ConEmuExeDir[0] && m_SrvMapping.ComSpec.ConEmuBaseDir[0]);
 
 		return TRUE;
 	}
@@ -329,6 +332,7 @@ BOOL CShellProc::LoadSrvMapping(BOOL bLightCheck /*= FALSE*/)
 	{
 		if (!::LoadSrvMapping(ghConWnd, m_SrvMapping))
 			return FALSE;
+		_ASSERTE(m_SrvMapping.ComSpec.ConEmuExeDir[0] && m_SrvMapping.ComSpec.ConEmuBaseDir[0]);
 	}
 
 	if (!m_SrvMapping.hConEmuWndDc || !user->isWindow(m_SrvMapping.hConEmuWndDc))
@@ -499,6 +503,8 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 		goto wrap;
 	}
 
+	_ASSERTEX(m_SrvMapping.sConEmuExe[0]!=0 && m_SrvMapping.ComSpec.ConEmuBaseDir[0]!=0);
+
 	if (gbPrepareDefaultTerminal)
 	{
 		_ASSERTEX(ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI || ImageSubsystem == IMAGE_SUBSYSTEM_BATCH_FILE);
@@ -506,7 +512,7 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 	}
 	else
 	{
-		_wcscpy_c(szConEmuC, cchConEmuC, m_SrvMapping.sConEmuBaseDir);
+		_wcscpy_c(szConEmuC, cchConEmuC, m_SrvMapping.ComSpec.ConEmuBaseDir);
 		_wcscat_c(szConEmuC, cchConEmuC, L"\\");
 	}
 	
@@ -848,11 +854,11 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 	}
 	else if (ImageBits == 16)
 	{
-		if (m_SrvMapping.cbSize && m_SrvMapping.bDosBox)
+		if (m_SrvMapping.cbSize && (m_SrvMapping.Flags & CECF_DosBox))
 		{
-			wcscpy_c(szDosBoxExe, m_SrvMapping.sConEmuBaseDir);
+			wcscpy_c(szDosBoxExe, m_SrvMapping.ComSpec.ConEmuBaseDir);
 			wcscat_c(szDosBoxExe, L"\\DosBox\\DosBox.exe");
-			wcscpy_c(szDosBoxCfg, m_SrvMapping.sConEmuBaseDir);
+			wcscpy_c(szDosBoxCfg, m_SrvMapping.ComSpec.ConEmuBaseDir);
 			wcscat_c(szDosBoxCfg, L"\\DosBox\\DosBox.conf");
 
 			if (!FileExists(szDosBoxExe) || !FileExists(szDosBoxCfg))
@@ -1435,9 +1441,31 @@ int CShellProc::PrepareExecuteParms(
 	{
 		_ASSERTEX(aCmd == eCreateProcess); // Пока расчитано только на него
 
-		if ((*anCreateFlags) & (CREATE_NO_WINDOW|DETACHED_PROCESS))
+		if (aCmd == eCreateProcess)
 		{
-			// Creating process without console window, not our case
+			if (anCreateFlags && ((*anCreateFlags) & (CREATE_NO_WINDOW|DETACHED_PROCESS)))
+			{
+				// Creating process without console window, not our case
+				return 0;
+			}
+		}
+		else if (aCmd == eShellExecute)
+		{
+			// We need to hook only "Run as administrator" action
+			if (!asAction || (lstrcmpi(asAction, L"runas") != 0))
+			{
+				return 0;
+			}
+			// Skip some executions
+			if (anShellFlags
+				&& ((*anShellFlags) & (SEE_MASK_CLASSNAME|SEE_MASK_CLASSKEY|SEE_MASK_IDLIST|SEE_MASK_INVOKEIDLIST)))
+			{
+				return 0;
+			}
+		}
+		else
+		{
+			_ASSERTE(FALSE && "Unsupported in Default terminal");
 			return 0;
 		}
 
@@ -1447,9 +1475,17 @@ int CShellProc::PrepareExecuteParms(
 			return 0;
 		}
 
-		if ((*anCreateFlags) & (DEBUG_PROCESS|DEBUG_ONLY_THIS_PROCESS))
+		if (anCreateFlags && ((*anCreateFlags) & (DEBUG_PROCESS|DEBUG_ONLY_THIS_PROCESS)))
 		{
-			bDebugWasRequested = TRUE;
+			// Для поиска трапов в дереве запускаемых процессов
+			if (m_SrvMapping.Flags & CECF_BlockChildDbg)
+			{
+				(*anCreateFlags) &= ~(DEBUG_PROCESS|DEBUG_ONLY_THIS_PROCESS);
+			}
+			else
+			{
+				bDebugWasRequested = TRUE;
+			}
 			// Пока продолжим, нам нужно определить, а консольное ли это приложение?
 		}
 	}
@@ -1633,7 +1669,7 @@ int CShellProc::PrepareExecuteParms(
 				// А вот "-cur_console" нужно обрабатывать _здесь_
 				bCurConsoleArg = true;
 
-				if (args.bForceDosBox && m_SrvMapping.cbSize && m_SrvMapping.bDosBox)
+				if (args.bForceDosBox && m_SrvMapping.cbSize && (m_SrvMapping.Flags & CECF_DosBox))
 				{
 					mn_ImageSubsystem = IMAGE_SUBSYSTEM_DOS_EXECUTABLE;
 					mn_ImageBits = 16;
@@ -1779,7 +1815,7 @@ int CShellProc::PrepareExecuteParms(
 					))
 			// если это Дос-приложение - то если включен DosBox, вставляем ConEmuC.exe /DOSBOX
 			|| ((mn_ImageBits == 16) && (mn_ImageSubsystem == IMAGE_SUBSYSTEM_DOS_EXECUTABLE)
-				&& m_SrvMapping.cbSize && m_SrvMapping.bDosBox));
+				&& m_SrvMapping.cbSize && (m_SrvMapping.Flags & CECF_DosBox)));
 	}
 
 	if (bGoChangeParm)
@@ -1787,9 +1823,25 @@ int CShellProc::PrepareExecuteParms(
 		if (bDebugWasRequested && gbPrepareDefaultTerminal)
 		{
 			mb_NeedInjects = FALSE;
-			lbChanged = FALSE;
 			// We need to post attach ConEmu GUI to started console
 			mb_DebugWasRequested = TRUE;
+			// Пока что не будем убирать "мелькание" окошка.
+			// На факт "видимости" консольного окна ориентируется ConEmuC
+			// при аттаче. Если окошко НЕ видимое - считаем, что оно было
+			// запущено процессом для служебных целей, и не трогаем его...
+			// -> ConsoleMain.cpp: ParseCommandLine: "if (!ghConWnd || !(lbIsWindowVisible = IsWindowVisible(ghConWnd)) || isTerminalMode())"
+			#if 0
+			// Remove flickering?
+			if (anShowCmd)
+			{
+				*anShowCmd = SW_HIDE;
+				lbChanged = TRUE;
+			}
+			else
+			#endif
+			{
+				lbChanged = FALSE;
+			}
 			goto wrap;
 		}
 
@@ -2218,8 +2270,15 @@ BOOL CShellProc::OnCreateProcessW(LPCWSTR* asFile, LPCWSTR* asCmdLine, LPCWSTR* 
 	{
 		if (gbPrepareDefaultTerminal)
 		{
-			// ConEmu itself must starts normally?
-			lpSI->wShowWindow = SW_SHOWNORMAL;
+			if (mb_DebugWasRequested)
+			{
+				lpSI->wShowWindow = nShowCmd; // this is SW_HIDE, disable flickering
+				lbRc = FALSE; // Stop other changes?
+			}
+			else
+			{
+				lpSI->wShowWindow = SW_SHOWNORMAL; // ConEmu itself must starts normally?
+			}
 			lpSI->dwFlags |= STARTF_USESHOWWINDOW;
 		}
 		else if (lpSI->wShowWindow != nShowCmd)
@@ -2229,7 +2288,10 @@ BOOL CShellProc::OnCreateProcessW(LPCWSTR* asFile, LPCWSTR* asCmdLine, LPCWSTR* 
 				lpSI->dwFlags |= STARTF_USESHOWWINDOW;
 		}
 
-		*asFile = mpwsz_TempRetFile;
+		if (lbRc)
+		{
+			*asFile = mpwsz_TempRetFile;
+		}
 	}
 
 	if (lbRc || mpwsz_TempRetParam)
@@ -2293,10 +2355,11 @@ void CShellProc::OnCreateProcessFinished(BOOL abSucceeded, PROCESS_INFORMATION *
 				wchar_t* pszCmdLine = (wchar_t*)malloc(cchMax*sizeof(*pszCmdLine));
 				if (pszCmdLine)
 				{
-					msprintf(pszCmdLine, cchMax, L"\"%s\\%s\" /ATTACH /CONPID=%u", m_SrvMapping.sConEmuBaseDir, WIN3264TEST(L"ConEmuC.exe",L"ConEmuC64.exe"), lpPI->dwProcessId);
+					_ASSERTEX(m_SrvMapping.ComSpec.ConEmuBaseDir[0]!=0);
+					msprintf(pszCmdLine, cchMax, L"\"%s\\%s\" /ATTACH /CONPID=%u", m_SrvMapping.ComSpec.ConEmuBaseDir, WIN3264TEST(L"ConEmuC.exe",L"ConEmuC64.exe"), lpPI->dwProcessId);
 					STARTUPINFO si = {sizeof(si)};
 					PROCESS_INFORMATION pi = {};
-					bAttachCreated = CreateProcess(NULL, pszCmdLine, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, m_SrvMapping.sConEmuBaseDir, &si, &pi);
+					bAttachCreated = CreateProcess(NULL, pszCmdLine, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, m_SrvMapping.ComSpec.ConEmuBaseDir, &si, &pi);
 					if (bAttachCreated)
 					{
 						CloseHandle(pi.hProcess);

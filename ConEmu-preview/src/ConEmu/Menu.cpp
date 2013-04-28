@@ -1169,18 +1169,24 @@ void CConEmuMenu::ShowSysmenu(int x, int y, bool bAlignUp /*= false*/)
 		mn_SysMenuCloseTick = 0;
 	}
 
-	if (Icon.isWindowInTray())
+	if (Icon.isWindowInTray() && gpConEmu->isIconic())
 	{
 		_ASSERTE(!gpConEmu->mp_Inside);
 
 		switch (command)
 		{
-			case SC_RESTORE:
-			case SC_MOVE:
-			case SC_SIZE:
-			case SC_MINIMIZE:
-			case SC_MAXIMIZE:
-				SendMessage(ghWnd, WM_TRAYNOTIFY, 0, WM_LBUTTONDOWN);
+			case SC_CLOSE:
+				break;
+
+			//case SC_RESTORE:
+			//case SC_MOVE:
+			//case SC_SIZE:
+			//case SC_MINIMIZE:
+			//case SC_MAXIMIZE:
+			default:
+				//SendMessage(ghWnd, WM_TRAYNOTIFY, 0, WM_LBUTTONDOWN);
+				//Icon.OnTryIcon(ghWnd, WM_TRAYNOTIFY, 0, WM_LBUTTONDOWN);
+				gpConEmu->OnMinimizeRestore(sih_Show);
 				break;
 		}
 	}
@@ -1206,7 +1212,8 @@ HMENU CConEmuMenu::CreateDebugMenuPopup()
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_SHOWRECTS, _T("Show debug rec&ts"));
 	#ifdef _DEBUG
 	AppendMenu(hDebug, MF_SEPARATOR, 0, NULL);
-	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_TRAP, _T("Raise exception"));
+	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_TRAP, _T("Raise exception (Main thread)"));
+	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_TRAP2, _T("Raise exception (Monitor thread)"));
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_ASSERT, _T("Show assertion"));
 	#endif
 	#ifdef TRACK_MEMORY_ALLOCATIONS
@@ -1359,9 +1366,12 @@ HMENU CConEmuMenu::CreateVConPopupMenu(CVirtualConsole* apVCon, HMENU ahExist, B
 			AppendMenu(hMenu, MF_STRING | MF_ENABLED, ID_NEWCONSOLE, MenuAccel(vkMultiNew,L"New console..."));
 			AppendMenu(hMenu, MF_STRING | MF_ENABLED, IDM_ATTACHTO,  MenuAccel(vkMultiNewAttach,L"Attach to..."));
 		}
+		#if 0
+		// Смысл выносить избранный макро заточенный только под редактор Far?
 		AppendMenu(hMenu, MF_SEPARATOR, 0, L"");
 		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_SAVE,      L"&Save");
 		AppendMenu(hMenu, MF_STRING | MF_ENABLED,     IDM_SAVEALL,   L"Save &all");
+		#endif
 	}
 
 	if (apVCon)
@@ -1473,6 +1483,7 @@ HMENU CConEmuMenu::CreateHelpMenuPopup()
 	}
 	
 	AppendMenu(hHelp, MF_STRING | MF_ENABLED, ID_HOMEPAGE, _T("&Visit home page"));
+	AppendMenu(hHelp, MF_STRING | MF_ENABLED, ID_DONATE_LINK, _T("&Donate (PayPal)"));
 
 	AppendMenu(hHelp, MF_STRING | MF_ENABLED, ID_WHATS_NEW_FILE, _T("Whats &new (local)"));
 	AppendMenu(hHelp, MF_STRING | MF_ENABLED, ID_WHATS_NEW_WWW, _T("Whats new (&web)"));
@@ -1686,6 +1697,13 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		case ID_DEBUG_TRAP:
 			MyAssertTrap();
 			return 0;
+		case ID_DEBUG_TRAP2:
+		{
+			CVConGuard VCon;
+			if ((gpConEmu->GetActiveVCon(&VCon) >= 0) && VCon->RCon())
+				VCon->RCon()->MonitorAssertTrap();
+			return 0;
+		}
 		case ID_DEBUG_ASSERT:
 			Assert(FALSE && "This is test assertion");
 			return 0;
@@ -1739,6 +1757,12 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		case ID_HOTKEYS:
 		{
 			CSettings::Dialog(IDD_SPG_KEYS);
+			return 0;
+		}
+
+		case ID_DONATE_LINK:
+		{
+			gpConEmu->OnInfo_Donate();
 			return 0;
 		}
 
@@ -1928,7 +1952,7 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 				if (gpSet->isQuakeStyle)
 				{
-					gpConEmu->OnMinimizeRestore(bMin2TSA ? sih_HideTSA : sih_Minimize);
+					gpConEmu->OnMinimizeRestore(sih_AutoHide);
 				}
 				else if (bMin2TSA)
 				{

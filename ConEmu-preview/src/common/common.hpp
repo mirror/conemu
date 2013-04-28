@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _COMMON_HEADER_HPP_
 
 // Версия интерфейса
-#define CESERVER_REQ_VER    123
+#define CESERVER_REQ_VER    125
 
 #include "defines.h"
 #include "ConEmuColors.h"
@@ -77,8 +77,8 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define isConsoleClass(sClass) (lstrcmp(sClass, RealConsoleClass)==0 || lstrcmp(sClass, WineConsoleClass)==0)
 
 
-#define CECOPYRIGHTSTRING_A "(c) 2009-2012, ConEmu.Maximus5@gmail.com"
-#define CECOPYRIGHTSTRING_W L"\x00A9 2009-2012 ConEmu.Maximus5@gmail.com"
+#define CECOPYRIGHTSTRING_A "(c) 2009-2013, ConEmu.Maximus5@gmail.com"
+#define CECOPYRIGHTSTRING_W L"\x00A9 2009-2013 ConEmu.Maximus5@gmail.com"
 
 // EnvVars
 #define ENV_CONEMUDIR_VAR_A  "ConEmuDir"
@@ -102,6 +102,11 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define ENV_CONEMU_HOOKS_DISABLED L"OFF" // This is only significant value
 #define ENV_CONEMU_INUPDATE L"ConEmuInUpdate" // This is set to "YES" during AutoUpdate script execution
 #define ENV_CONEMU_INUPDATE_YES L"YES" // This is set to "YES" during AutoUpdate script execution
+#define ENV_CONEMU_BLOCKCHILDDEBUGGERS L"ConEmuBlockChildDebuggers" // When ConEmuC tries to debug process tree - force disable DEBUG_PROCESS/DEBUG_ONLY_THIS_PROCESS flags when creating subchildren
+#define ENV_CONEMU_BLOCKCHILDDEBUGGERS_YES L"YES"
+#define ENV_CONEMU_MONITOR_INTERNAL L"ConEmuMonitorThreadId" // Used internally
+
+#define CONEMU_CONHOST_CREATED_MSG L"ConEmu: ConHost was created PID=" // L"%u\n"
 
 
 
@@ -921,18 +926,46 @@ enum ComSpecBits
 	csb_Last = csb_x32,
 };
 
+typedef DWORD CEAdd2Path;
+const CEAdd2Path
+	CEAP_AddConEmuBaseDir      = 0x00000001,
+	CEAP_AddConEmuExeDir       = 0x00000002,
+	CEAP_AddAll                = CEAP_AddConEmuBaseDir|CEAP_AddConEmuExeDir,
+	CEAP_None                  = 0;
+
 struct ConEmuComspec
 {
 	ComSpecType  csType;
 	ComSpecBits  csBits;
 	BOOL         isUpdateEnv;
-	BOOL         isAddConEmu2Path;
+	CEAdd2Path   AddConEmu2Path;
 	BOOL         isAllowUncPaths;
 	wchar_t      ComspecExplicit[MAX_PATH]; // этот - хранится в настройке
 	wchar_t      Comspec32[MAX_PATH]; // развернутые, готовые к использованию
 	wchar_t      Comspec64[MAX_PATH]; // развернутые, готовые к использованию
 	wchar_t      ConEmuBaseDir[MAX_PATH]; // БЕЗ завершающего слеша. Папка содержит ConEmuC.exe, ConEmuHk.dll, ConEmu.xml
+	wchar_t      ConEmuExeDir[MAX_PATH]; // БЕЗ завершающего слеша. Папка содержит ConEmu.exe, Far.exe (optional)
 };
+
+
+
+typedef DWORD ConEmuConsoleFlags;
+const ConEmuConsoleFlags
+	CECF_DosBox          = 0x00000001, // DosBox установлен, можно пользоваться
+	CECF_UseTrueColor    = 0x00000002, // включен флажок "TrueMod support"
+	CECF_ProcessAnsi     = 0x00000004, // ANSI X3.64 & XTerm-256-colors Support
+
+	CECF_UseClink_1      = 0x00000008, // использовать расширение командной строки (ReadConsole). 1 - старая версия (0.1.1)
+	CECF_UseClink_2      = 0x00000010, // использовать расширение командной строки (ReadConsole) - 2 - новая версия
+	CECF_UseClink_Any    = CECF_UseClink_1|CECF_UseClink_2,
+
+	CECF_SleepInBackg    = 0x00000020,
+
+	CECF_BlockChildDbg   = 0x00000040, // When ConEmuC tries to debug process tree - force disable DEBUG_PROCESS/DEBUG_ONLY_THIS_PROCESS flags when creating subchildren
+
+	CECF_Empty = 0
+	;
+#define SetConEmuFlags(v,m,f) (v) = ((v) & ~(m)) | (f)
 
 struct ConEmuGuiMapping
 {
@@ -945,19 +978,22 @@ struct ConEmuGuiMapping
 	DWORD    nLoggingType; // enum GuiLoggingType
 	
 	wchar_t  sConEmuExe[MAX_PATH+1]; // полный путь к ConEmu.exe (GUI)
-	wchar_t  sConEmuDir[MAX_PATH+1]; // БЕЗ завершающего слеша. Папка содержит ConEmu.exe
-	wchar_t  sConEmuBaseDir[MAX_PATH+1]; // БЕЗ завершающего слеша. Папка содержит ConEmuC.exe, ConEmuHk.dll, ConEmu.xml
+	// --> ComSpec.ConEmuBaseDir:  wchar_t  sConEmuDir[MAX_PATH+1]; // БЕЗ завершающего слеша. Папка содержит ConEmu.exe
+	// --> ComSpec.ConEmuBaseDir:  wchar_t  sConEmuBaseDir[MAX_PATH+1]; // БЕЗ завершающего слеша. Папка содержит ConEmuC.exe, ConEmuHk.dll, ConEmu.xml
 	wchar_t  sConEmuArgs[MAX_PATH*2];
 
 	wchar_t  sDefaultTermArg[MAX_PATH]; // "/config", параметры для "confirm" и "no-injects"
 	BOOL     bUseDefaultTerminal;
 
 	DWORD    bUseInjects;   // 0-off, 1-on, 3-exe only. Далее могут быть (пока не используется) доп.флаги (битмаск)? chcp, Hook HKCU\FAR[2] & HKLM\FAR and translate them to hive, ...
-	BOOL     bUseTrueColor; // включен флажок "TrueMod support"
-	BOOL     bProcessAnsi;  // ANSI X3.64 & XTerm-256-colors Support
-	DWORD    bUseClink;     // использовать расширение командной строки (ReadConsole). 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
+	
+	ConEmuConsoleFlags Flags;
+	//BOOL     bUseTrueColor; // включен флажок "TrueMod support"
+	//BOOL     bProcessAnsi;  // ANSI X3.64 & XTerm-256-colors Support
+	//DWORD    bUseClink;     // использовать расширение командной строки (ReadConsole). 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
 
-	BOOL     bSleepInBackg; // Sleep in background
+	//BOOL     bSleepInBackg; // Sleep in background
+
 	BOOL     bGuiActive;    // Gui is In focus or Not
 	HWND2    hActiveCon;    // Active Real console HWND
 	DWORD    dwActiveTick;  // Tick, when hActiveCon/bGuiActive was changed
@@ -972,7 +1008,7 @@ struct ConEmuGuiMapping
 	wchar_t sMountKey[MAX_PATH]; // Для Win2k&XP здесь хранится имя ключа, в который загружен hive
 	
 	// DosBox
-	BOOL     bDosBox; // наличие DosBox
+	//BOOL     bDosBox; // наличие DosBox
 	//wchar_t  sDosBoxExe[MAX_PATH+1]; // полный путь к DosBox.exe
 	//wchar_t  sDosBoxEnv[8192]; // команды загрузки (mount, и пр.)
 
@@ -1217,7 +1253,7 @@ struct CESERVER_CONSOLE_MAPPING_HDR
 	DWORD nServerInShutdown; // GetTickCount() начала закрытия сервера
 	//
 	wchar_t  sConEmuExe[MAX_PATH+1]; // полный путь к ConEmu.exe (GUI)
-	wchar_t  sConEmuBaseDir[MAX_PATH+1]; // БЕЗ завершающего слеша. Папка содержит ConEmuC.exe, ConEmuHk.dll, ConEmu.xml
+	// --> ComSpec.ConEmuBaseDir:  wchar_t  sConEmuBaseDir[MAX_PATH+1]; // БЕЗ завершающего слеша. Папка содержит ConEmuC.exe, ConEmuHk.dll, ConEmu.xml
 	//
 	DWORD nAltServerPID;  //
 
@@ -1229,11 +1265,13 @@ struct CESERVER_CONSOLE_MAPPING_HDR
 	HWND2 hConEmuWndBack;
 
 	DWORD nLoggingType;  // enum GuiLoggingType
-	BOOL  bDosBox;       // DosBox установлен, можно пользоваться
 	DWORD bUseInjects;   // 0-off, 1-on, 3-exe only. Далее могут быть доп.флаги (битмаск)? chcp, Hook HKCU\FAR[2] & HKLM\FAR and translate them to hive, ...
-	BOOL  bUseTrueColor; // включен флажок "TrueMod support"
-	BOOL  bProcessAnsi;  // ANSI X3.64 & XTerm-256-colors Support
-	DWORD bUseClink;     // использовать расширение командной строки (ReadConsole). 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
+
+	ConEmuConsoleFlags Flags;
+	//BOOL  bDosBox;       // DosBox установлен, можно пользоваться
+	//BOOL  bUseTrueColor; // включен флажок "TrueMod support"
+	//BOOL  bProcessAnsi;  // ANSI X3.64 & XTerm-256-colors Support
+	//DWORD bUseClink;     // использовать расширение командной строки (ReadConsole). 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
 	
 	// Перехват реестра
 	DWORD   isHookRegistry; // bitmask. 1 - supported, 2 - current
@@ -1340,6 +1378,9 @@ enum SingleInstanceShowHideType
 	sih_SetForeground = 4,
 	sih_HideTSA = 5,
 	sih_Minimize = 6,
+	sih_AutoHide = 7,
+	sih_QuakeShowHide = 8,
+	sih_StartDetached = 9,
 };
 
 struct CESERVER_REQ_NEWCMD // CECMD_NEWCMD

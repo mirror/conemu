@@ -3274,6 +3274,100 @@ BOOL MSectionLock::isLocked(BOOL abExclusiveOnly/*=FALSE*/)
 
 
 #ifndef CONEMU_MINIMAL
+MSectionLockSimple::MSectionLockSimple()
+{
+	mp_S = NULL;
+	mb_Locked = false;
+	#ifdef _DEBUG
+	mn_LockTID = mn_LockTick = 0;
+	#endif
+}
+
+MSectionLockSimple::~MSectionLockSimple()
+{
+	if (mb_Locked)
+	{
+		Unlock();
+	}
+}
+
+BOOL MSectionLockSimple::Lock(CRITICAL_SECTION* apS, DWORD anTimeout/*=-1*/)
+{
+	if (mb_Locked && (mp_S != apS))
+		Unlock();
+
+	mp_S = apS;
+
+	if (!mp_S)
+	{
+		_ASSERTEX(apS);
+		return FALSE;
+	}
+
+	_ASSERTEX(!mb_Locked);
+	
+	bool bLocked = false;
+	DWORD nStartTick = GetTickCount();
+	DWORD nDelta;
+#if 0
+	EnterCriticalSection(apS);
+
+	bLocked = mb_Locked = true;
+
+	nDelta = GetTickCount() - nStartTick;
+	if (nDelta >= anTimeout)
+	{
+		_ASSERTEX(FALSE && "Failed to lock CriticalSection, timeout");
+	}
+#else
+	while (true)
+	{
+		if (TryEnterCriticalSection(apS))
+		{
+			bLocked = mb_Locked = true;
+			#ifdef _DEBUG
+			mn_LockTID = GetCurrentThreadId();
+			mn_LockTick = GetTickCount();
+			#endif
+			break;
+		}
+
+		if (anTimeout != (DWORD)-1)
+		{
+			nDelta = GetTickCount() - nStartTick;
+			if (nDelta >= anTimeout)
+			{
+				_ASSERTEX(FALSE && "Failed to lock CriticalSection, timeout");
+				break;
+			}
+		}
+
+		Sleep(1);
+	}
+#endif
+
+	return bLocked;
+}
+
+void MSectionLockSimple::Unlock()
+{
+	if (mb_Locked)
+	{
+		if (mp_S)
+			LeaveCriticalSection(mp_S);
+		mb_Locked = false;
+	}
+}
+
+BOOL MSectionLockSimple::isLocked()
+{
+	return mb_Locked;
+}
+#endif
+
+
+
+#ifndef CONEMU_MINIMAL
 MFileLog::MFileLog(LPCWSTR asName, LPCWSTR asDir /*= NULL*/, DWORD anPID /*= 0*/)
 {
 	mh_LogFile = NULL;
@@ -3337,7 +3431,7 @@ void MFileLog::CloseLogFile()
 	SafeFree(ms_FileName);
 }
 // Returns 0 if succeeded, otherwise - GetLastError() code
-HRESULT MFileLog::CreateLogFile(LPCWSTR asName /*= NULL*/, DWORD anPID /*= 0*/)
+HRESULT MFileLog::CreateLogFile(LPCWSTR asName /*= NULL*/, DWORD anPID /*= 0*/, DWORD anLevel /*= 0*/)
 {
 	if (!this)
 		return -1;
@@ -3366,7 +3460,10 @@ HRESULT MFileLog::CreateLogFile(LPCWSTR asName /*= NULL*/, DWORD anPID /*= 0*/)
 	DWORD dwErr = (DWORD)-1;
 
 	wchar_t szVer[2] = {MVV_4a[0],0}, szConEmu[64];
-	_wsprintf(szConEmu, SKIPLEN(countof(szConEmu)) L"ConEmu %u%02u%02u%s[%s] log", MVV_1,MVV_2,MVV_3,szVer,WIN3264TEST(L"32",L"64"));
+	wchar_t szLevel[16] = L"";
+	if (anLevel > 0)
+		_wsprintf(szLevel, SKIPLEN(countof(szLevel)) L"[%u]", anLevel);
+	_wsprintf(szConEmu, SKIPLEN(countof(szConEmu)) L"ConEmu %u%02u%02u%s[%s] log%s", MVV_1,MVV_2,MVV_3,szVer,WIN3264TEST(L"32",L"64"),szLevel);
 
 	if (!ms_FilePathName)
 	{
@@ -3628,13 +3725,16 @@ void MFileLog::LogStartEnv(CEStartupEnv* apStartEnv)
 	if (!*pszReactOS)
 		pszReactOS++;
 
+	HWND hConWnd = GetConsoleWindow();
+
 	//wchar_t cVer = MVV_4a[0];
 	_wsprintf(szSI, SKIPLEN(countof(szSI)) L"Startup info\r\n"
 		L"\tOsVer: %u.%u.%u.x%u, Product: %u, SP: %u.%u, Suite: 0x%X, SM_SERVERR2: %u\r\n"
 		L"\tCSDVersion: %s, ReactOS: %u (%s), Rsrv: %u\r\n"
 		L"\tDBCS: %u, WINE: %u, ACP: %u, OEMCP: %u\r\n"
 		L"\tDesktop: %s\r\n\tTitle: %s\r\n\tSize: {%u,%u},{%u,%u}\r\n"
-		L"\tFlags: 0x%08X, ShowWindow: %u\r\n\tHandles: 0x%08X, 0x%08X, 0x%08X"
+		L"\tFlags: 0x%08X, ShowWindow: %u, ConHWnd: 0x%08X\r\n"
+		L"\tHandles: 0x%08X, 0x%08X, 0x%08X"
 		,
 		osv.dwMajorVersion, osv.dwMinorVersion, osv.dwBuildNumber, bWin64 ? 64 : 32,
 		osv.wProductType, osv.wServicePackMajor, osv.wServicePackMinor, osv.wSuiteMask, GetSystemMetrics(89/*SM_SERVERR2*/),
@@ -3643,10 +3743,53 @@ void MFileLog::LogStartEnv(CEStartupEnv* apStartEnv)
 		apStartEnv->nAnsiCP, apStartEnv->nOEMCP,
 		szDesktop, szTitle,
 		apStartEnv->si.dwX, apStartEnv->si.dwY, apStartEnv->si.dwXSize, apStartEnv->si.dwYSize,
-		apStartEnv->si.dwFlags, (DWORD)apStartEnv->si.wShowWindow,
+		apStartEnv->si.dwFlags, (DWORD)apStartEnv->si.wShowWindow, (DWORD)hConWnd,
 		(DWORD)apStartEnv->si.hStdInput, (DWORD)apStartEnv->si.hStdOutput, (DWORD)apStartEnv->si.hStdError
 		);
 	LogString(szSI, true);
+
+	if (hConWnd)
+	{
+		szSI[0] = 0;
+		HMODULE hKernel = GetModuleHandleW(L"kernel32.dll");
+		typedef BOOL (__stdcall *FGetConsoleKeyboardLayoutName)(wchar_t*);
+		FGetConsoleKeyboardLayoutName pfnGetConsoleKeyboardLayoutName = hKernel ? (FGetConsoleKeyboardLayoutName)GetProcAddress(hKernel, "GetConsoleKeyboardLayoutNameW") : NULL;
+		if (pfnGetConsoleKeyboardLayoutName)
+		{
+			ZeroStruct(szTitle);
+			if (pfnGetConsoleKeyboardLayoutName(szTitle))
+				_wsprintf(szSI, SKIPLEN(countof(szSI)) L"Active console layout name: '%s'", szTitle);
+		}
+		if (!*szSI)
+			_wsprintf(szSI, SKIPLEN(countof(szSI)) L"Active console layout: Unknown, code=%u", GetLastError());
+		LogString(szSI, false);
+	}
+
+	// Текущий HKL (он может отличаться от GetConsoleKeyboardLayoutNameW
+	HKL hkl[32] = {NULL};
+	hkl[0] = GetKeyboardLayout(0);
+	_wsprintf(szSI, SKIPLEN(countof(szSI)) L"Active HKL: " WIN3264TEST(L"0x%08X",L"0x%08X%08X"), WIN3264WSPRINT((DWORD_PTR)hkl[0]));
+	LogString(szSI, false);
+	// Установленные в системе HKL
+	UINT nHkl = GetKeyboardLayoutList(countof(hkl), hkl);
+	if (!nHkl || (nHkl > countof(hkl)))
+	{
+		_wsprintf(szSI, SKIPLEN(countof(szSI)) L"GetKeyboardLayoutList failed, code=%u", GetLastError());
+		LogString(szSI, false);
+	}
+	else
+	{
+		wcscpy_c(szSI, L"GetKeyboardLayoutList:");
+		size_t iLen = lstrlen(szSI);
+		_ASSERTE((iLen + 1 + nHkl*17)<countof(szSI));
+
+		for (UINT i = 0; i < nHkl; i++)
+		{
+			_wsprintf(szSI+iLen, SKIPLEN(18) WIN3264TEST(L" 0x%08X",L" 0x%08X%08X"), WIN3264WSPRINT((DWORD_PTR)hkl[i]));
+			iLen += lstrlen(szSI+iLen);
+		}
+		LogString(szSI, false);
+	}
 	
 	LogString("CmdLine: ", false, NULL, false);
 	LogString(apStartEnv->pszCmdLine ? apStartEnv->pszCmdLine : L"<NULL>", false, NULL, true);
@@ -3658,6 +3801,27 @@ void MFileLog::LogStartEnv(CEStartupEnv* apStartEnv)
 	LogString(apStartEnv->pszPathEnv ? apStartEnv->pszPathEnv : L"<NULL>", false, NULL, true);
 	LogString("ConFont: ", false, NULL, false);
 	LogString(apStartEnv->pszRegConFonts ? apStartEnv->pszRegConFonts : L"<NULL>", false, NULL, true);
+
+	// szSI уже не используется, можно
+	LogString("Modules:", false, NULL, true);
+	HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+	MODULEENTRY32W mi = {sizeof(mi)};
+	if (h && (h != INVALID_HANDLE_VALUE))
+	{
+		if (Module32First(h, &mi))
+		{
+			do
+			{
+				DWORD_PTR ptrStart = (DWORD_PTR)mi.modBaseAddr;
+				DWORD_PTR ptrEnd = (DWORD_PTR)mi.modBaseAddr + (DWORD_PTR)(mi.modBaseSize ? (mi.modBaseSize-1) : 0);
+				_wsprintf(szSI, SKIPLEN(countof(szSI))
+					L"  " WIN3264TEST(L"%08X-%08X",L"%08X%08X-%08X%08X") L" %8X %s",
+					WIN3264WSPRINT(ptrStart), WIN3264WSPRINT(ptrEnd), mi.modBaseSize, mi.szExePath);
+				LogString(szSI, false, NULL, true);
+			} while (Module32Next(h, &mi));
+		}
+		CloseHandle(h);
+	}
 }
 #endif
 
@@ -4077,7 +4241,57 @@ void FindComspec(ConEmuComspec* pOpt)
 		GetComspecFromEnvVar(pOpt->Comspec64, countof(pOpt->Comspec64), csb_x64);
 }
 
-void UpdateComspec(ConEmuComspec* pOpt)
+wchar_t* GetEnvVar(LPCWSTR VarName, DWORD cchDefaultMax /*= 2000*/)
+{
+	if (!VarName || !*VarName)
+	{
+		return NULL;
+	}
+
+	_ASSERTE(cchDefaultMax >= MAX_PATH);
+
+	DWORD cchMax = cchDefaultMax, nRc, nErr;
+	wchar_t* pszVal = (wchar_t*)malloc(cchMax*sizeof(*pszVal));
+	if (!pszVal)
+	{
+		_ASSERTE((pszVal!=NULL) && "GetEnvVar memory allocation failed");
+		return NULL;
+	}
+
+	nRc = GetEnvironmentVariable(VarName, pszVal, cchMax);
+	if (nRc == 0)
+	{
+		// Weird. This may be empty variable or not existing variable
+		nErr = GetLastError();
+		if (nErr == ERROR_ENVVAR_NOT_FOUND)
+			SafeFree(pszVal);
+		return pszVal;
+	}
+
+	// If buffer is not large enough to hold the data, the return value is the buffer size,
+	// in characters, required to hold the string and its terminating null character.
+	if (nRc >= cchMax)
+	{
+		cchMax = nRc+1;
+		pszVal = (wchar_t*)realloc(pszVal, cchMax*sizeof(*pszVal));
+		if (!pszVal)
+		{
+			_ASSERTE((pszVal!=NULL) && "GetEnvVar memory reallocation failed");
+			return NULL;
+		}
+
+		nRc = GetEnvironmentVariable(VarName, pszVal, cchMax);
+		if ((nRc == 0) || (nRc >= cchMax))
+		{
+			_ASSERTE(nRc > 0 && nRc < cchMax);
+			SafeFree(pszVal);
+		}
+	}
+
+	return pszVal;
+}
+
+void UpdateComspec(ConEmuComspec* pOpt, bool DontModifyPath /*= false*/)
 {
 	if (!pOpt)
 	{
@@ -4128,47 +4342,124 @@ void UpdateComspec(ConEmuComspec* pOpt)
 		}
 	}
 
-	if (pOpt->isAddConEmu2Path)
+	if (pOpt->AddConEmu2Path && !DontModifyPath)
 	{
-		if (pOpt->ConEmuBaseDir[0] == 0)
+		if ((pOpt->ConEmuBaseDir[0] == 0) || (pOpt->ConEmuExeDir[0] == 0))
 		{
 			_ASSERTE(pOpt->ConEmuBaseDir[0] != 0);
+			_ASSERTE(pOpt->ConEmuExeDir[0] != 0);
 		}
 		else
 		{
-			DWORD cchMax = 32767;
-			wchar_t* pszCur = (wchar_t*)malloc(cchMax*sizeof(*pszCur));
-			wchar_t* pszUpr = (wchar_t*)malloc(cchMax*sizeof(*pszCur));
-			wchar_t* pszDirUpr = (wchar_t*)malloc(MAX_PATH*sizeof(*pszCur));
+			wchar_t* pszCur = GetEnvVar(L"PATH");
 
-			if (pszCur && pszUpr && pszDirUpr)
+			if (!pszCur || !*pszCur)
 			{
-				DWORD n = GetEnvironmentVariable(L"PATH", pszCur, cchMax);
-				if (n < cchMax)
+				// Not existing or empty, just add
+				SafeFree(pszCur);
+				
+				// ConEmuC.exe is near to ConEmu.exe?
+				if (lstrcmp(pOpt->ConEmuBaseDir, pOpt->ConEmuExeDir) == 0)
 				{
-					if (!n)
-						*pszCur = 0;
-					lstrcpyn(pszUpr, pszCur, cchMax);
-					if (n)
-						CharUpperBuff(pszUpr, n);
-					lstrcpyn(pszDirUpr, pOpt->ConEmuBaseDir, MAX_PATH);
-					CharUpperBuff(pszDirUpr, lstrlen(pszDirUpr));
-					int nDirLen = lstrlen(pszDirUpr);
-					LPCWSTR pszFind = wcsstr(pszUpr, pszDirUpr);
-					if (!(pszFind && (pszFind[nDirLen] == L';' || pszFind[nDirLen] == 0))
-						&& ((n + nDirLen + 1) < cchMax))
-					{
-						lstrcpy(pszUpr, pOpt->ConEmuBaseDir);
-						lstrcat(pszUpr, L";");
-						lstrcat(pszUpr, pszCur);
-						SetEnvironmentVariable(L"PATH", pszUpr);
-					}
+					SetEnvironmentVariable(L"PATH", pOpt->ConEmuBaseDir);
+				}
+				else
+				{
+					pszCur = lstrmerge(pOpt->ConEmuBaseDir, L";", pOpt->ConEmuExeDir, L";");
+					_ASSERTE(pszCur && *pszCur);
+					SetEnvironmentVariable(L"PATH", pszCur);
 				}
 			}
+			else
+			{
+				DWORD n = lstrlen(pszCur);
+				wchar_t* pszUpr = lstrdup(pszCur);
+				wchar_t* pszDirUpr = (wchar_t*)malloc(MAX_PATH*sizeof(*pszCur));
 
+				MCHKHEAP;
+
+				if (!pszUpr || !pszDirUpr)
+				{
+					_ASSERTE(pszUpr && pszDirUpr);
+				}
+				else
+				{
+					bool bChanged = false;
+					wchar_t* pszAdd = NULL;
+
+					CharUpperBuff(pszUpr, n);
+
+					for (int i = 0; i <= 1; i++)
+					{
+						switch (i)
+						{
+						case 0:
+							if (!(pOpt->AddConEmu2Path & CEAP_AddConEmuExeDir))
+								continue;
+							pszAdd = pOpt->ConEmuExeDir;
+							break;
+						case 1:
+							if (!(pOpt->AddConEmu2Path & CEAP_AddConEmuBaseDir))
+								continue;
+							if (lstrcmp(pOpt->ConEmuExeDir, pOpt->ConEmuBaseDir) == 0)
+								continue; // второй раз ту же директорию не добавляем
+							pszAdd = pOpt->ConEmuBaseDir;
+							break;
+						}
+
+						int nDirLen = lstrlen(pszAdd);
+						lstrcpyn(pszDirUpr, pszAdd, MAX_PATH);
+						CharUpperBuff(pszDirUpr, nDirLen);
+
+						MCHKHEAP;
+
+						// Need to find exact match!
+						bool bFound = false;
+						
+						LPCWSTR pszFind = wcsstr(pszUpr, pszDirUpr);
+						while (pszFind)
+						{
+							if (pszFind[nDirLen] == L';' || pszFind[nDirLen] == 0)
+							{
+								// OK, found
+								bFound = true;
+								break;
+							}
+							// Next try (may be partial match of subdirs...)
+							pszFind = wcsstr(pszFind+nDirLen, pszDirUpr);
+						}
+
+						if (!bFound)
+						{
+							wchar_t* pszNew = lstrmerge(pszAdd, L";", pszCur);
+							if (!pszNew)
+							{
+								_ASSERTE(pszNew && "Failed to reallocate PATH variable");
+								break;
+							}
+							MCHKHEAP;
+							SafeFree(pszCur);
+							pszCur = pszNew;
+							bChanged = true; // Set flag, check next dir
+						}
+					}
+
+					MCHKHEAP;
+
+					if (bChanged)
+					{
+						SetEnvironmentVariable(L"PATH", pszCur);
+					}
+				}
+
+				MCHKHEAP;
+				
+				SafeFree(pszUpr);
+				SafeFree(pszDirUpr);
+
+				MCHKHEAP;
+			}
 			SafeFree(pszCur);
-			SafeFree(pszUpr);
-			SafeFree(pszDirUpr);
 		}
 	}
 }

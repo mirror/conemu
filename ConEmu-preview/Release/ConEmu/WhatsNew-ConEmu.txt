@@ -3,6 +3,10 @@ English: http://code.google.com/p/conemu-maximus5/wiki/Whats_New?wl=en
 Russian: http://code.google.com/p/conemu-maximus5/wiki/Whats_New?wl=ru
 SVN: http://conemu-maximus5.googlecode.com/svn/trunk/ConEmu/Release/ConEmu/WhatsNew-ConEmu.txt
 
+You can show your appreciation and support future development by donating.
+Donate (PayPal) button located on project website under ConEmu sketch (upper right of page)
+http://code.google.com/p/conemu-maximus5
+
 Please, vote for ConEmu
 http://code.google.com/p/conemu-maximus5/wiki/Awards
 
@@ -11,8 +15,100 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 *****************
 
 
-2013.02.24
+2013.04.27
+[%] Issue 1035, 1050: Keyboard layouts once more.
+[%] Issue 1047: Assertion on start file dragging.
+[%] Issue 1052: New option «Show balloon help tooltips» on «Appearance» page.
+
+
+2013.04.25
+[%] Issue 1040: Resize Far 3 panels macro error.
+[%] Issue 1035: Assertion on startup with some keyboard layouts (again).
+
+
+2013.04.22
+[%] Issue 1035: Assertion on startup with some keyboard layouts.
+
+
+2013.04.21
+[!] Option «Inject ConEmuHk» is enabled by default (for new configurations).
+[*] Some more internal logging.
+[*] Three-level autoupdate: Stable, Preview, Developer.
+[%] Issue 944: With some keyboard layouts ConEmu starting may cause loading "fantom" language.
+[%] Options «Focus in child windows» was ignored when activating ConEmu.
+
+
+2013.04.11
+[!] Quit on close once again... If no opened consoles and cross clicking - ConEmu will terminates.
+[%] Issue 1014: «Extend Fonts» feature does not work (was locked to far.exe only).
+[%] Issue 1011: Typo in installer.
+[*] Some more logging on keyboard input.
+[*] Allow to set tab templates without "%s" and "%n".
+[%] Far 3 (Lua) macro fails: Plugin.Call("bd454d48-448e-46cc-909d-b6cf789c2d65",1).
+[%] Issue 1020: Far 3 build 3277 supported.
+
+
+2013.04.01
+[%] Some more internal diagnostics.
+[%] Issue 1000: Gestures was not working on Windows x64.
+[%] Issue 1003: ConEmu autorun command processor disables testing movie in flash.
+
+
+2013.03.20
+[%] Issue 998: Default terminal may fails with error code 31 when starting debugging session in VS.
+
+
+2013.03.19
+[%] Issue 924: ConHost.exe crashed when maximizing.
+[%] Issue 974: "Leave ConEmu opened" blocks autoupdate.
+[%] Issue 990: Regression. ANSI processor was not initialized properly.
+[%] Issue 994: Regression. Clink loading failed.
+
+
+2013.03.18
+[+] Issue 984: Option "Add %ConEmuDir% to %PATH%" on ComSpec page. Turned ON by default.
+[+] Issue 915: Closing options redesigned. Taskbar page, checkboxes
+    Close ConEmu with last tab
+    Quit on close (e.g. caption bar cross clicking)
+    Minimize on closing last tab
+    Hide to the TSA
+[!] Some changes in console handling.
+[%] Failed to disable "Use clink in prompt" in active session (ConEmu restart was needed).
+
+
+2013.03.14
+[%] Issue 858: Drop files to Far panels failed second time.
+[*] Some internal changes.
+
+
+2013.03.13
+[%] Scrollbar was not appears/works when mouse was over padding on right edge.
+[+] Updated debug switch: "ConEmuC /debugtree <command_line>".
+[%] Flickering when starting Quake mode in TSA.
+[%] Drawing artefacts in the Status bar when resizing window.
+[%] Issue 969: Disabling "Multiple consoles in one ConEmu window" has no effect for "Default terminal".
+[*] The continue of "/debugtree".
+
+
+2013.03.04
+[%] Regression: GUI applications attach failed.
+[%] Issue 971: Sending dead chars to child GUI applications.
+[%] Issue 972: Regression: Duplicate root failed.
+
+
+2013.02.28
+[%] Issue 964: Duplicate Root shows an assert.
+[%] Issue 965: Regression: stored fixed position for normal mode was ignored.
+[+] Settings->Info: showing "conhost.exe" in processes list for Windows 8 and higher.
+[+] New debug switch: "ConEmuC /debugtree <command_line>".
+
+
+2013.02.27
 [%] Win8: Resize bugfix.
+[%] Issue 592: Quake-style autohide when clicking on taskbar.
+[%] Issue 888: Fixing MinTTY bug.
+[%] Issue 960: Sometimes ConEmu crashes while attaching external console (in progress).
+[%] Crash on GuiMacro WindowMaximize().
 
 
 2013.02.23

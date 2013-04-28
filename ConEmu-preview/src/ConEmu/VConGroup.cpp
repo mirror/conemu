@@ -1396,6 +1396,34 @@ bool CVConGroup::isConSelectMode()
 	return false;
 }
 
+bool CVConGroup::isInCreateRoot()
+{
+	CVConGuard VCon;
+	for (size_t i = 0; i < countof(gp_VCon); i++)
+	{
+		if (VCon.Attach(gp_VCon[i]))
+		{
+			if (VCon->RCon()->InCreateRoot())
+				return true;
+		}
+	}
+	return false;
+}
+
+bool CVConGroup::isDetached()
+{
+	CVConGuard VCon;
+	for (size_t i = 0; i < countof(gp_VCon); i++)
+	{
+		if (VCon.Attach(gp_VCon[i]))
+		{
+			if (VCon->RCon()->isDetached())
+				return true;
+		}
+	}
+	return false;
+}
+
 bool CVConGroup::isFilePanel(bool abPluginAllowed/*=false*/)
 {
 	if (!gp_VActive) return false;
@@ -1558,6 +1586,22 @@ bool CVConGroup::isPictureView()
 	return lbRc;
 }
 
+void CVConGroup::OnRConTimerCheck()
+{
+	CVConGuard VCon;
+	CRealConsole* pRCon;
+
+	for (size_t i = 0; i < countof(gp_VCon); i++)
+	{
+		if (!VCon.Attach(gp_VCon[i]))
+			continue;
+		pRCon = VCon->RCon();
+		if (!pRCon)
+			continue;
+		pRCon->OnTimerCheck();
+	}
+}
+
 // nIdx - 0 based
 bool CVConGroup::GetVCon(int nIdx, CVConGuard* pVCon /*= NULL*/)
 {
@@ -1592,9 +1636,11 @@ bool CVConGroup::GetVConFromPoint(POINT ptScreen, CVConGuard* pVCon /*= NULL*/)
 		{
 			
 			HWND hView = VCon->GetView();
-			if (hView)
+			HWND hBack = VCon->GetBack();
+			if (hView && hBack)
 			{
-				RECT rcView; GetWindowRect(hView, &rcView);
+				// Check hBack, because it is larger and ScrollBar may lie outside of hView
+				RECT rcView; GetWindowRect(hBack, &rcView);
 
 				if (PtInRect(&rcView, ptScreen))
 				{
@@ -1606,7 +1652,7 @@ bool CVConGroup::GetVConFromPoint(POINT ptScreen, CVConGuard* pVCon /*= NULL*/)
 			}
 			else
 			{
-				_ASSERTE(FALSE && "(hView = VCon->GetView()) != NULL");
+				_ASSERTE((hView && hBack) && "(hView = VCon->GetView()) != NULL");
 			}
 		}
 	}
@@ -1626,7 +1672,7 @@ bool CVConGroup::GetVConFromPoint(POINT ptScreen, CVConGuard* pVCon /*= NULL*/)
 //	return false;
 //}
 
-bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/, bool* rbCloseGuiConfirmed /*= NULL*/)
+bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/)
 {
 	int nEditors = 0, nProgress = 0, i, nConsoles = 0;
 	if (rbMsgConfirmed)
@@ -1726,16 +1772,11 @@ bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /
 		}
 		else if ((nBtn != IDYES) && (nBtn != IDOK))
 		{
-			if (rbCloseGuiConfirmed)
-				*rbCloseGuiConfirmed = false;
 			return false; // не закрывать
 		}
 
 		if (rbMsgConfirmed)
 			*rbMsgConfirmed = true;
-
-		if (rbCloseGuiConfirmed)
-			*rbCloseGuiConfirmed = true;
 	}
 
 	return true; // можно
@@ -1743,12 +1784,22 @@ bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /
 
 bool CVConGroup::OnCloseQuery(bool* rbMsgConfirmed /*= NULL*/)
 {
-	if (!CloseQuery(NULL, rbMsgConfirmed, &gpConEmu->mb_CloseGuiConfirmed))
+	if (!CloseQuery(NULL, rbMsgConfirmed))
+	{
+		gpConEmu->LogString(L"CloseQuery blocks closing");
+		gpConEmu->SetScClosePending(false);
 		return false;
+	}
+
+	// Выставить флажок, чтобы ConEmu знал: "закрытие инициировано пользователем через крестик/меню"
+	gpConEmu->SetScClosePending(true);
 
 	#ifdef _DEBUG
 	if (gbInMyAssertTrap)
+	{
+		gpConEmu->LogString(L"CloseQuery skipped due to gbInMyAssertTrap");
 		return false;
+	}
 	#endif
 
 	// Чтобы мог сработать таймер закрытия
@@ -1865,9 +1916,10 @@ void CVConGroup::OnUpdateGuiInfoMapping(ConEmuGuiMapping* apGuiInfo)
 {
 	for (size_t i = 0; i < countof(gp_VCon); i++)
 	{
-		if (gp_VCon[i] && gp_VCon[i]->RCon())
+		CVConGuard VCon;
+		if (VCon.Attach(gp_VCon[i]) && VCon->RCon())
 		{
-			gp_VCon[i]->RCon()->UpdateGuiInfoMapping(apGuiInfo);
+			VCon->RCon()->UpdateGuiInfoMapping(apGuiInfo);
 		}
 	}
 }
@@ -1885,10 +1937,28 @@ void CVConGroup::OnPanelViewSettingsChanged()
 
 void CVConGroup::OnTaskbarSettingsChanged()
 {
+	CVConGuard VCon;
 	for (size_t i = 0; i < countof(gp_VCon); i++)
 	{
-		if (gp_VCon[i])
-			gp_VCon[i]->OnTaskbarSettingsChanged();
+		if (VCon.Attach(gp_VCon[i]))
+			VCon->OnTaskbarSettingsChanged();
+	}
+}
+
+void CVConGroup::OnTaskbarCreated()
+{
+	CVConGuard VCon;
+	HWND hGhost = NULL;
+	for (size_t i = 0; i < countof(gp_VCon); i++)
+	{
+		if (VCon.Attach(gp_VCon[i]))
+		{
+			hGhost = VCon->GhostWnd();
+			if (hGhost)
+			{
+				gpConEmu->OnGhostCreated(VCon.VCon(), hGhost);
+			}
+		}
 	}
 }
 
@@ -1915,12 +1985,16 @@ bool CVConGroup::isConsolePID(DWORD nPID)
 	return lbPidFound;
 }
 
+// returns true if gpConEmu->Destroy() was called
 bool CVConGroup::OnScClose()
 {
+	gpConEmu->LogString(L"CVConGroup::OnScClose()");
+
 	bool lbAllowed = false;
 	int nConCount = 0, nDetachedCount = 0;
 	bool lbProceed = false, lbMsgConfirmed = false;
 
+	// lbMsgConfirmed - был ли показан диалог подтверждения, или юзер не включил эту опцию
 	if (!OnCloseQuery(&lbMsgConfirmed))
 		return false; // не закрывать
 
@@ -1972,11 +2046,17 @@ bool CVConGroup::OnScClose()
 		}
 	}
 
-	// Если просили НЕ закрывать ConEmu при закрытии последнего таба - закрыть окно вообще нельзя
-	if (lbAllowed && gpSet->isMultiLeaveOnClose && !nConCount && !nDetachedCount)
+	bool bEmpty = (!nConCount && !nDetachedCount);
+
+	// Закрыть окно, если просили
+	if (lbAllowed && bEmpty && gpConEmu->isDestroyOnClose(bEmpty))
 	{
 		// Поэтому проверяем, и если никого не осталось, то по крестику - прибиваемся
 		gpConEmu->Destroy();
+	}
+	else
+	{
+		lbAllowed = false;
 	}
 
 	return lbAllowed;
@@ -1996,7 +2076,7 @@ void CVConGroup::CloseGroup(CVirtualConsole* apVCon/*may be null*/)
 	int nCount = pActiveGroup->GetGroupPanes(Panes);
 	if (nCount > 0)
 	{
-		if (CloseQuery(&Panes, NULL, NULL))
+		if (CloseQuery(&Panes, NULL))
 		{
 			for (int i = (nCount - 1); i >= 0; i--)
 			{
@@ -2207,7 +2287,7 @@ void CVConGroup::OnUpdateProcessDisplay(HWND hInfo)
 }
 
 // Возвращает HWND окна отрисовки
-HWND CVConGroup::DoSrvCreated(DWORD nServerPID, HWND hWndCon, DWORD dwKeybLayout, DWORD& t1, DWORD& t2, DWORD& t3, int& iFound, HWND& hWndBack)
+HWND CVConGroup::DoSrvCreated(const DWORD nServerPID, const HWND hWndCon, const DWORD dwKeybLayout, DWORD& t1, DWORD& t2, DWORD& t3, int& iFound, HWND& hWndBack)
 {
 	HWND hWndDC = NULL;
 
@@ -2343,12 +2423,29 @@ int CVConGroup::GetConCount(bool bNoDetached /*= false*/)
 
 BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pStartStop, CESERVER_REQ_STARTSTOPRET* pRet)
 {
-	CVirtualConsole* pVCon = NULL;
-	CRealConsole* pRCon = NULL;
+	//CVirtualConsole* pVCon = NULL;
+	CVConGuard VCon;
+	bool bFound = false;
 	_ASSERTE(pStartStop->dwPID!=0);
 
+	if (gpSetCls->isAdvLogging)
+	{
+		size_t cchAll = 255 + _tcslen(pStartStop->sCmdLine) + _tcslen(pStartStop->sModuleName);
+		wchar_t* pszLog = (wchar_t*)malloc(cchAll*sizeof(*pszLog));
+		_wsprintf(pszLog, SKIPLEN(cchAll)
+			L"Attach requested. HWND=x%08X, AID=%u, PID=%u, Sys=%u, Bit=%u, Adm=%u, Hkl=x%08X, Wnd={%u-%u}, Buf={%u-%u}, Max={%u-%u}, Cmd=%s",
+			(DWORD)(DWORD_PTR)pStartStop->hWnd, pStartStop->dwAID, pStartStop->dwPID,
+			pStartStop->nSubSystem, pStartStop->nImageBits, pStartStop->bUserIsAdmin, pStartStop->dwKeybLayout,
+			pStartStop->sbi.srWindow.Right-pStartStop->sbi.srWindow.Left+1, pStartStop->sbi.srWindow.Bottom-pStartStop->sbi.srWindow.Top+1,
+			pStartStop->sbi.dwSize.X, pStartStop->sbi.dwSize.Y,
+			pStartStop->crMaxSize.X, pStartStop->crMaxSize.Y,
+			pStartStop->sCmdLine[0] ? pStartStop->sCmdLine : pStartStop->sModuleName);
+		gpConEmu->LogString(pszLog);
+		free(pszLog);
+	}
+
 	// Может быть какой-то VCon ждет аттача?
-	if (!pVCon)
+	if (!bFound)
 	{
 		#ifdef _DEBUG
 		if (pStartStop->dwAID == 0)
@@ -2363,13 +2460,15 @@ BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pS
 
 		for (size_t i = 0; i < countof(gp_VCon); i++)
 		{
-			if (gp_VCon[i] && (pRCon = gp_VCon[i]->RCon()) != NULL)
+			VCon = gp_VCon[i];
+			CRealConsole* pRCon = VCon.VCon() ? VCon->RCon() : NULL;
+			if (pRCon != NULL)
 			{
 				if (pStartStop->dwAID)
 				{
 					if (pRCon->GetMonitorThreadID() == pStartStop->dwAID)
 					{
-						pVCon = gp_VCon[i];
+						bFound = true;
 						break;
 					}
 				}
@@ -2377,7 +2476,7 @@ BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pS
 				{
 					if (pRCon->GetServerPID() == pStartStop->dwPID)
 					{
-						pVCon = gp_VCon[i];
+						bFound = true;
 						break;
 					}
 				}
@@ -2385,15 +2484,18 @@ BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pS
 		}
 	}
 
-	if (!pVCon)
+	// Если по ИД не нашли - ищем любую "ожидающую" аттача
+	if (!bFound)
 	{
 		for (size_t i = 0; i < countof(gp_VCon); i++)
 		{
-			if (gp_VCon[i] && (pRCon = gp_VCon[i]->RCon()) != NULL)
+			VCon = gp_VCon[i];
+			CRealConsole* pRCon = VCon.VCon() ? VCon->RCon() : NULL;
+			if (pRCon != NULL)
 			{
 				if (pRCon->isDetached())
 				{
-					pVCon = gp_VCon[i];
+					bFound = true;
 					break;
 				}
 			}
@@ -2401,26 +2503,36 @@ BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pS
 	}
 
 	// Если не нашли - определим, можно ли добавить новую консоль?
-	if (!pVCon)
+	if (!bFound)
 	{
 		RConStartArgs* pArgs = new RConStartArgs;
 		pArgs->bDetached = TRUE;
 		pArgs->bBackgroundTab = pStartStop->bRunInBackgroundTab;
+		_ASSERTE(pStartStop->sCmdLine[0]!=0);
+		pArgs->pszSpecialCmd = lstrdup(pStartStop->sCmdLine);
 
 		// т.к. это приходит из серверного потока - зовем в главном
-		pVCon = (CVirtualConsole*)SendMessage(ghWnd, gpConEmu->mn_MsgCreateCon, gpConEmu->mn_MsgCreateCon, (LPARAM)pArgs);
-		if (pVCon && !isValid(pVCon))
+		VCon = (CVirtualConsole*)SendMessage(ghWnd, gpConEmu->mn_MsgCreateCon, gpConEmu->mn_MsgCreateCon, (LPARAM)pArgs);
+		if (VCon.VCon() && !isValid(VCon.VCon()))
 		{
-			_ASSERTE(isValid(pVCon));
-			pVCon = NULL;
+			_ASSERTE(FALSE && "MsgCreateCon failed");
+			VCon = NULL;
 		}
 		//if ((pVCon = CreateCon(&args)) == NULL)
 		//	return FALSE;
 	}
 
-	// Пытаемся подцепить консоль
-	if (!pVCon->RCon()->AttachConemuC(ahConWnd, pStartStop->dwPID, pStartStop, pRet))
+	if (!bFound || !VCon.VCon())
+	{
+		//Assert? Report?
 		return FALSE;
+	}
+
+	// Пытаемся подцепить консоль
+	if (VCon->RCon()->AttachConemuC(ahConWnd, pStartStop->dwPID, pStartStop, pRet))
+	{
+		return FALSE;
+	}
 
 	// OK
 	return TRUE;
@@ -2776,7 +2888,7 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 	CVirtualConsole* pVCon = NULL;
 
 	// When no command specified - choose default one. Now!
-	if (!args->pszSpecialCmd || !*args->pszSpecialCmd)
+	if (!args->bDetached && (!args->pszSpecialCmd || !*args->pszSpecialCmd))
 	{
 		_ASSERTE(args->pszSpecialCmd==NULL);
 
@@ -2798,7 +2910,10 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 
 	//wchar_t* pszScript = NULL; //, szScript[MAX_PATH];
 
-	if (args->pszSpecialCmd
+	_ASSERTE(args->pszSpecialCmd!=NULL);
+
+	if (!args->bDetached
+		&& args->pszSpecialCmd
 		&& (*args->pszSpecialCmd == CmdFilePrefix
 			|| *args->pszSpecialCmd == DropLnkPrefix
 			|| *args->pszSpecialCmd == TaskBracketLeft))

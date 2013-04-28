@@ -137,7 +137,8 @@ class CConEmuMain :
 		HKEY mh_PortableRoot; // Это открытый ключ
 		bool PreparePortableReg();
 		bool mb_UpdateJumpListOnStartup;
-	public:
+	private:
+		bool mb_BlockChildrenDebuggers;
 	private:
 		bool CheckBaseDir();
 		BOOL CheckDosBoxExists();
@@ -159,6 +160,7 @@ class CConEmuMain :
 		wchar_t *mpsz_ConEmuArgs;    // Аргументы
 		void GetComSpecCopy(ConEmuComspec& ComSpec);
 		void CreateGuiAttachMapping(DWORD nGuiAppPID);
+		void InitComSpecStr(ConEmuComspec& ComSpec);
 	private:
 		ConEmuGuiMapping m_GuiInfo;
 		MFileMapping<ConEmuGuiMapping> m_GuiInfoMapping;
@@ -325,8 +327,19 @@ class CConEmuMain :
 		CDragDrop *mp_DragDrop;
 		bool mb_SkipOnFocus;
 		bool mb_LastConEmuFocusState;
-		//DWORD mn_SysMenuOpenTick, mn_SysMenuCloseTick;
+		DWORD mn_ForceTimerCheckLoseFocus; // GetTickCount()
+		bool mb_IgnoreQuakeActivation;
+		bool mb_AllowAutoChildFocus;
+	public:
+		void OnOurDialogOpened();
+		void OnOurDialogClosed();
+		void CheckAllowAutoChildFocus(DWORD nDeactivatedTID);
+		void SetScClosePending(bool bFlag);
 	protected:
+		bool mb_ScClosePending; // Устанавливается в TRUE в CVConGroup::CloseQuery
+	protected:
+		DWORD mn_LastQuakeShowHide;
+
 		friend class CVConGroup;
 
 		friend class CGuiServer;
@@ -339,9 +352,9 @@ class CConEmuMain :
 		TCHAR TitleTemplate[128];
 		short mn_Progress;
 		//LPTSTR GetTitleStart();
-		BOOL mb_InTimer;
-		BOOL mb_ProcessCreated, mb_WorkspaceErasedOnClose; //DWORD mn_StartTick;
-		bool mb_CloseGuiConfirmed;
+		bool mb_InTimer;
+		bool mb_ProcessCreated;
+		bool mb_WorkspaceErasedOnClose;
 		#ifndef _WIN64
 		HWINEVENTHOOK mh_WinHook; //, mh_PopupHook;
 		static VOID CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD anEvent, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
@@ -389,15 +402,19 @@ class CConEmuMain :
 		//BOOL mb_InRestore; // во время восстановления из Maximized
 		BOOL mb_MouseCaptured;
 		//BYTE m_KeybStates[256];
+		void CheckActiveLayoutName();
+		void AppendHKL(wchar_t* szInfo, size_t cchInfoMax, HKL* hKeyb, int nCount);
+		void AppendRegisteredLayouts(wchar_t* szInfo, size_t cchInfoMax);
+		void StoreLayoutName(int iIdx, DWORD dwLayout, HKL hkl);
 		DWORD_PTR m_ActiveKeybLayout;
-		struct
+		struct LayoutNames
 		{
 			BOOL      bUsed;
 			//wchar_t   klName[KL_NAMELENGTH/*==9*/];
 			DWORD     klName;
 			DWORD_PTR hkl;
 		} m_LayoutNames[20];
-		struct
+		struct TranslatedCharacters
 		{
 			wchar_t szTranslatedChars[16];
 		} m_TranslatedChars[256];
@@ -545,7 +562,7 @@ class CConEmuMain :
 		BOOL Activate(CVirtualConsole* apVCon);
 		int ActiveConNum(); // 0-based
 		int GetConCount(); // количество открытых консолей
-		static void AddMargins(RECT& rc, RECT& rcAddShift, BOOL abExpand=FALSE);
+		static void AddMargins(RECT& rc, const RECT& rcAddShift, BOOL abExpand=FALSE);
 		void AskChangeBufferHeight();
 		void AskChangeAlternative();
 		void AttachToDialog();
@@ -574,13 +591,20 @@ class CConEmuMain :
 		BOOL CreateWorkWindow();
 		HRGN CreateWindowRgn(bool abTestOnly=false);
 		HRGN CreateWindowRgn(bool abTestOnly,bool abRoundTitle,int anX, int anY, int anWndWidth, int anWndHeight);
-		void Destroy();
 		void DebugStep(LPCWSTR asMsg, BOOL abErrorSeverity=FALSE);
 		void ForceShowTabs(BOOL abShow);
 		DWORD_PTR GetActiveKeyboardLayout();
 		RECT GetDefaultRect();
 		RECT GetGuiClientRect();
 		//HMENU GetSysMenu(BOOL abInitial = FALSE);
+
+	public:
+		void Destroy();
+	private:
+		#ifdef _DEBUG
+		bool mb_DestroySkippedInAssert;
+		#endif
+
 	//protected:
 	//	void UpdateSysMenu(HMENU hSysMenu);
 	public:
@@ -604,6 +628,7 @@ class CConEmuMain :
 		bool isActive(CVirtualConsole* apVCon, bool abAllowGroup = true);
 		//bool isChildWindowVisible();
 		bool isCloseConfirmed();
+		bool isDestroyOnClose(bool ScCloseOnEmpty = false);
 		bool isConSelectMode();
 		bool isConsolePID(DWORD nPID);
 		bool isDragging();
@@ -666,7 +691,7 @@ class CConEmuMain :
 		bool ScreenToVCon(LPPOINT pt, CVirtualConsole** ppVCon);
 		//void SetAllConsoleWindowsSize(const COORD& size, /*bool updateInfo,*/ bool bSetRedraw = false);
 		void SetDragCursor(HCURSOR hCur);
-		void SetSkipOnFocus(bool abSkipOnFocus);
+		bool SetSkipOnFocus(bool abSkipOnFocus);
 		void SetWaitCursor(BOOL abWait);
 		ConEmuWindowMode GetWindowMode();
 		bool SetWindowMode(ConEmuWindowMode inMode, BOOL abForce = FALSE, BOOL abFirstShow = FALSE);
@@ -717,6 +742,7 @@ class CConEmuMain :
 		void SwitchKeyboardLayout(DWORD_PTR dwNewKeybLayout);
 		//void TabCommand(UINT nTabCmd);
 		BOOL TrackMouse();
+		void SetSkipMouseEvent(UINT nMsg1, UINT nMsg2, UINT nReplaceDblClk);
 		//int trackPopupMenu(TrackMenuPlace place, HMENU hMenu, UINT uFlags, int x, int y, HWND hWnd, RECT *prcRect = NULL);
 		void Update(bool isForce = false);
 		void UpdateActiveGhost(CVirtualConsole* apVCon);
@@ -734,6 +760,7 @@ class CConEmuMain :
 		static LRESULT CALLBACK WorkWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 		BOOL isDialogMessage(MSG &Msg);
 		//LPCWSTR MenuAccel(int DescrID, LPCWSTR asText);
+		BOOL setWindowPos(HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
 		LRESULT WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 	public:
 		void OnAltEnter();
@@ -757,16 +784,18 @@ class CConEmuMain :
 		LRESULT OnGetMinMaxInfo(LPMINMAXINFO pInfo);
 		void OnHideCaption();
 		void OnInfo_About(LPCWSTR asPageName = NULL);
+		void OnInfo_Donate();
 		void OnInfo_WhatsNew(bool bLocal);
 		void OnInfo_Help();
 		void OnInfo_HomePage();
 		void OnInfo_ReportBug();
+		void OnInfo_ReportCrash(LPCWSTR asDumpWasCreatedMsg);
 		//LRESULT OnInitMenuPopup(HWND hWnd, HMENU hMenu, LPARAM lParam);
 		LRESULT OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		LRESULT OnKeyboardHook(DWORD VkMod);
 		LRESULT OnKeyboardIme(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		LRESULT OnLangChange(UINT messg, WPARAM wParam, LPARAM lParam);
-		LRESULT OnLangChangeConsole(CVirtualConsole *apVCon, DWORD dwLayoutName);
+		LRESULT OnLangChangeConsole(CVirtualConsole *apVCon, const DWORD adwLayoutName);
 		LRESULT OnMouse(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		LRESULT OnMouse_Move(CVirtualConsole* pVCon, HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, POINT ptCur, COORD cr);
 		LRESULT OnMouse_LBtnDown(CVirtualConsole* pVCon, HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, POINT ptCur, COORD cr);
@@ -792,6 +821,7 @@ class CConEmuMain :
 		void OnTimer_FrameAppearDisappear(WPARAM wParam);
 		void OnTimer_RClickPaint();
 		void OnTimer_AdmShield();
+		void OnTimer_QuakeFocus();
 		void OnTransparent(bool abFromFocus = false, bool bSetFocus = true);
 		void OnVConCreated(CVirtualConsole* apVCon, const RConStartArgs *args);
 		LRESULT OnVConClosed(CVirtualConsole* apVCon, BOOL abPosted = FALSE);
@@ -805,6 +835,7 @@ class CConEmuMain :
 		void OnTaskbarCreated();
 		void OnTaskbarButtonCreated();
 		void OnTaskbarSettingsChanged();
+		void OnDefaultTermChanged();
 		#ifdef __GNUC__
 		AlphaBlend_t GdiAlphaBlend;
 		#endif

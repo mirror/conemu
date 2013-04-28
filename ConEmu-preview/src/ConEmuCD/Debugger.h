@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2012 Maximus5
+Copyright (c) 2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -26,56 +26,35 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 #pragma once
 
-#include "../common/MArray.h"
+int AttachRootProcessHandle();
+int RunDebugger();
+void GenerateMiniDumpFromCtrlBreak();
 
-class CDefaultTerminal
+struct CEDebugProcessInfo
 {
-public:
-	CDefaultTerminal();
-	~CDefaultTerminal();
+	DWORD  nPID; // дублирование ключа
+	BOOL   bWasBreak; // TRUE после первого EXCEPTION_BREAKPOINT
+	HANDLE hProcess;
+};
 
-	bool CheckForeground(HWND hFore, DWORD nForePID, bool bRunInThread = true);
-	void PostCreated(bool bWaitForReady = false, bool bShowErrors = false);
-	void CheckRegisterOsStartup();
-	bool IsRegisteredOsStartup(wchar_t* rsValue, DWORD cchMax);
-	void OnHookedListChanged();
+struct DebuggerInfo
+{
+	LPWSTR pszDebuggingCmdLine;
+	BOOL   bDebuggerActive;
+	BOOL   bDebuggerRequestDump;
+	HANDLE hDebugThread;
+	HANDLE hDebugReady;
+	DWORD  dwDebugThreadId;
 
-	bool isDefaultTerminalAllowed();
+	MMap<DWORD,CEDebugProcessInfo>* pDebugTreeProcesses /*= NULL*/;
+	BOOL  bDebugProcess /*= FALSE*/;
+	BOOL  bDebugProcessTree /*= FALSE*/;
+	int   nDebugDumpProcess /*= 0*/; // 1 - ask user, 2 - minidump, 3 - fulldump
+	int   nProcessCount;
+	int   nWaitTreeBreaks;
 
-private:
-	struct ProcessInfo
-	{
-		HANDLE  hProcess;
-		DWORD   nPID; // alignment issues
-		DWORD   nHookTick;
-	};
-	struct ProcessIgnore
-	{
-		DWORD nPID;
-		DWORD nTick;
-	};
-private:
-	HWND mh_LastWnd, mh_LastIgnoredWnd, mh_LastCall;
-	HANDLE mh_SignEvent;
-	BOOL mb_ReadyToHook;
-	MArray<ProcessInfo> m_Processed;
-	void ClearProcessed(bool bForceAll);
-	static DWORD WINAPI PostCreatedThread(LPVOID lpParameter);
-	static DWORD WINAPI PostCheckThread(LPVOID lpParameter);
-	bool CheckShellWindow();
-	bool mb_Initialized;
-	DWORD mn_PostThreadId;
-	bool  mb_PostCreatedThread;
-	MArray<HANDLE> m_Threads;
-	CRITICAL_SECTION mcs;
-	void ClearThreads(bool bForceTerminate);
-	struct ThreadArg
-	{
-		CDefaultTerminal* pTerm;
-		HWND hFore;
-		DWORD nForePID;
-	};
+	HMODULE hDbghelp;
+	FARPROC MiniDumpWriteDump_f;
 };

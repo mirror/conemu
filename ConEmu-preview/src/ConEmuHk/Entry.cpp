@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //	#define SHOW_STARTED_MSGBOX
 //	#define SHOW_INJECT_MSGBOX
 	#define SHOW_EXE_MSGBOX // показать сообщение при загрузке в определенный exe-шник (SHOW_EXE_MSGBOX_NAME)
-	#define SHOW_EXE_MSGBOX_NAME L"vim.exe"
+	#define SHOW_EXE_MSGBOX_NAME L"xxx.exe"
 //	#define SHOW_EXE_TIMINGS
 #endif
 //#define SHOW_INJECT_MSGBOX
@@ -347,9 +347,14 @@ CESERVER_CONSOLE_MAPPING_HDR* GetConMap(BOOL abForceRecreate/*=FALSE*/)
 			gnGuiPID = gpConInfo->nGuiPID;
 			ghConEmuWnd = gpConInfo->hConEmuRoot;
 			_ASSERTE(ghConEmuWnd==NULL || gnGuiPID!=0);
+			
 			SetConEmuHkWindows(gpConInfo->hConEmuWndDc, gpConInfo->hConEmuWndBack);
-			_ASSERTE(ghConEmuWndDC && user->isWindow(ghConEmuWndDC));
-			_ASSERTE(ghConEmuWndBack && user->isWindow(ghConEmuWndBack));
+			
+			// Проверка. Но если в GUI аттачится существующая консоль - ConEmuHk может загрузиться раньше,
+			// чем создадутся HWND, т.е. GuiPID известен, но HWND еще вообще нету.
+			_ASSERTE(!ghConEmuWnd || ghConEmuWndDC && user->isWindow(ghConEmuWndDC));
+			_ASSERTE(!ghConEmuWnd || ghConEmuWndBack && user->isWindow(ghConEmuWndBack));
+
 			gnServerPID = gpConInfo->nServerPID;
 		}
 		else
@@ -368,9 +373,10 @@ CESERVER_CONSOLE_MAPPING_HDR* GetConMap(BOOL abForceRecreate/*=FALSE*/)
 	}
 	
 wrap:
-	bAnsi = ((gpConInfo != NULL) && (gpConInfo->bProcessAnsi != FALSE));
+	bAnsi = ((gpConInfo != NULL) && ((gpConInfo->Flags & CECF_ProcessAnsi) != 0));
 	if (abForceRecreate || (bLastAnsi != bAnsi))
 	{
+		_ASSERTEX(bAnsi && "ANSI was disabled?");
 		bLastAnsi = bAnsi;
 		SetEnvironmentVariable(ENV_CONEMUANSI_VAR_W, bAnsi ? L"ON" : L"OFF");
 	}
@@ -544,6 +550,14 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 	{
 		gbIsVimProcess = true;
 		StartVimTerm(true);
+	}
+	else if (lstrcmpni(pszName, L"mintty", 6) == 0)
+	{
+		gbIsMinTtyProcess = true;
+	}
+	else if ((lstrcmpi(pszName, L"notepad.exe") == 0) || (lstrcmpi(pszName, L"notepad") == 0))
+	{
+		//_ASSERTE(FALSE && "Notepad.exe started!");
 	}
 
 	// Поскольку процедура в принципе может быть кем-то перехвачена, сразу найдем адрес
@@ -1703,7 +1717,7 @@ int DuplicateRoot(CESERVER_REQ_DUPLICATE* Duplicate)
 	// go
 	STARTUPINFO si = {sizeof(si)};
 	PROCESS_INFORMATION pi = {};
-	size_t cchCmdLine = 300 + lstrlen(GuiMapping->sConEmuBaseDir) + lstrlen(gpStartEnv->pszCmdLine);
+	size_t cchCmdLine = 300 + lstrlen(GuiMapping->ComSpec.ConEmuBaseDir) + lstrlen(gpStartEnv->pszCmdLine);
 	wchar_t *pszCmd, *pszName;
 	BOOL bSrvFound;
 
@@ -1715,7 +1729,8 @@ int DuplicateRoot(CESERVER_REQ_DUPLICATE* Duplicate)
 	}
 
 	*pszCmd = L'"';
-	lstrcpy(pszCmd+1, GuiMapping->sConEmuBaseDir);
+	_ASSERTEX(GuiMapping->ComSpec.ConEmuBaseDir[0]!=0);
+	lstrcpy(pszCmd+1, GuiMapping->ComSpec.ConEmuBaseDir);
 	pszName = pszCmd + lstrlen(pszCmd);
 	lstrcpy(pszName, WIN3264TEST(L"\\ConEmuC.exe",L"\\ConEmuC64.exe"));
 	bSrvFound = FileExists(pszCmd+1);

@@ -207,7 +207,7 @@ extern BOOL gbInDisplayLastError;
 int DisplayLastError(LPCTSTR asLabel, DWORD dwError = 0, DWORD dwMsgFlags = 0, LPCWSTR asTitle = NULL, HWND hParent = NULL);
 
 void ShutdownGuiStep(LPCWSTR asInfo, int nParm1 = 0, int nParm2 = 0, int nParm3 = 0, int nParm4 = 0);
-void LogFocusInfo(LPCWSTR asInfo);
+void LogFocusInfo(LPCWSTR asInfo, int Level=1);
 
 COORD /*__forceinline*/ MakeCoord(int X,int Y);
 //{
@@ -259,6 +259,9 @@ BOOL CreateProcessRestricted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 
 #include "../common/RConStartArgs.h"
 
+
+bool isKey(DWORD wp,DWORD vk);
+bool isConsoleService(LPCWSTR pszProcessName);
 
 
 //------------------------------------------------------------------------
@@ -480,9 +483,10 @@ enum SwitchGuiFocusOp
 bool CheckLockFrequentExecute(DWORD& Tick, DWORD Interval);
 #define LockFrequentExecute(Interval) static DWORD LastExecuteTick; if (CheckLockFrequentExecute(LastExecuteTick,Interval))
 
-extern const wchar_t* gsHomePage;  // = L"http://conemu-maximus5.googlecode.com";
-extern const wchar_t* gsReportBug; // = L"http://code.google.com/p/conemu-maximus5/issues/entry";
-extern const wchar_t* gsWhatsNew;  // = L"http://code.google.com/p/conemu-maximus5/wiki/Whats_New";
+extern const wchar_t* gsHomePage;    // = L"http://conemu-maximus5.googlecode.com";
+extern const wchar_t* gsReportBug;   // = L"http://code.google.com/p/conemu-maximus5/issues/entry";
+extern const wchar_t* gsReportCrash; // = L"http://code.google.com/p/conemu-maximus5/issues/entry";
+extern const wchar_t* gsWhatsNew;    // = L"http://code.google.com/p/conemu-maximus5/wiki/Whats_New";
 
 template <class T>
 T GetMinMax(T a, int v1, int v2)

@@ -81,7 +81,7 @@ private:
 	CVConGroup* SplitVConGroup(RConStartArgs::SplitType aSplitType = RConStartArgs::eSplitHorz/*eSplitVert*/, UINT anPercent10 = 500);
 	int GetGroupPanes(MArray<CVConGuard*> &rPanes);
 	static void FreePanesArray(MArray<CVConGuard*> &rPanes);
-	static bool CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/, bool* rbCloseGuiConfirmed /*= NULL*/);
+	static bool CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/);
 	
 	CVConGroup(CVConGroup *apParent);
 
@@ -106,6 +106,8 @@ public:
 	static bool isVConExists(int nIdx);
 	static bool isInGroup(CVirtualConsole* apVCon, CVConGroup* apGroup);
 	static bool isConSelectMode();
+	static bool isInCreateRoot();
+	static bool isDetached();
 	static bool isFilePanel(bool abPluginAllowed=false);
 	static bool isNtvdm(BOOL abCheckAllConsoles=FALSE);
 	static bool isOurConsoleWindow(HWND hCon);
@@ -128,6 +130,7 @@ public:
 
 	static void StopSignalAll();
 	static void DestroyAllVCon();
+	static void OnRConTimerCheck();
 	static void OnAlwaysShowScrollbar(bool abSync = true);
 	static void OnUpdateScrollInfo();
 	static void OnUpdateFarSettings();
@@ -142,7 +145,7 @@ public:
 	static void UpdateWindowChild(CVirtualConsole* apVCon);
 	static void RePaint();
 	static void Update(bool isForce = false);
-	static HWND DoSrvCreated(DWORD nServerPID, HWND hWndCon, DWORD dwKeybLayout, DWORD& t1, DWORD& t2, DWORD& t3, int& iFound, HWND& hWndBack);
+	static HWND DoSrvCreated(const DWORD nServerPID, const HWND hWndCon, const DWORD dwKeybLayout, DWORD& t1, DWORD& t2, DWORD& t3, int& iFound, HWND& hWndBack);
 	static void OnVConCreated(CVirtualConsole* apVCon, const RConStartArgs *args);
 	static void OnGuiFocused(BOOL abFocus, BOOL abForceChild = FALSE);
 
@@ -152,6 +155,7 @@ public:
 	static void OnUpdateGuiInfoMapping(ConEmuGuiMapping* apGuiInfo);
 	static void OnPanelViewSettingsChanged();
 	static void OnTaskbarSettingsChanged();
+	static void OnTaskbarCreated();
 
 	static void MoveAllVCon(CVirtualConsole* pVConCurrent, RECT rcNewCon);
 	static HRGN GetExclusionRgn(bool abTestOnly = false);

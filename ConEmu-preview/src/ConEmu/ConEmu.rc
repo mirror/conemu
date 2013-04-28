@@ -229,37 +229,38 @@ BEGIN
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,40,155,8
     CONTROL         "Close confirmation",cbCloseConsoleConfirm,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,168,40,77,8
     CONTROL         "Far Editor/Viewer",cbCloseEditViewConfirm,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,246,40,72,8
-    GROUPBOX        "Appearance",gbFeatureAppear,4,60,319,29
+    GROUPBOX        "Appearance",gbFeatureAppear,4,60,319,40
     CONTROL         "Enhance progressbars and scrollbars",cbEnhanceGraphics,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,73,140,8
     CONTROL         "Desktop mode",cbDesktopMode,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,158,73,73,8
     CONTROL         "Always on top",cbAlwaysOnTop,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,234,73,78,8
-    GROUPBOX        "Scrollbar",IDC_STATIC,4,94,319,29
-    CONTROL         "Hide",rbScrollbarHide,"Button",BS_AUTORADIOBUTTON | WS_GROUP,10,107,30,8
-    CONTROL         "Show",rbScrollbarShow,"Button",BS_AUTORADIOBUTTON,48,107,35,8
-    CONTROL         "Auto",rbScrollbarAuto,"Button",BS_AUTORADIOBUTTON,92,107,33,8
-    RTEXT           "Appear delay:",IDC_STATIC,129,107,50,8
-    EDITTEXT        tScrollAppearDelay,183,105,40,12,ES_AUTOHSCROLL
-    RTEXT           "Disappear:",IDC_STATIC,230,107,43,8
-    EDITTEXT        tScrollDisappearDelay,277,105,40,12,ES_AUTOHSCROLL
-    GROUPBOX        "Title bar (Caption) and border options",gbFeatureCaption,4,128,319,59
-    CONTROL         "Hide caption when maximized",cbHideCaption,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,141,117,8
-    CONTROL         "Hide caption always",cbHideCaptionAlways,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,141,79,8
-    CONTROL         "Show tabs in caption",cbTabsInCaption,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,223,141,94,8
-    RTEXT           "Frame width:",IDC_STATIC,9,156,54,8
-    EDITTEXT        tHideCaptionAlwaysFrame,67,154,40,12,ES_AUTOHSCROLL
-    RTEXT           "Appear delay:",IDC_STATIC,125,156,50,8
-    EDITTEXT        tHideCaptionAlwaysDelay,179,154,40,12,ES_AUTOHSCROLL
-    RTEXT           "Disappear:",IDC_STATIC,227,156,43,8
-    EDITTEXT        tHideCaptionAlwaysDissapear,273,154,40,12,ES_AUTOHSCROLL
-    CONTROL         "Always show numbers [n/m]",cbNumberInCaption,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,171,117,8
+    GROUPBOX        "Scrollbar",IDC_STATIC,4,104,319,29
+    CONTROL         "Hide",rbScrollbarHide,"Button",BS_AUTORADIOBUTTON | WS_GROUP,10,117,30,8
+    CONTROL         "Show",rbScrollbarShow,"Button",BS_AUTORADIOBUTTON,48,117,35,8
+    CONTROL         "Auto",rbScrollbarAuto,"Button",BS_AUTORADIOBUTTON,92,117,33,8
+    RTEXT           "Appear delay:",IDC_STATIC,129,117,50,8
+    EDITTEXT        tScrollAppearDelay,183,115,40,12,ES_AUTOHSCROLL
+    RTEXT           "Disappear:",IDC_STATIC,230,117,43,8
+    EDITTEXT        tScrollDisappearDelay,277,115,40,12,ES_AUTOHSCROLL
+    GROUPBOX        "Title bar (Caption) and border options",gbFeatureCaption,4,138,319,59
+    CONTROL         "Hide caption when maximized",cbHideCaption,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,151,117,8
+    CONTROL         "Hide caption always",cbHideCaptionAlways,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,151,79,8
+    CONTROL         "Show tabs in caption",cbTabsInCaption,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,223,151,94,8
+    RTEXT           "Frame width:",IDC_STATIC,9,166,54,8
+    EDITTEXT        tHideCaptionAlwaysFrame,67,164,40,12,ES_AUTOHSCROLL
+    RTEXT           "Appear delay:",IDC_STATIC,125,166,50,8
+    EDITTEXT        tHideCaptionAlwaysDelay,179,164,40,12,ES_AUTOHSCROLL
+    RTEXT           "Disappear:",IDC_STATIC,227,166,43,8
+    EDITTEXT        tHideCaptionAlwaysDissapear,273,164,40,12,ES_AUTOHSCROLL
+    CONTROL         "Always show numbers [n/m]",cbNumberInCaption,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,181,117,8
     CONTROL         "Hide caption of child GUI windows started in ConEmu",cbHideChildCaption,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,171,189,8
-    GROUPBOX        "Quake style",IDC_STATIC,4,191,319,29
-    CONTROL         "Quake style slide down",cbQuakeStyle,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,204,100,8
-    CONTROL         "Auto-hide on focus lose",cbQuakeAutoHide,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,204,94,8
-    RTEXT           "Animation:",stQuakeAnimation,227,204,43,8
-    EDITTEXT        tQuakeAnimation,273,202,40,12,ES_AUTOHSCROLL
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,181,189,8
+    GROUPBOX        "Quake style",IDC_STATIC,4,201,319,29
+    CONTROL         "Quake style slide down",cbQuakeStyle,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,214,100,8
+    CONTROL         "Auto-hide on focus lose",cbQuakeAutoHide,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,214,94,8
+    RTEXT           "Animation:",stQuakeAnimation,227,214,43,8
+    EDITTEXT        tQuakeAnimation,273,212,40,12,ES_AUTOHSCROLL
+    CONTROL         "Show balloon help tooltips",cbShowHelpTooltips,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,85,142,8
 END
 
 IDD_SPG_TASKBAR DIALOGEX 0, 0, 328, 235
@@ -280,18 +281,22 @@ BEGIN
                     "Button",BS_AUTORADIOBUTTON,158,62,159,8
     CONTROL         "Show Shield overlay (Win7 and higher)",cbTaskbarShield,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,77,143,8
-    GROUPBOX        "When last console (tab) is closed",IDC_STATIC,4,98,319,29
-    CONTROL         "Close ConEmu window",rbMultiLastClose,"Button",BS_AUTORADIOBUTTON | WS_GROUP,11,111,95,8
-    CONTROL         "Leave ConEmu opened",rbMultiLastLeave,"Button",BS_AUTORADIOBUTTON,113,111,99,8
-    CONTROL         "Hide ConEmu to the TSA",rbMultiLastTSA,"Button",BS_AUTORADIOBUTTON,218,111,101,8
-    GROUPBOX        "Minimize ConEmu automatically",IDC_STATIC,4,132,319,57
+    GROUPBOX        "Action on closing last console (tab) and 'cross clicking'",IDC_STATIC,4,98,319,42
+    GROUPBOX        "Minimize ConEmu automatically",IDC_STATIC,4,145,319,57
     CONTROL         "Minimize on focus lose (not in Quake style)",cbMinimizeOnLoseFocus,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,145,199,8
-    GROUPBOX        "When Esc pressed",IDC_STATIC,4,160,319,29
-    CONTROL         "If all consoles closed",rbMinByEscEmpty,"Button",BS_AUTORADIOBUTTON | WS_GROUP,11,173,99,8
-    CONTROL         "Always",rbMinByEscAlways,"Button",BS_AUTORADIOBUTTON,113,173,42,8
-    CONTROL         "Never",rbMinByEscNever,"Button",BS_AUTORADIOBUTTON,161,173,38,8
-    CONTROL         "Map Shift+Esc to Esc",cbMapShiftEscToEsc,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,218,173,101,8
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,158,199,8
+    GROUPBOX        "When Esc pressed",IDC_STATIC,4,173,319,29
+    CONTROL         "If all consoles closed",rbMinByEscEmpty,"Button",BS_AUTORADIOBUTTON | WS_GROUP,11,186,99,8
+    CONTROL         "Always",rbMinByEscAlways,"Button",BS_AUTORADIOBUTTON,113,186,42,8
+    CONTROL         "Never",rbMinByEscNever,"Button",BS_AUTORADIOBUTTON,161,186,38,8
+    CONTROL         "Map Shift+Esc to Esc",cbMapShiftEscToEsc,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,218,186,101,8
+    CONTROL         "Quit on close (e.g. caption bar cross clicking)",cbCloseConEmuOnCrossClicking,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,129,111,168,8
+    CONTROL         "Minimize on closing last tab",cbMinimizeOnLastTabClose,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,125,110,8
+    CONTROL         "Hide to the TSA",cbHideOnLastTabClose,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,129,125,66,8
+    CONTROL         "Close ConEmu with last tab",cbCloseConEmuWithLastTab,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,111,113,8
 END
 
 IDD_SPG_CURSOR DIALOGEX 0, 0, 328, 235
@@ -642,7 +647,7 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    GROUPBOX        "Used command processor",gbComspec,4,1,319,143
+    GROUPBOX        "Used command processor",gbComspec,4,1,319,154
     CONTROL         "Auto (tcc - if installed, %ComSpec% - otherwise)",rbComspecAuto,
                     "Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,9,12,178,8
     CONTROL         "%ComSpec% (env.var.)",rbComspecEnvVar,"Button",BS_AUTORADIOBUTTON,189,12,98,8
@@ -660,9 +665,9 @@ BEGIN
     PUSHBUTTON      "Test",cbComspecTest,269,60,50,14
     LTEXT           "Cmd.exe output codepage:",IDC_STATIC,11,100,94,8
     COMBOBOX        lbCmdOutputCP,108,98,81,30,CBS_DROPDOWNLIST | WS_TABSTOP
-    CONTROL         "Add %ConEmuBaseDir% to %PATH%",cbAddConEmu2Path,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,117,309,8
+    CONTROL         "Add %ConEmuDir% to %PATH%",cbAddConEmu2Path,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,139,150,8
     CONTROL         "Support UNC paths in cmd.exe (\\\\server\\share\\folder)",cbComspecUncPaths,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,130,309,8
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,114,309,8
     GROUPBOX        "Automatic attach of cmd && Tcc/Le to ConEmu (new window will be started if not found)",IDC_STATIC,4,168,319,65
     LTEXT           "[HKEY_CURRENT_USER\\Software\\Microsoft\\Command Processor]\nCurrent command stored in registry «AutoRun» (HKLM value is not processed here):",IDC_STATIC,11,178,308,16
     EDITTEXT        tCmdAutoAttach,9,197,308,13,ES_AUTOHSCROLL | ES_READONLY
@@ -670,6 +675,9 @@ BEGIN
     PUSHBUTTON      "Register ConEmu autorun",bCmdAutoRegister,126,213,100,14
     PUSHBUTTON      "Unregister",bCmdAutoUnregister,230,213,50,14
     PUSHBUTTON      "Clear",bCmdAutoClear,283,213,34,14
+    GROUPBOX        "Add to %PATH% environment variable",IDC_STATIC,4,127,319,28
+    CONTROL         "Add %ConEmuBaseDir% to %PATH%",cbAddConEmuBase2Path,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,165,139,152,8
 END
 
 IDD_SPG_FEATURE_FAR DIALOGEX 0, 0, 328, 235
@@ -1093,8 +1101,9 @@ BEGIN
     CONTROL         "Check on startup",cbUpdateCheckOnStartup,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,13,70,8
     CONTROL         "Hourly",cbUpdateCheckHourly,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,83,13,38,8
     CONTROL         "Show TSA balloon",cbUpdateConfirmDownload,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,126,13,78,8
-    CONTROL         "Stable only",rbUpdateStableOnly,"Button",BS_AUTORADIOBUTTON,214,13,52,8
-    CONTROL         "Latest",rbUpdateLatestAvailable,"Button",BS_AUTORADIOBUTTON,272,13,42,8
+    CONTROL         "Stable",rbUpdateStableOnly,"Button",BS_AUTORADIOBUTTON,200,13,38,8
+    CONTROL         "Preview",rbUpdatePreview,"Button",BS_AUTORADIOBUTTON,240,13,38,8
+    CONTROL         "Latest",rbUpdateLatestAvailable,"Button",BS_AUTORADIOBUTTON,280,13,38,8
     GROUPBOX        "",IDC_STATIC,4,30,319,27
     CONTROL         "Use proxy",cbUpdateUseProxy,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,29,51,10
     LTEXT           "Server:port",stUpdateProxy,10,41,42,8,WS_DISABLED
@@ -1136,12 +1145,13 @@ BEGIN
     GROUPBOX        "You can change this on 'Features' page of Settings dialog later",IDC_STATIC,3,86,316,54
     CONTROL         " Inject ConEmuHk.dll into all processes started in ConEmu tabs (may cause lags)",cbInjectConEmuHkFast,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,97,295,10
-    LTEXT           "Required for some features (-new_console argument, GUI apps in ConEmu tabs, ...) and elimination of several problems (dialogs and menus behind of ConEmu window, chcp hungs, and so on...)",stInjectConEmuHkFast1,20,110,292,25
+    LTEXT           "Required for many features (ANSI X3.64, -new_console argument, GUI apps in ConEmu tabs, ...) and elimination of several problems (telnet in Windows 7, dialogs and menus behind of ConEmu window, chcp hungs, and so on...)",stInjectConEmuHkFast1,20,110,292,25
     GROUPBOX        "You can change settings on 'Update' page of Settings dialog later",IDC_STATIC,3,141,316,27
     CONTROL         " Enable automatic updates",cbEnableAutoUpdateFast,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,152,104,10
-    CONTROL         "«Stable» builds",rbAutoUpdateStableFast,"Button",BS_AUTORADIOBUTTON,116,152,67,10
-    CONTROL         "Developer builds",rbAutoUpdateDeveloperFast,"Button",BS_AUTORADIOBUTTON,187,152,71,10
+    CONTROL         "«Stable»",rbAutoUpdateStableFast,"Button",BS_AUTORADIOBUTTON,120,152,46,10
+    CONTROL         "«Preview»",rbAutoUpdatePreviewFast,"Button",BS_AUTORADIOBUTTON,170,152,50,10
+    CONTROL         "«Developer» builds",rbAutoUpdateDeveloperFast,"Button",BS_AUTORADIOBUTTON,224,152,71,10
     GROUPBOX        "",gbDisableConImeFast,3,170,316,61
     CONTROL         " Disable ConIme.exe autorun (Vista only)",cbDisableConImeFast,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,178,295,10

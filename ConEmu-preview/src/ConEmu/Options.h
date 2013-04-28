@@ -128,6 +128,8 @@ enum TabStyle
 	ts_Win8   = 1,
 };
 
+#define DEFAULT_TERMINAL_APPS L"explorer.exe"
+
 struct Settings
 {
 	public:
@@ -1065,6 +1067,8 @@ struct Settings
 		//DWORD vmMinimizeRestore;
 		//reg->Load(L"SingleInstance", isSingleInstance);
 		bool isSingleInstance;
+		//reg->Load(L"ShowHelpTooltips", isShowHelpTooltips);
+		bool isShowHelpTooltips;
 		//reg->Load(L"Multi", isMulti);
 		bool isMulti;
 		//reg->Load(L"Multi.ShowButtons", isMultiShowButtons);
@@ -1103,9 +1107,9 @@ struct Settings
 		//reg->Load(L"Multi.AutoCreate", isMultiAutoCreate);
 		bool isMultiAutoCreate;
 		//reg->Load(L"Multi.LeaveOnClose", isMultiLeaveOnClose);
-		bool isMultiLeaveOnClose;
+		BYTE isMultiLeaveOnClose; // 0 - закрыватьс€, 1 - оставатьс€, 2 - Ќ≈ оставатьс€ при закрытии "крестиком"
 		//reg->Load(L"Multi.HideOnClose", isMultiHideOnClose);
-		bool isMultiHideOnClose;
+		BYTE isMultiHideOnClose; // 0 - не скрыватьс€, 1 - в трей, 2 - просто минимизаци€
 		//reg->Load(L"Multi.MinByEsc", isMultiMinByEsc);
 		BYTE isMultiMinByEsc; // 0 - Never, 1 - Always, 2 - NoConsoles
 		//reg->Load(L"MapShiftEscToEsc", isMapShiftEscToEsc);
@@ -1251,7 +1255,7 @@ struct Settings
 		//bool isUpdateCheckOnStartup;
 		//bool isUpdateCheckHourly;
 		//bool isUpdateConfirmDownload;
-		//BYTE isUpdateUseBuilds; // 1-stable only, 2-latest
+		//BYTE isUpdateUseBuilds; // 1-stable only, 2-latest, 3-preview
 		//bool isUpdateUseProxy;
 		//wchar_t *szUpdateProxy; // "Server:port"
 		//wchar_t *szUpdateProxyUser;

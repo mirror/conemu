@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2012 Maximus5
+Copyright (c) 2009-2012 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,53 +29,30 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "../common/MArray.h"
-
-class CDefaultTerminal
+struct MY_CONSOLE_SCREEN_BUFFER_INFOEX
 {
-public:
-	CDefaultTerminal();
-	~CDefaultTerminal();
-
-	bool CheckForeground(HWND hFore, DWORD nForePID, bool bRunInThread = true);
-	void PostCreated(bool bWaitForReady = false, bool bShowErrors = false);
-	void CheckRegisterOsStartup();
-	bool IsRegisteredOsStartup(wchar_t* rsValue, DWORD cchMax);
-	void OnHookedListChanged();
-
-	bool isDefaultTerminalAllowed();
-
-private:
-	struct ProcessInfo
-	{
-		HANDLE  hProcess;
-		DWORD   nPID; // alignment issues
-		DWORD   nHookTick;
-	};
-	struct ProcessIgnore
-	{
-		DWORD nPID;
-		DWORD nTick;
-	};
-private:
-	HWND mh_LastWnd, mh_LastIgnoredWnd, mh_LastCall;
-	HANDLE mh_SignEvent;
-	BOOL mb_ReadyToHook;
-	MArray<ProcessInfo> m_Processed;
-	void ClearProcessed(bool bForceAll);
-	static DWORD WINAPI PostCreatedThread(LPVOID lpParameter);
-	static DWORD WINAPI PostCheckThread(LPVOID lpParameter);
-	bool CheckShellWindow();
-	bool mb_Initialized;
-	DWORD mn_PostThreadId;
-	bool  mb_PostCreatedThread;
-	MArray<HANDLE> m_Threads;
-	CRITICAL_SECTION mcs;
-	void ClearThreads(bool bForceTerminate);
-	struct ThreadArg
-	{
-		CDefaultTerminal* pTerm;
-		HWND hFore;
-		DWORD nForePID;
-	};
+	ULONG      cbSize;
+	COORD      dwSize;
+	COORD      dwCursorPosition;
+	WORD       wAttributes;
+	SMALL_RECT srWindow;
+	COORD      dwMaximumWindowSize;
+	WORD       wPopupAttributes;
+	BOOL       bFullscreenSupported;
+	COLORREF   ColorTable[16];
 };
+
+
+void ChangeScreenBufferSize(CONSOLE_SCREEN_BUFFER_INFO& sbi, SHORT VisibleX, SHORT VisibleY, SHORT BufferX, SHORT BufferY);
+BOOL GetConWindowSize(const CONSOLE_SCREEN_BUFFER_INFO& sbi, int nCurWidth, int nCurHeight, DWORD nCurScroll, int* pnNewWidth, int* pnNewHeight, DWORD* pnScroll);
+void SetConsoleFontSizeTo(HWND inConWnd, int inSizeY, int inSizeX, const wchar_t *asFontName, WORD anTextColors = 0, WORD anPopupColors = 0);
+int EvaluateDefaultFontWidth(int inSizeY, const wchar_t *asFontName);
+void EmergencyShow(HWND hConWnd);
+
+BOOL apiGetConsoleScreenBufferInfoEx(HANDLE hConsoleOutput, MY_CONSOLE_SCREEN_BUFFER_INFOEX* lpConsoleScreenBufferInfoEx);
+BOOL apiSetConsoleScreenBufferInfoEx(HANDLE hConsoleOutput, MY_CONSOLE_SCREEN_BUFFER_INFOEX* lpConsoleScreenBufferInfoEx);
+
+BOOL apiGetConsoleFontSize(HANDLE hOutput, int &SizeY, int &SizeX, wchar_t (&rsFontName)[LF_FACESIZE]); //Vista+ only!
+BOOL apiSetConsoleFontSize(HANDLE hOutput, int inSizeY, int inSizeX, const wchar_t *asFontName); //Vista+ only!
+BOOL apiFixFontSizeForBufferSize(HANDLE hOutput, COORD dwSize);
+
