@@ -50,7 +50,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class CConEmuChild;
 class CConEmuBack;
-class TabBarClass;
+class CTabBarClass;
 class CConEmuMacro;
 class CAttachDlg;
 class CRecreateDlg;
@@ -193,7 +193,7 @@ class CConEmuMain :
 		//CConEmuBack  *m_Back;
 		//CConEmuMacro *m_Macro;
 		CConEmuMenu *mp_Menu;
-		TabBarClass *mp_TabBar;
+		CTabBarClass *mp_TabBar;
 		CConEmuInside *mp_Inside;
 		CStatus *mp_Status;
 		CToolTip *mp_Tip;
@@ -881,6 +881,7 @@ class CConEmuMain :
 		void OnSizePanels(COORD cr);
 		LRESULT OnShellHook(WPARAM wParam, LPARAM lParam);
 		//LRESULT OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+		UINT_PTR SetKillTimer(bool bEnable, UINT nTimerID, UINT nTimerElapse);
 		LRESULT OnTimer(WPARAM wParam, LPARAM lParam);
 		void OnTimer_Main(CVirtualConsole* pVCon);
 		void OnTimer_ConRedraw(CVirtualConsole* pVCon);

@@ -35,10 +35,11 @@ extern const TCHAR *const gsClassNameWork;
 extern const TCHAR *const gsClassNameBack;
 extern const TCHAR *const gsClassNameApp;
 
+
 struct Settings;
 class CSettings;
 class TrayIcon;
-class TabBarClass;
+class CTabBarClass;
 class CVirtualConsole;
 class CRealConsole;
 class CConEmuMain;
@@ -75,7 +76,6 @@ public:
 		gbDontEnable = b;
 	};
 };
-//extern TabBarClass TabBar;
 extern OSVERSIONINFO gOSVer;
 extern WORD gnOsVer;
 extern bool gbIsWine;

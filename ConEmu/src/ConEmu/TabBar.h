@@ -29,10 +29,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#ifdef _DEBUG
-#include "TabBarEx.h"
-#endif
-
 #if !defined(CONEMU_TABBAR_EX)
 
 #include <commctrl.h>
@@ -58,8 +54,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "DwmHelper.h"
 
+class CTabPanelBase;
 
-class TabBarClass //: public CToolTip
+class CTabBarClass
 {
 	private:
 		// Пока - банально. VCon, номер в FAR
@@ -79,34 +76,18 @@ class TabBarClass //: public CToolTip
 		} VConTabs;
 
 	private:
-		HWND mh_Tabbar, mh_Toolbar, mh_Rebar, mh_TabTip, mh_Balloon;
-		HFONT mh_TabFont;
-		TOOLINFO tiBalloon; wchar_t ms_TabErrText[512];
-		HIMAGELIST mh_TabIcons; int mn_AdminIcon;
-		int GetTabIcon(bool bAdmin);
-		//struct CmdHistory
-		//{
-		//	int nCmd;
-		//	LPCWSTR pszCmd;
-		//	wchar_t szShort[32];
-		//} m_CmdPopupMenu[MAX_CMD_HISTORY+1]; // структура для меню выбора команды новой консоли
-		//bool mb_InNewConPopup, mb_InNewConRPopup;
-		//int mn_FirstTaskID, mn_LastTaskID; // MenuItemID for Tasks, when mb_InNewConPopup==true
-		bool _active;
+		CTabPanelBase* mp_Rebar;
+
+	private:
+		bool _active, _visible;
 		int _tabHeight;
+		int mn_CurSelTab;
 		bool mb_ForceRecalcHeight;
-		int mn_ThemeHeightDiff;
 		//RECT m_Margins;
-		bool _titleShouldChange;
-		int _prevTab;
-		BOOL mb_ChangeAllowed; //, mb_Enabled;
-		void AddTab(LPCWSTR text, int i, bool bAdmin);
+		//bool _titleShouldChange;
 		void SelectTab(int i);
-		CVirtualConsole* FarSendChangeTab(int tabIndex);
-		LONG mn_LastToolbarWidth;
 		void UpdateToolbarPos();
 		void PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon);
-		BOOL GetVConFromTab(int nTabIdx, CVirtualConsole** rpVCon, DWORD* rpWndIndex);
 		ConEmuTab m_Tab4Tip;
 		WCHAR  ms_TmpTabText[MAX_PATH];
 		LPCWSTR GetTabText(int nTabIdx);
@@ -117,35 +98,14 @@ class TabBarClass //: public CToolTip
 		int GetItemCount();
 		void DeleteItem(int I);
 		void AddTab2VCon(VConTabs& vct);
-		void ShowTabError(LPCTSTR asInfo, int tabIndex = 0);
+		void ShowTabError(LPCTSTR asInfo, int tabIndex);
 		//void CheckTheming();
 		
 	protected:
-		static LRESULT CALLBACK TabProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-		static WNDPROC _defaultTabProc;
-		static LRESULT CALLBACK ToolProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-		static WNDPROC _defaultToolProc;
-		static LRESULT CALLBACK ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-		static WNDPROC _defaultReBarProc;
-		static LRESULT TabHitTest(bool abForce = false);
-
-		//typedef union tag_FAR_WND_ID {
-		//	struct {
-		//		CVirtualConsole* pVCon;
-		//		int nFarWindowId/*HighPart*/;
-		//	};
-		//	struct {
-		//		CVirtualConsole* pVCon;
-		//		int nFarWindowId/*HighPart*/;
-		//	} u;
-		//	ULONGLONG ID;
-		//} VConTabs;
 		MArray<VConTabs> m_Tab2VCon;
 		BOOL mb_PostUpdateCalled, mb_PostUpdateRequested;
 		DWORD mn_PostUpdateTick;
 		void RequestPostUpdate();
-		//UINT mn_MsgUpdateTabs;
-		int mn_CurSelTab;
 		int GetIndexByTab(VConTabs tab);
 		int mn_InUpdate;
 
@@ -158,9 +118,12 @@ class TabBarClass //: public CToolTip
 
 		BOOL mb_DisableRedraw;
 
+		friend class CTabPanelBase;
+		BOOL GetVConFromTab(int nTabIdx, CVirtualConsole** rpVCon, DWORD* rpWndIndex);
+
 	public:
-		TabBarClass();
-		virtual ~TabBarClass();
+		CTabBarClass();
+		virtual ~CTabBarClass();
 		//virtual bool OnMenuSelected(HMENU hMenu, WORD nID, WORD nFlags);
 		//void Enable(BOOL abEnabled);
 		//void Refresh(BOOL abFarActive);
@@ -172,11 +135,7 @@ class TabBarClass //: public CToolTip
 		//BOOL IsAllowed();
 		RECT GetMargins();
 		void Activate(BOOL abPreSyncConsole=FALSE);
-		HWND CreateToolbar();
-		HWND CreateTabbar(bool abDummyCreate = false);
-		HWND GetTabbar();
 		int GetTabbarHeight();
-		void CreateRebar();
 		void Deactivate(BOOL abPreSyncConsole=FALSE);
 		void RePaint();
 		//void Update(ConEmuTab* tabs, int tabsCount);
@@ -198,6 +157,7 @@ class TabBarClass //: public CToolTip
 		//void OnNewConPopupMenuRClick(HMENU hMenu, UINT nItemPos);
 		void OnCommand(WPARAM wParam, LPARAM lParam);
 		void OnMouse(int message, int x, int y);
+		LRESULT OnTimer(WPARAM wParam);
 		// Переключение табов
 		void Switch(BOOL abForward, BOOL abAltStyle=FALSE);
 		void SwitchNext(BOOL abAltStyle=FALSE);
@@ -209,7 +169,7 @@ class TabBarClass //: public CToolTip
 		void SetRedraw(BOOL abEnableRedraw);
 		//void PaintHeader(HDC hdc, RECT rcPaint);
 		int  ActiveTabByName(int anType, LPCWSTR asName, CVirtualConsole** ppVCon);
-		void GetActiveTabRect(RECT* rcTab);
+		bool GetActiveTabRect(RECT* rcTab);
 		void OnShowButtonsChanged();
 
 		// Из Samples\Tabs

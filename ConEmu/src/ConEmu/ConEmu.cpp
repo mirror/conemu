@@ -118,18 +118,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 
-#define TIMER_MAIN_ID 0
-#define TIMER_MAIN_ELAPSE 500
-#define TIMER_CONREDRAW_ID 1
-#define TIMER_CAPTION_APPEAR_ID 3
-#define TIMER_CAPTION_DISAPPEAR_ID 4
-#define TIMER_RCLICKPAINT 5
-#define TIMER_RCLICKPAINT_ELAPSE 20
-#define TIMER_ADMSHIELD_ID 7
-#define TIMER_ADMSHIELD_ELAPSE 1000
-#define TIMER_RUNQUEUE_ID 8
-#define TIMER_QUAKE_AUTOHIDE_ID 9
-#define TIMER_QUAKE_AUTOHIDE_ELAPSE 100
 
 #define HOTKEY_CTRLWINALTSPACE_ID 0x0201 // this is wParam for WM_HOTKEY
 #define HOTKEY_SETFOCUSSWITCH_ID  0x0202 // this is wParam for WM_HOTKEY
@@ -1197,7 +1185,7 @@ BOOL CConEmuMain::Init()
 	LoadIcons();
 
 	mp_Tip = new CToolTip();
-	mp_TabBar = new TabBarClass();
+	mp_TabBar = new CTabBarClass();
 	//m_Child = new CConEmuChild();
 	//m_Back = new CConEmuBack();
 	//m_Macro = new CConEmuMacro();
@@ -8912,8 +8900,8 @@ void CConEmuMain::UpdateProgress()
 
 void CConEmuMain::StartForceShowFrame()
 {
-	KillTimer(ghWnd, TIMER_CAPTION_APPEAR_ID);
-	KillTimer(ghWnd, TIMER_CAPTION_DISAPPEAR_ID);
+	SetKillTimer(false, TIMER_CAPTION_APPEAR_ID, 0);
+	SetKillTimer(false, TIMER_CAPTION_DISAPPEAR_ID, 0);
 	m_ForceShowFrame = fsf_Show;
 	OnHideCaption();
 	//UpdateWindowRgn();
@@ -8922,8 +8910,8 @@ void CConEmuMain::StartForceShowFrame()
 void CConEmuMain::StopForceShowFrame()
 {
 	m_ForceShowFrame = fsf_Hide;
-	KillTimer(ghWnd, TIMER_CAPTION_APPEAR_ID);
-	KillTimer(ghWnd, TIMER_CAPTION_DISAPPEAR_ID);
+	SetKillTimer(false, TIMER_CAPTION_APPEAR_ID, 0);
+	SetKillTimer(false, TIMER_CAPTION_DISAPPEAR_ID, 0);
 	OnHideCaption();
 	//UpdateWindowRgn();
 }
@@ -8936,8 +8924,8 @@ void CConEmuMain::UpdateWindowRgn(int anX/*=-1*/, int anY/*=-1*/, int anWndWidth
 	HRGN hRgn = NULL;
 
 	//if (gpSet->isHideCaptionAlways) {
-	//	KillTimer(ghWnd, TIMER_CAPTION_APPEAR_ID);
-	//	KillTimer(ghWnd, TIMER_CAPTION_DISAPPEAR_ID);
+	//	SetKillTimer(false, TIMER_CAPTION_APPEAR_ID, 0);
+	//	SetKillTimer(false, TIMER_CAPTION_DISAPPEAR_ID, 0);
 	//}
 
 	if (m_ForceShowFrame == fsf_Show)
@@ -9447,7 +9435,7 @@ void CConEmuMain::RightClickingPaint(HDC hdcIntVCon, CVirtualConsole* apVCon)
 					if (nIndex >= m_RightClickingFrames)
 					{
 						nIndex = (m_RightClickingFrames-1); // рисуем последний фрейм, мышку можно отпускать
-						//-- KillTimer(ghWnd, TIMER_RCLICKPAINT); // таймер понадобится для "скрытия" кружочка после RCLICKAPPSTIMEOUT_MAX
+						//-- SetKillTimer(false, TIMER_RCLICKPAINT, 0); // таймер понадобится для "скрытия" кружочка после RCLICKAPPSTIMEOUT_MAX
 					}
 
 					#ifdef _DEBUG
@@ -9549,7 +9537,7 @@ void CConEmuMain::StartRightClickingPaint()
 			m_RightClickingCurrent = -1;
 			mb_RightClickingPaint = TRUE;
 			mb_RightClickingLSent = FALSE;
-			SetTimer(ghWnd, TIMER_RCLICKPAINT, TIMER_RCLICKPAINT_ELAPSE, NULL);
+			SetKillTimer(true, TIMER_RCLICKPAINT, TIMER_RCLICKPAINT_ELAPSE);
 		}
 	}
 }
@@ -9568,7 +9556,7 @@ void CConEmuMain::StopRightClickingPaint()
 	{
 		mb_RightClickingPaint = FALSE;
 		mb_RightClickingLSent = FALSE;
-		KillTimer(ghWnd, TIMER_RCLICKPAINT);
+		SetKillTimer(false, TIMER_RCLICKPAINT, 0);
 		m_RightClickingCurrent = -1;
 		CVConGroup::InvalidateAll();
 	}
@@ -10113,8 +10101,8 @@ void CConEmuMain::BeginSizing(bool bFromStatusBar)
 
 	if (gpSet->isHideCaptionAlways())
 	{
-		KillTimer(ghWnd, TIMER_CAPTION_DISAPPEAR_ID);
-		KillTimer(ghWnd, TIMER_CAPTION_APPEAR_ID);
+		SetKillTimer(false, TIMER_CAPTION_DISAPPEAR_ID, 0);
+		SetKillTimer(false, TIMER_CAPTION_APPEAR_ID, 0);
 		// -- если уж пришел WM_NCLBUTTONDOWN - значит рамка уже показана?
 		//gpConEmu->OnTimer(TIMER_CAPTION_APPEAR_ID,0);
 		//UpdateWindowRgn();
@@ -11090,17 +11078,17 @@ void CConEmuMain::PostCreate(BOOL abReceived/*=FALSE*/)
 
 		//RegisterHotKeys();
 		//SetParent(GetParent(GetShellWindow()));
-		UINT n = SetTimer(ghWnd, TIMER_MAIN_ID, TIMER_MAIN_ELAPSE/*gpSet->nMainTimerElapse*/, NULL);
+		UINT n = SetKillTimer(true, TIMER_MAIN_ID, TIMER_MAIN_ELAPSE/*gpSet->nMainTimerElapse*/);
 		#ifdef _DEBUG
 		DWORD dw = GetLastError();
 		#endif
-		n = SetTimer(ghWnd, TIMER_CONREDRAW_ID, CON_REDRAW_TIMOUT*2, NULL);
+		n = SetKillTimer(true, TIMER_CONREDRAW_ID, CON_REDRAW_TIMOUT*2);
 		UNREFERENCED_PARAMETER(n);
 
 		if (gpSet->isTaskbarShield && gpConEmu->mb_IsUacAdmin && gpSet->isWindowOnTaskBar())
 		{
 			// Bug in Win7? Sometimes after startup "As Admin" sheild does not appeears.
-			SetTimer(ghWnd, TIMER_ADMSHIELD_ID, TIMER_ADMSHIELD_ELAPSE, NULL);
+			SetKillTimer(true, TIMER_ADMSHIELD_ID, TIMER_ADMSHIELD_ELAPSE);
 		}
 
 		mp_DefTrm->PostCreated();
@@ -11223,11 +11211,11 @@ LRESULT CConEmuMain::OnDestroy(HWND hWnd)
 	//	FreeLibrary(mh_DwmApi); mh_DwmApi = NULL;
 	//	DwmIsCompositionEnabled = NULL;
 	//}
-	KillTimer(ghWnd, TIMER_MAIN_ID);
-	KillTimer(ghWnd, TIMER_CONREDRAW_ID);
-	KillTimer(ghWnd, TIMER_CAPTION_APPEAR_ID);
-	KillTimer(ghWnd, TIMER_CAPTION_DISAPPEAR_ID);
-	KillTimer(ghWnd, TIMER_QUAKE_AUTOHIDE_ID);
+	SetKillTimer(false, TIMER_MAIN_ID, 0);
+	SetKillTimer(false, TIMER_CONREDRAW_ID, 0);
+	SetKillTimer(false, TIMER_CAPTION_APPEAR_ID, 0);
+	SetKillTimer(false, TIMER_CAPTION_DISAPPEAR_ID, 0);
+	SetKillTimer(false, TIMER_QUAKE_AUTOHIDE_ID, 0);
 	PostQuitMessage(0);
 	return 0;
 }
@@ -11741,7 +11729,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 		{
 			mn_ForceTimerCheckLoseFocus = GetTickCount();
 			_ASSERTE(mn_ForceTimerCheckLoseFocus!=0);
-			SetTimer(ghWnd, TIMER_QUAKE_AUTOHIDE_ID, TIMER_QUAKE_AUTOHIDE_ELAPSE, NULL);
+			SetKillTimer(true, TIMER_QUAKE_AUTOHIDE_ID, TIMER_QUAKE_AUTOHIDE_ELAPSE);
 		}
 	}
 	
@@ -12231,7 +12219,7 @@ void CConEmuMain::OnTaskbarButtonCreated()
 		if (gpConEmu->mb_IsUacAdmin)
 		{
 			// Bug in Win7? Sometimes after startup "As Admin" sheild does not appeears.
-			SetTimer(ghWnd, TIMER_ADMSHIELD_ID, TIMER_ADMSHIELD_ELAPSE, NULL);
+			SetKillTimer(true, TIMER_ADMSHIELD_ID, TIMER_ADMSHIELD_ELAPSE);
 		}
 	}
 }
@@ -16911,6 +16899,16 @@ void CConEmuMain::OnInfo_ThrowTrapException(bool bMainThread)
 	}
 }
 
+UINT_PTR CConEmuMain::SetKillTimer(bool bEnable, UINT nTimerID, UINT nTimerElapse)
+{
+	UINT_PTR nRc;
+	if (bEnable)
+		nRc = ::SetTimer(ghWnd, nTimerID, nTimerElapse, NULL);
+	else
+		nRc = ::KillTimer(ghWnd, nTimerID);
+	return nRc;
+}
+
 LRESULT CConEmuMain::OnTimer(WPARAM wParam, LPARAM lParam)
 {
 	LRESULT result = 0;
@@ -16989,6 +16987,10 @@ LRESULT CConEmuMain::OnTimer(WPARAM wParam, LPARAM lParam)
 		case TIMER_QUAKE_AUTOHIDE_ID:
 			OnTimer_QuakeFocus();
 			break;
+
+		case TIMER_FAILED_TABBAR_ID:
+			mp_TabBar->OnTimer(wParam);
+			break;
 	}
 
 	mb_InTimer = FALSE;
@@ -17002,11 +17004,11 @@ void CConEmuMain::SetRunQueueTimer(bool bSet, UINT uElapse)
 	if (bSet)
 	{
 		if (!bLastSet)
-			SetTimer(ghWnd, TIMER_RUNQUEUE_ID, uElapse, NULL);
+			SetKillTimer(true, TIMER_RUNQUEUE_ID, uElapse);
 	}
 	else
 	{
-		KillTimer(ghWnd, TIMER_RUNQUEUE_ID);
+		SetKillTimer(false, TIMER_RUNQUEUE_ID, 0);
 	}
 
 	bLastSet = bSet;
@@ -17194,14 +17196,14 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 				if (bCurForceShow != (m_ForceShowFrame != fsf_Hide))
 				{
 					m_ForceShowFrame = bCurForceShow ? fsf_WaitShow : fsf_Hide;
-					KillTimer(ghWnd, TIMER_CAPTION_APPEAR_ID);
-					KillTimer(ghWnd, TIMER_CAPTION_DISAPPEAR_ID);
+					SetKillTimer(false, TIMER_CAPTION_APPEAR_ID, 0);
+					SetKillTimer(false, TIMER_CAPTION_DISAPPEAR_ID, 0);
 					WORD nID = bCurForceShow ? TIMER_CAPTION_APPEAR_ID : TIMER_CAPTION_DISAPPEAR_ID;
 					DWORD nDelay = bCurForceShow ? gpSet->nHideCaptionAlwaysDelay : gpSet->nHideCaptionAlwaysDisappear;
 
 					// Если просили показывать с задержкой - то по таймеру
 					if (nDelay)
-						SetTimer(ghWnd, nID, nDelay, NULL);
+						SetKillTimer(true, nID, nDelay);
 					else if (bCurForceShow)
 						StartForceShowFrame();
 					else
@@ -17280,7 +17282,7 @@ void CConEmuMain::OnTimer_ConRedraw(CVirtualConsole* pVCon)
 
 void CConEmuMain::OnTimer_FrameAppearDisappear(WPARAM wParam)
 {
-	KillTimer(ghWnd, wParam);
+	SetKillTimer(false, wParam, 0);
 
 	if (isMouseOverFrame(true))
 		StartForceShowFrame();
@@ -17303,7 +17305,7 @@ void CConEmuMain::OnTimer_AdmShield()
 	}
 	if ((nStep >= 5) || !gpSet->isTaskbarShield)
 	{
-		KillTimer(ghWnd, TIMER_ADMSHIELD_ID);
+		SetKillTimer(false, TIMER_ADMSHIELD_ID, 0);
 	}
 }
 
@@ -17326,7 +17328,7 @@ void CConEmuMain::OnTimer_QuakeFocus()
 		LogFocusInfo(L"OnTimer_QuakeFocus skipped, already processed (TSA)");
 	}
 
-	KillTimer(ghWnd, TIMER_QUAKE_AUTOHIDE_ID);
+	SetKillTimer(false, TIMER_QUAKE_AUTOHIDE_ID, 0);
 }
 
 void CConEmuMain::OnTransparentSeparate(bool bSetFocus)

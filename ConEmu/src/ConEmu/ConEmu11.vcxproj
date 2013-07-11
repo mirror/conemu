@@ -799,6 +799,7 @@
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
       <Profile>false</Profile>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>conemu.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
@@ -935,7 +936,12 @@
     <ClCompile Include="RunQueue.cpp" />
     <ClCompile Include="ScreenDump.cpp" />
     <ClCompile Include="Status.cpp" />
-    <ClCompile Include="TabBar.cpp" />
+    <ClCompile Include="TabBar.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_F2|Win32'">
+      </ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="TabCtrlBase.cpp" />
+    <ClCompile Include="TabCtrlWin.cpp" />
     <ClCompile Include="TabID.cpp" />
     <ClCompile Include="TaskBar.cpp" />
     <ClCompile Include="TaskBarGhost.cpp" />
@@ -1005,6 +1011,8 @@
     <ClInclude Include="ScreenDump.h" />
     <ClInclude Include="Status.h" />
     <ClInclude Include="TabBar.h" />
+    <ClInclude Include="TabCtrlBase.h" />
+    <ClInclude Include="TabCtrlWin.h" />
     <ClInclude Include="TabID.h" />
     <ClInclude Include="TaskBar.h" />
     <ClInclude Include="TaskBarGhost.h" />
