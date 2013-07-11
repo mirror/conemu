@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _COMMON_HEADER_HPP_
 
 // Версия интерфейса
-#define CESERVER_REQ_VER    125
+#define CESERVER_REQ_VER    127
 
 #include "defines.h"
 #include "ConEmuColors.h"
@@ -80,6 +80,12 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define CECOPYRIGHTSTRING_A "(c) 2009-2013, ConEmu.Maximus5@gmail.com"
 #define CECOPYRIGHTSTRING_W L"\x00A9 2009-2013 ConEmu.Maximus5@gmail.com"
 
+#define CEHOMEPAGE     L"http://conemu-maximus5.googlecode.com"
+#define CEREPORTBUG    L"http://code.google.com/p/conemu-maximus5/issues/entry"
+#define CEREPORTCRASH  L"http://code.google.com/p/conemu-maximus5/issues/entry"
+#define CEWHATSNEW     L"http://code.google.com/p/conemu-maximus5/wiki/Whats_New"
+
+
 // EnvVars
 #define ENV_CONEMUDIR_VAR_A  "ConEmuDir"
 #define ENV_CONEMUDIR_VAR_W L"ConEmuDir"
@@ -105,6 +111,9 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define ENV_CONEMU_BLOCKCHILDDEBUGGERS L"ConEmuBlockChildDebuggers" // When ConEmuC tries to debug process tree - force disable DEBUG_PROCESS/DEBUG_ONLY_THIS_PROCESS flags when creating subchildren
 #define ENV_CONEMU_BLOCKCHILDDEBUGGERS_YES L"YES"
 #define ENV_CONEMU_MONITOR_INTERNAL L"ConEmuMonitorThreadId" // Used internally
+// Don't forget add exclusion to IsExportEnvVarAllowed
+#define ENV_CONEMU_SLEEP_INDICATE L"ConEmuSleepIndicator"
+#define ENV_CONEMU_SLEEP_INDICATE_NUM L"NUM"
 
 #define CONEMU_CONHOST_CREATED_MSG L"ConEmu: ConHost was created PID=" // L"%u\n"
 
@@ -333,6 +342,8 @@ const CECMD
 	CECMD_DUPLICATE      = 69, // CESERVER_REQ_DUPLICATE. sent to root console process (cmd, far, powershell), processed with ConEmuHk - Create new tab reproducing current state.
 	CECMD_BSDELETEWORD   = 70, // CESERVER_REQ_PROMPTACTION - default action for Ctrl+BS (prompt) - delete word to the left of the cursor
 	CECMD_GUICLIENTSHIFT = 71, // GuiStylesAndShifts
+	CECMD_ALTBUFFER      = 72, // CESERVER_REQ_ALTBUFFER: CmdOutputStore/Restore
+	CECMD_ALTBUFFERSTATE = 73, // Проверить, разрешен ли Alt.Buffer?
 /** Команды FAR плагина **/
 	CMD_FIRST_FAR_CMD    = 200,
 	CMD_DRAGFROM         = 200,
@@ -963,6 +974,8 @@ const ConEmuConsoleFlags
 
 	CECF_BlockChildDbg   = 0x00000040, // When ConEmuC tries to debug process tree - force disable DEBUG_PROCESS/DEBUG_ONLY_THIS_PROCESS flags when creating subchildren
 
+	CECF_SuppressBells   = 0x00000080, // Suppress output of char(7) to console (wich producess annoing bell sound)
+
 	CECF_Empty = 0
 	;
 #define SetConEmuFlags(v,m,f) (v) = ((v) & ~(m)) | (f)
@@ -1023,14 +1036,15 @@ static const CEFarWindowType
 	fwt_Editor         = 3,
 	fwt_TypeMask       = 0x00FF,
 
-	fwt_Elevated       = 0x0100,
-	fwt_NonElevated    = 0x0200, // Аргумент для поиска окна
-	fwt_Modal          = 0x0400,
-	fwt_NonModal       = 0x0800, // Аргумент для поиска окна
-	fwt_PluginRequired = 0x1000, // Аргумент для поиска окна
-	fwt_ActivateFound  = 0x2000, // Активировать найденный таб. Аргумент для поиска окна
-	fwt_Disabled       = 0x4000, // Таб заблокирован другим модальным табом (или диалогом?)
-	fwt_Renamed        = 0x8000  // Таб был принудительно переименован пользователем
+	fwt_Elevated       = 0x00100,
+	fwt_NonElevated    = 0x00200, // Аргумент для поиска окна
+	fwt_Modal          = 0x00400,
+	fwt_NonModal       = 0x00800, // Аргумент для поиска окна
+	fwt_PluginRequired = 0x01000, // Аргумент для поиска окна
+	fwt_ActivateFound  = 0x02000, // Активировать найденный таб. Аргумент для поиска окна
+	fwt_Disabled       = 0x04000, // Таб заблокирован другим модальным табом (или диалогом?)
+	fwt_Renamed        = 0x08000, // Таб был принудительно переименован пользователем
+	fwt_ActivateOther  = 0x10000  // Активировать найденный таб если он НЕ в активной консоли. Аргумент для поиска окна
 	;
 
 //TODO("Restrict CONEMUTABMAX to 128 chars. Only filename, and may be ellipsed...");
@@ -1689,6 +1703,7 @@ enum ATTACHGUIAPP_FLAGS
 	agaf_WS_CHILD = 8,
 	agaf_Self     = 16, // GUI приложение само создало дочернее окно в ConEmu
 	agaf_Inactive = 32, // GUI приложение создается в НЕ активной вкладке! Фокус нужно вернуть в ConEmu!
+	agaf_QtWindow = 64, // Qt
 };
 
 struct GuiStylesAndShifts
@@ -1793,6 +1808,21 @@ struct CESERVER_REQ_DUPLICATE
 	DWORD nWidth, nHeight;
 	DWORD nBufferHeight;
 	DWORD nColors;
+	WCHAR sCommand[1]; // variable length, NULL usually
+};
+
+enum ALTBUFFER_FLAGS
+{
+	abf_SaveContents    = 0x0001,
+	abf_RestoreContents = 0x0002,
+	abf_BufferOn        = 0x0004,
+	abf_BufferOff       = 0x0008,
+};
+
+struct CESERVER_REQ_ALTBUFFER
+{
+	DWORD  AbFlags; // ALTBUFFER_FLAGS
+	USHORT BufferHeight; // In/Out
 };
 
 struct CESERVER_REQ
@@ -1844,6 +1874,7 @@ struct CESERVER_REQ
 		CESERVER_REQ_SETCONSOLORS SetConColor;
 		CESERVER_REQ_PROMPTACTION Prompt;
 		CESERVER_REQ_DUPLICATE Duplicate;
+		CESERVER_REQ_ALTBUFFER AltBuf;
 	};
 
 	DWORD DataSize() { return this ? (hdr.cbSize - sizeof(hdr)) : 0; };

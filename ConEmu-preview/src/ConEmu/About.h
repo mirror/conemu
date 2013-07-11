@@ -55,6 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"/MinTSA - start minimized in taskbar status area on startup only.\r\n" \
 	L"/Detached - start ConEmu without consoles.\r\n" \
 	L"/Icon <file> - Take icon from file (exe, dll, ico).\r\n" \
+	L"/Title <title> - Set fixed(!) title for ConEmu window. You may use environment variables in <title>.\r\n" \
 	L"/Multi | /NoMulti - Enable or disable multiconsole features.\r\n" \
 	L"/Single - New console will be started in new tab of existing ConEmu.\r\n" \
 	L"/ShowHide | /ShowHideTSA - Works like \"Minimize/Restore\" global hotkey.\r\n" \
@@ -156,10 +157,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"    close ConEmu window (2)\r\n" \
 	L"    close active tab (3)\r\n" \
 	L"    close active group (4)\r\n" \
+	L"    close all tabs but active (5)\r\n" \
+	L"Copy(<What>)\r\n" \
+	L"  - Copy active console contents\r\n" \
+	L"    What==0: current selection\r\n" \
+	L"    What==1: all buffer contents\r\n" \
 	L"FindEditor(\"<FullEditFileName>\")\r\n" \
 	L"FindViewer(\"<FullViewerFileName>\")\r\n" \
 	L"FindFarWindow(<WindowType>,\"<WindowTitle>\")\r\n" \
-	L"  - Returns \"Found:<index of RealConsole>\", \"Blocked\", or \"NotFound\"\r\n" \
+	L"  - Returns \"Found:<index of RealConsole>\", \"Active:<Far window number>\",  \"Blocked\", or \"NotFound\"\r\n" \
 	L"     <WindowType> is number from Far Manager enum WINDOWINFO_TYPE\r\n" \
 	L"FontSetName(\"<FontFaceName>\"[,FontHeight[,FontWidth]])\r\n" \
 	L"  - Change font face name and (optionally) height/width.\r\n" \
@@ -198,8 +204,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"Rename(<Type>,[\"<Title>\"])\r\n" \
 	L"  - Rename tab (Type=0) or console title (Type=1)\r\n" \
 	L"SetOption(\"<Name>\",<Value>)\r\n" \
-	L"  - Name = \"QuakeAutoHide\": auto hide on focus lose, Quake mode\r\n" \
+	L"  - Name=one of allowed for changing ConEmu options\r\n" \
+	L"    \"QuakeAutoHide\": auto hide on focus lose, Quake mode\r\n" \
 	L"      Value: 2 - switch auto-hide, 1 - enable, 0 - disable\r\n" \
+	L"    \"bgImageDarker\": darkening of background image\r\n" \
+	L"      Value: 0 .. 255\r\n" \
 	L"Shell(\"<Verb>\",\"<File>\"[,\"<Parms>\"[,\"<Dir>\"[,<ShowCmd>]]])\r\n" \
 	L"  - Verb can be \"open\", \"print\" and so on, or special value \"new_console\",\r\n" \
 	L"     which starts File in the new tab of ConEmu window. Examples:\r\n" \
@@ -239,5 +248,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"     returns previous window mode\r\n" \
 	L"WindowMode([\"<Mode>\"])\r\n" \
 	L"  - Returns or set current window mode\r\n" \
-	L"     \"NOR\", \"MAX\", \"FS\", \"MIN\", \"TSA\"\r\n" \
+	L"     \"NOR\", \"MAX\", \"FS\" (fullscreen), \"MIN\", \"TSA\",\r\n" \
+    L"     \"TLEFT\", \"TRIGHT\" (tile to left/right), \"THEIGHT\",\r\n" \
+    L"     \"MPREF\", \"MNEXT\" (move ConEmu to prev/next monitor)\r\n" \
 	L""

@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //  #define SHOW_STARTED_ASSERT
 //  #define SHOW_STARTED_PRINT
 //	#define SHOW_STARTED_PRINT_LITE
+	#define SHOW_EXITWAITKEY_MSGBOX
 //	#define SHOW_INJECT_MSGBOX
 //	#define SHOW_INJECTREM_MSGBOX
 //	#define SHOW_ATTACH_MSGBOX
@@ -67,6 +68,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../ConEmu/version.h"
 #include "../common/execute.h"
 #include "../ConEmuHk/Injects.h"
+#include "../common/MArray.h"
 #include "../common/MMap.h"
 #include "../common/RConStartArgs.h"
 #include "../common/ConsoleAnnotation.h"
@@ -715,6 +717,42 @@ extern "C" {
 };
 #endif
 
+// Возвращает текст с информацией о пути к сохраненному дампу
+DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024]);
+#include "../common/Dump.h"
+
+LPTOP_LEVEL_EXCEPTION_FILTER gpfnPrevExFilter = NULL;
+LONG WINAPI CreateDumpOnException(LPEXCEPTION_POINTERS ExceptionInfo)
+{
+	wchar_t szFull[1024] = L"";
+	DWORD dwErr = CreateDumpForReport(ExceptionInfo, szFull);
+	wchar_t szAdd[1200];
+	wcscpy_c(szAdd, szFull);
+	wcscat_c(szAdd, L"\r\n\r\nPress <Yes> to copy this text to clipboard\r\nand open project web page");
+	wchar_t szTitle[100];
+	_wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"ConEmu crashed, PID=%u", GetCurrentProcessId());
+
+	int nBtn = MessageBox(NULL, szAdd, szTitle, MB_YESNO|MB_ICONSTOP|MB_SYSTEMMODAL);
+	if (nBtn == IDYES)
+	{
+		CopyToClipboard(szFull);
+		ShellExecute(NULL, L"open", CEREPORTCRASH, NULL, NULL, SW_SHOWNORMAL);
+	}
+
+	LONG lExRc = EXCEPTION_EXECUTE_HANDLER;
+
+	if (gpfnPrevExFilter)
+	{
+		// если фильтр уже был установлен перед нашим - будем звать его
+		// все-равно уже свалились, на валидность адреса можно не проверяться
+        lExRc = gpfnPrevExFilter(ExceptionInfo);
+	}
+
+	return lExRc;
+}
+
+
+
 // Main entry point for ConEmuC.exe
 int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserved*/)
 {
@@ -729,6 +767,11 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 
 	if (!anWorkMode)
 	{
+		if (!IsDebuggerPresent())
+		{
+			SetUnhandledExceptionFilter(CreateDumpOnException);
+		}
+
 		HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleMode(hOut, ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
 
@@ -736,6 +779,16 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 		#if 0
 		SetConsoleTextAttribute(hOut, 7);
 		#endif
+	}
+	else if (anWorkMode == 1)
+	{
+		// Far 3.x, telnet, Vim, etc.
+		// В этих программах ConEmuCD.dll может загружаться для работы с альтернативными буферами и TrueColor
+		if (!IsDebuggerPresent())
+		{
+			// Сохраним, если фильтр уже был установлен - будем звать его из нашей функции
+			gpfnPrevExFilter = SetUnhandledExceptionFilter(CreateDumpOnException);
+		}
 	}
 
 
@@ -873,6 +926,24 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 		_ASSERT(FALSE);
 	}
 	#endif
+
+
+	wchar_t szSelfExe[MAX_PATH*2] = {}, szSelfDir[MAX_PATH+1] = {};
+	DWORD nSelfLen = GetModuleFileNameW(NULL, szSelfExe, countof(szSelfExe));
+	if (!nSelfLen || (nSelfLen >= countof(szSelfExe)))
+	{
+		_ASSERTE(FALSE && "GetModuleFileNameW(NULL) failed");
+		szSelfExe[0] = 0;
+	}
+	else
+	{
+		lstrcpyn(szSelfDir, szSelfExe, countof(szSelfDir));
+		wchar_t* pszSlash = wcsrchr(szSelfDir, L'\\');
+		if (pszSlash)
+			*pszSlash = 0;
+		else
+			szSelfDir[0] = 0;
+	}
 
 
 	PRINT_COMSPEC(L"ConEmuC started: %s\n", GetCommandLineW());
@@ -1098,7 +1169,6 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 		#endif
 
 		LPCWSTR pszCurDir = NULL;
-		wchar_t szSelf[MAX_PATH*2];
 		WARNING("The process handle must have the PROCESS_VM_OPERATION access right!");
 
 		if (gbUseDosBox)
@@ -1195,8 +1265,11 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 		if (!lbRc && (gnRunMode == RM_SERVER) && dwErr == ERROR_FILE_NOT_FOUND)
 		{
 			// Фикс для перемещения ConEmu.exe в подпапку фара. т.е. far.exe находится на одну папку выше
-			if (GetModuleFileNameW(NULL, szSelf, countof(szSelf)))
+			if (szSelfExe[0] != 0)
 			{
+				wchar_t szSelf[MAX_PATH*2];
+				wcscpy_c(szSelf, szSelfExe);
+
 				wchar_t* pszSlash = wcsrchr(szSelf, L'\\');
 
 				if (pszSlash)
@@ -1384,6 +1457,10 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 	/* *** Ожидание запуска *** */
 	/* ************************ */
 
+	// Чтобы не блокировать папку запуска
+	if (szSelfDir[0])
+		SetCurrentDirectory(szSelfDir);
+
 	if (gnRunMode == RM_SERVER)
 	{
 		//DWORD dwWaitGui = -1;
@@ -1506,6 +1583,11 @@ wait:
 		gbPipeDebugBoxes = false;
 	}
 #endif
+
+	
+	// Чтобы не блокировать папку запуска (на всякий случай, если на метку goto был)
+	if (szSelfDir[0])
+		SetCurrentDirectory(szSelfDir);
 
 
 	if (gnRunMode == RM_ALTSERVER)
@@ -1666,6 +1748,10 @@ wrap:
 				|| gbAlwaysConfirmExit)
 	  )
 	{
+		// Чтобы не блокировать папку запуска (если вдруг ошибка была, и папку не меняли)
+		if (szSelfDir[0])
+			SetCurrentDirectory(szSelfDir);
+
 		//#ifdef _DEBUG
 		//if (!gbInShutdown)
 		//	MessageBox(0, L"ExitWaitForKey", L"ConEmuC", MB_SYSTEMMODAL);
@@ -1919,6 +2005,11 @@ int WINAPI RequestLocalServer(/*[IN/OUT]*/RequestLocalServerParm* Parm)
 			goto wrap;
 		}
 
+		// Need to block all requests to output buffer in other threads
+		MSectionLockSimple csRead;
+		if (gpSrv)
+			csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 		// Инициализировать gcrVisibleSize и прочие переменные
 		CONSOLE_SCREEN_BUFFER_INFO sbi = {};
 		// MyGetConsoleScreenBufferInfo пользовать нельзя - оно gpSrv и gnRunMode хочет
@@ -1932,6 +2023,7 @@ int WINAPI RequestLocalServer(/*[IN/OUT]*/RequestLocalServerParm* Parm)
 			gbParmBufSize = (gnBufferHeight != 0);
 		}
 		_ASSERTE(gcrVisibleSize.X>0 && gcrVisibleSize.X<=400 && gcrVisibleSize.Y>0 && gcrVisibleSize.Y<=300);
+		csRead.Unlock();
 
 		iRc = ConsoleMain2(1/*0-Server&ComSpec,1-AltServer,2-Reserved*/);
 
@@ -2778,12 +2870,12 @@ int DoInjectRemote(LPWSTR asCmdArg, bool abDefTermOnly)
 int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = false)
 {
 	int iRc = CERR_CARGUMENT;
-	size_t cchMax = 0x4000, nCount = 0;
 	struct ProcInfo {
 		DWORD nPID, nParentPID;
 		DWORD_PTR Flags;
 	};
-	ProcInfo* pList = NULL;
+	//ProcInfo* pList = NULL;
+	MArray<ProcInfo> List;
 	LPWSTR pszAllVars = NULL, pszSrc;
 	CESERVER_REQ *pIn = NULL;
 	DWORD nPID = GetCurrentProcessId();
@@ -2794,6 +2886,8 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	HANDLE h;
 	size_t cchMaxEnvLen = 0;
 	wchar_t* pszBuffer;
+
+	//_ASSERTE(FALSE && "Continue with exporting environment");
 
 	#define ExpFailedPref "ConEmuC: can't export environment"
 
@@ -2822,7 +2916,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	{
 		LPWSTR pszName = pszSrc;
 		LPWSTR pszVal = pszName + lstrlen(pszName) + 1;
-		pszSrc = pszVal + lstrlen(pszVal) + 1;
+		pszSrc = pszVal;
 	}
 	cchMaxEnvLen = pszSrc - pszAllVars + 1;
 	
@@ -2859,7 +2953,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 			LPWSTR pszName = pszSrc;
 			LPWSTR pszVal = pszName + lstrlen(pszName) + 1;
 			LPWSTR pszNext = pszVal + lstrlen(pszVal) + 1;
-			if (lstrcmpni(pszName, L"ConEmu", 6) != 0)
+			if (IsExportEnvVarAllowed(pszName))
 			{
 				// Non ConEmu's internals, transfer it
 				size_t cchAdd = pszNext - pszName;
@@ -2899,7 +2993,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 				LPWSTR pszName = pszSrc;
 				LPWSTR pszVal = pszName + lstrlen(pszName) + 1;
 				LPWSTR pszNext = pszVal + lstrlen(pszVal) + 1;
-				if (lstrcmpni(pszName, L"ConEmu", 6) != 0
+				if (IsExportEnvVarAllowed(pszName)
 					&& CompareFileMask(pszName, szTest)) // limited
 				{
 					// Non ConEmu's internals, transfer it
@@ -2945,11 +3039,12 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	}
 
 	// Allocate memory for process tree
-	pList = (ProcInfo*)malloc(cchMax*sizeof(*pList));
-	if (!pList)
+	//pList = (ProcInfo*)malloc(cchMax*sizeof(*pList));
+	//if (!pList)
+	if (!List.alloc(4096))
 	{
 		if (!bSilent)
-			_printf(ExpFailedPref ", pList allocation failed\n");
+			_printf(ExpFailedPref ", List allocation failed\n");
 		goto wrap;
 	}
 
@@ -2969,22 +3064,12 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 				}
 				CharUpperBuff(PI.szExeFile, lstrlen(PI.szExeFile));
 				LPCWSTR pszName = PointToName(PI.szExeFile);
-				pList[nCount].nPID = PI.th32ProcessID;
-				pList[nCount].nParentPID = PI.th32ParentProcessID;
-				pList[nCount].Flags = ((lstrcmp(pszName, L"CONEMUC.EXE") == 0) || (lstrcmp(pszName, L"CONEMUC64.EXE") == 0)) ? 1 : 0;
-				nCount++;
-				if (nCount == cchMax)
-				{
-					size_t cchNew = cchMax+0x4000;
-					ProcInfo* pNew = (ProcInfo*)realloc(pList, cchNew*sizeof(*pList));
-					if (!pNew)
-					{
-						_ASSERTE(pNew);
-						break;
-					}
-					cchMax = cchNew;
-					pList = pNew;
-				}
+				ProcInfo pi = {
+					PI.th32ProcessID,
+					PI.th32ParentProcessID,
+					((lstrcmp(pszName, L"CONEMUC.EXE") == 0) || (lstrcmp(pszName, L"CONEMUC64.EXE") == 0)) ? 1 : 0
+				};
+				List.push_back(pi);
 			} while (Process32Next(h, &PI));
 		}
 
@@ -2992,23 +3077,25 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	}
 
 	// Send to parents tree
-	if (nCount && (nParentPID != nPID))
+	if (!List.empty() && (nParentPID != nPID))
 	{
 		DWORD nOurParentPID = nParentPID;
 		// Loop while parent is found
-		bool bParentFound = true, bFirst = true;
-		while ((nParentPID != nSrvPID) && bParentFound)
+		bool bParentFound = true;
+		while (nParentPID != nSrvPID)
 		{
 			nPID = nParentPID;
 			bParentFound = false;
 			// find next parent
-			size_t i = 0;
+			INT_PTR i = 0;
+			INT_PTR nCount = List.size();
 			while (i < nCount)
 			{
-				if (pList[i].nPID == nPID)
+				const ProcInfo& pi = List[i];
+				if (pi.nPID == nPID)
 				{
-					nParentPID = pList[i].nParentPID;
-					if (pList[i].Flags & 1)
+					nParentPID = pi.nParentPID;
+					if (pi.Flags & 1)
 					{
 						// ConEmuC - пропустить
 						i = 0;
@@ -3021,21 +3108,37 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 				i++;
 			}
 
-			if (bParentFound && (nPID != nSrvPID) && (nPID != nOurParentPID))
+			if (nPID == nSrvPID)
+				break; // Fin, this is root server
+			if (bParentFound)
+				break; // Fin, no more parents
+
+			_ASSERTE(nPID != nOurParentPID);
+
+			// Apply environment
+			CESERVER_REQ *pOut = ExecuteHkCmd(nPID, pIn, ghConWnd);
+
+			if (!pOut && !bSilent)
 			{
-				// go
-				CESERVER_REQ *pOut = ExecuteHkCmd(nPID, pIn, ghConWnd);
-				if (!pOut)
-				{
-					if (!bSilent)
-						_printf(ExpFailedPref " to PID=%u, check <Inject ConEmuHk>\n", nPID);
-				}
-				else
-				{
-					bFirst = false;
-					ExecuteFreeResult(pOut);
-				}
+				_printf(ExpFailedPref " to PID=%u, check <Inject ConEmuHk>\n", nPID);
 			}
+
+			ExecuteFreeResult(pOut);
+		}
+	}
+
+	// В корневом сервере тоже применить
+	{
+		CESERVER_REQ *pOut = ExecuteSrvCmd(nSrvPID, pIn, ghConWnd);
+
+		if (!pOut)
+		{
+			if (!bSilent)
+				_printf(ExpFailedPref " to PID=%u, root server was terminated?\n", nPID);
+		}
+		else
+		{
+			ExecuteFreeResult(pOut);
 		}
 	}
 
@@ -3053,8 +3156,6 @@ wrap:
 		FreeEnvironmentStringsW((LPWCH)pszAllVars);
 	if (pIn)
 		ExecuteFreeResult(pIn);
-	if (pList)
-		free(pList);
 
 	return iRc;
 }
@@ -3192,6 +3293,14 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		// Далее - требуется чтобы у аргумента был "/"
 		if (szArg[0] != L'/')
 			continue;
+
+		#ifdef _DEBUG
+		if (lstrcmpi(szArg, L"/DEBUGTRAP")==0)
+		{
+			int i, j = 1; j--; i = 1 / j;
+		}
+		else
+		#endif
 
 		if (wcsncmp(szArg, L"/REGCONFONT=", 12)==0)
 		{
@@ -4486,8 +4595,10 @@ bool IsMainServerPID(DWORD nPID)
 	return false;
 }
 
-void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDontShowConsole)
+int ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDontShowConsole)
 {
+	int nKeyPressed = -1;
+
 	// Чтобы ошибку было нормально видно
 	if (!abDontShowConsole)
 	{
@@ -4525,10 +4636,12 @@ void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDon
 	}
 
 	HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	// Сначала почистить буфер
 	INPUT_RECORD r = {0}; DWORD dwCount = 0;
 	DWORD nPreFlush = 0, nPostFlush = 0, nPreQuit = 0;
+
 	GetNumberOfConsoleInputEvents(hIn, &nPreFlush);
 
 	FlushConsoleInputBuffer(hIn);
@@ -4537,9 +4650,8 @@ void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDon
 	GetNumberOfConsoleInputEvents(hIn, &nPostFlush);
 
 	if (gbInShutdown)
-		return; // Event закрытия мог припоздниться
+		goto wrap; // Event закрытия мог припоздниться
 
-	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleMode(hOut, ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
 
 	//
@@ -4599,8 +4711,10 @@ void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDon
 				{
 					if (pvkKeys)
 					{
-						for(int i = 0; !lbMatch && pvkKeys[i]; i++)
+						for (int i = 0; !lbMatch && pvkKeys[i]; i++)
+						{
 							lbMatch = (r.Event.KeyEvent.wVirtualKeyCode == pvkKeys[i]);
+						}
 					}
 					else
 					{
@@ -4609,7 +4723,10 @@ void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDon
 				}
 
 				if (lbMatch)
+				{
+					nKeyPressed = r.Event.KeyEvent.wVirtualKeyCode;
 					break;
+				}
 			}
 		}
 
@@ -4620,6 +4737,14 @@ void ExitWaitForKey(WORD* pvkKeys, LPCWSTR asConfirm, BOOL abNewLine, BOOL abDon
 	//int nCh = _getch();
 	if (abNewLine)
 		_printf("\n");
+
+wrap:
+	#if defined(_DEBUG) && defined(SHOW_EXITWAITKEY_MSGBOX)
+	wchar_t szTitle[128];
+	_wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"ConEmuC[Srv]: PID=%u", GetCurrentProcessId());
+	MessageBox(NULL, asConfirm ? asConfirm : L"???", szTitle, MB_ICONEXCLAMATION|MB_SYSTEMMODAL);
+	#endif
+	return nKeyPressed;
 }
 
 
@@ -4816,20 +4941,27 @@ void SendStarted()
 			pIn->StartStop.nImageBits = gnImageBits;
 
 		pIn->StartStop.bRootIsCmdExe = gbRootIsCmdExe; //2009-09-14
+
 		// НЕ MyGet..., а то можем заблокироваться...
-		HANDLE hOut = NULL;
-
-		if ((gnRunMode == RM_SERVER) || (gnRunMode == RM_ALTSERVER))
-			hOut = (HANDLE)ghConOut;
-		else
-			hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-
 		DWORD dwErr1 = 0;
-		BOOL lbRc1 = GetConsoleScreenBufferInfo(hOut, &pIn->StartStop.sbi);
+		BOOL lbRc1;
 
-		if (!lbRc1) dwErr1 = GetLastError();
+		{
+			HANDLE hOut;
+			// Need to block all requests to output buffer in other threads
+			MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
-		pIn->StartStop.crMaxSize = MyGetLargestConsoleWindowSize(hOut);
+			if ((gnRunMode == RM_SERVER) || (gnRunMode == RM_ALTSERVER))
+				hOut = (HANDLE)ghConOut;
+			else
+				hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+
+			lbRc1 = GetConsoleScreenBufferInfo(hOut, &pIn->StartStop.sbi);
+
+			if (!lbRc1) dwErr1 = GetLastError();
+
+			pIn->StartStop.crMaxSize = MyGetLargestConsoleWindowSize(hOut);
+		}
 
 		// Если (для ComSpec) указан параметр "-cur_console:h<N>"
 		if (gbParmBufSize)
@@ -6059,6 +6191,10 @@ BOOL cmd_SetSizeXXX_CmdStartedFinished(CESERVER_REQ& in, CESERVER_REQ** out)
 			{
 				// Во избежание каких-то накладок FAR (по крайней мере с /w)
 				// стал ресайзить панели только после дерганья мышкой над консолью
+
+				// Need to block all requests to output buffer in other threads
+				MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 				CONSOLE_SCREEN_BUFFER_INFO sc = {{0,0}};
 				GetConsoleScreenBufferInfo(ghConOut, &sc);
 				HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
@@ -6068,6 +6204,9 @@ BOOL cmd_SetSizeXXX_CmdStartedFinished(CESERVER_REQ& in, CESERVER_REQ** out)
 				r.Event.MouseEvent.dwEventFlags = MOUSE_MOVED;
 				DWORD cbWritten = 0;
 				WriteConsoleInput(hIn, &r, 1, &cbWritten);
+
+				csRead.Unlock();
+
 				// Команду можно выполнить через плагин FARа
 				wchar_t szPipeName[128];
 				_wsprintf(szPipeName, SKIPLEN(countof(szPipeName)) CEPLUGINPIPENAME, L".", in.SetSize.dwFarPID);
@@ -6099,13 +6238,16 @@ BOOL cmd_SetSizeXXX_CmdStartedFinished(CESERVER_REQ& in, CESERVER_REQ** out)
 		if (in.hdr.nCmd == CECMD_CMDSTARTED)
 		{
 			// Восстановить текст скрытой (прокрученной вверх) части консоли
-			CmdOutputRestore();
+			CmdOutputRestore(false);
 		}
 	}
 
 	MCHKHEAP;
 
 	nTick3 = GetTickCount();
+
+	// already blocked
+	//csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
 	// Prepare result
 	(*out)->SetSizeRet.crMaxSize = MyGetLargestConsoleWindowSize(ghConOut);
@@ -6413,7 +6555,25 @@ BOOL cmd_OnActivation(CESERVER_REQ& in, CESERVER_REQ** out)
 		//// Если консоль активировали - то принудительно перечитать ее содержимое
 		//if (gpSrv->pConsole->hdr.bConsoleActive)
 
-		ReloadFullConsoleInfo(TRUE);
+
+		// Принудить RefreshThread перечитать статус активности консоли
+		gpSrv->nLastConsoleActiveTick = 0;
+
+
+		if (gpSrv->dwAltServerPID && (gpSrv->dwAltServerPID != gnSelfPID))
+		{
+			CESERVER_REQ* pAltIn = ExecuteNewCmd(CECMD_ONACTIVATION, sizeof(CESERVER_REQ_HDR));
+			if (pAltIn)
+			{
+				CESERVER_REQ* pAltOut = ExecuteSrvCmd(gpSrv->dwAltServerPID, pAltIn, ghConWnd);
+				ExecuteFreeResult(pAltIn);
+				ExecuteFreeResult(pAltOut);
+			}
+		}
+		else
+		{
+			ReloadFullConsoleInfo(TRUE);
+		}
 	}
 	
 	return lbRc;
@@ -7152,8 +7312,11 @@ BOOL cmd_LoadFullConsoleData(CESERVER_REQ& in, CESERVER_REQ** out)
 	// В итоге, буфер вывода telnet'а схлопывается!
 	if (gpSrv->bReopenHandleAllowed)
 	{
-		ghConOut.Close();
+		ConOutCloseHandle();
 	}
+
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
 	CONSOLE_SCREEN_BUFFER_INFO lsbi = {{0,0}};
 	// !!! Нас интересует реальное положение дел в консоли,
@@ -7213,6 +7376,9 @@ BOOL cmd_SetFullScreen(CESERVER_REQ& in, CESERVER_REQ** out)
 	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(DWORD);
 	*out = ExecuteNewCmd(CECMD_CONSOLEFULL, cbReplySize);
 
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 	if ((*out) != NULL)
 	{
 		if (!_SetConsoleDisplayMode)
@@ -7240,6 +7406,8 @@ BOOL cmd_SetConColors(CESERVER_REQ& in, CESERVER_REQ** out)
 	BOOL lbRc = FALSE;
 	//ghConOut
 
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
 	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_SETCONSOLORS);
 	*out = ExecuteNewCmd(CECMD_CONSOLEFULL, cbReplySize);
@@ -7399,8 +7567,6 @@ BOOL cmd_SetConColors(CESERVER_REQ& in, CESERVER_REQ** out)
 BOOL cmd_SetConTitle(CESERVER_REQ& in, CESERVER_REQ** out)
 {
 	BOOL lbRc = FALSE;
-	//ghConOut
-
 
 	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(DWORD);
 	*out = ExecuteNewCmd(CECMD_SETCONTITLE, cbReplySize);
@@ -7417,9 +7583,153 @@ BOOL cmd_SetConTitle(CESERVER_REQ& in, CESERVER_REQ** out)
 	return lbRc;
 }
 
+BOOL cmd_AltBuffer(CESERVER_REQ& in, CESERVER_REQ** out)
+{
+	BOOL lbRc = TRUE;
+	CONSOLE_SCREEN_BUFFER_INFO lsbi = {};
+
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
+	// !!! Нас интересует реальное положение дел в консоли,
+	//     а не скорректированное функцией MyGetConsoleScreenBufferInfo
+	if (!GetConsoleScreenBufferInfo(ghConOut, &lsbi))
+	{
+		lbRc = FALSE;
+	}
+	else
+	{
+		if (in.AltBuf.AbFlags & abf_SaveContents)
+		{
+			CmdOutputStore();
+		}
+
+
+		//cmd_SetSizeXXX_CmdStartedFinished(CESERVER_REQ& in, CESERVER_REQ** out)
+		//CECMD_SETSIZESYNC
+		if (in.AltBuf.AbFlags & (abf_BufferOn|abf_BufferOff))
+		{
+			CESERVER_REQ* pSizeOut = NULL;
+			CESERVER_REQ* pSizeIn = ExecuteNewCmd(CECMD_SETSIZESYNC, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_SETSIZE));
+			if (!pSizeIn)
+			{
+				lbRc = FALSE;
+			}
+			else
+			{
+				pSizeIn->hdr = in.hdr; // Как-бы фиктивно пришло из приложения
+				pSizeIn->hdr.nCmd = CECMD_SETSIZESYNC;
+				pSizeIn->hdr.cbSize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_SETSIZE);
+
+				pSizeIn->SetSize.rcWindow.Left = pSizeIn->SetSize.rcWindow.Top = 0;
+				pSizeIn->SetSize.rcWindow.Right = lsbi.srWindow.Right - lsbi.srWindow.Left;
+				pSizeIn->SetSize.rcWindow.Bottom = lsbi.srWindow.Bottom - lsbi.srWindow.Top;
+				pSizeIn->SetSize.size.X = lsbi.srWindow.Right - lsbi.srWindow.Left + 1;
+				pSizeIn->SetSize.size.Y = lsbi.srWindow.Bottom - lsbi.srWindow.Top + 1;
+
+				if (in.AltBuf.AbFlags & abf_BufferOff)
+				{
+					pSizeIn->SetSize.nBufferHeight = 0;
+				}
+				else
+				{
+					TODO("BufferWidth");
+					pSizeIn->SetSize.nBufferHeight = (in.AltBuf.BufferHeight > 0) ? in.AltBuf.BufferHeight : 1000;
+				}
+
+				csRead.Unlock();
+
+				if (!cmd_SetSizeXXX_CmdStartedFinished(*pSizeIn, &pSizeOut))
+				{
+					lbRc = FALSE;
+				}
+				else
+				{
+					gpSrv->bAltBufferEnabled = ((in.AltBuf.AbFlags & (abf_BufferOff|abf_SaveContents)) == (abf_BufferOff|abf_SaveContents));
+				}
+				
+				ExecuteFreeResult(pSizeIn);
+				ExecuteFreeResult(pSizeOut);
+			}
+		}
+
+
+		if (in.AltBuf.AbFlags & abf_RestoreContents)
+		{
+			CmdOutputRestore(true/*Simple*/);
+		}
+	}
+
+	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_ALTBUFFER);
+	*out = ExecuteNewCmd(CECMD_ALTBUFFER, cbReplySize);
+	if ((*out) != NULL)
+	{
+		(*out)->AltBuf.AbFlags = in.AltBuf.AbFlags;
+		TODO("BufferHeight");
+		(*out)->AltBuf.BufferHeight = lsbi.dwSize.Y;
+	}
+	else
+	{
+		lbRc = FALSE;
+	}
+
+	return lbRc;
+}
+
+BOOL cmd_AltBufferState(CESERVER_REQ& in, CESERVER_REQ** out)
+{
+	BOOL lbRc = TRUE;
+
+	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(DWORD);
+	*out = ExecuteNewCmd(CECMD_ALTBUFFERSTATE, cbReplySize);
+	if ((*out) != NULL)
+	{
+		(*out)->dwData[0] = gpSrv->bAltBufferEnabled;
+	}
+	else
+	{
+		lbRc = FALSE;
+	}
+
+	return lbRc;
+}
+
+BOOL cmd_ApplyExportVars(CESERVER_REQ& in, CESERVER_REQ** out)
+{
+	BOOL lbRc = TRUE;
+
+	ApplyExportEnvVar((LPCWSTR)in.wData);
+
+	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(DWORD);
+	*out = ExecuteNewCmd(CECMD_EXPORTVARS, cbReplySize);
+	if ((*out) != NULL)
+	{
+		(*out)->dwData[0] = TRUE;
+	}
+	else
+	{
+		lbRc = FALSE;
+	}
+
+	return lbRc;
+}
+
+bool ProcessAltSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out, BOOL& lbRc)
+{
+	bool lbProcessed = false;
+	// Если крутится альтернативный сервер - команду нужно выполнять в нем
+	if (gpSrv->dwAltServerPID && (gpSrv->dwAltServerPID != gnSelfPID))
+	{
+		(*out) = ExecuteSrvCmd(gpSrv->dwAltServerPID, &in, ghConWnd);
+		lbProcessed = ((*out) != NULL);
+		lbRc = lbProcessed;
+	}
+	return lbProcessed;
+}
+
 BOOL ProcessSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out)
 {
-	BOOL lbRc = FALSE;
+	BOOL lbRc;
 	MCHKHEAP;
 
 	switch(in.hdr.nCmd)
@@ -7567,6 +7877,32 @@ BOOL ProcessSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out)
 		{
 			lbRc = cmd_SetConTitle(in, out);
 		} break;
+		case CECMD_ALTBUFFER:
+		{
+			// Если крутится альтернативный сервер - команду нужно выполнять в нем
+			if (!ProcessAltSrvCommand(in, out, lbRc))
+			{
+				lbRc = cmd_AltBuffer(in, out);
+			}
+		} break;
+		case CECMD_ALTBUFFERSTATE:
+		{
+			// Если крутится альтернативный сервер - команду нужно выполнять в нем
+			if (!ProcessAltSrvCommand(in, out, lbRc))
+			{
+				lbRc = cmd_AltBufferState(in, out);
+			}
+		} break;
+		case CECMD_EXPORTVARS:
+		{
+			lbRc = cmd_ApplyExportVars(in, out);
+		} break;
+		default:
+		{
+			// Отлов необработанных
+			_ASSERTE(FALSE && "Command was not processed");
+			lbRc = FALSE;
+		}
 	}
 
 	if (gbInRecreateRoot) gbInRecreateRoot = FALSE;

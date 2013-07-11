@@ -46,6 +46,7 @@ protected:
 	RECT mrc_Splitter;
 	bool mb_ResizeFlag; // взводится в true для корня, когда в группе что-то меняется
 	void SetResizeFlags();
+	void* mp_ActiveGroupVConPtr; // указатель (CVirtualConsole*) на последнюю активную консоль в этой группе
 
 	CVConGroup* GetRootGroup();
 	static CVConGroup* GetRootOfVCon(CVirtualConsole* apVCon);
@@ -60,6 +61,8 @@ protected:
 
 	void GetAllTextSize(SIZE& sz, bool abMinimal = false);
 	void SetConsoleSizes(const COORD& size, const RECT& rcNewCon, bool abSync);
+
+	void StoreActiveVCon(CVirtualConsole* pVCon);
 	
 protected:
 	//static CVirtualConsole* mp_VCon[MAX_CONSOLE_COUNT];
@@ -79,7 +82,7 @@ private:
 	
 	static CVConGroup* CreateVConGroup();
 	CVConGroup* SplitVConGroup(RConStartArgs::SplitType aSplitType = RConStartArgs::eSplitHorz/*eSplitVert*/, UINT anPercent10 = 500);
-	int GetGroupPanes(MArray<CVConGuard*> &rPanes);
+	int GetGroupPanes(MArray<CVConGuard*>* rPanes);
 	static void FreePanesArray(MArray<CVConGuard*> &rPanes);
 	static bool CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/);
 	
@@ -100,11 +103,13 @@ public:
 
 public:
 	static bool isActive(CVirtualConsole* apVCon, bool abAllowGroup = true);
+	static bool isActiveGroupVCon(CVirtualConsole* pVCon);
 	static bool isVisible(CVirtualConsole* apVCon);
 	static bool isValid(CRealConsole* apRCon);
 	static bool isValid(CVirtualConsole* apVCon);
 	static bool isVConExists(int nIdx);
 	static bool isInGroup(CVirtualConsole* apVCon, CVConGroup* apGroup);
+	static bool isGroup(CVirtualConsole* apVCon, CVConGroup** rpRoot = NULL, CVConGuard* rpActiveVCon = NULL);
 	static bool isConSelectMode();
 	static bool isInCreateRoot();
 	static bool isDetached();
@@ -117,7 +122,7 @@ public:
 	static bool isEditor();
 	static bool isViewer();
 	static bool isFar(bool abPluginRequired=false);
-	static bool isFarExist(CEFarWindowType anWindowType=fwt_Any, LPWSTR asName=NULL, CVConGuard* rpVCon=NULL);
+	static int isFarExist(CEFarWindowType anWindowType=fwt_Any, LPWSTR asName=NULL, CVConGuard* rpVCon=NULL);
 	static bool isVConHWND(HWND hChild, CVConGuard* rpVCon = NULL);
 	static bool isConsolePID(DWORD nPID);
 	static DWORD GetFarPID(BOOL abPluginRequired=FALSE);
@@ -136,7 +141,8 @@ public:
 	static void OnUpdateFarSettings();
 	static void OnUpdateTextColorSettings(BOOL ChangeTextAttr = TRUE, BOOL ChangePopupAttr = TRUE);
 	static bool OnCloseQuery(bool* rbMsgConfirmed = NULL);
-	static bool OnScClose();
+	static bool DoCloseAllVCon(bool bMsgConfirmed = false);
+	static void CloseAllButActive(CVirtualConsole* apVCon/*may be null*/);
 	static void CloseGroup(CVirtualConsole* apVCon/*may be null*/);
 	static void OnDestroyConEmu();
 	static void OnVConClosed(CVirtualConsole* apVCon);
@@ -159,6 +165,7 @@ public:
 
 	static void MoveAllVCon(CVirtualConsole* pVConCurrent, RECT rcNewCon);
 	static HRGN GetExclusionRgn(bool abTestOnly = false);
+	static void OnConActivated(CVirtualConsole* pVCon);
 	static bool ConActivate(int nCon);
 	static bool ConActivateNext(bool abNext);
 	static bool PaneActivateNext(bool abNext);
@@ -177,7 +184,7 @@ public:
 	static void SyncWindowToConsole(); // -- функция пустая, игнорируется
 	static void SyncConsoleToWindow(LPRECT prcNewWnd=NULL, bool bSync=false);
 	static void LockSyncConsoleToWindow(bool abLockSync);
-	static void SetAllConsoleWindowsSize(const COORD& size, /*bool updateInfo,*/ bool bSetRedraw /*= false*/, bool bResizeConEmuWnd = false);
+	static void SetAllConsoleWindowsSize(COORD size, bool bSetRedraw /*= false*/);
 	static void SyncAllConsoles2Window(RECT rcWnd, enum ConEmuRect tFrom = CER_MAIN, bool bSetRedraw = false);
 	static void OnConsoleResize(bool abSizingToDo);
 	static void ReSizePanes(RECT mainClient);
@@ -194,10 +201,10 @@ public:
 
 	static void ExportEnvVarAll(CESERVER_REQ* pIn, CRealConsole* pExceptRCon);
 
-	// Это некие сводные размеры, соответствующие тому, как если бы была
-	// только одна активная консоль, БЕЗ Split-screen
-	static uint TextWidth();
-	static uint TextHeight();
+	//// Это некие сводные размеры, соответствующие тому, как если бы была
+	//// только одна активная консоль, БЕЗ Split-screen
+	//static uint TextWidth();
+	//static uint TextHeight();
 
 	static RECT AllTextRect(bool abMinimal = false);
 

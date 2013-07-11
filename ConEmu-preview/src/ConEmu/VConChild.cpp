@@ -189,6 +189,7 @@ BOOL CConEmuChild::ShowView(int nShowCmd)
 
 	BOOL bRc = FALSE;
 	DWORD nTID = 0, nPID = 0;
+	wchar_t sInfo[200];
 
 	// Должно быть создано в главной нити!
 	nTID = GetWindowThreadProcessId(mh_WndDC, &nPID);
@@ -204,10 +205,23 @@ BOOL CConEmuChild::ShowView(int nShowCmd)
 	CVConGuard guard(pVCon);
 
 	HWND hChildGUI = pVCon->GuiWnd();
+	BOOL bGuiVisible = (hChildGUI && nShowCmd) ? pVCon->RCon()->isGuiVisible() : FALSE;
+
+
+	if (gpSetCls->isAdvLogging)
+	{
+		if (hChildGUI != NULL)
+			_wsprintf(sInfo, SKIPLEN(countof(sInfo)) L"ShowView: Back=x%08X, DC=x%08X, ChildGUI=x%08X, ShowCMD=%u, ChildVisible=%u",
+				(DWORD)mh_WndBack, (DWORD)mh_WndDC, (DWORD)hChildGUI, nShowCmd, bGuiVisible);
+		else
+			_wsprintf(sInfo, SKIPLEN(countof(sInfo)) L"ShowView: Back=x%08X, DC=x%08X, ShowCMD=%u",
+				(DWORD)mh_WndBack, (DWORD)mh_WndDC, nShowCmd);
+		gpConEmu->LogString(sInfo);
+	}
+
 
 	if ((GetCurrentThreadId() != nTID) || (hChildGUI != NULL))
 	{
-		BOOL bGuiVisible = (hChildGUI && nShowCmd) ? pVCon->RCon()->isGuiVisible() : FALSE;
 		bRc = ShowWindowAsync(mh_WndBack, nShowCmd);
 		bRc = ShowWindowAsync(mh_WndDC, bGuiVisible ? SW_HIDE : nShowCmd);
 	}
@@ -221,6 +235,7 @@ BOOL CConEmuChild::ShowView(int nShowCmd)
 			SetWindowPos(mh_WndBack, mh_WndDC, 0, 0, 0,0, SWP_NOSIZE|SWP_NOMOVE);
 		}
 	}
+
 	return bRc;
 }
 
@@ -552,6 +567,12 @@ wrap:
 
 void CConEmuChild::PostRestoreChildFocus()
 {
+	if (!gpConEmu->CanSetChildFocus())
+	{
+		_ASSERTE(FALSE && "Must not get here?");
+		return;
+	}
+
 	PostMessage(mh_WndBack, mn_MsgRestoreChildFocus, 0, 0);
 }
 
@@ -771,15 +792,23 @@ LRESULT CConEmuChild::BackWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM l
 
 			if (pVCon && (messg == pVCon->mn_MsgRestoreChildFocus))
 			{
-				CRealConsole* pRCon = pVCon->RCon();
-				if (gpConEmu->isActive(pVCon, false))
+				if (!gpConEmu->CanSetChildFocus())
 				{
-					pRCon->GuiWndFocusRestore();
+					// Клик по иконке открывает системное меню
+					//_ASSERTE(FALSE && "Must not get here?");
 				}
-
-				if (pRCon->GuiWnd())
+				else
 				{
-					pRCon->StoreGuiChildRect(NULL);
+					CRealConsole* pRCon = pVCon->RCon();
+					if (gpConEmu->isActive(pVCon, false))
+					{
+						pRCon->GuiWndFocusRestore();
+					}
+
+					if (pRCon->GuiWnd())
+					{
+						pRCon->StoreGuiChildRect(NULL);
+					}
 				}
 			}
 			else
@@ -1190,7 +1219,7 @@ void CConEmuChild::OnAlwaysShowScrollbar(bool abSync /*= true*/)
 			if (gpConEmu->WindowMode != wmNormal)
 				pVCon->RCon()->SyncConsole2Window();
 			else
-				gpConEmu->SyncWindowToConsole(); // -- функция пустая, игнорируется
+				CVConGroup::SyncWindowToConsole(); // -- функция пустая, игнорируется
 		}
 
 		m_LastAlwaysShowScrollbar = gpSet->isAlwaysShowScrollbar;
@@ -1298,9 +1327,12 @@ BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 
 				if (PtInRect(&rcScroll, ptCur))
 				{
+					// Если прокрутка УЖЕ видна - то мышку в консоль не пускать! Она для прокрутки!
+					if (mb_ScrollVisible)
+						lbOverVScroll = TRUE;
 					// Если не проверять - не получится начать выделение с правого края окна
 					//if (!gpSet->isSelectionModifierPressed())
-					if (!(isPressed(VK_SHIFT) || isPressed(VK_CONTROL) || isPressed(VK_MENU) || isPressed(VK_LBUTTON)))
+					else if (!(isPressed(VK_SHIFT) || isPressed(VK_CONTROL) || isPressed(VK_MENU) || isPressed(VK_LBUTTON)))
 						lbOverVScroll = TRUE;
 				}
 			}

@@ -223,6 +223,7 @@ class CSettings
 		bool PrepareBackground(CVirtualConsole* apVCon, HDC* phBgDc, COORD* pbgBmpSize);
 		bool PollBackgroundFile(); // true, если файл изменен
 		bool LoadBackgroundFile(TCHAR *inPath, bool abShowErrors=false);
+		void SetBgImageDarker(u8 newValue, bool bUpdate);
 		bool IsBackgroundEnabled(CVirtualConsole* apVCon);
 		void NeedBackgroundUpdate();
 		//CBackground* CreateBackgroundImage(const BITMAPFILEHEADER* apBkImgData);
@@ -299,11 +300,13 @@ class CSettings
 		//void UpdateMargins(RECT arcMargins);
 		static void Dialog(int IdShowPage = 0);
 		void UpdateWindowMode(WORD WndMode);
+		void UpdatePosSizeEnabled(HWND hWnd2);
 		void UpdatePos(int x, int y, bool bGetRect = false);
-		void UpdateSize(UINT w, UINT h);
+		void UpdateSize(const CESize w, const CESize h);
 		void UpdateTTF(BOOL bNewTTF);
 		void UpdateFontInfo();
 		void Performance(UINT nID, BOOL bEnd);
+		void PostUpdateCounters(bool bPosted);
 		void SetArgBufferHeight(int anBufferHeight);
 		void InitFont(LPCWSTR asFontName=NULL, int anFontHeight=-1, int anQuality=-1);
 		BOOL RegisterFont(LPCWSTR asFontFile, BOOL abDefault);
@@ -458,7 +461,7 @@ class CSettings
 		typedef HRESULT(STDAPICALLTYPE *EnableThemeDialogTextureT)(HWND hwnd,DWORD dwFlags);
 		EnableThemeDialogTextureT EnableThemeDialogTextureF;
 #endif
-		UINT mn_MsgUpdateCounter;
+		UINT mn_MsgUpdateCounter; BOOL mb_MsgUpdateCounter;
 		//wchar_t temp[MAX_PATH];
 		UINT mn_MsgRecreateFont;
 		UINT mn_MsgLoadFontFromMain;

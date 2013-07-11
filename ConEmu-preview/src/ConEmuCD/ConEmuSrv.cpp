@@ -47,6 +47,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#define DEBUGSTRINPUTWRITEFAIL(s) DEBUGSTR(s) // ### WriteConsoleInput(Write=
 //#define DEBUGSTRCHANGES(s) DEBUGSTR(s)
 
+#ifdef _DEBUG
+	//#define DEBUG_SLEEP_NUMLCK
+	#undef DEBUG_SLEEP_NUMLCK
+#else
+	#undef DEBUG_SLEEP_NUMLCK
+#endif
+
 #define MAX_EVENTS_PACK 20
 
 #ifdef _DEBUG
@@ -1768,6 +1775,18 @@ BOOL MyWriteConsoleOutput(HANDLE hOut, CHAR_INFO *pData, COORD& bufSize, COORD& 
 	return lbRc;
 }
 
+void ConOutCloseHandle()
+{
+	if (gpSrv->bReopenHandleAllowed)
+	{
+		// Need to block all requests to output buffer in other threads
+		MSectionLockSimple csRead;
+		if (csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_REOPENCONOUT_TIMEOUT))
+		{
+			ghConOut.Close();
+		}
+	}
+}
 
 bool CmdOutputOpenMap(CONSOLE_SCREEN_BUFFER_INFO& lsbi, CESERVER_CONSAVE_MAPHDR*& pHdr, CESERVER_CONSAVE_MAP*& pData)
 {
@@ -1778,9 +1797,11 @@ bool CmdOutputOpenMap(CONSOLE_SCREEN_BUFFER_INFO& lsbi, CESERVER_CONSAVE_MAPHDR*
 	// В итоге, буфер вывода telnet'а схлопывается!
 	if (gpSrv->bReopenHandleAllowed)
 	{
-		ghConOut.Close();
+		ConOutCloseHandle();
 	}
 
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
 	// !!! Нас интересует реальное положение дел в консоли,
 	//     а не скорректированное функцией MyGetConsoleScreenBufferInfo
@@ -1909,9 +1930,14 @@ wrap:
 // Сохранить данные ВСЕЙ консоли в gpStoredOutput
 void CmdOutputStore(bool abCreateOnly /*= false*/)
 {
+	LogString("CmdOutputStore called");
+
 	CONSOLE_SCREEN_BUFFER_INFO lsbi = {{0,0}};
 	CESERVER_CONSAVE_MAPHDR* pHdr = NULL;
 	CESERVER_CONSAVE_MAP* pData = NULL;
+
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
 	if (!CmdOutputOpenMap(lsbi, pHdr, pData))
 		return;
@@ -1964,20 +1990,31 @@ void CmdOutputStore(bool abCreateOnly /*= false*/)
 	// Запомнить/обновить sbi
 	pData->info = lsbi;
 
-	// Need to block all requests to output buffer in other threads
-	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
-
 	pData->Succeeded = MyReadConsoleOutput(ghConOut, pData->Data, BufSize, ReadRect);
 	
 	csRead.Unlock();
 
+	LogString("CmdOutputStore finished");
 	DEBUGSTR(L"--- CmdOutputStore end\n");
 }
 
-void CmdOutputRestore()
+// abSimpleMode==true  - просто восстановить экран на момент вызова CmdOutputStore
+//             ==false - пытаться подогнять строки вывода по текущее состояние
+//                       задел на будущее для выполнения команд из Far (без /w), mc, или еще кого.
+void CmdOutputRestore(bool abSimpleMode)
 {
-	WARNING("Переделать/доделать CmdOutputRestore");
-#if 0
+	if (!abSimpleMode)
+	{
+		//_ASSERTE(FALSE && "Non Simple mode is not supported!");
+		WARNING("Переделать/доделать CmdOutputRestore для Far");
+		return;
+	}
+
+	LogString("CmdOutputRestore called");
+
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 	CONSOLE_SCREEN_BUFFER_INFO lsbi = {{0,0}};
 	CESERVER_CONSAVE_MAPHDR* pHdr = NULL;
 	CESERVER_CONSAVE_MAP* pData = NULL;
@@ -2008,7 +2045,16 @@ void CmdOutputRestore()
 		return;
 	}
 
-	SMALL_RECT rcBottom = {0, crMoveTo.Y, lsbi.srWindow.Right, lsbi.dwSize.Y-1};
+	short h = lsbi.srWindow.Bottom - lsbi.srWindow.Top + 1;
+	short w = lsbi.srWindow.Right - lsbi.srWindow.Left + 1;
+
+	if (abSimpleMode)
+	{
+		
+		crMoveTo.Y = min(pData->info.srWindow.Top,max(0,lsbi.dwSize.Y-h));
+	}
+
+	SMALL_RECT rcBottom = {0, crMoveTo.Y, w - 1, crMoveTo.Y + h - 1};
 	SetConsoleWindowInfo(ghConOut, TRUE, &rcBottom);
 
 	COORD crNewPos = {lsbi.dwCursorPosition.X, lsbi.dwCursorPosition.Y + crMoveTo.Y};
@@ -2044,20 +2090,41 @@ void CmdOutputRestore()
 
 
 	CONSOLE_SCREEN_BUFFER_INFO storedSbi = pData->info;
+	COORD crOldBufSize = pData->info.dwSize; // Может быть шире или уже чем текущая консоль!
+	SMALL_RECT rcWrite = {0,0,min(crOldBufSize.X,lsbi.dwSize.X)-1,min(crOldBufSize.Y,lsbi.dwSize.Y)-1};
+	COORD crBufPos = {0,0};
 
-	SHORT nStoredHeight = min(storedSbi.srWindow.Top,rcBottom.Top);
-	if (nStoredHeight < 1)
+	if (!abSimpleMode)
 	{
-		// Nothing to restore?
-		return;
+		// Что восстанавливать - при выполнении команд из фара - нужно
+		// восстановить только область выше первой видимой строки,
+		// т.к. видимую область фар восстанавливает сам
+		SHORT nStoredHeight = min(storedSbi.srWindow.Top,rcBottom.Top);
+		if (nStoredHeight < 1)
+		{
+			// Nothing to restore?
+			return;
+		}
+
+		rcWrite.Top = rcBottom.Top-nStoredHeight;
+		rcWrite.Right = min(crOldBufSize.X,lsbi.dwSize.X)-1;
+		rcWrite.Bottom = rcBottom.Top-1;
+
+		crBufPos.Y = storedSbi.srWindow.Top-nStoredHeight;
+	}
+	else
+	{
+		// А в "простом" режиме - тупо восстановить консоль как она была на момент сохранения!
 	}
 
-	COORD crOldBufSize = pData->info.dwSize; // Может быть шире или уже чем текущая консоль!
-	SMALL_RECT rcWrite = {0,rcBottom.Top-nStoredHeight,min(crOldBufSize.X,lsbi.dwSize.X)-1,rcBottom.Top-1};
-	COORD crBufPos = {0, storedSbi.srWindow.Top-nStoredHeight};
-
 	MyWriteConsoleOutput(ghConOut, pData->Data, crOldBufSize, crBufPos, rcWrite);
-#endif
+
+	if (abSimpleMode)
+	{
+		SetConsoleTextAttribute(ghConOut, pData->info.wAttributes);
+	}
+
+	LogString("CmdOutputRestore finished");
 }
 
 static BOOL CALLBACK FindConEmuByPidProc(HWND hwnd, LPARAM lParam)
@@ -2404,6 +2471,7 @@ HWND Attach2Gui(DWORD nTimeout)
 	HWND hGui = NULL, hDcWnd = NULL;
 	//UINT nMsg = RegisterWindowMessage(CONEMUMSG_ATTACH);
 	BOOL bNeedStartGui = FALSE;
+	DWORD nStartedGuiPID = 0;
 	DWORD dwErr = 0;
 	DWORD dwStartWaitIdleResult = -1;
 	// Будем подцепляться заново
@@ -2478,7 +2546,7 @@ HWND Attach2Gui(DWORD nTimeout)
 
 	if (bNeedStartGui)
 	{
-		wchar_t szSelf[MAX_PATH+128];
+		wchar_t szSelf[MAX_PATH+320];
 		wchar_t* pszSelf = szSelf+1, *pszSlash = NULL;
 
 		if (!GetModuleFileName(NULL, pszSelf, MAX_PATH))
@@ -2551,6 +2619,16 @@ HWND Attach2Gui(DWORD nTimeout)
 			lstrcatW(pszSlash, L"\"");
 		}
 
+		// "/config"!
+		wchar_t szConfigName[MAX_PATH] = {};
+		DWORD nCfgNameLen = GetEnvironmentVariable(ENV_CONEMUANSI_CONFIG_W, szConfigName, countof(szConfigName));
+		if (nCfgNameLen && (nCfgNameLen < countof(szConfigName)) && *szConfigName)
+		{
+			lstrcatW(pszSelf, L" /config \"");
+			lstrcatW(pszSelf, szConfigName);
+			lstrcatW(pszSelf, L"\"");
+		}
+
 		//else
 		//{
 		//	lstrcpyW(pszSlash, L"ConEmu.exe");
@@ -2576,6 +2654,7 @@ HWND Attach2Gui(DWORD nTimeout)
 		}
 
 		//delete psNewCmd; psNewCmd = NULL;
+		nStartedGuiPID = pi.dwProcessId;
 		AllowSetForegroundWindow(pi.dwProcessId);
 		PRINT_COMSPEC(L"Detached GUI was started. PID=%i, Attaching...\n", pi.dwProcessId);
 		dwStartWaitIdleResult = WaitForInputIdle(pi.hProcess, INFINITE); // был nTimeout, видимо часто обламывался
@@ -2655,9 +2734,19 @@ HWND Attach2Gui(DWORD nTimeout)
 		else
 		{
 			HWND hFindGui = NULL;
+			DWORD nFindPID;
 
 			while ((hFindGui = FindWindowEx(NULL, hFindGui, VirtualConsoleClassMain, NULL)) != NULL)
 			{
+				// Если ConEmu.exe мы запустили сами
+				if (nStartedGuiPID)
+				{
+					// то цепляемся ТОЛЬКО к этому PID!
+					GetWindowThreadProcessId(hFindGui, &nFindPID);
+					if (nFindPID != nStartedGuiPID)
+						continue;					
+				}
+
 				if (TryConnect2Gui(hFindGui, hDcWnd, pIn))
 					break; // OK
 			}
@@ -3258,6 +3347,9 @@ BOOL CorrectVisibleRect(CONSOLE_SCREEN_BUFFER_INFO* pSbi)
 
 static int ReadConsoleInfo()
 {
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 	//int liRc = 1;
 	BOOL lbChanged = gpSrv->pConsole->bDataChanged; // Если что-то еще не отослали - сразу TRUE
 	//CONSOLE_SELECTION_INFO lsel = {0}; // GetConsoleSelectionInfo
@@ -3503,6 +3595,9 @@ static int ReadConsoleInfo()
 
 static BOOL ReadConsoleData()
 {
+	// Need to block all requests to output buffer in other threads
+	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
 	BOOL lbRc = FALSE, lbChanged = FALSE;
 #ifdef _DEBUG
 	CONSOLE_SCREEN_BUFFER_INFO dbgSbi = gpSrv->sbi;
@@ -3768,6 +3863,32 @@ BOOL ReloadFullConsoleInfo(BOOL abForceSend)
 
 
 
+BOOL CheckIndicateSleepNum()
+{
+	static BOOL  bCheckIndicateSleepNum = FALSE;
+	static DWORD nLastCheckTick = 0;
+
+	if (!nLastCheckTick || ((GetTickCount() - nLastCheckTick) >= 3000))
+	{
+		wchar_t szVal[32];
+		DWORD nLen = GetEnvironmentVariable(ENV_CONEMU_SLEEP_INDICATE, szVal, countof(szVal));
+		if (nLen && (nLen < countof(szVal)))
+		{
+			szVal[3] = 0; // только "NUM" - хвост отрезать (возможные пробелы не интересуют)
+			bCheckIndicateSleepNum = (lstrcmpi(szVal, ENV_CONEMU_SLEEP_INDICATE_NUM) == 0);
+		}
+		else
+		{
+			bCheckIndicateSleepNum = FALSE; // Надо, ибо может быть обратный сброс переменной
+		}
+		nLastCheckTick = GetTickCount();
+	}
+
+	return bCheckIndicateSleepNum;
+}
+
+
+
 
 
 
@@ -3791,11 +3912,11 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 	BOOL bFellInSleep = FALSE; // Если TRUE - снизить нагрузку на conhost
 	BOOL bConsoleActive = TRUE;
 	BOOL bConsoleVisible = TRUE;
-	DWORD nLastConsoleActiveTick = 0;
 	BOOL bOnlyCursorChanged;
 	BOOL bSetRefreshDoneEvent;
 	DWORD nWaitCursor = 99;
 	DWORD nWaitCommit = 99;
+	BOOL bIndicateSleepNum = FALSE;
 
 	while (TRUE)
 	{
@@ -3927,7 +4048,8 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 			&& !nAltWait
 			&& ((GetTickCount() - nLastConHandleTick) > UPDATECONHANDLE_TIMEOUT))
 		{
-			ghConOut.Close();
+			// Need to block all requests to output buffer in other threads
+			ConOutCloseHandle();
 			nLastConHandleTick = GetTickCount();
 		}
 
@@ -4090,11 +4212,12 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 		BOOL bNewActive = TRUE;
 		BOOL bNewFellInSleep = FALSE;
 
+		DWORD nLastConsoleActiveTick = gpSrv->nLastConsoleActiveTick;
 		if (!nLastConsoleActiveTick || ((GetTickCount() - nLastConsoleActiveTick) >= REFRESH_FELL_SLEEP_TIMEOUT))
 		{
 			ReloadGuiSettings(NULL);
 			bConsoleVisible = IsWindowVisible(ghConEmuWndDC);
-			nLastConsoleActiveTick = GetTickCount();
+			gpSrv->nLastConsoleActiveTick = GetTickCount();
 		}
 
 		if ((ghConWnd == gpSrv->guiSettings.hActiveCon) || (gpSrv->guiSettings.hActiveCon == NULL) || bConsoleVisible)
@@ -4132,6 +4255,10 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 		}
 
 
+		// Обновляется по таймауту
+		bIndicateSleepNum = CheckIndicateSleepNum();
+
+
 		// Чтобы не грузить процессор неактивными консолями спим, если
 		// только что не было затребовано изменение размера консоли
 		if (!lbWasSizeChange
@@ -4148,6 +4275,16 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 			DWORD nCurTick = GetTickCount();
 			nDelta = nCurTick - nLastReadTick;
 
+			if (bIndicateSleepNum)
+			{
+				bool bNum = (GetKeyState(VK_NUMLOCK) & 1) == 1;
+				if (bNum)
+				{
+					keybd_event(VK_NUMLOCK, 0, 0, 0);
+					keybd_event(VK_NUMLOCK, 0, KEYEVENTF_KEYUP, 0);
+				}
+			}
+
 			// #define MAX_FORCEREFRESH_INTERVAL 500
 			if (nDelta <= MAX_FORCEREFRESH_INTERVAL)
 			{
@@ -4155,6 +4292,16 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 				continue;
 			}
 		}
+		else if (bIndicateSleepNum)
+		{
+			bool bNum = (GetKeyState(VK_NUMLOCK) & 1) == 1;
+			if (!bNum)
+			{
+				keybd_event(VK_NUMLOCK, 0, 0, 0);
+				keybd_event(VK_NUMLOCK, 0, KEYEVENTF_KEYUP, 0);
+			}
+		}
+
 
 		#ifdef _DEBUG
 		if (nWait == nRefreshEventId)

@@ -1331,6 +1331,43 @@ wchar_t* ExpandEnvStr(LPCWSTR pszCommand)
 	return NULL;
 }
 
+// GetFullPathName & ExpandEnvStr
+wchar_t* GetFullPathNameEx(LPCWSTR asPath)
+{
+	wchar_t* pszResult = NULL;
+	wchar_t* pszTemp = NULL;
+
+	if (wcschr(asPath, L'%'))
+	{
+		if ((pszTemp = ExpandEnvStr(asPath)) != NULL)
+		{
+			asPath = pszTemp;
+		}
+	}
+
+	DWORD cchMax = MAX_PATH+1;
+	pszResult = (wchar_t*)calloc(cchMax,sizeof(*pszResult));
+	if (pszResult)
+	{
+		wchar_t* pszFilePart;
+		DWORD nLen = GetFullPathName(asPath, cchMax, pszResult, &pszFilePart);
+		if (!nLen  || (nLen >= cchMax))
+		{
+			_ASSERTEX(FALSE && "GetFullPathName failed");
+			SafeFree(pszResult);
+		}
+	}
+	
+	if (!pszResult)
+	{
+		_ASSERTEX(pszResult!=NULL);
+		pszResult = lstrdup(asPath);
+	}
+
+	SafeFree(pszTemp);
+	return pszResult;
+}
+
 
 
 #ifndef __GNUC__
@@ -3370,6 +3407,7 @@ BOOL MSectionLockSimple::isLocked()
 #ifndef CONEMU_MINIMAL
 MFileLog::MFileLog(LPCWSTR asName, LPCWSTR asDir /*= NULL*/, DWORD anPID /*= 0*/)
 {
+	InitializeCriticalSection(&mcs_Lock);
 	mh_LogFile = NULL;
 	ms_FilePathName = NULL;
 	ms_DefPath = (asDir && *asDir) ? lstrdup(asDir) : NULL;
@@ -3422,6 +3460,7 @@ MFileLog::~MFileLog()
 {
 	CloseLogFile();
 	SafeFree(ms_DefPath);
+	DeleteCriticalSection(&mcs_Lock);
 }
 void MFileLog::CloseLogFile()
 {
@@ -3659,8 +3698,8 @@ void MFileLog::LogString(LPCWSTR asText, bool abWriteTime /*= true*/, LPCWSTR as
 
 	if (mh_LogFile)
 	{
+		MSectionLockSimple lock; lock.Lock(&mcs_Lock);
 		DWORD dwLen = (DWORD)cchCur;
-
 		WriteFile(mh_LogFile, pszBuffer, dwLen, &dwLen, 0);
 		FlushFileBuffers(mh_LogFile);
 	}
@@ -4611,3 +4650,72 @@ wchar_t* GetComspec(const ConEmuComspec* pOpt)
 	return pszComSpec;
 }
 
+
+bool IsExportEnvVarAllowed(LPCWSTR szName)
+{
+	if (!szName || !*szName)
+		return false;
+
+	// ’от€ некоторые внутренние переменные мен€ть можно
+	if (lstrcmpi(szName, ENV_CONEMU_SLEEP_INDICATE) == 0)
+		return true;
+
+	// Ќо большинство внутренних переменных ConEmu запрещено мен€ть (экспортировать)
+	wchar_t szTemp[8];
+	lstrcpyn(szTemp, szName, 7); szTemp[7] = 0;
+	if (lstrcmpi(szTemp, L"ConEmu") == 0)
+		return false;
+
+	return true;
+}
+
+void ApplyExportEnvVar(LPCWSTR asEnvNameVal)
+{
+	if (!asEnvNameVal)
+		return;
+
+	while (*asEnvNameVal)
+	{
+		LPCWSTR pszName = asEnvNameVal;
+		LPCWSTR pszVal = pszName + lstrlen(pszName) + 1;
+		LPCWSTR pszNext = pszVal + lstrlen(pszVal) + 1;
+		// Skip ConEmu's internals!
+		if (IsExportEnvVarAllowed(pszName))
+		{
+			SetEnvironmentVariableW(pszName, pszVal);
+		}
+		asEnvNameVal = pszNext;
+	}
+}
+
+#ifndef CONEMU_MINIMAL
+bool CopyToClipboard(LPCWSTR asText)
+{
+	if (!asText)
+		return false;
+
+	bool bCopied = false;
+
+	if (OpenClipboard(NULL))
+	{
+		DWORD cch = lstrlen(asText);
+		HGLOBAL hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (cch + 1) * sizeof(*asText));
+		if (hglbCopy)
+		{
+			wchar_t* lptstrCopy = (wchar_t*)GlobalLock(hglbCopy);
+			if (lptstrCopy)
+			{
+				_wcscpy_c(lptstrCopy, cch+1, asText);
+				GlobalUnlock(hglbCopy);
+
+				EmptyClipboard();
+				bCopied = (SetClipboardData(CF_UNICODETEXT, hglbCopy) != NULL);
+			}
+		}
+
+		CloseClipboard();
+	}
+
+	return bCopied;
+}
+#endif

@@ -55,6 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "TabBar.h"
 #include "TrayIcon.h"
 #include "VConChild.h"
+#include "VConGroup.h"
 #include "VirtualConsole.h"
 
 #define DEBUGSTRINPUT(s) //DEBUGSTR(s)
@@ -527,7 +528,34 @@ bool CRealBuffer::LoadAlternativeConsole(LoadAltMode iMode /*= lam_Default*/)
 
 	if (iMode == lam_Default)
 	{
-		iMode = (mp_RCon->isFar() && gpSet->AutoBufferHeight) ? lam_LastOutput : lam_FullBuffer;
+		if (mp_RCon->isFar() && gpSet->AutoBufferHeight)
+		{
+			iMode = lam_LastOutput;
+		}
+		else
+		{
+			// При открытии Vim (например) буфер отключается и переходим в режим без прокрутки
+			// А вот старый буфер как раз и хочется посмотреть
+			bool lbAltBufSwitched = false;
+			if (!mp_RCon->isBufferHeight())
+			{
+				mp_RCon->GetServerPID();
+
+				CESERVER_REQ *pIn = ExecuteNewCmd(CECMD_ALTBUFFERSTATE, sizeof(CESERVER_REQ_HDR));
+				if (pIn)
+				{
+					CESERVER_REQ *pOut = ExecuteSrvCmd(mp_RCon->GetServerPID(), pIn, ghWnd);
+					if (pOut && (pOut->DataSize() >= sizeof(DWORD)))
+					{
+						lbAltBufSwitched = (pOut->dwData[0]!=0);
+					}
+					ExecuteFreeResult(pOut);
+					ExecuteFreeResult(pIn);
+				}
+			}
+
+			iMode = lbAltBufSwitched ? lam_LastOutput : lam_FullBuffer;
+		}
 	}
 
 	if (iMode == lam_LastOutput)
@@ -1241,7 +1269,9 @@ BOOL CRealBuffer::PreInit()
 	if (gpConEmu->isWindowNormal() && gpConEmu->isIconic())
 	{
 		// Сюда попадаем только при wmNormal&Minimized
-		rcCon = MakeRect(gpConEmu->wndWidth, gpConEmu->wndHeight);
+		//rcCon = MakeRect(gpConEmu->wndWidth, gpConEmu->wndHeight);
+		SIZE sz = gpConEmu->GetDefaultSize(true);
+		rcCon = MakeRect(sz.cx, sz.cy);
 	}
 	else
 	{
@@ -2651,7 +2681,7 @@ bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
 						else
 						{
 							CVConGuard VCon;
-							if (!gpConEmu->isFarExist(fwt_NonModal|fwt_PluginRequired, NULL, &VCon))
+							if (!CVConGroup::isFarExist(fwt_NonModal|fwt_PluginRequired, NULL, &VCon))
 							{
 								if (gpSet->sFarGotoEditor && *gpSet->sFarGotoEditor)
 								{
@@ -3359,6 +3389,13 @@ done:
 void CRealBuffer::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*=-1*/, BOOL abByMouse/*=FALSE*/, UINT anFromMsg/*=0*/, COORD *pcrTo/*=NULL*/)
 {
 	_ASSERTE(anY==-1 || anY>=con.nTopVisibleLine);
+
+	// Если начинается выделение - запретить фару начинать драг, а то подеремся
+	if (abByMouse)
+	{
+		Assert(!(gpConEmu->mouse.state & (DRAG_L_STARTED|DRAG_R_STARTED)));
+		gpConEmu->mouse.state &= ~(DRAG_L_ALLOWED | DRAG_R_STARTED);
+	}
 
 	if (!(con.m_sel.dwFlags & (CONSOLE_BLOCK_SELECTION|CONSOLE_TEXT_SELECTION)) && gpSet->isCTSFreezeBeforeSelect)
 	{
@@ -4633,8 +4670,10 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 				pcaDst += nWidth; //pnSrc += con.nTextWidth;
 			}
 
+			#ifndef __GNUC__
 			UNREFERENCED_PARAMETER(pszSrcStart);
 			UNREFERENCED_PARAMETER(pnSrcStart);
+			#endif
 			UNREFERENCED_PARAMETER(nSrcCells);
 		}
 	} // rbt_Primary

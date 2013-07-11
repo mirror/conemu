@@ -111,6 +111,7 @@ WARNING("TB_GETIDEALSIZE - awailable on XP only, use insted TB_GETMAXSIZE");
 TabBarClass::TabBarClass()
 {
 	_active = false;
+	_visible = false;
 	_tabHeight = 0;
 	mb_ForceRecalcHeight = false;
 	mb_DisableRedraw = FALSE;
@@ -247,7 +248,7 @@ void TabBarClass::Retrieve()
 	if (gpSet->isTabs == 0)
 		return; // если табов нет ВООБЩЕ - и читать ничего не нужно
 
-	if (!gpConEmu->isFar())
+	if (!CVConGroup::isFar())
 	{
 		Reset();
 		return;
@@ -550,12 +551,20 @@ LRESULT CALLBACK TabBarClass::ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 	{
 		case WM_WINDOWPOSCHANGING:
 		{
+			LPWINDOWPOS pos = (LPWINDOWPOS)lParam;
 			if (gpConEmu->mp_TabBar->_tabHeight)
 			{
-				LPWINDOWPOS pos = (LPWINDOWPOS)lParam;
 				pos->cy = gpConEmu->mp_TabBar->_tabHeight;
 				return 0;
 			}
+			break;
+		}
+		case WM_WINDOWPOSCHANGED:
+		{
+			#ifdef _DEBUG
+			LPWINDOWPOS pos = (LPWINDOWPOS)lParam;
+			#endif
+			break;
 		}
 		case WM_SETFOCUS:
 		{
@@ -581,7 +590,7 @@ LRESULT CALLBACK TabBarClass::ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 		/*case WM_RBUTTONDOWN:*/ case WM_RBUTTONUP: //case WM_RBUTTONDBLCLK:
 
 			if (((uMsg == WM_RBUTTONUP)
-					|| ((uMsg == WM_LBUTTONDBLCLK) && gpSet->nTabDblClickAction)
+					|| ((uMsg == WM_LBUTTONDBLCLK) && gpSet->nTabBarDblClickAction)
 					|| gpSet->isCaptionHidden())
 				&& gpSet->isTabs)
 			{
@@ -593,16 +602,16 @@ LRESULT CALLBACK TabBarClass::ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 
 					if (uMsg == WM_LBUTTONDBLCLK)
 					{
-						if ((gpSet->nTabDblClickAction == 2)
-							|| ((gpSet->nTabDblClickAction == 1) && gpSet->isCaptionHidden()))
+						if ((gpSet->nTabBarDblClickAction == 2)
+							|| ((gpSet->nTabBarDblClickAction == 1) && gpSet->isCaptionHidden()))
 						{
 							// Чтобы клик случайно не провалился в консоль
 							gpConEmu->mouse.state |= MOUSE_SIZING_DBLCKL;
 							// Аналог AltF9
 							gpConEmu->OnAltF9(TRUE);
 						}
-						else if ((gpSet->nTabDblClickAction == 3)
-							|| ((gpSet->nTabDblClickAction == 1) && !gpSet->isCaptionHidden()))
+						else if ((gpSet->nTabBarDblClickAction == 3)
+							|| ((gpSet->nTabBarDblClickAction == 1) && !gpSet->isCaptionHidden()))
 						{
 							gpConEmu->RecreateAction(cra_CreateTab/*FALSE*/, gpSet->isMultiNewConfirm || isPressed(VK_SHIFT));
 						}
@@ -662,6 +671,7 @@ LRESULT CALLBACK TabBarClass::TabProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 		}
 		case WM_MBUTTONUP:
 		case WM_RBUTTONUP:
+		case WM_LBUTTONDBLCLK:
 		{
 			gpConEmu->mp_TabBar->OnMouse(uMsg, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
 			return 0;
@@ -756,14 +766,15 @@ LRESULT CALLBACK TabBarClass::ToolProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 			}
 			else
 			{
-				LRESULT nTestIdx = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_APPCLOSE, 0);
-				if (nIdx == nTestIdx)
+				LRESULT nTestIdxMin = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_MINIMIZE, 0);
+				LRESULT nTestIdxClose = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_APPCLOSE, 0);
+				if ((nIdx == nTestIdxMin) || (nIdx == nTestIdxClose))
 				{
 					Icon.HideWindowToTray();
 					return 0;
 				}
 
-				nTestIdx = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_CREATE_CON, 0);
+				LRESULT nTestIdx = SendMessage(hwnd, TB_COMMANDTOINDEX, TID_CREATE_CON, 0);
 				if (nIdx == nTestIdx)
 				{
 					gpConEmu->RecreateAction(cra_CreateTab/*FALSE*/, TRUE);
@@ -795,7 +806,7 @@ bool TabBarClass::IsTabsShown()
 		_ASSERTE(this!=NULL);
 		return false;
 	}
-	return _active && IsWindowVisible(mh_Tabbar);
+	return _active && _visible/*IsWindowVisible(mh_Tabbar)*/;
 }
 
 void TabBarClass::Activate(BOOL abPreSyncConsole/*=FALSE*/)
@@ -810,7 +821,7 @@ void TabBarClass::Activate(BOOL abPreSyncConsole/*=FALSE*/)
 	if (abPreSyncConsole && (gpConEmu->WindowMode == wmNormal))
 	{
 		RECT rcIdeal = gpConEmu->GetIdealRect();
-		gpConEmu->SyncConsoleToWindow(&rcIdeal, TRUE);
+		CVConGroup::SyncConsoleToWindow(&rcIdeal, TRUE);
 	}
 	UpdatePosition();
 }
@@ -824,7 +835,7 @@ void TabBarClass::Deactivate(BOOL abPreSyncConsole/*=FALSE*/)
 	if (abPreSyncConsole && !(gpConEmu->isZoomed() || gpConEmu->isFullScreen()))
 	{
 		RECT rcIdeal = gpConEmu->GetIdealRect();
-		gpConEmu->SyncConsoleToWindow(&rcIdeal, true);
+		CVConGroup::SyncConsoleToWindow(&rcIdeal, true);
 	}
 	UpdatePosition();
 }
@@ -955,16 +966,49 @@ void TabBarClass::Update(BOOL abPosted/*=FALSE*/)
 	MCHKHEAP
 	_ASSERTE(m_Tab2VCon.size()==0);
 
+	MMap<CVConGroup*,CVirtualConsole*> Groups; Groups.Init(MAX_CONSOLE_COUNT, true);
+
 	for (V = 0; V < MAX_CONSOLE_COUNT; V++)
 	{
-		if (!(pVCon = gpConEmu->GetVCon(V))) continue;
-		CVConGuard guard(pVCon);
+		//if (!(pVCon = gpConEmu->GetVCon(V))) continue;
+		CVConGuard guard;
+		if (!CVConGroup::GetVCon(V, &guard))
+			continue;
+		pVCon = guard.VCon();
 
 		BOOL lbActive = gpConEmu->isActive(pVCon, false);
 
 		if (gpSet->bHideInactiveConsoleTabs)
 		{
 			if (!lbActive) continue;
+		}
+
+		if (gpSet->isOneTabPerGroup)
+		{
+			CVConGroup *pGr;
+			CVConGuard VGrActive;
+			if (CVConGroup::isGroup(pVCon, &pGr, &VGrActive))
+			{
+				CVirtualConsole* pGrVCon;
+
+				if (Groups.Get(pGr, &pGrVCon))
+					continue; // эта группа уже есть
+
+				pGrVCon = VGrActive.VCon();
+				Groups.Set(pGr, pGrVCon);
+
+				// И показывать таб нужно от "активной" консоли, а не от первой в группе
+				if (pVCon != pGrVCon)
+				{
+					guard = pGrVCon;
+					pVCon = pGrVCon;
+				}
+
+				if (!lbActive)
+				{
+					lbActive = gpConEmu->isActive(pVCon, true);
+				}
+			}
 		}
 
 		CRealConsole *pRCon = pVCon->RCon();
@@ -1186,6 +1230,8 @@ void TabBarClass::UpdatePosition()
 
 	if (_active)
 	{
+		_visible = true;
+
 		if (mh_Rebar)
 		{
 			if (!IsWindowVisible(mh_Rebar))
@@ -1216,6 +1262,8 @@ void TabBarClass::UpdatePosition()
 	}
 	else
 	{
+		_visible = false;
+
 		//gpConEmu->Sync ConsoleToWindow(); -- 2009.07.04 Sync должен быть выполнен в самом ReSize
 		gpConEmu->ReSize(TRUE);
 
@@ -1389,6 +1437,7 @@ LRESULT TabBarClass::OnNotify(LPNMHDR nmhdr)
 		//  return FALSE;
 		//}
 		_prevTab = GetCurSel();
+		// Returns TRUE to prevent the selection from changing, or FALSE to allow the selection to change.
 		return FALSE; // разрешаем
 	}
 
@@ -1594,7 +1643,7 @@ void TabBarClass::OnCommand(WPARAM wParam, LPARAM lParam)
 	}
 	else if (wParam == TID_APPCLOSE)
 	{
-		PostMessage(ghWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+		gpConEmu->PostScClose();
 	}
 	else if (wParam == TID_COPYING)
 	{
@@ -1612,7 +1661,9 @@ void TabBarClass::OnMouse(int message, int x, int y)
 		return;
 	}
 
-	if (message == WM_MBUTTONUP || message == WM_RBUTTONUP)
+	if ((message == WM_MBUTTONUP)
+		|| (message == WM_RBUTTONUP)
+		|| ((message == WM_LBUTTONDBLCLK) && gpSet->nTabBtnDblClickAction))
 	{
 		TCHITTESTINFO htInfo;
 		htInfo.pt.x = x;
@@ -1632,7 +1683,28 @@ void TabBarClass::OnMouse(int message, int x, int y)
 				CVConGuard guard(pVCon);
 				BOOL lbCtrlPressed = isPressed(VK_CONTROL);
 
-				if (message == WM_RBUTTONUP && !lbCtrlPressed)
+				if (message == WM_LBUTTONDBLCLK)
+				{
+					switch (gpSet->nTabBtnDblClickAction)
+					{
+					case 1:
+						// Чтобы клик случайно не провалился в консоль
+						gpConEmu->mouse.state |= MOUSE_SIZING_DBLCKL;
+						// Аналог AltF9
+						gpConEmu->OnAltF9(TRUE);
+						break;
+					case 2:
+						guard->RCon()->CloseTab();
+						break;
+					case 3:
+						gpConEmu->mp_Menu->ExecPopupMenuCmd(guard.VCon(), IDM_RESTART);
+						break;
+					case 4:
+						gpConEmu->mp_Menu->ExecPopupMenuCmd(guard.VCon(), IDM_DUPLICATE);
+						break;
+					}
+				}
+				else if (message == WM_RBUTTONUP && !lbCtrlPressed)
 				{
 					gpConEmu->mp_Menu->ShowPopupMenu(guard.VCon(), ptCur);
 				}

@@ -57,6 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef _DEBUG
 #pragma warning( default : 4995 )
 #endif
+#include "../common/ConEmuCheckEx.h"
 #include "../common/ConsoleAnnotation.h"
 #include "../common/WinObjects.h"
 #include "../common/WinConsole.h"
@@ -424,6 +425,8 @@ HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item,bool FromMacro)
 							SetEnvironmentVariable(CEGUIMACRORETENVVAR,
 							                       pOut->GuiMacro.nSucceeded ? pOut->GuiMacro.sMacro : NULL);
 							ExecuteFreeResult(pOut);
+							// 130708 -- Otherwise Far Macro "Plugin.Call" returns "0" always...
+							hResult = (HANDLE)TRUE;
 						}
 						else
 						{
@@ -6141,10 +6144,14 @@ BOOL StartDebugger()
 
 	if (ConEmuHwnd)
 	{
+		DWORD nGuiPID = 0; GetWindowThreadProcessId(ConEmuHwnd, &nGuiPID);
 		// Откроем дебаггер в новой вкладке ConEmu. При желании юзеру проще сделать Detach
 		// "/DEBUGPID=" обязательно должен быть первым аргументом
+
 		_wsprintf(szExe, SKIPLEN(countof(szExe)) L"\"%s\" /ATTACH /ROOT \"%s\" /DEBUGPID=%i /BW=%i /BH=%i /BZ=9999",
 		          szConEmuC, szConEmuC, dwSelfPID, w, h);
+		//_wsprintf(szExe, SKIPLEN(countof(szExe)) L"\"%s\" /ATTACH /GID=%u /GHWND=%08X /ROOT \"%s\" /DEBUGPID=%i /BW=%i /BH=%i /BZ=9999",
+		//          szConEmuC, nGuiPID, (DWORD)(DWORD_PTR)ConEmuHwnd, szConEmuC, dwSelfPID, w, h);
 	}
 	else
 	{

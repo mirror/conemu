@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "OptionsClass.h"
 #include "Status.h"
 #include "Menu.h"
+#include "TrayIcon.h"
 
 #ifdef _DEBUG
 static int _nDbgStep = 0; wchar_t _szDbg[512];
@@ -80,6 +81,11 @@ void CFrameHolder::InitFrameHolder()
 {
 	mb_Initialized = TRUE;
 	RecalculateFrameSizes();
+}
+
+void CFrameHolder::PostScClose()
+{
+	PostMessage(ghWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
 }
 
 // returns false if message not handled
@@ -257,6 +263,13 @@ bool CFrameHolder::ProcessNcMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 				lResult = 0;
 				lbRc = true;
 			}
+			else if ((uMsg == WM_NCRBUTTONDOWN || uMsg == WM_NCRBUTTONUP)
+				&& (wParam == HTCLOSE || wParam == HTMINBUTTON))
+			{
+				Icon.HideWindowToTray();
+				lResult = 0;
+				lbRc = true;
+			}
 		}
 		return lbRc;
 
@@ -266,7 +279,7 @@ bool CFrameHolder::ProcessNcMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 	//		POINT pt = MakePoint(LOWORD(lParam),HIWORD(lParam));
 	//		if (gpConEmu->PtDiffTest(pt, ptLastNcClick.x, ptLastNcClick.y, 4))
 	//		{
-	//			PostMessage(ghWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+	//			PostScClose();
 	//			lResult = 0;
 	//			return true;
 	//		}

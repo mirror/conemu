@@ -86,6 +86,7 @@ const wchar_t* PointToExt(const wchar_t* asFullPath);
 const wchar_t* Unquote(wchar_t* asParm);
 wchar_t* ExpandMacroValues(LPCWSTR pszFormat, LPCWSTR* pszValues, size_t nValCount);
 wchar_t* ExpandEnvStr(LPCWSTR pszCommand);
+wchar_t* GetFullPathNameEx(LPCWSTR asPath);
 
 BOOL IsExecutable(LPCWSTR aszFilePathName, wchar_t** rsExpandedVars = NULL);
 BOOL IsNeedCmd(LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
@@ -145,6 +146,12 @@ wchar_t* GetEnvVar(LPCWSTR VarName, DWORD cchDefaultMax = 2000);
 LPCWSTR GetComspecFromEnvVar(wchar_t* pszComspec, DWORD cchMax, ComSpecBits Bits = csb_SameOS);
 wchar_t* GetComspec(const ConEmuComspec* pOpt);
 
+bool IsExportEnvVarAllowed(LPCWSTR szName);
+void ApplyExportEnvVar(LPCWSTR asEnvNameVal);
+
+#ifndef CONEMU_MINIMAL
+bool CopyToClipboard(LPCWSTR asText);
+#endif
 
 //------------------------------------------------------------------------
 ///| Section |////////////////////////////////////////////////////////////
@@ -538,6 +545,8 @@ class MFileLog
 		wchar_t* ms_DefPath;
 		HANDLE   mh_LogFile;
 		HRESULT  InitFileName(LPCWSTR asName = NULL, DWORD anPID = 0);
+	protected:
+		CRITICAL_SECTION mcs_Lock;
 	public:
 		MFileLog(LPCWSTR asName, LPCWSTR asDir = NULL, DWORD anPID = 0);
 		~MFileLog();

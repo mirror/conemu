@@ -471,7 +471,7 @@ class CRealConsole
 		void UpdateScrollInfo();
 		void SetTabs(ConEmuTab* tabs, int tabsCount);
 		void DoRenameTab();
-		bool DuplicateRoot(bool bSkipMsg = false, LPCWSTR asAddArgs = NULL, bool bRunAsAdmin = false);
+		bool DuplicateRoot(bool bSkipMsg = false, bool bRunAsAdmin = false, LPCWSTR asNewConsole = NULL, LPCWSTR asApp = NULL, LPCWSTR asParm = NULL);
 		void RenameTab(LPCWSTR asNewTabText = NULL);
 		void RenameWindow(LPCWSTR asNewWindowText = NULL);
 		int GetTabCount(BOOL abVisibleOnly = FALSE);
@@ -483,7 +483,7 @@ class CRealConsole
 		DWORD CanActivateFarWindow(int anWndIndex);
 		void OnConsoleKeyboardLayout(DWORD dwNewLayout);
 		void SwitchKeyboardLayout(WPARAM wParam,DWORD_PTR dwNewKeybLayout);
-		void CloseConsole(bool abForceTerminate, bool abConfirm);
+		void CloseConsole(bool abForceTerminate, bool abConfirm, bool abAllowMacro = true);
 		void CloseConsoleWindow(bool abConfirm);
 		bool isCloseConfirmed(LPCWSTR asConfirmation, bool bForceAsk = false);
 		void CloseConfirmReset();
@@ -554,12 +554,10 @@ class CRealConsole
 		void OnStartProcessAllowed();
 		void OnTimerCheck();
 
-	#ifdef _DEBUG
 	public:
 		void MonitorAssertTrap();
 	private:
 		bool mb_MonitorAssertTrap;
-	#endif
 
 	protected:
 		CVirtualConsole* mp_VCon; // соответствующая виртуальная консоль
@@ -622,6 +620,7 @@ class CRealConsole
 		HANDLE mh_MonitorThread; DWORD mn_MonitorThreadID;
 		HANDLE mh_MonitorThreadEvent;
 		HANDLE mh_UpdateServerActiveEvent;
+		DWORD mn_ServerActiveTick1, mn_ServerActiveTick2;
 		//BOOL mb_UpdateServerActive;
 		DWORD mn_LastUpdateServerActive;
 		// Для пересылки событий ввода в консоль

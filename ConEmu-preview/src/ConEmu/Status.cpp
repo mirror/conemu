@@ -858,7 +858,8 @@ wrap:
 		{
 			#ifdef _DEBUG
 			nErr = GetLastError();
-			_ASSERTE(bPaintOK);
+			// ассерт может возникнуть в RemoteDesktop пока был запрос на UAC
+			_ASSERTE(bPaintOK || !gpConEmu->session.Connected());
 			bPaintOK = FALSE;
 			#endif
 		}
@@ -1063,6 +1064,7 @@ bool CStatus::ProcessStatusMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 			if (uMsg == WM_LBUTTONUP)
 			{
 				SetCapture(NULL);
+				gpConEmu->EndSizing();
 				mb_StatusResizing = false;
 				DEBUGSTRSIZE(L"Resize from status bar grip finished");
 			}

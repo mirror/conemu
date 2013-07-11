@@ -722,6 +722,7 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkMultiCmd,       chk_User,  NULL,    L"Multi.CmdKey",          /*&vmMultiCmd,*/ MakeHotKey('X',VK_LWIN), CConEmuCtrl::key_MultiCmd},
 		{vkCTSVkBlockStart,chk_User,  NULL,    L"CTS.VkBlockStart",      /*&vmCTSVkBlockStart,*/ 0, CConEmuCtrl::key_CTSVkBlockStart}, // запуск выделения блока
 		{vkCTSVkTextStart, chk_User,  NULL,    L"CTS.VkTextStart",       /*&vmCTSVkTextStart,*/ 0, CConEmuCtrl::key_CTSVkTextStart},   // запуск выделения текста
+		{vkCTSVkCopyAll,   chk_User,  NULL,    L"CTS.VkCopyAll",         0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Copy(1)")},
 		{vkShowTabsList,   chk_User,  NULL,    L"Multi.ShowTabsList",    /*MakeHotKey(VK_F12)*/ 0, CConEmuCtrl::key_ShowTabsList},
 		{vkShowTabsList2,  chk_User,  NULL,    L"Multi.ShowTabsList2",   MakeHotKey(VK_F12,VK_APPS), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Tabs(8)")},
 		{vkPasteText,      chk_User,  NULL,    L"ClipboardVkAllLines",   MakeHotKey(VK_INSERT,VK_SHIFT), CConEmuCtrl::key_PasteText},
@@ -756,6 +757,8 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkPasteCygwin,    chk_User,  NULL,    L"PasteCygwinKey",        MakeHotKey(VK_INSERT,VK_APPS), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Paste(8)")},
 		{vkJumpPrevMonitor,chk_User,  NULL,    L"Key.JumpPrevMonitor",   MakeHotKey(VK_LEFT,VK_LWIN,VK_SHIFT),  CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMode(9)"),  DontHookJumps},
 		{vkJumpNextMonitor,chk_User,  NULL,    L"Key.JumpNextMonitor",   MakeHotKey(VK_RIGHT,VK_LWIN,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMode(10)"), DontHookJumps},
+		{vkTileToLeft,     chk_User,  NULL,    L"Key.TileToLeft",        MakeHotKey(VK_LEFT,VK_LWIN),  CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMode(6)"),  DontHookJumps},
+		{vkTileToRight,    chk_User,  NULL,    L"Key.TileToRIght",       MakeHotKey(VK_RIGHT,VK_LWIN), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMode(7)"), DontHookJumps},
 		// GUI Macros
 		{vkGuMacro01,      chk_Macro, NULL,    L"KeyMacro01", 0, CConEmuCtrl::key_GuiMacro},
 		{vkGuMacro02,      chk_Macro, NULL,    L"KeyMacro02", 0, CConEmuCtrl::key_GuiMacro},

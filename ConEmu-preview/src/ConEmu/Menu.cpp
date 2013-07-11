@@ -678,7 +678,10 @@ void CConEmuMenu::ExecPopupMenuCmd(CVirtualConsole* apVCon, int nCmd)
 	switch (nCmd)
 	{
 		case IDM_CLOSE:
-			apVCon->RCon()->CloseTab();
+			if (gpSet->isOneTabPerGroup && CVConGroup::isGroup(apVCon))
+				CVConGroup::CloseGroup(apVCon);
+			else
+				apVCon->RCon()->CloseTab();
 			break;
 		case IDM_DETACH:
 			apVCon->RCon()->Detach();
@@ -709,10 +712,10 @@ void CConEmuMenu::ExecPopupMenuCmd(CVirtualConsole* apVCon, int nCmd)
 			//apVCon->RCon()->CloseConsoleWindow();
 			CVConGroup::CloseGroup(apVCon);
 			break;
+
 		case IDM_RESTART:
 		case IDM_RESTARTAS:
 		case IDM_RESTARTDLG:
-
 			if (gpConEmu->isActive(apVCon))
 			{
 				gpConEmu->RecreateAction(cra_RecreateTab/*TRUE*/, (nCmd==IDM_RESTARTDLG) || isPressed(VK_SHIFT), (nCmd==IDM_RESTARTAS));
@@ -723,18 +726,21 @@ void CConEmuMenu::ExecPopupMenuCmd(CVirtualConsole* apVCon, int nCmd)
 			}
 
 			break;
+
 		case ID_NEWCONSOLE:
 			gpConEmu->RecreateAction(gpSet->GetDefaultCreateAction(), gpSet->isMultiNewConfirm || isPressed(VK_SHIFT));
 			break;
 		case IDM_ATTACHTO:
 			OnSysCommand(ghWnd, IDM_ATTACHTO, 0);
 			break;
+
 		case IDM_SAVE:
 			apVCon->RCon()->PostMacro(L"F2");
 			break;
 		case IDM_SAVEALL:
 			apVCon->RCon()->PostMacro(gpSet->sSaveAllMacro);
 			break;
+
 		default:
 			if (nCmd >= 0xAB00)
 			{
@@ -862,7 +868,7 @@ void CConEmuMenu::UpdateSysMenu(HMENU hSysMenu)
 		#endif
 		InsertMenu(hSysMenu, 0, MF_BYPOSITION | MF_STRING | MF_ENABLED, ID_SETTINGS, MenuAccel(vkWinAltP,L"S&ettings..."));
 		InsertMenu(hSysMenu, 0, MF_BYPOSITION | MF_STRING | MF_ENABLED, IDM_ATTACHTO, MenuAccel(vkMultiNewAttach,L"Attach t&o..."));
-		InsertMenu(hSysMenu, 0, MF_BYPOSITION | MF_STRING | MF_ENABLED, ID_NEWCONSOLE, MenuAccel(vkMultiNew,L"&New console..."));
+		InsertMenu(hSysMenu, 0, MF_BYPOSITION | MF_STRING | MF_ENABLED, ID_NEWCONSOLE, MenuAccel(vkMultiNew,L"New console..."));
 	}
 }
 
@@ -1005,6 +1011,8 @@ int CConEmuMenu::trackPopupMenu(TrackMenuPlace place, HMENU hMenu, UINT uFlags, 
 	if (!(uFlags & (TPM_HORIZONTAL|TPM_VERTICAL)))
 		uFlags |= TPM_HORIZONTAL;
 
+	//SetCursor(LoadCursor(NULL, IDC_ARROW));
+
 	int cmd = TrackPopupMenuEx(hMenu, uFlags, x, y, hWnd, &ex);
 
 	mn_TrackMenuPlace = prevPlace;
@@ -1068,7 +1076,7 @@ void CConEmuMenu::OnNcIconLClick()
 
 	if (mn_SysMenuOpenTick && (nOpenDelay < nDoubleTime))
 	{
-		PostMessage(ghWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+		gpConEmu->PostScClose();
 	}
 	else if (mn_SysMenuCloseTick && (nCloseDelay < (nDoubleTime/2)))
 	{
@@ -1077,7 +1085,8 @@ void CConEmuMenu::OnNcIconLClick()
 		int nDbg = 0;
 		#endif
 	}
-	else
+	// When Alt is hold down - sysmenu will be immediately closed
+	else if (!isPressed(VK_MENU))
 	{
 		ShowSysmenu();
 	}
@@ -1149,6 +1158,7 @@ void CConEmuMenu::ShowSysmenu(int x, int y, bool bAlignUp /*= false*/)
 	//mb_InTrackSysMenu = FALSE;
 	if (command == 0)
 	{
+		bool bLbnPressed = isPressed(VK_LBUTTON);
 		mn_SysMenuCloseTick = GetTickCount();
 
 		if ((mn_SysMenuCloseTick - mn_SysMenuOpenTick) < GetDoubleClickTime())
@@ -1210,12 +1220,10 @@ HMENU CConEmuMenu::CreateDebugMenuPopup()
 //	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_MONITOR_SHELLACTIVITY, _T("Enable &shell log..."));
 //#endif
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_SHOWRECTS, _T("Show debug rec&ts"));
-	#ifdef _DEBUG
 	AppendMenu(hDebug, MF_SEPARATOR, 0, NULL);
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_TRAP, _T("Raise exception (Main thread)"));
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_TRAP2, _T("Raise exception (Monitor thread)"));
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DEBUG_ASSERT, _T("Show assertion"));
-	#endif
 	#ifdef TRACK_MEMORY_ALLOCATIONS
 	AppendMenu(hDebug, MF_SEPARATOR, 0, NULL);
 	AppendMenu(hDebug, MF_STRING | MF_ENABLED, ID_DUMP_MEM_BLK, _T("Dump used memory blocks"));
@@ -1449,9 +1457,9 @@ HMENU CConEmuMenu::CreateEditMenuPopup(CVirtualConsole* apVCon, HMENU ahExist /*
 		hMenu = CreatePopupMenu();
 		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_MARKBLOCK, MenuAccel(vkCTSVkBlockStart,L"Mark &block"));
 		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_MARKTEXT, MenuAccel(vkCTSVkTextStart,L"Mar&k text"));
-		AppendMenu(hMenu, MF_STRING | (lbSelectionExist?MF_ENABLED:MF_GRAYED), ID_CON_COPY, _T("Copy &all"));
-		//AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_COPY_ALL, _T("Cop&y"));
-		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_PASTE, _T("&Paste"));
+		AppendMenu(hMenu, MF_STRING | (lbSelectionExist?MF_ENABLED:MF_GRAYED), ID_CON_COPY, L"Cop&y");
+		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_COPY_ALL, MenuAccel(vkCTSVkCopyAll,L"Copy &all"));
+		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_PASTE, L"&Paste");
 		AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
 		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_FIND, MenuAccel(vkFindTextDlg,L"&Find text..."));
 	}
@@ -1460,7 +1468,7 @@ HMENU CConEmuMenu::CreateEditMenuPopup(CVirtualConsole* apVCon, HMENU ahExist /*
 		EnableMenuItem(hMenu, ID_CON_MARKBLOCK, MF_BYCOMMAND | (lbEnabled?MF_ENABLED:MF_GRAYED));
 		EnableMenuItem(hMenu, ID_CON_MARKTEXT, MF_BYCOMMAND | (lbEnabled?MF_ENABLED:MF_GRAYED));
 		EnableMenuItem(hMenu, ID_CON_COPY, MF_BYCOMMAND | (lbSelectionExist?MF_ENABLED:MF_GRAYED));
-		//EnableMenuItem(hMenu, ID_CON_COPY_ALL, MF_BYCOMMAND | (lbEnabled?MF_ENABLED:MF_GRAYED));
+		EnableMenuItem(hMenu, ID_CON_COPY_ALL, MF_BYCOMMAND | (lbEnabled?MF_ENABLED:MF_GRAYED));
 		EnableMenuItem(hMenu, ID_CON_PASTE, MF_BYCOMMAND | (lbEnabled?MF_ENABLED:MF_GRAYED));
 		EnableMenuItem(hMenu, ID_CON_FIND, MF_BYCOMMAND | (lbEnabled?MF_ENABLED:MF_GRAYED));
 	}
@@ -1693,21 +1701,15 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 			gpConEmu->InvalidateAll();
 			return 0;
 
-		#ifdef _DEBUG
 		case ID_DEBUG_TRAP:
-			MyAssertTrap();
+			gpConEmu->OnInfo_ThrowTrapException(true);
 			return 0;
 		case ID_DEBUG_TRAP2:
-		{
-			CVConGuard VCon;
-			if ((gpConEmu->GetActiveVCon(&VCon) >= 0) && VCon->RCon())
-				VCon->RCon()->MonitorAssertTrap();
+			gpConEmu->OnInfo_ThrowTrapException(false);
 			return 0;
-		}
 		case ID_DEBUG_ASSERT:
 			Assert(FALSE && "This is test assertion");
 			return 0;
-		#endif
 
 		case ID_DUMP_MEM_BLK:
 			#ifdef TRACK_MEMORY_ALLOCATIONS
@@ -1864,7 +1866,7 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 			break;
 			
 		case SC_CLOSE:
-			CVConGroup::OnScClose();
+			gpConEmu->OnScClose();
 			break;
 		
 		case SC_MAXIMIZE:

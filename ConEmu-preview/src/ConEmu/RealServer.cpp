@@ -467,7 +467,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 					_ASSERTE(mp_RCon->mb_WasStartDetached || mp_RCon->mn_DefaultBufferHeight == mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/ || mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/ == mp_RCon->TextHeight());
 
 					pOut->StartStopRet.nBufferHeight = max(mp_RCon->mp_RBuf->GetBufferHeight()/*con.m_sbi.dwSize.Y*/,mp_RCon->mn_DefaultBufferHeight);
-					_ASSERTE(mp_RCon->mp_RBuf->TextHeight()/*con.nTextHeight*/ > 5);
+					_ASSERTE(mp_RCon->mp_RBuf->TextHeight()/*con.nTextHeight*/ >= 1);
 					pOut->StartStopRet.nHeight = mp_RCon->mp_RBuf->TextHeight()/*con.nTextHeight*/;
 					//111126 - убрал. выше буфер блокируется
 					//con.m_sbi.dwSize.Y = pOut->StartStopRet.nBufferHeight; // Сразу обновить, иначе буфер может сброситься самопроизвольно
@@ -545,7 +545,7 @@ CESERVER_REQ* CRealServer::cmdStartStop(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 							// Хотя, может быть, например, команда "mode con lines=25 cols=80"
 							_ASSERTE(crNewSize.X == nNewWidth && crNewSize.Y == nNewHeight);
 							
-							//gpConEmu->SyncWindowToConsole(); - его использовать нельзя. во первых это не главная нить, во вторых - размер pVCon может быть еще не изменен
+							//CVConGroup::SyncWindowToConsole(); - его использовать нельзя. во первых это не главная нить, во вторых - размер pVCon может быть еще не изменен
 							lbNeedResizeWnd = TRUE;
 							
 							crNewSize.X = nNewWidth;
@@ -855,8 +855,9 @@ CESERVER_REQ* CRealServer::cmdGuiMacro(LPVOID pInst, CESERVER_REQ* pIn, UINT nDa
 {
 	CESERVER_REQ* pOut = NULL;
 
-	DEBUGSTRCMD(L"GUI recieved CECMD_GUIMACRO\n");	
-	LPWSTR pszResult = CConEmuMacro::ExecuteMacro(pIn->GuiMacro.sMacro, mp_RCon);
+	DEBUGSTRCMD(L"GUI recieved CECMD_GUIMACRO\n");
+	DWORD nFarPluginPID = mp_RCon->GetFarPID(true);
+	LPWSTR pszResult = CConEmuMacro::ExecuteMacro(pIn->GuiMacro.sMacro, mp_RCon, (nFarPluginPID==pIn->hdr.nSrcPID));
 	int nLen = pszResult ? _tcslen(pszResult) : 0;
 	pOut = ExecuteNewCmd(pIn->hdr.nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_GUIMACRO)+nLen*sizeof(wchar_t));
 

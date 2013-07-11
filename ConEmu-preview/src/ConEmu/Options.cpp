@@ -510,9 +510,10 @@ void Settings::InitSettings()
 	isExtendUCharMap = true;
 	isDownShowHiddenMessage = false;
 	ParseCharRanges(L"2013-25C4", mpc_FixFarBorderValues);
-	_wndHeight = 25;
+	wndWidth.Set(true, ss_Standard, 80);
+	wndHeight.Set(false, ss_Standard, 25);
 	ntvdmHeight = 0; // Подбирать автоматически
-	_wndWidth = 80;
+	mb_IntegralSize = false;
 	_WindowMode = rNormal;
 	isUseCurrentSizePos = true; // Show in settings dialog and save current window size/pos
 	//isFullScreen = false;
@@ -546,6 +547,7 @@ void Settings::InitSettings()
 	SetDefaultTerminalApps(L"explorer.exe"/* to default value */); // "|"-delimited string -> MSZ
 
 	isProcessAnsi = true;
+	isSuppressBells = false; // пока не доделано - false
 	mb_UseClink = true;
 	#ifdef USEPORTABLEREGISTRY
 	isPortableReg = true; // включено по умолчанию, DEBUG
@@ -618,8 +620,9 @@ void Settings::InitSettings()
 	isStatusColumnHidden[csi_ConEmuView] = true;
 	isStatusColumnHidden[csi_ServerHWND] = true;
 
-	isTabs = 1; nTabsLocation = 0;
-	isTabSelf = true; isTabRecent = true; isTabLazy = true; nTabDblClickAction = 1;
+	isTabs = 1; nTabsLocation = 0; isOneTabPerGroup = false; isActivateSplitMouseOver = true;
+	isTabSelf = true; isTabRecent = true; isTabLazy = true;
+	nTabBarDblClickAction = TABBAR_DEFAULT_CLICK_ACTION; nTabBtnDblClickAction = TABBTN_DEFAULT_CLICK_ACTION;
 	ilDragHeight = 10;
 	m_isTabsOnTaskBar = 2;
 	isTaskbarShield = true;
@@ -703,8 +706,12 @@ bool Settings::isTransparentAllowed()
 }
 
 // true - не допускать Gaps в Normal режиме. Подгонять размер окна точно под консоль.
+// false - размер окна - свободный (попиксельно)
 bool Settings::isIntegralSize()
 {
+	if (mb_IntegralSize)
+		return false;
+
 	if (isQuakeStyle || gpConEmu->mp_Inside)
 		return false;
 
@@ -2074,6 +2081,8 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 
 		reg->Load(L"ProcessAnsi", isProcessAnsi);
 
+		reg->Load(L"SuppressBells", isSuppressBells);
+
 		reg->Load(L"UseClink", mb_UseClink);
 
 		#ifdef USEPORTABLEREGISTRY
@@ -2182,6 +2191,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		
 		reg->Load(L"UseCurrentSizePos", isUseCurrentSizePos);
 		reg->Load(L"WindowMode", _WindowMode); if (_WindowMode!=rFullScreen && _WindowMode!=rMaximized && _WindowMode!=rNormal) _WindowMode = rNormal;
+		reg->Load(L"IntegralSize", mb_IntegralSize);
 		reg->Load(L"QuakeStyle", isQuakeStyle);
 		reg->Load(L"QuakeAnimation", nQuakeAnimation); MinMax(nQuakeAnimation, QUAKEANIMATION_MAX);
 		reg->Load(L"HideCaption", isHideCaption);
@@ -2207,17 +2217,16 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		// ЭТО не влияет на szDefCmd. Только прямое указание флажка "/BufferHeight N"
 		// может сменить (умолчательную) команду запуска на "cmd" или "far"
 		reg->Load(L"Cascaded", wndCascade);
-		reg->Load(L"ConWnd Width", _wndWidth);
-		reg->Load(L"ConWnd Height", _wndHeight);
+		DWORD sizeRaw = wndWidth.Raw;
+		reg->Load(L"ConWnd Width", sizeRaw); wndWidth.SetFromRaw(true, sizeRaw);
+		sizeRaw = wndHeight.Raw;
+		reg->Load(L"ConWnd Height", sizeRaw); wndHeight.SetFromRaw(false, sizeRaw);
 
 		if (gpSetCls->isAdvLogging)
 		{
-			char szInfo[100]; _wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "Loaded pos: {%i,%i}, size: {%i,%i}", _wndX, _wndY, _wndWidth, _wndHeight);
+			char szInfo[120]; _wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "Loaded pos: {%i,%i}, size: {%s,%s}", _wndX, _wndY, wndWidth.AsString(), wndHeight.AsString());
 			gpConEmu->LogString(szInfo);
 		}
-
-		if (!_wndWidth) _wndWidth = 80; else if (_wndWidth>1000) _wndWidth = 1000;
-		if (!_wndHeight) _wndHeight = 25; else if (_wndHeight>500) _wndHeight = 500;
 
 		//TODO: Эти два параметра не сохраняются
 		reg->Load(L"16bit Height", ntvdmHeight);
@@ -2472,10 +2481,13 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		//reg->Load(L"GUIpb", isGUIpb);
 		reg->Load(L"Tabs", isTabs);
 		reg->Load(L"TabsLocation", nTabsLocation);
+		reg->Load(L"OneTabPerGroup", isOneTabPerGroup);
+		reg->Load(L"ActivateSplitMouseOver", isActivateSplitMouseOver);
 		reg->Load(L"TabSelf", isTabSelf);
 		reg->Load(L"TabLazy", isTabLazy);
 		reg->Load(L"TabRecent", isTabRecent);
-		reg->Load(L"TabDblClick", nTabDblClickAction); MinMax(nTabDblClickAction, 3);
+		reg->Load(L"TabDblClick", nTabBarDblClickAction); MinMax(nTabBarDblClickAction, 3);
+		reg->Load(L"TabBtnDblClick", nTabBtnDblClickAction); MinMax(nTabBtnDblClickAction, 4);
 		reg->Load(L"TabsOnTaskBar", m_isTabsOnTaskBar);
 		reg->Load(L"TaskBarOverlay", isTaskbarShield);
 
@@ -2723,9 +2735,10 @@ void Settings::SaveSizePosOnExit()
 							? gpConEmu->WindowMode
 							: (gpConEmu->isFullScreen() ? rFullScreen : gpConEmu->isZoomed() ? rMaximized : rNormal));
 			reg->Save(L"WindowMode", saveMode);
-			reg->Save(L"ConWnd Width", isUseCurrentSizePos ? gpConEmu->wndWidth : _wndWidth);
-			reg->Save(L"ConWnd Height", isUseCurrentSizePos ? gpConEmu->wndHeight : _wndHeight);
+			reg->Save(L"ConWnd Width", isUseCurrentSizePos ? gpConEmu->WndWidth.Raw : wndWidth.Raw);
+			reg->Save(L"ConWnd Height", isUseCurrentSizePos ? gpConEmu->WndHeight.Raw : wndHeight.Raw);
 			reg->Save(L"Cascaded", wndCascade);
+			reg->Save(L"IntegralSize", mb_IntegralSize);
 			reg->Save(L"ConWnd X", isUseCurrentSizePos ? gpConEmu->wndX : _wndX);
 			reg->Save(L"ConWnd Y", isUseCurrentSizePos ? gpConEmu->wndY : _wndY);
 			reg->Save(L"16bit Height", ntvdmHeight);
@@ -2979,6 +2992,9 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 
 		reg->Save(L"ProcessAnsi", isProcessAnsi);
 
+		_ASSERTE(isSuppressBells==false); // пока не доделано - не сохраняем
+		//reg->Save(L"SuppressBells", isSuppressBells);
+
 		reg->Save(L"UseClink", mb_UseClink);
 
 		#ifdef USEPORTABLEREGISTRY
@@ -3074,14 +3090,15 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 						? gpConEmu->WindowMode
 						: (gpConEmu->isFullScreen() ? rFullScreen : gpConEmu->isZoomed() ? rMaximized : rNormal));
 		reg->Save(L"WindowMode", saveMode);
-		reg->Save(L"ConWnd Width", isUseCurrentSizePos ? gpConEmu->wndWidth : _wndWidth);
-		reg->Save(L"ConWnd Height", isUseCurrentSizePos ? gpConEmu->wndHeight : _wndHeight);
+		reg->Save(L"ConWnd Width", isUseCurrentSizePos ? gpConEmu->WndWidth.Raw : wndWidth.Raw);
+		reg->Save(L"ConWnd Height", isUseCurrentSizePos ? gpConEmu->WndHeight.Raw : wndHeight.Raw);
 		reg->Save(L"Cascaded", wndCascade);
 		reg->Save(L"ConWnd X", isUseCurrentSizePos ? gpConEmu->wndX : _wndX);
 		reg->Save(L"ConWnd Y", isUseCurrentSizePos ? gpConEmu->wndY : _wndY);
 		reg->Save(L"16bit Height", ntvdmHeight);
 		reg->Save(L"AutoSaveSizePos", isAutoSaveSizePos);
 		mb_SizePosAutoSaved = false; // Раз было инициированное пользователей сохранение настроек - сбросим флажок
+		reg->Save(L"IntegralSize", mb_IntegralSize);
 		reg->Save(L"QuakeStyle", isQuakeStyle);
 		reg->Save(L"QuakeAnimation", nQuakeAnimation);
 		reg->Save(L"HideCaption", isHideCaption);
@@ -3182,10 +3199,13 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		SaveStatusSettings(reg);
 		reg->Save(L"Tabs", isTabs);
 		reg->Save(L"TabsLocation", nTabsLocation);
+		reg->Save(L"OneTabPerGroup", isOneTabPerGroup);
+		reg->Save(L"ActivateSplitMouseOver", isActivateSplitMouseOver);
 		reg->Save(L"TabSelf", isTabSelf);
 		reg->Save(L"TabLazy", isTabLazy);
 		reg->Save(L"TabRecent", isTabRecent);
-		reg->Save(L"TabDblClick", nTabDblClickAction);
+		reg->Save(L"TabDblClick", nTabBarDblClickAction);
+		reg->Save(L"TabBtnDblClick", nTabBtnDblClickAction);
 		reg->Save(L"TabsOnTaskBar", m_isTabsOnTaskBar);
 		reg->Save(L"TaskBarOverlay", isTaskbarShield);
 		reg->Save(L"TabCloseMacro", sTabCloseMacro);
@@ -3549,10 +3569,10 @@ LPCTSTR Settings::GetCmd(bool *pIsCmdList)
 		}
 
 		// (2) в текущей директории
-		if (!lbFound && lstrcmpi(gpConEmu->ms_ConEmuCurDir, gpConEmu->ms_ConEmuExeDir))
+		if (!lbFound && lstrcmpi(gpConEmu->WorkDir(), gpConEmu->ms_ConEmuExeDir))
 		{
 			szFar[0] = L'"';
-			wcscpy_add(1, szFar, gpConEmu->ms_ConEmuCurDir);
+			wcscpy_add(1, szFar, gpConEmu->WorkDir());
 			wcscat_add(1, szFar, L"\\Far.exe");
 
 			if (FileExists(szFar+1, &nFarSize))
@@ -4082,8 +4102,10 @@ void Settings::GetSettingsType(SettingsStorage& Storage, bool& ReadOnly)
 				}
 				else
 				{
+					DWORD nErr = GetLastError();
 					//EnableWindow(GetDlgItem(ghOpWnd, bSaveSettings), FALSE); // Сохранение запрещено
 					ReadOnly = true;
+					UNREFERENCED_PARAMETER(nErr);
 				}
 			}
 		}

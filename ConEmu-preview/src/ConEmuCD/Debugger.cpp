@@ -136,9 +136,16 @@ int RunDebugger()
 	//gpSrv->DbgInfo.bDebuggerActive = TRUE;
 	//PrintDebugInfo();
 
-	int iAttachRc = AttachRootProcessHandle();
-	if (iAttachRc != 0)
-		return iAttachRc;
+	if (gpSrv->DbgInfo.pszDebuggingCmdLine == NULL)
+	{
+		int iAttachRc = AttachRootProcessHandle();
+		if (iAttachRc != 0)
+			return iAttachRc;
+	}
+	else
+	{
+		_ASSERTE(!gpSrv->DbgInfo.bDebuggerActive);
+	}
 
 	_ASSERTE(((gpSrv->hRootProcess!=NULL) || (gpSrv->DbgInfo.pszDebuggingCmdLine!=NULL)) && "Process handle must be opened");
 
@@ -1023,7 +1030,9 @@ void ProcessDebugEvent()
 							|| (bDumpOnBreakPoint && (evt.u.Exception.ExceptionRecord.ExceptionCode==EXCEPTION_BREAKPOINT))))
 					)
 				{
-					BOOL bGenerateTreeBreak = gpSrv->DbgInfo.bDebuggerRequestDump || lbNonContinuable;
+					BOOL bGenerateTreeBreak = gpSrv->DbgInfo.bDebugProcessTree
+						&& (gpSrv->DbgInfo.bDebuggerRequestDump || lbNonContinuable);
+
 					if (gpSrv->DbgInfo.bDebugProcessTree
 						&& !bGenerateTreeBreak
 						&& (evt.u.Exception.ExceptionRecord.ExceptionCode==EXCEPTION_BREAKPOINT))

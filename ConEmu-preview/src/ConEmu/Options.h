@@ -80,7 +80,6 @@ class CVirtualConsole;
 #define CENTERCONSOLEPAD_MIN 0
 #define CENTERCONSOLEPAD_MAX 64
 
-
 struct FindTextOptions
 {
 	size_t   cchTextMax;
@@ -129,6 +128,9 @@ enum TabStyle
 };
 
 #define DEFAULT_TERMINAL_APPS L"explorer.exe"
+
+#define TABBAR_DEFAULT_CLICK_ACTION 1
+#define TABBTN_DEFAULT_CLICK_ACTION 0
 
 struct Settings
 {
@@ -721,6 +723,8 @@ struct Settings
 		bool isHideChildCaption; // Hide caption of child GUI applications, started in ConEmu tabs (PuTTY, Notepad, etc.)
 		//reg->Load(L"FocusInChildWindows", isFocusInChildWindows);
 		bool isFocusInChildWindows;
+		//reg->Load(L"IntegralSize", mb_IntegralSize);
+		bool mb_IntegralSize;
 		//reg->Load(L"QuakeStyle", isQuakeStyle);
 		BYTE isQuakeStyle; // 0 - NoQuake, 1 - Quake, 2 - Quake+HideOnLoseFocus
 		DWORD nQuakeAnimation;
@@ -973,6 +977,10 @@ struct Settings
 		char isTabs;
 		//reg->Load(L"TabsLocation", nTabsLocation);
 		BYTE nTabsLocation; // 0 - top, 1 - bottom
+		//reg->Load(L"OneTabPerGroup", isOneTabPerGroup);
+		bool isOneTabPerGroup;
+		//reg->Load(L"ActivateSplitMouseOver", isActivateSplitMouseOver);
+		bool isActivateSplitMouseOver;
 		//reg->Load(L"TabSelf", isTabSelf);
 		bool isTabSelf;
 		//reg->Load(L"TabRecent", isTabRecent);
@@ -981,7 +989,8 @@ struct Settings
 		bool isTabLazy;
 
 		//reg->Load(L"TabDblClick", nTabDblClickAction);
-		DWORD nTabDblClickAction; // 0-None, 1-Auto, 2-Maximize/Restore, 3-NewTab.
+		DWORD nTabBarDblClickAction; // 0-None, 1-Auto, 2-Maximize/Restore, 3-NewTab (SettingsNS::tabBarDefaultClickActions)
+		DWORD nTabBtnDblClickAction; // 0-None, 1-Maximize/Restore, 2-Close, 3-Restart, 4-Duplicate (SettingsNS::tabBtnDefaultClickActions)
 		
 		//TODO:
 		bool isTabsInCaption;
@@ -1018,9 +1027,9 @@ struct Settings
 		//reg->Load(L"ToolbarAddSpace", nToolbarAddSpace);
 		int nToolbarAddSpace;
 		//reg->Load(L"ConWnd Width", wndWidth);
-		DWORD _wndWidth;
+		CESize wndWidth;
 		//reg->Load(L"ConWnd Height", wndHeight);
-		DWORD _wndHeight;
+		CESize wndHeight;
 		//reg->Load(L"16bit Height", ntvdmHeight);
 		DWORD ntvdmHeight; // в символах
 		//reg->Load(L"ConWnd X", wndX);
@@ -1236,6 +1245,8 @@ struct Settings
 		DWORD isUseClink(bool abCheckVersion = false);
 		//reg->Load(L"PortableReg", isPortableReg);
 		bool isPortableReg;
+		//reg->Load(L"SuppressBells", isSuppressBells);
+		bool isSuppressBells;
 
 		/* *** Debugging *** */
 		//reg->Load(L"ConVisible", isConVisible);
