@@ -59,21 +59,20 @@ class CTabPanelBase;
 class CTabBarClass
 {
 	private:
-		// Пока - банально. VCon, номер в FAR
-		typedef struct tag_FAR_WND_ID
-		{
-			CVirtualConsole* pVCon;
-			int nFarWindowId;
-
-			bool operator==(struct tag_FAR_WND_ID c)
-			{
-				return (this->pVCon==c.pVCon) && (this->nFarWindowId==c.nFarWindowId);
-			};
-			bool operator!=(struct tag_FAR_WND_ID c)
-			{
-				return (this->pVCon!=c.pVCon) || (this->nFarWindowId!=c.nFarWindowId);
-			};
-		} VConTabs;
+		//// Пока - банально. VCon, номер в FAR
+		//typedef struct tag_FAR_WND_ID
+		//{
+		//	CVirtualConsole* pVCon;
+		//	int nFarWindowId;
+		//	bool operator==(struct tag_FAR_WND_ID c)
+		//	{
+		//		return (this->pVCon==c.pVCon) && (this->nFarWindowId==c.nFarWindowId);
+		//	};
+		//	bool operator!=(struct tag_FAR_WND_ID c)
+		//	{
+		//		return (this->pVCon!=c.pVCon) || (this->nFarWindowId!=c.nFarWindowId);
+		//	};
+		//} VConTabs;
 
 	private:
 		CTabPanelBase* mp_Rebar;
@@ -97,28 +96,40 @@ class CTabBarClass
 		int GetCurSel();
 		int GetItemCount();
 		void DeleteItem(int I);
-		void AddTab2VCon(VConTabs& vct);
+		//void AddTab2VCon(VConTabs& vct);
 		void ShowTabError(LPCTSTR asInfo, int tabIndex);
 		//void CheckTheming();
+
+	public:
+		// Tabs updating (populating)
+		void Update(BOOL abPosted=FALSE);
+		bool NeedPostUpdate();
+
+	private:
+		int  mn_InUpdate;
+		UINT mn_PostUpdateTick;
+		bool mb_PostUpdateCalled;
+		bool mb_PostUpdateRequested;
+		
+		void RequestPostUpdate();
+		int  CountActiveTabs(int nMax = 0);
 		
 	protected:
-		MArray<VConTabs> m_Tab2VCon;
-		BOOL mb_PostUpdateCalled, mb_PostUpdateRequested;
-		DWORD mn_PostUpdateTick;
-		void RequestPostUpdate();
-		int GetIndexByTab(VConTabs tab);
-		int mn_InUpdate;
-
-		//BOOL mb_ThemingEnabled;
+		friend class CTabPanelBase;
+		
+		//int GetIndexByTab(VConTabs tab);
 
 		// Tab stack
-		MArray<VConTabs> m_TabStack;
-		void CheckStack(); // Убьет из стека отсутствующих
-		void AddStack(VConTabs tab); // Убьет из стека отсутствующих и поместит tab на верх стека
+		CTabStack m_Tabs; // Открытые табы
+		CTabStack m_TabStack; // История табов (для переключения в Recent mode)
+		//MArray<VConTabs> m_Tab2VCon;
+		//MArray<VConTabs> m_TabStack;
+		//void CheckStack(); // Убьет из стека отсутствующих
+		//void AddStack(VConTabs tab); // Убьет из стека отсутствующих и поместит tab на верх стека
 
 		BOOL mb_DisableRedraw;
 
-		friend class CTabPanelBase;
+		
 		BOOL GetVConFromTab(int nTabIdx, CVirtualConsole** rpVCon, DWORD* rpWndIndex);
 
 	public:
@@ -140,8 +151,6 @@ class CTabBarClass
 		void RePaint();
 		//void Update(ConEmuTab* tabs, int tabsCount);
 		bool GetRebarClientRect(RECT* rc);
-		void Update(BOOL abPosted=FALSE);
-		BOOL NeedPostUpdate();
 		void UpdatePosition();
 		void UpdateTabFont();
 		void Reposition();

@@ -577,6 +577,7 @@ void Settings::InitSettings()
 	sSafeFarCloseMacro = NULL; // если NULL - то используется макрос по умолчанию
 	isConsoleTextSelection = 1; // Always
 	isCTSAutoCopy = true;
+	isCTSIBeam = true;
 	isCTSEndOnTyping = false;
 	isCTSEndOnKeyPress = false;
 	isCTSFreezeBeforeSelect = false;
@@ -2277,6 +2278,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"ConsoleTextSelection", isConsoleTextSelection); if (isConsoleTextSelection>2) isConsoleTextSelection = 2;
 
 		reg->Load(L"CTS.AutoCopy", isCTSAutoCopy);
+		reg->Load(L"CTS.IBeam", isCTSIBeam);
 		reg->Load(L"CTS.EndOnTyping", isCTSEndOnTyping); MinMax(isCTSEndOnTyping, 2);
 		reg->Load(L"CTS.EndOnKeyPress", isCTSEndOnKeyPress);
 		reg->Load(L"CTS.Freeze", isCTSFreezeBeforeSelect);
@@ -3124,6 +3126,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"ComSpec.Path", ComSpec.ComspecExplicit);
 		reg->Save(L"ConsoleTextSelection", isConsoleTextSelection);
 		reg->Save(L"CTS.AutoCopy", isCTSAutoCopy);
+		reg->Save(L"CTS.IBeam", isCTSIBeam);
 		reg->Save(L"CTS.EndOnTyping", isCTSEndOnTyping);
 		reg->Save(L"CTS.EndOnKeyPress", isCTSEndOnKeyPress);
 		reg->Save(L"CTS.Freeze", isCTSFreezeBeforeSelect);

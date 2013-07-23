@@ -113,6 +113,10 @@ CTabBarClass::CTabBarClass()
 CTabBarClass::~CTabBarClass()
 {
 	SafeDelete(mp_Rebar);
+
+	// Освободить все табы
+	m_Tabs.ReleaseTabs(false);
+	m_TabStack.ReleaseTabs(false);
 }
 
 void CTabBarClass::RePaint()
@@ -218,6 +222,39 @@ int CTabBarClass::GetItemCount()
 	return nCurCount;
 }
 
+int CTabBarClass::CountActiveTabs(int nMax = 0)
+{
+	int  nTabs = 0;
+	bool bHideInactiveConsoleTabs = gpSet->bHideInactiveConsoleTabs;
+
+	for (int V = 0; V < MAX_CONSOLE_COUNT; V++)
+	{
+		_ASSERTE(m_Tab2VCon.size()==0);
+
+		CVConGuard guard;
+		if (!CVConGroup::GetVCon(V, &guard))
+			continue;
+		pVCon = guard.VCon();
+
+		if (bHideInactiveConsoleTabs)
+		{
+			if (!gpConEmu->isActive(pVCon))
+				continue;
+		}
+
+		_ASSERTE(m_Tab2VCon.size()==0);
+
+		nTabs += pVCon->RCon()->GetTabCount(TRUE);
+		
+		_ASSERTE(m_Tab2VCon.size()==0);
+
+		if ((nMax > 0) && (nTabs >= nMax))
+			break;
+	}
+
+	return nTabs;
+}
+
 void CTabBarClass::DeleteItem(int I)
 {
 	if (mp_Rebar->IsTabbarCreated())
@@ -232,7 +269,7 @@ void CTabBarClass::DeleteItem(int I)
     return tabIndex < 10 ? '0' + tabIndex : 'A' + tabIndex - 10;
 }*/
 
-BOOL CTabBarClass::NeedPostUpdate()
+bool CTabBarClass::NeedPostUpdate()
 {
 	return (mb_PostUpdateCalled || mb_PostUpdateRequested);
 }
@@ -372,7 +409,10 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 	}*/ // Теперь - ВСЕГДА! т.к. сами управляем мультиконсолью
 
 	if (mb_DisableRedraw)
+	{
+		_ASSERTE(mb_DisableRedraw); // Надо?
 		return;
+	}
 
 	if (!gpConEmu->isMainThread())
 	{
@@ -393,7 +433,8 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 	#endif
 
 	mn_InUpdate ++;
-	ConEmuTab tab = {0};
+
+	//ConEmuTab tab = {0};
 	MCHKHEAP
 	int V, I, tabIdx = 0, nCurTab = -1, rFrom, rFound;
 	BOOL bShowFarWindows = gpSet->bShowFarWindows;
@@ -413,28 +454,11 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 	TODO("Обработка gpSet->bHideInactiveConsoleTabs для новых табов");
 	MCHKHEAP
 
-	if (!gpConEmu->mp_TabBar->IsTabsActive() && gpSet->isTabs)
+
+	// Check if we need to AutoSHOW or AutoHIDE tab bar
+	if (!IsTabsActive() && gpSet->isTabs)
 	{
-		int nTabs = 0;
-
-		for (V = 0; V < MAX_CONSOLE_COUNT && nTabs < 2; V++)
-		{
-			_ASSERTE(m_Tab2VCon.size()==0);
-
-			if (!(pVCon = gpConEmu->GetVCon(V)))
-				continue;
-
-			if (gpSet->bHideInactiveConsoleTabs)
-			{
-				if (!gpConEmu->isActive(pVCon))
-					continue;
-			}
-
-			_ASSERTE(m_Tab2VCon.size()==0);
-			nTabs += pVCon->RCon()->GetTabCount(TRUE);
-			_ASSERTE(m_Tab2VCon.size()==0);
-		}
-
+		int nTabs = CountActiveTabs(2);
 		if (nTabs > 1)
 		{
 			_ASSERTE(m_Tab2VCon.size()==0);
@@ -442,28 +466,9 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 			_ASSERTE(m_Tab2VCon.size()==0);
 		}
 	}
-	else if (gpConEmu->mp_TabBar->IsTabsActive() && gpSet->isTabs==2)
+	else if (IsTabsActive() && gpSet->isTabs==2)
 	{
-		int nTabs = 0;
-
-		for (V = 0; V < MAX_CONSOLE_COUNT && nTabs < 2; V++)
-		{
-			_ASSERTE(m_Tab2VCon.size()==0);
-
-			if (!(pVCon = gpConEmu->GetVCon(V)))
-				continue;
-
-			if (gpSet->bHideInactiveConsoleTabs)
-			{
-				if (!gpConEmu->isActive(pVCon))
-					continue;
-			}
-
-			_ASSERTE(m_Tab2VCon.size()==0);
-			nTabs += pVCon->RCon()->GetTabCount(TRUE);
-			_ASSERTE(m_Tab2VCon.size()==0);
-		}
-
+		int nTabs = CountActiveTabs(2);
 		if (nTabs <= 1)
 		{
 			_ASSERTE(m_Tab2VCon.size()==0);
@@ -472,6 +477,8 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 		}
 	}
 
+
+    // Validation?
 	#ifdef _DEBUG
 	if (this != gpConEmu->mp_TabBar)
 	{
@@ -482,134 +489,147 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 	MCHKHEAP
 	_ASSERTE(m_Tab2VCon.size()==0);
 
-	MMap<CVConGroup*,CVirtualConsole*> Groups; Groups.Init(MAX_CONSOLE_COUNT, true);
 
-	for (V = 0; V < MAX_CONSOLE_COUNT; V++)
+
+	
+
+
+	/* ********************* */
+	/*          Go           */
+	/* ********************* */
 	{
-		//if (!(pVCon = gpConEmu->GetVCon(V))) continue;
-		CVConGuard guard;
-		if (!CVConGroup::GetVCon(V, &guard))
-			continue;
-		pVCon = guard.VCon();
+		MMap<CVConGroup*,CVirtualConsole*> Groups; Groups.Init(MAX_CONSOLE_COUNT, true);
 
-		BOOL lbActive = gpConEmu->isActive(pVCon, false);
-
-		if (gpSet->bHideInactiveConsoleTabs)
+		for (V = 0; V < MAX_CONSOLE_COUNT; V++)
 		{
-			if (!lbActive) continue;
-		}
+			//if (!(pVCon = gpConEmu->GetVCon(V))) continue;
+			CVConGuard guard;
+			if (!CVConGroup::GetVCon(V, &guard))
+				continue;
+			pVCon = guard.VCon();
 
-		if (gpSet->isOneTabPerGroup)
-		{
-			CVConGroup *pGr;
-			CVConGuard VGrActive;
-			if (CVConGroup::isGroup(pVCon, &pGr, &VGrActive))
+			BOOL lbActive = gpConEmu->isActive(pVCon, false);
+
+			if (gpSet->bHideInactiveConsoleTabs)
 			{
-				CVirtualConsole* pGrVCon;
+				if (!lbActive) continue;
+			}
 
-				if (Groups.Get(pGr, &pGrVCon))
-					continue; // эта группа уже есть
-
-				pGrVCon = VGrActive.VCon();
-				Groups.Set(pGr, pGrVCon);
-
-				// И показывать таб нужно от "активной" консоли, а не от первой в группе
-				if (pVCon != pGrVCon)
+			if (gpSet->isOneTabPerGroup)
+			{
+				CVConGroup *pGr;
+				CVConGuard VGrActive;
+				if (CVConGroup::isGroup(pVCon, &pGr, &VGrActive))
 				{
-					guard = pGrVCon;
-					pVCon = pGrVCon;
+					CVirtualConsole* pGrVCon;
+
+					if (Groups.Get(pGr, &pGrVCon))
+						continue; // эта группа уже есть
+
+					pGrVCon = VGrActive.VCon();
+					Groups.Set(pGr, pGrVCon);
+
+					// И показывать таб нужно от "активной" консоли, а не от первой в группе
+					if (pVCon != pGrVCon)
+					{
+						guard = pGrVCon;
+						pVCon = pGrVCon;
+					}
+
+					if (!lbActive)
+					{
+						lbActive = gpConEmu->isActive(pVCon, true);
+					}
+				}
+			}
+
+			CRealConsole *pRCon = pVCon->RCon();
+			if (!pRCon)
+			{
+				_ASSERTE(pRCon!=NULL);
+				continue;
+			}
+
+			// (Panels=1, Viewer=2, Editor=3) |(Elevated=0x100) |(NotElevated=0x200) |(Modal=0x400)
+			bool bAllWindows = (bShowFarWindows && !(pRCon->GetActiveTabType() & fwt_Modal));
+			rFrom = bAllWindows ? 0 : pRCon->GetActiveTab();
+			rFound = 0;
+			
+			for (I = rFrom; bAllWindows || !rFound; I++)
+			{
+				#ifdef _DEBUG
+					if (!I && !V)
+					{
+						_ASSERTE(m_Tab2VCon.size()==0);
+					}
+					if (this != gpConEmu->mp_TabBar)
+					{
+						_ASSERTE(this == gpConEmu->mp_TabBar);
+					}
+					MCHKHEAP;
+				#endif
+				
+
+				// bShowFarWindows проверяем, чтобы не проколоться с недоступностью единственного таба
+				if (gpSet->bHideDisabledTabs && bShowFarWindows)
+				{
+					if (!pRCon->CanActivateFarWindow(I))
+						continue;
 				}
 
-				if (!lbActive)
-				{
-					lbActive = gpConEmu->isActive(pVCon, true);
-				}
+				if (!pRCon->GetTab(I, &tab))
+					break;
+
+				
+				#ifdef _DEBUG
+					if (this != gpConEmu->mp_TabBar)
+					{
+						_ASSERTE(this == gpConEmu->mp_TabBar);
+					}
+					MCHKHEAP;
+				#endif
+				
+				
+				PrepareTab(&tab, pVCon);
+				vct.pVCon = pVCon;
+				vct.nFarWindowId = I;
+
+				
+				#ifdef _DEBUG
+					if (!I && !V)
+					{
+						_ASSERTE(m_Tab2VCon.size()==0);
+					}
+				#endif
+
+
+				AddTab2VCon(vct);
+				// Добавляет закладку, или меняет (при необходимости) заголовок существующей
+				mp_Rebar->AddTabInt(tab.Name, tabIdx, (tab.Type & fwt_Elevated)==fwt_Elevated);
+
+				if (lbActive && tab.Current)
+					nCurTab = tabIdx;
+
+				rFound++;
+				tabIdx++;
+
+				
+				#ifdef _DEBUG
+					if (this != gpConEmu->mp_TabBar)
+					{
+						_ASSERTE(this == gpConEmu->mp_TabBar);
+					}
+				#endif
 			}
 		}
 
-		CRealConsole *pRCon = pVCon->RCon();
-		if (!pRCon)
-		{
-			_ASSERTE(pRCon!=NULL);
-			continue;
-		}
-
-		// (Panels=1, Viewer=2, Editor=3) |(Elevated=0x100) |(NotElevated=0x200) |(Modal=0x400)
-		bool bAllWindows = (bShowFarWindows && !(pRCon->GetActiveTabType() & fwt_Modal));
-		rFrom = bAllWindows ? 0 : pRCon->GetActiveTab();
-		rFound = 0;
-		
-		for (I = rFrom; bAllWindows || !rFound; I++)
-		{
-			#ifdef _DEBUG
-				if (!I && !V)
-				{
-					_ASSERTE(m_Tab2VCon.size()==0);
-				}
-				if (this != gpConEmu->mp_TabBar)
-				{
-					_ASSERTE(this == gpConEmu->mp_TabBar);
-				}
-				MCHKHEAP;
-			#endif
-			
-
-			// bShowFarWindows проверяем, чтобы не проколоться с недоступностью единственного таба
-			if (gpSet->bHideDisabledTabs && bShowFarWindows)
-			{
-				if (!pRCon->CanActivateFarWindow(I))
-					continue;
-			}
-
-			if (!pRCon->GetTab(I, &tab))
-				break;
-
-			
-			#ifdef _DEBUG
-				if (this != gpConEmu->mp_TabBar)
-				{
-					_ASSERTE(this == gpConEmu->mp_TabBar);
-				}
-				MCHKHEAP;
-			#endif
-			
-			
-			PrepareTab(&tab, pVCon);
-			vct.pVCon = pVCon;
-			vct.nFarWindowId = I;
-
-			
-			#ifdef _DEBUG
-				if (!I && !V)
-				{
-					_ASSERTE(m_Tab2VCon.size()==0);
-				}
-			#endif
-
-
-			AddTab2VCon(vct);
-			// Добавляет закладку, или меняет (при необходимости) заголовок существующей
-			mp_Rebar->AddTabInt(tab.Name, tabIdx, (tab.Type & fwt_Elevated)==fwt_Elevated);
-
-			if (lbActive && tab.Current)
-				nCurTab = tabIdx;
-
-			rFound++;
-			tabIdx++;
-
-			
-			#ifdef _DEBUG
-				if (this != gpConEmu->mp_TabBar)
-				{
-					_ASSERTE(this == gpConEmu->mp_TabBar);
-				}
-			#endif
-		}
+		Groups.Release();
 	}
 
 	MCHKHEAP
 
-	if (tabIdx == 0)  // хотя бы "Console" покажем
+	// Must be at least one tab!
+	if (tabIdx == 0)
 	{
 		ZeroStruct(tab);
 		PrepareTab(&tab, NULL);
@@ -682,15 +702,6 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 
 void CTabBarClass::AddTab2VCon(VConTabs& vct)
 {
-	//#ifdef _DEBUG
-	//std::vector<VConTabs>::iterator i = m_Tab2VCon.begin();
-	//while (i != m_Tab2VCon.end())
-	//{
-	//	_ASSERTE(i->pVCon!=vct.pVCon || i->nFarWindowId!=vct.nFarWindowId);
-	//	++i;
-	//}
-	//#endif
-
 	m_Tab2VCon.push_back(vct);
 }
 
@@ -1418,15 +1429,6 @@ int CTabBarClass::GetIndexByTab(VConTabs tab)
 		}
 	}
 
-	//std::vector<VConTabs>::iterator iter = m_Tab2VCon.begin();
-	//while (iter != m_Tab2VCon.end())
-	//{
-	//	nIdx ++;
-	//	if (*iter == tab)
-	//		return nIdx;
-	//	++iter;
-	//}
-
 	return -1;
 }
 
@@ -1460,8 +1462,6 @@ int CTabBarClass::GetNextTab(BOOL abForward, BOOL abAltStyle/*=FALSE*/)
 	{
 		if (lbRecentMode)
 		{
-			//std::vector<VConTabs>::iterator iter = m_TabStack.begin();
-			//while (iter != m_TabStack.end())
 			int iter = 0;
 
 			while (iter < m_TabStack.size())
@@ -1517,10 +1517,8 @@ int CTabBarClass::GetNextTab(BOOL abForward, BOOL abAltStyle/*=FALSE*/)
 	{
 		if (lbRecentMode)
 		{
-			//std::vector<VConTabs>::reverse_iterator iter = m_TabStack.rbegin();
 			int iter = m_TabStack.size()-1;
 
-			//while (iter != m_TabStack.rend())
 			while (iter >= 0)
 			{
 				VConTabs Item = m_TabStack[iter]; // *iter;
@@ -1633,19 +1631,15 @@ void CTabBarClass::SwitchRollback()
 void CTabBarClass::CheckStack()
 {
 	_ASSERTE(gpConEmu->isMainThread());
-	//std::vector<VConTabs>::iterator i, j;
 	int i, j;
 
 	BOOL lbExist = FALSE;
-	//j = m_TabStack.begin();
 	j = 0;
 
-	//while (j != m_TabStack.end())
 	while (j < m_TabStack.size())
 	{
 		lbExist = FALSE;
 
-		//for (i = m_Tab2VCon.begin(); i != m_Tab2VCon.end(); ++i)
 		for (i = 0; i < m_Tab2VCon.size(); ++i)
 		{
 			//if (*i == *j)
@@ -1696,16 +1690,12 @@ void CTabBarClass::AddStack(VConTabs tab)
 
 	if (!m_TabStack.empty())
 	{
-		//VConTabs tmp;
-		//std::vector<VConTabs>::iterator iter = m_TabStack.begin();
 		int iter = 0;
 
-		//while (iter != m_TabStack.end())
 		while (iter < m_TabStack.size())
 		{
 			if (m_TabStack[iter] == tab)
 			{
-				//if (iter == m_TabStack.begin())
 				if (iter == 0)
 				{
 					lbExist = TRUE;

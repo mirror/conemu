@@ -103,7 +103,7 @@ private:
 public:
 	LPCWSTR Set(LPCWSTR asName);
 	void Release();
-	LPCWSTR Upper();
+	//LPCWSTR MakeUpper();
 	LPCWSTR Ptr() const;
 	int Length() const;
 };
@@ -121,8 +121,7 @@ struct TabDrawInfo
 struct TabInfo
 {
 	enum TabIdState Status;
-	int  Type; // TabType { etfPanels/etfEditor/etfViewer }
-	CEFarWindowType Flags; // enum of CEFarWindowType
+	CEFarWindowType Type; // enum of CEFarWindowType
 	
 	CVirtualConsole* pVCon;
 	
@@ -142,14 +141,15 @@ protected:
 	~CTabID();
 public:
 	TabInfo Info;
-	CEFarWindowType Flags() { return Info.Flags; };
+	CEFarWindowType Type() { return (Info.Type & fwt_TypeMask); }; // Не нужен вобщем-то
+	CEFarWindowType Flags() { return (Info.Type & ~fwt_TypeMask); }; // Не нужен вобщем-то
 	//enum TabIdState Status;
 	//int  Type; // TabType { etfPanels/etfEditor/etfViewer }
 	//UINT Flags; // enum of TabInfoFlags
 	//CVirtualConsole* pVCon;
 	
 	TabName Name;
-	TabName Upper; // для облегчения сравнения
+	//TabName Upper; // для облегчения сравнения
 	
 	//int nPID; // ИД процесса, содержащего таб (актуально для редакторов/вьюверов)
 	//int nFarWindowID; // ИД (а точнее просто 0-based index) окна в FAR. Panels==0, ViewerEditor>=1
@@ -158,13 +158,13 @@ public:
 	// Для внутреннего использования
 	TabDrawInfo DrawInfo;
 
-	CTabID(CVirtualConsole* apVCon, LPCWSTR asName, int anType, int anPID, int anFarWindowID, int anViewEditID, CEFarWindowType anFlags);
-	void Set(LPCWSTR asName, int anType, int anPID, int anFarWindowID, int anViewEditID, CEFarWindowType anFlags);
+	CTabID(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
+	bool Set(LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
 
 	int AddRef();
 	int Release();
 	bool IsEqual(const CTabID* pTabId, bool abIgnoreWindowId = false);
-	bool IsEqual(CVirtualConsole* apVCon, const TabName& asNameUpper, int anType, int anPID, int anViewEditID);
+	bool IsEqual(CVirtualConsole* apVCon, const TabName& asName, CEFarWindowType anType, int anPID, int anViewEditID);
 	
 	void ReleaseDrawRegion();
 };
@@ -195,7 +195,8 @@ protected:
 protected:
 	MSection* mp_Section;
 	//MSectionLock* mp_UpdateLock;
-	int mn_UpdatePos;
+	int  mn_UpdatePos;
+	bool mb_FarUpdateMode;
 	void AppendInt(CTabID* pTab, BOOL abMoveFirst, MSectionLock* pSC);
 	void RequestSize(int anCount, MSectionLock* pSC);
 public:
@@ -215,10 +216,10 @@ public:
 	void LockTabs(MSectionLock* pLock);
 	
 	HANDLE UpdateBegin();
-	void UpdateFarWindow(HANDLE hUpdate, CVirtualConsole* apVCon, LPCWSTR asName, int anType, int anPID, int anFarWindowID, int anViewEditID, CEFarWindowType anFlags);
+	bool UpdateFarWindow(HANDLE hUpdate, CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
 	void UpdateAppend(HANDLE hUpdate, CTab& Tab, BOOL abMoveFirst);
 	void UpdateAppend(HANDLE hUpdate, CTabID* pTab, BOOL abMoveFirst);
-	void UpdateEnd(HANDLE hUpdate, BOOL abForceReleaseTail);
+	bool UpdateEnd(HANDLE hUpdate, BOOL abForceReleaseTail);
 
 	void ReleaseTabs(BOOL abInvalidOnly = TRUE);
 };

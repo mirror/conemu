@@ -393,6 +393,7 @@ class CRealConsole
 		//void OnWinEvent(DWORD anEvent, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
 		void OnServerStarted(const HWND ahConWnd, const DWORD anServerPID, const DWORD dwKeybLayout);
 		void OnDosAppStartStop(enum StartStopType sst, DWORD anPID);
+		bool isProcessExist(DWORD anPID);
 		int  GetProcesses(ConProcess** ppPrc, bool ClientOnly = false);
 		DWORD GetFarPID(bool abPluginRequired=false);
 		void SetFarPID(DWORD nFarPID);
@@ -716,11 +717,14 @@ class CRealConsole
 		wchar_t ms_LastProcessName[MAX_PATH];
 		int mn_LastAppSettingsId;
 		//
-		ConEmuTab* mp_tabs;
+		//ConEmuTab* mp_tabs;
 		wchar_t    ms_RenameFirstTab[MAX_RENAME_TAB_LEN/*128*/];
-		MSection   msc_Tabs;
-		int mn_tabsCount, mn_MaxTabs, mn_ActiveTab;
-		BOOL mb_TabsWasChanged;
+		//MSection   msc_Tabs;
+		CTabStack m_Tabs;
+		//int mn_tabsCount, mn_MaxTabs, mn_ActiveTab;
+		int  mn_tabsCount;
+		int  mn_ActiveTab;
+		bool mb_TabsWasChanged;
 		void CheckPanelTitle();
 		//
 		//void ProcessAdd(DWORD addPID);
@@ -801,7 +805,7 @@ class CRealConsole
 		//BOOL ReopenMapData();
 		void CloseMapHeader();
 		BOOL ApplyConsoleInfo();
-		BOOL mb_DataChanged;
+		bool mb_DataChanged;
 		void OnServerStarted(DWORD anServerPID, HANDLE ahServerHandle, DWORD dwKeybLayout);
 		void OnStartedSuccess();
 		BOOL mb_RConStartedSuccess;

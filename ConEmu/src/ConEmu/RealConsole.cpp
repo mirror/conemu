@@ -1,3 +1,4 @@
+\b(mp_tabs|msc_Tabs|mn_tabsCount|mn_MaxTabs)\b
 
 /*
 Copyright (c) 2009-2012 Maximus5
@@ -163,13 +164,16 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	//mn_LastRgnFlags = -1;
 	m_ConsoleKeyShortcuts = 0;
 	memset(Title,0,sizeof(Title)); memset(TitleCmp,0,sizeof(TitleCmp));
-	mn_tabsCount = 0; ms_PanelTitle[0] = 0; mn_ActiveTab = 0;
-	mn_MaxTabs = 20; mb_TabsWasChanged = FALSE;
-	mp_tabs = (ConEmuTab*)Alloc(mn_MaxTabs, sizeof(ConEmuTab));
+	mn_tabsCount = 0; 
+	ms_PanelTitle[0] = 0;
+	mn_ActiveTab = 0;
+	//mn_MaxTabs = 20;
+	mb_TabsWasChanged = false;
+	//mp_tabs = (ConEmuTab*)Alloc(mn_MaxTabs, sizeof(ConEmuTab));
+	//_ASSERTE(mp_tabs!=NULL);
 	
 	lstrcpyn(ms_RenameFirstTab, args->pszRenameTab ? args->pszRenameTab : L"", countof(ms_RenameFirstTab));
 
-	_ASSERTE(mp_tabs!=NULL);
 	//memset(&m_PacketQueue, 0, sizeof(m_PacketQueue));
 	mn_FlushIn = mn_FlushOut = 0;
 	mb_MouseButtonDown = FALSE;
@@ -385,9 +389,13 @@ CRealConsole::~CRealConsole()
 	}
 
 
-	if (mp_tabs) Free(mp_tabs);
+	//if (mp_tabs) Free(mp_tabs);
+	//mp_tabs = NULL;
+	//mn_MaxTabs = 0;
+	mn_ActiveTab = 0;
+	mn_tabsCount = 0;
+	m_Tabs.ReleaseTabs(FALSE);
 
-	mp_tabs = NULL; mn_tabsCount = 0; mn_ActiveTab = 0; mn_MaxTabs = 0;
 	//
 	CloseLogFiles();
 
@@ -2380,8 +2388,8 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 			if (mb_DataChanged || mb_TabsWasChanged)
 			{
 				lbForceUpdate = true; // чтобы если консоль неактивна - не забыть при ее активации передернуть что нужно...
-				mb_TabsWasChanged = FALSE;
-				mb_DataChanged = FALSE;
+				mb_TabsWasChanged = false;
+				mb_DataChanged = false;
 				// Функция загружает ТОЛЬКО ms_PanelTitle, чтобы показать
 				// корректный текст в закладке, соответсвующей панелям
 				CheckPanelTitle();
@@ -4516,6 +4524,7 @@ void CRealConsole::StopSignal()
 		// Чтобы при закрытии не было попытка активировать
 		// другую вкладку ЭТОЙ консоли
 		mn_tabsCount = 0;
+
 		// Очистка массива консолей и обновление вкладок
 		gpConEmu->OnVConClosed(mp_VCon);
 	}
@@ -5320,6 +5329,30 @@ void CRealConsole::OnServerClosing(DWORD anSrvPID)
 	{
 		_ASSERTE(anSrvPID == mn_MainSrv_PID);
 	}
+}
+
+bool CRealConsole::isProcessExist(DWORD anPID)
+{
+	if (mn_InRecreate || isDetached() || !ppPrc || !mn_ProcessCount)
+		return false;
+
+	bool bExist = false;
+	MSectionLock SPRC; SPRC.Lock(&csPRC);
+	int dwProcCount = (int)m_Processes.size();
+
+	for (int i = 0; i < dwProcCount; i++)
+	{
+		ConProcess prc = m_Processes[i];
+		if (prc.ProcessID == anPID)
+		{
+			bExist = true;
+			break;
+		}
+	}
+
+	SPRC.Unlock();
+
+	return bExist;
 }
 
 int CRealConsole::GetProcesses(ConProcess** ppPrc, bool ClientOnly /*= false*/)
@@ -8202,7 +8235,7 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 	_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"CRealConsole::SetTabs.  ItemCount=%i, PrevItemCount=%i\n", tabsCount, mn_tabsCount);
 	DEBUGSTRTABS(szDbg);
 #endif
-	ConEmuTab* lpTmpTabs = NULL;
+	ConEmuTab lTmpTabs = {0};
 	//const size_t nMaxTabName = countof(tabs->Name);
 	// Табы нужно проверить и подготовить
 	int nActiveTab = 0, i;
@@ -8210,12 +8243,6 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 	if (tabs && tabsCount)
 	{
 		_ASSERTE(tabs->Type>1 || !tabs->Modified);
-
-		//int nNewSize = sizeof(ConEmuTab)*tabsCount;
-		//lpNewTabs = (ConEmuTab*)Alloc(nNewSize, 1);
-		//if (!lpNewTabs)
-		//    return;
-		//memmove ( lpNewTabs, tabs, nNewSize );
 
 		// иначе вместо "Panels" будет то что в заголовке консоли. Например "edit - doc1.doc"
 		// это например, в процессе переключения закладок
@@ -8234,30 +8261,25 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 			}
 		}
 
-#ifdef _DEBUG
 
+		#ifdef _DEBUG
 		// отладочно: имена закладок (редакторов/вьюверов) должны быть заданы!
-		for(i=1; i<tabsCount; i++)
+		for (i=1; i<tabsCount; i++)
 		{
 			if (tabs[i].Name[0] == 0)
 			{
 				_ASSERTE(tabs[i].Name[0]!=0);
-				//wcscpy(tabs[i].Name, gpConEmu->GetDefaultTitle());
 			}
 		}
-
-#endif
+		#endif
 	}
-	else if (tabsCount == 1 && tabs == NULL)
+	else if ((tabsCount == 1 && tabs == NULL) || (tabsCount <= 0 || tabs == NULL))
 	{
-		lpTmpTabs = (ConEmuTab*)Alloc(sizeof(ConEmuTab),1);
-
-		if (!lpTmpTabs)
-			return;
-
-		tabs = lpTmpTabs;
+		_ASSERTE(tabsCount>=1);
+		tabs = &lTmpTabs;
 		tabs->Current = 1;
 		tabs->Type = 1;
+		tabsCount = 1;
 	}
 
 	// Если запущено под "администратором"
@@ -8268,7 +8290,7 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 		{
 			for (i = 0; i < tabsCount; i++)
 			{
-				tabs[i].Type |= 0x100;
+				tabs[i].Type |= fwt_Elevated;
 			}
 		}
 		//else
@@ -8287,42 +8309,61 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 		//}
 	}
 
-	if (tabsCount != mn_tabsCount)
-		mb_TabsWasChanged = TRUE;
+	//if (tabsCount != mn_tabsCount)
+	//	mb_TabsWasChanged = true;
 
-	MSectionLock SC;
-
-	if (tabsCount > mn_MaxTabs)
-	{
-		SC.Lock(&msc_Tabs, TRUE);
-		mn_tabsCount = 0; Free(mp_tabs); mp_tabs = NULL;
-		mn_MaxTabs = tabsCount*2+10;
-		mp_tabs = (ConEmuTab*)Alloc(mn_MaxTabs,sizeof(ConEmuTab));
-		mb_TabsWasChanged = TRUE;
-	}
-	else
-	{
-		SC.Lock(&msc_Tabs, FALSE);
-	}
+	HANDLE hUpdate = m_Tabs.UpdateBegin();
 
 	for (i = 0; i < tabsCount; i++)
 	{
-		if (!mb_TabsWasChanged)
-		{
-			if (mp_tabs[i].Current != tabs[i].Current
-			        || mp_tabs[i].Type != tabs[i].Type
-			        || mp_tabs[i].Modified != tabs[i].Modified
-			  )
-				mb_TabsWasChanged = TRUE;
-			else if (wcscmp(mp_tabs[i].Name, tabs[i].Name)!=0)
-				mb_TabsWasChanged = TRUE;
-		}
+		CEFarWindowType TypeAndFlags = tabs[i].Type
+			| (tabs[i].Modified ? fwt_ModifiedFarWnd : fwt_Any)
+			| (tabs[i].Current ? fwt_CurrentFarWnd : fwt_Any)
+			| (tabs[i].Modal ? fwt_ModalFarWnd : fwt_Any);
 
-		mp_tabs[i] = tabs[i];
+		if (m_Tabs.UpdateFarWindow(hUpdate, mp_VCon, tabs[i].Name, TypeAndFlags, int anPID, tabs[i].Pos, tabs[i].EditViewId))
+			mb_TabsWasChanged = true;
 	}
 
-	mn_tabsCount = tabsCount; mn_ActiveTab = nActiveTab;
-	SC.Unlock(); // больше не нужно
+	mn_tabsCount = tabsCount;
+	mn_ActiveTab = nActiveTab;
+
+	if (m_Tabs.UpdateEnd(hUpdate, FALSE))
+		mb_TabsWasChanged = true;
+
+	//MSectionLock SC;
+//
+	//if (tabsCount > mn_MaxTabs)
+	//{
+	//	SC.Lock(&msc_Tabs, TRUE);
+	//	mn_tabsCount = 0; Free(mp_tabs); mp_tabs = NULL;
+	//	mn_MaxTabs = tabsCount*2+10;
+	//	mp_tabs = (ConEmuTab*)Alloc(mn_MaxTabs,sizeof(ConEmuTab));
+	//	mb_TabsWasChanged = true;
+	//}
+	//else
+	//{
+	//	SC.Lock(&msc_Tabs, FALSE);
+	//}
+//
+	//for (i = 0; i < tabsCount; i++)
+	//{
+	//	if (!mb_TabsWasChanged)
+	//	{
+	//		if (mp_tabs[i].Current != tabs[i].Current
+	//		        || mp_tabs[i].Type != tabs[i].Type
+	//		        || mp_tabs[i].Modified != tabs[i].Modified
+	//		  )
+	//			mb_TabsWasChanged = true;
+	//		else if (wcscmp(mp_tabs[i].Name, tabs[i].Name)!=0)
+	//			mb_TabsWasChanged = true;
+	//	}
+//
+	//	mp_tabs[i] = tabs[i];
+	//}
+//
+	//mn_tabsCount = tabsCount; mn_ActiveTab = nActiveTab;
+	//SC.Unlock(); // больше не нужно
 
 	//if (mb_TabsWasChanged && mp_tabs && mn_tabsCount) {
 	//    CheckPanelTitle();
@@ -8336,6 +8377,10 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 		// На время появления автотабов - отключалось
 		gpConEmu->mp_TabBar->SetRedraw(TRUE);
 		gpConEmu->mp_TabBar->Update();
+	}
+	else
+	{
+		_ASSERTE(FALSE && "Must be added in valid-list for consistense!");
 	}
 }
 
@@ -8666,40 +8711,48 @@ int CRealConsole::GetActiveTab()
 // (Panels=1, Viewer=2, Editor=3) |(Elevated=0x100) |(NotElevated=0x200) |(Modal=0x400)
 CEFarWindowType CRealConsole::GetActiveTabType()
 {
-	int nType = 0;
-	if (!mp_tabs)
+	int nType = fwt_Any/*0*/;
+
+	if (mn_tabsCount < 1)
 	{
-		nType = 1;
+		_ASSERTE(mn_tabsCount>=1);
+		nType = fwt_Panels;
 	}
 	else
 	{
+		TabInfo rInfo;
 		int iModal = -1;
 		for (int i = 0; i < mn_tabsCount; i++)
 		{
-			if (mp_tabs[i].Modal)
+			if (m_Tabs.GetTabInfoByIndex(i, Info) && (Info.Type & fwt_ModalFarWnd))
 			{
 				iModal = i;
+				nType = Info.Type;
 				break;
 			}
 		}
 
-		int iActive = (iModal != -1) ? iModal : GetActiveTab();
-		if (iActive >= 0 && iActive < mn_tabsCount)
+		if (iModal == -1)
 		{
-			nType = mp_tabs[iActive].Type;
-			if (mp_tabs[iActive].Modal)
-				nType |= 0x400;
+			int iActive = GetActiveTab();
+			if (m_Tabs.GetTabInfoByIndex(iActive, Info))
+			{
+				nType = Info.Type;
+			}
 		}
 	}
 
+	#ifdef _DEBUG
 	TODO("Надо/не надо?");
 	if (isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
 	{
-		if (gpSet->bAdminShield)
-		{
-			nType |= 0x100;
-		}
+		_ASSERTE((nType&fwt_Elevated)==fwt_Elevated);
+		//if (gpSet->bAdminShield)
+		//{
+		//	nType |= fwt_Elevated;
+		//}
 	}
+	#endif
 
 	return nType;
 }
@@ -8729,6 +8782,11 @@ bool CRealConsole::GetTab(int tabIdx, /*OUT*/ ConEmuTab* pTab)
 {
 	if (!this)
 		return false;
+
+	// Должен быть как минимум один (хотя бы пустой) таб
+	_ASSERTE(mn_tabsCount>0);
+
+	PRAGMA_ERROR("CRealConsole::GetTab переделать на CTab& Tab");
 
 	//if (hGuiWnd)
 	//{
@@ -8817,7 +8875,7 @@ bool CRealConsole::GetTab(int tabIdx, /*OUT*/ ConEmuTab* pTab)
 			//{
 			//	if (gpSet->bAdminShield)
 			//	{
-			//		pTab->Type |= 0x100;
+			//		pTab->Type |= fwt_Elevated;
 			//	}
 			//	else
 			//	{
@@ -8836,7 +8894,7 @@ bool CRealConsole::GetTab(int tabIdx, /*OUT*/ ConEmuTab* pTab)
 
 	//if (tabIdx == 0 && isAdministrator() && gpSet->bAdminShield)
 	//{
-	//	pTab->Type |= 0x100;
+	//	pTab->Type |= fwt_Elevated;
 	//}
 
 	wchar_t* pszAmp = pTab->Name;
@@ -8878,12 +8936,17 @@ int CRealConsole::GetModifiedEditors()
 {
 	int nEditors = 0;
 	
-	if (mp_tabs && mn_tabsCount)
+	if (mn_tabsCount > 0)
 	{
+		TabInfo Info;
+
 		for (int j = 0; j < mn_tabsCount; j++)
 		{
-			if ((mp_tabs[j].Type == /*Editor*/3) && (mp_tabs[j].Modified != 0))
-				nEditors++;
+			if (m_Tabs.GetTabInfoByIndex(j, Info))
+			{
+				if (((Info.Type & fwt_TypeMask) == fwt_Editor) && (Info.Type & fwt_ModifiedFarWnd))
+					nEditors++;
+			}
 		}
 	}
 
@@ -8899,7 +8962,7 @@ void CRealConsole::CheckPanelTitle()
 
 #endif
 
-	if (mp_tabs && mn_tabsCount)
+	if (mn_tabsCount > 0)
 	{
 		if ((mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount) || mn_tabsCount == 1)
 		{
@@ -8933,7 +8996,7 @@ DWORD CRealConsole::CanActivateFarWindow(int anWndIndex)
 	// Если идет процесс (в заголовке консоли {n%}) - выходим
 	// Если висит диалог - выходим (диалог обработает сам плагин)
 
-	if (anWndIndex<0 || anWndIndex>=mn_tabsCount)
+	if (anWndIndex < 0 || anWndIndex >= mn_tabsCount)
 	{
 		AssertCantActivate((anWndIndex>=0 && anWndIndex<mn_tabsCount));
 		return 0;
@@ -8986,10 +9049,10 @@ DWORD CRealConsole::CanActivateFarWindow(int anWndIndex)
 
 	BOOL lbMenuOrMacro = FALSE;
 
-	if (mp_tabs && mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount)
+	if (mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount)
 	{
 		// Меню может быть только в панелях
-		if (mp_tabs[mn_ActiveTab].Type == 1/*WTYPE_PANELS*/)
+		if ((GetActiveTabType() & fwt_TypeMask) == fwt_Panels)
 		{
 			lbMenuOrMacro = mp_RBuf->isFarMenuOrMacro();
 		}
@@ -9998,13 +10061,15 @@ void CRealConsole::CheckFarStates()
 	{
 		// Сначала пытаемся проверить статус по закладкам: если к нам из плагина пришло,
 		// что активен "viewer/editor" - то однозначно ставим CES_VIEWER/CES_EDITOR
-		if (mp_tabs && mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount)
+		if (mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount)
 		{
-			if (mp_tabs[mn_ActiveTab].Type != 1)
+			CEFarWindowType nActiveType = (GetActiveTabType() & fwt_TypeMask);
+
+			if (nActiveType != fwt_Panels)
 			{
-				if (mp_tabs[mn_ActiveTab].Type == 2)
+				if (nActiveType == fwt_Viewer)
 					nNewState |= CES_VIEWER;
-				else if (mp_tabs[mn_ActiveTab].Type == 3)
+				else if (nActiveType == fwt_Editor)
 					nNewState |= CES_EDITOR;
 			}
 		}
@@ -10313,15 +10378,17 @@ bool CRealConsole::isEditorModified()
 
 	if (!isEditor()) return false;
 
-	if (mp_tabs && mn_tabsCount)
+	if (mn_tabsCount)
 	{
-		for(int j = 0; j < mn_tabsCount; j++)
+		TabInfo Info;
+
+		for (int j = 0; j < mn_tabsCount; j++)
 		{
-			if (mp_tabs[j].Current)
+			if (m_Tabs.GetTabInfoByIndex(j, Info) && (Info.Type & fwt_CurrentFarWnd))
 			{
-				if (mp_tabs[j].Type == /*Editor*/3)
+				if ((Info.Type & fwt_TypeMask) == fwt_Editor)
 				{
-					return (mp_tabs[j].Modified != 0);
+					return ((Info.Type & fwt_ModifiedFarWnd) == fwt_ModifiedFarWnd);
 				}
 
 				return false;
@@ -11556,7 +11623,7 @@ void CRealConsole::CloseColorMapping()
 	//	CloseHandle(mh_ColorMapping);
 	//	mh_ColorMapping = NULL;
 	//}
-	mb_DataChanged = TRUE;
+	mb_DataChanged = true;
 	mn_LastColorFarID = 0;
 }
 
@@ -11839,7 +11906,7 @@ void CRealConsole::CloseMapHeader()
 	if (mp_EBuf) mp_EBuf->ResetBuffer();
 	if (mp_SBuf) mp_SBuf->ResetBuffer();
 
-	mb_DataChanged = TRUE;
+	mb_DataChanged = true;
 }
 
 bool CRealConsole::isAlive()

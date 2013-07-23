@@ -584,30 +584,26 @@ int CVirtualConsole::GetActiveTab()
 
 bool CVirtualConsole::GetTab(int tabIdx, /*OUT*/ CTab* pTab)
 {
+	if (!this || !mp_RCon)
+	{
+		_ASSERTE(this && mp_RCon);
+		return false;
+	}
+
 	ConEmuTab tab = {};
-	if (!GetTab(tabIdx, &tab))
+	if (!mp_RCon->GetTab(tabIdx, &tab))
 		return false;
 
-	CTabID* id = new CTabID(this, *tab.Name ? tab.Name : gpConEmu->GetDefaultTitle(), tab.Type & fwt_TypeMask/*убить*/, 0/*anPID*/, tab.Pos/*anFarWindowID*/, tab.EditViewId, tab.Type);
+	// ¬общем-то PID важен только дл€ редакторов-вьюверов, чтобы знать, что "этот" фар еще жив
+	DWORD nActivePID = mp_RCon->GetActivePID();
+
+	CTabID* id = new CTabID(this, *tab.Name ? tab.Name : gpConEmu->GetDefaultTitle(), tab.Type & fwt_TypeMask/*убить*/, nActivePID, tab.Pos/*anFarWindowID*/, tab.EditViewId, tab.Type);
+	
 	pTab->Init(id);
-	//id->Release(); -- ???
-	return true;
-}
 
-bool CVirtualConsole::GetTab(int tabIdx, /*OUT*/ ConEmuTab* pTab)
-{
-	if (!this)
-	{
-		_ASSERTE(this!=NULL);
-		return false;
-	}
-	if (!mp_RCon)
-	{
-		pTab->Pos = 0; pTab->Current = 1; pTab->Type = 1; pTab->Modified = 0;
-		lstrcpyn(pTab->Name, gpConEmu->GetDefaultTitle(), countof(pTab->Name));
-		return true;
-	}
-	return mp_RCon->GetTab(tabIdx, pTab);
+	//id->Release(); -- ???
+	id = NULL; // don't use it anymore, reference stored in pTab
+	return true;
 }
 
 void CVirtualConsole::PointersInit()

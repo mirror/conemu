@@ -2446,6 +2446,7 @@ LRESULT CSettings::OnInitDialog_Selection(HWND hWnd2)
 		(gpSet->isConsoleTextSelection == 1) ? rbCTSAlways : rbCTSBufferOnly);
 
 	checkDlgButton(hWnd2, cbCTSAutoCopy, gpSet->isCTSAutoCopy);
+	checkDlgButton(hWnd2, cbCTSIBeam, gpSet->isCTSIBeam);
 	checkDlgButton(hWnd2, cbCTSEndOnTyping, (gpSet->isCTSEndOnTyping != 0));
 	checkDlgButton(hWnd2, cbCTSEndOnKeyPress, (gpSet->isCTSEndOnTyping != 0) && gpSet->isCTSEndOnKeyPress);
 	checkDlgButton(hWnd2, cbCTSEndCopyBefore, (gpSet->isCTSEndOnTyping == 1));
@@ -5813,6 +5814,10 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			break;
 		case cbCTSAutoCopy:
 			gpSet->isCTSAutoCopy = IsChecked(hWnd2,CB);
+			break;
+		case cbCTSIBeam:
+			gpSet->isCTSIBeam = IsChecked(hWnd2,CB);
+			gpConEmu->OnSetCursor();
 			break;
 		case cbCTSEndOnTyping:
 		case cbCTSEndCopyBefore:

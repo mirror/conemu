@@ -6227,6 +6227,11 @@ LRESULT CRealBuffer::OnScroll(int nDirection, short nTrackPos /*= -1*/, UINT nCo
 		_ASSERTE(nCount >= 1);
 		nCount = 1;
 	}
+	// returns "-1" when user choose "one screen per time"
+	else if ((UINT)nCount >= (UINT)nVisible)
+	{
+		nCount = max(1,(nVisible-1));
+	}
 
 	// SB_LINEDOWN / SB_LINEUP / SB_PAGEDOWN / SB_PAGEUP
 	if (m_Type == rbt_Primary)

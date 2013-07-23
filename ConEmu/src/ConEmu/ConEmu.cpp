@@ -16218,7 +16218,7 @@ LRESULT CConEmuMain::OnSetCursor(WPARAM wParam, LPARAM lParam)
 			}
 
 			// If mouse is used for selection, or specified modifier is pressed
-			if (!hCur && lbMeFore)
+			if (!hCur && lbMeFore && gpSet->isCTSIBeam)
 			{
 				if ((gpSet->isCTSSelectBlock && gpSet->IsModifierPressed(vkCTSVkBlock, true))
 					|| (gpSet->isCTSSelectText && gpSet->IsModifierPressed(vkCTSVkText, true)))

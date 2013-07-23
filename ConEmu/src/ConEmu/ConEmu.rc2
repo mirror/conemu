@@ -32,6 +32,7 @@ BEGIN
     cbCTSBashMargin         "Bash leave one space-character on the right edge of console when wrapping lines, skip these spaces when copying to clipboard"
     cbCTSBlockSelection     "Enable rectangular selection (like standard Windows console)"
     cbCTSDeleteLeftWord     "Delete word leftward to the cursor (does not work in Far),\r\n3rd-state means «try to detect if console is in ReadConsole», if you want to use this with bash - turn checkbox to «On» (don't use third state)"
+    cbCTSIBeam              "Show IBeam (text selection) cursor when available and allowed by settings and key modifiers"
     cbCTSClickPromptPosition "3rd-state means «try to detect if console is in ReadConsole», if you want to use this with bash - turn checkbox to «On» (don't use third state)"
     cbCTSTextSelection      "Enable streaming selection (like GUI text editors)"
     cbCTSDetectLineEnd      "Try to copy wrapped text as single line when possible (Text selection)"

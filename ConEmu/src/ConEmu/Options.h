@@ -777,6 +777,8 @@ struct Settings
 		BYTE isConsoleTextSelection;
 		//reg->Load(L"CTS.AutoCopy", isCTSAutoCopy);
 		bool isCTSAutoCopy;
+		//reg->Load(L"CTS.IBeam", isCTSIBeam);
+		bool isCTSIBeam;
 		//reg->Load(L"CTS.EndOnTyping", isCTSEndOnTyping);
 		BYTE isCTSEndOnTyping; // 0 - off, 1 - copy & reset, 2 - reset only
 		//reg->Load(L"CTS.EndOnKeyPress", isCTSEndOnKeyPress);

@@ -944,6 +944,7 @@
 #define tTabBarDblClickAction           2600
 #define cbActivateSplitMouseOver        2601
 #define tPerfCounters                   2602
+#define cbCTSIBeam                      2603
 
 // Next default values for new objects
 // 
@@ -951,7 +952,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        222
 #define _APS_NEXT_COMMAND_VALUE         40010
-#define _APS_NEXT_CONTROL_VALUE         2603
+#define _APS_NEXT_CONTROL_VALUE         2604
 #define _APS_NEXT_SYMED_VALUE           130
 #endif
 #endif

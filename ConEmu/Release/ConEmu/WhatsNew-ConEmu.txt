@@ -17,6 +17,10 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 
 [*] Build number stored in xml-configuration file when saving settings.
 [*] Keys & Macros: "Drag ConEmu window by client area" renamed to "Move ConEmu window by dragging client area".
+[+] Settings->Mark & Paste: New option "Show IBeam cursor".
+[%] Hungs on wheel when "sreen per time" was choosed in mouse settings.
+[*] Issue ???: Don't resize real console until mouse button released (Far Manager resized «on the fly»).
+[%] Issue ???: Tab bar position fails after restoring ConEmu when «Auto show» (tabs) is selected.
 
 
 2013.07.08

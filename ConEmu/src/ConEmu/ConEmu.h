@@ -289,6 +289,7 @@ class CConEmuMain :
 			{
 				if (!nWheelScrollChars)
 					ReloadWheelScroll();
+				_ASSERTE(nWheelScrollChars<=3);
 				return nWheelScrollChars;
 			};
 			UINT GetWheelScrollLines()
