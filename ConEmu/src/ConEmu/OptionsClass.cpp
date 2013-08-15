@@ -911,6 +911,13 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 		gpSet->SaveSettings(TRUE/*abSilent*/);
 	}
 
+	// Issue 1191: ConEmu was launched instead of explorer from taskbar pinned library icon
+	bool bHasLibraries = IsWindows7;
+	if (bHasLibraries)
+	{
+		UnregisterShellInvalids();
+	}
+
 	// Передернуть палитру затенения
 	gpSet->ResetFadeColors();
 	gpSet->GetColors(-1, TRUE);
@@ -2365,6 +2372,8 @@ LRESULT CSettings::OnInitDialog_Ext(HWND hWnd2)
 
 	checkDlgButton(hWnd2, cbSuppressBells, gpSet->isSuppressBells);
 
+	checkDlgButton(hWnd2, cbConsoleExceptionHandler, gpSet->isConsoleExceptionHandler);
+
 	checkDlgButton(hWnd2, cbUseClink, gpSet->isUseClink() ? BST_CHECKED : BST_UNCHECKED);
 
 	checkDlgButton(hWnd2, cbDosBox, gpConEmu->mb_DosBoxExists);
@@ -2419,6 +2428,8 @@ LRESULT CSettings::OnInitDialog_Comspec(HWND hWnd2, bool abInitial)
 	checkRadioButton(hWnd2, rbComspec_OSbit, rbComspec_x32, rbComspec_OSbit+gpSet->ComSpec.csBits);
 
 	checkDlgButton(hWnd2, cbComspecUpdateEnv, gpSet->ComSpec.isUpdateEnv ? BST_CHECKED : BST_UNCHECKED);
+	EnableDlgItem(hWnd2, cbComspecUpdateEnv, (gpSet->ComSpec.csType!=cst_EnvVar));
+
 	checkDlgButton(hWnd2, cbAddConEmu2Path, (gpSet->ComSpec.AddConEmu2Path & CEAP_AddConEmuExeDir) ? BST_CHECKED : BST_UNCHECKED);
 	checkDlgButton(hWnd2, cbAddConEmuBase2Path, (gpSet->ComSpec.AddConEmu2Path & CEAP_AddConEmuBaseDir) ? BST_CHECKED : BST_UNCHECKED);
 	checkDlgButton(hWnd2, cbComspecUncPaths, gpSet->ComSpec.isAllowUncPaths ? BST_CHECKED : BST_UNCHECKED);
@@ -3240,6 +3251,7 @@ LRESULT CSettings::OnInitDialog_Status(HWND hWnd2, bool abInitial)
 
 	checkDlgButton(hWnd2, cbStatusVertSep, (gpSet->isStatusBarFlags & csf_VertDelim) ? BST_CHECKED : BST_UNCHECKED);
 	checkDlgButton(hWnd2, cbStatusHorzSep, (gpSet->isStatusBarFlags & csf_HorzDelim) ? BST_CHECKED : BST_UNCHECKED);
+	checkDlgButton(hWnd2, cbStatusVertPad, (gpSet->isStatusBarFlags & csf_NoVerticalPad)==0 ? BST_CHECKED : BST_UNCHECKED);
 	checkDlgButton(hWnd2, cbStatusSystemColors, (gpSet->isStatusBarFlags & csf_SystemColors) ? BST_CHECKED : BST_UNCHECKED);
 
 	EnableDlgItems(hWnd2, SettingsNS::nStatusColorIds, countof(SettingsNS::nStatusColorIds), !(gpSet->isStatusBarFlags & csf_SystemColors));
@@ -4050,8 +4062,9 @@ void CSettings::RegisterShell(LPCWSTR asName, LPCWSTR asOpt, LPCWSTR asConfig, L
 	//@="C:\\Program Files\\ConEmu\\ConEmu.exe /inside /config shell /dir \"%1\" /cmd powershell -cur_console:n"
 
 	int iSucceeded = 0;
+	bool bHasLibraries = IsWindows7;
 
-	for (int i = 1; i <= 4; i++)
+	for (int i = 1; i <= 6; i++)
 	{
 		_wsprintf(pszCmd, SKIPLEN(cchMax) L"\"%s\" ", gpConEmu->ms_ConEmuExe);
 		if (asOpt && *asOpt)
@@ -4078,13 +4091,26 @@ void CSettings::RegisterShell(LPCWSTR asName, LPCWSTR asOpt, LPCWSTR asConfig, L
 			pszRoot = L"Software\\Classes\\Directory\\Background\\shell";
 			break;
 		case 3:
+			if (!bHasLibraries)
+				continue;
+			pszRoot = L"Software\\Classes\\LibraryFolder\\Background\\shell";
+			break;
+		case 4:
 			pszRoot = L"Software\\Classes\\Directory\\shell";
 			_wcscat_c(pszCmd, cchMax, L"/dir \"%1\" ");
 			break;
-		case 4:
+		case 5:
 			pszRoot = L"Software\\Classes\\Drive\\shell";
 			_wcscat_c(pszCmd, cchMax, L"/dir \"%1\" ");
 			break;
+		case 6:
+			// Issue 1191: ConEmu was launched instead of explorer from taskbar pinned library icon
+			continue;
+			//if (!bHasLibraries)
+			//	continue;
+			//pszRoot = L"Software\\Classes\\LibraryFolder\\shell";
+			//_wcscat_c(pszCmd, cchMax, L"/dir \"%1\" ");
+			//break;
 		}
 
 		bool bCmdKeyExist = false;
@@ -4134,6 +4160,64 @@ void CSettings::UnregisterShell(LPCWSTR asName)
 	DeleteRegKeyRecursive(HKEY_CURRENT_USER, L"Software\\Classes\\Directory\\shell", asName);
 	DeleteRegKeyRecursive(HKEY_CURRENT_USER, L"Software\\Classes\\Drive\\shell", asName);
 	DeleteRegKeyRecursive(HKEY_CURRENT_USER, L"Software\\Classes\\*\\shell", asName);
+	DeleteRegKeyRecursive(HKEY_CURRENT_USER, L"Software\\Classes\\LibraryFolder\\Background\\shell", asName);
+	DeleteRegKeyRecursive(HKEY_CURRENT_USER, L"Software\\Classes\\LibraryFolder\\shell", asName);
+}
+
+// Issue 1191: ConEmu was launched instead of explorer from taskbar pinned library icon
+void CSettings::UnregisterShellInvalids()
+{
+	HKEY hkDir;
+
+	if (0 == RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Classes\\LibraryFolder\\shell", 0, KEY_READ, &hkDir))
+	{
+		int iOthers = 0;
+		MArray<wchar_t*> lsNames;
+
+		for (DWORD i = 0; i < 512; i++)
+		{
+			wchar_t szName[MAX_PATH+32] = {};
+			wchar_t szCmd[MAX_PATH*4];
+			DWORD cchMax = countof(szName) - 32;
+			if (0 != RegEnumKeyEx(hkDir, i, szName, &cchMax, NULL, NULL, NULL, NULL))
+				break;
+			wchar_t* pszSlash = szName + _tcslen(szName);
+			wcscat_c(szName, L"\\command");
+			HKEY hkCmd = NULL;
+			if (0 == RegOpenKeyEx(hkDir, szName, 0, KEY_READ, &hkCmd))
+			{
+				DWORD cbMax = sizeof(szCmd)-2;
+				if (0 == RegQueryValueEx(hkCmd, NULL, NULL, NULL, (LPBYTE)szCmd, &cbMax))
+				{
+					szCmd[cbMax>>1] = 0;
+					*pszSlash = 0;
+					//LPCWSTR pszInside = StrStrI(szCmd, L"/inside");
+					LPCWSTR pszConEmu = StrStrI(szCmd, L"conemu");
+					if (pszConEmu)
+						lsNames.push_back(lstrdup(szName));
+					else
+						iOthers++;
+				}
+				RegCloseKey(hkCmd);
+			}
+		}
+		RegCloseKey(hkDir);
+
+
+		wchar_t* pszName;
+		while (lsNames.pop_back(pszName))
+		{
+			DeleteRegKeyRecursive(HKEY_CURRENT_USER, L"Software\\Classes\\LibraryFolder\\shell", pszName);
+		}
+
+		// If there is no other "commands" - try to delete "shell" subkey.
+		// No worse if there are any other "non commands" - RegDeleteKey will do nothing.
+		if ((iOthers == 0) && (0 == RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Classes\\LibraryFolder", 0, KEY_ALL_ACCESS, &hkDir)))
+		{
+			RegDeleteKey(hkDir, L"shell");
+			RegCloseKey(hkDir);
+		}
+	}
 }
 
 bool CSettings::DeleteRegKeyRecursive(HKEY hRoot, LPCWSTR asParent, LPCWSTR asName)
@@ -4750,6 +4834,7 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				gpSet->ComSpec.csType = cst_EnvVar;
 			else
 				gpSet->ComSpec.csType = cst_AutoTccCmd;
+			EnableDlgItem(hWnd2, cbComspecUpdateEnv, (gpSet->ComSpec.csType!=cst_EnvVar));
 			gpConEmu->OnGlobalSettingsChanged();
 			break;
 		case cbComspecExplicit:
@@ -5084,6 +5169,7 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpConEmu->mp_TabBar->Update(TRUE);
 			break;
 		case cbActivateSplitMouseOver:
+			GetCursorPos(&gpConEmu->mouse.ptLastSplitOverCheck);
 			gpSet->isActivateSplitMouseOver = IsChecked(hWnd2, cbActivateSplitMouseOver);
 			break;
 		case cbTabSelf:
@@ -5258,6 +5344,10 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpSet->isSuppressBells = IsChecked(hWnd2, cbSuppressBells);
 			gpConEmu->OnGlobalSettingsChanged();
 			break;
+		case cbConsoleExceptionHandler:
+			gpSet->isConsoleExceptionHandler = IsChecked(hWnd2, cbConsoleExceptionHandler);
+			gpConEmu->OnGlobalSettingsChanged();
+			break;
 		case cbUseClink:
 			gpSet->mb_UseClink = IsChecked(hWnd2, cbUseClink);
 			if (gpSet->mb_UseClink && !gpSet->isUseClink())
@@ -5272,6 +5362,9 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				MessageBox(szErrInfo, MB_ICONSTOP|MB_SYSTEMMODAL, NULL, ghOpWnd);
 			}
 			gpConEmu->OnGlobalSettingsChanged();
+			break;
+		case cbClinkWebPage:
+			ShellExecute(NULL, L"open", L"http://code.google.com/p/clink", NULL, NULL, SW_SHOWNORMAL);
 			break;
 		case cbPortableRegistry:
 			#ifdef USEPORTABLEREGISTRY
@@ -6143,6 +6236,16 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 						gpSet->isStatusBarFlags |= csf_HorzDelim;
 					else
 						gpSet->isStatusBarFlags &= ~csf_HorzDelim;
+					gpConEmu->mp_Status->UpdateStatusFont();
+					gpConEmu->mp_Status->UpdateStatusBar(true);
+					break;
+
+				case cbStatusVertPad:
+					if (!IsChecked(hWnd2,CB))
+						gpSet->isStatusBarFlags |= csf_NoVerticalPad;
+					else
+						gpSet->isStatusBarFlags &= ~csf_NoVerticalPad;
+					gpConEmu->mp_Status->UpdateStatusFont();
 					gpConEmu->mp_Status->UpdateStatusBar(true);
 					break;
 
@@ -6281,7 +6384,7 @@ LRESULT CSettings::OnButtonClicked_Cursor(HWND hWnd2, WPARAM wParam, LPARAM lPar
 			pApp->CursorInactive.isColor = IsChecked(hWnd2,cbInactiveCursorColor);
 			break;
 		case cbInactiveCursorBlink:
-			pApp->CursorInactive.isBlinking = IsChecked(hWnd2,cbInactiveCursorColor);
+			pApp->CursorInactive.isBlinking = IsChecked(hWnd2,cbInactiveCursorBlink);
 			break;
 		case cbInactiveCursorIgnoreSize:
 			pApp->CursorInactive.isFixedSize = IsChecked(hWnd2,cbInactiveCursorIgnoreSize);

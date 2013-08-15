@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -65,9 +65,10 @@ _DBGHLP(L"     /DOSBOX -> use DosBox\r\n") \
 	    L"When you run application from ConEmu console, you may use one or more\r\n" \
       /*L"  Switch: -new_console[:abcd[:dir]h[N]rx[N]y[N]u[:user:pwd]]\r\n")*/ \
 		L"  Switch: -new_console[:switches]\r\n" \
-        L"     a - RunAs shell verb (as Admin on Vista+, login/passw in Win2k and WinXP)\r\n" \
+        L"     a - RunAs shell verb (as Admin on Vista+, user/pwd in Win2k and WinXP)\r\n" \
         L"     b - Create background tab\r\n" \
         L"     c - force enable 'Press Enter or Esc to close console' (default)\r\n" \
+        L"     f - force starting console active, useful when starting several consoles simultaneously\r\n" \
         L"     h<height> - i.e., h0 - turn buffer off, h9999 - switch to 9999 lines\r\n" \
         L"     i - don't inject ConEmuHk into starting process\r\n" \
         L"     I - (GuiMacro only) forces inheriting of root process contents, like \"Duplicate root\" feature\r\n" \

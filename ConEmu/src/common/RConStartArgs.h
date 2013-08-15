@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@ struct RConStartArgs
 	BOOL     bDetached; // internal use
 	BOOL     bNewConsole; // TRUE==-new_console, FALSE==-cur_console
 	BOOL     bBackgroundTab;      // -new_console:b
+	BOOL     bForegroungTab;      // -new_console:f
 	BOOL     bNoDefaultTerm;      // -new_console:z - не использовать фичу "Default terminal". Ќе пишетс€ в CreateCommandLine()
 
 	wchar_t* pszSpecialCmd; // собственно, command line

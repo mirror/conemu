@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -106,6 +106,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 //#define PROCESS_WAIT_START_TIME 1000
+
+#define DRAG_DELTA 5
+#define SPLITOVERCHECK_DELTA 5 // gpSet->isActivateSplitMouseOver
 
 #define PTDIFFTEST(C,D) PtDiffTest(C, ptCur.x, ptCur.y, D)
 //(((abs(C.x-(short)LOWORD(lParam)))<D) && ((abs(C.y-(short)HIWORD(lParam)))<D))
@@ -268,6 +271,7 @@ CConEmuMain::CConEmuMain()
 	//GetVersionEx(&gOSVer);
 
 	mp_Log = NULL;
+	InitializeCriticalSection(&mcs_Log);
 
 	mb_CommCtrlsInitialized = false;
 	mh_AboutDlg = NULL;
@@ -381,6 +385,7 @@ CConEmuMain::CConEmuMain()
 	ZeroStruct(mouse);
 	mouse.lastMMW=-1;
 	mouse.lastMML=-1;
+	GetCursorPos(&mouse.ptLastSplitOverCheck);
 	ZeroStruct(session);
 	ZeroStruct(m_TranslatedChars);
 	//GetKeyboardState(m_KeybStates);
@@ -737,6 +742,11 @@ void LogFocusInfo(LPCWSTR asInfo, int Level/*=1*/)
 
 void CConEmuMain::StoreWorkDir(LPCWSTR asNewCurDir /*= NULL*/)
 {
+	if (asNewCurDir && (asNewCurDir[0] == L':'))
+	{
+		asNewCurDir = NULL; // Пути а-ля библиотеки - не поддерживаются при выполнении команд и приложений
+	}
+
 	if (asNewCurDir)
 	{
 		if (*asNewCurDir)
@@ -763,11 +773,20 @@ void CConEmuMain::StoreWorkDir(LPCWSTR asNewCurDir /*= NULL*/)
 
 LPCWSTR CConEmuMain::WorkDir(LPCWSTR asOverrideCurDir /*= NULL*/)
 {
+	LPCWSTR pszWorkDir;
 	if (asOverrideCurDir && *asOverrideCurDir)
-		return asOverrideCurDir;
-	
-	_ASSERTE(this && ms_ConEmuWorkDir[0]!=0);
-	return ms_ConEmuWorkDir;
+	{
+		pszWorkDir = asOverrideCurDir;
+	}
+	else
+	{
+		_ASSERTE(this && ms_ConEmuWorkDir[0]!=0);
+		pszWorkDir = ms_ConEmuWorkDir;
+	}
+
+	if (pszWorkDir && (pszWorkDir[0] == L':'))
+		pszWorkDir = L""; // Пути а-ля библиотеки - не поддерживаются при выполнении команд и приложений
+	return pszWorkDir;
 }
 
 bool CConEmuMain::CheckRequiredFiles()
@@ -1851,15 +1870,18 @@ DWORD CConEmuMain::GetWorkWindowStyleEx()
 	return styleEx;
 }
 
-void CConEmuMain::CreateLog()
+bool CConEmuMain::CreateLog()
 {
 	_ASSERTE(gpSetCls->isAdvLogging && !mp_Log);
 
-	SafeDelete(mp_Log);
+	if (mp_Log!=NULL)
+	{
+		_ASSERTE(mp_Log==NULL);
+		return true; // создан уже
+	}
 
-	//if (!gpSetCls->isAdvLogging)
-	//{
-	//}
+	bool bRc = false;
+	EnterCriticalSection(&mcs_Log);
 
 	mp_Log = new MFileLog(L"ConEmu-gui", ms_ConEmuExeDir, GetCurrentProcessId());
 
@@ -1870,10 +1892,18 @@ void CConEmuMain::CreateLog()
 		_wsprintf(szError, SKIPLEN(countof(szError)) L"Create log file failed! ErrCode=0x%08X\n%s\n", (DWORD)hr, mp_Log->GetLogFileName());
 		MBoxA(szError);
 		SafeDelete(mp_Log);
-		return;
+		// Сброс!
+		gpSetCls->isAdvLogging = 0;
+	}
+	else
+	{
+		mp_Log->LogStartEnv(gpStartEnv);
+		bRc = true;
 	}
 
-	mp_Log->LogStartEnv(gpStartEnv);
+	LeaveCriticalSection(&mcs_Log);
+
+	return bRc;
 }
 
 void CConEmuMain::LogString(LPCWSTR asInfo, bool abWriteTime /*= true*/, bool abWriteLine /*= true*/)
@@ -2489,6 +2519,7 @@ void CConEmuMain::UpdateGuiInfoMapping()
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_UseTrueColor,(gpSet->isTrueColorer ? CECF_UseTrueColor : 0));
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_ProcessAnsi,(gpSet->isProcessAnsi ? CECF_ProcessAnsi : 0));
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_SuppressBells,(gpSet->isSuppressBells ? CECF_SuppressBells : 0));
+	SetConEmuFlags(m_GuiInfo.Flags,CECF_ConExcHandler,(gpSet->isConsoleExceptionHandler ? CECF_ConExcHandler : 0));
 	// использовать расширение командной строки (ReadConsole). 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
 	switch (gpSet->isUseClink())
 	{
@@ -3078,6 +3109,7 @@ CConEmuMain::~CConEmuMain()
 	LoadImageFinalize();
 
 	SafeDelete(mp_Log);
+	DeleteCriticalSection(&mcs_Log);
 
 	_ASSERTE(mh_LLKeyHookDll==NULL);
 	CommonShutdown();
@@ -4240,6 +4272,15 @@ RECT CConEmuMain::GetIdealRect()
 	return rcIdeal;
 }
 
+// Если табов не было, создается новая консоль, появляются табы
+// Размер окна ConEmu пытаемся НЕ менять, но размер КОНСОЛИ меняется
+// Нужно ее запомнить, иначе при Minimize/Restore установится некорректная высота!
+void CConEmuMain::OnTabbarActivated(bool bTabbarVisible)
+{
+	CVConGroup::SyncConsoleToWindow();
+	StoreNormalRect(NULL);
+}
+
 void CConEmuMain::StoreNormalRect(RECT* prcWnd)
 {
 	mouse.bCheckNormalRect = false;
@@ -4577,9 +4618,19 @@ bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 		else
 		{
 			if ((Tile == cwc_TileLeft) && (CurTile == cwc_TileRight))
-				Tile = cwc_Current;
+			{
+				rcNewWnd = GetDefaultRect();
+				m_TileMode = Tile = cwc_Current;
+				HMONITOR hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
+				JumpNextMonitor(ghWnd, hMon, false, rcNewWnd);
+			}
 			else if ((Tile == cwc_TileRight) && (CurTile == cwc_TileLeft))
-				Tile = cwc_Current;
+			{
+				rcNewWnd = GetDefaultRect();
+				m_TileMode = Tile = cwc_Current;
+				HMONITOR hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
+				JumpNextMonitor(ghWnd, hMon, true, rcNewWnd);
+			}
 		}
 
 
@@ -4587,7 +4638,7 @@ bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 		{
 			// Вернуться из Tile-режима в нормальный
 			rcNewWnd = GetDefaultRect();
-			bChange = true;
+			//bChange = true;
 		}
 		else if (Tile == cwc_TileLeft)
 		{
@@ -4700,6 +4751,7 @@ bool CConEmuMain::JumpNextMonitor(bool Next)
 	}
 
 	wchar_t szInfo[100];
+	RECT rcMain;
 
 	HWND hJump = getForegroundWindow();
 	if (!hJump)
@@ -4721,24 +4773,40 @@ bool CConEmuMain::JumpNextMonitor(bool Next)
 		return false;
 	}
 
-	RECT rcMain = {};
-	bool bFullScreen = false;
-	bool bMaximized = false;
-	DWORD nStyles = GetWindowLong(hJump, GWL_STYLE);
-
 	if (hJump == ghWnd)
 	{
 		rcMain = CalcRect(CER_MAIN);
-		bFullScreen = isFullScreen();
-		bMaximized = bFullScreen ? false : isZoomed();
 	}
 	else
 	{
 		GetWindowRect(hJump, &rcMain);
 	}
 
+	return JumpNextMonitor(hJump, NULL, Next, rcMain);
+}
+
+bool CConEmuMain::JumpNextMonitor(HWND hJumpWnd, HMONITOR hJumpMon, bool Next, const RECT rcJumpWnd)
+{
+	wchar_t szInfo[100];
+	RECT rcMain = {};
+	bool bFullScreen = false;
+	bool bMaximized = false;
+	DWORD nStyles = GetWindowLong(hJumpWnd, GWL_STYLE);
+
+	rcMain = rcJumpWnd;
+	if (hJumpWnd == ghWnd)
+	{
+		//-- rcMain = CalcRect(CER_MAIN);
+		bFullScreen = isFullScreen();
+		bMaximized = bFullScreen ? false : isZoomed();
+	}
+	else
+	{
+		//-- GetWindowRect(hJumpWnd, &rcMain);
+	}
+
 	MONITORINFO mi = {};
-	HMONITOR hNext = GetNextMonitorInfo(&mi, &rcMain, Next);
+	HMONITOR hNext = hJumpMon ? (GetMonitorInfoSafe(hJumpMon, mi) ? hJumpMon : NULL) : GetNextMonitorInfo(&mi, &rcMain, Next);
 	if (!hNext)
 	{
 		if (gpSetCls->isAdvLogging)
@@ -4765,14 +4833,14 @@ bool CConEmuMain::JumpNextMonitor(bool Next)
 
 	RECT rcNewMain = rcMain;
 
-	if ((bFullScreen || bMaximized) && (hJump == ghWnd))
+	if ((bFullScreen || bMaximized) && (hJumpWnd == ghWnd))
 	{
-		_ASSERTE(hJump == ghWnd);
+		_ASSERTE(hJumpWnd == ghWnd);
 		rcNewMain = CalcRect(bFullScreen ? CER_FULLSCREEN : CER_MAXIMIZED, mi.rcMonitor, CER_MAIN);
 	}
 	else
 	{
-		_ASSERTE(WindowMode==wmNormal || hJump!=ghWnd);
+		_ASSERTE(WindowMode==wmNormal || hJumpWnd!=ghWnd);
 
 		RECT rcPrevMon = bFullScreen ? miCur.rcMonitor : miCur.rcWork;
 		RECT rcNextMon = bFullScreen ? mi.rcMonitor : mi.rcWork;
@@ -4843,7 +4911,7 @@ bool CConEmuMain::JumpNextMonitor(bool Next)
 	
 	// Поскольку кнопки мы перехватываем - нужно предусмотреть
 	// прыжки и для других окон, например окна настроек
-	if (hJump == ghWnd)
+	if (hJumpWnd == ghWnd)
 	{
 		// Коррекция (заранее)
 		OnMoving(&rcNewMain);
@@ -4867,11 +4935,11 @@ bool CConEmuMain::JumpNextMonitor(bool Next)
 
 
 	// И перемещение
-	SetWindowPos(hJump, NULL, rcNewMain.left, rcNewMain.top, rcNewMain.right-rcNewMain.left, rcNewMain.bottom-rcNewMain.top, SWP_NOZORDER/*|SWP_DRAWFRAME*/|SWP_NOCOPYBITS);
-	//MoveWindow(hJump, rcNewMain.left, rcNewMain.top, rcNewMain.right-rcNewMain.left, rcNewMain.bottom-rcNewMain.top, FALSE);
+	SetWindowPos(hJumpWnd, NULL, rcNewMain.left, rcNewMain.top, rcNewMain.right-rcNewMain.left, rcNewMain.bottom-rcNewMain.top, SWP_NOZORDER/*|SWP_DRAWFRAME*/|SWP_NOCOPYBITS);
+	//MoveWindow(hJumpWnd, rcNewMain.left, rcNewMain.top, rcNewMain.right-rcNewMain.left, rcNewMain.bottom-rcNewMain.top, FALSE);
 
 
-	if (hJump == ghWnd)
+	if (hJumpWnd == ghWnd)
 	{
 		if (bFullScreen)
 		{
@@ -7059,6 +7127,10 @@ CVirtualConsole* CConEmuMain::CreateConGroup(LPCWSTR apszScript, bool abForceAsA
 				{
 					lbOneCreated = TRUE;
 
+					const RConStartArgs& modArgs = pVCon->RCon()->GetArgs();
+					if (modArgs.bForegroungTab)
+						lbSetActive = true;
+
 					pLastVCon = pVCon;
 					if (lbSetActive && !pSetActive)
 						pSetActive = pVCon;
@@ -8277,6 +8349,8 @@ BOOL CConEmuMain::RunSingleInstance(HWND hConEmuWnd /*= NULL*/, LPCWSTR apszCmd 
 				// "ShowHide" argument has priority before szCommand!!!
 				// If need to run command in new tab of existing window,
 				// "ShowHide" must be "sih_None"
+
+				pIn->NewCmd.isAdvLogging = gpSetCls->isAdvLogging;
 
 				pIn->NewCmd.ShowHide = gpSetCls->SingleInstanceShowHide;
 				if (gpSetCls->SingleInstanceShowHide == sih_None)
@@ -9899,7 +9973,7 @@ bool CConEmuMain::isMainThread()
 	return dwTID == mn_MainThreadId;
 }
 
-bool CConEmuMain::isMeForeground(bool abRealAlso/*=false*/, bool abDialogsAlso/*=true*/)
+bool CConEmuMain::isMeForeground(bool abRealAlso/*=false*/, bool abDialogsAlso/*=true*/, HWND* phFore/*=NULL*/)
 {
 	if (!this) return false;
 
@@ -9907,6 +9981,8 @@ bool CConEmuMain::isMeForeground(bool abRealAlso/*=false*/, bool abDialogsAlso/*
 	static bool isMe = false;
 	static bool bLastRealAlso, bLastDialogsAlso;
 	HWND h = getForegroundWindow();
+	if (phFore)
+		*phFore = h;
 
 	if ((h != hLastFore) || (bLastRealAlso != abRealAlso) || (bLastDialogsAlso != abDialogsAlso))
 	{
@@ -10065,16 +10141,16 @@ bool CConEmuMain::isProcessCreated()
 	return mb_ProcessCreated;
 }
 
-bool CConEmuMain::isSizing()
+bool CConEmuMain::isSizing(UINT nMouseMsg/*=0*/)
 {
 	// Юзер тащит мышкой рамку окна
 	if ((mouse.state & MOUSE_SIZING_BEGIN) != MOUSE_SIZING_BEGIN)
 		return false;
 
 	// могло не сброситься, проверим
-	if (!isPressed(VK_LBUTTON))
+	if ((nMouseMsg==WM_NCLBUTTONUP) || !isPressed(VK_LBUTTON))
 	{
-		EndSizing();
+		EndSizing(nMouseMsg);
 		mouse.bCheckNormalRect = true;
 		return false;
 	}
@@ -10129,10 +10205,22 @@ void CConEmuMain::ResetSizingFlags(DWORD nDropFlags /*= MOUSE_SIZING_BEGIN|MOUSE
 	mouse.state &= ~nDropFlags;
 }
 
-void CConEmuMain::EndSizing()
+void CConEmuMain::EndSizing(UINT nMouseMsg/*=0*/)
 {
-	_ASSERTE((mouse.state & MOUSE_SIZING_TODO) == 0); // Уже должен быть сброшен?
-	ResetSizingFlags(MOUSE_SIZING_BEGIN);
+	bool bApplyResize = false;
+
+	if (mouse.state & MOUSE_SIZING_TODO)
+	{
+		// Если тянули мышкой - изменение размера консоли могло быть "отложено" до ее отпускания
+		bApplyResize = true;
+	}
+
+	ResetSizingFlags(MOUSE_SIZING_BEGIN|MOUSE_SIZING_TODO);
+
+	if (bApplyResize)
+	{
+		CVConGroup::SyncConsoleToWindow();
+	}
 
 	if (IsWindowVisible(ghWnd) && !isIconic())
 	{
@@ -14346,7 +14434,7 @@ bool CConEmuMain::PatchMouseEvent(UINT messg, POINT& ptCurClient, POINT& ptCurSc
 
 	if (mb_MouseCaptured
 		|| (messg == WM_LBUTTONDOWN) || (messg == WM_RBUTTONDOWN) || (messg == WM_MBUTTONDOWN)
-		|| ((messg == WM_MOUSEMOVE) && gpSet->isActivateSplitMouseOver))
+		/*|| ((messg == WM_MOUSEMOVE) && gpSet->isActivateSplitMouseOver)*/)
 	{
 		HWND hChild = ::ChildWindowFromPointEx(ghWnd, ptCurClient, CWP_SKIPINVISIBLE|CWP_SKIPDISABLED|CWP_SKIPTRANSPARENT);
 
@@ -14363,7 +14451,7 @@ bool CConEmuMain::PatchMouseEvent(UINT messg, POINT& ptCurClient, POINT& ptCurSc
 			// WARNING! Тут строго, без учета активности группы!
 			if (VCon.VCon() && isVisible(VCon.VCon()) && !isActive(VCon.VCon(), false))
 			{
-				Activate(VCon.VCon());
+				//Activate(VCon.VCon());
 
 				if (gpSet->isMouseSkipActivation)
 				{
@@ -17044,10 +17132,54 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 			EnableWindow(ghWnd, TRUE);
 	}
 
-	bool bForeground = isMeForeground();
+	HWND hForeWnd = NULL;
+	bool bForeground = isMeForeground(false, true, &hForeWnd);
 	if (bForeground && !m_GuiInfo.bGuiActive)
 	{
 		UpdateGuiInfoMappingActive(true);
+	}
+
+	CVConGuard VConFromPoint;
+	// bForeground - does not fit our needs (it ignores GUI children)
+	if (gpSet->isActivateSplitMouseOver)
+	{
+		POINT ptCur; GetCursorPos(&ptCur);
+		if (!PTDIFFTEST(mouse.ptLastSplitOverCheck, SPLITOVERCHECK_DELTA))
+		{
+			mouse.ptLastSplitOverCheck = ptCur;
+			if (!isIconic() && (hForeWnd == ghWnd || CVConGroup::isOurGuiChildWindow(hForeWnd)))
+			{
+				// Курсор над ConEmu?
+				RECT rcClient = CalcRect(CER_MAIN);
+				// Проверяем, в какой из VCon попадает курсор?
+				if (PtInRect(&rcClient, ptCur))
+				{
+					if (CVConGroup::GetVConFromPoint(ptCur, &VConFromPoint))
+					{
+						bool bActive = isActive(VConFromPoint.VCon(), false);
+						if (!bActive)
+						{
+							// Если был активирован GUI CHILD - то фокус нужно сначала поставить в ConEmu
+							if (!bForeground && pVCon && pVCon->RCon()->GuiWnd())
+							{
+								apiSetForegroundWindow(ghWnd);
+							}
+
+							if (Activate(VConFromPoint.VCon()))
+							{
+								pVCon = VConFromPoint.VCon();
+							}
+
+							// Если был активен GUI CHILD - то ConEmu может НЕ активироваться
+							if (!bForeground && !VConFromPoint.VCon()->RCon()->GuiWnd())
+							{
+								apiSetForegroundWindow(ghWnd);
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	DWORD dwStyleEx = GetWindowLong(ghWnd, GWL_EXSTYLE);

@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#define RCLICKAPPS_START 100 // начало отрисовки кружка вокруг курсора
 //#define RCLICKAPPSTIMEOUT_MAX 10000
 //#define RCLICKAPPSDELTA 3
-#define DRAG_DELTA 5
+//#define DRAG_DELTA 5
 
 //typedef DWORD (WINAPI* FGetModuleFileNameEx)(HANDLE hProcess,HMODULE hModule,LPWSTR lpFilename,DWORD nSize);
 
@@ -197,12 +197,12 @@ class CConEmuMain :
 		CConEmuInside *mp_Inside;
 		CStatus *mp_Status;
 		CToolTip *mp_Tip;
-		MFileLog *mp_Log;
+		MFileLog *mp_Log; CRITICAL_SECTION mcs_Log; // mcs_Log - для создания
 		CDefaultTerminal *mp_DefTrm;
 		CEFindDlg *mp_Find;
 		CRunQueue *mp_RunQueue;
 
-		void CreateLog();
+		bool CreateLog();
 		void LogString(LPCWSTR asInfo, bool abWriteTime = true, bool abWriteLine = true);
 		void LogString(LPCSTR asInfo, bool abWriteTime = true, bool abWriteLine = true);
 		void LogMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -258,6 +258,9 @@ class CConEmuMain :
 			DWORD LDblClkTick;
 			COORD RClkDC, RClkCon;
 			DWORD RClkTick;
+
+			// Для обработки gpSet->isActivateSplitMouseOver
+			POINT  ptLastSplitOverCheck;
 
 			// Чтобы не слать в консоль бесконечные WM_MOUSEMOVE
 			UINT   lastMsg;
@@ -455,6 +458,7 @@ class CConEmuMain :
 	public:
 		void StoreIdealRect();
 		RECT GetIdealRect();
+		void OnTabbarActivated(bool bTabbarVisible);
 	protected:
 		BOOL mn_InResize;
 		//bool mb_InScMinimize;
@@ -708,18 +712,18 @@ class CConEmuMain :
 		bool isInImeComposition();		
 		bool isLBDown();
 		bool isMainThread();
-		bool isMeForeground(bool abRealAlso=false, bool abDialogsAlso=true);
+		bool isMeForeground(bool abRealAlso=false, bool abDialogsAlso=true, HWND* phFore=NULL);
 		bool isMouseOverFrame(bool abReal=false);		
 		bool isNtvdm(BOOL abCheckAllConsoles=FALSE);		
 		bool isOurConsoleWindow(HWND hCon);		
 		bool isPictureView();		
 		bool isProcessCreated();		
 		bool isRightClickingPaint();		
-		bool isSizing();
+		bool isSizing(UINT nMouseMsg=0);
 		void BeginSizing(bool bFromStatusBar);
 		void SetSizingFlags(DWORD nSetFlags = MOUSE_SIZING_BEGIN);
 		void ResetSizingFlags(DWORD nDropFlags = MOUSE_SIZING_BEGIN|MOUSE_SIZING_TODO);
-		void EndSizing();
+		void EndSizing(UINT nMouseMsg=0);
 		bool isValid(CRealConsole* apRCon);
 		bool isValid(CVirtualConsole* apVCon);
 		bool isVConExists(int nIdx);
@@ -767,6 +771,7 @@ class CConEmuMain :
 		ConEmuWindowCommand GetTileMode(bool Estimate, MONITORINFO* pmi=NULL);
 		bool IsSizeFree(ConEmuWindowMode CheckMode = wmFullScreen);
 		bool JumpNextMonitor(bool Next);
+		bool JumpNextMonitor(HWND hJumpWnd, HMONITOR hJumpMon, bool Next, const RECT rcJumpWnd);
 	private:
 		struct {
 			bool bWasSaved;

@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2010 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -501,6 +501,14 @@ enum SwitchGuiFocusOp
 	sgf_FocusGui,
 	sgf_FocusChild,
 	sgf_Last
+};
+
+enum CEStatusFlags
+{
+	csf_VertDelim           = 0x00000001,
+	csf_HorzDelim           = 0x00000002,
+	csf_SystemColors        = 0x00000004,
+	csf_NoVerticalPad       = 0x00000008,
 };
 
 enum CESizeStyle

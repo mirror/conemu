@@ -729,8 +729,11 @@ LONG WINAPI CreateDumpOnException(LPEXCEPTION_POINTERS ExceptionInfo)
 	wchar_t szAdd[1200];
 	wcscpy_c(szAdd, szFull);
 	wcscat_c(szAdd, L"\r\n\r\nPress <Yes> to copy this text to clipboard\r\nand open project web page");
-	wchar_t szTitle[100];
-	_wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"ConEmu crashed, PID=%u", GetCurrentProcessId());
+	wchar_t szTitle[100], szExe[MAX_PATH] = L"", *pszExeName;
+	GetModuleFileName(NULL, szExe, countof(szExe));
+	pszExeName = (wchar_t*)PointToName(szExe);
+	if (pszExeName && lstrlen(pszExeName) > 63) pszExeName[63] = 0;
+	_wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"%s crashed, PID=%u", pszExeName ? pszExeName : L"<process>", GetCurrentProcessId());
 
 	int nBtn = MessageBox(NULL, szAdd, szTitle, MB_YESNO|MB_ICONSTOP|MB_SYSTEMMODAL);
 	if (nBtn == IDYES)
@@ -751,6 +754,18 @@ LONG WINAPI CreateDumpOnException(LPEXCEPTION_POINTERS ExceptionInfo)
 	return lExRc;
 }
 
+void SetupCreateDumpOnException()
+{
+	_ASSERTE(gnRunMode == RM_ALTSERVER);
+
+	// Far 3.x, telnet, Vim, etc.
+	// В этих программах ConEmuCD.dll может загружаться для работы с альтернативными буферами и TrueColor
+	if (!gpfnPrevExFilter && !IsDebuggerPresent())
+	{
+		// Сохраним, если фильтр уже был установлен - будем звать его из нашей функции
+		gpfnPrevExFilter = SetUnhandledExceptionFilter(CreateDumpOnException);
+	}
+}
 
 
 // Main entry point for ConEmuC.exe
@@ -769,6 +784,7 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 	{
 		if (!IsDebuggerPresent())
 		{
+			// Наш exe-шник, gpfnPrevExFilter не нужен
 			SetUnhandledExceptionFilter(CreateDumpOnException);
 		}
 
@@ -780,6 +796,8 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 		SetConsoleTextAttribute(hOut, 7);
 		#endif
 	}
+	#if 0
+	// Issue 1183, 1188, 1189: Exception filter вызывается (некорректно?) при обработке EMenu или закрытии NetBox
 	else if (anWorkMode == 1)
 	{
 		// Far 3.x, telnet, Vim, etc.
@@ -790,6 +808,7 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 			gpfnPrevExFilter = SetUnhandledExceptionFilter(CreateDumpOnException);
 		}
 	}
+	#endif
 
 
 	// На всякий случай - сбросим
@@ -6990,7 +7009,7 @@ BOOL cmd_CmdStartStop(CESERVER_REQ& in, CESERVER_REQ** out)
 
 		if (!ghConEmuWnd || !IsWindow(ghConEmuWnd))
 		{
-			_ASSERTE(FALSE && "ConEmu GUI was terminated? Invalid ghConEmuWnd");
+			_ASSERTE((ghConEmuWnd==NULL) && "ConEmu GUI was terminated? Invalid ghConEmuWnd");
 		}
 		else
 		{

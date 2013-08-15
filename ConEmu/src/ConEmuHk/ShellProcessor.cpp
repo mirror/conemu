@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2011 Maximus5
+Copyright (c) 2011-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1231,7 +1231,11 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 	}
 
 	if (lbEndQuote)
-		_wcscat_c((*psParam), nCchSize, L" \"");
+	{
+		// [conemu_ml:254] TCC fails while executing: ""F:\program files\take command\tcc.exe" /C "alias where" "
+		//--_wcscat_c((*psParam), nCchSize, L" \"");
+		_wcscat_c((*psParam), nCchSize, L"\"");
+	}
 
 
 #ifdef _DEBUG
@@ -1384,7 +1388,14 @@ int CShellProc::PrepareExecuteParms(
 	HANDLE hIn  = lphStdIn  ? *lphStdIn  : NULL;
 	HANDLE hOut = lphStdOut ? *lphStdOut : NULL;
 	HANDLE hErr = lphStdErr ? *lphStdErr : NULL;
-	BOOL bLongConsoleOutput = gFarMode.bFarHookMode && gFarMode.bLongConsoleOutput;
+	// В некоторых случаях - LongConsoleOutput бессмысленен
+	// ShellExecute(SW_HIDE) или CreateProcess(CREATE_NEW_CONSOLE|CREATE_NO_WINDOW|DETACHED_PROCESS,SW_HIDE)
+	BOOL bDetachedOrHidden = FALSE;
+	if (aCmd == eShellExecute)
+		bDetachedOrHidden = (!anShellFlags && anShowCmd && *anShowCmd == 0);
+	else if (aCmd == eCreateProcess)
+		bDetachedOrHidden = (anCreateFlags && (*anCreateFlags & (CREATE_NEW_CONSOLE|CREATE_NO_WINDOW|DETACHED_PROCESS)) && anShowCmd && *anShowCmd == 0);
+	BOOL bLongConsoleOutput = gFarMode.bFarHookMode && gFarMode.bLongConsoleOutput && !bDetachedOrHidden;
 
 	BOOL bHooksTempDisabled = FALSE;
 	wchar_t szVar[32] = L"";
@@ -1995,7 +2006,9 @@ int CShellProc::PrepareExecuteParms(
 		//				ms_ExeTmp, mn_ImageBits, mn_ImageSubsystem, psFile, psParam);
 		// Хуки нельзя ставить в 16битные приложение - будет облом, ntvdm.exe игнорировать!
 		// И если просили не ставить хуки (-new_console:i) - тоже
-		mb_NeedInjects = (aCmd == eCreateProcess) && (mn_ImageBits != 16) && !args.bInjectsDisable && !gbPrepareDefaultTerminal;
+		mb_NeedInjects = (aCmd == eCreateProcess) && (mn_ImageBits != 16)
+			&& !args.bInjectsDisable && !gbPrepareDefaultTerminal
+			&& !bDetachedOrHidden;
 
 		// Параметр -cur_console / -new_console нужно вырезать
 		if (bNewConsoleArg || bCurConsoleArg)

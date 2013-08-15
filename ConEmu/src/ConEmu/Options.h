@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -962,8 +962,8 @@ struct Settings
 		DWORD nStatusFontCharSet;
 		//reg->Load(L"StatusFontHeight", nStatusFontHeight);
 		int nStatusFontHeight;
-		int StatusBarFontHeight() { return max(4,nStatusFontHeight); };
-		int StatusBarHeight() { return StatusBarFontHeight()+2; };
+		int StatusBarFontHeight(); // { return max(4,nStatusFontHeight); };
+		int StatusBarHeight(); // { return StatusBarFontHeight() + ((isStatusBarFlags & csf_NoVerticalPad) ? ((isStatusBarFlags & csf_HorzDelim) ? 1 : 0) : 2); };
 		//reg->Load(L"StatusBar.Color.Back", nStatusBarBack);
 		DWORD nStatusBarBack;
 		//reg->Load(L"StatusBar.Color.Light", nStatusBarLight);
@@ -1249,6 +1249,8 @@ struct Settings
 		bool isPortableReg;
 		//reg->Load(L"SuppressBells", isSuppressBells);
 		bool isSuppressBells;
+		//reg->Load(L"ConsoleExceptionHandler", isConsoleExceptionHandler);
+		bool isConsoleExceptionHandler; // 
 
 		/* *** Debugging *** */
 		//reg->Load(L"ConVisible", isConVisible);

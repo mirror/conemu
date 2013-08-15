@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2011 Maximus5
+Copyright (c) 2011-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -576,6 +576,8 @@ LPWSTR CConEmuMacro::ExecuteMacro(LPWSTR asMacro, CRealConsole* apRCon, bool abF
 			pszResult = Task(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"Status") || !lstrcmpi(szFunction, L"StatusBar") || !lstrcmpi(szFunction, L"StatusControl"))
 			pszResult = Status(p, apRCon);
+		else if (!lstrcmpi(szFunction, L"Splitter") || !lstrcmpi(szFunction, L"Split"))
+			pszResult = Split(p, apRCon);
 		else
 			pszResult = lstrdup(L"UnknownMacro"); // Íåèçâåñòíàÿ ôóíêöèÿ
 
@@ -825,9 +827,10 @@ LPWSTR CConEmuMacro::Close(GuiMacro* p, CRealConsole* apRCon)
 		}
 		break;
 	case 4:
+	case 7:
 		if (apRCon)
 		{
-			CVConGroup::CloseGroup(apRCon->VCon());
+			CVConGroup::CloseGroup(apRCon->VCon(), (nCmd==7));
 			pszResult = lstrdup(L"OK");
 		}
 		break;
@@ -835,6 +838,16 @@ LPWSTR CConEmuMacro::Close(GuiMacro* p, CRealConsole* apRCon)
 		if (apRCon)
 		{
 			CVConGroup::CloseAllButActive(apRCon->VCon());
+			pszResult = lstrdup(L"OK");
+		}
+		break;
+	case 6:
+		if (apRCon)
+		{
+			if (gpSet->isOneTabPerGroup && CVConGroup::isGroup(apRCon->VCon()))
+				CVConGroup::CloseGroup(apRCon->VCon());
+			else
+				apRCon->CloseTab();
 			pszResult = lstrdup(L"OK");
 		}
 		break;
@@ -1741,13 +1754,34 @@ LPWSTR CConEmuMacro::Shell(GuiMacro* p, CRealConsole* apRCon)
 			{
 				int nRc = (int)ShellExecuteW(ghWnd, pszOper, pszFile, pszParm, pszDir, nShowCmd);
 				
-				size_t cchSize = 16;
-				pszRc = (LPWSTR)malloc(2*cchSize);
-
 				if (nRc <= 32)
-					_wsprintf(pszRc, SKIPLEN(cchSize) L"Failed:%i", nRc);
+				{
+					switch (nRc)
+					{
+					case 0:
+						pszRc = lstrdup(L"OUT_OF_MEMORY"); break;
+					case ERROR_FILE_NOT_FOUND:
+						pszRc = lstrdup(L"ERROR_FILE_NOT_FOUND"); break;
+					case ERROR_PATH_NOT_FOUND:
+						pszRc = lstrdup(L"ERROR_PATH_NOT_FOUND"); break;
+					case ERROR_BAD_FORMAT:
+						pszRc = lstrdup(L"ERROR_BAD_FORMAT"); break;
+					case SE_ERR_ACCESSDENIED:
+						pszRc = lstrdup(L"SE_ERR_ACCESSDENIED"); break;
+					case SE_ERR_SHARE:
+						pszRc = lstrdup(L"SE_ERR_SHARE"); break;
+					default:
+						{
+							size_t cchSize = 16;
+							pszRc = (LPWSTR)malloc(2*cchSize);
+							_wsprintf(pszRc, SKIPLEN(cchSize) L"Failed:%i", nRc);
+						}
+					}
+				}
 				else
-					lstrcpyn(pszRc, L"OK", cchSize);
+				{
+					pszRc = lstrdup(L"OK");
+				}
 				
 				goto wrap;
 			}
@@ -1756,7 +1790,57 @@ LPWSTR CConEmuMacro::Shell(GuiMacro* p, CRealConsole* apRCon)
 
 wrap:
 	SafeFree(pszBuf);
-	return lstrdup(L"InvalidArg");
+	return pszRc ? pszRc : lstrdup(L"InvalidArg");
+}
+
+LPWSTR CConEmuMacro::Split(GuiMacro* p, CRealConsole* apRCon)
+{
+	LPWSTR pszResult = NULL;
+	int nCmd = 0;
+	int nHorz = 0;
+	int nVert = 0;
+
+	if (apRCon && p->GetIntArg(0, nCmd))
+	{
+		if (!p->GetIntArg(1, nHorz))
+			nHorz = 0;
+		if (!p->GetIntArg(2, nVert))
+			nVert = 0;
+
+		if (nCmd == 0)
+		{
+			// Àíàëîã 
+			// Duplicate active «shell» split to right: Shell("new_console:sHn")
+			// èëè
+			// Duplicate active «shell» split to bottom: Shell("new_console:sVn")
+			wchar_t szMacro[32] = L"";
+			if (nHorz > 0 && nHorz < 100 && nVert == 0)
+				_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"Shell(\"new_console:s%iHn\")", nHorz);
+			else if (nVert > 0 && nVert < 100 && nHorz == 0)
+				_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"Shell(\"new_console:s%iVn\")", nVert);
+
+			if (szMacro[0])
+				pszResult = ExecuteMacro(szMacro, apRCon);
+		}
+		else if (nCmd == 1)
+		{
+			// Move splitter between panes
+			// Horizontal, Vertical, or both directions may be specified
+			if (nHorz != 0 || nVert != 0)
+			{
+				CVConGroup::ReSizeSplitter(apRCon->VCon(), nHorz, nVert);
+				pszResult = lstrdup(L"OK");
+			}
+		}
+		else if (nCmd == 2)
+		{
+			// Put cursor to the nearest pane
+			// You may choose preferred direction with Horz and Vert parameters
+			pszResult = CVConGroup::ActivateNextPane(apRCon->VCon(), nHorz, nVert) ? lstrdup(L"OK") : lstrdup(L"Failed");
+		}
+	}
+
+	return pszResult ? pszResult : lstrdup(L"InvalidArg");
 }
 
 // Status(0[,<Parm>]) - Show/Hide status bar, Parm=1 - Show, Parm=2 - Hide

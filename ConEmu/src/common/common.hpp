@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _COMMON_HEADER_HPP_
 
 // Версия интерфейса
-#define CESERVER_REQ_VER    127
+#define CESERVER_REQ_VER    128
 
 #include "defines.h"
 #include "ConEmuColors.h"
@@ -976,6 +976,8 @@ const ConEmuConsoleFlags
 
 	CECF_SuppressBells   = 0x00000080, // Suppress output of char(7) to console (wich producess annoing bell sound)
 
+	CECF_ConExcHandler   = 0x00000100, // Set up "SetUnhandledExceptionFilter(CreateDumpOnException)" in alternative servers too
+
 	CECF_Empty = 0
 	;
 #define SetConEmuFlags(v,m,f) (v) = ((v) & ~(m)) | (f)
@@ -1405,6 +1407,8 @@ struct CESERVER_REQ_NEWCMD // CECMD_NEWCMD
 {
 	HWND2   hFromConWnd;
 	SingleInstanceShowHideType ShowHide;
+	BYTE isAdvLogging;
+	BYTE Reserved;
 	wchar_t szConEmu[MAX_PATH]; // Для идентификации, чтобы можно было выполнять команду в instance по тому же пути (путь к папке с ConEmu.exe без слеша)
 	wchar_t szCurDir[MAX_PATH];
 	// Внимание! Может содержать параметр -new_console. GUI его должен вырезать перед запуском сервера!

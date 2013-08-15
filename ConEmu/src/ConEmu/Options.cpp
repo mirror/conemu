@@ -137,6 +137,12 @@ const CONEMUDEFCOLORS DefColors[] =
 		}
 	},
 	{
+		L"<Solarized (Luke Maciak)>", {
+			0x00423607, 0x00d28b26, 0x00009985, 0x000089b5, 0x002f32dc, 0x008236d3, 0x0098a12a, 0x00d5e8ee,
+			0x00362b00, 0x00aaa897, 0x00756e58, 0x00837b65, 0x00004ff2, 0x00c4716c, 0x00a1a193, 0x00e3f6fd
+		}
+	},
+	{
 		L"<Solarized (John Doe)>", {
 			0x00362b00, 0x00423607, 0x00756e58, 0x00837b65, 0x002f32dc, 0x00c4716c, 0x00164bcb, 0x00d5e8ee,
 			0x00a1a193, 0x00d28b26, 0x00009985, 0x0098a12a, 0x00969483, 0x008236d3, 0x000089b5, 0x00e3f6fd		
@@ -548,6 +554,7 @@ void Settings::InitSettings()
 
 	isProcessAnsi = true;
 	isSuppressBells = false; // пока не доделано - false
+	isConsoleExceptionHandler = false; // по умолчанию - false
 	mb_UseClink = true;
 	#ifdef USEPORTABLEREGISTRY
 	isPortableReg = true; // включено по умолчанию, DEBUG
@@ -621,7 +628,8 @@ void Settings::InitSettings()
 	isStatusColumnHidden[csi_ConEmuView] = true;
 	isStatusColumnHidden[csi_ServerHWND] = true;
 
-	isTabs = 1; nTabsLocation = 0; isOneTabPerGroup = false; isActivateSplitMouseOver = true;
+	isTabs = 1; nTabsLocation = 0; isOneTabPerGroup = false;
+	isActivateSplitMouseOver = false;
 	isTabSelf = true; isTabRecent = true; isTabLazy = true;
 	nTabBarDblClickAction = TABBAR_DEFAULT_CLICK_ACTION; nTabBtnDblClickAction = TABBTN_DEFAULT_CLICK_ACTION;
 	ilDragHeight = 10;
@@ -2084,6 +2092,8 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 
 		reg->Load(L"SuppressBells", isSuppressBells);
 
+		reg->Load(L"ConsoleExceptionHandler", isConsoleExceptionHandler);
+
 		reg->Load(L"UseClink", mb_UseClink);
 
 		#ifdef USEPORTABLEREGISTRY
@@ -2997,6 +3007,8 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		_ASSERTE(isSuppressBells==false); // пока не доделано - не сохраняем
 		//reg->Save(L"SuppressBells", isSuppressBells);
 
+		reg->Save(L"ConsoleExceptionHandler", isConsoleExceptionHandler);
+
 		reg->Save(L"UseClink", mb_UseClink);
 
 		#ifdef USEPORTABLEREGISTRY
@@ -3310,6 +3322,22 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 	//MessageBoxA(ghOpWnd, "Failed", "Information", MB_ICONERROR);
 	return lbRc;
 }
+
+int Settings::StatusBarFontHeight()
+{
+	return max(4,nStatusFontHeight);
+}
+
+int Settings::StatusBarHeight()
+{
+	int iHeight = StatusBarFontHeight();
+	if (isStatusBarFlags & csf_NoVerticalPad)
+		iHeight += (isStatusBarFlags & csf_HorzDelim) ? 1 : 0;
+	else
+		iHeight += (isStatusBarFlags & csf_HorzDelim) ? 2 : 1;
+	return iHeight;
+}
+
 
 DWORD Settings::isUseClink(bool abCheckVersion /*= false*/)
 {
