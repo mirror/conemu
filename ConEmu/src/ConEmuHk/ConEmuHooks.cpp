@@ -61,8 +61,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define DEFINE_HOOK_MACROS
 
-#define HOOK_SETWNDSTYLE_FARONLY
-
 #define SETCONCP_READYTIMEOUT 5000
 #define SETCONCP_TIMEOUT 1000
 
@@ -627,14 +625,11 @@ bool InitHooksUser32()
 		{(void*)OnGetActiveWindow,		"GetActiveWindow",		user32},
 		{(void*)OnMoveWindow,			"MoveWindow",			user32},
 		{(void*)OnSetWindowPos,			"SetWindowPos",			user32},
-		#ifndef HOOK_SETWNDSTYLE_FARONLY
-		// Issue 1193: PowerShell:Get-Credential crashes for unknown reason
 		{(void*)OnSetWindowLongA,		"SetWindowLongA",		user32},
 		{(void*)OnSetWindowLongW,		"SetWindowLongW",		user32},
 		#ifdef WIN64
 		{(void*)OnSetWindowLongPtrA,	"SetWindowLongPtrA",	user32},
 		{(void*)OnSetWindowLongPtrW,	"SetWindowLongPtrW",	user32},
-		#endif
 		#endif
 		{(void*)OnGetWindowPlacement,	"GetWindowPlacement",	user32},
 		{(void*)OnSetWindowPlacement,	"SetWindowPlacement",	user32},
@@ -692,17 +687,6 @@ bool InitHooksFar()
 	{
 	//	{OnlstrcmpiA,      "lstrcmpiA",      kernel32, 0},
 		{(void*)OnCompareStringW, "CompareStringW", kernel32},
-
-
-		#ifdef HOOK_SETWNDSTYLE_FARONLY
-		// Issue 1193: PowerShell:Get-Credential crashes for unknown reason, moved here from common block
-		{(void*)OnSetWindowLongA,		"SetWindowLongA",		user32},
-		{(void*)OnSetWindowLongW,		"SetWindowLongW",		user32},
-		#ifdef WIN64
-		{(void*)OnSetWindowLongPtrA,	"SetWindowLongPtrA",	user32},
-		{(void*)OnSetWindowLongPtrW,	"SetWindowLongPtrW",	user32},
-		#endif
-		#endif
 
 		/* ************************ */
 		//110131 попробуем просто добвавить ее в ExcludedModules
@@ -2153,7 +2137,7 @@ BOOL WINAPI OnMoveWindow(HWND hWnd, int X, int Y, int nWidth, int nHeight, BOOL 
 
 LONG WINAPI OnSetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong)
 {
-	typedef BOOL (WINAPI* OnSetWindowLongA_t)(HWND hWnd, int nIndex, LONG dwNewLong);
+	typedef LONG (WINAPI* OnSetWindowLongA_t)(HWND hWnd, int nIndex, LONG dwNewLong);
 	ORIGINALFASTEX(SetWindowLongA,NULL);
 	LONG lRc = 0;
 
@@ -2172,7 +2156,7 @@ LONG WINAPI OnSetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong)
 }
 LONG WINAPI OnSetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong)
 {
-	typedef BOOL (WINAPI* OnSetWindowLongW_t)(HWND hWnd, int nIndex, LONG dwNewLong);
+	typedef LONG (WINAPI* OnSetWindowLongW_t)(HWND hWnd, int nIndex, LONG dwNewLong);
 	ORIGINALFASTEX(SetWindowLongW,NULL);
 	LONG lRc = 0;
 
@@ -2192,7 +2176,7 @@ LONG WINAPI OnSetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong)
 #ifdef WIN64
 LONG_PTR WINAPI OnSetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong)
 {
-	typedef BOOL (WINAPI* OnSetWindowLongPtrA_t)(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+	typedef LONG_PTR (WINAPI* OnSetWindowLongPtrA_t)(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 	ORIGINALFASTEX(SetWindowLongPtrA,NULL);
 	LONG_PTR lRc = 0;
 
@@ -2211,7 +2195,7 @@ LONG_PTR WINAPI OnSetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong)
 }
 LONG_PTR WINAPI OnSetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong)
 {
-	typedef BOOL (WINAPI* OnSetWindowLongPtrW_t)(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+	typedef LONG_PTR (WINAPI* OnSetWindowLongPtrW_t)(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 	ORIGINALFASTEX(SetWindowLongPtrW,NULL);
 	LONG_PTR lRc = 0;
 

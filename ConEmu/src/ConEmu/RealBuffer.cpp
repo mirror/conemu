@@ -1377,7 +1377,9 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 	// Если требуется увеличить или создать (первично) буфера
 	if (!con.pConChar || (con.nTextWidth*con.nTextHeight) < (nNewWidth*nNewHeight))
 	{
+		// Exclusive(!) Lock
 		MSectionLock sc; sc.Lock(&csCON, TRUE);
+
 		MCHKHEAP;
 		con.LastStartInitBuffersTick = GetTickCount();
 
@@ -4375,9 +4377,9 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 	
 	lcaTable = lcaTableOrg;
 
-	con.bInGetConsoleData = TRUE;
-
+	// NonExclusive lock (need to ensure that buffers will not be recreated during processing)
 	MSectionLock csData; csData.Lock(&csCON);
+	con.bInGetConsoleData = TRUE;
 
 	con.LastStartReadBufferTick = GetTickCount();
 

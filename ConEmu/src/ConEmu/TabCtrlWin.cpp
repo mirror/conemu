@@ -98,6 +98,7 @@ LRESULT CTabPanelWin::ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			if (mn_TabHeight)
 			{
 				pos->cy = mn_TabHeight;
+				return 0;
 			}
 			//return 0;
 			break;

@@ -375,7 +375,7 @@ void CTabBarClass::Activate(BOOL abPreSyncConsole/*=FALSE*/)
 		RECT rcIdeal = gpConEmu->GetIdealRect();
 		CVConGroup::SyncConsoleToWindow(&rcIdeal, TRUE);
 	}
-
+	gpConEmu->OnTabbarActivated(true);
 	UpdatePosition();
 }
 
@@ -757,6 +757,7 @@ void CTabBarClass::UpdatePosition()
 	if (_active)
 	{
 		_visible = true;
+
 		mp_Rebar->ShowBar(true);
 
 		#ifdef _DEBUG
