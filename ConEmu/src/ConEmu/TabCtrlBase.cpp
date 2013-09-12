@@ -54,8 +54,6 @@ CTabPanelBase::CTabPanelBase(CTabBarClass* ap_Owner)
 	mh_TabTip = mh_Balloon = NULL;
 	ms_TabErrText[0] = 0;
 	memset(&tiBalloon,0,sizeof(tiBalloon));
-	mh_TabIcons = NULL;
-	mn_AdminIcon = 0;
 	mn_prevTab = -1;
 }
 
@@ -118,8 +116,7 @@ void CTabPanelBase::ShowTabErrorInt(LPCTSTR asInfo, int tabIndex)
 
 int CTabPanelBase::GetTabIcon(bool bAdmin)
 {
-	int iIconIdx = (bAdmin && gpSet->bAdminShield) ? mn_AdminIcon : -1;
-	return iIconIdx;
+	return m_TabIcons.GetTabIcon(bAdmin);
 }
 
 LRESULT CTabPanelBase::OnTimerInt(WPARAM wParam)
@@ -135,10 +132,9 @@ LRESULT CTabPanelBase::OnTimerInt(WPARAM wParam)
 
 void CTabPanelBase::InitIconList()
 {
-	if (!mh_TabIcons)
+	if (!m_TabIcons.IsInitialized())
 	{
-		mh_TabIcons = ImageList_LoadImage(g_hInstance, MAKEINTRESOURCE(IDB_SHIELD), 14, 1, RGB(128,0,0), IMAGE_BITMAP, LR_CREATEDIBSECTION);
-		mn_AdminIcon = (gOSVer.dwMajorVersion >= 6) ? 0 : 1;
+		m_TabIcons.Initialized();
 	}
 }
 

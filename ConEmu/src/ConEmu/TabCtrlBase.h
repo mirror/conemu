@@ -29,15 +29,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include "IconList.h"
+
 class CTabPanelBase
 {
 private:
 	HFONT      mh_TabFont;
-	int        mn_AdminIcon;
 
 protected:
 	CTabBarClass* mp_Owner;
-	HIMAGELIST mh_TabIcons;
+	CIconList  m_TabIcons;
 	HWND       mh_TabTip, mh_Balloon;
 	TOOLINFO   tiBalloon;
 	wchar_t    ms_TabErrText[512];

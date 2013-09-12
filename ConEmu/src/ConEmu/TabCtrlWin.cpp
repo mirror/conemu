@@ -474,7 +474,7 @@ HWND CTabPanelWin::CreateTabbar()
 	if (mh_Tabbar)
 		return mh_Tabbar; // Уже создали
 
-	if (!mh_TabIcons)
+	if (!m_TabIcons.IsInitialized())
 	{
 		InitIconList();
 	}
@@ -536,7 +536,7 @@ HWND CTabPanelWin::CreateTabbar()
 	gp_TabPanelWinMap->Set(mh_Tabbar, map);
 
 
-	SendMessage(mh_Tabbar, TCM_SETIMAGELIST, 0, (LPARAM)mh_TabIcons);
+	SendMessage(mh_Tabbar, TCM_SETIMAGELIST, 0, (LPARAM)(HIMAGELIST)m_TabIcons);
 
 	if (!mh_TabTip || !IsWindow(mh_TabTip))
 		InitTooltips(mh_Tabbar);
@@ -813,7 +813,7 @@ void CTabPanelWin::AddTabInt(LPCWSTR text, int i, bool bAdmin)
 
 	TCITEM tie;
 	// иконку обновляем всегда. она может измениться для таба
-	tie.mask = TCIF_TEXT | (mh_TabIcons ? TCIF_IMAGE : 0);
+	tie.mask = TCIF_TEXT | (m_TabIcons.IsInitialized() ? TCIF_IMAGE : 0);
 	tie.iImage = -1;
 	tie.pszText = (LPWSTR)text ;
 	tie.iImage = iIconIdx; // Пока иконка только одна - для табов со щитом
