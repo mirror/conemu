@@ -51,6 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "TabBar.h"
 #include "TrayIcon.h"
 #include "VConChild.h"
+#include "VConGroup.h"
 #include "VirtualConsole.h"
 
 
@@ -277,8 +278,8 @@ void Settings::ReleasePointers()
 	SafeFree(psStartSingleApp);
 	SafeFree(psStartTasksFile);
 	SafeFree(psStartTasksName);
-	SafeFree(psCurCmd); isCurCmdList = false;
-	SafeFree(psCmdHistory);
+	//SafeFree(psCurCmd);
+	SafeFree(psCmdHistory); isSaveCmdHistory = true;
 	SafeFree(psDefaultTerminalApps);
 
 	FreeCmdTasks();
@@ -320,7 +321,7 @@ void Settings::InitSettings()
 	nHostkeyArrowModifier = VK_LWIN; //TestHostkeyModifiers(nHostkeyArrowModifier);
 	isSingleInstance = false;
 	isShowHelpTooltips = true;
-	isMulti = true;
+	mb_isMulti = true;
 	isMultiShowButtons = true;
 	isNumberInCaption = false;
 	//vmMultiNew = 'W' | (nMultiHotkeyModifier << 8);
@@ -351,6 +352,7 @@ void Settings::InitSettings()
 	isSendAltTab = isSendAltEsc = isSendAltPrintScrn = isSendPrintScrn = isSendCtrlEsc = false;
 	isMonitorConsoleLang = 3;
 	DefaultBufferHeight = 1000; AutoBufferHeight = true;
+	isSaveCmdHistory = true;
 	nCmdOutputCP = 0;
 	ComSpec.AddConEmu2Path = CEAP_AddAll;
 	{
@@ -376,7 +378,7 @@ void Settings::InitSettings()
 	//memset(&LogFont, 0, sizeof(LogFont));
 	//memset(&LogFont2, 0, sizeof(LogFont2));
 	/*LogFont.lfHeight = mn_FontHeight =*/
-	FontSizeY = 16;
+	FontSizeY = 16 * gpSetCls->_dpiY / 96;
 	//-- Issue 577: Для иероглифов - сделаем "пошире", а то глифы в консоль не влезут...
 	//-- пошире не будем. DBCS консоль хитрая, на каждый иероглиф отводится 2 ячейки
 	//-- "не влезть" может только если выполнить "chcp 65001", что врядли, а у если надо - руками пусть ставят
@@ -389,7 +391,11 @@ void Settings::InitSettings()
 	/*LogFont.lfCharSet*/ mn_LoadFontCharSet = DEFAULT_CHARSET;
 	//LogFont.lfOutPrecision = OUT_TT_PRECIS;
 	//LogFont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-	/*LogFont.lfQuality =*/ mn_AntiAlias = ANTIALIASED_QUALITY;
+	/*LogFont.lfQuality =*/
+	BOOL bClearType = FALSE; if (SystemParametersInfo(SPI_GETCLEARTYPE, 0, &bClearType, 0) && bClearType)
+		mn_AntiAlias = CLEARTYPE_NATURAL_QUALITY;
+	else
+		mn_AntiAlias = ANTIALIASED_QUALITY;
 	//LogFont.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
 	inFont[0] = inFont2[0] = 0;
 	//wcscpy_c(inFont, gsLucidaConsole);
@@ -542,7 +548,8 @@ void Settings::InitSettings()
 		_wndX = rcWork.left; _wndY = rcWork.top;
 	}
 	wndCascade = true;
-	isAutoSaveSizePos = false; mb_SizePosAutoSaved = false;
+	isAutoSaveSizePos = false;
+	mb_ExitSettingsAutoSaved = false;
 	isConVisible = false; //isLockRealConsolePos = false;
 	isUseInjects = true; // Fuck... Features or speed. User must choose!
 
@@ -572,7 +579,9 @@ void Settings::InitSettings()
 	//wcscpy_c(szTabViewer, L"<%c.%i>[%s] `%p`" /* L"{%s}" */);
 	wcscpy_c(szTabConsole, L"<%c> %s");
 	//wcscpy_c(szTabSkipWords, L"Administrator:|Администратор:");
+	wchar_t szTabSkipWords[64];
 	MultiByteToWideChar(1251/*rus*/, 0, "Administrator:|Администратор:", -1, szTabSkipWords, countof(szTabSkipWords));
+	pszTabSkipWords = lstrdup(szTabSkipWords);
 	wcscpy_c(szTabPanels, szTabConsole); // Раньше была только настройка "TabConsole". Унаследовать ее в "TabPanels"
 	wcscpy_c(szTabEditor, L"<%c.%i>{%s}");
 	wcscpy_c(szTabEditorModified, L"<%c.%i>[%s] *");
@@ -590,6 +599,7 @@ void Settings::InitSettings()
 	isCTSFreezeBeforeSelect = false;
 	isCTSSelectBlock = true; //isCTSVkBlock = VK_LMENU; // по умолчанию - блок выделяется c LAlt
 	isCTSSelectText = true; //isCTSVkText = VK_LSHIFT; // а текст - при нажатом LShift
+	isCTSHtmlFormat = 1; // Use HTML Copy formatting
 	//vmCTSVkBlockStart = 0; // при желании, пользователь может назначить hotkey запуска выделения
 	//vmCTSVkTextStart = 0;  // при желании, пользователь может назначить hotkey запуска выделения
 	isCTSActMode = 2; // BufferOnly
@@ -607,7 +617,8 @@ void Settings::InitSettings()
 	nStatusBarBack = RGB(64,64,64);
 	nStatusBarLight = RGB(255,255,255);
 	nStatusBarDark = RGB(160,160,160);
-	wcscpy_c(sStatusFontFace, L"Tahoma"); nStatusFontCharSet = ANSI_CHARSET; nStatusFontHeight = 14;
+	wcscpy_c(sStatusFontFace, gsDefMUIFont); nStatusFontCharSet = ANSI_CHARSET;
+	nStatusFontHeight = 14 * gpSetCls->_dpiY / 96;
 	//nHideStatusColumns = ces_CursorInfo;
 	_ASSERTE(countof(isStatusColumnHidden)>csi_Last);
 	memset(isStatusColumnHidden, 0, sizeof(isStatusColumnHidden));
@@ -628,7 +639,7 @@ void Settings::InitSettings()
 	isStatusColumnHidden[csi_ConEmuView] = true;
 	isStatusColumnHidden[csi_ServerHWND] = true;
 
-	isTabs = 1; nTabsLocation = 0; isOneTabPerGroup = false;
+	isTabs = 1; nTabsLocation = 0; isTabIcons = true; isOneTabPerGroup = false;
 	isActivateSplitMouseOver = false;
 	isTabSelf = true; isTabRecent = true; isTabLazy = true;
 	nTabBarDblClickAction = TABBAR_DEFAULT_CLICK_ACTION; nTabBtnDblClickAction = TABBTN_DEFAULT_CLICK_ACTION;
@@ -641,7 +652,8 @@ void Settings::InitSettings()
 	isTabsInCaption = true;
 	#endif
 
-	wcscpy_c(sTabFontFace, L"Tahoma"); nTabFontCharSet = ANSI_CHARSET; nTabFontHeight = 16;
+	wcscpy_c(sTabFontFace, gsDefMUIFont); nTabFontCharSet = ANSI_CHARSET;
+	nTabFontHeight = 16 * gpSetCls->_dpiY / 96;
 	sTabCloseMacro = sSaveAllMacro = NULL;
 	nToolbarAddSpace = 0;
 	wcscpy_c(szAdminTitleSuffix, L" (Admin)");
@@ -680,9 +692,9 @@ void Settings::InitSettings()
 	SetThumbColor(ThSet.crSelectFrame, RGB(192,192,192), 7, FALSE);
 	/* теперь разнообразные размеры */
 	// отступы для preview
-	SetThumbSize(ThSet.Thumbs,96,1,1,5,20,2,0,L"Tahoma",14);
+	SetThumbSize(ThSet.Thumbs,96,1,1,5,20,2,0,gsDefMUIFont,14);
 	// отступы для tiles
-	SetThumbSize(ThSet.Tiles,48,4,4,172,4,4,1,L"Tahoma",14); //-V112
+	SetThumbSize(ThSet.Tiles,48,4,4,172,4,4,1,gsDefMUIFont,14); //-V112
 	// Прочие параметры загрузки
 	ThSet.bLoadPreviews = 3;   // bitmask of {1=Thumbs, 2=Tiles}
 	ThSet.bLoadFolders = true; // true - load infolder previews (only for Thumbs)
@@ -732,12 +744,12 @@ bool Settings::isIntegralSize()
 	return true;
 }
 
-void Settings::FreeApps(int NewAppCount, AppSettings** NewApps, Settings::CEAppColors** NewAppColors)
+void Settings::FreeApps(int NewAppCount, AppSettings** NewApps/*, Settings::CEAppColors** NewAppColors*/)
 {
 	int OldAppCount = this->AppCount;
 	this->AppCount = NewAppCount;
 	AppSettings** OldApps = Apps; Apps = NewApps;
-	CEAppColors** OldAppColors = AppColors; AppColors = NewAppColors;
+	//CEAppColors** OldAppColors = AppColors; AppColors = NewAppColors;
 	for (int i = 0; i < OldAppCount && OldApps; i++)
 	{
 		if (OldApps[i])
@@ -745,10 +757,10 @@ void Settings::FreeApps(int NewAppCount, AppSettings** NewApps, Settings::CEAppC
 			OldApps[i]->FreeApps();
 			SafeFree(OldApps[i]);
 		}
-		SafeFree(OldAppColors[i]);
+		//SafeFree(OldAppColors[i]);
 	}
 	SafeFree(OldApps);
-	SafeFree(OldAppColors);
+	//SafeFree(OldAppColors);
 }
 
 void Settings::LoadAppSettings(SettingsBase* reg, bool abFromOpDlg /*= false*/)
@@ -779,7 +791,7 @@ void Settings::LoadAppSettings(SettingsBase* reg, bool abFromOpDlg /*= false*/)
 
 	int NewAppCount = 0;
 	AppSettings** NewApps = NULL;
-	CEAppColors** NewAppColors = NULL;
+	//CEAppColors** NewAppColors = NULL;
 	
 	lbOpened = reg->OpenKey(szAppKey, KEY_READ);
 	if (lbOpened)
@@ -791,7 +803,7 @@ void Settings::LoadAppSettings(SettingsBase* reg, bool abFromOpDlg /*= false*/)
 	if (lbOpened && NewAppCount > 0)
 	{
 		NewApps = (AppSettings**)calloc(NewAppCount, sizeof(*NewApps));
-		NewAppColors = (CEAppColors**)calloc(NewAppCount, sizeof(*NewAppColors));
+		//NewAppColors = (CEAppColors**)calloc(NewAppCount, sizeof(*NewAppColors));
 
 		int nSucceeded = 0;
 		for (int i = 0; i < NewAppCount; i++)
@@ -804,11 +816,11 @@ void Settings::LoadAppSettings(SettingsBase* reg, bool abFromOpDlg /*= false*/)
 				_ASSERTE(AppStd.AppNames == NULL && AppStd.AppNamesLwr == NULL);
 
 				NewApps[nSucceeded] = (AppSettings*)malloc(sizeof(AppSettings));
-				NewAppColors[nSucceeded] = (CEAppColors*)calloc(1,sizeof(CEAppColors));
+				//NewAppColors[nSucceeded] = (CEAppColors*)calloc(1,sizeof(CEAppColors));
 
 				// Умолчания берем из основной ветки!
 				*NewApps[nSucceeded] = AppStd;
-				memmove(NewAppColors[nSucceeded]->Colors, Colors, sizeof(Colors));
+				//memmove(NewAppColors[nSucceeded]->Colors, Colors, sizeof(Colors));
 				NewApps[nSucceeded]->AppNames = NULL;
 				NewApps[nSucceeded]->AppNamesLwr = NULL;
 				NewApps[nSucceeded]->cchNameMax = 0;
@@ -821,7 +833,7 @@ void Settings::LoadAppSettings(SettingsBase* reg, bool abFromOpDlg /*= false*/)
 					NewApps[nSucceeded]->AppNamesLwr = lstrdup(NewApps[nSucceeded]->AppNames);
 					CharLowerBuff(NewApps[nSucceeded]->AppNamesLwr, lstrlen(NewApps[nSucceeded]->AppNamesLwr));
 					reg->Load(L"Elevated", NewApps[nSucceeded]->Elevated);
-					LoadAppSettings(reg, NewApps[nSucceeded], NewAppColors[nSucceeded]->Colors);
+					LoadAppSettings(reg, NewApps[nSucceeded]/*, NewAppColors[nSucceeded]->Colors*/);
 					nSucceeded++;
 				}
 				reg->CloseKey();
@@ -830,7 +842,7 @@ void Settings::LoadAppSettings(SettingsBase* reg, bool abFromOpDlg /*= false*/)
 		NewAppCount = nSucceeded;
 	}
 
-	FreeApps(NewAppCount, NewApps, NewAppColors);
+	FreeApps(NewAppCount, NewApps/*, NewAppColors*/);
 
 	if (lbDelete)
 		delete reg;
@@ -896,7 +908,7 @@ void Settings::LoadCursorSettings(SettingsBase* reg, CECursorType* pActive, CECu
 	}
 }
 
-void Settings::LoadAppSettings(SettingsBase* reg, Settings::AppSettings* pApp, COLORREF* pColors)
+void Settings::LoadAppSettings(SettingsBase* reg, Settings::AppSettings* pApp/*, COLORREF* pColors*/)
 {
 	// Для AppStd данные загружаются из основной ветки! В том числе и цвета (RGB[32] а не имя палитры)
 	bool bStd = (pApp == &AppStd);
@@ -909,8 +921,9 @@ void Settings::LoadAppSettings(SettingsBase* reg, Settings::AppSettings* pApp, C
 		{
 			ColorName[10] = i/10 + '0';
 			ColorName[11] = i%10 + '0';
-			reg->Load(ColorName, pColors[i]);
+			reg->Load(ColorName, Colors[i]);
 		}
+
 		reg->Load(L"ExtendColors", pApp->isExtendColors);
 		reg->Load(L"ExtendColorIdx", pApp->nExtendColorIdx);
 		if (pApp->nExtendColorIdx > 15) pApp->nExtendColorIdx=14;
@@ -929,7 +942,9 @@ void Settings::LoadAppSettings(SettingsBase* reg, Settings::AppSettings* pApp, C
 		reg->Load(L"OverridePalette", pApp->OverridePalette);
 		if (!reg->Load(L"PaletteName", pApp->szPaletteName, countof(pApp->szPaletteName)))
 			pApp->szPaletteName[0] = 0;
-		const Settings::ColorPalette* pPal = PaletteGet(PaletteGetIndex(pApp->szPaletteName));
+		pApp->ResetPaletteIndex();
+		const Settings::ColorPalette* pPal = PaletteGet(pApp->GetPaletteIndex());
+
 		_ASSERTE(pPal!=NULL); // NULL не может быть. Всегда как минимум - стандартная палитра
 		pApp->isExtendColors = pPal->isExtendColors;
 		pApp->nExtendColorIdx = pPal->nExtendColorIdx;
@@ -939,7 +954,7 @@ void Settings::LoadAppSettings(SettingsBase* reg, Settings::AppSettings* pApp, C
 		pApp->nPopTextColorIdx = pPal->nPopTextColorIdx;
 		pApp->nPopBackColorIdx = pPal->nPopBackColorIdx;
 
-		memmove(pColors, pPal->Colors, sizeof(pPal->Colors));
+		//memmove(pColors, pPal->Colors, sizeof(pPal->Colors));
 	}
 
 	pApp->OverrideExtendFonts = bStd;
@@ -987,7 +1002,7 @@ void Settings::FreeCmdTasks()
 	if (StartupTask)
 	{
 		StartupTask->FreePtr();
-		SafeFree(StartupTask);
+		StartupTask = NULL; // освобождается в FreePtr
 	}
 }
 
@@ -1019,7 +1034,23 @@ void Settings::LoadCmdTasks(SettingsBase* reg, bool abFromOpDlg /*= false*/)
 	wcscat_c(szCmdKey, L"\\Tasks");
 	wchar_t* pszCmdKey = szCmdKey+lstrlen(szCmdKey);
 
+
+	{
+		// Таск автозагрузки
+		_wcscpy_c(pszCmdKey, 32, L"\\" AutoStartTaskName);
+		lbOpened = reg->OpenKey(szCmdKey, KEY_READ);
+		if (lbOpened)
+		{
+			LoadCmdTask(reg, StartupTask, -1);
+
+			reg->CloseKey();
+		}
+		// Обязательно вернуть "начальный" путь
+		*pszCmdKey = 0;
+	}
+
 	int NewTasksCount = 0;
+	
 	
 	lbOpened = reg->OpenKey(szCmdKey, KEY_READ);
 	if (lbOpened)
@@ -1060,11 +1091,20 @@ bool Settings::LoadCmdTask(SettingsBase* reg, CommandTasks* &pTask, int iIndex)
 	int iCmdMax = 0, iCmdCount = 0;
 
 	wchar_t* pszNameSet = NULL;
+	if (iIndex >= 0)
+	{
 	if (!reg->Load(L"Name", &pszNameSet) || !*pszNameSet)
 	{
 		SafeFree(pszNameSet);
 		goto wrap;
 	}
+	}
+	else
+	{
+		_ASSERTE(&pTask == &StartupTask);
+	}
+
+	_ASSERTE(pTask==NULL);
 
 	pTask = (CommandTasks*)calloc(1, sizeof(CommandTasks));
 	if (!pTask)
@@ -1206,7 +1246,11 @@ bool Settings::SaveCmdTask(SettingsBase* reg, CommandTasks* pTask)
 	int nActive = 0; // 1-based
 	wchar_t szVal[32];
 
+	if (pTask != StartupTask)
+	{
 	reg->Save(L"Name", pTask->pszName);
+	}
+
 	reg->Save(L"GuiArgs", pTask->pszGuiArgs);
 
 	if (pTask->pszCommands)
@@ -1485,8 +1529,8 @@ void Settings::SavePalettes(SettingsBase* reg)
 		{
 			if (Palettes[i]->pszName && (lstrcmpi(Apps[k]->szPaletteName, Palettes[i]->pszName) == 0))
 			{
-				memmove(AppColors[k]->Colors, Palettes[i]->Colors, sizeof(Palettes[i]->Colors));
-				AppColors[k]->FadeInitialized = false;
+				//memmove(AppColors[k]->Colors, Palettes[i]->Colors, sizeof(Palettes[i]->Colors));
+				//AppColors[k]->FadeInitialized = false;
 				Apps[k]->isExtendColors = Palettes[i]->isExtendColors;
 				Apps[k]->nExtendColorIdx = Palettes[i]->nExtendColorIdx;
 
@@ -1518,8 +1562,25 @@ void Settings::SavePalettes(SettingsBase* reg)
 // -1 -- current palette
 const Settings::ColorPalette* Settings::PaletteGet(int anIndex)
 {
-	if (anIndex == -1)
+	return PaletteGetPtr(anIndex);
+}
+
+// 0-based, index of Palettes
+// -1 -- current palette
+Settings::ColorPalette* Settings::PaletteGetPtr(int anIndex)
+{
+	if ((anIndex >= 0) && (anIndex < PaletteCount) && Palettes && Palettes[anIndex])
 	{
+		return Palettes[anIndex];
+	}
+
+	if (anIndex != -1)
+	{
+		return NULL;
+	}
+
+	_ASSERTE(anIndex==-1);
+
 		static ColorPalette StdPal = {};
 		StdPal.bPredefined = false;
 		static wchar_t szCurrentScheme[64] = L"<Current color scheme>";
@@ -1538,12 +1599,6 @@ const Settings::ColorPalette* Settings::PaletteGet(int anIndex)
 		return &StdPal;
 	}
 
-	if (anIndex < -1 || anIndex >= PaletteCount || !Palettes)
-		return NULL;
-
-	return Palettes[anIndex];
-}
-
 void Settings::PaletteSetStdIndexes()
 {
 	if (!Apps || AppCount < 1)
@@ -1551,7 +1606,7 @@ void Settings::PaletteSetStdIndexes()
 
 	for (int i = 0; i < AppCount; i++)
 	{
-		int nPalIdx = PaletteGetIndex(Apps[i]->szPaletteName);
+		int nPalIdx = Apps[i]->GetPaletteIndex();
 		if (nPalIdx == -1)
 		{
 			Apps[i]->nTextColorIdx = AppStd.nTextColorIdx;
@@ -1560,6 +1615,32 @@ void Settings::PaletteSetStdIndexes()
 			Apps[i]->nPopBackColorIdx = AppStd.nPopBackColorIdx;
 		}
 	}
+}
+
+int Settings::AppSettings::GetPaletteIndex()
+{
+	if (this == NULL) // *AppSettings
+	{
+		_ASSERTE(this!=NULL);
+		return -1;
+	}
+	return gpSet->PaletteGetIndex(szPaletteName);
+}
+
+void Settings::AppSettings::SetPaletteName(LPCWSTR asNewPaletteName)
+{
+	if (this == NULL)
+	{
+		_ASSERTE(this!=NULL);
+		return;
+	}
+	lstrcpyn(szPaletteName, asNewPaletteName, countof(szPaletteName));
+	ResetPaletteIndex();
+}
+
+void Settings::AppSettings::ResetPaletteIndex()
+{
+	// TODO:
 }
 
 // Returns Zero-based palette index, or "-1" when not found
@@ -2030,6 +2111,12 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 ///| Loading from reg/xml |//////////////////////////////////////////////
 //-----------------------------------------------------------------------
 	SettingsBase* reg = CreateSettings(NULL);
+	if (!reg)
+	{
+		_ASSERTE(reg!=NULL);
+		return;
+	}
+
 	wcscpy_c(Type, reg->m_Storage.szType);
 
 	BOOL lbOpened = FALSE;
@@ -2060,7 +2147,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 
 	if (lbOpened)
 	{
-		LoadAppSettings(reg, &AppStd, Colors);
+		LoadAppSettings(reg, &AppStd/*, Colors*/);
 
 		reg->Load(L"TrueColorerSupport", isTrueColorer);
 		reg->Load(L"FadeInactive", isFadeInactive);
@@ -2150,10 +2237,11 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"StoreTaskbarkTasks", isStoreTaskbarkTasks);
 		reg->Load(L"StoreTaskbarCommands", isStoreTaskbarCommands);
 
+		reg->Load(L"SaveCmdHistory", isSaveCmdHistory);
 		reg->Load(L"CmdLineHistory", &psCmdHistory); nCmdHistorySize = 0; HistoryCheck();
 		reg->Load(L"SingleInstance", isSingleInstance);
 		reg->Load(L"ShowHelpTooltips", isShowHelpTooltips);
-		reg->Load(L"Multi", isMulti);
+		reg->Load(L"Multi", mb_isMulti);
 		reg->Load(L"Multi.ShowButtons", isMultiShowButtons);
 		reg->Load(L"Multi.NumberInCaption", isNumberInCaption);
 		//LoadVkMod(reg, L"Multi.NewConsole", vmMultiNew, vmMultiNew);
@@ -2296,6 +2384,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		//reg->Load(L"CTS.VkBlock", isCTSVkBlock);
 		//LoadVkMod(reg, L"CTS.VkBlockStart", vmCTSVkBlockStart, vmCTSVkBlockStart);
 		reg->Load(L"CTS.SelectText", isCTSSelectText);
+		reg->Load(L"CTS.HtmlFormat", isCTSHtmlFormat);
 		//reg->Load(L"CTS.ClickPromptPosition", isCTSClickPromptPosition); if (isCTSClickPromptPosition > 2) isCTSClickPromptPosition = 2;
 		//reg->Load(L"CTS.VkText", isCTSVkText);
 		//LoadVkMod(reg, L"CTS.VkTextStart", vmCTSVkTextStart, vmCTSVkTextStart);
@@ -2493,6 +2582,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		//reg->Load(L"GUIpb", isGUIpb);
 		reg->Load(L"Tabs", isTabs);
 		reg->Load(L"TabsLocation", nTabsLocation);
+		reg->Load(L"TabIcons", isTabIcons);
 		reg->Load(L"OneTabPerGroup", isOneTabPerGroup);
 		reg->Load(L"ActivateSplitMouseOver", isActivateSplitMouseOver);
 		reg->Load(L"TabSelf", isTabSelf);
@@ -2523,7 +2613,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		
 		
 		reg->Load(L"TabConsole", szTabConsole, countof(szTabConsole));
-		reg->Load(L"TabSkipWords", szTabSkipWords, countof(szTabSkipWords));
+		reg->Load(L"TabSkipWords", &pszTabSkipWords);
 		wcscpy_c(szTabPanels, szTabConsole); // Раньше была только настройка "TabConsole". Унаследовать ее в "TabPanels"
 		reg->Load(L"TabPanels", szTabPanels, countof(szTabPanels));
 		reg->Load(L"TabEditor", szTabEditor, countof(szTabEditor));
@@ -2722,20 +2812,32 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 	//gpSetCls->SettingsLoaded();
 }
 
-void Settings::SaveSizePosOnExit()
+void Settings::SaveSettingsOnExit()
 {
-	if (!this || !(isAutoSaveSizePos || mb_StatusSettingsWasChanged))
+	if (!this)
 		return;
 
-	// При закрытии окна крестиком - сохранять только один раз,
-	// а то размер может в процессе закрытия консолей измениться
-	if (mb_SizePosAutoSaved)
+	// При закрытии окна крестиком - сохранять только один раз!
+	// а то размер/таски/настройки могут в процессе закрытия консолей измениться
+	if (mb_ExitSettingsAutoSaved)
 		return;
-	mb_SizePosAutoSaved = true;
+	mb_ExitSettingsAutoSaved = true;
 
-	gpConEmu->LogWindowPos(L"SaveSizePosOnExit");
+	bool bTaskAutoSave = (nStartType == (rbStartLastTabs - rbStartSingleApp));
+
+	// Смотрим, нужно ли сохранять что-либо при выходе?
+	if (!isAutoSaveSizePos && !mb_StatusSettingsWasChanged && !bTaskAutoSave)
+		return;
+
+	gpConEmu->LogWindowPos(L"SaveSettingsOnExit");
 		
 	SettingsBase* reg = CreateSettings(NULL);
+	if (!reg)
+	{
+		gpConEmu->LogWindowPos(L"SaveSettingsOnExit - FAILED(CreateSettings)");
+		_ASSERTE(reg!=NULL);
+		return;
+	}
 
 	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
 	{
@@ -2758,19 +2860,59 @@ void Settings::SaveSizePosOnExit()
 		}
 
 		if (mb_StatusSettingsWasChanged)
+		{
 			SaveStatusSettings(reg);
-		//{
-		//	mb_StatusSettingsWasChanged = false;
-		//	reg->Save(L"StatusBar.Show", isStatusBarShow);
-		//	for (int i = csi_Info; i < csi_Last; i++)
-		//	{
-		//		LPCWSTR pszName = gpConEmu->mp_Status->GetSettingName((CEStatusItems)i);
-		//		if (pszName)
-		//			reg->Save(pszName, isStatusColumnHidden[i]);
-		//	}
-		//}
+		}
+
+		if (bTaskAutoSave)
+		{
+			reg->Save(L"StartType", nStartType);
+		}
 
 		reg->CloseKey();
+
+		// Таски пишутся в отдельный ключ
+		if (bTaskAutoSave)
+		{
+			BOOL lbOpened = FALSE;
+			wchar_t szCmdKey[MAX_PATH+64];
+			wcscpy_c(szCmdKey, gpSetCls->GetConfigPath());
+			wcscat_c(szCmdKey, L"\\Tasks\\");
+			wcscat_c(szCmdKey, AutoStartTaskName);
+			lbOpened = reg->OpenKey(szCmdKey, KEY_WRITE);
+			if (lbOpened)
+			{
+				if (!StartupTask)
+					StartupTask = (CommandTasks*)calloc(1, sizeof(CommandTasks));
+
+				if (StartupTask)
+				{
+					wchar_t szConfig[300] = L"";
+					LPCWSTR pszConfigName = gpSetCls->GetConfigName();
+					if (pszConfigName && *pszConfigName)
+					{
+						_wsprintf(szConfig, SKIPLEN(countof(szConfig)) L"/config \"%s\"", pszConfigName);
+					}
+					StartupTask->SetGuiArg(szConfig);
+
+					wchar_t* pszTabs = CVConGroup::GetTasks(NULL);
+					StartupTask->SetCommands(pszTabs);
+					SafeFree(pszTabs);
+
+					SaveCmdTask(reg, StartupTask);
+				}
+
+				reg->CloseKey();
+			}
+			else
+			{
+				gpConEmu->LogWindowPos(L"SaveSettingsOnExit - FAILED(OpenKey(AutoStartTaskName, KEY_WRITE))");
+			}
+		}
+	}
+	else
+	{
+		gpConEmu->LogWindowPos(L"SaveSettingsOnExit - FAILED(OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))");
 	}
 
 	delete reg;
@@ -2782,6 +2924,11 @@ void Settings::SaveConsoleFont()
 		return;
 
 	SettingsBase* reg = CreateSettings(NULL);
+	if (!reg)
+	{
+		_ASSERTE(reg!=NULL);
+		return;
+	}
 
 	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
 	{
@@ -2800,6 +2947,12 @@ void Settings::SaveFindOptions(SettingsBase* reg/* = NULL*/)
 	if (!reg)
 	{
 		reg = CreateSettings(NULL);
+		if (!reg)
+		{
+			_ASSERTE(reg!=NULL);
+			return;
+		}
+
 		if (!reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE, TRUE))
 		{
 			delete reg;
@@ -2823,23 +2976,6 @@ void Settings::SaveFindOptions(SettingsBase* reg/* = NULL*/)
 		delete reg;
 	}
 }
-
-//void Settings::UpdateMargins(RECT arcMargins)
-//{
-//	if (memcmp(&arcMargins, &rcTabMargins, sizeof(rcTabMargins))==0)
-//		return;
-//
-//	rcTabMargins = arcMargins;
-//	SettingsBase* reg = CreateSettings();
-//
-//	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
-//	{
-//		reg->Save(L"TabMargins", rcTabMargins);
-//		reg->CloseKey();
-//	}
-//
-//	delete reg;
-//}
 
 void Settings::SaveAppSettings(SettingsBase* reg)
 {
@@ -2866,13 +3002,13 @@ void Settings::SaveAppSettings(SettingsBase* reg)
 			// Загрузка "AppNames" - снаружи, т.к. LoadAppSettings используется и для загрузки &AppStd
 			reg->Save(L"AppNames", Apps[i]->AppNames);
 			reg->Save(L"Elevated", Apps[i]->Elevated);
-			SaveAppSettings(reg, Apps[i], NULL/*Цвета сохраняются как Имя палитры*/);
+			SaveAppSettings(reg, Apps[i]/*, Цвета сохраняются как Имя палитры*/);
 			reg->CloseKey();
 		}
 	}
 }
 
-void Settings::SaveAppSettings(SettingsBase* reg, Settings::AppSettings* pApp, COLORREF* pColors)
+void Settings::SaveAppSettings(SettingsBase* reg, Settings::AppSettings* pApp/*, COLORREF* pColors*/)
 {
 	// Для AppStd данные загружаются из основной ветки! В том числе и цвета (RGB[32] а не имя палитры)
 	bool bStd = (pApp == &AppStd);
@@ -2885,7 +3021,7 @@ void Settings::SaveAppSettings(SettingsBase* reg, Settings::AppSettings* pApp, C
 		{
 			ColorName[10] = i/10 + '0';
 			ColorName[11] = i%10 + '0';
-			reg->Save(ColorName, (DWORD)pColors[i]);
+			reg->Save(ColorName, (DWORD)Colors[i]);
 		}
 
 		reg->Save(L"ExtendColors", pApp->isExtendColors);
@@ -2955,6 +3091,11 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 	gpSetCls->SettingsPreSave();
 
 	SettingsBase* reg = CreateSettings(apStorage);
+	if (!reg)
+	{
+		_ASSERTE(reg!=NULL);
+		return FALSE;
+	}
 
 	// Если в реестре настройка есть, или изменилось значение
 	bool lbCurAutoRegisterFonts = isAutoRegisterFonts, lbCurAutoRegisterFontsRc = false;
@@ -2974,7 +3115,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 			wcscpy_c(Type, reg->m_Storage.szType);
 		}
 
-		SaveAppSettings(reg, &AppStd, Colors);
+		SaveAppSettings(reg, &AppStd/*, Colors*/);
 
 		reg->Save(L"TrueColorerSupport", isTrueColorer);
 		reg->Save(L"FadeInactive", isFadeInactive);
@@ -3027,12 +3168,16 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"StoreTaskbarkTasks", isStoreTaskbarkTasks);
 		reg->Save(L"StoreTaskbarCommands", isStoreTaskbarCommands);
 
+		reg->Save(L"SaveCmdHistory", isSaveCmdHistory);
 		if (psCmdHistory)
+		{
+			// Пишем всегда, даже если (!isSaveCmdHistory), т.к. история могла быть "преднастроена"
 			reg->SaveMSZ(L"CmdLineHistory", psCmdHistory, nCmdHistorySize);
+		}
 
 		reg->Save(L"SingleInstance", isSingleInstance);
 		reg->Save(L"ShowHelpTooltips", isShowHelpTooltips);
-		reg->Save(L"Multi", isMulti);
+		reg->Save(L"Multi", mb_isMulti);
 		reg->Save(L"Multi.ShowButtons", isMultiShowButtons);
 		reg->Save(L"Multi.NumberInCaption", isNumberInCaption);
 		//reg->Save(L"Multi.NewConsole", vmMultiNew);
@@ -3111,7 +3256,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"ConWnd Y", isUseCurrentSizePos ? gpConEmu->wndY : _wndY);
 		reg->Save(L"16bit Height", ntvdmHeight);
 		reg->Save(L"AutoSaveSizePos", isAutoSaveSizePos);
-		mb_SizePosAutoSaved = false; // Раз было инициированное пользователей сохранение настроек - сбросим флажок
+		mb_ExitSettingsAutoSaved = false; // Раз было инициированное пользователем сохранение настроек - сбросим флажок
 		reg->Save(L"IntegralSize", mb_IntegralSize);
 		reg->Save(L"QuakeStyle", isQuakeStyle);
 		reg->Save(L"QuakeAnimation", nQuakeAnimation);
@@ -3146,6 +3291,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		//reg->Save(L"CTS.VkBlock", isCTSVkBlock);
 		//reg->Save(L"CTS.VkBlockStart", vmCTSVkBlockStart);
 		reg->Save(L"CTS.SelectText", isCTSSelectText);
+		reg->Save(L"CTS.HtmlFormat", isCTSHtmlFormat);
 		//reg->Save(L"CTS.ClickPromptPosition", isCTSClickPromptPosition);
 		//reg->Save(L"CTS.VkText", isCTSVkText);
 		//reg->Save(L"CTS.VkTextStart", vmCTSVkTextStart);
@@ -3214,6 +3360,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		SaveStatusSettings(reg);
 		reg->Save(L"Tabs", isTabs);
 		reg->Save(L"TabsLocation", nTabsLocation);
+		reg->Save(L"TabIcons", isTabIcons);
 		reg->Save(L"OneTabPerGroup", isOneTabPerGroup);
 		reg->Save(L"ActivateSplitMouseOver", isActivateSplitMouseOver);
 		reg->Save(L"TabSelf", isTabSelf);
@@ -3232,7 +3379,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		//reg->Save(L"TabMargins", rcTabMargins);
 		reg->Save(L"ToolbarAddSpace", nToolbarAddSpace);
 		reg->Save(L"TabConsole", szTabConsole);
-		reg->Save(L"TabSkipWords", szTabSkipWords);
+		reg->Save(L"TabSkipWords", pszTabSkipWords);
 		reg->Save(L"TabPanels", szTabPanels);
 		reg->Save(L"TabEditor", szTabEditor);
 		reg->Save(L"TabEditorModified", szTabEditorModified);
@@ -3342,7 +3489,10 @@ int Settings::StatusBarHeight()
 DWORD Settings::isUseClink(bool abCheckVersion /*= false*/)
 {
 	if (!mb_UseClink)
-		return false;
+		return 0;
+
+	if (gpConEmu->IsResetBasicSettings())
+		return 0;
 
 	wchar_t szClink32[MAX_PATH+30], szClink64[MAX_PATH+30];
 	
@@ -3362,7 +3512,7 @@ DWORD Settings::isUseClink(bool abCheckVersion /*= false*/)
 
 	if (!szClink32[0] && !szClink64[0])
 	{
-		return false;
+		return 0;
 	}
 
 	static int nVersionChecked = 0;
@@ -3426,240 +3576,28 @@ bool Settings::isKeyboardHooks(bool abNoDisable /*= false*/)
 	if (gpConEmu->DisableKeybHooks && !abNoDisable)
 		return false;
 
-	//// Нужно и для WinXP, но только в "локальном" режиме
-	//if (gOSVer.dwMajorVersion < 6)
-	//{
-	//	return true;
-	//}
-
-
-	//if (m_isKeyboardHooks == 0)
-	//{
-	//	// Вопрос пользователю еще не задавали (это на старте, окно еще и не создано)
-	//	int nBtn = MessageBox(NULL,
-	//	                      L"Do You want to use Win-Number combination for \n"
-	//	                      L"switching between consoles (Multi Console feature)? \n\n"
-	//	                      L"If You choose 'Yes' - ConEmu will install keyboard hook. \n"
-	//	                      L"So, You must allow that in antiviral software (such as AVP). \n\n"
-	//	                      L"You can change behavior later via Settings->Features->\n"
-	//	                      L"'Install keyboard hooks (Vista & Win7)' check box, or\n"
-	//	                      L"'KeyboardHooks' value in ConEmu settings (registry or xml)."
-	//	                      , gpConEmu->GetDefaultTitle(), MB_YESNOCANCEL|MB_ICONQUESTION);
-
-	//	if (nBtn == IDCANCEL)
-	//	{
-	//		m_isKeyboardHooks = 2; // NO
-	//	}
-	//	else
-	//	{
-	//		m_isKeyboardHooks = (nBtn == IDYES) ? 1 : 2;
-	//		SettingsBase* reg = CreateSettings();
-
-	//		if (!reg)
-	//		{
-	//			_ASSERTE(reg!=NULL);
-	//		}
-	//		else
-	//		{
-	//			if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
-	//			{
-	//				reg->Save(L"KeyboardHooks", m_isKeyboardHooks);
-	//				reg->CloseKey();
-	//			}
-
-	//			delete reg;
-	//		}
-	//	}
-	//}
-
 	return (m_isKeyboardHooks == 0) || (m_isKeyboardHooks == 1);
 }
 
-//WORD Settings::GetPressedHostkey()
+//LPCTSTR Settings::GetCurCmd()
 //{
-//	_ASSERTE(mn_HostModOk[0]!=0);
-//
-//	if (mn_HostModOk[0] == VK_LWIN)
-//	{
-//		if (isPressed(VK_LWIN))
-//			return VK_LWIN;
-//
-//		if (isPressed(VK_RWIN))
-//			return VK_RWIN;
+//	return psCurCmd;
 //	}
 //
-//	if (!isPressed(mn_HostModOk[0]))
+//void Settings::SetCmdPtr(wchar_t*& psNewCmd)
 //	{
-//		_ASSERT(FALSE);
-//		return 0;
-//	}
+//	_ASSERTE(psNewCmd!=NULL);
 //
-//	// Для правых-левых - возвращаем общий, т.к. именно он приходит в WM_KEYUP
-//	if (mn_HostModOk[0] == VK_LSHIFT || mn_HostModOk[0] == VK_RSHIFT)
-//		return VK_SHIFT;
-//
-//	if (mn_HostModOk[0] == VK_LMENU || mn_HostModOk[0] == VK_RMENU)
-//		return VK_MENU;
-//
-//	if (mn_HostModOk[0] == VK_LCONTROL || mn_HostModOk[0] == VK_RCONTROL)
-//		return VK_CONTROL;
-//
-//	return mn_HostModOk[0];
-//}
-
-//bool Settings::IsHostkeyPressed()
+//	if (psCurCmd && (psCurCmd != psNewCmd))
 //{
-//	if (mn_HostModOk[0] == 0)
-//	{
-//		_ASSERTE(mn_HostModOk[0]!=0);
-//		mn_HostModOk[0] = VK_LWIN;
-//		return isPressed(VK_LWIN) || isPressed(VK_RWIN);
+//		SafeFree(psCurCmd);
 //	}
 //
-//	// Не более 3-х модификаторов + кнопка
-//	_ASSERTE(mn_HostModOk[4] == 0);
-//	for(int i = 0; i < 4 && mn_HostModOk[i]; i++) //-V112
-//	{
-//		if (mn_HostModOk[i] == VK_LWIN)
-//		{
-//			if (!(isPressed(VK_LWIN) || isPressed(VK_RWIN)))
-//				return false;
-//		}
-//		else if (!isPressed(mn_HostModOk[i]))
-//		{
-//			return false;
-//		}
-//	}
+//	psCurCmd = psNewCmd;
 //
-//	// Не более 3-х модификаторов + кнопка
-//	for(int j = 0; j < 4 && mn_HostModSkip[j]; j++) //-V112
-//	{
-//		if (isPressed(mn_HostModSkip[j]))
-//			return false;
-//	}
-//
-//	return true;
+//	// Release it
+//	psNewCmd = NULL;
 //}
-
-LPCTSTR Settings::GetCmd(bool *pIsCmdList)
-{
-	if (psCurCmd && *psCurCmd)
-	{
-		if (pIsCmdList)
-		{
-			*pIsCmdList = isCurCmdList;
-		}
-		else
-		{
-			//_ASSERTE(isCurCmdList == false);
-		}
-		return psCurCmd;
-	}
-
-	if (pIsCmdList)
-		*pIsCmdList = false;
-
-	switch (nStartType)
-	{
-	case 0:
-		if (psStartSingleApp && *psStartSingleApp)
-			return psStartSingleApp;
-		break;
-	case 1:
-		if (psStartTasksFile && *psStartTasksFile)
-			return psStartTasksFile;
-		break;
-	case 2:
-		if (psStartTasksName && *psStartTasksName)
-			return psStartTasksName;
-		break;
-	}
-
-	SafeFree(psCurCmd); // впринципе, эта строка скорее всего не нужна, но на всякий случай...
-	// Хорошо бы более корректно определить версию фара, но это не всегда просто
-	// Например x64 файл сложно обработать в x86 ConEmu.
-	DWORD nFarSize = 0;
-
-	if (lstrcmpi(gpSetCls->GetDefaultCmd(), L"far") == 0)
-	{
-		// Ищем фар. (1) В папке ConEmu, (2) в текущей директории, (2) на уровень вверх от папки ConEmu
-		wchar_t szFar[MAX_PATH*2], *pszSlash;
-		szFar[0] = L'"';
-		wcscpy_add(1, szFar, gpConEmu->ms_ConEmuExeDir); // Теперь szFar содержит путь запуска программы
-		pszSlash = szFar + _tcslen(szFar);
-		_ASSERTE(pszSlash > szFar);
-		BOOL lbFound = FALSE;
-
-		// (1) В папке ConEmu
-		if (!lbFound)
-		{
-			wcscpy_add(pszSlash, szFar, L"\\Far.exe");
-
-			if (FileExists(szFar+1, &nFarSize))
-				lbFound = TRUE;
-		}
-
-		// (2) в текущей директории
-		if (!lbFound && lstrcmpi(gpConEmu->WorkDir(), gpConEmu->ms_ConEmuExeDir))
-		{
-			szFar[0] = L'"';
-			wcscpy_add(1, szFar, gpConEmu->WorkDir());
-			wcscat_add(1, szFar, L"\\Far.exe");
-
-			if (FileExists(szFar+1, &nFarSize))
-				lbFound = TRUE;
-		}
-
-		// (3) на уровень вверх
-		if (!lbFound)
-		{
-			szFar[0] = L'"';
-			wcscpy_add(1, szFar, gpConEmu->ms_ConEmuExeDir);
-			pszSlash = szFar + _tcslen(szFar);
-			*pszSlash = 0;
-			pszSlash = wcsrchr(szFar, L'\\');
-
-			if (pszSlash)
-			{
-				wcscpy_add(pszSlash+1, szFar, L"Far.exe");
-
-				if (FileExists(szFar+1, &nFarSize))
-					lbFound = TRUE;
-			}
-		}
-
-		if (lbFound)
-		{
-			// 110124 - нафиг, если пользователю надо - сам или параметр настроит, или реестр
-			//// far чаще всего будет установлен в "Program Files", поэтому для избежания проблем - окавычиваем
-			//// Пока тупо - если far.exe > 1200K - считаем, что это Far2
-			//wcscat_c(szFar, (nFarSize>1228800) ? L"\" /w" : L"\"");
-			wcscat_c(szFar, L"\"");
-
-			// Finally - Result
-			psCurCmd = lstrdup(szFar);
-		}
-		else
-		{
-			// Если Far.exe не найден рядом с ConEmu - запустить cmd.exe
-			psCurCmd = GetComspec(&ComSpec);
-			//wcscpy_c(szFar, L"cmd");
-		}
-
-	}
-	else
-	{
-		// Simple Copy
-		psCurCmd = lstrdup(gpSetCls->GetDefaultCmd());
-	}
-
-	return psCurCmd;
-}
-
-RecreateActionParm Settings::GetDefaultCreateAction()
-{
-	return isMulti ? cra_CreateTab : cra_CreateWindow;
-}
 
 void Settings::HistoryCheck()
 {
@@ -3689,6 +3627,11 @@ void Settings::HistoryReset()
 
 	// И сразу сохранить в настройках
 	SettingsBase* reg = CreateSettings(NULL);
+	if (!reg)
+	{
+		_ASSERTE(reg!=NULL);
+		return;
+	}
 
 	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
 	{
@@ -3703,6 +3646,9 @@ void Settings::HistoryReset()
 
 void Settings::HistoryAdd(LPCWSTR asCmd)
 {
+	if (!isSaveCmdHistory)
+		return;
+
 	// Группы и так отображаются в диалоге/меню. В историю их не пишем
 	if (!asCmd || !*asCmd || (*asCmd == TaskBracketLeft))
 		return;
@@ -3714,6 +3660,7 @@ void Settings::HistoryAdd(LPCWSTR asCmd)
 	if (psStartTasksName && lstrcmp(psStartTasksName, asCmd)==0)
 		return;
 
+	LPCWSTR psCurCmd = gpSetCls->GetCurCmd();
 	if (psCurCmd && lstrcmp(psCurCmd, asCmd)==0)
 		return;
 
@@ -3759,6 +3706,11 @@ void Settings::HistoryAdd(LPCWSTR asCmd)
 	HEAPVAL;
 	// И сразу сохранить в настройках
 	SettingsBase* reg = CreateSettings(NULL);
+	if (!reg)
+	{
+		_ASSERTE(reg!=NULL);
+		return;
+	}
 
 	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
 	{
@@ -3906,74 +3858,6 @@ bool Settings::isCharBorder(wchar_t inChar)
 {
 	return mpc_FixFarBorderValues[(WORD)inChar];
 }
-
-//BOOL Settings::CheckConIme()
-//{
-//	if (!(gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion == 0))
-//		return FALSE; // Проверять только в Vista
-//
-//	long  lbStopWarning = FALSE;
-//	DWORD dwValue=1;
-//	SettingsBase* reg = CreateSettings();
-//
-//	// БЕЗ имени конфигурации!
-//	if (reg->OpenKey(CONEMU_ROOT_KEY, KEY_READ))
-//	{
-//		if (!reg->Load(_T("StopWarningConIme"), lbStopWarning))
-//			lbStopWarning = FALSE;
-//
-//		reg->CloseKey();
-//	}
-//
-//	if (!lbStopWarning)
-//	{
-//		HKEY hk = NULL;
-//
-//		if (0 == RegOpenKeyEx(HKEY_CURRENT_USER, L"Console", 0, KEY_READ, &hk))
-//		{
-//			DWORD dwType = REG_DWORD, nSize = sizeof(DWORD);
-//
-//			if (0 != RegQueryValueEx(hk, L"LoadConIme", 0, &dwType, (LPBYTE)&dwValue, &nSize))
-//				dwValue = 1;
-//
-//			RegCloseKey(hk);
-//
-//			if (dwValue!=0)
-//			{
-//				if (IDCANCEL==MessageBox(0,
-//				                        L"Unwanted value of 'LoadConIme' registry parameter!\r\n"
-//				                        L"Press 'Cancel' to stop this message.\r\n"
-//				                        L"Take a look at 'FAQ-ConEmu.txt'.\r\n"
-//				                        L"You may simply import file 'Disable_ConIme.reg'\r\n"
-//				                        L"located in 'ConEmu.Addons' folder.",
-//				                        gpConEmu->GetDefaultTitle(),MB_OKCANCEL|MB_ICONEXCLAMATION))
-//					lbStopWarning = TRUE;
-//			}
-//		}
-//		else
-//		{
-//			if (IDCANCEL==MessageBox(0,
-//			                        L"Can't determine a value of 'LoadConIme' registry parameter!\r\n"
-//			                        L"Press 'Cancel' to stop this message.\r\n"
-//			                        L"Take a look at 'FAQ-ConEmu.txt'",
-//			                        gpConEmu->GetDefaultTitle(),MB_OKCANCEL|MB_ICONEXCLAMATION))
-//				lbStopWarning = TRUE;
-//		}
-//
-//		if (lbStopWarning)
-//		{
-//			// БЕЗ имени конфигурации!
-//			if (reg->OpenKey(CONEMU_ROOT_KEY, KEY_WRITE))
-//			{
-//				reg->Save(_T("StopWarningConIme"), lbStopWarning);
-//				reg->CloseKey();
-//			}
-//		}
-//	}
-//
-//	delete reg;
-//	return TRUE;
-//}
 
 void Settings::CheckConsoleSettings()
 {
@@ -4311,30 +4195,31 @@ Settings::AppSettings* Settings::GetAppSettingsPtr(int anAppId, BOOL abCreateNew
 		_ASSERTE(gpConEmu->isMainThread());
 		int NewAppCount = AppCount+1;
 		AppSettings** NewApps = (AppSettings**)calloc(NewAppCount, sizeof(*NewApps));
-		CEAppColors** NewAppColors = (CEAppColors**)calloc(NewAppCount, sizeof(*NewAppColors));
-		if (!NewApps || !NewAppColors)
+		//CEAppColors** NewAppColors = (CEAppColors**)calloc(NewAppCount, sizeof(*NewAppColors));
+		if (!NewApps /*|| !NewAppColors*/)
 		{
-			_ASSERTE(NewApps && NewAppColors);
+			//_ASSERTE(NewApps && NewAppColors);
+			_ASSERTE(NewApps);
 			return NULL;
 		}
 		if (Apps && (AppCount > 0))
 		{
 			memmove(NewApps, Apps, AppCount*sizeof(*NewApps));
-			memmove(NewAppColors, AppColors, AppCount*sizeof(*NewAppColors));
+			//memmove(NewAppColors, AppColors, AppCount*sizeof(*NewAppColors));
 		}
 		AppSettings** pOld = Apps;
-		CEAppColors** pOldColors = AppColors;
+		//CEAppColors** pOldColors = AppColors;
 		Apps = NewApps;
-		AppColors = NewAppColors;
+		//AppColors = NewAppColors;
 		SafeFree(pOld);
-		SafeFree(pOldColors);
+		//SafeFree(pOldColors);
 		
 		Apps[anAppId] = (AppSettings*)calloc(1,sizeof(AppSettings));
-		AppColors[anAppId] = (CEAppColors*)calloc(1,sizeof(CEAppColors));
+		//AppColors[anAppId] = (CEAppColors*)calloc(1,sizeof(CEAppColors));
 
-		if (!Apps[anAppId] || !AppColors[anAppId])
+		if (!Apps[anAppId] /*|| !AppColors[anAppId]*/)
 		{
-			_ASSERTE(Apps[anAppId]!=NULL && AppColors[anAppId]!=NULL);
+			_ASSERTE(Apps[anAppId]!=NULL /*&& AppColors[anAppId]!=NULL*/);
 			return NULL;
 		}
 		Apps[anAppId]->cchNameMax = MAX_PATH;
@@ -4356,19 +4241,19 @@ Settings::AppSettings* Settings::GetAppSettingsPtr(int anAppId, BOOL abCreateNew
 void Settings::AppSettingsDelete(int anAppId)
 {
 	_ASSERTE(gpConEmu->isMainThread())
-	if (!Apps || !AppColors || (anAppId < 0) || (anAppId >= AppCount))
+	if (!Apps /*|| !AppColors*/ || (anAppId < 0) || (anAppId >= AppCount))
 	{
-		_ASSERTE(Apps && AppColors && (anAppId >= 0) && (anAppId < AppCount));
+		_ASSERTE(Apps /*&& AppColors*/ && (anAppId >= 0) && (anAppId < AppCount));
 		return;
 	}
 
 	AppSettings* pOld = Apps[anAppId];
-	CEAppColors* pOldClr = AppColors[anAppId];
+	//CEAppColors* pOldClr = AppColors[anAppId];
 
 	for (int i = anAppId+1; i < AppCount; i++)
 	{
 		Apps[i-1] = Apps[i];
-		AppColors[i-1] = AppColors[i];
+		//AppColors[i-1] = AppColors[i];
 	}
 
 	_ASSERTE(AppCount>0);
@@ -4379,7 +4264,7 @@ void Settings::AppSettingsDelete(int anAppId)
 		pOld->FreeApps();
 		free(pOld);
 	}
-	SafeFree(pOldClr);
+	//SafeFree(pOldClr);
 }
 
 // 0-based, index of Apps
@@ -4396,9 +4281,9 @@ bool Settings::AppSettingsXch(int anIndex1, int anIndex2)
 	Apps[anIndex1] = Apps[anIndex2];
 	Apps[anIndex2] = p;
 
-	CEAppColors* pClr = AppColors[anIndex1];
-	AppColors[anIndex1] = AppColors[anIndex2];
-	AppColors[anIndex2] = pClr;
+	//CEAppColors* pClr = AppColors[anIndex1];
+	//AppColors[anIndex1] = AppColors[anIndex2];
+	//AppColors[anIndex2] = pClr;
 
 	return true;
 }
@@ -4408,23 +4293,57 @@ void Settings::ResetFadeColors()
 	mn_LastFadeSrc = mn_LastFadeDst = -1;
 	mb_FadeInitialized = false;
 
-	for (int i = 0; i < AppCount; i++)
+	for (int i = 0; i < PaletteCount; i++)
 	{
-		AppColors[i]->FadeInitialized = false;
+		if (Palettes[i])
+	{
+			Palettes[i]->FadeInitialized = false;
+		}
 	}
+}
+
+COLORREF* Settings::GetPaletteColors(LPCWSTR asPalette, BOOL abFade /*= FALSE*/)
+{
+	COLORREF *pColors = Colors;
+	COLORREF *pColorsFade = ColorsFade;
+	bool* pbFadeInitialized = &mb_FadeInitialized;
+
+	_ASSERTE(asPalette && *asPalette);
+	int iPalIdx = PaletteGetIndex(asPalette);
+	if (iPalIdx >= 0)
+	{
+		ColorPalette* palPtr = PaletteGetPtr(iPalIdx);
+		_ASSERTE(palPtr && countof(Colors)==countof(palPtr->Colors) && countof(ColorsFade)==countof(palPtr->ColorsFade));
+
+		pColors = palPtr->Colors;
+		pColorsFade = palPtr->ColorsFade;
+		pbFadeInitialized = &palPtr->FadeInitialized;
+	}
+
+	return GetColorsPrepare(pColors, pColorsFade, pbFadeInitialized, abFade);
 }
 
 COLORREF* Settings::GetColors(int anAppId/*=-1*/, BOOL abFade)
 {
-	COLORREF *pColors = Colors, *pColorsFade = ColorsFade;
+	COLORREF *pColors = Colors;
+	COLORREF *pColorsFade = ColorsFade;
 	bool* pbFadeInitialized = &mb_FadeInitialized;
+
 	if ((anAppId >= 0) && (anAppId < AppCount) && Apps[anAppId]->OverridePalette && Apps[anAppId]->szPaletteName[0])
 	{
-		_ASSERTE(countof(Colors)==countof(AppColors[anAppId]->Colors) && countof(ColorsFade)==countof(AppColors[anAppId]->ColorsFade));
-		pColors = AppColors[anAppId]->Colors; pColorsFade = AppColors[anAppId]->ColorsFade;
-		pbFadeInitialized = &AppColors[anAppId]->FadeInitialized;
+		ColorPalette* palPtr = PaletteGetPtr(Apps[anAppId]->GetPaletteIndex());
+		_ASSERTE(palPtr && countof(Colors)==countof(palPtr->Colors) && countof(ColorsFade)==countof(palPtr->ColorsFade));
+
+		pColors = palPtr->Colors;
+		pColorsFade = palPtr->ColorsFade;
+		pbFadeInitialized = &palPtr->FadeInitialized;
 	}
 
+	return GetColorsPrepare(pColors, pColorsFade, pbFadeInitialized, abFade);
+}
+
+COLORREF* Settings::GetColorsPrepare(COLORREF *pColors, COLORREF *pColorsFade, bool* pbFadeInitialized, BOOL abFade)
+{
 	if (!abFade || !isFadeInactive)
 		return pColors;
 
@@ -4671,7 +4590,8 @@ const Settings::CommandTasks* Settings::CmdTaskGet(int anIndex)
 {
 	if (anIndex == -1)
 	{
-		_ASSERTE(StartupTask!=NULL);
+		if (!StartupTask)
+			StartupTask = (CommandTasks*)calloc(1, sizeof(CommandTasks));
 		// Создать!
 		return StartupTask;
 	}
@@ -5103,6 +5023,10 @@ void Settings::CheckHotkeyUnique()
 		if ((ppHK1->HkType == chk_Modifier) || (ConEmuHotKey::GetHotkey(ppHK1->VkMod) == 0))
 			continue;
 
+		// Отключен пользователем?
+		if (ppHK1->Enabled && !ppHK1->Enabled())
+			continue;
+
 		// Некоторые хоткеи не проверять
 		bSkip = false;
 		for (size_t i = 0; i < countof(SkipCheckID); i++)
@@ -5118,6 +5042,10 @@ void Settings::CheckHotkeyUnique()
 		for (ConEmuHotKey *ppHK2 = ppHK1+1; ppHK2[0].DescrLangID; ++ppHK2)
 		{
 			if ((ppHK2->HkType == chk_Modifier) || (ConEmuHotKey::GetHotkey(ppHK2->VkMod) == 0))
+				continue;
+
+			// Отключен пользователем?
+			if (ppHK2->Enabled && !ppHK2->Enabled())
 				continue;
 
 			// Некоторые хоткеи не проверять

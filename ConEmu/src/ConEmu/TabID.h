@@ -101,6 +101,9 @@ private:
 	int nLen;
 	wchar_t sz[CONEMUTABMAX];
 public:
+	TabName();
+	TabName(LPCWSTR asName);
+public:
 	LPCWSTR Set(LPCWSTR asName);
 	void Release();
 	//LPCWSTR MakeUpper();
@@ -111,11 +114,14 @@ public:
 /* Internal information for Tab drawing */
 struct TabDrawInfo
 {
+public:
 	TabName  Display; // это уже отформатированный текст, который нужно отобразить
 	//DWORD    nFlags;  // enum TabInfoFlags
 	RECT     rcTab;   // Координаты относительно WindowDC
 	HRGN     rgnTab;  // точный регион таба, для реакции на мышку
 	bool     Clipped; // текст был обрезан при отрисовке, показывать тултип
+public:
+	TabDrawInfo() {rgnTab = NULL; Clipped=false;};
 };
 
 struct TabInfo
@@ -159,12 +165,13 @@ public:
 	TabDrawInfo DrawInfo;
 
 	CTabID(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
-	bool Set(LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
+	void Set(LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
 
 	int AddRef();
 	int Release();
 	bool IsEqual(const CTabID* pTabId, bool abIgnoreWindowId = false);
 	bool IsEqual(CVirtualConsole* apVCon, const TabName& asName, CEFarWindowType anType, int anPID, int anViewEditID);
+	bool IsEqual(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anViewEditID);
 	
 	void ReleaseDrawRegion();
 };

@@ -34,6 +34,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "VConGroup.h"
 
 /* Simple fixed-max-length string class { struct } */
+TabName::TabName()
+{
+	nLen = 0; sz[0] = 0;
+}
+TabName::TabName(LPCWSTR asName)
+{
+	nLen = 0; sz[0] = 0;
+	Set(asName);
+}
 LPCWSTR TabName::Set(LPCWSTR asName)
 {
 	#ifdef _DEBUG
@@ -137,7 +146,12 @@ int CTabID::Release()
 		delete this;
 	return n;
 }
-bool CTabID::IsEqual(CVirtualConsole* apVCon, const TabName& asName, int anType, int anPID, int anViewEditID)
+bool CTabID::IsEqual(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anViewEditID)
+{
+	TabName t(asName);
+	return IsEqual(apVCon, t, anType, anPID, anViewEditID);
+}
+bool CTabID::IsEqual(CVirtualConsole* apVCon, const TabName& asName, CEFarWindowType anType, int anPID, int anViewEditID)
 {
 	if (!this)
 		return false; // Invalid arguments

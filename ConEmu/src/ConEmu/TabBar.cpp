@@ -198,6 +198,25 @@ void CTabBarClass::Retrieve()
 	//}
 }
 
+int CTabBarClass::CreateTabIcon(LPCWSTR asIconDescr, bool bAdmin)
+{
+	if (!gpSet->isTabIcons)
+		return -1;
+	return m_TabIcons.CreateTabIcon(asIconDescr, bAdmin);
+}
+
+HIMAGELIST CTabBarClass::GetTabIcons()
+{
+	if (!m_TabIcons.IsInitialized())
+		return NULL;
+	return (HIMAGELIST)m_TabIcons;
+}
+
+int CTabBarClass::GetTabIcon(bool bAdmin)
+{
+	return m_TabIcons.GetTabIcon(bAdmin);
+}
+
 void CTabBarClass::SelectTab(int i)
 {
 	mn_CurSelTab = mp_Rebar->SelectTabInt(i); // Меняем выделение, только если оно реально меняется
@@ -222,7 +241,7 @@ int CTabBarClass::GetItemCount()
 	return nCurCount;
 }
 
-int CTabBarClass::CountActiveTabs(int nMax = 0)
+int CTabBarClass::CountActiveTabs(int nMax /*= 0*/)
 {
 	int  nTabs = 0;
 	bool bHideInactiveConsoleTabs = gpSet->bHideInactiveConsoleTabs;
@@ -234,7 +253,7 @@ int CTabBarClass::CountActiveTabs(int nMax = 0)
 		CVConGuard guard;
 		if (!CVConGroup::GetVCon(V, &guard))
 			continue;
-		pVCon = guard.VCon();
+		CVirtualConsole* pVCon = guard.VCon();
 
 		if (bHideInactiveConsoleTabs)
 		{
@@ -361,6 +380,10 @@ void CTabBarClass::Activate(BOOL abPreSyncConsole/*=FALSE*/)
 {
 	if (!mp_Rebar->IsCreated())
 	{
+		if (!m_TabIcons.IsInitialized())
+		{
+			m_TabIcons.Initialize();
+		}
 		// Создать
 		mp_Rebar->CreateRebar();
 		// Узнать высоту созданного
@@ -552,7 +575,7 @@ void CTabBarClass::Update(BOOL abPosted/*=FALSE*/)
 			}
 
 			// (Panels=1, Viewer=2, Editor=3) |(Elevated=0x100) |(NotElevated=0x200) |(Modal=0x400)
-			bool bAllWindows = (bShowFarWindows && !(pRCon->GetActiveTabType() & fwt_Modal));
+			bool bAllWindows = (bShowFarWindows && !(pRCon->GetActiveTabType() & fwt_ModalFarWnd));
 			rFrom = bAllWindows ? 0 : pRCon->GetActiveTab();
 			rFound = 0;
 			
@@ -950,7 +973,7 @@ void CTabBarClass::OnCommand(WPARAM wParam, LPARAM lParam)
 		if (gpConEmu->IsGesturesEnabled())
 			gpConEmu->mp_Menu->OnNewConPopupMenu();
 		else
-			gpConEmu->RecreateAction(gpSet->GetDefaultCreateAction(), gpSet->isMultiNewConfirm || isPressed(VK_SHIFT));
+			gpConEmu->RecreateAction(gpSetCls->GetDefaultCreateAction(), gpSet->isMultiNewConfirm || isPressed(VK_SHIFT));
 	}
 	else if (wParam == TID_ALTERNATIVE)
 	{
@@ -1466,7 +1489,7 @@ int CTabBarClass::GetNextTab(BOOL abForward, BOOL abAltStyle/*=FALSE*/)
 		{
 			int iter = 0;
 
-			while (iter < m_TabStack.size())
+			while (iter < m_TabStack.GetCount())
 			{
 				VConTabs Item = m_TabStack[iter]; // *iter;
 

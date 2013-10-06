@@ -54,6 +54,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static CVirtualConsole* gp_VCon[MAX_CONSOLE_COUNT] = {};
 
 static CVirtualConsole* gp_VActive = NULL;
+static CVirtualConsole* gp_GroupPostCloseActivate = NULL; // ≈сли открыты сплиты - то при закрытии одного pane - остатьс€ в активной группе
 static bool gb_CreatingActive = false, gb_SkipSyncSize = false;
 static UINT gn_CreateGroupStartVConIdx = 0;
 static bool gb_InCreateGroup = false;
@@ -1208,7 +1209,7 @@ int CVConGroup::isFarExist(CEFarWindowType anWindowType/*=fwt_Any*/, LPWSTR asNa
 			if (pRCon && pRCon->isFar(anWindowType & fwt_PluginRequired))
 			{
 				// »щем что-то конкретное?
-				if (!(anWindowType & (fwt_TypeMask|fwt_Elevated|fwt_NonElevated|fwt_Modal|fwt_NonModal|fwt_ActivateFound|fwt_ActivateOther)) && !(asName && *asName))
+				if (!(anWindowType & (fwt_TypeMask|fwt_Elevated|fwt_NonElevated|fwt_ModalFarWnd|fwt_NonModal|fwt_ActivateFound|fwt_ActivateOther)) && !(asName && *asName))
 				{
 					iFound = 1; // Just "exists"
 					break;
@@ -1228,11 +1229,11 @@ int CVConGroup::isFarExist(CEFarWindowType anWindowType/*=fwt_Any*/, LPWSTR asNa
 
 					// ћодальное окно?
 					WARNING("Ќужно еще учитывать <модальность> заблокированным диалогом, или меню, или еще чем-либо!");
-					if ((anWindowType & fwt_Modal) && !(t & fwt_Modal))
+					if ((anWindowType & fwt_ModalFarWnd) && !(t & fwt_ModalFarWnd))
 						continue;
 					// ¬ табе устанавливаетс€ флаг fwt_Modal
 					// fwt_NonModal используетс€ только как аргумент поиска
-					if ((anWindowType & fwt_NonModal) && (t & fwt_Modal))
+					if ((anWindowType & fwt_NonModal) && (t & fwt_ModalFarWnd))
 						continue;
 
 					iFound = 1; // Just "exists"
@@ -1270,11 +1271,11 @@ int CVConGroup::isFarExist(CEFarWindowType anWindowType/*=fwt_Any*/, LPWSTR asNa
 
 						// ћодальное окно?
 						WARNING("Ќужно еще учитывать <модальность> заблокированным диалогом, или меню, или еще чем-либо!");
-						if ((anWindowType & fwt_Modal) && !(tab.Type & fwt_Modal))
+						if ((anWindowType & fwt_ModalFarWnd) && !(tab.Type & fwt_ModalFarWnd))
 							continue;
 						// ¬ табе устанавливаетс€ флаг fwt_Modal
 						// fwt_NonModal используетс€ только как аргумент поиска
-						if ((anWindowType & fwt_NonModal) && (tab.Type & fwt_Modal))
+						if ((anWindowType & fwt_NonModal) && (tab.Type & fwt_ModalFarWnd))
 							continue;
 
 						// ≈сли ищем конкретный редактор/вьювер
@@ -1896,7 +1897,7 @@ bool CVConGroup::GetVConFromPoint(POINT ptScreen, CVConGuard* pVCon /*= NULL*/)
 //	return false;
 //}
 
-bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/, bool bForceKill /*= false*/)
+bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/, bool bForceKill /*= false*/, bool bNoGroup /*= false*/)
 {
 	CVConGuard VCon(gp_VActive);
 
@@ -1945,7 +1946,7 @@ bool CVConGroup::CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /
 			if (gOSVer.dwMajorVersion >= 6)
 			{
 				ConfirmCloseParam Parm;
-				Parm.bGroup = TRUE;
+				Parm.bGroup = bNoGroup ? ConfirmCloseParam::eNoGroup : ConfirmCloseParam::eGroup;
 				Parm.bForceKill = bForceKill;
 				Parm.nConsoles = nConsoles;
 				Parm.nOperations = nProgress;
@@ -2240,7 +2241,7 @@ bool CVConGroup::DoCloseAllVCon(bool bMsgConfirmed)
 	bool bConfirmEach = (bMsgConfirmed || !gpSet->isCloseConsoleConfirm) ? false : true;
 
 	// —охраним размер перед закрытием консолей, а то они могут напакостить и "вернуть" старый размер
-	gpSet->SaveSizePosOnExit();
+	gpSet->SaveSettingsOnExit();
 		
 	for (int i = (int)(countof(gp_VCon)-1); i >= 0; i--)
 	{
@@ -2316,7 +2317,7 @@ void CVConGroup::CloseAllButActive(CVirtualConsole* apVCon/*may be null*/)
 		VCons.push_back(pGuard);
 	}
 
-	if (CloseQuery(&VCons, NULL))
+	if (CloseQuery(&VCons, NULL, false, true))
 	{
 		gpConEmu->SetScClosePending(true); // Disable confirmation of each console closing
 
@@ -2434,8 +2435,22 @@ void CVConGroup::OnVConClosed(CVirtualConsole* apVCon)
 			// будет попытка активировать другую вкладку закрываемой консоли
 			//gpConEmu->mp_TabBar->Update(TRUE); -- а и не сможет он другую активировать, т.к. RCon вернет FALSE
 
+			bool bAllowRecent = true;
+
+			if (gp_GroupPostCloseActivate)
+			{
+				if (isValid(gp_GroupPostCloseActivate))
+				{
+					if (Activate(gp_GroupPostCloseActivate))
+					{
+						bAllowRecent = false;
+					}
+				}
+				gp_GroupPostCloseActivate = NULL;
+			}
+
 			// Ёта комбинаци€ должна активировать предыдущую консоль (если активна текуща€)
-			if (gpSet->isTabRecent && apVCon == gp_VActive)
+			if (bAllowRecent && gpSet->isTabRecent && apVCon == gp_VActive)
 			{
 				if (gpConEmu->GetVCon(1))
 				{
@@ -2890,6 +2905,11 @@ BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pS
 		_ASSERTE(pStartStop->sCmdLine[0]!=0);
 		pArgs->pszSpecialCmd = lstrdup(pStartStop->sCmdLine);
 
+		if (gpConEmu->isIconic())
+		{
+			gpConEmu->OnMinimizeRestore(sih_SetForeground);
+		}
+
 		// т.к. это приходит из серверного потока - зовем в главном
 		VCon = (CVirtualConsole*)SendMessage(ghWnd, gpConEmu->mn_MsgCreateCon, gpConEmu->mn_MsgCreateCon, (LPARAM)pArgs);
 		if (VCon.VCon() && !isValid(VCon.VCon()))
@@ -3296,7 +3316,7 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 	{
 		_ASSERTE(args->pszSpecialCmd==NULL);
 
-		args->pszSpecialCmd = lstrdup(gpSet->GetCmd());
+		args->pszSpecialCmd = lstrdup(gpSetCls->GetCmd());
 
 		_ASSERTE(args->pszSpecialCmd && *args->pszSpecialCmd);
 	}
@@ -3365,7 +3385,8 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 			pVCon = CVConGroup::CreateVCon(args, gp_VCon[i]);
 			gb_CreatingActive = false;
 
-			BOOL lbInBackground = args->bBackgroundTab && (pOldActive != NULL) && !args->eSplit;
+			// 130826 - "-new_console:sVb" - "b" was ignored!
+			BOOL lbInBackground = args->bBackgroundTab && (pOldActive != NULL); // && !args->eSplit;
 
 			if (pVCon)
 			{
@@ -3889,7 +3910,7 @@ void CVConGroup::SetConsoleSizes(const COORD& size, const RECT& rcNewCon, bool a
 // т.е. если по горизонтали есть 2 консоли, и прос€т размер 80x25
 // то эти две консоли должны стать 40x25 а GUI отресайзитьс€ под 80x25
 // ¬ принципе, эту функцию можно было бы и в CConEmu оставить, но дл€ общности путь здесь будет
-void CVConGroup::SetAllConsoleWindowsSize(COORD size, bool bSetRedraw /*= false*/)
+void CVConGroup::SetAllConsoleWindowsSize(RECT rcWnd, enum ConEmuRect tFrom /*= CER_MAIN or CER_MAINCLIENT*/, COORD size, bool bSetRedraw /*= false*/)
 {
 	CVConGuard VCon(gp_VActive);
 	CVConGroup* pRoot = GetRootOfVCon(VCon.VCon());
@@ -3932,7 +3953,7 @@ void CVConGroup::SetAllConsoleWindowsSize(COORD size, bool bSetRedraw /*= false*
 	}
 
 	// ƒл€ разбиени€ имеет смысл использовать текущий размер окна в пиксел€х
-	RECT rcWorkspace = gpConEmu->CalcRect(CER_WORKSPACE);
+	RECT rcWorkspace = gpConEmu->CalcRect(CER_WORKSPACE, rcWnd, tFrom);
 
 	// Go (size real consoles)
 	pRoot->SetConsoleSizes(size, rcWorkspace, bSetRedraw/*as Sync*/);
@@ -3952,7 +3973,7 @@ void CVConGroup::SyncAllConsoles2Window(RECT rcWnd, enum ConEmuRect tFrom /*= CE
 	CVConGuard VCon(gp_VActive);
 	RECT rcAllCon = gpConEmu->CalcRect(CER_CONSOLE_ALL, rcWnd, tFrom, VCon.VCon());
 	COORD crNewAllSize = {rcAllCon.right,rcAllCon.bottom};
-	SetAllConsoleWindowsSize(crNewAllSize, bSetRedraw);
+	SetAllConsoleWindowsSize(rcWnd, tFrom, crNewAllSize, bSetRedraw);
 }
 
 void CVConGroup::LockSyncConsoleToWindow(bool abLockSync)
@@ -4205,7 +4226,7 @@ bool CVConGroup::PreReSize(uint WindowMode, RECT rcWnd, enum ConEmuRect tFrom /*
 	COORD size = {rcCon.right, rcCon.bottom};
 	if (isVConExists(0))
 	{
-		SetAllConsoleWindowsSize(size, bSetRedraw);
+		SetAllConsoleWindowsSize(rcWnd, tFrom, size, bSetRedraw);
 	}
 
 	//if (bSetRedraw /*&& gp_VActive*/)

@@ -406,7 +406,7 @@ bool CDefaultTerminal::CheckForeground(HWND hFore, DWORD nForePID, bool bRunInTh
 	if (GetClassName(hFore, szClass, countof(szClass)))
 	{
 		if ((lstrcmp(szClass, VirtualConsoleClass) == 0)
-			|| (lstrcmp(szClass, L"#32770") == 0) // Ignore dialogs
+			//|| (lstrcmp(szClass, L"#32770") == 0) // Ignore dialogs // -- Process dialogs too (Application may be dialog-based)
 			|| isConsoleClass(szClass))
 		{
 			mh_LastIgnoredWnd = hFore;
@@ -582,13 +582,13 @@ void CDefaultTerminal::ClearProcessed(bool bForceAll)
 		}
 	}
 
-	if (mh_LastWnd && !IsWindow(mh_LastWnd))
+	if (mh_LastWnd && (bForceAll || !IsWindow(mh_LastWnd)))
 	{
 		if (mh_LastIgnoredWnd == mh_LastWnd)
 			mh_LastIgnoredWnd = NULL;
 		mh_LastWnd = NULL;
 	}
-	if (mh_LastIgnoredWnd && !IsWindow(mh_LastIgnoredWnd))
+	if (mh_LastIgnoredWnd && (bForceAll || !IsWindow(mh_LastIgnoredWnd)))
 	{
 		mh_LastIgnoredWnd = NULL;
 	}

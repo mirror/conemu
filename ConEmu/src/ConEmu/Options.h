@@ -191,8 +191,12 @@ struct Settings
 			//reg->Load(L"PopBackColorIdx", nPopBackColorIdx);
 			BYTE nPopBackColorIdx; // 0..15,16
 
-
+			// Loaded
 			COLORREF Colors[0x20];
+
+			// Computed
+			COLORREF ColorsFade[0x20];
+			bool FadeInitialized;
 
 			void FreePtr()
 			{
@@ -213,6 +217,11 @@ struct Settings
 
 			bool OverridePalette; // Palette+Extend
 			wchar_t szPaletteName[128];
+			//TODO: “ут хорошо бы индекс палитры хранить...
+			int GetPaletteIndex();
+			void SetPaletteName(LPCWSTR asNewPaletteName);
+			void ResetPaletteIndex();
+
 			//reg->Load(L"ExtendColors", isExtendColors);
 			bool isExtendColors;
 			char ExtendColors() const { return (OverridePalette || !AppNames) ? isExtendColors : gpSet->AppStd.isExtendColors; };
@@ -363,6 +372,7 @@ struct Settings
 		int GetAppSettingsId(LPCWSTR asExeAppName, bool abElevated);
 		const AppSettings* GetAppSettings(int anAppId=-1);
 		COLORREF* GetColors(int anAppId=-1, BOOL abFade = FALSE);
+		COLORREF* GetPaletteColors(LPCWSTR asPalette, BOOL abFade = FALSE);
 		COLORREF GetFadeColor(COLORREF cr);
 		void ResetFadeColors();
 
@@ -390,7 +400,12 @@ struct Settings
 			void SetName(LPCWSTR asName, int anCmdIndex)
 			{
 				wchar_t szCmd[16];
-				if (!asName || !*asName)
+				if (anCmdIndex == -1)
+				{
+					wcscpy_c(szCmd, AutoStartTaskName);
+					asName = szCmd;
+				}
+				else if (!asName || !*asName)
 				{
 					_wsprintf(szCmd, SKIPLEN(countof(szCmd)) L"Group%i", (anCmdIndex+1));
 					asName = szCmd;
@@ -524,6 +539,7 @@ struct Settings
 		bool CmdTaskXch(int anIndex1, int anIndex2); // 0-based, index of CmdTasks
 
 		const ColorPalette* PaletteGet(int anIndex); // 0-based, index of Palettes
+		int PaletteGetIndex(LPCWSTR asName);
 		void PaletteSaveAs(LPCWSTR asName); // Save active colors to named palette
 		void PaletteDelete(LPCWSTR asName); // Delete named palette
 		void PaletteSetStdIndexes();
@@ -566,10 +582,12 @@ struct Settings
 
 		int PaletteCount;
 		ColorPalette** Palettes;
-		int PaletteGetIndex(LPCWSTR asName);
+		ColorPalette* PaletteGetPtr(int anIndex); // 0-based, index of Palettes
 		void SavePalettes(SettingsBase* reg);
 		void SortPalettes();
 		void FreePalettes();
+
+		COLORREF* GetColorsPrepare(COLORREF *pColors, COLORREF *pColorsFade, bool* pbFadeInitialized, BOOL abFade);
 
 		int ProgressesCount;
 		ConEmuProgressStore** Progresses;
@@ -585,20 +603,20 @@ struct Settings
 		COLORREF ColorsFade[0x20];
 		bool mb_FadeInitialized;
 
-		struct CEAppColors
-		{
-			COLORREF Colors[0x20];
-			COLORREF ColorsFade[0x20];
-			bool FadeInitialized;
-		} **AppColors; // [AppCount]
+		//struct CEAppColors
+		//{
+		//	COLORREF Colors[0x20];
+		//	COLORREF ColorsFade[0x20];
+		//	bool FadeInitialized;
+		//} **AppColors; // [AppCount]
 
 		void LoadCursorSettings(SettingsBase* reg, CECursorType* pActive, CECursorType* pInactive);
 
 		void LoadAppSettings(SettingsBase* reg, bool abFromOpDlg = false);
-		void LoadAppSettings(SettingsBase* reg, AppSettings* pApp, COLORREF* pColors);
-		void SaveAppSettings(SettingsBase* reg, AppSettings* pApp, COLORREF* pColors);
+		void LoadAppSettings(SettingsBase* reg, AppSettings* pApp/*, COLORREF* pColors*/);
+		void SaveAppSettings(SettingsBase* reg, AppSettings* pApp/*, COLORREF* pColors*/);
 
-		void FreeApps(int NewAppCount = 0, AppSettings** NewApps = NULL, Settings::CEAppColors** NewAppColors = NULL);
+		void FreeApps(int NewAppCount = 0, AppSettings** NewApps = NULL/*, Settings::CEAppColors** NewAppColors = NULL*/);
 
 		DWORD mn_FadeMul;
 		inline BYTE GetFadeColorItem(BYTE c);
@@ -656,6 +674,8 @@ struct Settings
 		DWORD nColorKeyValue;
 
 		/* *** Command Line History (from start dialog) *** */
+		//reg->Load(L"SaveCmdHistory", isSaveCmdHistory);
+		bool isSaveCmdHistory;
 		//reg->Load(L"CmdLineHistory", &psCmdHistory);
 		LPWSTR psCmdHistory;
 		//nCmdHistorySize = 0; HistoryCheck();
@@ -663,7 +683,7 @@ struct Settings
 
 		/* *** Startup options *** */
 		//reg->Load(L"StartType", nStartType);
-		BYTE nStartType; // 0-cmd line, 1-cmd task file, 2-named task, 3-auto saved task
+		BYTE nStartType; // 0-cmd line, 1-cmd task file, 2-named task, 3-auto saved task (*StartupTask)
 		//reg->Load(L"CmdLine", &psStartSingleApp);
 		LPTSTR psStartSingleApp;
 		//reg->Load(L"StartTasksFile", &psStartTasksFile);
@@ -681,18 +701,17 @@ struct Settings
 		bool isStoreTaskbarCommands;
 
 		
-		/* Command Line ("/cmd" arg) */
-		LPTSTR psCurCmd;
-		bool isCurCmdList; // а это если был указан /cmdlist
+	//	/* Command Line ("/cmd" arg) */
+	//private:
+	//	LPTSTR psCurCmd;
+	//public:
+	//	LPCTSTR GetCurCmd();
+	//	void SetCmdPtr(wchar_t*& psNewCmd);
+
 
 		/* 'Default' command line (if nor Registry, nor /cmd specified) */
 		//WCHAR  szDefCmd[16];
 	public:
-		/* "Active" command line */
-		LPCTSTR GetCmd(bool *pIsCmdList = NULL);
-
-		RecreateActionParm GetDefaultCreateAction();
-
 		//reg->Load(L"FontName", inFont, countof(inFont))
 		wchar_t inFont[LF_FACESIZE];
 		//reg->Load(L"FontName2", inFont2, countof(inFont2))
@@ -789,6 +808,9 @@ struct Settings
 		bool isCTSSelectBlock;
 		//reg->Load(L"CTS.SelectText", isCTSSelectText);
 		bool isCTSSelectText;
+		//reg->Load(L"CTS.HtmlFormat", isCTSHtmlFormat);
+		BYTE isCTSHtmlFormat; // 0 - Plain text only, 1 - HTML formatting, 2 - Copy as HTML
+
 		////reg->Load(L"CTS.ClickPromptPosition", isCTSClickPromptPosition);
 		//BYTE isCTSClickPromptPosition; // & vkCTSVkPromptClk
 		//reg->Load(L"CTS.VkBlock", isCTSVkBlock);
@@ -979,6 +1001,8 @@ struct Settings
 		char isTabs;
 		//reg->Load(L"TabsLocation", nTabsLocation);
 		BYTE nTabsLocation; // 0 - top, 1 - bottom
+		//reg->Load(L"TabIcons", isTabIcons);
+		bool isTabIcons;
 		//reg->Load(L"OneTabPerGroup", isOneTabPerGroup);
 		bool isOneTabPerGroup;
 		//reg->Load(L"ActivateSplitMouseOver", isActivateSplitMouseOver);
@@ -1052,7 +1076,7 @@ struct Settings
 	private:
 		// ѕри закрытии окна крестиком - сохран€ть только один раз,
 		// а то размер может в процессе закрыти€ консолей изменитьс€
-		bool mb_SizePosAutoSaved;
+		bool mb_ExitSettingsAutoSaved;
 	public:
 		//reg->Load(L"SlideShowElapse", nSlideShowElapse);
 		DWORD nSlideShowElapse;
@@ -1080,11 +1104,11 @@ struct Settings
 		bool isSingleInstance;
 		//reg->Load(L"ShowHelpTooltips", isShowHelpTooltips);
 		bool isShowHelpTooltips;
-		//reg->Load(L"Multi", isMulti);
-		bool isMulti;
+		//reg->Load(L"Multi", mb_isMulti);
+		bool mb_isMulti;
 		//reg->Load(L"Multi.ShowButtons", isMultiShowButtons);
 		bool isMultiShowButtons;
-		//reg->Load(L"NumberInCaption", isMulti);
+		//reg->Load(L"NumberInCaption", isNumberInCaption);
 		bool isNumberInCaption;
 		private:
 		//reg->Load(L"Multi.Modifier", nHostkeyModifier); TestHostkeyModifiers();
@@ -1183,8 +1207,8 @@ struct Settings
 		/* *** «аголовки табов *** */
 		//reg->Load(L"TabConsole", szTabConsole, countof(szTabConsole));
 		WCHAR szTabConsole[32];
-		//reg->Load(L"TabSkipWords", szTabSkipWords, countof(szTabSkipWords));
-		WCHAR szTabSkipWords[255];
+		//reg->Load(L"TabSkipWords", &pszTabSkipWords);
+		wchar_t* pszTabSkipWords;
 		//reg->Load(L"TabPanels", szTabPanels, countof(szTabPanels));
 		WCHAR szTabPanels[32];
 		//reg->Load(L"TabEditor", szTabEditor, countof(szTabEditor));
@@ -1305,9 +1329,9 @@ struct Settings
 		void SaveAppSettings(SettingsBase* reg);
 		bool SaveCmdTasks(SettingsBase* reg);
 		bool SaveProgresses(SettingsBase* reg);
-		void SaveSizePosOnExit();
 		void SaveConsoleFont();
 		void SaveFindOptions(SettingsBase* reg = NULL);
+		void SaveSettingsOnExit();
 		//void UpdateMargins(RECT arcMargins);
 	public:
 		void HistoryCheck();

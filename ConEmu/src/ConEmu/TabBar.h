@@ -35,6 +35,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/MArray.h"
 #include "../common/WinObjects.h"
 
+#include "IconList.h"
+
 //#define CONEMUMSG_UPDATETABS _T("ConEmuMain::UpdateTabs")
 
 #define HT_CONEMUTAB HTBORDER
@@ -76,6 +78,13 @@ class CTabBarClass
 
 	private:
 		CTabPanelBase* mp_Rebar;
+
+	private:
+		CIconList      m_TabIcons;
+	public:
+		int CreateTabIcon(LPCWSTR asIconDescr, bool bAdmin);
+		HIMAGELIST GetTabIcons();
+		int GetTabIcon(bool bAdmin);
 
 	private:
 		bool _active, _visible;
@@ -149,7 +158,6 @@ class CTabBarClass
 		int GetTabbarHeight();
 		void Deactivate(BOOL abPreSyncConsole=FALSE);
 		void RePaint();
-		//void Update(ConEmuTab* tabs, int tabsCount);
 		bool GetRebarClientRect(RECT* rc);
 		void UpdatePosition();
 		void UpdateTabFont();

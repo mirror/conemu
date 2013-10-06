@@ -1,4 +1,3 @@
-\b(mp_tabs|msc_Tabs|mn_tabsCount|mn_MaxTabs)\b
 
 /*
 Copyright (c) 2009-2013 Maximus5
@@ -121,8 +120,8 @@ static BOOL gbInSendConEvent = FALSE;
 
 wchar_t CRealConsole::ms_LastRConStatus[80] = {};
 
-const wchar_t gsCloseGui[] = L"Confirm closing current window?";
-const wchar_t gsCloseCon[] = L"Confirm closing console window?";
+const wchar_t gsCloseGui[] = L"Confirm closing active child window?";
+const wchar_t gsCloseCon[] = L"Confirm closing console?";
 //const wchar_t gsCloseAny[] = L"Confirm closing console?";
 const wchar_t gsCloseEditor[] = L"Confirm closing Far editor?";
 const wchar_t gsCloseViewer[] = L"Confirm closing Far viewer?";
@@ -277,6 +276,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	ZeroStruct(m_ServerClosing);
 	ZeroStruct(m_Args);
 	ms_RootProcessName[0] = 0;
+	mn_RootProcessIcon = -1;
 	mn_LastInvalidateTick = 0;
 
 	hConWnd = NULL;
@@ -332,6 +332,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	_ASSERTE(mb_WasStartDetached == args->bDetached);
 
 	// -- т.к. автопоказ табов может вызвать ресайз - то табы в самом конце инициализации!
+	_ASSERTE(gpConEmu->isMainThread()); // Иначе табы сразу не перетряхнутся
 	SetTabs(NULL,1); // Для начала - показывать вкладку Console, а там ФАР разберется
 	MCHKHEAP;
 
@@ -392,6 +393,7 @@ CRealConsole::~CRealConsole()
 	//if (mp_tabs) Free(mp_tabs);
 	//mp_tabs = NULL;
 	//mn_MaxTabs = 0;
+
 	mn_ActiveTab = 0;
 	mn_tabsCount = 0;
 	m_Tabs.ReleaseTabs(FALSE);
@@ -952,7 +954,7 @@ BOOL CRealConsole::AttachConemuC(HWND ahConWnd, DWORD anConemuC_PID, const CESER
 	// Передернуть нить MonitorThread
 	SetMonitorThreadEvent();
 
-	_ASSERTE((pRet->nBufferHeight == 0) || ((int)pRet->nBufferHeight > rStartStop->sbi.dwSize.X));
+	_ASSERTE((pRet->nBufferHeight == 0) || ((int)pRet->nBufferHeight > (rStartStop->sbi.srWindow.Bottom-rStartStop->sbi.srWindow.Top)));
 
 	return TRUE;
 }
@@ -1272,6 +1274,7 @@ bool CRealConsole::PostString(wchar_t* pszChars, size_t cchCount)
 	}
 
 	bool lbRc = false;
+	bool lbIsFar = isFar();
 	//wchar_t szMsg[128];
 
 	size_t cchSucceeded = 0;
@@ -1294,6 +1297,15 @@ bool CRealConsole::PostString(wchar_t* pszChars, size_t cchCount)
 		}
 
 		TranslateKeyPress(0, 0, *pch, -1, r, r+1);
+		
+		// 130822 - Japanese+iPython - (wVirtualKeyCode!=0) fails with pyreadline
+		if (lbIsFar && (r->EventType == KEY_EVENT) && !r->Event.KeyEvent.wVirtualKeyCode)
+		{
+			// Если в RealConsole валится VK=0, но его фар игнорит
+			r[0].Event.KeyEvent.wVirtualKeyCode = VK_PROCESSKEY;
+			r[1].Event.KeyEvent.wVirtualKeyCode = VK_PROCESSKEY;
+		}
+
 		PackInputRecord(r, pir);
 		PackInputRecord(r+1, pir+1);
 		cchSucceeded += 2;
@@ -1778,18 +1790,6 @@ DWORD CRealConsole::MonitorThread(LPVOID lpParameter)
 	{
 		_ASSERTE(pRCon->mh_MainSrv==NULL);
 
-		#if 1
-
-		//if (!pRCon->mb_ProcessRestarted)
-		//{
-		//	if (!pRCon->PreInit())
-		//	{
-		//		DEBUGSTRPROC(L"### RCon:PreInit failed\n");
-		//		pRCon->SetConStatus(L"RCon:PreInit failed");
-		//		return 0;
-		//	}
-		//}
-
 		// -- pushed to queue from ::Constructor!
 		//// Move all "CreateProcess-es" to Main Thread
 		//gpConEmu->mp_RunQueue->RequestRConStartup(pRCon);
@@ -1807,26 +1807,6 @@ DWORD CRealConsole::MonitorThread(LPVOID lpParameter)
 		UNREFERENCED_PARAMETER(nNumber);
 		#endif
 
-		#else
-
-		pRCon->mb_NeedStartProcess = FALSE;
-
-		if (!pRCon->StartProcess())
-		{
-			wchar_t szErrInfo[128];
-			_wsprintf(szErrInfo, SKIPLEN(countof(szErrInfo)) L"Can't start root process, ErrCode=0x%08X...", GetLastError());
-			DEBUGSTRPROC(L"### Can't start process\n");
-			pRCon->SetConStatus(szErrInfo);
-			return 0;
-		}
-
-		// Если ConEmu был запущен с ключом "/single /cmd xxx" то после окончания
-		// загрузки - сбросить команду, которая пришла из "/cmd" - загрузить настройку
-		if (gpSetCls->SingleInstanceArg == sgl_Enabled)
-		{
-			gpSetCls->ResetCmdArg();
-		}
-		#endif
 	}
 
 	pRCon->mb_WaitingRootStartup = FALSE;
@@ -2666,8 +2646,23 @@ void CRealConsole::PrepareDefaultColors(BYTE& nTextColorIdx, BYTE& nBackColorIdx
 	const Settings::AppSettings* pApp = gpSet->GetAppSettings(GetDefaultAppSettingsId());
 	_ASSERTE(pApp!=NULL);
 
-	nTextColorIdx = pApp->TextColorIdx(); // 0..15,16
-	nBackColorIdx = pApp->BackColorIdx(); // 0..15,16
+	// User choose special palette for this console?
+	const Settings::ColorPalette* pPal = NULL;
+	_ASSERTE(countof(pApp->szPaletteName)>0); // must be array, not pointer
+	LPCWSTR pszPalette = (m_Args.pszPalette && *m_Args.pszPalette) ? m_Args.pszPalette
+		: (pApp->OverridePalette && *pApp->szPaletteName) ? pApp->szPaletteName
+		: NULL;
+	if (pszPalette && pszPalette)
+	{
+		int iPalIdx = gpSet->PaletteGetIndex(pszPalette);
+		if (iPalIdx >= 0)
+		{
+			pPal = gpSet->PaletteGet(iPalIdx);
+		}
+	}
+
+	nTextColorIdx = pPal ? pPal->nTextColorIdx : pApp->TextColorIdx(); // 0..15,16
+	nBackColorIdx = pPal ? pPal->nBackColorIdx : pApp->BackColorIdx(); // 0..15,16
 	if (nTextColorIdx <= 15 || nBackColorIdx <= 15)
 	{
 		if (nTextColorIdx >= 16) nTextColorIdx = 7;
@@ -2691,8 +2686,8 @@ void CRealConsole::PrepareDefaultColors(BYTE& nTextColorIdx, BYTE& nBackColorIdx
 		mn_BackColorIdx = 0;
 	}
 
-	nPopTextColorIdx = pApp->PopTextColorIdx(); // 0..15,16
-	nPopBackColorIdx = pApp->PopBackColorIdx(); // 0..15,16
+	nPopTextColorIdx = pPal ? pPal->nPopTextColorIdx : pApp->PopTextColorIdx(); // 0..15,16
+	nPopBackColorIdx = pPal ? pPal->nPopBackColorIdx : pApp->PopBackColorIdx(); // 0..15,16
 	if (nPopTextColorIdx <= 15 || nPopBackColorIdx <= 15)
 	{
 		if (nPopTextColorIdx >= 16) nPopTextColorIdx = 5;
@@ -2840,12 +2835,12 @@ void CRealConsole::OnStartProcessAllowed()
 		return;
 	}
 
-	// Если ConEmu был запущен с ключом "/single /cmd xxx" то после окончания
-	// загрузки - сбросить команду, которая пришла из "/cmd" - загрузить настройку
-	if (gpSetCls->SingleInstanceArg == sgl_Enabled)
-	{
-		gpSetCls->ResetCmdArg();
-	}
+	//// Если ConEmu был запущен с ключом "/single /cmd xxx" то после окончания
+	//// загрузки - сбросить команду, которая пришла из "/cmd" - загрузить настройку
+	//if (gpSetCls->SingleInstanceArg == sgl_Enabled)
+	//{
+	//	gpSetCls->ResetCmdArg();
+	//}
 }
 
 void CRealConsole::ConHostSearchPrepare()
@@ -3109,7 +3104,7 @@ BOOL CRealConsole::StartProcess()
 	}
 
 	// Prepare cmd line
-	LPCWSTR lpszRawCmd = (m_Args.pszSpecialCmd && *m_Args.pszSpecialCmd) ? m_Args.pszSpecialCmd : gpSet->GetCmd();
+	LPCWSTR lpszRawCmd = (m_Args.pszSpecialCmd && *m_Args.pszSpecialCmd) ? m_Args.pszSpecialCmd : gpSetCls->GetCmd();
 	_ASSERTE(lpszRawCmd && *lpszRawCmd);
 	SafeFree(mpsz_CmdBuffer);
 	mpsz_CmdBuffer = ParseConEmuSubst(lpszRawCmd);
@@ -3485,7 +3480,7 @@ BOOL CRealConsole::StartProcess()
 		{
 			if (psz[_tcslen(psz)-1]!=_T('\n')) _wcscat_c(psz, nErrLen, _T("\n"));
 
-			if (!gpSet->psCurCmd && StrStrI(gpSet->GetCmd(), gpSetCls->GetDefaultCmd())==NULL)
+			if (!gpSetCls->GetCurCmd() && StrStrI(gpSetCls->GetCmd(), gpSetCls->GetDefaultCmd())==NULL)
 			{
 				_wcscat_c(psz, nErrLen, _T("\n\n"));
 				_wcscat_c(psz, nErrLen, _T("Do You want to simply start "));
@@ -3528,8 +3523,12 @@ BOOL CRealConsole::StartProcess()
 		// Выполнить стандартную команду...
 		if (m_Args.pszSpecialCmd == NULL)
 		{
-			_ASSERTE(gpSet->psCurCmd==NULL);
-			gpSet->psCurCmd = lstrdup(gpSetCls->GetDefaultCmd());
+			if (!gpSetCls->GetCurCmd())
+			{
+				Assert(gpSetCls->GetCurCmd()==NULL);
+				wchar_t* pszTmpCmd = lstrdup(gpSetCls->GetDefaultCmd());
+				gpSetCls->SetCurCmd(pszTmpCmd, false);
+			}
 		}
 
 		nStep ++;
@@ -4534,6 +4533,19 @@ void CRealConsole::StopSignal()
 	}
 }
 
+void CRealConsole::StartStopXTerm(DWORD nPID, bool xTerm)
+{
+	if (gpSetCls->isAdvLogging)
+	{
+		wchar_t szInfo[100];
+		_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"StartStopXTerm(nPID=%u, xTerm=%u)", nPID, (UINT)xTerm);
+		LogString(szInfo);
+	}
+
+	m_Term.nCallTermPID = nPID;
+	m_Term.Term = xTerm ? te_xterm : te_win32;
+}
+
 void CRealConsole::StopThread(BOOL abRecreating)
 {
 #ifdef _DEBUG
@@ -5054,14 +5066,16 @@ void CRealConsole::ProcessKeyboard(UINT messg, WPARAM wParam, LPARAM lParam, con
 
 	r.Event.KeyEvent.dwControlKeyState = gpConEmu->GetControlKeyState(lParam);
 
-	if ((mn_LastVKeyPressed == VK_ESCAPE)
-		&& (gpSet->isMapShiftEscToEsc && (gpSet->isMultiMinByEsc == 1))
+	if (mn_LastVKeyPressed == VK_ESCAPE)
+	{
+		if ((gpSet->isMapShiftEscToEsc && (gpSet->isMultiMinByEsc == 1))
 		&& ((r.Event.KeyEvent.dwControlKeyState & ALL_MODIFIERS) == SHIFT_PRESSED))
 	{
 		// When enabled feature "Minimize by Esc always"
 		// we need easy way to send simple "Esc" to console
 		// There is an option for this: Map Shift+Esc to Esc
 		r.Event.KeyEvent.dwControlKeyState &= ~ALL_MODIFIERS;
+	}
 	}
 
 	#ifdef _DEBUG
@@ -5084,6 +5098,73 @@ void CRealConsole::ProcessKeyboard(UINT messg, WPARAM wParam, LPARAM lParam, con
 		//if (dwFarPID)
 		AllowSetForegroundWindow(mn_FarPID);
 		mn_LastSetForegroundPID = mn_FarPID;
+	}
+
+	// Эмуляция терминала?
+	static struct xTermKey {
+		UINT vk;
+		wchar_t szKeys[16];
+	} xTermKeys[] = {
+		// From vim "term.c"
+		{VK_UP,		L"\033O*A"},
+		{VK_DOWN,	L"\033O*B"},
+		{VK_RIGHT,	L"\033O*C"},
+		{VK_LEFT,	L"\033O*D"},
+		{VK_F1,		L"\033[11;*~"},
+		{VK_F2,		L"\033[12;*~"},
+		{VK_F3,		L"\033[13;*~"},
+		{VK_F4,		L"\033[14;*~"},
+		{VK_F5,		L"\033[15;*~"},
+		{VK_F6,		L"\033[17;*~"},
+		{VK_F7,		L"\033[18;*~"},
+		{VK_F8,		L"\033[19;*~"},
+		{VK_F9,		L"\033[20;*~"},
+		{VK_F10,	L"\033[21;*~"},
+		{VK_F11,	L"\033[23;*~"},
+		{VK_F12,	L"\033[24;*~"},
+		{VK_INSERT,	L"\033[2;*~"},
+		{VK_HOME,	L"\033[1;*H"},
+		{VK_END,	L"\033[1;*F"},
+		{VK_PRIOR,	L"\033[5;*~"},
+		{VK_NEXT,	L"\033[6;*~"},
+		{VK_DELETE,	L"\033[3;*~"}, // ???
+		{0}
+	};
+	xTermKey x = {0};
+	if (m_Term.Term)
+	{
+		// Processed keys?
+		
+		for (int i = 0; xTermKeys[i].vk; i++)
+		{
+			if (xTermKeys[i].vk == r.Event.KeyEvent.wVirtualKeyCode)
+			{
+				x = xTermKeys[i];
+				break;
+			}
+		}
+
+		if (x.vk)
+		{
+			if (!isProcessExist(m_Term.nCallTermPID))
+			{
+				StartStopXTerm(0,false/*te_win32*/);
+			}
+			else if (!r.Event.KeyEvent.bKeyDown)
+			{
+				// only key pressed are sent to terminal
+				return;
+			}
+			else
+			{
+				PostString(x.szKeys, _tcslen(x.szKeys));
+				//pszChars = x.szKeys;
+				//r.Event.KeyEvent.wVirtualScanCode = 0;
+				//r.Event.KeyEvent.wVirtualKeyCode = x.szKeys[0]; // VK_ESCAPE?
+				//r.Event.KeyEvent.uChar.UnicodeChar = x.szKeys[0];
+				return;
+			}
+		}
 	}
 
 	PostConsoleEvent(&r);
@@ -5134,7 +5215,8 @@ void CRealConsole::OnKeyboardIme(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lP
 	WORD nShift = 0x8000 & (WORD)GetKeyState(VK_SHIFT);
 
 	r.Event.KeyEvent.wRepeatCount = 1; // Repeat count. Since the first byte and second byte is continuous, this is always 1.
-	r.Event.KeyEvent.wVirtualKeyCode = VK_PROCESSKEY; // В RealConsole валится VK=0, но его фар игнорит
+	// 130822 - Japanese+iPython - (wVirtualKeyCode!=0) fails with pyreadline
+	r.Event.KeyEvent.wVirtualKeyCode = isFar() ? VK_PROCESSKEY : 0; // В RealConsole валится VK=0, но его фар игнорит
 	r.Event.KeyEvent.uChar.UnicodeChar = (wchar_t)wParam;
 	r.Event.KeyEvent.bKeyDown = TRUE; //(messg == WM_KEYDOWN || messg == WM_SYSKEYDOWN);
 	r.Event.KeyEvent.wVirtualScanCode = ((DWORD)lParam & 0xFF0000) >> 16; // 16-23 - Specifies the scan code. The value depends on the OEM.
@@ -5337,7 +5419,7 @@ void CRealConsole::OnServerClosing(DWORD anSrvPID)
 
 bool CRealConsole::isProcessExist(DWORD anPID)
 {
-	if (mn_InRecreate || isDetached() || !ppPrc || !mn_ProcessCount)
+	if (mn_InRecreate || isDetached() || !mn_ProcessCount)
 		return false;
 
 	bool bExist = false;
@@ -5780,7 +5862,14 @@ void CRealConsole::SetFarPID(DWORD nFarPID)
 
 void CRealConsole::SetFarPluginPID(DWORD nFarPluginPID)
 {
+	bool bNeedUpdate = (mn_FarPID_PluginDetected != nFarPluginPID);
 	mn_FarPID_PluginDetected = nFarPluginPID;
+
+	// Для фара могут быть настроены другие параметры фона и прочего...
+	if (bNeedUpdate)
+	{
+		mp_VCon->Update(true);
+	}
 }
 
 // Вернуть PID "условно активного" процесса в консоли
@@ -5828,6 +5917,7 @@ int CRealConsole::GetDefaultAppSettingsId()
 	wchar_t szExe[MAX_PATH+1];
 	wchar_t szName[MAX_PATH+1];
 	LPCWSTR pszTemp = NULL;
+	LPCWSTR pszIconFile = (m_Args.pszIconFile && *m_Args.pszIconFile) ? m_Args.pszIconFile : NULL;
 	bool bAsAdmin = false;
 
 	if (m_Args.pszSpecialCmd)
@@ -5846,7 +5936,7 @@ int CRealConsole::GetDefaultAppSettingsId()
 		// may return task name instead of real command.
 		_ASSERTE(m_Args.pszSpecialCmd && *m_Args.pszSpecialCmd && "Command line must be specified already!");
 
-		lpszCmd = gpSet->GetCmd();
+		lpszCmd = gpSetCls->GetCmd();
 		
 		// May be this is batch?
 		pszBuffer = gpConEmu->LoadConsoleBatch(lpszCmd);
@@ -5866,6 +5956,7 @@ int CRealConsole::GetDefaultAppSettingsId()
 	if (0 == NextArg(&pszTemp, szExe))
 	{
 		pszName = PointToName(szExe);
+
 		pszTemp = (*lpszCmd == L'"') ? NULL : PointToName(lpszCmd);
 		if (pszTemp && (wcschr(pszName, L'.') == NULL) && (wcschr(pszTemp, L'.') != NULL))
 		{
@@ -5873,6 +5964,9 @@ int CRealConsole::GetDefaultAppSettingsId()
 			if (FileExists(lpszCmd))
 				pszName = pszTemp;
 		}
+
+		if (pszName != pszTemp)
+			lpszCmd = szExe;
 	}
 
 	if (!pszName)
@@ -5897,8 +5991,16 @@ int CRealConsole::GetDefaultAppSettingsId()
 	// Done. Get AppDistinct ID
 	iAppId = gpSet->GetAppSettingsId(pszName, bAsAdmin);
 
+	if (!pszIconFile)
+		pszIconFile = lpszCmd;
+
 wrap:
+	// Load (or create) icon for new tab
+	mn_RootProcessIcon = gpConEmu->mp_TabBar->CreateTabIcon(pszIconFile, bAsAdmin);
+	// Fin
 	SafeFree(pszBuffer);
+	if (!*ms_RootProcessName)
+		mn_RootProcessIcon = -1;
 	return iAppId;
 }
 
@@ -6102,7 +6204,8 @@ BOOL CRealConsole::ProcessUpdateFlags(BOOL abProcessChanged)
 		// не мелькали цветные артефакты (пример - вызов ActiveHelp из редактора)
 		lbChanged = TRUE;
 	}
-	mn_FarPID = dwFarPID;
+	//mn_FarPID = dwFarPID;
+	SetFarPID(dwFarPID);
 	
 	if (mn_ActivePID != dwActivePID)
 		SetActivePID(dwActivePID);
@@ -6152,6 +6255,7 @@ BOOL CRealConsole::ProcessUpdate(const DWORD *apPID, UINT anCount)
 	TODO("OPTIMIZE: хорошо бы от секции вообще избавиться, да и не всегда обновлять нужно...");
 	MSectionLock SPRC; SPRC.Lock(&csPRC);
 	BOOL lbRecreateOk = FALSE;
+	bool bIsWin64 = IsWindows64();
 
 	if (mn_InRecreate && mn_ProcessCount == 0)
 	{
@@ -6358,6 +6462,29 @@ BOOL CRealConsole::ProcessUpdate(const DWORD *apPID, UINT anCount)
 								ProcessCheckName(cp, p.szExeFile); //far, telnet, cmd, tcc, conemuc, и пр.
 								cp.Alive = true;
 								cp.inConsole = true;
+
+								bool bIsWowProcess = false;
+								if (bIsWin64)
+								{
+									MODULEENTRY32 mi = {sizeof(mi)};
+									HANDLE hMod = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, cp.ProcessID);
+									DWORD nErrCode = (hMod == INVALID_HANDLE_VALUE) ? GetLastError() : 0;
+									if (hMod != INVALID_HANDLE_VALUE)
+									{
+										if (Module32First(hMod, &mi))
+										{
+											do {
+												if (lstrcmpi(mi.szModule, L"wow64.dll") == 0)
+												{
+													bIsWowProcess = true; break;
+												}
+											} while (Module32Next(hMod, &mi));
+										}
+										SafeCloseHandle(hMod);
+									}
+								}
+
+
 								SPRC.RelockExclusive(300); // Заблокировать, если это еще не сделано
 								m_Processes.push_back(cp);
 							}
@@ -8325,7 +8452,9 @@ void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 			| (tabs[i].Current ? fwt_CurrentFarWnd : fwt_Any)
 			| (tabs[i].Modal ? fwt_ModalFarWnd : fwt_Any);
 
-		if (m_Tabs.UpdateFarWindow(hUpdate, mp_VCon, tabs[i].Name, TypeAndFlags, int anPID, tabs[i].Pos, tabs[i].EditViewId))
+		int nPID = ((TypeAndFlags & (fwt_ModalFarWnd|fwt_Editor|fwt_Viewer)) != 0) ? GetFarPID() : 0;
+
+		if (m_Tabs.UpdateFarWindow(hUpdate, mp_VCon, tabs[i].Name, TypeAndFlags, nPID, tabs[i].Pos, tabs[i].EditViewId))
 			mb_TabsWasChanged = true;
 	}
 
@@ -8660,6 +8789,11 @@ void CRealConsole::RenameWindow(LPCWSTR asNewWindowText /*= NULL*/)
 	}
 }
 
+int CRealConsole::GetRootProcessIcon()
+{
+	return gpSet->isTabIcons ? mn_RootProcessIcon : -1;
+}
+
 int CRealConsole::GetTabCount(BOOL abVisibleOnly /*= FALSE*/)
 {
 	if (!this)
@@ -8728,10 +8862,10 @@ CEFarWindowType CRealConsole::GetActiveTabType()
 		int iModal = -1;
 		for (int i = 0; i < mn_tabsCount; i++)
 		{
-			if (m_Tabs.GetTabInfoByIndex(i, Info) && (Info.Type & fwt_ModalFarWnd))
+			if (m_Tabs.GetTabInfoByIndex(i, rInfo) && (rInfo.Type & fwt_ModalFarWnd))
 			{
 				iModal = i;
-				nType = Info.Type;
+				nType = rInfo.Type;
 				break;
 			}
 		}
@@ -8739,9 +8873,9 @@ CEFarWindowType CRealConsole::GetActiveTabType()
 		if (iModal == -1)
 		{
 			int iActive = GetActiveTab();
-			if (m_Tabs.GetTabInfoByIndex(iActive, Info))
+			if (m_Tabs.GetTabInfoByIndex(iActive, rInfo))
 			{
-				nType = Info.Type;
+				nType = rInfo.Type;
 			}
 		}
 	}
@@ -10443,7 +10577,7 @@ LPCWSTR CRealConsole::GetCmd()
 	if (m_Args.pszSpecialCmd)
 		return m_Args.pszSpecialCmd;
 	else
-		return gpSet->GetCmd();
+		return gpSetCls->GetCmd();
 }
 
 LPCWSTR CRealConsole::GetDir()

@@ -474,10 +474,10 @@ HWND CTabPanelWin::CreateTabbar()
 	if (mh_Tabbar)
 		return mh_Tabbar; // Уже создали
 
-	if (!m_TabIcons.IsInitialized())
-	{
-		InitIconList();
-	}
+	//if (!m_TabIcons.IsInitialized())
+	//{
+	//	InitIconList();
+	//}
 
 	// Важно проверку делать после создания главного окна, иначе IsAppThemed будет возвращать FALSE
 	BOOL bAppThemed = FALSE, bThemeActive = FALSE;
@@ -536,7 +536,7 @@ HWND CTabPanelWin::CreateTabbar()
 	gp_TabPanelWinMap->Set(mh_Tabbar, map);
 
 
-	SendMessage(mh_Tabbar, TCM_SETIMAGELIST, 0, (LPARAM)(HIMAGELIST)m_TabIcons);
+	SendMessage(mh_Tabbar, TCM_SETIMAGELIST, 0, (LPARAM)mp_Owner->GetTabIcons());
 
 	if (!mh_TabTip || !IsWindow(mh_TabTip))
 		InitTooltips(mh_Tabbar);
@@ -809,11 +809,11 @@ void CTabPanelWin::AddTabInt(LPCWSTR text, int i, bool bAdmin)
 	if (!IsTabbarCreated())
 		return;
 
-	int iIconIdx = GetTabIcon(bAdmin);
+	int iIconIdx = mp_Owner->GetTabIcon(bAdmin);
 
 	TCITEM tie;
 	// иконку обновляем всегда. она может измениться для таба
-	tie.mask = TCIF_TEXT | (m_TabIcons.IsInitialized() ? TCIF_IMAGE : 0);
+	tie.mask = TCIF_TEXT | (mp_Owner->GetTabIcons() ? TCIF_IMAGE : 0);
 	tie.iImage = -1;
 	tie.pszText = (LPWSTR)text ;
 	tie.iImage = iIconIdx; // Пока иконка только одна - для табов со щитом

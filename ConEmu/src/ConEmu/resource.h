@@ -11,6 +11,7 @@
 #define IDB_SCROLL                      104
 #define IDB_COPY4                       105
 #define IDB_COPY24                      106
+#define IDB_SHIELD16                    107
 #define IDC_COPY                        120
 #define IDC_LINK                        121
 #define IDC_MOVE                        122
@@ -957,6 +958,10 @@
 #define cbActionBtn3                    2620
 #define vkCloseGroupPrc                 2621
 #define cbConsoleExceptionHandler       2622
+#define lbStorageLocation               2623
+#define vkMultiNewPopup2                2624
+#define vkCloseAllCon                   2625
+#define vkCloseExceptCon                2626
 
 // Next default values for new objects
 // 
@@ -964,7 +969,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        222
 #define _APS_NEXT_COMMAND_VALUE         40010
-#define _APS_NEXT_CONTROL_VALUE         2623
+#define _APS_NEXT_CONTROL_VALUE         2627
 #define _APS_NEXT_SYMED_VALUE           130
 #endif
 #endif

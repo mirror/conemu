@@ -625,7 +625,7 @@ DWORD ConEmuHotKey::GetHotkey(DWORD VkMod)
 
 bool ConEmuHotKey::UseWinNumber()
 {
-	return gpSet->isMulti && gpSet->isUseWinNumber;
+	return gpSetCls->IsMulti() && gpSet->isUseWinNumber;
 }
 
 bool ConEmuHotKey::UseWinArrows()
@@ -648,6 +648,11 @@ bool ConEmuHotKey::UseCTSShiftArrow()
 		return false;
 
 	return pApp->CTSShiftArrowStart();
+}
+
+bool ConEmuHotKey::UseCtrlTab()
+{
+	return gpSet->isTabSelf;
 }
 
 bool ConEmuHotKey::DontHookJumps(const ConEmuHotKey* pHK)
@@ -704,6 +709,8 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkSplitSizeVdown, chk_User,  NULL,    L"Multi.SplitSizeVD",     MakeHotKey(VK_DOWN,VK_APPS,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Split(1,0,1)")},
 		{vkSplitSizeHleft, chk_User,  NULL,    L"Multi.SplitSizeHL",     MakeHotKey(VK_LEFT,VK_APPS,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Split(1,-1,0)")},
 		{vkSplitSizeHright,chk_User,  NULL,    L"Multi.SplitSizeHR",     MakeHotKey(VK_RIGHT,VK_APPS,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Split(1,1,0)")},
+		{vkTabPane,        chk_User,  NULL,    L"Key.TabPane1",          MakeHotKey(VK_TAB,VK_APPS), CConEmuCtrl::key_GuiMacro, false/*OnKeyUp*/, lstrdup(L"Tab(10,1)")}, // Next visible pane
+		{vkTabPaneShift,   chk_User,  NULL,    L"Key.TabPane2",          MakeHotKey(VK_TAB,VK_APPS,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false/*OnKeyUp*/, lstrdup(L"Tab(10,-1)")}, // Prev visible pane
 		{vkSplitFocusUp,   chk_User,  NULL,    L"Multi.SplitFocusU",     MakeHotKey(VK_UP,VK_APPS), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Split(2,0,-1)")},
 		{vkSplitFocusDown, chk_User,  NULL,    L"Multi.SplitFocusD",     MakeHotKey(VK_DOWN,VK_APPS), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Split(2,0,1)")},
 		{vkSplitFocusLeft, chk_User,  NULL,    L"Multi.SplitFocusL",     MakeHotKey(VK_LEFT,VK_APPS), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Split(2,-1,0)")},
@@ -712,6 +719,7 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkMultiNew,       chk_User,  NULL,    L"Multi.NewConsole",      MakeHotKey('W',VK_LWIN), CConEmuCtrl::key_MultiNew},
 		{vkMultiNewShift,  chk_User,  NULL,    L"Multi.NewConsoleShift", MakeHotKey('W',VK_LWIN,VK_SHIFT), CConEmuCtrl::key_MultiNewShift},
 		{vkMultiNewPopup,  chk_User,  NULL,    L"Multi.NewConsolePopup", MakeHotKey('N',VK_LWIN), CConEmuCtrl::key_MultiNewPopupMenu},
+		{vkMultiNewPopup2, chk_User,  NULL,    L"Multi.NewConsolePopup2", 0, CConEmuCtrl::key_MultiNewPopupMenu2},
 		{vkMultiNewWnd,    chk_User,  NULL,    L"Multi.NewWindow",       0, CConEmuCtrl::key_MultiNewWindow},
 		{vkMultiNewAttach, chk_User,  NULL,    L"Multi.NewAttach",       MakeHotKey('G',VK_LWIN), CConEmuCtrl::key_MultiNewAttach, true/*OnKeyUp*/},
 		{vkMultiNext,      chk_User,  NULL,    L"Multi.Next",            /*&vmMultiNext,*/ MakeHotKey('Q',VK_LWIN), CConEmuCtrl::key_MultiNext},
@@ -723,6 +731,8 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkCloseTab,       chk_User,  NULL,    L"CloseTabKey",           MakeHotKey(VK_DELETE,VK_LWIN,VK_MENU), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Close(6)")},
 		{vkCloseGroup,     chk_User,  NULL,    L"CloseGroupKey",         0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Close(4)")},
 		{vkCloseGroupPrc,  chk_User,  NULL,    L"CloseGroupPrcKey",      0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Close(7)")},
+		{vkCloseAllCon,    chk_User,  NULL,    L"CloseAllConKey",        0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Close(8)")},
+		{vkCloseExceptCon, chk_User,  NULL,    L"CloseExceptConKey",     0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Close(5)")},
 		{vkTerminateApp,   chk_User,  NULL,    L"TerminateProcessKey",   MakeHotKey(VK_DELETE,VK_LWIN,VK_SHIFT), CConEmuCtrl::key_TerminateProcess/*sort of Close*/},
 		{vkDuplicateRoot,  chk_User,  NULL,    L"DuplicateRootKey",      0, CConEmuCtrl::key_DuplicateRoot},
 		//{vkDuplicateRootAs,chk_User,  NULL,    L"DuplicateRootAsKey",    0, CConEmuCtrl::key_DuplicateRootAs},
@@ -748,8 +758,6 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkAlwaysOnTop,    chk_User,  NULL,    L"AlwaysOnTopKey",        0, CConEmuCtrl::key_AlwaysOnTop},
 		{vkTabMenu,        chk_User,  NULL,    L"Key.TabMenu",           MakeHotKey(VK_SPACE,VK_APPS), CConEmuCtrl::key_TabMenu, true/*OnKeyUp*/}, // Tab menu
 		{vkTabMenu2,       chk_User,  NULL,    L"Key.TabMenu2",          MakeHotKey(VK_RBUTTON,VK_SHIFT), CConEmuCtrl::key_TabMenu, true/*OnKeyUp*/}, // Tab menu
-		{vkTabPane,        chk_User,  NULL,    L"Key.TabPane1",          MakeHotKey(VK_TAB,VK_APPS), CConEmuCtrl::key_GuiMacro, false/*OnKeyUp*/, lstrdup(L"Tab(10,1)")}, // Next visible pane
-		{vkTabPaneShift,   chk_User,  NULL,    L"Key.TabPane2",          MakeHotKey(VK_TAB,VK_APPS,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false/*OnKeyUp*/, lstrdup(L"Tab(10,-1)")}, // Prev visible pane
 		{vkAltF9,          chk_User,  NULL,    L"Key.Maximize",          MakeHotKey(VK_F9,VK_MENU), CConEmuCtrl::key_AltF9}, // Maximize window
 		{vkAltEnter,       chk_User,  NULL,    L"Key.FullScreen",        MakeHotKey(VK_RETURN,VK_MENU), CConEmuCtrl::key_AltEnter}, // Full screen
 		{vkSystemMenu,     chk_User,  NULL,    L"Key.SysMenu",           MakeHotKey(VK_SPACE,VK_MENU), CConEmuCtrl::key_SystemMenu, true/*OnKeyUp*/}, // System menu
@@ -819,8 +827,8 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkWinAltSpace,    chk_System, NULL, L"", MakeHotKey(VK_SPACE,VK_LWIN,VK_MENU), CConEmuCtrl::key_SystemMenu, true/*OnKeyUp*/}, // System menu
 		{vkCtrlWinAltSpace,chk_System, NULL, L"", MakeHotKey(VK_SPACE,VK_CONTROL,VK_LWIN,VK_MENU), CConEmuCtrl::key_ShowRealConsole}, // Show real console
 		{vkCtrlWinEnter,   chk_System, NULL, L"", MakeHotKey(VK_RETURN,VK_LWIN,VK_CONTROL), CConEmuCtrl::key_FullScreen},
-		{vkCtrlTab,        chk_System, NULL, L"", MakeHotKey(VK_TAB,VK_CONTROL), CConEmuCtrl::key_CtrlTab}, // Tab switch
-		{vkCtrlShiftTab,   chk_System, NULL, L"", MakeHotKey(VK_TAB,VK_CONTROL,VK_SHIFT), CConEmuCtrl::key_CtrlShiftTab}, // Tab switch
+		{vkCtrlTab,        chk_System, UseCtrlTab, L"", MakeHotKey(VK_TAB,VK_CONTROL), CConEmuCtrl::key_CtrlTab}, // Tab switch
+		{vkCtrlShiftTab,   chk_System, UseCtrlTab, L"", MakeHotKey(VK_TAB,VK_CONTROL,VK_SHIFT), CConEmuCtrl::key_CtrlShiftTab}, // Tab switch
 		{vkCtrlTab_Left,   chk_System, NULL, L"", MakeHotKey(VK_LEFT,VK_CONTROL), CConEmuCtrl::key_CtrlTab_Prev}, // Tab switch
 		{vkCtrlTab_Up,     chk_System, NULL, L"", MakeHotKey(VK_UP,VK_CONTROL), CConEmuCtrl::key_CtrlTab_Prev}, // Tab switch
 		{vkCtrlTab_Right,  chk_System, NULL, L"", MakeHotKey(VK_RIGHT,VK_CONTROL), CConEmuCtrl::key_CtrlTab_Next}, // Tab switch

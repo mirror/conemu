@@ -118,8 +118,12 @@ OSVERSIONINFO gOSVer = {};
 WORD gnOsVer = 0x500;
 bool gbIsWine = false;
 bool gbIsDBCS = false;
+// Drawing console font face name (default)
 wchar_t gsDefGuiFont[32] = L"Lucida Console"; // gbIsWine ? L"Liberation Mono" : L"Lucida Console"
+// Set this font (default) in real console window to enable unicode support
 wchar_t gsDefConFont[32] = L"Lucida Console"; // DBCS ? L"Liberation Mono" : L"Lucida Console"
+// Use this (default) in ConEmu interface, where allowed (tabs, status, panel views, ...)
+wchar_t gsDefMUIFont[32] = L"Tahoma";         // WindowsVista ? L"Segoe UI" : L"Tahoma"
 
 
 #ifdef MSGLOGGER
@@ -2779,7 +2783,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	gbIsWine = IsWine(); // В общем случае, на флажок ориентироваться нельзя. Это для информации.
 	if (gbIsWine)
+	{
 		wcscpy_c(gsDefGuiFont, L"Liberation Mono");
+	}
+	else if (IsWindowsVista)
+	{
+		// Vista+ and ClearType? May be "Consolas" font need to be default in Console.
+		BOOL bClearType = FALSE;
+		if (SystemParametersInfo(SPI_GETCLEARTYPE, 0, &bClearType, 0) && bClearType)
+		{
+			wcscpy_c(gsDefGuiFont, L"Consolas");
+		}
+		// Default UI?
+		wcscpy_c(gsDefMUIFont, L"Segoe UI");
+	}
+
 
 	gbIsDBCS = IsDbcs();
 	if (gbIsDBCS)
@@ -3416,6 +3434,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				{
 					ResetSettings = true;
 				}
+				else if (!klstricmp(curCommand, _T("/basic")))
+				{
+					ResetSettings = true;
+					gpSetCls->isResetBasicSettings = true;
+				}
 				//else if ( !klstricmp(curCommand, _T("/DontSetParent")) || !klstricmp(curCommand, _T("/Windows7")) )
 				//{
 				//    setParentDisabled = true;
@@ -3718,7 +3741,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 	if (MultiConPrm)
-		gpSet->isMulti = MultiConValue;
+		gpSet->mb_isMulti = MultiConValue;
 
 	if (VisValue)
 		gpSet->isConVisible = VisPrm;
@@ -3726,7 +3749,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	// Если запускается conman (нафига?) - принудительно включить флажок "Обновлять handle"
 	//TODO("Deprecated: isUpdConHandle использоваться не должен");
 
-	if (gpSet->isMulti || StrStrI(gpSet->GetCmd(), L"conman.exe"))
+	if (gpSetCls->IsMulti() || StrStrI(gpSetCls->GetCmd(), L"conman.exe"))
 	{
 		//gpSet->isUpdConHandle = TRUE;
 
@@ -3829,12 +3852,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 
 		MCHKHEAP
-		// могло быть создано в gpSet->GetCmd()
-		SafeFree(gpSet->psCurCmd);
 
 		// Запоминаем
-		gpSet->psCurCmd = pszReady; pszReady = NULL;
-		gpSet->isCurCmdList = isScript;
+		gpSetCls->SetCurCmd(pszReady, isScript);
 	}
 
 	//if (FontFilePrm) {

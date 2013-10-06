@@ -66,7 +66,13 @@ class CSettings
 		LPCWSTR GetConfigName();
 		void SetConfigName(LPCWSTR asConfigName);
 
+		// Для отладочных целей.
+		bool isResetBasicSettings;
+
 		wchar_t szFontError[512];
+
+		bool IsMulti();
+		RecreateActionParm GetDefaultCreateAction();
 
 		SingleInstanceArgEnum SingleInstanceArg; // по умолчанию = sgl_Default, но для Quake переключается на = sgl_Enabled
 		bool IsSingleInstanceArg();
@@ -88,6 +94,7 @@ class CSettings
 		LPCWSTR FontFaceName();
 		LONG FontWidth();
 		LONG FontHeight();
+		LONG FontHeightPx();
 		LPCWSTR BorderFontFaceName();
 		LONG BorderFontWidth();
 		BYTE FontCharSet();
@@ -145,10 +152,16 @@ class CSettings
 		//LPTSTR psCurCmd;
 	private:
 		/* 'Default' command line (if nor Registry, nor /cmd specified) */
-		WCHAR  szDefCmd[MAX_PATH+32];
+		wchar_t  szDefCmd[MAX_PATH+32];
+		/* Current command line, specified with "/cmd" or "/cmdlist" switches */
+		wchar_t* pszCurCmd;
+		bool isCurCmdList; // а это если был указан /cmdlist
 	public:
+		/* Store/retrieve command line, specified with "/cmd" or "/cmdlist" switches */
+		void SetCurCmd(wchar_t*& pszNewCmd, bool bIsCmdList);
+		LPCTSTR GetCurCmd(bool *pIsCmdList = NULL);
 		/* "Active" command line */
-		//LPCTSTR GetCmd();
+		LPCTSTR GetCmd(bool *pIsCmdList = NULL, bool bNoTask = false);
 		/* "Default" command line "far/cmd", based on /BufferHeight switch */
 		LPCTSTR GetDefaultCmd();
 		void    SetDefaultCmd(LPCWSTR asCmd);
@@ -313,7 +326,7 @@ class CSettings
 		void RegisterFonts();
 	private:
 		void RegisterFontsInt(LPCWSTR asFromDir);
-		void ApplyStartupOptions();
+		//void ApplyStartupOptions();
 	public:
 		enum ShellIntegrType
 		{
@@ -361,6 +374,8 @@ class CSettings
 		static void ShowConFontErrorTip(LPCTSTR asInfo);
 		LPCWSTR CreateConFontError(LPCWSTR asReqFont=NULL, LPCWSTR asGotFont=NULL);
 		TOOLINFO tiConFontBalloon;
+		int _dpiY;
+		int UpdateDpi();
 	private:
 		static void ShowErrorTip(LPCTSTR asInfo, HWND hDlg, int nCtrlID, wchar_t* pszBuffer, int nBufferSize, HWND hBall, TOOLINFO *pti, HWND hTip, DWORD nTimeout, bool bLeftAligh = false);
 	protected:

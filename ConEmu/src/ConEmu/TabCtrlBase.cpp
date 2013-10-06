@@ -114,10 +114,10 @@ void CTabPanelBase::ShowTabErrorInt(LPCTSTR asInfo, int tabIndex)
 	}
 }
 
-int CTabPanelBase::GetTabIcon(bool bAdmin)
-{
-	return m_TabIcons.GetTabIcon(bAdmin);
-}
+//int CTabPanelBase::GetTabIcon(bool bAdmin)
+//{
+//	return m_TabIcons.GetTabIcon(bAdmin);
+//}
 
 LRESULT CTabPanelBase::OnTimerInt(WPARAM wParam)
 {
@@ -130,13 +130,13 @@ LRESULT CTabPanelBase::OnTimerInt(WPARAM wParam)
 	return 0;
 }
 
-void CTabPanelBase::InitIconList()
-{
-	if (!m_TabIcons.IsInitialized())
-	{
-		m_TabIcons.Initialized();
-	}
-}
+//void CTabPanelBase::InitIconList()
+//{
+//	if (!m_TabIcons.IsInitialized())
+//	{
+//		m_TabIcons.Initialize();
+//	}
+//}
 
 void CTabPanelBase::InitTooltips(HWND hParent)
 {

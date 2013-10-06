@@ -90,7 +90,7 @@ private:
 	CVConGroup* SplitVConGroup(RConStartArgs::SplitType aSplitType = RConStartArgs::eSplitHorz/*eSplitVert*/, UINT anPercent10 = 500);
 	int GetGroupPanes(MArray<CVConGuard*>* rPanes);
 	static void FreePanesArray(MArray<CVConGuard*> &rPanes);
-	static bool CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/, bool bForceKill = false);
+	static bool CloseQuery(MArray<CVConGuard*>* rpPanes, bool* rbMsgConfirmed /*= NULL*/, bool bForceKill = false, bool bNoGroup = false);
 	
 	CVConGroup(CVConGroup *apParent);
 
@@ -192,7 +192,7 @@ public:
 	static void SyncWindowToConsole(); // -- функция пустая, игнорируется
 	static void SyncConsoleToWindow(LPRECT prcNewWnd=NULL, bool bSync=false);
 	static void LockSyncConsoleToWindow(bool abLockSync);
-	static void SetAllConsoleWindowsSize(COORD size, bool bSetRedraw /*= false*/);
+	static void SetAllConsoleWindowsSize(RECT rcWnd, enum ConEmuRect tFrom /*= CER_MAIN or CER_MAINCLIENT*/, COORD size, bool bSetRedraw /*= false*/);
 	static void SyncAllConsoles2Window(RECT rcWnd, enum ConEmuRect tFrom = CER_MAIN, bool bSetRedraw = false);
 	static void OnConsoleResize(bool abSizingToDo);
 	static void ReSizePanes(RECT mainClient);

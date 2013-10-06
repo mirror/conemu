@@ -709,7 +709,8 @@ CESERVER_REQ* CRealServer::cmdTabsChanged(LPVOID pInst, CESERVER_REQ* pIn, UINT 
 					mp_RCon->m_FarPlugPIDs[i] = 0;
 			}
 
-			mp_RCon->mn_FarPID_PluginDetected = mp_RCon->mn_FarPID = 0;
+			mp_RCon->SetFarPID(0);
+			mp_RCon->SetFarPluginPID(0);
 			mp_RCon->CloseFarMapData();
 
 			if (mp_RCon->isActive()) gpConEmu->UpdateProcessDisplay(FALSE);  // обновить PID в окне настройки
@@ -984,7 +985,7 @@ CESERVER_REQ* CRealServer::cmdResources(LPVOID pInst, CESERVER_REQ* pIn, UINT nD
 	}
 
 	// Запомним, что в фаре есть плагин
-	mp_RCon->mn_FarPID_PluginDetected = nPID;
+	mp_RCon->SetFarPluginPID(nPID);
 	mp_RCon->OpenFarMapData(); // переоткроет мэппинг с информацией о фаре
 	// Разрешить мониторинг PID фара в MonitorThread (оно будет переоткрывать mp_RCon->OpenFarMapData)
 	mp_RCon->mb_SkipFarPidChange = FALSE;
@@ -1414,6 +1415,21 @@ CESERVER_REQ* CRealServer::cmdExportEnvVarAll(LPVOID pInst, CESERVER_REQ* pIn, U
 	return pOut;
 }
 
+CESERVER_REQ* CRealServer::cmdStartXTerm(LPVOID pInst, CESERVER_REQ* pIn, UINT nDataSize)
+{
+	DWORD nCmd = pIn->hdr.nCmd;
+	DEBUGSTRCMD(L"GUI recieved CECMD_STARTXTERM\n");
+
+	// В свой процесс тоже засосать переменные, чтобы для новых табов применялись
+	mp_RCon->StartStopXTerm(pIn->hdr.nSrcPID, (pIn->dwData[0] != 0));
+
+	// pIn->hdr.nCmd перебивается на CECMD_EXPORTVARS, поэтому возвращаем сохраненный ID
+	CESERVER_REQ* pOut = ExecuteNewCmd(nCmd, sizeof(CESERVER_REQ_HDR)+sizeof(DWORD));
+	if (pOut)
+		pOut->dwData[0] = TRUE;
+	return pOut;
+}
+
 // Эта функция пайп не закрывает!
 //void CRealServer::ServerThreadCommand(HANDLE hPipe)
 BOOL CRealServer::ServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ* &ppReply, DWORD &pcbReplySize, DWORD &pcbMaxReplySize, LPARAM lParam)
@@ -1518,6 +1534,9 @@ BOOL CRealServer::ServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ* &
 	case CECMD_EXPORTVARS:
 	case CECMD_EXPORTVARSALL:
 		pOut = pRSrv->cmdExportEnvVarAll(pInst, pIn, nDataSize);
+		break;
+	case CECMD_STARTXTERM:
+		pOut = pRSrv->cmdStartXTerm(pInst, pIn, nDataSize);
 		break;
 	//else if (pIn->hdr.nCmd == CECMD_ASSERT)
 	//	pOut = cmdAssert(pInst, pIn, nDataSize);

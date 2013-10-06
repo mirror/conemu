@@ -62,6 +62,8 @@ bool SettingsRegistry::OpenKey(HKEY inHKEY, const wchar_t *regPath, uint access,
 {
 	bool res = false;
 
+	_ASSERTE(!gpConEmu->IsResetBasicSettings() || !(access & KEY_WRITE) || !lstrcmpi(regPath, L"Software\\Microsoft\\Command Processor"));
+
 	if ((access & KEY_WRITE) == KEY_WRITE)
 		res = RegCreateKeyEx(inHKEY, regPath, 0, NULL, 0, access, 0, &regMy, 0) == ERROR_SUCCESS;
 	else
@@ -213,6 +215,8 @@ SettingsINI::~SettingsINI()
 
 bool SettingsINI::OpenKey(const wchar_t *regPath, uint access, BOOL abSilent /*= FALSE*/)
 {
+	_ASSERTE(!gpConEmu->IsResetBasicSettings() || !(access & KEY_WRITE));
+
 	SafeFree(mpsz_Section);
 
 	if (!regPath || !*regPath)
@@ -392,20 +396,36 @@ IXMLDOMDocument* SettingsXML::CreateDomDocument(wchar_t* pszErr /*= NULL*/, size
 		if (!hMsXml3)
 		{
 			wchar_t szDll[MAX_PATH+16];
+			struct FindPlaces { LPCWSTR sDir, sSlash; } findPlaces[] = {
+				{gpConEmu->ms_ConEmuExeDir,  L"\\"},
+				{gpConEmu->ms_ConEmuBaseDir, L"\\"},
+				{L"", L""}, {NULL}};
 
-			_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s\\msxml3.dll", gpConEmu->ms_ConEmuExeDir);
-			hMsXml3 = LoadLibrary(szDll);
-			hFact = hMsXml3 ? 0 : (HRESULT)GetLastError();
-
-			if (!hMsXml3 
-				&& (((DWORD)hFact) == ERROR_MOD_NOT_FOUND
-					|| ((DWORD)hFact) == ERROR_BAD_EXE_FORMAT
-					|| ((DWORD)hFact) == ERROR_FILE_NOT_FOUND))
+			for (FindPlaces* fp = findPlaces; fp->sDir; fp++)
 			{
-				_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s\\msxml3.dll", gpConEmu->ms_ConEmuBaseDir);
+				_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s%smsxml3.dll", fp->sDir, fp->sSlash);
 				hMsXml3 = LoadLibrary(szDll);
 				hFact = hMsXml3 ? 0 : (HRESULT)GetLastError();
+				if (hMsXml3)
+					break;
+			//if (!hMsXml3 
+			//	&& (((DWORD)hFact) == ERROR_MOD_NOT_FOUND
+			//		|| ((DWORD)hFact) == ERROR_BAD_EXE_FORMAT
+			//		|| ((DWORD)hFact) == ERROR_FILE_NOT_FOUND))
 			}
+
+			//_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s\\msxml3.dll", gpConEmu->ms_ConEmuExeDir);
+			//hMsXml3 = LoadLibrary(szDll);
+			//hFact = hMsXml3 ? 0 : (HRESULT)GetLastError();
+			//if (!hMsXml3 
+			//	&& (((DWORD)hFact) == ERROR_MOD_NOT_FOUND
+			//		|| ((DWORD)hFact) == ERROR_BAD_EXE_FORMAT
+			//		|| ((DWORD)hFact) == ERROR_FILE_NOT_FOUND))
+			//{
+			//	_wsprintf(szDll, SKIPLEN(countof(szDll)) L"%s\\msxml3.dll", gpConEmu->ms_ConEmuBaseDir);
+			//	hMsXml3 = LoadLibrary(szDll);
+			//	hFact = hMsXml3 ? 0 : (HRESULT)GetLastError();
+			//}
 
 			if (!hMsXml3)
 			{
@@ -486,6 +506,8 @@ bool SettingsXML::IsXmlAllowed()
 
 bool SettingsXML::OpenKey(const wchar_t *regPath, uint access, BOOL abSilent /*= FALSE*/)
 {
+	_ASSERTE(!gpConEmu->IsResetBasicSettings() || !(access & KEY_WRITE));
+
 	bool lbRc = false;
 	HRESULT hr = S_OK;
 	wchar_t szErr[512]; szErr[0] = 0;

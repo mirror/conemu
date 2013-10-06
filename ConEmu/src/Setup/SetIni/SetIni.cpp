@@ -141,6 +141,48 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 			}
 			bRc = true;
 		}
+		else if (lstrcmpi(szArg, L"ver") == 0)
+		{
+			if (
+				NextArg(&pszCmdToken, szIni) || !*szIni
+				|| NextArg(&pszCmdToken, szSection) || !*szSection
+				|| NextArg(&pszCmdToken, szKey) || !*szKey
+				|| NextArg(&pszCmdToken, szValue) || !*szValue
+				)
+			{
+				return ReportError(31, L"Invalid command line\nUsage: SetIni ver <ini-file> <section> <key-name> <buildno>\n", NULL);
+			}
+			wchar_t* psz;
+			DWORD ulDate = wcstoul(szValue, &psz, 10);
+			if (ulDate)
+			{
+				SYSTEMTIME st = {0}; int iMinor = 0;
+
+				st.wDay = ulDate%100; ulDate = (ulDate - (ulDate%100)) / 100;
+				st.wMonth = ulDate%100; ulDate = (ulDate - (ulDate%100)) / 100;
+				st.wYear = ulDate%100;
+
+				if (psz && (*psz >= L'a' && *psz <= L'z'))
+				{
+					iMinor = (*psz - L'a' + 1);
+					if (iMinor < 0) iMinor = 0; else if (iMinor > 9) iMinor = 9;
+				}
+
+				wsprintfW(szFull, L"%u.%u.%u.%u", st.wYear % 100, st.wMonth, st.wDay, iMinor);
+
+				wsprintfW(szInfo, L"[%s]\n%s=%s\n", szSection, szKey, szFull);
+				Write(szInfo);
+				if (!WritePrivateProfileStringW(szSection, szKey, szFull, szIni))
+				{
+					return ReportError(21, L"WritePrivateProfileString failed, Key=%s\n", szKey);
+				}
+				bRc = true;
+			}
+			else
+			{
+				return ReportError(31, L"Invalid command line\nUsage: SetIni ver <ini-file> <section> <key-name> <buildno>\n", NULL);
+			}
+		}
 		else if (lstrcmpi(szArg, L"crc") == 0)
 		{
 			if (
@@ -196,6 +238,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 		return ReportError(21, 
 			L"Invalid command line\n"
 			L"Usage: SetIni set <ini-file> <section> <key-name> <value>\n"
+			L"   or: SetIni ver <ini-file> <section> <key-name> <buildno>\n"
 			L"   or: SetIni crc <ini-file> <section> <key-name> <src-file> <url>\n"
 			, NULL);
 	}

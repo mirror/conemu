@@ -144,7 +144,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define MAX_CMD_HISTORY 100
 #define MAX_CMD_HISTORY_SHOW 16
-#define MAX_CMD_GROUP_SHOW 16
+#define MAX_CMD_GROUP_SHOW 10
 
 #define MAX_RENAME_TAB_LEN 128
 
@@ -323,6 +323,7 @@ struct SettingsStorage
 #include "../common/WinObjects.h"
 
 #define IsWindowsXP ((gOSVer.dwMajorVersion >= 6) || (gOSVer.dwMajorVersion == 5 && gOSVer.dwMinorVersion > 0))
+#define IsWindowsVista (gOSVer.dwMajorVersion >= 6)
 #define IsWindows7 ((gOSVer.dwMajorVersion > 6) || (gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion > 0))
 #define IsWindows8 ((gOSVer.dwMajorVersion > 6) || (gOSVer.dwMajorVersion == 6 && gOSVer.dwMinorVersion > 1))
 
@@ -431,8 +432,8 @@ enum TrackMenuPlace
 	tmp_None = 0,
 	tmp_System,
 	tmp_VCon,
-	tmp_Cmd,
-	tmp_CmdPopup,
+	tmp_Cmd, // Tasks & Last commands
+	tmp_CmdPopup, // Task contents (RClick) -- 4del
 	tmp_KeyBar,
 	tmp_TabsList,
 	tmp_PasteCmdLine,
@@ -694,3 +695,5 @@ typedef struct tagMYRGB
 #define AutoStartTaskName L"<Startup>"
 
 bool NextLine(const wchar_t*& pszFrom, wchar_t** pszLine);
+
+#include "TabID.h"

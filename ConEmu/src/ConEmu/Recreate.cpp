@@ -186,7 +186,8 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 			                 ? pArgs->pszSpecialCmd
 			                 : pRCon ? pRCon->GetCmd() : NULL;
 
-			LPCWSTR pszSystem = gpSet->GetCmd();
+			// В диалоге запуска новой консоли - нечего делать автостартующему таску?
+			LPCWSTR pszSystem = gpSetCls->GetCmd(NULL, true);
 
 			if (pArgs->aRecreate == cra_RecreateTab)
 			{
@@ -202,7 +203,8 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 			}
 			else
 			{
-				SetDlgItemText(hDlg, IDC_RESTART_CMD, pArgs->pszSpecialCmd ? pArgs->pszSpecialCmd : pszSystem);
+				LPCWSTR pszSetCmd = pArgs->pszSpecialCmd ? pArgs->pszSpecialCmd : (pszSystem ? pszSystem : pszCmd);
+				SetDlgItemText(hDlg, IDC_RESTART_CMD, pszSetCmd ? pszSetCmd : L"");
 				SetDlgItemText(hDlg, IDC_STARTUP_DIR, pArgs->pszStartupDir ? pArgs->pszStartupDir : L"");
 				// Fill splits
 				SetDlgItemInt(hDlg, tRecreateSplit, (1000-pArgs->nSplitValue)/10, FALSE);
@@ -322,20 +324,12 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 				//GCC hack. иначе не собирается
 				SetDlgItemTextA(hDlg, IDC_RESTART_MSG,  "Create new console");
 
-				CheckDlgButton(hDlg, cbRunInNewWindow, (pArgs->aRecreate == cra_CreateWindow || !gpSet->isMulti) ? BST_CHECKED : BST_UNCHECKED);
-				EnableWindow(GetDlgItem(hDlg, cbRunInNewWindow), gpSet->isMulti);
-				//if (pArgs->aRecreate == cra_CreateWindow)
-				//{
-				//	SetWindowText(hDlg, L"ConEmu - Create new window");
-				//	//GCC hack. иначе не собирается
-				//	SetDlgItemTextA(hDlg, IDC_RESTART_MSG,  "Create new window");
-				//}
-				//else
-				//{
-				//	//GCC hack. иначе не собирается
-				//	SetDlgItemTextA(hDlg, IDC_RESTART_MSG,  "Create new console");
-				//}
+				// Если ВЫКЛЮЧЕН "Multi consoles in one window"
+				// - Check & Disable "New window" checkbox
+				CheckDlgButton(hDlg, cbRunInNewWindow, (pArgs->aRecreate == cra_CreateWindow || !gpSetCls->IsMulti()) ? BST_CHECKED : BST_UNCHECKED);
+				EnableWindow(GetDlgItem(hDlg, cbRunInNewWindow), gpSetCls->IsMulti());
 
+				//
 				SendDlgItemMessage(hDlg, IDC_RESTART_ICON, STM_SETICON, (WPARAM)LoadIcon(NULL,IDI_QUESTION), 0);
 				POINT pt = {0,0};
 				MapWindowPoints(GetDlgItem(hDlg, IDC_TERMINATE), hDlg, &pt, 1);
@@ -442,7 +436,8 @@ INT_PTR CRecreateDlg::RecreateDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPAR
 
 			if (*pszCmd && (nId < 0)) SendDlgItemMessage(hDlg, IDC_RESTART_CMD, CB_INSERTSTRING, 0, (LPARAM)pszCmd);
 
-			LPCWSTR pszSystem = gpSet->GetCmd();
+			// В диалоге запуска новой консоли - нечего делать автостартующему таску?
+			LPCWSTR pszSystem = gpSetCls->GetCmd(NULL, true);
 
 			if (pszSystem != pszCmd && (pszSystem && pszCmd && (lstrcmpi(pszSystem, pszCmd) != 0)))
 			{

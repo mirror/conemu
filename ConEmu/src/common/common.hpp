@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _COMMON_HEADER_HPP_
 
 // Версия интерфейса
-#define CESERVER_REQ_VER    128
+#define CESERVER_REQ_VER    130
 
 #include "defines.h"
 #include "ConEmuColors.h"
@@ -81,6 +81,7 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define CECOPYRIGHTSTRING_W L"\x00A9 2009-2013 ConEmu.Maximus5@gmail.com"
 
 #define CEHOMEPAGE     L"http://conemu-maximus5.googlecode.com"
+#define CEHOMEPAGE_A    "http://conemu-maximus5.googlecode.com"
 #define CEREPORTBUG    L"http://code.google.com/p/conemu-maximus5/issues/entry"
 #define CEREPORTCRASH  L"http://code.google.com/p/conemu-maximus5/issues/entry"
 #define CEWHATSNEW     L"http://code.google.com/p/conemu-maximus5/wiki/Whats_New"
@@ -146,6 +147,12 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define CECONOUTPUTNAME     L"ConEmuLastOutputMapping.%08X"    // --> CESERVER_CONSAVE_MAPHDR ( %X == (DWORD)ghConWnd )
 #define CECONOUTPUTITEMNAME L"ConEmuLastOutputMapping.%08X.%u" // --> CESERVER_CONSAVE_MAP ( %X == (DWORD)ghConWnd, %u = CESERVER_CONSAVE_MAPHDR.nCurrentIndex )
 
+// Default terminal hook module name
+#define CEDEFTERMDLLFORMAT  L"ConEmuHk%s.%02u%02u%02u%s.dll"
+#define CEDEFAULTTERMHOOK   L"ConEmuDefaultTerm.%u" // Если Event взведен - нужно загрузить хуки в процесс только для перехвата запуска консольных приложений
+//#define CEDEFAULTTERMMUTEX  L"IsConEmuDefaultTerm.%u" // Если Mutex есть - значит какая-то версия длл-ки уже была загружена в обрабатываемый процесс
+
+// Events
 #define CEDATAREADYEVENT    L"ConEmuSrvDataReady.%u"
 #define CEFARWRITECMTEVENT  L"ConEmuSrvFarWriteCommit.%u"
 #define CECURSORCHANGEEVENT L"ConEmuSrvCursorChanged.%u"
@@ -162,7 +169,6 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define CEGHOSTSKIPACTIVATE L"ConEmuGhostActivate.%u"
 #define CECONEMUROOTPROCESS L"ConEmuRootProcess.%u" // Если Event взведен - значит это корневой процесс, облегченную версию хуков не использовать!
 #define CECONEMUROOTTHREAD  L"ConEmuRootThread.%u"  // Если Event взведен - ConEmuHk загружен в главной нити, гонять snapshoot в GetMainThreadId не требуется
-#define CEDEFAULTTERMHOOK   L"ConEmuDefaultTerm.%u" // Если Event взведен - нужно загрузить хуки в процесс только для перехвата запуска консольных приложений
 
 #define CESECURITYNAME       "ConEmuLocalData"
 
@@ -245,6 +251,13 @@ enum RealBufferScroll
 	rbs_Vert = 1,
 	rbs_Horz = 2,
 	rbs_Any  = 3,
+};
+
+// Generally used for control keys (arrows e.g.) translation
+enum TermEmulationType
+{
+	te_win32 = 0,
+	te_xterm = 1,
 };
 
 //#define CONEMUMAPPING    L"ConEmuPluginData%u"
@@ -344,6 +357,7 @@ const CECMD
 	CECMD_GUICLIENTSHIFT = 71, // GuiStylesAndShifts
 	CECMD_ALTBUFFER      = 72, // CESERVER_REQ_ALTBUFFER: CmdOutputStore/Restore
 	CECMD_ALTBUFFERSTATE = 73, // Проверить, разрешен ли Alt.Buffer?
+	CECMD_STARTXTERM     = 74, // dwData[0]=bool, start/stop xterm input
 /** Команды FAR плагина **/
 	CMD_FIRST_FAR_CMD    = 200,
 	CMD_DRAGFROM         = 200,
@@ -1048,9 +1062,9 @@ static const CEFarWindowType
 	fwt_Renamed        = 0x08000, // Таб был принудительно переименован пользователем (?)
 	fwt_ActivateOther  = 0x10000, // Аргумент для поиска окна. Активировать найденный таб если он НЕ в активной консоли
 	fwt_CurrentFarWnd  = 0x20000, // Бывший ConEmuTab.Current
-	fwt_ModifiedFarWnd = 0x40000  // Бывший ConEmuTab.Modified
+	fwt_ModifiedFarWnd = 0x40000, // Бывший ConEmuTab.Modified
 
-	fwt_CompareFlags   = fwt_Elevated|fwt_Modal|fwt_Disabled|fwt_Renamed|fwt_CurrentFarWnd|fwt_ModifiedFarWnd;
+	fwt_CompareFlags   = fwt_Elevated|fwt_ModalFarWnd|fwt_Disabled|fwt_Renamed|fwt_CurrentFarWnd|fwt_ModifiedFarWnd;
 	;
 
 //TODO("Restrict CONEMUTABMAX to 128 chars. Only filename, and may be ellipsed...");

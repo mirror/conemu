@@ -70,7 +70,7 @@ BOOL IsUserAdmin();
 BOOL GetLogonSID (HANDLE hToken, wchar_t **ppszSID);
 bool IsWine();
 bool IsDbcs();
-BOOL IsWindows64();
+bool IsWindows64();
 int GetProcessBits(DWORD nPID, HANDLE hProcess = NULL);
 BOOL CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL abCheckModuleInfo, BOOL abAllowNTDLL = FALSE);
 bool IsModuleValid(HMODULE module);
@@ -89,7 +89,7 @@ wchar_t* ExpandEnvStr(LPCWSTR pszCommand);
 wchar_t* GetFullPathNameEx(LPCWSTR asPath);
 
 BOOL IsExecutable(LPCWSTR aszFilePathName, wchar_t** rsExpandedVars = NULL);
-BOOL IsNeedCmd(LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
+BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
 			   wchar_t (&szExe)[MAX_PATH+1],
 			   BOOL& rbRootIsCmdExe, BOOL& rbAlwaysConfirmExit, BOOL& rbAutoDisableConfirmExit);
 
@@ -116,6 +116,9 @@ struct CEStartupEnv
 {
 	size_t cbSize;
 	STARTUPINFOW si;
+	DWORD OsBits;
+	HWND  hConWnd;
+	DWORD nConVisible;
 	OSVERSIONINFOEXW os;
 	CE_CONSOLE_HISTORY_INFO hi;
 	CE_HANDLE_INFO hIn, hOut, hErr;

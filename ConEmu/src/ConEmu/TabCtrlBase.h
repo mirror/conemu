@@ -38,14 +38,13 @@ private:
 
 protected:
 	CTabBarClass* mp_Owner;
-	CIconList  m_TabIcons;
 	HWND       mh_TabTip, mh_Balloon;
 	TOOLINFO   tiBalloon;
 	wchar_t    ms_TabErrText[512];
 	int        mn_prevTab;
 
 protected:
-	void InitIconList();
+	//void InitIconList();
 	void InitTooltips(HWND hParent);
 
 public:
@@ -86,7 +85,7 @@ public:
 	virtual void ShowToolbar(bool bShow) = 0;
 
 public:
-	int  GetTabIcon(bool bAdmin);
+	//int  GetTabIcon(bool bAdmin);
 	CVirtualConsole* FarSendChangeTab(int tabIndex);
 	virtual LRESULT OnTimerInt(WPARAM wParam);
 	void ShowTabErrorInt(LPCTSTR asInfo, int tabIndex);

@@ -163,6 +163,7 @@ class CConEmuMain :
 		void GetComSpecCopy(ConEmuComspec& ComSpec);
 		void CreateGuiAttachMapping(DWORD nGuiAppPID);
 		void InitComSpecStr(ConEmuComspec& ComSpec);
+		bool IsResetBasicSettings();
 	private:
 		ConEmuGuiMapping m_GuiInfo;
 		MFileMapping<ConEmuGuiMapping> m_GuiInfoMapping;
@@ -862,7 +863,6 @@ class CConEmuMain :
 		void OnInfo_ReportBug();
 		void OnInfo_ReportCrash(LPCWSTR asDumpWasCreatedMsg);
 		void OnInfo_ThrowTrapException(bool bMainThread);
-		//LRESULT OnInitMenuPopup(HWND hWnd, HMENU hMenu, LPARAM lParam);
 		LRESULT OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		LRESULT OnKeyboardHook(DWORD VkMod);
 		LRESULT OnKeyboardIme(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);

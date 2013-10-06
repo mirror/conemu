@@ -47,7 +47,11 @@ struct RConStartArgs
 	wchar_t* pszSpecialCmd; // собственно, command line
 	wchar_t* pszStartupDir; // "-new_console:d:<dir>"
 
-	wchar_t* pszRenameTab; // "-new_console:t:<name>"
+	wchar_t* pszRenameTab;  // "-new_console:t:<name>"
+
+	wchar_t* pszIconFile;   // "-new_console:C:<icon>"
+	wchar_t* pszPalette;    // "-new_console:P:<palette>"
+	wchar_t* pszWallpaper;  // "-new_console:W:<wallpaper>"
 	
 	BOOL     bRunAsAdministrator; // -new_console:a
 	BOOL     bRunAsRestricted;    // -new_console:r
@@ -81,7 +85,7 @@ struct RConStartArgs
 		eSplitHorz = 1,
 		eSplitVert = 2,
 	} eSplit;
-	UINT nSplitValue; // (0.1 - 99.9%)0, по умолчанию - "50"
+	UINT nSplitValue; // 1..999 (0.1 - 99.9%)0, по умолчанию - "50"
     UINT nSplitPane;  // по умолчанию - "0", иначе - 1-based индекс консоли, которую нужно разбить
 	
 	RecreateActionParm aRecreate; // Информационно и для CRecreateDlg

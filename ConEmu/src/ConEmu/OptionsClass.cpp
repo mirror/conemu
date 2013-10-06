@@ -294,7 +294,10 @@ CSettings::CSettings()
 	gpSetCls = this;
 	gpSet = &m_Settings;
 
+	UpdateDpi();
+
 	// Go
+	isResetBasicSettings = false;
 	isAdvLogging = 0;
 	m_ActivityLoggingType = glt_None; mn_ActivityCmdStartTick = 0;
 	bForceBufferHeight = false; nForceBufferHeight = 1000; /* устанавливается в true, из ком.строки /BufferHeight */
@@ -324,10 +327,9 @@ CSettings::CSettings()
 	// вызвана потом из интерфейса диалога настроек
 	wcscpy_c(ConfigPath, CONEMU_ROOT_KEY L"\\.Vanilla");
 	ConfigName[0] = 0;
-	//Type[0] = 0;
-	//gpSet->psCmd = NULL; gpSet->psCurCmd = NULL;
+
+	pszCurCmd = NULL; isCurCmdList = false;
 	SetDefaultCmd(L"far");
-	//gpSet->psCmdHistory = NULL; gpSet->nCmdHistorySize = 0;
 	
 	m_ThSetMap.InitName(CECONVIEWSETNAME, GetCurrentProcessId());
 	if (!m_ThSetMap.Create())
@@ -436,6 +438,20 @@ CSettings::CSettings()
 
 	// Вкладки-диалоги
 	InitVars_Pages();
+}
+
+int CSettings::UpdateDpi()
+{
+	_dpiY = 96;
+	HDC hdc = GetDC(NULL);
+	if (hdc)
+	{
+		_dpiY = GetDeviceCaps(hdc, LOGPIXELSY);
+		ReleaseDC(NULL, hdc);
+		if (_dpiY < 96)
+			_dpiY = 96;
+	}
+	return _dpiY;
 }
 
 void CSettings::InitVars_Hotkeys()
@@ -691,39 +707,6 @@ void CSettings::UpdateWinHookSettings(HMODULE hLLKeyHookDll)
 			*(pn++) = nFlags;
 		}
 		
-		//if (gpSet->isMulti)
-		//{
-		//	if (gpSet->HasModifier(gpSet->vmMultiNew, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiNew;
-		//	if (gpSet->HasModifier(gpSet->vmMultiNewShift, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiNewShift;
-		//	if (gpSet->HasModifier(gpSet->vmMultiNext, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiNext;
-		//	if (gpSet->HasModifier(gpSet->vmMultiNextShift, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiNextShift;
-		//	if (gpSet->HasModifier(gpSet->vmMultiRecreate, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiRecreate;
-		//	if (gpSet->HasModifier(gpSet->vmMultiBuffer, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiBuffer;
-		//	if (gpSet->HasModifier(gpSet->vmMultiClose, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiClose;
-		//	if (gpSet->HasModifier(gpSet->vmMultiCmd, VK_LWIN))
-		//		*(pn++) = gpSet->vmMultiCmd;
-		//}
-
-		//if (gpSet->isUseWinArrows)
-		//{
-		//	*(pn++) = VK_LEFT;
-		//	*(pn++) = VK_RIGHT;
-		//	*(pn++) = VK_UP;
-		//	*(pn++) = VK_DOWN;
-		//}
-
-		//if (gpSet->HasModifier(gpSet->vmCTSVkBlockStart, VK_LWIN))
-		//	*(pn++) = gpSet->vmCTSVkBlockStart;
-		//if (gpSet->HasModifier(gpSet->vmCTSVkTextStart, VK_LWIN))
-		//	*(pn++) = gpSet->vmCTSVkTextStart;
-
 		*pn = 0;
 		_ASSERTE((pn - pnHookedKeys) < (HookedKeysMaxCount-1));
 	}
@@ -842,6 +825,8 @@ CSettings::~CSettings()
 	SafeFree(m_Pages);
 
 	SafeDelete(mp_HelpPopup);
+
+	SafeFree(pszCurCmd);
 }
 
 LPCWSTR CSettings::GetConfigPath()
@@ -1106,19 +1091,19 @@ void CSettings::SettingsPreSave()
 	if (gpSet->sSaveAllMacro && (lstrcmp(gpSet->sSaveAllMacro, gpSet->SaveAllMacroDefault(fmv_Default)) == 0 || lstrcmp(gpSet->sSaveAllMacro, gpSet->SaveAllMacroDefault(fmv_Lua)) == 0))
 		SafeFree(gpSet->sSaveAllMacro);
 
-	ApplyStartupOptions();
+	//ApplyStartupOptions();
 }
 
-void CSettings::ApplyStartupOptions()
-{
-	if (ghOpWnd && IsWindow(mh_Tabs[thi_Startup]))
-	{
-		//GetString(mh_Tabs[thi_Startup], tCmdLine, &gpSet->psStartSingleApp);
-		ResetCmdArg();
-
-		//TODO: пендюрки всякие, типа "Auto save/restore open tabs", "Far editor/viewer also"
-	}
-}
+//void CSettings::ApplyStartupOptions()
+//{
+//	if (ghOpWnd && IsWindow(mh_Tabs[thi_Startup]))
+//	{
+//		//GetString(mh_Tabs[thi_Startup], tCmdLine, &gpSet->psStartSingleApp);
+//		ResetCmdArg();
+//
+//		//TODO: пендюрки всякие, типа "Auto save/restore open tabs", "Far editor/viewer also"
+//	}
+//}
 
 
 
@@ -1640,8 +1625,14 @@ LRESULT CSettings::OnInitDialog()
 	SettingsStorage Storage = {};
 	bool ReadOnly = false;
 	gpSet->GetSettingsType(Storage, ReadOnly);
-	if (ReadOnly)
+	if (ReadOnly || isResetBasicSettings)
+	{
 		EnableWindow(GetDlgItem(ghOpWnd, bSaveSettings), FALSE); // Сохранение запрещено
+		if (isResetBasicSettings)
+		{
+			SetDlgItemText(ghOpWnd, bSaveSettings, L"Basic settings");
+		}
+	}
 
 	if (lstrcmp(Storage.szType, CONEMU_CONFIGTYPE_REG) == 0)
 	{
@@ -1984,7 +1975,7 @@ LRESULT CSettings::OnInitDialog_Show(HWND hWnd2, bool abInitial)
 
 	checkDlgButton(hWnd2, cbNumberInCaption, gpSet->isNumberInCaption);
 
-	checkDlgButton(hWnd2, cbMultiCon, gpSet->isMulti);
+	checkDlgButton(hWnd2, cbMultiCon, gpSet->mb_isMulti);
 	checkDlgButton(hWnd2, cbMultiShowButtons, gpSet->isMultiShowButtons);
 	checkDlgButton(hWnd2, cbNewConfirm, gpSet->isMultiNewConfirm);
 	checkDlgButton(hWnd2, cbCloseConsoleConfirm, gpSet->isCloseConsoleConfirm);
@@ -2032,6 +2023,10 @@ LRESULT CSettings::OnInitDialog_Taskbar(HWND hWnd2, bool abInitial)
 		(gpSet->isMultiMinByEsc == 2) ? rbMinByEscEmpty : gpSet->isMultiMinByEsc ? rbMinByEscAlways : rbMinByEscNever);
 	checkDlgButton(hWnd2, cbMapShiftEscToEsc, gpSet->isMapShiftEscToEsc);
 	EnableWindow(GetDlgItem(hWnd2, cbMapShiftEscToEsc), (gpSet->isMultiMinByEsc == 1 /*Always*/));
+
+	checkDlgButton(hWnd2, cbCmdTaskbarTasks, gpSet->isStoreTaskbarkTasks);
+	checkDlgButton(hWnd2, cbCmdTaskbarCommands, gpSet->isStoreTaskbarCommands);
+	EnableWindow(GetDlgItem(hWnd2, cbCmdTaskbarUpdate), (gnOsVer >= 0x601));
 
 	return 0;
 }
@@ -2217,9 +2212,9 @@ INT_PTR CSettings::pageOpProc_Start(HWND hWnd2, UINT messg, WPARAM wParam, LPARA
 						EnableWindow(GetDlgItem(hWnd2, cbStartTasksFile), (CB == rbStartTasksFile));
 						//
 						EnableWindow(GetDlgItem(hWnd2, lbStartNamedTask), (CB == rbStartNamedTask));
-						//
-						EnableWindow(GetDlgItem(hWnd2, cbStartFarRestoreFolders), (CB == rbStartLastTabs));
-						EnableWindow(GetDlgItem(hWnd2, cbStartFarRestoreEditors), (CB == rbStartLastTabs));
+						// -- пока не поддерживается
+						EnableWindow(GetDlgItem(hWnd2, cbStartFarRestoreFolders), FALSE/*(CB == rbStartLastTabs)*/);
+						EnableWindow(GetDlgItem(hWnd2, cbStartFarRestoreEditors), FALSE/*(CB == rbStartLastTabs)*/);
 						// 
 						EnableWindow(GetDlgItem(hWnd2, stCmdGroupCommands), (CB == rbStartNamedTask) || (CB == rbStartLastTabs));
 						EnableWindow(GetDlgItem(hWnd2, tCmdGroupCommands), (CB == rbStartNamedTask) || (CB == rbStartLastTabs));
@@ -2628,6 +2623,11 @@ LRESULT CSettings::OnInitDialog_Far(HWND hWnd2, BOOL abInitial)
 
 	_ASSERTE(gpSet->isDisableFarFlashing==0 || gpSet->isDisableFarFlashing==1 || gpSet->isDisableFarFlashing==2);
 	checkDlgButton(hWnd2, cbDisableFarFlashing, gpSet->isDisableFarFlashing);
+
+	SetDlgItemText(hWnd2, tTabPanels, gpSet->szTabPanels);
+	SetDlgItemText(hWnd2, tTabViewer, gpSet->szTabViewer);
+	SetDlgItemText(hWnd2, tTabEditor, gpSet->szTabEditor);
+	SetDlgItemText(hWnd2, tTabEditorMod, gpSet->szTabEditorModified);
 
 	return 0;
 }
@@ -3159,7 +3159,7 @@ LRESULT CSettings::OnInitDialog_Keys(HWND hWnd2, BOOL abInitial)
 
 LRESULT CSettings::OnInitDialog_Tabs(HWND hWnd2)
 {
-	//checkDlgButton(hWnd2, cbMultiCon, gpSet->isMulti);
+	//checkDlgButton(hWnd2, cbMultiCon, gpSet->mb_isMulti);
 	//checkDlgButton(hWnd2, cbNewConfirm, gpSet->isMultiNewConfirm);
 	//checkDlgButton(hWnd2, cbCloseConsoleConfirm, gpSet->isCloseConsoleConfirm);
 	//checkDlgButton(hWnd2, cbCloseEditViewConfirm, gpSet->isCloseEditViewConfirm);
@@ -3220,11 +3220,7 @@ LRESULT CSettings::OnInitDialog_Tabs(HWND hWnd2)
 	//	checkDlgButton(hTabs, cbUseWinNumber, BST_CHECKED);
 
 	SetDlgItemText(hWnd2, tTabConsole, gpSet->szTabConsole);
-	SetDlgItemText(hWnd2, tTabSkipWords, gpSet->szTabSkipWords);
-	SetDlgItemText(hWnd2, tTabPanels, gpSet->szTabPanels);
-	SetDlgItemText(hWnd2, tTabViewer, gpSet->szTabViewer);
-	SetDlgItemText(hWnd2, tTabEditor, gpSet->szTabEditor);
-	SetDlgItemText(hWnd2, tTabEditorMod, gpSet->szTabEditorModified);
+	SetDlgItemText(hWnd2, tTabSkipWords, gpSet->pszTabSkipWords ? gpSet->pszTabSkipWords : L"");
 	SetDlgItemInt(hWnd2, tTabLenMax, gpSet->nTabLenMax, FALSE);
 
 	checkRadioButton(hWnd2, rbAdminShield, rbAdminSuffix, gpSet->bAdminShield ? rbAdminShield : rbAdminSuffix);
@@ -3478,10 +3474,6 @@ LRESULT CSettings::OnInitDialog_Tasks(HWND hWnd2, bool abForceReload)
 	OnComboBox(hWnd2, MAKELONG(lbCmdTasks,LBN_SELCHANGE), 0);
 
 	mb_IgnoreCmdGroupEdit = false;
-
-	checkDlgButton(hWnd2, cbCmdTaskbarTasks, gpSet->isStoreTaskbarkTasks);
-	checkDlgButton(hWnd2, cbCmdTaskbarCommands, gpSet->isStoreTaskbarCommands);
-	EnableWindow(GetDlgItem(hWnd2, cbCmdTaskbarUpdate), (gnOsVer >= 0x601));
 
 	return 0;
 }
@@ -4804,7 +4796,7 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpSet->isShowHelpTooltips = IsChecked(hWnd2, cbShowHelpTooltips);
 			break;
 		case cbMultiCon:
-			gpSet->isMulti = IsChecked(hWnd2, cbMultiCon);
+			gpSet->mb_isMulti = IsChecked(hWnd2, cbMultiCon);
 			gpConEmu->UpdateWinHookSettings();
 			break;
 		case cbMultiShowButtons:
@@ -6650,13 +6642,13 @@ LRESULT CSettings::OnButtonClicked_Tasks(HWND hWnd2, WPARAM wParam, LPARAM lPara
 		} // cbCmdTasksReload
 		break;
 
-	case cbCmdTaskbarTasks:
+	case cbCmdTaskbarTasks: // Находится в IDD_SPG_TASKBAR!
 		gpSet->isStoreTaskbarkTasks = IsChecked(hWnd2, CB);
 		break;
-	case cbCmdTaskbarCommands:
+	case cbCmdTaskbarCommands: // Находится в IDD_SPG_TASKBAR!
 		gpSet->isStoreTaskbarCommands = IsChecked(hWnd2, CB);
 		break;
-	case cbCmdTaskbarUpdate:
+	case cbCmdTaskbarUpdate: // Находится в IDD_SPG_TASKBAR!
 		if (!gpSet->SaveCmdTasks(NULL))
 		{
 			LPCWSTR pszMsg = L"Can't save task list to settings!\r\nJump list may be not working!\r\nUpdate Windows 7 task list now?";
@@ -6976,7 +6968,7 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 
 	case tTabSkipWords:
 	{
-		GetDlgItemText(hWnd2, TB, gpSet->szTabSkipWords, countof(gpSet->szTabSkipWords));
+		gpSet->pszTabSkipWords = GetDlgItemText(hWnd2, TB);
 		gpConEmu->mp_TabBar->Update(TRUE);
 		break;
 	}
@@ -8251,7 +8243,7 @@ wrap:
 
 void CSettings::OnClose()
 {
-	ApplyStartupOptions();
+	//ApplyStartupOptions();
 
 	//if (gpSet->isTabs==1)
 	//	gpConEmu->ForceShowTabs(TRUE);
@@ -8442,6 +8434,13 @@ INT_PTR CSettings::wndOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPara
 					{
 					case bSaveSettings:
 						{
+							if (/*ReadOnly || */gpSetCls->isResetBasicSettings)
+							{
+								//DisplayLastError(isResetBasicSettings ? L"Not allowed in '/Basic' mode" : L"Settings storage is read only", -1);
+								DisplayLastError(L"Not allowed in '/Basic' mode", -1);
+								return 0;
+							}
+
 							HWND hFocus = GetFocus();
 							WORD wFocusID = GetDlgCtrlID(hFocus);
 							bool isShiftPressed = isPressed(VK_SHIFT);
@@ -8662,7 +8661,8 @@ INT_PTR CSettings::OnMeasureFontItem(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 		|| wID == tTabFontFace || wID == tStatusFontFace)
 	{
 		MEASUREITEMSTRUCT *pItem = (MEASUREITEMSTRUCT*)lParam;
-		pItem->itemHeight = 15; //pItem->itemHeight;
+		_ASSERTE(_dpiY >= 96);
+		pItem->itemHeight = 15 * _dpiY / 96;
 	}
 
 	return TRUE;
@@ -8699,9 +8699,9 @@ INT_PTR CSettings::OnDrawFontItem(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM 
 		FillRect(pItem->hDC, &rc, hBr);
 		DeleteObject(hBr);
 		rc.left++;
-		HFONT hFont = CreateFont(8, 0,0,0,(bAlmostMonospace==1)?FW_BOLD:FW_NORMAL,0,0,0,
+		HFONT hFont = CreateFont(-8*_dpiY/72, 0,0,0,(bAlmostMonospace==1)?FW_BOLD:FW_NORMAL,0,0,0,
 		                         ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH,
-		                         L"MS Sans Serif");
+		                         L"MS Shell Dlg");
 		HFONT hOldF = (HFONT)SelectObject(pItem->hDC, hFont);
 		DrawText(pItem->hDC, szText, _tcslen(szText), &rc, DT_LEFT|DT_VCENTER|DT_NOPREFIX);
 		SelectObject(pItem->hDC, hOldF);
@@ -9947,12 +9947,15 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 										int iPal = (nIdx == 0) ? -1 : gpSet->PaletteGetIndex(pszText);
 										if ((nIdx == 0) || (iPal >= 0))
 										{
-											lstrcpyn(pApp->szPaletteName, (nIdx == 0) ? L"" : pszText, countof(pApp->szPaletteName));
-											_ASSERTE(iCur>=0 && iCur<gpSet->AppCount && gpSet->AppColors);
+											pApp->SetPaletteName((nIdx == 0) ? L"" : pszText);
+
+											_ASSERTE(iCur>=0 && iCur<gpSet->AppCount /*&& gpSet->AppColors*/);
 											const Settings::ColorPalette* pPal = gpSet->PaletteGet(iPal);
 											if (pPal)
 											{
-												memmove(gpSet->AppColors[iCur]->Colors, pPal->Colors, sizeof(pPal->Colors));
+												//memmove(gpSet->AppColors[iCur]->Colors, pPal->Colors, sizeof(pPal->Colors));
+												//gpSet->AppColors[iCur]->FadeInitialized = false;
+
 												BOOL bTextAttr = (pApp->nTextColorIdx != pPal->nTextColorIdx) || (pApp->nBackColorIdx != pPal->nBackColorIdx);
 												pApp->nTextColorIdx = pPal->nTextColorIdx;
 												pApp->nBackColorIdx = pPal->nBackColorIdx;
@@ -9961,7 +9964,6 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 												pApp->nPopBackColorIdx = pPal->nPopBackColorIdx;
 												pApp->isExtendColors = pPal->isExtendColors;
 												pApp->nExtendColorIdx = pPal->nExtendColorIdx;
-												gpSet->AppColors[iCur]->FadeInitialized = false;
 												if (bTextAttr || bPopupAttr)
 													gpSetCls->UpdateTextColorSettings(bTextAttr, bPopupAttr);
 												bRedraw = true;
@@ -12283,10 +12285,173 @@ void CSettings::SetDefaultCmd(LPCWSTR asCmd)
 	}
 }
 
+void CSettings::SetCurCmd(wchar_t*& pszNewCmd, bool bIsCmdList)
+{
+	_ASSERTE((pszNewCmd || isCurCmdList) && pszCurCmd != pszNewCmd);
+
+	if (pszNewCmd != pszCurCmd)
+		SafeFree(pszCurCmd);
+
+	pszCurCmd = pszNewCmd;
+	isCurCmdList = bIsCmdList;
+}
+
+LPCTSTR CSettings::GetCurCmd(bool *pIsCmdList /*= NULL*/)
+{
+	if (pszCurCmd && *pszCurCmd)
+	{
+		if (pIsCmdList)
+		{
+			*pIsCmdList = isCurCmdList;
+		}
+		else
+		{
+			//_ASSERTE(isCurCmdList == false);
+		}
+		return pszCurCmd;
+	}
+
+	return NULL;
+}
+
+LPCTSTR CSettings::GetCmd(bool *pIsCmdList, bool bNoTask /*= false*/)
+{
+	LPCWSTR pszCmd = GetCurCmd(pIsCmdList);
+	if (pszCmd)
+		return pszCmd;
+
+	if (pIsCmdList)
+		*pIsCmdList = false;
+
+	switch (gpSet->nStartType)
+	{
+	case 0:
+		if (gpSet->psStartSingleApp && *gpSet->psStartSingleApp)
+			return gpSet->psStartSingleApp;
+		break;
+	case 1:
+		if (bNoTask)
+			return NULL;
+		if (gpSet->psStartTasksFile && *gpSet->psStartTasksFile)
+			return gpSet->psStartTasksFile;
+		break;
+	case 2:
+		if (bNoTask)
+			return NULL;
+		if (gpSet->psStartTasksName && *gpSet->psStartTasksName)
+			return gpSet->psStartTasksName;
+		break;
+	case 3:
+		if (bNoTask)
+			return NULL;
+		return AutoStartTaskName;
+	}
+
+	wchar_t* pszNewCmd = NULL;
+
+	// Хорошо бы более корректно определить версию фара, но это не всегда просто
+	// Например x64 файл сложно обработать в x86 ConEmu.
+	DWORD nFarSize = 0;
+
+	if (lstrcmpi(gpSetCls->GetDefaultCmd(), L"far") == 0)
+	{
+		// Ищем фар. (1) В папке ConEmu, (2) в текущей директории, (2) на уровень вверх от папки ConEmu
+		wchar_t szFar[MAX_PATH*2], *pszSlash;
+		szFar[0] = L'"';
+		wcscpy_add(1, szFar, gpConEmu->ms_ConEmuExeDir); // Теперь szFar содержит путь запуска программы
+		pszSlash = szFar + _tcslen(szFar);
+		_ASSERTE(pszSlash > szFar);
+		BOOL lbFound = FALSE;
+
+		// (1) В папке ConEmu
+		if (!lbFound)
+		{
+			wcscpy_add(pszSlash, szFar, L"\\Far.exe");
+
+			if (FileExists(szFar+1, &nFarSize))
+				lbFound = TRUE;
+		}
+
+		// (2) в текущей директории
+		if (!lbFound && lstrcmpi(gpConEmu->WorkDir(), gpConEmu->ms_ConEmuExeDir))
+		{
+			szFar[0] = L'"';
+			wcscpy_add(1, szFar, gpConEmu->WorkDir());
+			wcscat_add(1, szFar, L"\\Far.exe");
+
+			if (FileExists(szFar+1, &nFarSize))
+				lbFound = TRUE;
+		}
+
+		// (3) на уровень вверх
+		if (!lbFound)
+		{
+			szFar[0] = L'"';
+			wcscpy_add(1, szFar, gpConEmu->ms_ConEmuExeDir);
+			pszSlash = szFar + _tcslen(szFar);
+			*pszSlash = 0;
+			pszSlash = wcsrchr(szFar, L'\\');
+
+			if (pszSlash)
+			{
+				wcscpy_add(pszSlash+1, szFar, L"Far.exe");
+
+				if (FileExists(szFar+1, &nFarSize))
+					lbFound = TRUE;
+			}
+		}
+
+		if (lbFound)
+		{
+			// 110124 - нафиг, если пользователю надо - сам или параметр настроит, или реестр
+			//// far чаще всего будет установлен в "Program Files", поэтому для избежания проблем - окавычиваем
+			//// Пока тупо - если far.exe > 1200K - считаем, что это Far2
+			//wcscat_c(szFar, (nFarSize>1228800) ? L"\" /w" : L"\"");
+			wcscat_c(szFar, L"\"");
+
+			// Finally - Result
+			pszNewCmd = lstrdup(szFar);
+		}
+		else
+		{
+			// Если Far.exe не найден рядом с ConEmu - запустить cmd.exe
+			pszNewCmd = GetComspec(&gpSet->ComSpec);
+			//wcscpy_c(szFar, L"cmd");
+		}
+
+	}
+	else
+	{
+		// Simple Copy
+		pszNewCmd = lstrdup(gpSetCls->GetDefaultCmd());
+	}
+
+	SetCurCmd(pszNewCmd, false);
+
+	return GetCurCmd(pIsCmdList);
+}
+
 LPCTSTR CSettings::GetDefaultCmd()
 {
 	_ASSERTE(szDefCmd[0]!=0);
 	return szDefCmd;
+}
+
+RecreateActionParm CSettings::GetDefaultCreateAction()
+{
+	return IsMulti() ? cra_CreateTab : cra_CreateWindow;
+}
+
+bool CSettings::IsMulti()
+{
+	if (!gpSet->mb_isMulti)
+	{
+		// "SingleInstance" has more weight
+		if (!IsSingleInstanceArg())
+			return false;
+		// Otherwise we'll get infinite loop
+	}
+	return true;
 }
 
 bool CSettings::IsSingleInstanceArg()
@@ -12304,10 +12469,16 @@ bool CSettings::IsSingleInstanceArg()
 // загрузки - сбросить команду, которая пришла из "/cmd" - загрузить настройку
 void CSettings::ResetCmdArg()
 {
-	SingleInstanceArg = sgl_Default;
-	// Сбросить нужно только gpSet->psCurCmd, gpSet->psCmd не меняется - загружается только из настройки
-	SafeFree(gpSet->psCurCmd);
-	gpSet->isCurCmdList = false;
+	//SingleInstanceArg = sgl_Default;
+	//// Сбросить нужно только gpSet->psCurCmd, gpSet->psCmd не меняется - загружается только из настройки
+	//SafeFree(gpSet->psCurCmd);
+	//gpSet->isCurCmdList = false;
+
+	if (isCurCmdList)
+	{
+		wchar_t* pszReset = NULL;
+		SetCurCmd(pszReset, false);
+	}
 }
 
 bool CSettings::ResetCmdHistory(HWND hParent)
@@ -12348,6 +12519,24 @@ LONG CSettings::FontHeight()
 	{
 		_ASSERTE(LogFont.lfHeight!=0);
 		return 12;
+	}
+
+	_ASSERTE(gpSetCls->mn_FontHeight==LogFont.lfHeight);
+	return gpSetCls->mn_FontHeight;
+}
+
+LONG CSettings::FontHeightPx()
+{
+	if (!LogFont.lfHeight)
+	{
+		_ASSERTE(LogFont.lfHeight!=0);
+		return 12;
+	}
+
+	if (m_otm[0] && (m_otm[0]->otmrcFontBox.top > 0))
+	{
+		_ASSERTE(((m_otm[0]->otmrcFontBox.top * 1.3) >= LogFont.lfHeight) && (m_otm[0]->otmrcFontBox.top <= LogFont.lfHeight));
+		return m_otm[0]->otmrcFontBox.top;
 	}
 
 	_ASSERTE(gpSetCls->mn_FontHeight==LogFont.lfHeight);
@@ -13220,99 +13409,6 @@ BOOL CSettings::GetFontNameFromFile_BDF(LPCTSTR lpszFilePath, wchar_t (&rsFontNa
 	lstrcpy(rsFullFontName, rsFontName);
 	return TRUE;
 }
-
-//void CSettings::HistoryCheck()
-//{
-//	if (!gpSet->psCmdHistory || !*gpSet->psCmdHistory)
-//	{
-//		gpSet->nCmdHistorySize = 0;
-//	}
-//	else
-//	{
-//		const wchar_t* psz = gpSet->psCmdHistory;
-//
-//		while(*psz)
-//			psz += _tcslen(psz)+1;
-//
-//		if (psz == gpSet->psCmdHistory)
-//			gpSet->nCmdHistorySize = 0;
-//		else
-//			gpSet->nCmdHistorySize = (psz - gpSet->psCmdHistory + 1)*sizeof(wchar_t);
-//	}
-//}
-
-//void CSettings::HistoryAdd(LPCWSTR asCmd)
-//{
-//	if (!asCmd || !*asCmd)
-//		return;
-//
-//	if (gpSet->psCmd && lstrcmp(gpSet->psCmd, asCmd)==0)
-//		return;
-//
-//	if (gpSet->psCurCmd && lstrcmp(gpSet->psCurCmd, asCmd)==0)
-//		return;
-//
-//	HEAPVAL
-//	wchar_t *pszNewHistory, *psz;
-//	int nCount = 0;
-//	DWORD nCchNewSize = (gpSet->nCmdHistorySize>>1) + _tcslen(asCmd) + 2;
-//	DWORD nNewSize = nCchNewSize*2;
-//	pszNewHistory = (wchar_t*)malloc(nNewSize);
-//
-//	//wchar_t* pszEnd = pszNewHistory + nNewSize/sizeof(wchar_t);
-//	if (!pszNewHistory) return;
-//
-//	_wcscpy_c(pszNewHistory, nCchNewSize, asCmd);
-//	psz = pszNewHistory + _tcslen(pszNewHistory) + 1;
-//	nCount++;
-//
-//	if (gpSet->psCmdHistory)
-//	{
-//		wchar_t* pszOld = gpSet->psCmdHistory;
-//		int nLen;
-//		HEAPVAL;
-//
-//		while(nCount < MAX_CMD_HISTORY && *pszOld /*&& psz < pszEnd*/)
-//		{
-//			const wchar_t *pszCur = pszOld;
-//			pszOld += _tcslen(pszOld) + 1;
-//
-//			if (lstrcmp(pszCur, asCmd) == 0)
-//				continue;
-//
-//			_wcscpy_c(psz, nCchNewSize-(psz-pszNewHistory), pszCur);
-//			psz += (nLen = (_tcslen(psz)+1));
-//			nCount ++;
-//		}
-//	}
-//
-//	*psz = 0;
-//	HEAPVAL;
-//	free(gpSet->psCmdHistory);
-//	gpSet->psCmdHistory = pszNewHistory;
-//	gpSet->nCmdHistorySize = (psz - pszNewHistory + 1)*sizeof(wchar_t);
-//	HEAPVAL;
-//	// И сразу сохранить в настройках
-//	SettingsBase* reg = CreateSettings();
-//
-//	if (reg->OpenKey(ConfigPath, KEY_WRITE))
-//	{
-//		HEAPVAL;
-//		reg->SaveMSZ(L"CmdLineHistory", gpSet->psCmdHistory, gpSet->nCmdHistorySize);
-//		HEAPVAL;
-//		reg->CloseKey();
-//	}
-//
-//	delete reg;
-//}
-
-//LPCWSTR CSettings::HistoryGet()
-//{
-//	if (gpSet->psCmdHistory && *gpSet->psCmdHistory)
-//		return gpSet->psCmdHistory;
-//
-//	return NULL;
-//}
 
 // Показать в "Инфо" текущий режим консоли
 void CSettings::UpdateConsoleMode(DWORD nMode)

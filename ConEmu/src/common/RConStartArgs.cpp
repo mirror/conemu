@@ -112,6 +112,7 @@ RConStartArgs::RConStartArgs()
 	eSplit = eSplitNone; nSplitValue = DefaultSplitValue; nSplitPane = 0;
 	aRecreate = cra_CreateTab;
 	pszSpecialCmd = pszStartupDir = pszUserName = pszDomain = pszRenameTab = NULL;
+	pszIconFile = pszPalette = pszWallpaper = NULL;
 	bBufHeight = FALSE; nBufHeight = 0; bLongOutputDisable = FALSE;
 	bOverwriteMode = FALSE; nPTY = 0;
 	bInjectsDisable = FALSE;
@@ -139,22 +140,26 @@ bool RConStartArgs::AssignFrom(const struct RConStartArgs* args)
 	// Директория запуска. В большинстве случаев совпадает с CurDir в conemu.exe,
 	// но может быть задана из консоли, если запуск идет через "-new_console"
 	_ASSERTE(this->pszStartupDir==NULL);
-	SafeFree(this->pszStartupDir);
-	if (args->pszStartupDir)
+
+	struct CopyValues { wchar_t** ppDst; LPCWSTR pSrc; } values[] =
 	{
-		this->pszStartupDir = lstrdup(args->pszStartupDir);
+		{&this->pszStartupDir, args->pszStartupDir},
+		{&this->pszRenameTab, args->pszRenameTab},
+		{&this->pszIconFile, args->pszIconFile},
+		{&this->pszPalette, args->pszPalette},
+		{&this->pszWallpaper, args->pszWallpaper},
+		{NULL}
+	};
 
-		if (!this->pszStartupDir)
-			return false;
-	}
-
-	SafeFree(this->pszRenameTab);
-	if (args->pszRenameTab)
+	for (CopyValues* p = values; p->ppDst; p++)
 	{
-		this->pszRenameTab = lstrdup(args->pszRenameTab);
-
-		if (!this->pszRenameTab)
-			return false;
+		SafeFree(*p->ppDst);
+		if (p->pSrc)
+		{
+			*p->ppDst = lstrdup(p->pSrc);
+			if (!*p->ppDst)
+				return false;
+		}
 	}
 
 	this->bRunAsRestricted = args->bRunAsRestricted;
@@ -206,6 +211,9 @@ RConStartArgs::~RConStartArgs()
 	SafeFree(pszSpecialCmd); // именно SafeFree
 	SafeFree(pszStartupDir); // именно SafeFree
 	SafeFree(pszRenameTab);
+	SafeFree(pszIconFile);
+	SafeFree(pszPalette);
+	SafeFree(pszWallpaper);
 	SafeFree(pszUserName);
 	SafeFree(pszDomain);
 	//SafeFree(pszUserProfile);
@@ -222,7 +230,10 @@ wchar_t* RConStartArgs::CreateCommandLine(bool abForTasks /*= false*/)
 	size_t cchMaxLen =
 				 (pszSpecialCmd ? (lstrlen(pszSpecialCmd) + 3) : 0); // только команда
 	cchMaxLen += (pszStartupDir ? (lstrlen(pszStartupDir) + 20) : 0); // "-new_console:d:..."
-	cchMaxLen += (pszRenameTab  ? (lstrlen(pszRenameTab) + 20) : 0); // "-new_console:t:..."
+	cchMaxLen += (pszRenameTab  ? (lstrlen(pszRenameTab)*2 + 20) : 0); // "-new_console:t:..."
+	cchMaxLen += (pszIconFile   ? (lstrlen(pszIconFile) + 20) : 0); // "-new_console:C:..."
+	cchMaxLen += (pszPalette    ? (lstrlen(pszPalette)*2 + 20) : 0); // "-new_console:P:..."
+	cchMaxLen += (pszWallpaper  ? (lstrlen(pszWallpaper) + 20) : 0); // "-new_console:W:..."
 	cchMaxLen += (bRunAsAdministrator ? 15 : 0); // -new_console:a
 	cchMaxLen += (bRunAsRestricted ? 15 : 0); // -new_console:r
 	cchMaxLen += (pszUserName ? (lstrlen(pszUserName) + 32 // "-new_console:u:<user>:<pwd>"
@@ -315,8 +326,11 @@ wchar_t* RConStartArgs::CreateCommandLine(bool abForTasks /*= false*/)
 		wcscat_c(szAdd, L"s");
 		if (nSplitPane)
 			_wsprintf(szAdd+lstrlen(szAdd), SKIPLEN(16) L"%uT", nSplitPane);
-		if ((int)(nSplitValue/10) != 0)
-			_wsprintf(szAdd+lstrlen(szAdd), SKIPLEN(16) L"%u", (UINT)(nSplitValue/10));
+		if (nSplitValue > 0 && nSplitValue < 1000)
+		{
+			UINT iPercent = (1000-nSplitValue)/10;
+			_wsprintf(szAdd+lstrlen(szAdd), SKIPLEN(16) L"%u", max(1,min(iPercent,99)));
+		}
 		wcscat_c(szAdd, (eSplit == eSplitHorz) ? L"H" : L"V");
 	}
 
@@ -326,36 +340,51 @@ wchar_t* RConStartArgs::CreateCommandLine(bool abForTasks /*= false*/)
 		_wcscat_c(pszFull, cchMaxLen, szAdd);
 	}
 
-	// "-new_console:d:..."
-	if (pszStartupDir && *pszStartupDir)
+	struct CopyValues { wchar_t cOpt; bool bEscape; LPCWSTR pVal; } values[] =
 	{
-		bool bQuot = wcschr(pszStartupDir, L' ') != NULL;
+		{L'd', false, this->pszStartupDir},
+		{L't', true,  this->pszRenameTab},
+		{L'C', false, this->pszIconFile},
+		{L'P', true,  this->pszPalette},
+		{L'W', false, this->pszWallpaper},
+		{0}
+	};
 
-		if (bQuot)
-			_wcscat_c(pszFull, cchMaxLen, bNewConsole ? L" \"-new_console:d:" : L" \"-cur_console:d:");
-		else
-			_wcscat_c(pszFull, cchMaxLen, bNewConsole ? L" -new_console:d:" : L" -cur_console:d:");
-			
-		_wcscat_c(pszFull, cchMaxLen, pszStartupDir);
-
-		if (bQuot)
-			_wcscat_c(pszFull, cchMaxLen, L"\"");
-	}
-
-	// "-new_console:t:..."
-	if (pszRenameTab && *pszRenameTab)
+	wchar_t szCat[32];
+	for (CopyValues* p = values; p->cOpt; p++)
 	{
-		bool bQuot = wcschr(pszRenameTab, L' ') != NULL;
+		if (p->pVal && *p->pVal)
+		{
+			bool bQuot = wcspbrk(p->pVal, L" \"") != NULL;
 
-		if (bQuot)
-			_wcscat_c(pszFull, cchMaxLen, bNewConsole ? L" \"-new_console:t:" : L" \"-cur_console:t:");
-		else
-			_wcscat_c(pszFull, cchMaxLen, bNewConsole ? L" -new_console:t:" : L" -cur_console:t:");
+			if (bQuot)
+				msprintf(szCat, countof(szCat), bNewConsole ? L" \"-new_console:%c:" : L" \"-cur_console:%c:", p->cOpt);
+			else
+				msprintf(szCat, countof(szCat), bNewConsole ? L" -new_console:%c:" : L" -cur_console:%c:", p->cOpt);
 			
-		_wcscat_c(pszFull, cchMaxLen, pszRenameTab);
+			_wcscat_c(pszFull, cchMaxLen, szCat);
 
-		if (bQuot)
-			_wcscat_c(pszFull, cchMaxLen, L"\"");
+			if (p->bEscape)
+			{
+				wchar_t* pD = pszFull + lstrlen(pszFull);
+				const wchar_t* pS = p->pVal;
+				while (*pS)
+				{
+					if (wcschr(L"<>()&|^\"", *pS))
+						*(pD++) = (*pS == L'"') ? L'"' : L'^';
+					*(pD++) = *(pS++);
+				}
+				_ASSERTE(pD < (pszFull+cchMaxLen));
+				*pD = 0;
+			}
+			else
+			{
+				_wcscat_c(pszFull, cchMaxLen, p->pVal);
+			}
+
+			if (bQuot)
+				_wcscat_c(pszFull, cchMaxLen, L"\"");
+		}
 	}
 
 	// "-new_console:u:<user>:<pwd>"
@@ -566,7 +595,8 @@ int RConStartArgs::ProcessNewConArg(bool bForceCurConsole /*= false*/)
 				bool lbReady = false;
 				while (!lbReady && *pszEnd)
 				{
-					switch (*(pszEnd++))
+					wchar_t cOpt = *(pszEnd++);
+					switch (cOpt)
 					{
 					//case L'-':
 					//	bStop = true; // следующие "-new_console" - не трогать!
@@ -713,6 +743,12 @@ int RConStartArgs::ProcessNewConArg(bool bForceCurConsole /*= false*/)
 
 					case L't':
 						// t:<TabName>. MUST be last options
+					case L'C':
+						// C:<IconFile>. MUST be last options
+					case L'P':
+						// P:<Palette>. MUST be last options
+					case L'W':
+						// W:<Wallpaper>. MUST be last options
 						{
 							if (*pszEnd == L':')
 								pszEnd++;
@@ -721,13 +757,36 @@ int RConStartArgs::ProcessNewConArg(bool bForceCurConsole /*= false*/)
 								pszEnd++;
 							if (pszEnd > pszTab)
 							{
-								size_t cchLen = pszEnd - pszTab;
-								SafeFree(pszRenameTab);
-								pszRenameTab = (wchar_t*)malloc((cchLen+1)*sizeof(*pszRenameTab));
-								if (pszRenameTab)
+								wchar_t** pptr = NULL;
+								switch (cOpt)
 								{
-									wmemmove(pszRenameTab, pszTab, cchLen);
-									pszRenameTab[cchLen] = 0;
+								case L't': pptr = &pszRenameTab; break;
+								case L'C': pptr = &pszIconFile; break;
+								case L'P': pptr = &pszPalette; break;
+								case L'W': pptr = &pszWallpaper; break;
+								}
+								size_t cchLen = pszEnd - pszTab;
+								SafeFree(*pptr);
+								*pptr = (wchar_t*)malloc((cchLen+1)*sizeof(**pptr));
+								if (*pptr)
+								{
+									// We need to process escape sequences ("^>" -> ">", "^&" -> "&", etc.)
+									//wmemmove(*pptr, pszTab, cchLen);
+									wchar_t* pD = *pptr;
+									const wchar_t* pS = pszTab;
+									// There is enough room allocated
+									while (pS < pszEnd)
+									{
+										if ((*pS == L'^') && ((pS + 1) < pszEnd))
+											pS++; // Skip control char, goto escaped char
+										else if ((*pS == L'"') && ((pS + 1) < pszEnd) && (*(pS+1) == L'"'))
+											pS++; // Skip qoubled qouble quote
+
+										*(pD++) = *(pS++);
+									}
+									// Terminate with '\0'
+									_ASSERTE(pD <= ((*pptr)+cchLen));
+									*pD = 0;
 								}
 							}
 						} // L't':
