@@ -29,6 +29,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "../common/common.hpp"
+#include "RefRelease.h"
 
 // Forwards
 struct TabName;
@@ -129,7 +130,7 @@ struct TabInfo
 	enum TabIdState Status;
 	CEFarWindowType Type; // enum of CEFarWindowType
 	
-	CVirtualConsole* pVCon;
+	void/*CVirtualConsole*/* pVCon;
 	
 	//TabName Name;
 
@@ -140,11 +141,13 @@ struct TabInfo
 
 
 /* Uniqualizer for Each tab */
-class CTabID
+class CTabID : public CRefRelease
 {
 protected:
-	LONG mn_RefCount;
-	~CTabID();
+	virtual ~CTabID();
+	virtual void FinalRelease();
+public:
+	CTabID(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
 public:
 	TabInfo Info;
 	CEFarWindowType Type() { return (Info.Type & fwt_TypeMask); }; // Не нужен вобщем-то
@@ -154,7 +157,7 @@ public:
 	//UINT Flags; // enum of TabInfoFlags
 	//CVirtualConsole* pVCon;
 	
-	TabName Name;
+	TabName Name, Renamed;
 	//TabName Upper; // для облегчения сравнения
 	
 	//int nPID; // ИД процесса, содержащего таб (актуально для редакторов/вьюверов)
@@ -164,11 +167,8 @@ public:
 	// Для внутреннего использования
 	TabDrawInfo DrawInfo;
 
-	CTabID(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
 	void Set(LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID);
 
-	int AddRef();
-	int Release();
 	bool IsEqual(const CTabID* pTabId, bool abIgnoreWindowId = false);
 	bool IsEqual(CVirtualConsole* apVCon, const TabName& asName, CEFarWindowType anType, int anPID, int anViewEditID);
 	bool IsEqual(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anViewEditID);
@@ -192,6 +192,8 @@ public:
 	CTabID* operator -> () { return mp_Tab; }
 	
 	const CTabID* Tab() { return mp_Tab; }
+
+	CTabID* AddRef() { mp_Tab->AddRef(); return mp_Tab; }
 };
 
 class CTabStack

@@ -116,7 +116,14 @@ CTabBarClass::~CTabBarClass()
 
 	// Освободить все табы
 	m_Tabs.ReleaseTabs(false);
-	m_TabStack.ReleaseTabs(false);
+
+	//m_TabStack.ReleaseTabs(false);
+	_ASSERTE(gpConEmu->isMainThread());
+	for (INT_PTR i = 0; i < m_TabStack.size(); i++)
+	{
+		m_TabStack[i]->Release();
+	}
+	m_TabStack.clear();
 }
 
 void CTabBarClass::RePaint()
@@ -236,7 +243,7 @@ int CTabBarClass::GetItemCount()
 	if (mp_Rebar->IsTabbarCreated())
 		nCurCount = mp_Rebar->GetItemCountInt();
 	else
-		nCurCount = m_Tab2VCon.size();
+		nCurCount = m_Tabs.GetCount();
 
 	return nCurCount;
 }
@@ -248,8 +255,6 @@ int CTabBarClass::CountActiveTabs(int nMax /*= 0*/)
 
 	for (int V = 0; V < MAX_CONSOLE_COUNT; V++)
 	{
-		_ASSERTE(m_Tab2VCon.size()==0);
-
 		CVConGuard guard;
 		if (!CVConGroup::GetVCon(V, &guard))
 			continue;
@@ -261,11 +266,7 @@ int CTabBarClass::CountActiveTabs(int nMax /*= 0*/)
 				continue;
 		}
 
-		_ASSERTE(m_Tab2VCon.size()==0);
-
 		nTabs += pVCon->RCon()->GetTabCount(TRUE);
-		
-		_ASSERTE(m_Tab2VCon.size()==0);
 
 		if ((nMax > 0) && (nTabs >= nMax))
 			break;
@@ -319,35 +320,33 @@ void CTabBarClass::RequestPostUpdate()
 	}
 }
 
-BOOL CTabBarClass::GetVConFromTab(int nTabIdx, CVirtualConsole** rpVCon, DWORD* rpWndIndex)
+bool CTabBarClass::GetVConFromTab(int nTabIdx, CVConGuard* rpVCon, DWORD* rpWndIndex)
 {
-	BOOL lbRc = FALSE;
-	CVirtualConsole *pVCon = NULL;
+	bool lbRc = false;
+	CTab tab;
+	CVConGuard VCon;
 	DWORD wndIndex = 0;
 
-	if ((nTabIdx >= 0) && (nTabIdx < m_Tab2VCon.size()))
+	if (m_Tabs.GetTabByIndex(nTabIdx, tab))
 	{
-		pVCon = m_Tab2VCon[nTabIdx].pVCon;
-		wndIndex = m_Tab2VCon[nTabIdx].nFarWindowId;
+		wndIndex = tab->Info.nFarWindowID;
 
-		if (!gpConEmu->isValid(pVCon))
+		if (!gpConEmu->isValid((CVirtualConsole*)tab->Info.pVCon))
 		{
 			RequestPostUpdate();
-			//if (!mb_PostUpdateCalled)
-			//{
-			//    mb_PostUpdateCalled = TRUE;
-			//    PostMessage(ghWnd, mn_Msg UpdateTabs, 0, 0);
-			//}
 		}
 		else
 		{
-			lbRc = TRUE;
+			VCon = (CVirtualConsole*)tab->Info.pVCon;
+			lbRc = true;
 		}
 	}
 
-	if (rpVCon) *rpVCon = lbRc ? pVCon : NULL;
+	if (rpVCon)
+		rpVCon->Attach(VCon.VCon());
 
-	if (rpWndIndex) *rpWndIndex = lbRc ? wndIndex : 0;
+	if (rpWndIndex)
+		*rpWndIndex = lbRc ? wndIndex : 0;
 
 	return lbRc;
 }
@@ -1656,44 +1655,36 @@ void CTabBarClass::SwitchRollback()
 void CTabBarClass::CheckStack()
 {
 	_ASSERTE(gpConEmu->isMainThread());
-	int i, j;
+	INT_PTR i, j;
 
 	BOOL lbExist = FALSE;
 	j = 0;
 
+	// Remove all absent items
 	while (j < m_TabStack.size())
 	{
-		lbExist = FALSE;
-
-		for (i = 0; i < m_Tab2VCon.size(); ++i)
+		// If refcount was decreased to 1, that means that CTabID is left only in m_TabStack
+		// All other references was eliminated
+		if (m_TabStack[j]->RefCount() <= 1)
 		{
-			//if (*i == *j)
-			if (m_Tab2VCon[i] == m_TabStack[j])
-			{
-				lbExist = TRUE; break;
-			}
-		}
-
-		if (lbExist)
-		{
-			++j;
+			m_TabStack[j]->Release();
+			m_TabStack.erase(j);
 		}
 		else
 		{
-			m_TabStack.erase(j);
+			j++;
 		}
 	}
 
-	//for (i = m_Tab2VCon.begin(); i != m_Tab2VCon.end(); ++i)
-	for (i = 0; i < m_Tab2VCon.size(); ++i)
+	CTab tab;
+
+	for (i = 0; m_Tabs.GetTabByIndex(i, tab); ++i)
 	{
 		lbExist = FALSE;
 
-		//for (j = m_TabStack.begin(); j != m_TabStack.end(); ++j)
 		for (j = 0; j < m_TabStack.size(); ++j)
 		{
-			//if (*i == *j)
-			if (m_Tab2VCon[i] == m_TabStack[j])
+			if (tab == m_TabStack[j])
 			{
 				lbExist = TRUE; break;
 			}
@@ -1701,17 +1692,18 @@ void CTabBarClass::CheckStack()
 
 		if (!lbExist)
 		{
-			//m_TabStack.push_back(*i);
-			m_TabStack.push_back(m_Tab2VCon[i]);
+			m_TabStack.push_back(tab.AddRef());
 		}
 	}
 }
 
 // Убьет из стека отсутствующих и поместит tab на верх стека
-void CTabBarClass::AddStack(VConTabs tab)
+void CTabBarClass::AddStack(CTab& tab)
 {
 	_ASSERTE(gpConEmu->isMainThread());
 	BOOL lbExist = FALSE;
+
+	CTabID* pTab = NULL;
 
 	if (!m_TabStack.empty())
 	{
@@ -1723,10 +1715,12 @@ void CTabBarClass::AddStack(VConTabs tab)
 			{
 				if (iter == 0)
 				{
+					// Already first
 					lbExist = TRUE;
 				}
 				else
 				{
+					pTab = m_TabStack[iter];
 					m_TabStack.erase(iter);
 				}
 
@@ -1740,8 +1734,9 @@ void CTabBarClass::AddStack(VConTabs tab)
 	// поместить наверх стека
 	if (!lbExist)
 	{
-		//m_TabStack.insert(m_TabStack.begin(), tab);
-		m_TabStack.insert(0, tab);
+		if (!pTab)
+			pTab = tab.AddRef();
+		m_TabStack.insert(0, pTab);
 	}
 
 	CheckStack();

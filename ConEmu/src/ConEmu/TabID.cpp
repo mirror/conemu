@@ -88,7 +88,6 @@ int TabName::Length() const
 /* Uniqualizer for Each tab */
 CTabID::CTabID(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWindowID, int anViewEditID)
 {
-	mn_RefCount = 0;
 	memset(&Info, 0, sizeof(Info));
 	memset(&DrawInfo, 0, sizeof(DrawInfo));
 
@@ -124,7 +123,13 @@ void CTabID::Set(LPCWSTR asName, CEFarWindowType anType, int anPID, int anFarWin
 CTabID::~CTabID()
 {
 	Name.Release();
+	Renamed.Release();
 	ReleaseDrawRegion();
+}
+void CTabID::FinalRelease()
+{
+	CTabID* p = this;
+	delete p;
 }
 void CTabID::ReleaseDrawRegion()
 {
@@ -133,18 +138,6 @@ void CTabID::ReleaseDrawRegion()
 		DeleteObject(DrawInfo.rgnTab);
 		DrawInfo.rgnTab = NULL;
 	}
-}
-int CTabID::AddRef()
-{
-	int nNewCount = InterlockedIncrement(&mn_RefCount);
-	return nNewCount;
-}
-int CTabID::Release()
-{
-	int n = InterlockedDecrement(&mn_RefCount);
-	if (n <= 0)
-		delete this;
-	return n;
 }
 bool CTabID::IsEqual(CVirtualConsole* apVCon, LPCWSTR asName, CEFarWindowType anType, int anPID, int anViewEditID)
 {

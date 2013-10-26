@@ -57,6 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DwmHelper.h"
 
 class CTabPanelBase;
+class CVConGuard;
 
 class CTabBarClass
 {
@@ -130,16 +131,16 @@ class CTabBarClass
 
 		// Tab stack
 		CTabStack m_Tabs; // Открытые табы
-		CTabStack m_TabStack; // История табов (для переключения в Recent mode)
+		MArray<CTabID*> m_TabStack; // История табов (для переключения в Recent mode)
 		//MArray<VConTabs> m_Tab2VCon;
 		//MArray<VConTabs> m_TabStack;
-		//void CheckStack(); // Убьет из стека отсутствующих
-		//void AddStack(VConTabs tab); // Убьет из стека отсутствующих и поместит tab на верх стека
+		void CheckStack(); // Убьет из стека отсутствующих
+		void AddStack(CTab& tab); // Убьет из стека отсутствующих и поместит tab на верх стека
 
 		BOOL mb_DisableRedraw;
 
 		
-		BOOL GetVConFromTab(int nTabIdx, CVirtualConsole** rpVCon, DWORD* rpWndIndex);
+		bool GetVConFromTab(int nTabIdx, CVConGuard* rpVCon, DWORD* rpWndIndex);
 
 	public:
 		CTabBarClass();

@@ -18681,10 +18681,10 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 					i = isVConValid(pVCon);
 					if (i >= 1)
 					{
-						ConEmuTab tab = {0};
-						pVCon->RCon()->GetTab(0, &tab);
-						tab.Name[128] = 0; // чтобы не вылезло из szDbg
-						wsprintf(szDbg+_tcslen(szDbg), L": #%i: %s", i, tab.Name);
+						CTab tab;
+						pVCon->RCon()->GetTab(0, tab);
+						wsprintf(szDbg+_tcslen(szDbg), L": #%i: ", i);
+						lstrcpyn(szDbg+_tcslen(szDbg), tab->Name.Ptr(), 128); // чтобы не вылезло из szDbg
 					}
 
 					lstrcat(szDbg, L"\n");
