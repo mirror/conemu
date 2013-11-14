@@ -859,8 +859,8 @@ INT_PTR CConEmuChild::DbgChildDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 
 LRESULT CConEmuChild::OnPaintGaps()
 {
-	CVirtualConsole* pVCon = (CVirtualConsole*)this;
-	if (!pVCon)
+	CVConGuard VCon((CVirtualConsole*)this);
+	if (!VCon.VCon())
 	{
 		_ASSERTE(pVCon!=NULL);
 		return 0;
@@ -874,7 +874,7 @@ LRESULT CConEmuChild::OnPaintGaps()
 		return 0;
 	}
 
-	CRealConsole* pRCon = pVCon->RCon();
+	CRealConsole* pRCon = VCon->RCon();
 	if (pRCon)
 	{
 		nColorIdx = pRCon->GetDefaultBackColorIdx();
@@ -913,14 +913,12 @@ LRESULT CConEmuChild::OnPaint()
 	if (mb_DisableRedraw)
 		return 0;
 
-	CVirtualConsole* pVCon = (CVirtualConsole*)this;
-	_ASSERTE(pVCon!=NULL);
-	CVConGuard guard(pVCon);
+	CVConGuard VCon((CVirtualConsole*)this);
 
 	mb_PostFullPaint = FALSE;
 
 	if (gpSetCls->isAdvLogging>2)
-		pVCon->RCon()->LogString("CConEmuChild::OnPaint", TRUE);
+		VCon->RCon()->LogString("CConEmuChild::OnPaint", TRUE);
 
 	gpSetCls->Performance(tPerfBlt, FALSE);
 
@@ -951,7 +949,7 @@ LRESULT CConEmuChild::OnPaint()
 			//_ASSERTE(FALSE);
 			lbSkipDraw = TRUE;
 
-			pVCon->CheckTransparent();
+			VCon->CheckTransparent();
 
 			// Типа "зальет цветом фона окна"?
 			result = DefWindowProc(mh_WndDC, WM_PAINT, 0, 0);
@@ -970,27 +968,27 @@ LRESULT CConEmuChild::OnPaint()
 		}
 		else
 		{
-			mh_LastGuiChild = pVCon->RCon() ? pVCon->RCon()->GuiWnd() : NULL;
+			mh_LastGuiChild = VCon->RCon() ? VCon->RCon()->GuiWnd() : NULL;
 		}
 
-		bool bRightClickingPaint = gpConEmu->isRightClickingPaint() && gpConEmu->isActive(pVCon);
+		bool bRightClickingPaint = gpConEmu->isRightClickingPaint() && gpConEmu->isActive(VCon.VCon());
 		if (bRightClickingPaint)
 		{
 			// Скрыть окошко с "кружочком"
-			gpConEmu->RightClickingPaint((HDC)INVALID_HANDLE_VALUE, pVCon);
+			gpConEmu->RightClickingPaint((HDC)INVALID_HANDLE_VALUE, VCon.VCon());
 		}
 
 		PAINTSTRUCT ps;
 		HDC hDc = BeginPaint(mh_WndDC, &ps);
 		UNREFERENCED_PARAMETER(hDc);
 
-		//RECT rcClient = pVCon->GetDcClientRect();
-		pVCon->PaintVCon(ps.hdc);
+		//RECT rcClient = VCon->GetDcClientRect();
+		VCon->PaintVCon(ps.hdc);
 
 		if (bRightClickingPaint)
 		{
 			// Нарисует кружочек, или сбросит таймер, если кнопку отпустили
-			gpConEmu->RightClickingPaint(pVCon->GetIntDC()/*ps.hdc*/, pVCon);
+			gpConEmu->RightClickingPaint(VCon->GetIntDC()/*ps.hdc*/, VCon.VCon());
 		}
 
 		EndPaint(mh_WndDC, &ps);
@@ -1000,6 +998,8 @@ LRESULT CConEmuChild::OnPaint()
 	gpSetCls->Performance(tPerfBlt, TRUE);
 	// Если открыто окно настроек - обновить системную информацию о размерах
 	gpConEmu->UpdateSizes();
+
+	_ASSERTE(CVConGroup::isValid(VCon.VCon()));
 	return result;
 }
 
@@ -1320,22 +1320,22 @@ BOOL CConEmuChild::TrackMouse()
 	return lbCapture;
 }
 
-BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
+bool CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 {
 	if (abCheckVisible)
 	{
 		if (gpSet->isAlwaysShowScrollbar == 0)
 		{
-			return FALSE; // не показывается вообще
+			return false; // не показывается вообще
 		}
 		else if ((gpSet->isAlwaysShowScrollbar != 1) // 1 -- показывать всегда
 			&& !mb_ScrollVisible)
 		{
-			return FALSE; // не показывается сейчас
+			return false; // не показывается сейчас
 		}
 	}
 
-	BOOL lbOverVScroll = FALSE;
+	bool lbOverVScroll = false;
 
 	CVirtualConsole* pVCon = (CVirtualConsole*)this;
 	CVConGuard guard(pVCon);
@@ -1360,7 +1360,7 @@ BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 			// чтобы полоса не скрылась, когда ее тащат мышкой
 			if (mb_VTracking)
 			{
-				lbOverVScroll = TRUE;
+				lbOverVScroll = true;
 			}
 			else // Теперь проверим, если мышь в над скроллбаром - показать его
 			{
@@ -1375,11 +1375,11 @@ BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 				{
 					// Если прокрутка УЖЕ видна - то мышку в консоль не пускать! Она для прокрутки!
 					if (mb_ScrollVisible)
-						lbOverVScroll = TRUE;
+						lbOverVScroll = true;
 					// Если не проверять - не получится начать выделение с правого края окна
 					//if (!gpSet->isSelectionModifierPressed())
 					else if (!(isPressed(VK_SHIFT) || isPressed(VK_CONTROL) || isPressed(VK_MENU) || isPressed(VK_LBUTTON)))
-						lbOverVScroll = TRUE;
+						lbOverVScroll = true;
 				}
 			}
 		}
