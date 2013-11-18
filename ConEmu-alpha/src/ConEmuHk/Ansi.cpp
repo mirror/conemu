@@ -86,6 +86,9 @@ static bool gbVimTermWasChangedBuffer = false;
 HANDLE CEAnsi::ghLastAnsiCapable = NULL;
 HANDLE CEAnsi::ghLastAnsiNotCapable = NULL;
 
+// VIM, etc. Some programs waiting control keys as xterm sequences. Need to inform ConEmu GUI.
+bool CEAnsi::gbWasXTermOutput = false;
+
 void CEAnsi::GetFeatures(bool* pbAnsiAllowed, bool* pbSuppressBells)
 {
 	static DWORD nLastCheck = 0;
@@ -401,13 +404,13 @@ void CEAnsi::ReSetDisplayParm(HANDLE hConsoleOutput, BOOL bReset, BOOL bApply)
 
 
 #if defined(DUMP_UNKNOWN_ESCAPES) || defined(DUMP_WRITECONSOLE_LINES)
-void CEAnsi::DumpEscape(LPCWSTR buf, size_t cchLen, bool bUnknown)
+void CEAnsi::DumpEscape(LPCWSTR buf, size_t cchLen, int iUnknown)
 {
 	if (!buf || !cchLen)
 	{
-		_ASSERTE((buf && cchLen) || (gnAllowClinkUsage && buf));
+		_ASSERTE((buf && cchLen) || (gszClinkCmdLine && buf));
 	}
-	else if (bUnknown)
+	else if (iUnknown == 1)
 	{
 		_ASSERTE(FALSE && "Unknown Esc Sequence!");
 	}
@@ -416,11 +419,18 @@ void CEAnsi::DumpEscape(LPCWSTR buf, size_t cchLen, bool bUnknown)
 	size_t nLen = cchLen;
 	static int nWriteCallNo = 0;
 
-	if (bUnknown)
+	switch (iUnknown)
+	{
+	case 1:
 		//wcscpy_c(szDbg, L"###Unknown Esc Sequence: ");
 		msprintf(szDbg, countof(szDbg), L"[%u] ###Unknown Esc Sequence: ", GetCurrentThreadId());
-	else
+		break;
+	case 2:
+		msprintf(szDbg, countof(szDbg), L"[%u] ###Bad Unicode Translation: ", GetCurrentThreadId());
+		break;
+	default:
 		msprintf(szDbg, countof(szDbg), L"[%u] AnsiDump #%u: ", GetCurrentThreadId(), ++nWriteCallNo);
+	}
 
 	size_t nStart = lstrlenW(szDbg);
 	wchar_t* pszDst = szDbg + nStart;
@@ -468,7 +478,7 @@ void CEAnsi::DumpEscape(LPCWSTR buf, size_t cchLen, bool bUnknown)
 			}
 		}
 	}
-	else if (gnAllowClinkUsage)
+	else if (gszClinkCmdLine)
 	{
 		pszDst -= 2;
 		const wchar_t* psEmptyClink = L" - <empty sequence, clink?>";
@@ -539,6 +549,12 @@ BOOL /*WINAPI*/ CEAnsi::OnWriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumbe
 	ORIGINALFAST(WriteFile);
 	//BOOL bMainThread = FALSE; // поток не важен
 	BOOL lbRc = FALSE;
+	DWORD nDBCSCP = 0;
+
+	//if (gpStartEnv->bIsDbcs)
+	//{
+	//	nDBCSCP = GetConsoleOutputCP();
+	//}
 
 	if (lpBuffer && nNumberOfBytesToWrite && IsAnsiCapable(hFile))
 		lbRc = OnWriteConsoleA(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, NULL);
@@ -554,14 +570,51 @@ BOOL /*WINAPI*/ CEAnsi::OnWriteConsoleA(HANDLE hConsoleOutput, const VOID *lpBuf
 	ORIGINALFAST(WriteConsoleA);
 	//BOOL bMainThread = FALSE; // поток не важен
 	BOOL lbRc = FALSE;
+	wchar_t* buf = NULL;
+	DWORD len, cp;
+	static bool badUnicode = false;
+	DEBUGTEST(bool curBadUnicode = badUnicode);
+	DEBUGTEST(wchar_t szTmp[2] = L"");
+
+	if (badUnicode)
+	{
+		badUnicode = false;
+		#ifdef _DEBUG
+		if (lpBuffer && nNumberOfCharsToWrite)
+		{
+			szTmp[0] = ((char*)lpBuffer)[0];
+			DumpEscape(szTmp, 1, 2);
+		}
+		#endif
+		goto badchar;
+	}
 
 	if (lpBuffer && nNumberOfCharsToWrite && IsAnsiCapable(hConsoleOutput))
 	{
-		wchar_t* buf = NULL;
-		DWORD len, cp;
-		
 		cp = GetConsoleOutputCP();
-		len = MultiByteToWideChar(cp, 0, (LPCSTR)lpBuffer, nNumberOfCharsToWrite, 0, 0);
+
+		DWORD nLastErr = 0;
+		DWORD nFlags = 0; //MB_ERR_INVALID_CHARS;
+
+		if (! ((cp == 42) || (cp == 65000) || (cp >= 57002 && cp <= 57011) || (cp >= 50220 && cp <= 50229)) )
+		{
+			nFlags = MB_ERR_INVALID_CHARS;
+			nLastErr = GetLastError();
+		}
+
+		len = MultiByteToWideChar(cp, nFlags, (LPCSTR)lpBuffer, nNumberOfCharsToWrite, 0, 0);
+
+		if (nFlags /*gpStartEnv->bIsDbcs*/ && (GetLastError() == ERROR_NO_UNICODE_TRANSLATION))
+		{
+			badUnicode = true;
+			#ifdef _DEBUG
+			szTmp[0] = ((char*)lpBuffer)[0];
+			DumpEscape(szTmp, 1, 2);
+			#endif
+			SetLastError(nLastErr);
+			goto badchar;
+		}
+
 		buf = (wchar_t*)malloc((len+1)*sizeof(wchar_t));
 		if (buf == NULL)
 		{
@@ -570,22 +623,27 @@ BOOL /*WINAPI*/ CEAnsi::OnWriteConsoleA(HANDLE hConsoleOutput, const VOID *lpBuf
 		}
 		else
 		{
-			DWORD newLen = MultiByteToWideChar(cp, 0, (LPCSTR)lpBuffer, nNumberOfCharsToWrite, buf, len);
+			DWORD newLen = MultiByteToWideChar(cp, nFlags, (LPCSTR)lpBuffer, nNumberOfCharsToWrite, buf, len);
 			_ASSERTE(newLen==len);
 			buf[newLen] = 0; // ASCII-Z, хотя, если функцию WriteConsoleW зовет приложение - "\0" может и не быть...
 
-			lbRc = OnWriteConsoleW(hConsoleOutput, buf, len, lpNumberOfCharsWritten, NULL);
+			DWORD nWideWritten = 0;
+			lbRc = OnWriteConsoleW(hConsoleOutput, buf, len, &nWideWritten, NULL);
 
-			free( buf );
+			// Issue 1291:	Python fails to print string sequence with ASCII character followed by Chinese character.
+			if (lpNumberOfCharsWritten)
+				*lpNumberOfCharsWritten = (nWideWritten == len) ? nNumberOfCharsToWrite : nWideWritten;
 		}
-	}
-	else
-	{
-		// По идее, сюда попадать не должны. Ошибка в параметрах?
-		_ASSERTE(lpBuffer && nNumberOfCharsToWrite && IsAnsiCapable(hConsoleOutput));
-		lbRc = F(WriteConsoleA)(hConsoleOutput, lpBuffer, nNumberOfCharsToWrite, lpNumberOfCharsWritten, lpReserved);
+		goto fin;
 	}
 
+badchar:
+	// По идее, сюда попадать не должны. Ошибка в параметрах?
+	_ASSERTE((lpBuffer && nNumberOfCharsToWrite && IsAnsiCapable(hConsoleOutput)) || (curBadUnicode||badUnicode));
+	lbRc = F(WriteConsoleA)(hConsoleOutput, lpBuffer, nNumberOfCharsToWrite, lpNumberOfCharsWritten, lpReserved);
+
+fin:
+	SafeFree(buf);
 	return lbRc;
 }
 
@@ -675,6 +733,7 @@ BOOL /*WINAPI*/ CEAnsi::OnWriteConsoleW(HANDLE hConsoleOutput, const VOID *lpBuf
 	//ExtWriteTextParm wrt = {sizeof(wrt), ewtf_None, hConsoleOutput};
 	bool bIsConOut = false;
 
+#if 0
 	// Store prompt(?) for clink 0.1.1
 	if ((gnAllowClinkUsage == 1) && nNumberOfCharsToWrite && lpBuffer && gpszLastWriteConsole && gcchLastWriteConsoleMax)
 	{
@@ -682,6 +741,7 @@ BOOL /*WINAPI*/ CEAnsi::OnWriteConsoleW(HANDLE hConsoleOutput, const VOID *lpBuf
 		gpszLastWriteConsole[cchMax] = 0;
 		wmemmove(gpszLastWriteConsole, (const wchar_t*)lpBuffer, cchMax);
 	}
+#endif
 
 	#ifdef DUMP_WRITECONSOLE_LINES
 	// Логирование в отладчик ВСЕГО, что пишется в консольный Output
@@ -1265,19 +1325,6 @@ void CEAnsi::EscCopyCtrlString(wchar_t* pszDst, LPCWSTR asMsg, INT_PTR cchMaxLen
 // ESC ] 9 ; 2 ; "txt" ST          Show GUI MessageBox ( txt ) for dubug purposes
 void CEAnsi::DoMessage(LPCWSTR asMsg, INT_PTR cchLen)
 {
-	//if (cchLen < 0)
-	//{
-	//	_ASSERTE(cchLen >= 0);
-	//	cchLen = 0;
-	//}
-	//if (cchLen > 1)
-	//{
-	//	if ((asMsg[0] == L'"') && (asMsg[cchLen-1] == L'"'))
-	//	{
-	//		asMsg++;
-	//		cchLen -= 2;
-	//	}
-	//}
 	wchar_t* pszText = (wchar_t*)malloc((cchLen+1)*sizeof(*pszText));
 
 	if (pszText)
@@ -1298,6 +1345,67 @@ void CEAnsi::DoMessage(LPCWSTR asMsg, INT_PTR cchLen)
 	}
 }
 
+// ESC ] 9 ; 7 ; "cmd" ST        Run some process with arguments
+void CEAnsi::DoProcess(LPCWSTR asCmd, INT_PTR cchLen)
+{
+	// We need zero-terminated string
+	wchar_t* pszCmdLine = (wchar_t*)malloc((cchLen + 1)*sizeof(*asCmd));
+
+	if (pszCmdLine)
+	{
+		EscCopyCtrlString(pszCmdLine, asCmd, cchLen);
+
+		STARTUPINFO si = {sizeof(si)};
+		PROCESS_INFORMATION pi = {};
+
+		BOOL bCreated = CreateProcess(NULL, pszCmdLine, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+		if (bCreated)
+		{
+			WaitForSingleObject(pi.hProcess, INFINITE);
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+		}
+
+		free(pszCmdLine);
+	}
+}
+
+// ESC ] 9 ; 8 ; "env" ST        Output value of environment variable
+void CEAnsi::DoPrintEnv(LPCWSTR asCmd, INT_PTR cchLen)
+{
+	if (!pfnWriteConsoleW)
+		return;
+
+	// We need zero-terminated string
+	wchar_t* pszVarName = (wchar_t*)malloc((cchLen + 1)*sizeof(*asCmd));
+
+	if (pszVarName)
+	{
+		EscCopyCtrlString(pszVarName, asCmd, cchLen);
+
+		wchar_t szValue[MAX_PATH];
+		wchar_t* pszValue = szValue;
+		DWORD cchMax = countof(szValue);
+		DWORD nMax = GetEnvironmentVariable(pszVarName, pszValue, cchMax);
+		if (nMax >= cchMax)
+		{
+			cchMax = nMax+1;
+			pszValue = (wchar_t*)malloc(cchMax*sizeof(*pszValue));
+			nMax = pszValue ? GetEnvironmentVariable(pszVarName, szValue, countof(szValue)) : 0;
+		}
+
+		if (nMax)
+		{
+			TODO("Process here ANSI colors TOO! But now it will be 'reentrance'?");
+			WriteText(pfnWriteConsoleW, mh_WriteOutput, pszValue, nMax, &cchMax);
+		}
+
+		if (pszValue && pszValue != szValue)
+			free(pszValue);
+		free(pszVarName);
+	}
+}
+
 BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten)
 {
 	BOOL lbRc = TRUE, lbApply = FALSE;
@@ -1309,6 +1417,8 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 
 	// Store this pointer
 	pfnWriteConsoleW = _WriteConsoleW;
+	// Ans current output handle
+	mh_WriteOutput = hConsoleOutput;
 
 	//ExtWriteTextParm write = {sizeof(write), ewtf_Current, hConsoleOutput};
 	//write.Private = _WriteConsoleW;
@@ -1754,14 +1864,22 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 
 							case L'n':
 								{
-									TODO("ECMA-48 Status Report Commands");
-									//ESC [ 5 n
-									//      Device status report (DSR): Answer is ESC [ 0 n (Terminal OK).
-									//
-									//ESC [ 6 n
-									//      Cursor position report (CPR): Answer is ESC [ y ; x R, where x,y is the
-									//      cursor location.
-									DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
+									switch (*Code.ArgSZ)
+									{
+									case '5':
+									case '6':
+										DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
+										break;
+									default:
+										TODO("ECMA-48 Status Report Commands");
+										//ESC [ 5 n
+										//      Device status report (DSR): Answer is ESC [ 0 n (Terminal OK).
+										//
+										//ESC [ 6 n
+										//      Cursor position report (CPR): Answer is ESC [ y ; x R, where x,y is the
+										//      cursor location.
+										DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
+									}
 								}
 								break;
 
@@ -1914,6 +2032,8 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 								// ESC ] 9 ; 4 ; st ; pr ST      When _st_ is 0: remove progress. When _st_ is 1: set progress value to _pr_ (number, 0-100). When _st_ is 2: set error state in progress on Windows 7 taskbar
 								// ESC ] 9 ; 5 ST                Wait for ENTER/SPACE/ESC. Set EnvVar "ConEmuWaitKey" to ENTER/SPACE/ESC on exit.
 								// ESC ] 9 ; 6 ; "txt" ST        Execute GuiMacro. Set EnvVar "ConEmuMacroResult" on exit.
+								// ESC ] 9 ; 7 ; "cmd" ST        Run some process with arguments
+								// ESC ] 9 ; 8 ; "env" ST        Output value of environment variable
 								// -- You may specify timeout _s_ in seconds. - не работает
 								if (Code.ArgSZ[1] == L';')
 								{
@@ -2021,6 +2141,14 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 										ExecuteFreeResult(pOut);
 										ExecuteFreeResult(pIn);
 									}
+									else if (Code.ArgSZ[2] == L'7' && Code.ArgSZ[3] == L';')
+									{
+										DoProcess(Code.ArgSZ+4, Code.cchArgSZ - 4);
+									}
+									else if (Code.ArgSZ[2] == L'8' && Code.ArgSZ[3] == L';')
+									{
+										DoPrintEnv(Code.ArgSZ+4, Code.cchArgSZ - 4);
+									}
 								}
 								break;
 
@@ -2034,6 +2162,12 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 						{
 							// vim-xterm-emulation
 							lbApply = TRUE;
+
+							if (!gbWasXTermOutput)
+							{
+								gbWasXTermOutput = true;
+								CEAnsi::StartXTermMode(true);
+							}
 
 							switch (Code.Action)
 							{
@@ -2064,6 +2198,9 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 										case 112:
 											gDisplayParm.Inverse = TRUE;
 											gDisplayParm.WasSet = TRUE;
+											break;
+										case 143:
+											// What is this?
 											break;
 										default:
 											DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
@@ -2229,6 +2366,12 @@ void CEAnsi::StartVimTerm(bool bFromDllStart)
 
 void CEAnsi::StopVimTerm()
 {
+	if (gbWasXTermOutput)
+	{
+		gbWasXTermOutput = false;
+		CEAnsi::StartXTermMode(false);
+	}
+
 	if (!gbVimTermWasChangedBuffer)
 		return;
 
@@ -2242,9 +2385,14 @@ void CEAnsi::StopVimTerm()
 	{
 		WORD nDefAttr = GetDefaultTextAttr();
 		// Сброс только расширенных атрибутов
-		ExtFillOutputParm fill = {sizeof(fill), efof_ResetExt/*|efof_Attribute|efof_Character*/,
+		ExtFillOutputParm fill = {sizeof(fill), /*efof_ResetExt|*/efof_Attribute/*|efof_Character*/,
 			hOut, {CECF_NONE,nDefAttr&0xF,(nDefAttr&0xF0)>>4}, L' ', {0,0}, csbi.dwSize.X * csbi.dwSize.Y};
 		ExtFillOutput(&fill);
+		CEAnsi* pObj = CEAnsi::Object();
+		if (pObj)
+			pObj->ReSetDisplayParm(hOut, TRUE, TRUE);
+		else
+			SetConsoleTextAttribute(hOut, nDefAttr);
 	}
 
 	// Восстановление прокрутки и данных
@@ -2279,4 +2427,18 @@ void CEAnsi::StopVimTerm()
 		}
 	}
 	*/
+}
+
+void CEAnsi::StartXTermMode(bool bStart)
+{
+	_ASSERTEX(gbVimTermWasChangedBuffer && (gbWasXTermOutput==bStart));
+
+	CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_STARTXTERM, sizeof(CESERVER_REQ_HDR)+sizeof(DWORD));
+	if (pIn)
+	{
+		pIn->dwData[0] = bStart ? te_xterm : te_win32;
+		CESERVER_REQ* pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+		ExecuteFreeResult(pIn);
+		ExecuteFreeResult(pOut);
+	}
 }

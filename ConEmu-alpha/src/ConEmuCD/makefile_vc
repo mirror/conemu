@@ -38,9 +38,11 @@ $(OBJDIR)\InjectRemote.obj \
 $(OBJDIR)\InQueue.obj \
 $(OBJDIR)\Queue.obj \
 $(OBJDIR)\SrvPipes.obj \
+$(OBJDIR)\ExecPty.obj \
 $(OBJDIR)\execute.obj \
 $(OBJDIR)\ConEmuCheck.obj \
 $(OBJDIR)\ConsoleRead.obj \
+$(OBJDIR)\CmdLine.obj \
 $(OBJDIR)\Common.obj \
 $(OBJDIR)\MAssert.obj \
 $(OBJDIR)\Memory.obj \
@@ -48,6 +50,7 @@ $(OBJDIR)\Monitors.obj \
 $(OBJDIR)\MSecurity.obj \
 $(OBJDIR)\MStrSafe.obj \
 $(OBJDIR)\RConStartArgs.obj \
+$(OBJDIR)\SetEnvVar.obj \
 $(OBJDIR)\WinConsole.obj \
 $(OBJDIR)\WinObjects.obj
 
@@ -261,6 +264,8 @@ $(OBJDIR)\GuiHooks.obj: GuiHooks.cpp GuiHooks.h
 
 $(OBJDIR)\RegPrepare.obj: RegPrepare.cpp
 
+$(INTDIR)\CmdLine.obj: ../common/CmdLine.cpp ../common/CmdLine.h
+
 $(OBJDIR)\Common.obj: ../common/Common.cpp
 
 $(OBJDIR)\ConEmuCmd.obj: ConEmuCmd.cpp ../common/PipeServer.h
@@ -281,6 +286,8 @@ $(OBJDIR)\Queue.obj: Queue.cpp ../common/PipeServer.h ../common/InQueue.h
 
 $(OBJDIR)\SrvPipes.obj: SrvPipes.cpp ../common/PipeServer.h
 
+$(OBJDIR)\ExecPty.obj: ../common/ExecPty.cpp ../common/ExecPty.h
+
 $(OBJDIR)\execute.obj: ../common/execute.cpp ../common/execute.h
 
 $(OBJDIR)\ConEmuCheck.obj: ../common/ConEmuCheck.cpp ../common/ConEmuCheck.h
@@ -298,6 +305,8 @@ $(OBJDIR)\MSecurity.obj: ../common/MSecurity.cpp
 $(OBJDIR)\MStrSafe.obj: ../common/MStrSafe.cpp
 
 $(OBJDIR)\RConStartArgs.obj: ../common/RConStartArgs.cpp ../common/RConStartArgs.h
+
+$(OBJDIR)\SetEnvVar.obj: ../common/SetEnvVar.cpp
 
 $(OBJDIR)\WinConsole.obj: ../common/WinConsole.cpp ../common/WinConsole.h
 

@@ -120,16 +120,22 @@ const CONEMUDEFCOLORS DefColors[] =
 		}
 	},
 	{
-		L"<PowerShell>", {
-			0x00000000, 0x00800000, 0x00008000, 0x00808000, 0x00000080, 0x00562401, 0x00F0EDEE, 0x00C0C0C0,
-			0x00808080, 0x00ff0000, 0x0000FF00, 0x00FFFF00, 0x000000FF, 0x00FF00FF, 0x0000FFFF, 0x00FFFFFF
-		}, {6,5,3,15}
+		L"<Monokai>", {
+			0x00222827, 0x009e5401, 0x0004aa74, 0x00a6831a, 0x003403a7, 0x009c5689, 0x0049b6b6, 0x00cacaca,
+			0x007c7c7c, 0x00f58303, 0x0006d08d, 0x00e5c258, 0x004b04f3, 0x00b87da8, 0x0081cccc, 0x00ffffff
+		}
 	},
 	{
 		L"<Murena scheme>", {
 			0x00000000, 0x00644100, 0x00008000, 0x00808000, 0x00000080, 0x00800080, 0x00008080, 0x00c0c0c0,
 			0x00808080, 0x00ff0000, 0x0076c587, 0x00ffff00, 0x00004bff, 0x00d78ce6, 0x0000ffff, 0x00ffffff
 		}
+	},
+	{
+		L"<PowerShell>", {
+			0x00000000, 0x00800000, 0x00008000, 0x00808000, 0x00000080, 0x00562401, 0x00F0EDEE, 0x00C0C0C0,
+			0x00808080, 0x00ff0000, 0x0000FF00, 0x00FFFF00, 0x000000FF, 0x00FF00FF, 0x0000FFFF, 0x00FFFFFF
+		}, {6,5,3,15}
 	},
 	{
 		L"<Solarized>", {
@@ -156,7 +162,7 @@ const CONEMUDEFCOLORS DefColors[] =
 		}
 	},
 	{
-		L"<Solarized Me>", {
+		L"<SolarMe>", {
 			0x00E3F6FD, 0x00D5E8EE, 0x00756E58, 0x008C8A77, 0x00164BCB, 0x00C4716C, 0x002F32DC, 0x00586E75,
 			0x00423607, 0x00D28B26, 0x0000BB7E, 0x0098A12A, 0x00837B65, 0x008236D3, 0x000089B5, 0x00362B00
 		}
@@ -180,15 +186,21 @@ const CONEMUDEFCOLORS DefColors[] =
 		}
 	},
 	{
-		L"<xterm>", {
-			0x00000000, 0x00ee0000, 0x0000cd00, 0x00cdcd00, 0x000000cd, 0x00cd00cd, 0x0000cdcd, 0x00e5e5e5,
-			0x007f7f7f, 0x00ff5c5c, 0x0000ff00, 0x00ffff00, 0x000000ff, 0x00ff00ff, 0x0000ffff, 0x00ffffff
-		}
-	},
-	{
 		L"<Twilight>", {
 			0x00141414, 0x004c6acf, 0x00619083, 0x0069a8ce, 0x00a68775, 0x009d859b, 0x00b3a605, 0x00d7d7d7,
 			0x00666666, 0x00a68775, 0x004da459, 0x00e6e60a, 0x00520ad8, 0x008b00e6, 0x003eeee1, 0x00e6e6e6
+		}
+	},
+	{
+		L"<Ubuntu>", { // Need to set up backround "picture" with colorfill #300A24
+			0x0036342e, 0x00a46534, 0x00069a4e, 0x009a9806, 0x000000cc, 0x007b5075, 0x0000a0c4, 0x00cfd7d3,
+			0x00535755, 0x00cf9f72, 0x0034e28a, 0x00e2e234, 0x002929ef, 0x00a87fad, 0x004fe9fc, 0x00eceeee			
+		}, {15, 0, 0, 0}, {true, 0x00240A30}
+	},
+	{
+		L"<xterm>", {
+			0x00000000, 0x00ee0000, 0x0000cd00, 0x00cdcd00, 0x000000cd, 0x00cd00cd, 0x0000cdcd, 0x00e5e5e5,
+			0x007f7f7f, 0x00ff5c5c, 0x0000ff00, 0x00ffff00, 0x000000ff, 0x00ff00ff, 0x0000ffff, 0x00ffffff
 		}
 	},
 	{
@@ -196,12 +208,6 @@ const CONEMUDEFCOLORS DefColors[] =
 			0x003f3f3f, 0x00af6464, 0x00008000, 0x00808000, 0x00232333, 0x00aa50aa, 0x0000dcdc, 0x00ccdcdc,
 			0x008080c0, 0x00ffafaf, 0x007f9f7f, 0x00d3d08c, 0x007071e3, 0x00c880c8, 0x00afdff0, 0x00ffffff
 		},
-	},
-	{
-		L"<Ubuntu>", { // Need to set up backround "picture" with colorfill #300A24
-			0x0036342e, 0x00a46534, 0x00069a4e, 0x009a9806, 0x000000cc, 0x007b5075, 0x0000a0c4, 0x00cfd7d3,
-			0x00535755, 0x00cf9f72, 0x0034e28a, 0x00e2e234, 0x002929ef, 0x00a87fad, 0x004fe9fc, 0x00eceeee			
-		}, {15, 0, 0, 0}, {true, 0x00240A30}
 	},
 };
 //const DWORD *dwDefColors = DefColors[0].dwDefColors;
@@ -337,6 +343,7 @@ void Settings::InitSettings()
 	isMultiIterate = true;
 	isMultiMinByEsc = 2; isMapShiftEscToEsc = true; // isMapShiftEscToEsc used only when isMultiMinByEsc==1 and only for console apps
 	isMultiNewConfirm = true;
+	isCloseConsoleConfirm = true;
 	isUseWinNumber = true; isUseWinArrows = false; isUseWinTab = false;
 	nSplitWidth = nSplitHeight = 4;
 	//nSplitClr1 = nSplitClr2 = RGB(160,160,160);
@@ -555,6 +562,7 @@ void Settings::InitSettings()
 
 	isSetDefaultTerminal = false;
 	isRegisterOnOsStartup = false;
+	isRegisterOnOsStartupTSA = true;
 	isDefaultTerminalNoInjects = false;
 	nDefaultTerminalConfirmClose = 1 /* Always */;
 	SetDefaultTerminalApps(L"explorer.exe"/* to default value */); // "|"-delimited string -> MSZ
@@ -599,7 +607,7 @@ void Settings::InitSettings()
 	isCTSFreezeBeforeSelect = false;
 	isCTSSelectBlock = true; //isCTSVkBlock = VK_LMENU; // по умолчанию - блок выделяется c LAlt
 	isCTSSelectText = true; //isCTSVkText = VK_LSHIFT; // а текст - при нажатом LShift
-	isCTSHtmlFormat = 1; // Use HTML Copy formatting
+	isCTSHtmlFormat = 0; // Don't use HTML formatting with copy (by default)
 	//vmCTSVkBlockStart = 0; // при желании, пользователь может назначить hotkey запуска выделения
 	//vmCTSVkTextStart = 0;  // при желании, пользователь может назначить hotkey запуска выделения
 	isCTSActMode = 2; // BufferOnly
@@ -709,6 +717,11 @@ void Settings::InitSettings()
 	/* *** AutoUpdate *** */
 	_ASSERTE(UpdSet.szUpdateVerLocation==NULL); // Уже должен был быть вызван ReleasePointers
 	UpdSet.ResetToDefaults();
+}
+
+void Settings::ResetSavedOnExit()
+{
+	mb_ExitSettingsAutoSaved = false;
 }
 
 // В Desktop, Inside (и еще может быть когда) Transparent включать нельзя
@@ -1093,11 +1106,11 @@ bool Settings::LoadCmdTask(SettingsBase* reg, CommandTasks* &pTask, int iIndex)
 	wchar_t* pszNameSet = NULL;
 	if (iIndex >= 0)
 	{
-	if (!reg->Load(L"Name", &pszNameSet) || !*pszNameSet)
-	{
-		SafeFree(pszNameSet);
-		goto wrap;
-	}
+		if (!reg->Load(L"Name", &pszNameSet) || !*pszNameSet)
+		{
+			SafeFree(pszNameSet);
+			goto wrap;
+		}
 	}
 	else
 	{
@@ -1114,6 +1127,11 @@ bool Settings::LoadCmdTask(SettingsBase* reg, CommandTasks* &pTask, int iIndex)
 	}
 
 	pTask->SetName(pszNameSet, iIndex);
+
+	pTask->HotKey.HkType = chk_Task;
+	if ((iIndex < 0) || !reg->Load(L"Hotkey", pTask->HotKey.VkMod))
+		pTask->HotKey.VkMod = 0;
+
 
 	if (!reg->Load(L"GuiArgs", &pTask->pszGuiArgs) || !*pTask->pszGuiArgs)
 	{
@@ -1248,7 +1266,8 @@ bool Settings::SaveCmdTask(SettingsBase* reg, CommandTasks* pTask)
 
 	if (pTask != StartupTask)
 	{
-	reg->Save(L"Name", pTask->pszName);
+		reg->Save(L"Name", pTask->pszName);
+		reg->Save(L"Hotkey", pTask->HotKey.VkMod);
 	}
 
 	reg->Save(L"GuiArgs", pTask->pszGuiArgs);
@@ -1581,23 +1600,23 @@ Settings::ColorPalette* Settings::PaletteGetPtr(int anIndex)
 
 	_ASSERTE(anIndex==-1);
 
-		static ColorPalette StdPal = {};
-		StdPal.bPredefined = false;
-		static wchar_t szCurrentScheme[64] = L"<Current color scheme>";
-		StdPal.pszName = szCurrentScheme;
+	static ColorPalette StdPal = {};
+	StdPal.bPredefined = false;
+	static wchar_t szCurrentScheme[64] = L"<Current color scheme>";
+	StdPal.pszName = szCurrentScheme;
 		
-		StdPal.isExtendColors = AppStd.isExtendColors;
-		StdPal.nExtendColorIdx = AppStd.nExtendColorIdx;
+	StdPal.isExtendColors = AppStd.isExtendColors;
+	StdPal.nExtendColorIdx = AppStd.nExtendColorIdx;
 		
-		StdPal.nTextColorIdx = AppStd.nTextColorIdx;
-		StdPal.nBackColorIdx = AppStd.nBackColorIdx;
-		StdPal.nPopTextColorIdx = AppStd.nPopTextColorIdx;
-		StdPal.nPopBackColorIdx = AppStd.nPopBackColorIdx;
+	StdPal.nTextColorIdx = AppStd.nTextColorIdx;
+	StdPal.nBackColorIdx = AppStd.nBackColorIdx;
+	StdPal.nPopTextColorIdx = AppStd.nPopTextColorIdx;
+	StdPal.nPopBackColorIdx = AppStd.nPopBackColorIdx;
 
-		_ASSERTE(sizeof(StdPal.Colors) == sizeof(this->Colors));
-		memmove(StdPal.Colors, this->Colors, sizeof(StdPal.Colors));
-		return &StdPal;
-	}
+	_ASSERTE(sizeof(StdPal.Colors) == sizeof(this->Colors));
+	memmove(StdPal.Colors, this->Colors, sizeof(StdPal.Colors));
+	return &StdPal;
+}
 
 void Settings::PaletteSetStdIndexes()
 {
@@ -2166,6 +2185,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 
 		reg->Load(L"SetDefaultTerminal", isSetDefaultTerminal);
 		reg->Load(L"SetDefaultTerminalStartup", isRegisterOnOsStartup);
+		reg->Load(L"SetDefaultTerminalStartupTSA", isRegisterOnOsStartupTSA);
 		reg->Load(L"DefaultTerminalNoInjects", isDefaultTerminalNoInjects);
 		reg->Load(L"DefaultTerminalConfirm", nDefaultTerminalConfirmClose);
 		{
@@ -2369,8 +2389,8 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		//
 		reg->Load(L"ComSpec.Path", ComSpec.ComspecExplicit, countof(ComSpec.ComspecExplicit));
 		//-- wcscpy_c(ComSpec.ComspecInitial, gpConEmu->ms_ComSpecInitial);
-		// Обработать 32/64 (найти tcc.exe и т.п.)
-		FindComspec(&ComSpec);
+		//// Обработать 32/64 (найти tcc.exe и т.п.)
+		//FindComspec(&ComSpec);
 		//Update Comspec(&ComSpec); --> CSettings::SettingsLoaded
 
 		reg->Load(L"ConsoleTextSelection", isConsoleTextSelection); if (isConsoleTextSelection>2) isConsoleTextSelection = 2;
@@ -2504,13 +2524,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"bgImageDarker", bgImageDarker);
 		reg->Load(L"bgImageColors", nBgImageColors);
 		if (!nBgImageColors) nBgImageColors = (DWORD)-1; //1|2 == BgImageColorsDefaults;
-		reg->Load(L"bgOperation", bgOperation);
-		if (bgOperation!=eUpLeft && bgOperation!=eUpRight
-			&& bgOperation!=eDownLeft && bgOperation!=eDownRight
-			&& bgOperation!=eStretch && bgOperation!=eTile)
-		{
-			bgOperation = eUpLeft;
-		}
+		reg->Load(L"bgOperation", bgOperation); MinMax(bgOperation, eOpLast);
 		reg->Load(L"bgPluginAllowed", isBgPluginAllowed);
 		if (isBgPluginAllowed!=0 && isBgPluginAllowed!=1 && isBgPluginAllowed!=2) isBgPluginAllowed = 1;
 
@@ -2724,9 +2738,9 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 				pHK->VkMod = 0; // Сбросить VkMod для vkAltEnter
 			}
 			// Если раньше был включен флажок "Send Alt+F9 to console"
-			if (bSendAltF9 && GetHotkeyById(vkAltF9, (const ConEmuHotKey**)&pHK) && pHK->NotChanged && (pHK->VkMod == ConEmuHotKey::MakeHotKey(VK_F9,VK_MENU)))
+			if (bSendAltF9 && GetHotkeyById(vkMaximize, (const ConEmuHotKey**)&pHK) && pHK->NotChanged && (pHK->VkMod == ConEmuHotKey::MakeHotKey(VK_F9,VK_MENU)))
 			{
-				pHK->VkMod = 0; // Сбросить VkMod для vkAltF9
+				pHK->VkMod = 0; // Сбросить VkMod для vkMaximize
 			}
 		}
 
@@ -2823,6 +2837,10 @@ void Settings::SaveSettingsOnExit()
 		return;
 	mb_ExitSettingsAutoSaved = true;
 
+	// В некоторых случаях сохранение опций при выходе не допустимо
+	if (!gpConEmu->IsAllowSaveSettingsOnExit())
+		return;
+
 	bool bTaskAutoSave = (nStartType == (rbStartLastTabs - rbStartSingleApp));
 
 	// Смотрим, нужно ли сохранять что-либо при выходе?
@@ -2874,40 +2892,45 @@ void Settings::SaveSettingsOnExit()
 		// Таски пишутся в отдельный ключ
 		if (bTaskAutoSave)
 		{
-			BOOL lbOpened = FALSE;
-			wchar_t szCmdKey[MAX_PATH+64];
-			wcscpy_c(szCmdKey, gpSetCls->GetConfigPath());
-			wcscat_c(szCmdKey, L"\\Tasks\\");
-			wcscat_c(szCmdKey, AutoStartTaskName);
-			lbOpened = reg->OpenKey(szCmdKey, KEY_WRITE);
-			if (lbOpened)
+			wchar_t* pszTabs = CVConGroup::GetTasks(NULL);
+			if (pszTabs && *pszTabs)
 			{
-				if (!StartupTask)
-					StartupTask = (CommandTasks*)calloc(1, sizeof(CommandTasks));
-
-				if (StartupTask)
+				BOOL lbOpened = FALSE;
+				wchar_t szCmdKey[MAX_PATH+64];
+				wcscpy_c(szCmdKey, gpSetCls->GetConfigPath());
+				wcscat_c(szCmdKey, L"\\Tasks\\");
+				wcscat_c(szCmdKey, AutoStartTaskName);
+				lbOpened = reg->OpenKey(szCmdKey, KEY_WRITE);
+				if (lbOpened)
 				{
-					wchar_t szConfig[300] = L"";
-					LPCWSTR pszConfigName = gpSetCls->GetConfigName();
-					if (pszConfigName && *pszConfigName)
+					if (!StartupTask)
+						StartupTask = (CommandTasks*)calloc(1, sizeof(CommandTasks));
+
+					if (StartupTask)
 					{
-						_wsprintf(szConfig, SKIPLEN(countof(szConfig)) L"/config \"%s\"", pszConfigName);
+						wchar_t szConfig[300] = L"";
+						LPCWSTR pszConfigName = gpSetCls->GetConfigName();
+						if (pszConfigName && *pszConfigName)
+						{
+							_wsprintf(szConfig, SKIPLEN(countof(szConfig)) L"/config \"%s\"", pszConfigName);
+						}
+						StartupTask->SetGuiArg(szConfig);
+
+					
+						StartupTask->SetCommands(pszTabs);
+					
+
+						SaveCmdTask(reg, StartupTask);
 					}
-					StartupTask->SetGuiArg(szConfig);
 
-					wchar_t* pszTabs = CVConGroup::GetTasks(NULL);
-					StartupTask->SetCommands(pszTabs);
-					SafeFree(pszTabs);
-
-					SaveCmdTask(reg, StartupTask);
+					reg->CloseKey();
 				}
-
-				reg->CloseKey();
+				else
+				{
+					gpConEmu->LogWindowPos(L"SaveSettingsOnExit - FAILED(OpenKey(AutoStartTaskName, KEY_WRITE))");
+				}
 			}
-			else
-			{
-				gpConEmu->LogWindowPos(L"SaveSettingsOnExit - FAILED(OpenKey(AutoStartTaskName, KEY_WRITE))");
-			}
+			SafeFree(pszTabs);
 		}
 	}
 	else
@@ -3135,6 +3158,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 
 		reg->Save(L"SetDefaultTerminal", isSetDefaultTerminal);
 		reg->Save(L"SetDefaultTerminalStartup", isRegisterOnOsStartup);
+		reg->Save(L"SetDefaultTerminalStartupTSA", isRegisterOnOsStartupTSA);
 		reg->Save(L"DefaultTerminalNoInjects", isDefaultTerminalNoInjects);
 		reg->Save(L"DefaultTerminalConfirm", nDefaultTerminalConfirmClose);
 		{
@@ -3256,7 +3280,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"ConWnd Y", isUseCurrentSizePos ? gpConEmu->wndY : _wndY);
 		reg->Save(L"16bit Height", ntvdmHeight);
 		reg->Save(L"AutoSaveSizePos", isAutoSaveSizePos);
-		mb_ExitSettingsAutoSaved = false; // Раз было инициированное пользователем сохранение настроек - сбросим флажок
+		ResetSavedOnExit(); // Раз было инициированное пользователем сохранение настроек - сбросим флажок (mb_ExitSettingsAutoSaved)
 		reg->Save(L"IntegralSize", mb_IntegralSize);
 		reg->Save(L"QuakeStyle", isQuakeStyle);
 		reg->Save(L"QuakeAnimation", nQuakeAnimation);
@@ -3582,14 +3606,14 @@ bool Settings::isKeyboardHooks(bool abNoDisable /*= false*/)
 //LPCTSTR Settings::GetCurCmd()
 //{
 //	return psCurCmd;
-//	}
+//}
 //
 //void Settings::SetCmdPtr(wchar_t*& psNewCmd)
-//	{
+//{
 //	_ASSERTE(psNewCmd!=NULL);
 //
 //	if (psCurCmd && (psCurCmd != psNewCmd))
-//{
+//	{
 //		SafeFree(psCurCmd);
 //	}
 //
@@ -3704,23 +3728,27 @@ void Settings::HistoryAdd(LPCWSTR asCmd)
 	psCmdHistory = pszNewHistory;
 	nCmdHistorySize = (psz - pszNewHistory + 1)*sizeof(wchar_t);
 	HEAPVAL;
-	// И сразу сохранить в настройках
-	SettingsBase* reg = CreateSettings(NULL);
-	if (!reg)
-	{
-		_ASSERTE(reg!=NULL);
-		return;
-	}
 
-	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
+	if (!gpConEmu->IsResetBasicSettings())
 	{
-		HEAPVAL;
-		reg->SaveMSZ(L"CmdLineHistory", psCmdHistory, nCmdHistorySize);
-		HEAPVAL;
-		reg->CloseKey();
-	}
+		// И сразу сохранить в настройках
+		SettingsBase* reg = CreateSettings(NULL);
+		if (!reg)
+		{
+			_ASSERTE(reg!=NULL);
+			return;
+		}
 
-	delete reg;
+		if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
+		{
+			HEAPVAL;
+			reg->SaveMSZ(L"CmdLineHistory", psCmdHistory, nCmdHistorySize);
+			HEAPVAL;
+			reg->CloseKey();
+		}
+
+		delete reg;
+	}
 }
 
 LPCWSTR Settings::HistoryGet()
@@ -4296,7 +4324,7 @@ void Settings::ResetFadeColors()
 	for (int i = 0; i < PaletteCount; i++)
 	{
 		if (Palettes[i])
-	{
+		{
 			Palettes[i]->FadeInitialized = false;
 		}
 	}
@@ -4599,7 +4627,24 @@ const Settings::CommandTasks* Settings::CmdTaskGet(int anIndex)
 	if (!CmdTasks || (anIndex < 0) || (anIndex >= CmdTaskCount))
 		return NULL;
 
+	if (CmdTasks[anIndex])
+	{
+		CmdTasks[anIndex]->HotKey.HkType = chk_Task;
+		CmdTasks[anIndex]->HotKey.SetTaskIndex(anIndex);
+		CmdTasks[anIndex]->HotKey.fkey = CConEmuCtrl::key_RunTask;
+	}
+
 	return (CmdTasks[anIndex]);
+}
+
+// anIndex - 0-based, index of CmdTasks
+void Settings::CmdTaskSetVkMod(int anIndex, DWORD VkMod)
+{
+	if (!CmdTasks || (anIndex < 0) || (anIndex >= CmdTaskCount))
+		return;
+	if (!CmdTasks[anIndex])
+		return;
+	CmdTasks[anIndex]->HotKey.VkMod = VkMod;
 }
 
 // anIndex - 0-based, index of CmdTasks
@@ -4788,38 +4833,30 @@ void Settings::SetDefaultTerminalApps(const wchar_t* apszApps)
 
 // Вернуть заданный VkMod, или 0 если не задан
 // nDescrID = vkXXX (e.g. vkMinimizeRestore)
+// Используется при отображении клавиш в меню
 DWORD Settings::GetHotkeyById(int nDescrID, const ConEmuHotKey** ppHK)
 {
-	if (!gpSetCls || !gpSetCls->m_HotKeys)
-	{
-		_ASSERTE(gpSetCls && gpSetCls->m_HotKeys);
-		return 0;
-	}
-
 	static int iLastFound = -1;
 
 	for (int j = -1;; j++)
 	{
-		ConEmuHotKey *pHK;
+		if (j == -1 && iLastFound == -1)
+			continue;
 
-		if (j == -1)
+		const ConEmuHotKey *pHK = gpSetCls->GetHotKeyPtr((j == -1) ? iLastFound : j);
+		if (!pHK)
 		{
-			if (iLastFound == -1)
+			if (j == -1)
 				continue;
 			else
-				pHK = (gpSetCls->m_HotKeys + iLastFound);
+				break; // Кончились
 		}
-		else
-		{
-			pHK = (gpSetCls->m_HotKeys + j);
-		}
-
-		if (!pHK->DescrLangID)
-			break;
 
 		if (pHK->DescrLangID == nDescrID)
 		{
-			iLastFound = (int)(pHK - gpSetCls->m_HotKeys);
+			if (j >= 0)
+				iLastFound = j;
+
 			DWORD VkMod = pHK->VkMod;
 			if (pHK->HkType == chk_Modifier)
 			{
@@ -4849,19 +4886,26 @@ bool Settings::IsHotkey(int nDescrID)
 // VkMod = LOBYTE - VK, старшие три байта - модификаторы (тоже VK)
 void Settings::SetHotkeyById(int nDescrID, DWORD VkMod)
 {
-	if (!gpSetCls || !gpSetCls->m_HotKeys)
+	if (nDescrID > 0)
 	{
-		_ASSERTE(gpSetCls && gpSetCls->m_HotKeys);
-		return;
-	}
-
-	for (ConEmuHotKey *ppHK = gpSetCls->m_HotKeys; ppHK->DescrLangID; ++ppHK)
-	{
-		if (ppHK->DescrLangID == nDescrID)
+		if (!gpSetCls || !gpSetCls->mp_HotKeys)
 		{
-			ppHK->VkMod = VkMod;
-			break;
+			_ASSERTE(gpSetCls && gpSetCls->mp_HotKeys);
+			return;
 		}
+
+		for (int i = 0; i < gpSetCls->mn_HotKeys; i++)
+		{
+			if (gpSetCls->mp_HotKeys[i].DescrLangID == nDescrID)
+			{
+				gpSetCls->mp_HotKeys[i].VkMod = VkMod;
+				break;
+			}
+		}
+	}
+	else
+	{
+		_ASSERTE(nDescrID > 0); // Invalid descr!
 	}
 
 	CheckHotkeyUnique();
@@ -4869,14 +4913,12 @@ void Settings::SetHotkeyById(int nDescrID, DWORD VkMod)
 
 bool Settings::isModifierExist(BYTE Mod/*VK*/, bool abStrictSingle /*= false*/)
 {
-	if (!gpSetCls || !gpSetCls->m_HotKeys)
+	for (int i = 0;; i++)
 	{
-		_ASSERTE(gpSetCls && gpSetCls->m_HotKeys);
-		return false;
-	}
+		const ConEmuHotKey *ppHK = gpSetCls->GetHotKeyPtr(i);
+		if (!ppHK)
+			break;
 
-	for (ConEmuHotKey *ppHK = gpSetCls->m_HotKeys; ppHK->DescrLangID; ++ppHK)
-	{
 		if (ppHK->VkMod == 0)
 			continue;
 
@@ -4903,14 +4945,12 @@ bool Settings::isModifierExist(BYTE Mod/*VK*/, bool abStrictSingle /*= false*/)
 // Есть ли такой хоткей или модификатор (актуально для VK_APPS)
 bool Settings::isKeyOrModifierExist(BYTE Mod/*VK*/)
 {
-	if (!gpSetCls || !gpSetCls->m_HotKeys)
+	for (int i = 0;; i++)
 	{
-		_ASSERTE(gpSetCls && gpSetCls->m_HotKeys);
-		return false;
-	}
+		const ConEmuHotKey *ppHK = gpSetCls->GetHotKeyPtr(i);
+		if (!ppHK)
+			break;
 
-	for (ConEmuHotKey *ppHK = gpSetCls->m_HotKeys; ppHK->DescrLangID; ++ppHK)
-	{
 		if (ppHK->VkMod == 0)
 			continue;
 
@@ -4926,12 +4966,6 @@ bool Settings::isKeyOrModifierExist(BYTE Mod/*VK*/)
 
 void Settings::LoadHotkeys(SettingsBase* reg)
 {
-	if (!gpSetCls || !gpSetCls->m_HotKeys)
-	{
-		_ASSERTE(gpSetCls && gpSetCls->m_HotKeys);
-		return;
-	}
-
 	reg->Load(L"Multi.Modifier", nHostkeyNumberModifier); ConEmuHotKey::TestHostkeyModifiers(nHostkeyNumberModifier);
 	nHostkeyArrowModifier = nHostkeyArrowModifier; // Умолчание - то же что и "Multi.Modifier"
 	reg->Load(L"Multi.ArrowsModifier", nHostkeyArrowModifier); ConEmuHotKey::TestHostkeyModifiers(nHostkeyArrowModifier);
@@ -4942,8 +4976,15 @@ void Settings::LoadHotkeys(SettingsBase* reg)
 	BYTE MacroVersion = 0;
 	reg->Load(L"KeyMacroVersion", MacroVersion);
 
-	for (ConEmuHotKey *ppHK = gpSetCls->m_HotKeys; ppHK->DescrLangID; ++ppHK)
+	if (!gpSetCls || !gpSetCls->mp_HotKeys)
 	{
+		_ASSERTE(gpSetCls && gpSetCls->mp_HotKeys);
+		return;
+	}
+
+	for (int i = 0; i < gpSetCls->mn_HotKeys; i++)
+	{
+		ConEmuHotKey *ppHK = gpSetCls->mp_HotKeys+i;
 		ppHK->NotChanged = true;
 
 		if (!*ppHK->Name)
@@ -5016,10 +5057,21 @@ void Settings::CheckHotkeyUnique()
 	// А некоторые проверять не хочется
 	int SkipCheckID[] = {vkCtrlTab_Left, vkCtrlTab_Up, vkCtrlTab_Right, vkCtrlTab_Down, vkEscNoConsoles};
 	bool bSkip = false;
+	int iHK1, iHK2;
+	const ConEmuHotKey *ppHK1, *ppHK2;
 
 	// Go
-	for (ConEmuHotKey *ppHK1 = gpSetCls->m_HotKeys; ppHK1[0].DescrLangID && ppHK1[1].DescrLangID; ++ppHK1)
+	for (iHK1 = 0;; iHK1++)
 	{
+		ppHK1 = gpSetCls->GetHotKeyPtr(iHK1);
+		if (!ppHK1)
+			break;
+		// Сразу проверить следующий за ним
+		ppHK2 = gpSetCls->GetHotKeyPtr(iHK1+1);
+		if (!ppHK2)
+			break;
+		
+
 		if ((ppHK1->HkType == chk_Modifier) || (ConEmuHotKey::GetHotkey(ppHK1->VkMod) == 0))
 			continue;
 
@@ -5039,8 +5091,13 @@ void Settings::CheckHotkeyUnique()
 		if (bSkip)
 			continue;
 		
-		for (ConEmuHotKey *ppHK2 = ppHK1+1; ppHK2[0].DescrLangID; ++ppHK2)
+		//for (ConEmuHotKey *ppHK2 = ppHK1+1; ppHK2[0].DescrLangID; ++ppHK2)
+		for (iHK2 = iHK1+1;; iHK2++)
 		{
+			ppHK2 = gpSetCls->GetHotKeyPtr(iHK2);
+			if (!ppHK2)
+				break;
+
 			if ((ppHK2->HkType == chk_Modifier) || (ConEmuHotKey::GetHotkey(ppHK2->VkMod) == 0))
 				continue;
 
@@ -5070,10 +5127,11 @@ void Settings::CheckHotkeyUnique()
 			{
 				if (lstrcmp(ppHK1->GuiMacro, ppHK2->GuiMacro) == 0)
 				{
+					// Нам - можно
 					if (ppHK1->HkType == chk_Macro)
-						ppHK1->VkMod = 0;
+						((ConEmuHotKey*)ppHK1)->VkMod = 0;
 					else
-						ppHK2->VkMod = 0;
+						((ConEmuHotKey*)ppHK2)->VkMod = 0;
 					continue;
 				}
 			}
@@ -5114,22 +5172,25 @@ wrap:
 
 void Settings::SaveHotkeys(SettingsBase* reg)
 {
-	if (!gpSetCls || !gpSetCls->m_HotKeys)
-	{
-		_ASSERTE(gpSetCls && gpSetCls->m_HotKeys);
-		return;
-	}
-
 	reg->Save(L"Multi.Modifier", nHostkeyNumberModifier);
 	reg->Save(L"Multi.ArrowsModifier", nHostkeyArrowModifier);
 
 	BYTE MacroVersion = GUI_MACRO_VERSION;
 	reg->Save(L"KeyMacroVersion", MacroVersion);
 
+	if (!gpSetCls || !gpSetCls->mp_HotKeys)
+	{
+		_ASSERTE(gpSetCls && gpSetCls->mp_HotKeys);
+		return;
+	}
+
 	wchar_t szMacroName[80];
 
-	for (ConEmuHotKey *ppHK = gpSetCls->m_HotKeys; ppHK->DescrLangID; ++ppHK)
+	// Таски сохраняются отдельно
+	for (int i = 0; i < gpSetCls->mn_HotKeys; i++)
 	{
+		ConEmuHotKey *ppHK = gpSetCls->mp_HotKeys+i;
+
 		if (!*ppHK->Name)
 			continue;
 		

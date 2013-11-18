@@ -43,6 +43,8 @@
 #define IDD_SPG_CONTROL                 173
 #define IDD_SPG_SHOW                    174
 #define IDD_SPG_TASKBAR                 175
+#define IDD_SPG_DEFTERM                 176
+#define IDD_SPG_FARMACRO                177
 #define IDD_MORE_CONFONT                209
 #define IDD_MORE_DOSBOX                 210
 #define IDD_ATTACHDLG                   212
@@ -53,6 +55,7 @@
 #define IDD_CMDPROMPT                   220
 #define IDD_HELP                        221
 #define IDD_ACTION                      222
+#define IDD_HOTKEY                      223
 #define c0                              1000
 #define c1                              1001
 #define c2                              1002
@@ -396,7 +399,7 @@
 #define vkRDragKey                      2012
 #define vkWinAltP                       2013
 #define vkWinAltSpace                   2014
-#define vkAltF9                         2015
+#define vkMaximize                      2015
 #define vkCtrlWinAltSpace               2016
 #define vkAltEnter                      2017
 #define vkSystemMenu                    2018
@@ -752,6 +755,7 @@
 #define bHereRegister                   2392
 #define bHereUnregister                 2393
 #define tCmdAutoAttach                  2394
+#define bInsideUnregister2              2394
 #define bCmdAutoRegister                2395
 #define bCmdAutoUnregister              2396
 #define cbInsideSyncDir                 2397
@@ -962,14 +966,25 @@
 #define vkMultiNewPopup2                2624
 #define vkCloseAllCon                   2625
 #define vkCloseExceptCon                2626
+#define cbDefaultTerminalTSA            2627
+#define tCmdGroupKey                    2628
+#define cbCmdGroupKey                   2629
+#define vkCTSShiftHome                  2630
+#define vkCTSShiftEnd                   2631
+#define cbAddDefaults                   2632
+#define vkCTSCopyHtml0                  2633
+#define vkCTSCopyHtml1                  2634
+#define vkCTSCopyHtml2                  2635
+#define vkMaximizeWidth                 2636
+#define vkMaximizeHeight                2637
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        222
+#define _APS_NEXT_RESOURCE_VALUE        224
 #define _APS_NEXT_COMMAND_VALUE         40010
-#define _APS_NEXT_CONTROL_VALUE         2627
+#define _APS_NEXT_CONTROL_VALUE         2640
 #define _APS_NEXT_SYMED_VALUE           130
 #endif
 #endif

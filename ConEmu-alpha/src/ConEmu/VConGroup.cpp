@@ -67,6 +67,79 @@ static CVConGroup* gp_VGroups[MAX_CONSOLE_COUNT*2] = {}; // на каждое разбиение 
 static COORD g_LastConSize = {0,0}; // console size after last resize (in columns and lines)
 
 
+/* Group Guard */
+
+CGroupGuard::CGroupGuard(CVConGroup* apRef)
+{
+	mp_Ref = NULL;
+	Attach(apRef);
+}
+
+CGroupGuard::~CGroupGuard()
+{
+	Release();
+}
+	
+void CGroupGuard::Release()
+{
+	if (mp_Ref)
+	{
+		mp_Ref->Release();
+		mp_Ref = NULL;
+	}
+}
+
+bool CGroupGuard::Attach(CVConGroup* apRef)
+{
+	if (mp_Ref != apRef)
+	{
+		CVConGroup *pOldRef = mp_Ref;
+
+		mp_Ref = apRef;
+
+		if (pOldRef != mp_Ref)
+		{
+			if (mp_Ref)
+			{
+				mp_Ref->AddRef();
+			}
+
+			if (pOldRef)
+			{
+				pOldRef->Release();
+			}
+		}
+	}
+
+	return (mp_Ref != NULL);
+}
+	
+// Dereference
+CVConGroup* CGroupGuard::operator->() const
+{
+	_ASSERTE(mp_Ref!=NULL);
+	return mp_Ref;
+}
+
+// Releases any current VCon and loads specified
+CGroupGuard& CGroupGuard::operator=(CVConGroup* apRef)
+{
+	Attach(apRef);
+	return *this;
+}
+
+// Ptr, No Asserts
+CVConGroup* CGroupGuard::VGroup()
+{
+	return mp_Ref;
+}
+
+
+
+
+/* **************************************** */
+
+
 void CVConGroup::Initialize()
 {
 	InitializeCriticalSection(&gcs_VGroups);
@@ -114,8 +187,8 @@ CVConGroup* CVConGroup::SplitVConGroup(RConStartArgs::SplitType aSplitType /*eSp
 	if (!mp_Grp1 || !mp_Grp2)
 	{
 		_ASSERTE(mp_Grp1 && mp_Grp2);
-		SafeDelete(mp_Grp1);
-		SafeDelete(mp_Grp2);
+		SafeRelease(mp_Grp1);
+		SafeRelease(mp_Grp2);
 		return NULL;
 	}
 
@@ -233,7 +306,9 @@ CVConGroup::CVConGroup(CVConGroup *apParent)
 	mp_Parent = apParent; // Ссылка на "родительскую" панель
 	mp_ActiveGroupVConPtr = NULL;
 
-	EnterCriticalSection(&gcs_VGroups);
+
+	MSectionLockSimple lockGroups; lockGroups.Lock(&gcs_VGroups);
+	
 	bool bAdded = false;
 	for (size_t i = 0; i < countof(gp_VGroups); i++)
 	{
@@ -245,8 +320,18 @@ CVConGroup::CVConGroup(CVConGroup *apParent)
 		}
 	}
 	_ASSERTE(bAdded && "gp_VGroups overflow");
-	LeaveCriticalSection(&gcs_VGroups);
+
+	lockGroups.Unlock();
 }
+
+void CVConGroup::FinalRelease()
+{
+	MCHKHEAP;
+	_ASSERTE(gpConEmu->isMainThread());
+	CVConGroup* pGroup = (CVConGroup*)this;
+	delete pGroup;
+	MCHKHEAP;
+};
 
 CVConGroup::~CVConGroup()
 {
@@ -254,10 +339,9 @@ CVConGroup::~CVConGroup()
 
 	// Не должно быть дочерних панелей
 	_ASSERTE(mp_Grp1==NULL && mp_Grp2==NULL);
-	//SafeDelete(mp_Grp1);
-	//SafeDelete(mp_Grp2);
 
-	EnterCriticalSection(&gcs_VGroups);
+
+	MSectionLockSimple lockGroups; lockGroups.Lock(&gcs_VGroups);
 
 	if (mp_Parent)
 	{
@@ -271,7 +355,7 @@ CVConGroup::~CVConGroup()
 		else
 		{
 			p->MoveToParent(mp_Parent);
-			delete p;
+			p->Release();
 		}
 	}
 
@@ -287,7 +371,7 @@ CVConGroup::~CVConGroup()
 	}
 	_ASSERTE(bRemoved && "Was not pushed in gp_VGroups?");
 
-	LeaveCriticalSection(&gcs_VGroups);
+	lockGroups.Unlock();
 }
 
 void CVConGroup::OnVConDestroyed(CVirtualConsole* apVCon)
@@ -296,7 +380,7 @@ void CVConGroup::OnVConDestroyed(CVirtualConsole* apVCon)
 	{
 		CVConGroup* p = (CVConGroup*)apVCon->mp_Group;
 		apVCon->mp_Group = NULL;
-		delete p;
+		p->Release();
 	}
 }
 
@@ -548,6 +632,7 @@ void CVConGroup::LogInput(UINT uMsg, WPARAM wParam, LPARAM lParam, LPCWSTR pszTr
 
 void CVConGroup::StopSignalAll()
 {
+	MCHKHEAP;
 	for (size_t i = 0; i < countof(gp_VCon); i++)
 	{
 		if (gp_VCon[i])
@@ -559,6 +644,7 @@ void CVConGroup::StopSignalAll()
 
 void CVConGroup::DestroyAllVCon()
 {
+	MCHKHEAP;
 	for (size_t i = countof(gp_VCon); i--;)
 	{
 		if (gp_VCon[i])
@@ -568,6 +654,7 @@ void CVConGroup::DestroyAllVCon()
 			p->Release();
 		}
 	}
+	MCHKHEAP;
 }
 
 void CVConGroup::OnDestroyConEmu()
@@ -1242,8 +1329,8 @@ int CVConGroup::isFarExist(CEFarWindowType anWindowType/*=fwt_Any*/, LPWSTR asNa
 				else
 				{
 					// Нужны доп.проверки окон фара
-					CTab tab;
-					LPCWSTR pszNameOnly = asName ? PointToName(asName) : NULL;
+					ConEmuTab tab;
+					LPCWSTR pszNameOnly = (anWindowType & fwt_FarFullPathReq) ? NULL : asName ? PointToName(asName) : NULL;
 					if (pszNameOnly)
 					{
 						// Обработаем как обратные (в PointToName), так и прямые слеши
@@ -1255,39 +1342,38 @@ int CVConGroup::isFarExist(CEFarWindowType anWindowType/*=fwt_Any*/, LPWSTR asNa
 
 					for (int j = 0; !iFound; j++)
 					{
-						if (!pRCon->GetTab(j, tab))
+						if (!pRCon->GetTab(j, &tab))
 							break;
 
-						CEFarWindowType tabFlags = tab->Info.Type;
-						if ((tabFlags & fwt_TypeMask) != (anWindowType & fwt_TypeMask))
+						if ((tab.Type & fwt_TypeMask) != (anWindowType & fwt_TypeMask))
 							continue;
 
 						// Этот Far Elevated?
-						if ((anWindowType & fwt_Elevated) && !(tabFlags & fwt_Elevated))
+						if ((anWindowType & fwt_Elevated) && !(tab.Type & fwt_Elevated))
 							continue;
 						// В табе устанавливается флаг fwt_Elevated
 						// fwt_NonElevated используется только как аргумент поиска
-						if ((anWindowType & fwt_NonElevated) && (tabFlags & fwt_Elevated))
+						if ((anWindowType & fwt_NonElevated) && (tab.Type & fwt_Elevated))
 							continue;
 
 						// Модальное окно?
 						WARNING("Нужно еще учитывать <модальность> заблокированным диалогом, или меню, или еще чем-либо!");
-						if ((anWindowType & fwt_ModalFarWnd) && !(tabFlags & fwt_ModalFarWnd))
+						if ((anWindowType & fwt_ModalFarWnd) && !(tab.Type & fwt_ModalFarWnd))
 							continue;
 						// В табе устанавливается флаг fwt_Modal
 						// fwt_NonModal используется только как аргумент поиска
-						if ((anWindowType & fwt_NonModal) && (tabFlags & fwt_ModalFarWnd))
+						if ((anWindowType & fwt_NonModal) && (tab.Type & fwt_ModalFarWnd))
 							continue;
 
 						// Если ищем конкретный редактор/вьювер
 						if (asName && *asName)
 						{
-							LPCWSTR tabName = tab->Name.Ptr();
-							if (lstrcmpi(tabName, asName) == 0)
+							if (lstrcmpi(tab.Name, asName) == 0)
 							{
 								iFound = (j+1);
 							}
-							else if ((pszNameOnly != asName) && (lstrcmpi(PointToName(tabName), pszNameOnly) == 0))
+							else if (pszNameOnly && (pszNameOnly != asName)
+								&& (lstrcmpi(PointToName(tab.Name), pszNameOnly) == 0))
 							{
 								iFound = (j+1);
 							}
@@ -1573,13 +1659,15 @@ bool CVConGroup::isActiveGroupVCon(CVirtualConsole* pVCon)
 
 bool CVConGroup::isVisible(CVirtualConsole* apVCon)
 {
-	if (!apVCon)
+	if (!apVCon || !isValid(apVCon))
 		return false;
 
 	if (apVCon == gp_VActive)
 		return true;
 
-	CVConGroup* pActiveRoot = GetRootOfVCon(gp_VActive);
+	_ASSERTE(gp_VActive || gpConEmu->mb_ScClosePending);
+
+	CVConGroup* pActiveRoot = gp_VActive ? GetRootOfVCon(gp_VActive) : NULL;
 	CVConGroup* pRoot = GetRootOfVCon(apVCon);
 	if (pRoot && pActiveRoot && (pRoot == pActiveRoot))
 		return true;
@@ -2146,7 +2234,7 @@ void CVConGroup::ExportEnvVarAll(CESERVER_REQ* pIn, CRealConsole* pExceptRCon)
 			// Apply to all processes in this tab (console)
 			for (int i = 0; i < nCount; i++)
 			{
-				if (pP[i].ProcessID != nSrvPID)
+				if (pP[i].ProcessID != nSrvPID && !pP[i].IsConHost)
 				{
 					CESERVER_REQ* pOut = ExecuteHkCmd(pP[i].ProcessID, pIn, ghWnd);
 					ExecuteFreeResult(pOut);
@@ -2421,6 +2509,12 @@ void CVConGroup::OnUpdateTextColorSettings(BOOL ChangeTextAttr /*= TRUE*/, BOOL 
 
 void CVConGroup::OnVConClosed(CVirtualConsole* apVCon)
 {
+	if (!isValid(apVCon) || apVCon->isAlreadyDestroyed())
+	{
+		ShutdownGuiStep(L"OnVConClosed - was already closed");
+		return;
+	}
+
 	ShutdownGuiStep(L"OnVConClosed");
 
 	bool bDbg1 = false, bDbg2 = false, bDbg3 = false, bDbg4 = false;
@@ -2510,6 +2604,7 @@ void CVConGroup::OnVConClosed(CVirtualConsole* apVCon)
 				gp_VActive = NULL;
 			}
 
+			apVCon->DoDestroyDcWindow();
 			apVCon->Release();
 			break;
 		}
@@ -2909,7 +3004,7 @@ BOOL CVConGroup::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pS
 
 		if (gpConEmu->isIconic())
 		{
-			gpConEmu->OnMinimizeRestore(sih_SetForeground);
+			gpConEmu->DoMinimizeRestore(sih_SetForeground);
 		}
 
 		// т.к. это приходит из серверного потока - зовем в главном
@@ -3310,15 +3405,45 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 		MBoxAssert(gpConEmu->isMainThread());
 		return NULL;
 	}
+	MCHKHEAP;
 
 	CVirtualConsole* pVCon = NULL;
 
 	// When no command specified - choose default one. Now!
 	if (!args->bDetached && (!args->pszSpecialCmd || !*args->pszSpecialCmd))
 	{
+		_ASSERTE(gpConEmu->mn_StartupFinished == CConEmuMain::ss_Started);
 		_ASSERTE(args->pszSpecialCmd==NULL);
 
-		args->pszSpecialCmd = lstrdup(gpSetCls->GetCmd());
+		// Сюда мы попадаем, если юзер жмет Win+W (создание без подтверждения)
+		LPCWSTR pszSysCmd = gpSetCls->GetCmd(NULL, true);
+		LPCWSTR pszSysDir = NULL;
+		CVConGuard vActive;
+		// OK, если ConEmu стартовал с задачей (именованой или <Startup>)
+		if (!pszSysCmd || !*pszSysCmd)
+		{
+			// То нельзя запускать _консоль_ с _задачей_ или вообще "без команды"
+			if (GetActiveVCon(&vActive) >= 0)
+			{
+				// Попробовать взять команду из текущей консоли?
+				pszSysCmd = vActive->RCon()->GetCmd(true);
+				if (pszSysCmd && *pszSysCmd && !args->pszStartupDir)
+					pszSysDir = vActive->RCon()->GetStartupDir();
+			}
+			// Хм? Команда по умолчанию тогда.
+			if (!pszSysCmd || !*pszSysCmd)
+			{
+				pszSysCmd = gpSetCls->GetDefaultCmd();
+			}
+		}
+
+		args->pszSpecialCmd = lstrdup(pszSysCmd);
+
+		if (pszSysDir)
+		{
+			_ASSERTE(args->pszStartupDir==NULL);
+			args->pszStartupDir = lstrdup(pszSysDir);
+		}
 
 		_ASSERTE(args->pszSpecialCmd && *args->pszSpecialCmd);
 	}
@@ -3359,6 +3484,7 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 		pVCon = gpConEmu->CreateConGroup(pszDataW, args->bRunAsAdministrator, NULL/*ignored when 'args' specified*/, args);
 
 		SafeFree(pszDataW);
+		MCHKHEAP;
 		return pVCon;
 	}
 
@@ -3389,6 +3515,8 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 
 			// 130826 - "-new_console:sVb" - "b" was ignored!
 			BOOL lbInBackground = args->bBackgroundTab && (pOldActive != NULL); // && !args->eSplit;
+			// 131106 - "cmd -new_console:bsV" fails, split was left invisible
+			BOOL lbShowSplit = (args->eSplit != RConStartArgs::eSplitNone);
 
 			if (pVCon)
 			{
@@ -3415,18 +3543,11 @@ CVirtualConsole* CVConGroup::CreateCon(RConStartArgs *args, bool abAllowScripts 
 				{
 					pVCon->RCon()->OnActivate(i, ActiveConNum());
 
-					//mn_ActiveCon = i;
-					//Update(true);
-
 					ShowActiveGroup(pOldActive);
-					//TODO("DoubleView: показать на неактивной?");
-					//// Теперь можно показать активную
-					//gp_VActive->ShowView(SW_SHOW);
-					////ShowWindow(gp_VActive->GetView(), SW_SHOW);
-					//// и спрятать деактивированную
-					//if (pOldActive && (pOldActive != gp_VActive) && !pOldActive->isVisible())
-					//	pOldActive->ShowView(SW_HIDE);
-					//	//ShowWindow(pOldActive->GetView(), SW_HIDE);
+				}
+				else if (lbShowSplit)
+				{
+					ShowActiveGroup(NULL);
 				}
 
 				// Если была смена конфигурации окна (появились табы)
@@ -3822,6 +3943,7 @@ void CVConGroup::CalcSplitConSize(COORD size, COORD& sz1, COORD& sz2)
 
 void CVConGroup::SetConsoleSizes(const COORD& size, const RECT& rcNewCon, bool abSync)
 {
+	MSectionLockSimple lockGroups; lockGroups.Lock(&gcs_VGroups);
 	CVConGuard VCon(mp_Item);
 
 	// Некорректно. Нужно прокрутку просто вводить. А игнорировать установку размера окна нельзя.
@@ -3856,7 +3978,7 @@ void CVConGroup::SetConsoleSizes(const COORD& size, const RECT& rcNewCon, bool a
 	CVConGuard VCon1(mp_Grp1 ? mp_Grp1->mp_Item : NULL);
 	CVConGuard VCon2(mp_Grp2 ? mp_Grp2->mp_Item : NULL);
 
-	if ((m_SplitType == RConStartArgs::eSplitNone) || !mp_Grp1 || !mp_Grp2)
+	if ((m_SplitType == RConStartArgs::eSplitNone) || !VCon1.VCon() || !VCon2.VCon())
 	{
 		_ASSERTE(mp_Grp1==NULL && mp_Grp2==NULL);
 
@@ -3893,8 +4015,8 @@ void CVConGroup::SetConsoleSizes(const COORD& size, const RECT& rcNewCon, bool a
 	RECT rcCon1, rcCon2, rcSplitter, rcSize1, rcSize2;
 	CalcSplitRect(rcNewCon, rcCon1, rcCon2, rcSplitter);
 
-	rcSize1 = CalcRect(CER_CONSOLE_CUR, rcCon1, CER_BACK, mp_Grp1->mp_Item);
-	rcSize2 = CalcRect(CER_CONSOLE_CUR, rcCon2, CER_BACK, mp_Grp2->mp_Item);
+	rcSize1 = CalcRect(CER_CONSOLE_CUR, rcCon1, CER_BACK, VCon1.VCon());
+	rcSize2 = CalcRect(CER_CONSOLE_CUR, rcCon2, CER_BACK, VCon2.VCon());
 
 	COORD sz1 = {rcSize1.right,rcSize1.bottom}, sz2 = {rcSize2.right,rcSize2.bottom};
 
@@ -3914,6 +4036,7 @@ void CVConGroup::SetConsoleSizes(const COORD& size, const RECT& rcNewCon, bool a
 // В принципе, эту функцию можно было бы и в CConEmu оставить, но для общности путь здесь будет
 void CVConGroup::SetAllConsoleWindowsSize(RECT rcWnd, enum ConEmuRect tFrom /*= CER_MAIN or CER_MAINCLIENT*/, COORD size, bool bSetRedraw /*= false*/)
 {
+	MSectionLockSimple lockGroups; lockGroups.Lock(&gcs_VGroups);
 	CVConGuard VCon(gp_VActive);
 	CVConGroup* pRoot = GetRootOfVCon(VCon.VCon());
 
@@ -3957,15 +4080,24 @@ void CVConGroup::SetAllConsoleWindowsSize(RECT rcWnd, enum ConEmuRect tFrom /*= 
 	// Для разбиения имеет смысл использовать текущий размер окна в пикселях
 	RECT rcWorkspace = gpConEmu->CalcRect(CER_WORKSPACE, rcWnd, tFrom);
 
+	// Избежать мерцания панелей в Far
+	if (!bSetRedraw && pRoot->mp_Item && pRoot->m_SplitType == RConStartArgs::eSplitNone)
+	{
+		bSetRedraw = pRoot->mp_Item->RCon()->isFar(true);
+	}
+
 	// Go (size real consoles)
 	pRoot->SetConsoleSizes(size, rcWorkspace, bSetRedraw/*as Sync*/);
 
+	lockGroups.Unlock();
 
 	if (bSetRedraw /*&& gp_VActive*/)
 	{
 		SetRedraw(TRUE);
 		Redraw();
 	}
+
+	MCHKHEAP;
 }
 
 void CVConGroup::SyncAllConsoles2Window(RECT rcWnd, enum ConEmuRect tFrom /*= CER_MAIN*/, bool bSetRedraw /*= false*/)

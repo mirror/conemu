@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CustomFonts.h"
 
 class CBackground;
+class CBackgroundInfo;
 struct DebugLogShellActivity;
 struct CEHelpPopup;
 
@@ -55,6 +56,7 @@ class CSettings
 	private:
 		Settings m_Settings;
 		void ReleaseHandles();
+		void ReleaseHotkeys();
 		void InitVars_Hotkeys();
 		void InitVars_Pages();
 	public:
@@ -66,8 +68,15 @@ class CSettings
 		LPCWSTR GetConfigName();
 		void SetConfigName(LPCWSTR asConfigName);
 
+		// === Аргументы из командной строки ===
+		// Default terminal installation
+		bool ibExitAfterDefTermSetup;
 		// Для отладочных целей.
 		bool isResetBasicSettings;
+		bool isFastSetupDisabled;
+		bool isDontCascade;
+		// === Запрет сохранения опций при выходе ===
+		bool ibDisableSaveSettingsOnExit;
 
 		wchar_t szFontError[512];
 
@@ -79,6 +88,7 @@ class CSettings
 		SingleInstanceShowHideType SingleInstanceShowHide; // по умолчанию = sih_None
 		void ResetCmdArg();
 		bool ResetCmdHistory(HWND hParent = NULL);
+		void SetSaveCmdHistory(bool bSaveHistory);
 
 		//int DefaultBufferHeight;
 		bool bForceBufferHeight; int nForceBufferHeight;
@@ -116,46 +126,14 @@ class CSettings
 		void SaveFontSizes(LOGFONT *pCreated, bool bAuto, bool bSendChanges);
 		LPOUTLINETEXTMETRIC LoadOutline(HDC hDC, HFONT hFont);
 		void DumpFontMetrics(LPCWSTR szType, HDC hDC, HFONT hFont, LPOUTLINETEXTMETRIC lpOutl = NULL);
-	public:
-		//bool isFontAutoSize;
-		//bool isAutoRegisterFonts;
-		//wchar_t FontFile[MAX_PATH];
-		//LOGFONT ConsoleFont;
-		//COLORREF* GetColors(BOOL abFade = FALSE);
-		//COLORREF GetFadeColor(COLORREF cr);
-		//bool NeedDialogDetect();
-		//COLORREF ColorKey;
-		//bool isExtendColors;
-		//char nExtendColorIdx;
-		//bool isExtendFonts, isTrueColorer;
-		//char nFontNormalColor, nFontBoldColor, nFontItalicColor;
 
-		/* Background image */
-		//WCHAR sBgImage[MAX_PATH];
-		//char isShowBgImage;
-		bool isBackgroundImageValid;
-		//u8 bgImageDarker;
-		//DWORD nBgImageColors;
-		//char bgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2}
-		//char isBgPluginAllowed;
-
-		/* Transparency */
-		//u8 nTransparent;
-		//bool isUserScreenTransparent;
-
-		/* Command Line History (from start dialog) */
-		//LPWSTR psCmdHistory; DWORD nCmdHistorySize;
-
-		/* Command Line (Registry) */
-		//LPTSTR psCmd;
-		/* Command Line ("/cmd" arg) */
-		//LPTSTR psCurCmd;
 	private:
 		/* 'Default' command line (if nor Registry, nor /cmd specified) */
 		wchar_t  szDefCmd[MAX_PATH+32];
 		/* Current command line, specified with "/cmd" or "/cmdlist" switches */
 		wchar_t* pszCurCmd;
 		bool isCurCmdList; // а это если был указан /cmdlist
+
 	public:
 		/* Store/retrieve command line, specified with "/cmd" or "/cmdlist" switches */
 		void SetCurCmd(wchar_t*& pszNewCmd, bool bIsCmdList);
@@ -168,41 +146,6 @@ class CSettings
 		/* OUR(!) startup info */
 		STARTUPINFOW ourSI;
 		
-		/* If Attach to PID requested */
-#if 0
-		//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
-		DWORD nAttachPID;
-		HWND hAttachConWnd;
-#endif
-
-		//DWORD FontSizeY;  // высота основного шрифта (загруженная из настроек!)
-		//DWORD FontSizeX;  // ширина основного шрифта
-		//DWORD FontSizeX2; // ширина для FixFarBorders (ширина создаваемого шрифта для отрисовки рамок, не путать со знакоместом)
-		//DWORD FontSizeX3; // ширина знакоместа при моноширном режиме (не путать с FontSizeX2)
-		//bool isFullScreen, isHideCaption;
-		//bool isHideCaptionAlways();
-		//BYTE nHideCaptionAlwaysFrame;
-		//DWORD nHideCaptionAlwaysDelay, nHideCaptionAlwaysDisappear;
-		//bool isDownShowHiddenMessage;
-		//bool isAlwaysOnTop, isDesktopMode;
-		//BYTE isFixFarBorders;
-		//bool isExtendUCharMap;
-		//bool isDisableMouse;
-		//bool isMouseSkipActivation, isMouseSkipMoving;
-		//bool isFarHourglass; DWORD nFarHourglassDelay;
-		//BYTE isDisableFarFlashing, isDisableAllFlashing;
-		
-		// Text selection
-		//BYTE isConsoleTextSelection;
-		//bool isCTSSelectBlock, isCTSSelectText;
-		//BYTE isCTSVkBlock, isCTSVkText; // модификатор запуска выделения мышкой
-		//BYTE isCTSActMode, isCTSVkAct; // режим и модификатор разрешения действий правой и средней кнопки мышки
-		//BYTE isCTSRBtnAction, isCTSMBtnAction; // 0-off, 1-copy, 2-paste
-		//BYTE isCTSColorIndex;
-		//bool isFarGotoEditor; // Подсвечивать и переходить на файл/строку (ошибки компилятора)
-		//BYTE isFarGotoEditorVk; // Клавиша-модификатор для isFarGotoEditor
-		//bool isModifierPressed(DWORD vk);
-		//bool isSelectionModifierPressed();
 	protected:
 		
 		BYTE isMonospaceSelected; // 0 - proportional, 1 - monospace, 2 - forcemonospace
@@ -222,21 +165,26 @@ class CSettings
 
 		// Working variables...
 	private:
-		//HBITMAP  hBgBitmap;
-		//COORD    bgBmp;
-		//HDC      hBgDc;
+		#ifndef APPDISTINCTBACKGROUND
 		CBackground* mp_Bg;
-		//MSection mcs_BgImgData;
 		BITMAPFILEHEADER* mp_BgImgData;
 		BOOL mb_NeedBgUpdate; //, mb_WasVConBgImage;
-		bool mb_BgLastFade;
 		FILETIME ftBgModified;
 		DWORD nBgModifiedTick;
+		bool isBackgroundImageValid;
+		bool mb_BgLastFade;
+		#else
+		CBackgroundInfo* mp_BgInfo;
+		#endif
 	public:
+		void SetBgImageDarker(u8 newValue, bool bUpdate);
+		#ifndef APPDISTINCTBACKGROUND
 		bool PrepareBackground(CVirtualConsole* apVCon, HDC* phBgDc, COORD* pbgBmpSize);
 		bool PollBackgroundFile(); // true, если файл изменен
+		#else
+		CBackgroundInfo* GetBackgroundObject();
+		#endif
 		bool LoadBackgroundFile(TCHAR *inPath, bool abShowErrors=false);
-		void SetBgImageDarker(u8 newValue, bool bUpdate);
 		bool IsBackgroundEnabled(CVirtualConsole* apVCon);
 		void NeedBackgroundUpdate();
 		//CBackground* CreateBackgroundImage(const BITMAPFILEHEADER* apBkImgData);
@@ -262,12 +210,14 @@ class CSettings
 			thi_Transparent,  //   "Transparency"
 			thi_Tabs,         //   "Tabs"
 			thi_Status,       //   "Status bar"
-			thi_Integr,       //   "Integration"
 			thi_Apps,         //   "App distinct"
+			thi_Integr,       // "Integration"
+			thi_DefTerm,      //   "Default terminal"
 			thi_Keys,         // "Keys & Macro"
 			thi_KeybMouse,    //   "Controls"
 			thi_Selection,    //   "Mark & Paste"
 			thi_Far,          // "Far Manager"
+			thi_FarMacro,     //   "Far macros"
 			thi_Views,        //   "Views"
 			thi_Info,         // "Info"
 			thi_Debug,        //   "Debug"
@@ -395,6 +345,7 @@ class CSettings
 		//LRESULT OnInitDialog_Output(HWND hWnd2, bool abInitial);
 		LRESULT OnInitDialog_Selection(HWND hWnd2);
 		LRESULT OnInitDialog_Far(HWND hWnd2, BOOL abInitial);
+		LRESULT OnInitDialog_FarMacro(HWND hWnd2, BOOL abInitial);
 		LRESULT OnInitDialog_Keys(HWND hWnd2, BOOL abInitial);
 		LRESULT OnInitDialog_Control(HWND hWnd2, BOOL abInitial);
 		LRESULT OnInitDialog_Tabs(HWND hWnd2);
@@ -405,6 +356,7 @@ class CSettings
 		LRESULT OnInitDialog_Tasks(HWND hWnd2, bool abForceReload);
 		LRESULT OnInitDialog_Apps(HWND hWnd2, bool abForceReload);
 		LRESULT OnInitDialog_Integr(HWND hWnd2, BOOL abInitial);
+		LRESULT OnInitDialog_DefTerm(HWND hWnd2, BOOL abInitial);
 		LRESULT OnInitDialog_Views(HWND hWnd2);
 		void OnInitDialog_CopyFonts(HWND hWnd2, int nList1, ...); // скопировать список шрифтов с вкладки hMain
 		LRESULT OnInitDialog_Debug(HWND hWnd2);
@@ -442,7 +394,6 @@ class CSettings
 		UINT mn_ActivateTabMsg;
 		bool mb_IgnoreSelPage;
 		void UpdateTextColorSettings(BOOL ChangeTextAttr = TRUE, BOOL ChangePopupAttr = TRUE);
-		void UpdateComSpecUncSupport();
 	private:
 		bool GetColorById(WORD nID, COLORREF* color);
 		bool SetColorById(WORD nID, COLORREF color);
@@ -520,7 +471,7 @@ class CSettings
 		//COLORREF mn_LastFadeSrc, mn_LastFadeDst;
 		//COLORREF ColorsFade[0x20];
 		bool GetColorRef(HWND hDlg, WORD TB, COLORREF* pCR);
-		bool GetColorRef(LPCWSTR pszText, COLORREF* pCR);
+		//bool GetColorRef(LPCWSTR pszText, COLORREF* pCR);
 		//inline BYTE GetFadeColorItem(BYTE c);
 		//
 		bool mb_ThemingEnabled;
@@ -536,19 +487,31 @@ class CSettings
 		//DWORD nMultiHotkeyModifier;
 		//BYTE mn_HostModOk[15], mn_HostModSkip[15];
 		//bool isHostkeySingleLR(WORD vk, WORD vkC, WORD vkL, WORD vkR);
-		static void FillListBoxItems(HWND hList, uint nItems, const WCHAR** pszItems, const DWORD* pnValues, DWORD& nValue, BOOL abExact = FALSE);
-		static void GetListBoxItem(HWND hList, uint nItems, const WCHAR** pszItems, const DWORD* pnValues, DWORD& nValue);
+	public:
+		struct ListBoxItem { DWORD nValue; LPCWSTR sValue; };
+		enum eFillListBoxHotKeys { eHkModifiers, eHkKeysHot, eHkKeys, eHkKeysAct };
+		static void FillListBoxHotKeys(HWND hList, eFillListBoxHotKeys eWhat, BYTE& vk);
+		static void GetListBoxHotKey(HWND hList, eFillListBoxHotKeys eWhat, BYTE& vk);
+		static void SetHotkeyField(HWND hHk, BYTE vk);
+		static uint GetHotKeyListItems(eFillListBoxHotKeys eWhat, ListBoxItem** ppItems);
+	private:
+		static void FillListBoxItems(HWND hList, uint nItems, ListBoxItem* Items /*const WCHAR** pszItems, const DWORD* pnValues*/, DWORD& nValue, BOOL abExact = FALSE);
+		static void FillListBoxItems(HWND hList, uint nItems, const DWORD* pnValues, DWORD& nValue, BOOL abExact = FALSE);
+		static void GetListBoxItem(HWND hList, uint nItems, ListBoxItem* Items /*const WCHAR** pszItems, const DWORD* pnValues*/, DWORD& nValue);
+		static void GetListBoxItem(HWND hList, uint nItems, const DWORD* pnValues, DWORD& nValue);
 		static void CenterMoreDlg(HWND hWnd2);
 		static bool IsAlmostMonospace(LPCWSTR asFaceName, int tmMaxCharWidth, int tmAveCharWidth, int tmHeight);
 	private:
 		DWORD MakeHotKey(BYTE Vk, BYTE vkMod1=0, BYTE vkMod2=0, BYTE vkMod3=0) { return ConEmuHotKey::MakeHotKey(Vk, vkMod1, vkMod2, vkMod3); };
 		//#define MAKEMODIFIER2(vk1,vk2) ((DWORD)vk1&0xFF)|(((DWORD)vk2&0xFF)<<8)
 		//#define MAKEMODIFIER3(vk1,vk2,vk3) ((DWORD)vk1&0xFF)|(((DWORD)vk2&0xFF)<<8)|(((DWORD)vk3&0xFF)<<16)
-		ConEmuHotKey *m_HotKeys;
+		ConEmuHotKey *mp_HotKeys;
+		int mn_HotKeys; // Число "явных" хоткеев, после которых виртуально идут хоткеи тасков
 		ConEmuHotKey *mp_ActiveHotKey;
 		void SetHotkeyVkMod(ConEmuHotKey *pHK, DWORD VkMod);
 		friend struct Settings;
 	public:
+		const ConEmuHotKey* GetHotKeyPtr(int idx);
 		const ConEmuHotKey* GetHotKeyInfo(DWORD VkMod, bool bKeyDown, CRealConsole* pRCon);
 		bool HasSingleWinHotkey();
 		void UpdateWinHookSettings(HMODULE hLLKeyHookDll);

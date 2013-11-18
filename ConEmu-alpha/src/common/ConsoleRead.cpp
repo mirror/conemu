@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -247,7 +247,8 @@ BOOL ReadConsoleOutputEx(HANDLE hOut, CHAR_INFO *pData, COORD bufSize, SMALL_REC
 						size_t x2 = nAttrsMax;
 						for (size_t i = 0; i < x1; ++i, ++p)
 						{
-							p->Attributes = *pn;
+							WARNING("Переделать!");
+							p->Attributes = *pn & (~(COMMON_LVB_LEADING_BYTE|COMMON_LVB_TRAILING_BYTE));
 							p->Char.UnicodeChar = *psz;
 
 							WARNING("Некорректно! pn может указывать на начало блока DBCS/QBCS");

@@ -124,9 +124,13 @@ public:
 	static HANDLE ghLastAnsiCapable /*= NULL*/;
 	static HANDLE ghLastAnsiNotCapable /*= NULL*/;
 
+	static bool gbWasXTermOutput;
+
 protected:
 	static SHORT GetDefaultTextAttr();
 	static int NextNumber(LPCWSTR& asMS);
+
+	static void StartXTermMode(bool bStart);
 
 public:
 	struct AnsiEscCode
@@ -158,7 +162,7 @@ public:
 	void ReSetDisplayParm(HANDLE hConsoleOutput, BOOL bReset, BOOL bApply);
 
 	#if defined(DUMP_UNKNOWN_ESCAPES) || defined(DUMP_WRITECONSOLE_LINES)
-	static void DumpEscape(LPCWSTR buf, size_t cchLen, bool bUnknown);
+	static void DumpEscape(LPCWSTR buf, size_t cchLen, int iUnknown);
 	#endif
 
 	BOOL WriteText(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten, BOOL abCommit = FALSE);
@@ -169,6 +173,8 @@ public:
 	void DoSleep(LPCWSTR asMS);
 	void EscCopyCtrlString(wchar_t* pszDst, LPCWSTR asMsg, INT_PTR cchMaxLen);
 	void DoMessage(LPCWSTR asMsg, INT_PTR cchLen);
+	void DoProcess(LPCWSTR asCmd, INT_PTR cchLen);
+	void DoPrintEnv(LPCWSTR asCmd, INT_PTR cchLen);
 
 	int NextEscCode(LPCWSTR lpBuffer, LPCWSTR lpEnd, wchar_t (&szPreDump)[CEAnsi_MaxPrevPart], DWORD& cchPrevPart, LPCWSTR& lpStart, LPCWSTR& lpNext, AnsiEscCode& Code, BOOL ReEntrance = FALSE);
 
@@ -177,6 +183,7 @@ protected:
 	/*        Instance variables             */
 	/* ************************************* */
 	OnWriteConsoleW_t pfnWriteConsoleW;
+	HANDLE mh_WriteOutput;
 
 	struct DisplayParm
 	{

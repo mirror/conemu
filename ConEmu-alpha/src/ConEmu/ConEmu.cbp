@@ -84,6 +84,7 @@
 		<Unit filename="GestureEngine.cpp" />
 		<Unit filename="GuiServer.cpp" />
 		<Unit filename="Hotkeys.cpp" />
+		<Unit filename="IconList.cpp" />
 		<Unit filename="Inside.cpp" />
 		<Unit filename="LoadImg.cpp" />
 		<Unit filename="Macro.cpp" />

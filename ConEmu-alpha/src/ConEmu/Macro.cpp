@@ -910,7 +910,7 @@ LPWSTR CConEmuMacro::FindFarWindowHelper(
 	int iActiveCon = CVConGroup::ActiveConNum()+1; //need 1-based value
 
 	int iFoundCon = 0;
-	int iFoundWnd = CVConGroup::isFarExist(anWindowType|(abFromPlugin?fwt_ActivateOther:fwt_ActivateFound), asName, &VCon);
+	int iFoundWnd = CVConGroup::isFarExist(anWindowType|fwt_FarFullPathReq|(abFromPlugin?fwt_ActivateOther:fwt_ActivateFound), asName, &VCon);
 
 	if ((iFoundWnd <= 0) && VCon.VCon())
 		iFoundCon = -1; // редактор есть, но заблокирован модальным диалогом/другим редактором
@@ -937,17 +937,30 @@ LPWSTR CConEmuMacro::WindowFullscreen(GuiMacro* p, CRealConsole* apRCon)
 {
 	LPWSTR pszRc = WindowMode(NULL, NULL);
 
-	gpConEmu->OnAltEnter();
+	gpConEmu->DoFullScreen();
 
 	return pszRc;
 }
 
-// Fullscreen
+// WindowMaximize
 LPWSTR CConEmuMacro::WindowMaximize(GuiMacro* p, CRealConsole* apRCon)
 {
 	LPWSTR pszRc = WindowMode(NULL, NULL);
 
-	gpConEmu->OnAltF9();
+	int nStyle = 0; // 
+	p->GetIntArg(0, nStyle);
+
+	switch (nStyle)
+	{
+	case 1:
+		// By width
+		gpConEmu->DoMaximizeWidthHeight(true,false); break;
+	case 2:
+		// By height
+		gpConEmu->DoMaximizeWidthHeight(false,true); break;
+	default:
+		gpConEmu->DoMaximizeRestore();
+	}
 
 	return pszRc;
 }
@@ -1030,6 +1043,7 @@ LPWSTR CConEmuMacro::WindowMode(GuiMacro* p, CRealConsole* apRCon)
 		gpConEmu->SetWindowMode(wmNormal);
 		break;
 	case cwc_Minimize:
+		gpConEmu->LogString(L"GuiMacro: WindowMode(cwc_Minimize)");
 		PostMessage(ghWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
 		break;
 	case cwc_MinimizeTSA:
@@ -1195,7 +1209,7 @@ LPWSTR CConEmuMacro::FontSetName(GuiMacro* p, CRealConsole* apRCon)
 // Copy (<What>)
 LPWSTR CConEmuMacro::Copy(GuiMacro* p, CRealConsole* apRCon)
 {
-	int nWhat = 0;
+	int nWhat = 0, nFormat;
 	LPWSTR pszText = NULL;
 
 	if (!apRCon)
@@ -1205,13 +1219,14 @@ LPWSTR CConEmuMacro::Copy(GuiMacro* p, CRealConsole* apRCon)
 
 	if (p->GetIntArg(0, nWhat))
 	{
+		if (!p->GetIntArg(1, nFormat))
+			nFormat = gpSet->isCTSHtmlFormat;
+
 		switch (nWhat)
 		{
 		case 0:
-			bCopy = apRCon->DoSelectionCopy(false);
-			break;
 		case 1:
-			bCopy = apRCon->DoSelectionCopy(true);
+			bCopy = apRCon->DoSelectionCopy((nWhat==1), nFormat);
 			break;
 		}
 
@@ -1498,11 +1513,12 @@ LPWSTR CConEmuMacro::Select(GuiMacro* p, CRealConsole* apRCon)
 		return lstrdup(L"Selection was already started");
 
 	int nType = 0; // 0 - text, 1 - block
-	int nDX = 0, nDY = 0;
+	int nDX = 0, nDY = 0, nHomeEnd = 0;
 
 	p->GetIntArg(0, nType);
 	p->GetIntArg(1, nDX);
 	p->GetIntArg(2, nDY);
+	p->GetIntArg(3, nHomeEnd);
 
 	bool bText = (nType == 0);
 
@@ -1541,9 +1557,15 @@ LPWSTR CConEmuMacro::Select(GuiMacro* p, CRealConsole* apRCon)
 
 	apRCon->StartSelection(bText, cr.X, cr.Y);
 
-	if ((nType == 1) && nDY)
+	if (nType == 1)
 	{
-		apRCon->ExpandSelection(cr.X, cr.Y + nDY);
+		if (nDY)
+			apRCon->ExpandSelection(cr.X, cr.Y + nDY);
+	}
+	else if (nType == 0)
+	{
+		if (nHomeEnd)
+			apRCon->ExpandSelection((nHomeEnd < 0) ? 0 : apRCon->BufferWidth()-1, cr.Y);
 	}
 
 	return lstrdup(L"OK");
@@ -1591,6 +1613,27 @@ LPWSTR CConEmuMacro::SetOption(GuiMacro* p, CRealConsole* apRCon)
 				gpSetCls->SetBgImageDarker(nValue, true);
 			}
 		}
+		pszResult = lstrdup(L"OK");
+	}
+	else if (!lstrcmpi(pszName, L"AlwaysOnTop"))
+	{
+		// SetOption("AlwaysOnTop",0) - Disable top-most
+		// SetOption("AlwaysOnTop",1) - Enable top-most
+		// SetOption("AlwaysOnTop",2) - Switch top-most
+		p->GetIntArg(1, nValue);
+		switch (nValue)
+		{
+		case 0:
+			gpSet->isAlwaysOnTop = false;
+			break;
+		case 1:
+			gpSet->isAlwaysOnTop = true;
+			break;
+		case 2:
+			gpSet->isAlwaysOnTop = !gpSet->isAlwaysOnTop;
+			break;
+		}
+		gpConEmu->OnAlwaysOnTop();
 		pszResult = lstrdup(L"OK");
 	}
 	else
@@ -1643,7 +1686,7 @@ LPWSTR CConEmuMacro::Shell(GuiMacro* p, CRealConsole* apRCon)
 			if (bNewConsoleVerb)
 			{
 				wchar_t* pszNewConsoleArgs = lstrmerge(L"\"-", pszOper, L"\"");
-				bool bOk = apRCon->DuplicateRoot(true, false, pszNewConsoleArgs, pszFile, pszParm);
+				bool bOk = apRCon->DuplicateRoot(true/*bSkipMsg*/, false/*bRunAsAdmin*/, pszNewConsoleArgs, pszFile, pszParm);
 				SafeFree(pszNewConsoleArgs);
 				if (bOk)
 				{
@@ -2006,7 +2049,7 @@ LPWSTR CConEmuMacro::Tab(GuiMacro* p, CRealConsole* apRCon)
 LPWSTR CConEmuMacro::Task(GuiMacro* p, CRealConsole* apRCon)
 {
 	LPCWSTR pszResult = NULL;
-	LPCWSTR pszName = NULL, pszDir = NULL;
+	LPCWSTR pszName = NULL;
 	wchar_t* pszBuf = NULL;
 	int nTaskIndex = 0;
 
@@ -2052,7 +2095,8 @@ LPWSTR CConEmuMacro::Task(GuiMacro* p, CRealConsole* apRCon)
 		RConStartArgs *pArgs = new RConStartArgs;
 		pArgs->pszSpecialCmd = lstrdup(pszName);
 
-		if (pszDir)
+		LPWSTR pszDir = NULL;
+		if (p->GetStrArg(1, pszDir) && pszDir && *pszDir)
 			pArgs->pszStartupDir = lstrdup(pszDir);
 
 		gpConEmu->PostCreateCon(pArgs);

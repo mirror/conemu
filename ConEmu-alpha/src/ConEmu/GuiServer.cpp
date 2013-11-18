@@ -28,12 +28,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
+#include "../common/PipeServer.h"
+
+#include "ConEmu.h"
+#include "DefaultTerm.h"
 #include "GuiServer.h"
+#include "Macro.h"
 #include "RealConsole.h"
 #include "VConGroup.h"
 #include "VirtualConsole.h"
-#include "ConEmu.h"
-#include "../common/PipeServer.h"
 
 #ifdef USEPIPELOG
 namespace PipeServerLogger
@@ -189,8 +192,10 @@ BOOL CGuiServer::GuiServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ*
 
 			if (bAccepted)
 			{
-				bool bCreateTab = (pIn->NewCmd.ShowHide == sih_None || pIn->NewCmd.ShowHide == sih_StartDetached);
-				gpConEmu->OnMinimizeRestore(bCreateTab ? sih_SetForeground : pIn->NewCmd.ShowHide);
+				bool bCreateTab = (pIn->NewCmd.ShowHide == sih_None || pIn->NewCmd.ShowHide == sih_StartDetached)
+					// Issue 1275: When minimized into TSA (on all VCon are closed) we need to restore and run new tab
+					|| (pIn->NewCmd.szCommand[0] && !CVConGroup::isVConExists(0));
+				gpConEmu->DoMinimizeRestore(bCreateTab ? sih_SetForeground : pIn->NewCmd.ShowHide);
 
 				// Может быть пусто
 				if (bCreateTab && pIn->NewCmd.szCommand[0])
@@ -557,6 +562,50 @@ BOOL CGuiServer::GuiServerCommand(LPVOID pInst, CESERVER_REQ* pIn, CESERVER_REQ*
 			lbRc = TRUE;
 			break;
 		} // CECMD_GUICLIENTSHIFT
+
+		case CECMD_GUIMACRO:
+		{
+			// Допустимо, если GuiMacro пытаются выполнить извне
+			CVConGuard VCon; CVConGroup::GetActiveVCon(&VCon);
+
+			DWORD nFarPluginPID = VCon->RCon()->GetFarPID(true);
+			LPWSTR pszResult = CConEmuMacro::ExecuteMacro(pIn->GuiMacro.sMacro, VCon->RCon(), (nFarPluginPID==pIn->hdr.nSrcPID));
+
+			int nLen = pszResult ? _tcslen(pszResult) : 0;
+
+			pcbReplySize = sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_GUIMACRO)+nLen*sizeof(wchar_t);
+			if (!ExecuteNewCmd(ppReply, pcbMaxReplySize, pIn->hdr.nCmd, pcbReplySize))
+				goto wrap;
+
+			if (pszResult)
+			{
+				lstrcpy(ppReply->GuiMacro.sMacro, pszResult);
+				ppReply->GuiMacro.nSucceeded = 1;
+				free(pszResult);
+			}
+			else
+			{
+				ppReply->GuiMacro.sMacro[0] = 0;
+				ppReply->GuiMacro.nSucceeded = 0;
+			}
+
+			break;
+		} // CECMD_GUIMACRO
+
+		//case CECMD_DEFTERMSTARTED:
+		//{
+		//	if (gpConEmu->mp_DefTrm)
+		//		gpConEmu->mp_DefTrm->OnDefTermStarted(pIn);
+
+		//	pcbReplySize = sizeof(CESERVER_REQ_HDR);
+		//	if (!ExecuteNewCmd(ppReply, pcbMaxReplySize, pIn->hdr.nCmd, pcbReplySize))
+		//		goto wrap;
+		//	lbRc = TRUE;
+		//	break;
+		//} // CECMD_DEFTERMSTARTED
+
+		default:
+			_ASSERTE(FALSE && "Command was not handled in CGuiServer::GuiServerCommand");
 	}
 
 	//// Освободить память

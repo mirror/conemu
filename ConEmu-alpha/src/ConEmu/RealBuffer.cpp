@@ -2739,7 +2739,7 @@ bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
 										args.pszSpecialCmd = pszCmd; pszCmd = NULL;
 										args.pszStartupDir = mp_RCon->m_Args.pszStartupDir ? lstrdup(mp_RCon->m_Args.pszStartupDir) : NULL;
 										args.bRunAsAdministrator = mp_RCon->m_Args.bRunAsAdministrator;
-										args.bForceUserDialog = mp_RCon->m_Args.bRunAsRestricted || (mp_RCon->m_Args.pszUserName != NULL);
+										args.bForceUserDialog = mp_RCon->m_Args.bForceUserDialog || mp_RCon->m_Args.bRunAsRestricted || (mp_RCon->m_Args.pszUserName != NULL);
 										args.bBufHeight = TRUE;
 										//args.eConfirmation = RConStartArgs::eConfNever;
 
@@ -2853,18 +2853,19 @@ bool CRealBuffer::OnMouse(UINT messg, WPARAM wParam, int x, int y, COORD crMouse
 		}
 	}
 
-	BOOL lbFarBufferSupported = mp_RCon->isFarBufferSupported();
-	BOOL lbMouseOverScroll = FALSE;
+	bool lbFarBufferSupported = mp_RCon->isFarBufferSupported();
+	bool lbMouseSendAllowed = mp_RCon->isSendMouseAllowed();
+	bool lbMouseOverScroll = false;
 	// Проверять мышку имеет смысл только если она пересылается в фар, а не работает на прокрутку
 	if ((messg == WM_MOUSEWHEEL) || (messg == WM_MOUSEHWHEEL))
 	{
-		if (con.bBufferHeight && (m_Type == rbt_Primary) && lbFarBufferSupported)
+		if (con.bBufferHeight && (m_Type == rbt_Primary) && lbFarBufferSupported && lbMouseSendAllowed)
 		{
 			lbMouseOverScroll = mp_RCon->mp_VCon->CheckMouseOverScroll(true);
 		}
 	}
 
-	if (con.bBufferHeight && ((m_Type != rbt_Primary) || !lbFarBufferSupported || lbMouseOverScroll))
+	if (con.bBufferHeight && ((m_Type != rbt_Primary) || !lbFarBufferSupported || !lbMouseSendAllowed || lbMouseOverScroll))
 	{
 		if (messg == WM_MOUSEWHEEL)
 		{
@@ -3541,11 +3542,21 @@ void CRealBuffer::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*=
 	}
 }
 
-void CRealBuffer::ExpandSelection(SHORT anX/*=-1*/, SHORT anY/*=-1*/)
+void CRealBuffer::ExpandSelection(SHORT anX, SHORT anY)
 {
 	_ASSERTE(con.m_sel.dwFlags!=0);
 	// Добавил "-3" чтобы на прокрутку не ругалась
 	_ASSERTE(anY==-1 || anY>=(con.nTopVisibleLine-3));
+
+	// 131017 Scroll content if selection cursor goes out of visible screen
+	if (anY < con.nTopVisibleLine)
+	{
+		OnScroll(SB_LINEUP);
+	}
+	else if (anY >= (con.nTopVisibleLine + con.nTextHeight))
+	{
+		OnScroll(SB_LINEDOWN);
+	}
 
 	COORD cr = {anX,anY};
 
@@ -3621,7 +3632,7 @@ void CRealBuffer::DoSelectionStop()
 	con.m_sel.dwFlags = 0;
 }
 
-bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
+bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/, BYTE nFormat /*= 0xFF*/ /* use gpSet->isCTSHtmlFormat */)
 {
 	bool bRc = false;
 
@@ -3652,7 +3663,7 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 			{
 				if (mp_RCon->LoadAlternativeConsole(lam_FullBuffer) && (mp_RCon->mp_ABuf != this))
 				{
-					bRc = mp_RCon->mp_ABuf->DoSelectionCopyInt(bCopyAll, lbStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top, con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom);
+					bRc = mp_RCon->mp_ABuf->DoSelectionCopyInt(bCopyAll, lbStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top, con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom, nFormat);
 					lbProcessed = true;
 					bufType = rbt_Selection;
 				}
@@ -3665,7 +3676,7 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 		
 		if (!lbProcessed)
 		{
-			bRc = DoSelectionCopyInt(bCopyAll, lbStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top, con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom);
+			bRc = DoSelectionCopyInt(bCopyAll, lbStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top, con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom, nFormat);
 		}
 	}
 
@@ -3689,7 +3700,7 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/)
 	return bRc;
 }
 
-bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2)
+bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2, BYTE nFormat /*= 0xFF*/ /* use gpSet->isCTSHtmlFormat */)
 {
 	// Warning!!! Здесь уже нельзя ориентироваться на con.m_sel !!!
 
@@ -3697,6 +3708,9 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 	WORD* pAttrStart = NULL;
 	CharAttr* pAttrStartEx = NULL;
 	int nTextWidth = 0, nTextHeight = 0;
+
+	if (nFormat == 0xFF)
+		nFormat = gpSet->isCTSHtmlFormat;
 
 	if (m_Type == rbt_Primary)
 	{
@@ -3834,7 +3848,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 
 	COLORREF *pPal = mp_RCon->VCon()->GetColors();
 
-	bool bUseHtml = (gpSet->isCTSHtmlFormat != 0);
+	bool bUseHtml = (nFormat != 0);
 	
 	CHtmlCopy html;
 	
@@ -3853,7 +3867,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 		}
 
 		//wchar_t szClass[64]; _wsprintf(szClass, SKIPLEN(countof(szClass)) L"ConEmu%s%s", gpConEmu->ms_ConEmuBuild, WIN3264TEST(L"x32",L"x64"));
-		html.Init((gpSet->isCTSHtmlFormat == 2), gpConEmu->ms_ConEmuBuild, gpSetCls->FontFaceName(), gpSetCls->FontHeightPx(), crFore, crBack);
+		html.Init((nFormat == 2), gpConEmu->ms_ConEmuBuild, gpSetCls->FontFaceName(), gpSetCls->FontHeightPx(), crFore, crBack);
 	}
 
 
@@ -3939,7 +3953,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 			nX2 = (Y == nSelHeight) ? srSelection_X2 : (con.nTextWidth-1);
 			LPCWSTR pszCon = NULL;
 			LPCWSTR pszNextLine = NULL;
-			
+
 			if (m_Type == rbt_Primary)
 			{
 				pszCon = pszDataStart + con.nTextWidth*(Y+srSelection_Y1) + nX1;
@@ -4042,17 +4056,21 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 	// Ready
 	GlobalUnlock(hUnicode);
 	// HTML?
-	HGLOBAL hHtml = bUseHtml ? html.CreateResult() : NULL;
-	if (!hHtml)
+	HGLOBAL hHtml = NULL;
+	if (bUseHtml)
 	{
-		dwErr = GetLastError();
-		DisplayLastError(L"Creating HTML format failed!", dwErr, MB_ICONSTOP);
-		GlobalFree(hUnicode);
-		return false;
+		hHtml = html.CreateResult();
+		if (!hHtml)
+		{
+			dwErr = GetLastError();
+			DisplayLastError(L"Creating HTML format failed!", dwErr, MB_ICONSTOP);
+			GlobalFree(hUnicode);
+			return false;
+		}
 	}
 
 	// User asked to copy HTML instead of HTML formatted (put HTML in CF_UNICODE)
-	if ((gpSet->isCTSHtmlFormat == 2) && hHtml)
+	if ((nFormat == 2) && hHtml)
 	{
 		WARNING("hUnicode Overhead...");
 		GlobalFree(hUnicode);
@@ -4071,7 +4089,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 			GlobalFree(hUnicode);
 			if (hHtml) GlobalFree(hHtml);
 			return false;
-	}
+		}
 	}
 
 	UINT i_CF_HTML = bUseHtml ? RegisterClipboardFormat(L"HTML Format") : 0;
@@ -4168,17 +4186,38 @@ bool CRealBuffer::DoSelectionFinalize(bool abCopy, WPARAM wParam)
 }
 
 // pszChars may be NULL
+const ConEmuHotKey* CRealBuffer::ProcessSelectionHotKey(DWORD VkState, bool bKeyDown, const wchar_t *pszChars)
+{
+	if (!this || !con.m_sel.dwFlags)
+		return NULL;
+
+	// If these was not processed by user HotKeys, lets do it...
+	if (VkState == ConEmuHotKey::MakeHotKey('C', VK_CONTROL)
+		|| VkState == ConEmuHotKey::MakeHotKey(VK_INSERT, VK_CONTROL))
+	{
+		if (bKeyDown)
+		{
+			DoSelectionFinalize(true, ConEmuHotKey::GetHotkey(VkState));
+		}
+		return ConEmuSkipHotKey;
+	}
+
+	return NULL;
+}
+
+// pszChars may be NULL
 bool CRealBuffer::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, const wchar_t *pszChars)
 {
 	// Обработка Left/Right/Up/Down при выделении
 
 	if (con.m_sel.dwFlags && messg == WM_KEYDOWN
 	        && ((wParam == VK_ESCAPE) || (wParam == VK_RETURN)
-				|| ((wParam == 'C' || wParam == VK_INSERT) && isPressed(VK_CONTROL))
-	            || (wParam == VK_LEFT) || (wParam == VK_RIGHT) || (wParam == VK_UP) || (wParam == VK_DOWN))
+				/*|| ((wParam == 'C' || wParam == VK_INSERT) && isPressed(VK_CONTROL)) -- moved to ProcessSelectionHotKey */
+	            || (wParam == VK_LEFT) || (wParam == VK_RIGHT) || (wParam == VK_UP) || (wParam == VK_DOWN)
+				|| (wParam == VK_HOME) || (wParam == VK_END))
 	  )
 	{
-		if ((wParam == VK_ESCAPE) || (wParam == VK_RETURN) || (wParam == 'C' || wParam == VK_INSERT))
+		if ((wParam == VK_ESCAPE) || (wParam == VK_RETURN) /*|| (wParam == 'C' || wParam == VK_INSERT)*/)
 		{
 			if (DoSelectionFinalize(wParam != VK_ESCAPE, wParam))
 				return true;
@@ -4195,6 +4234,8 @@ bool CRealBuffer::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			else if (wParam == VK_RIGHT) { if (cr.X<(GetBufferWidth()-1)) cr.X++; }
 			else if (wParam == VK_UP)    { if (cr.Y>0) cr.Y--; }
 			else if (wParam == VK_DOWN)  { if (cr.Y<(GetBufferHeight()-1)) cr.Y++; }
+			else if (wParam == VK_HOME)  { cr.X = 0; }
+			else if (wParam == VK_END)   { cr.X = (GetBufferWidth()-1); }
 
 			// Теперь - двигаем
 			BOOL bShift = isPressed(VK_SHIFT);
@@ -4839,6 +4880,9 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 			COORD crStart = BufferToScreen(MakeCoord(con.m_sel.srSelection.Left, con.m_sel.srSelection.Top));
 			COORD crEnd = BufferToScreen(MakeCoord(con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom));
 
+			bool bAboveScreen = (con.m_sel.srSelection.Top < con.m_sbi.srWindow.Top);
+			bool bBelowScreen = (con.m_sel.srSelection.Bottom > con.m_sbi.srWindow.Bottom);
+
 			SMALL_RECT rc = {crStart.X, crStart.Y, crEnd.X, crEnd.Y};
 			// Коррекция по видимой области
 			MinMax(rc.Left, 0, nWidth-1); MinMax(rc.Right, 0, nWidth-1);
@@ -4862,8 +4906,8 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 				}
 				else
 				{
-					nX1 = (nY == rc.Top) ? rc.Left : 0;
-					nX2 = (nY == rc.Bottom) ? rc.Right : (nWidth-1);
+					nX1 = (nY == rc.Top && !bAboveScreen) ? rc.Left : 0;
+					nX2 = (nY == rc.Bottom && !bBelowScreen) ? rc.Right : (nWidth-1);
 				}
 
 				pcaDst = pAttr + nWidth*nY + nX1;
@@ -5603,6 +5647,11 @@ DWORD CRealBuffer::GetConsoleOutputCP()
 	return con.m_dwConsoleOutputCP;
 }
 
+DWORD CRealBuffer::GetConsoleMode()
+{
+	return con.m_dwConsoleMode;
+}
+
 bool CRealBuffer::FindRangeStart(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[In/Out]*/, bool& bUrlMode, LPCWSTR pszBreak, LPCWSTR pszUrlDelim, LPCWSTR pszSpacing, LPCWSTR pszUrl, LPCWSTR pszProtocol, LPCWSTR pChar, int nLen)
 {
 	bool lbRc = false;
@@ -5613,7 +5662,8 @@ bool CRealBuffer::FindRangeStart(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[In/Out
 
 	// Курсор над комментарием?
 	// Попробуем найти начало имени файла
-	while ((crFrom.X) > 0 && !wcschr(bUrlMode ? pszUrlDelim : pszBreak, pChar[crFrom.X-1]))
+	// 131026 Allows '?', otherwise links like http://go.com/fwlink/?LinkID=1 may fails
+	while ((crFrom.X) > 0 && (pChar[crFrom.X-1]==L'?' || !wcschr(bUrlMode ? pszUrlDelim : pszBreak, pChar[crFrom.X-1])))
 	{
 		if (!bUrlMode && pChar[crFrom.X] == L'/')
 		{
@@ -5772,6 +5822,7 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 			const wchar_t* pszDigits  = L"0123456789";
 			const wchar_t* pszSlashes = L"/\\";
 			const wchar_t* pszUrl = L":/%#ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz;?@&=+$,-_.!~*'()0123456789";
+			const wchar_t* pszUrlTrimRight = L".,;";
 			const wchar_t* pszProtocol = L"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.";
 			const wchar_t* pszEMail = L"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.";
 			const wchar_t* pszUrlDelim = L"\\\"<>{}[]^`' \t\r\n";
@@ -6053,6 +6104,12 @@ ExpandTextRangeType CRealBuffer::ExpandTextRange(COORD& crFrom/*[In/Out]*/, COOR
 					cchTextMax -= iMailTo;
 					bUrlMode = true;
 				}
+				if (bUrlMode)
+				{
+					while ((lcrTo.X > lcrFrom.X) && wcschr(pszUrlTrimRight, pChar[lcrTo.X]))
+						lcrTo.X--;
+				}
+				// Return hyperlink target
 				memmove(pszText, pChar+lcrFrom.X, (lcrTo.X - lcrFrom.X + 1)*sizeof(*pszText));
 				pszText[lcrTo.X - lcrFrom.X + 1] = 0;
 

@@ -34,6 +34,211 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "VirtualConsole.h"
 #include "../ConEmuCD/GuiHooks.h"
 
+/* *********** Hotkey editor dialog *********** */
+bool CHotKeyDialog::EditHotKey(HWND hParent, DWORD& VkMod)
+{
+	CHotKeyDialog Dlg(hParent, VkMod);
+	// Модальный
+	INT_PTR iRc = DialogBoxParam(g_hInstance, MAKEINTRESOURCE(IDD_HOTKEY), hParent, hkDlgProc, (LPARAM)&Dlg);
+	bool bOk = (iRc == IDOK);
+	if (bOk)
+	{
+		VkMod = Dlg.GetVkMod();
+	}
+	return bOk;
+}
+
+CHotKeyDialog::CHotKeyDialog(HWND hParent, DWORD aVkMod)
+{
+	mh_Dlg = NULL;
+	mh_Parent = hParent;
+	
+	ZeroStruct(m_HK);
+	m_HK.HkType = chk_User;
+	m_HK.VkMod = aVkMod;
+}
+
+CHotKeyDialog::~CHotKeyDialog()
+{
+}
+
+DWORD CHotKeyDialog::GetVkMod()
+{
+	return m_HK.VkMod;
+}
+
+DWORD CHotKeyDialog::dlgGetHotkey(HWND hDlg, UINT iEditCtrl /*= hkHotKeySelect*/, UINT iListCtrl /*= lbHotKeyList*/)
+{
+	DWORD nHotKey = 0xFF & SendDlgItemMessage(hDlg, iEditCtrl, HKM_GETHOTKEY, 0, 0);
+
+	bool bList = false;
+	CSettings::ListBoxItem* pItems = NULL;
+	uint nKeyCount = CSettings::GetHotKeyListItems(CSettings::eHkKeysHot, &pItems);
+	for (size_t i = 0; i < nKeyCount; i++)
+	{
+		if (pItems[i].nValue == nHotKey)
+		{
+			SendDlgItemMessage(hDlg, iListCtrl, CB_SETCURSEL, i, 0);
+			bList = true;
+			break;
+		}
+	}
+
+	if (!bList)
+		SendDlgItemMessage(hDlg, iListCtrl, CB_SETCURSEL, 0, 0);
+
+	return nHotKey;
+}
+
+INT_PTR CHotKeyDialog::hkDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam)
+{
+	CHotKeyDialog* pDlg = NULL;
+	if (messg == WM_INITDIALOG)
+	{
+		pDlg = (CHotKeyDialog*)lParam;
+		pDlg->mh_Dlg = hDlg;
+		SetWindowLongPtr(hDlg, DWLP_USER, lParam);
+	}
+	else
+	{
+		pDlg = (CHotKeyDialog*)GetWindowLongPtr(hDlg, DWLP_USER);
+	}
+	if (!pDlg)
+	{
+		return FALSE;
+	}
+
+	switch (messg)
+	{
+		case WM_INITDIALOG:
+		{
+			// Ensure, it will be "on screen"
+			RECT rect; GetWindowRect(hDlg, &rect);
+			RECT rcCenter = CenterInParent(rect, pDlg->mh_Parent);
+			MoveWindow(hDlg, rcCenter.left, rcCenter.top,
+			           rect.right - rect.left, rect.bottom - rect.top, false);
+
+			HWND hHk = GetDlgItem(hDlg, hkHotKeySelect);
+			SendMessage(hHk, HKM_SETRULES, HKCOMB_A|HKCOMB_C|HKCOMB_CA|HKCOMB_S|HKCOMB_SA|HKCOMB_SC|HKCOMB_SCA, 0);
+
+			BYTE vk = ConEmuHotKey::GetHotkey(pDlg->m_HK.VkMod);
+			CSettings::SetHotkeyField(hHk, vk);
+
+			// Warning! Если nVK не указан в SettingsNS::nKeysHot - nVK будет обнулен
+			CSettings::FillListBoxHotKeys(GetDlgItem(hDlg, lbHotKeyList), CSettings::eHkKeysHot, vk);
+
+			for (int n = 0; n < 3; n++)
+			{
+				BYTE b = pDlg->m_HK.VkMod ? ConEmuHotKey::GetModifier(pDlg->m_HK.VkMod,n+1) : 0;
+				CSettings::FillListBoxHotKeys(GetDlgItem(hDlg, lbHotKeyMod1+n), CSettings::eHkModifiers, b);
+			}
+
+			SetFocus(GetDlgItem(hDlg,hkHotKeySelect));
+
+			return FALSE;
+		} // WM_INITDIALOG
+
+		case WM_COMMAND:
+		{
+			switch (HIWORD(wParam))
+			{
+				case BN_CLICKED:
+				{
+					switch (LOWORD(wParam))
+					{
+					case IDOK:
+					case IDCANCEL:
+					case IDCLOSE:
+						EndDialog(hDlg, LOWORD(wParam));
+						return 1;
+					}
+					break;
+				} // BN_CLICKED
+
+				case EN_CHANGE:
+				{
+					UINT nHotKey = dlgGetHotkey(hDlg, hkHotKeySelect, lbHotKeyList);
+
+					DWORD nCurMods = (CEHOTKEY_MODMASK & pDlg->m_HK.VkMod);
+					if (!nCurMods)
+						nCurMods = CEHOTKEY_NOMOD;
+
+					pDlg->m_HK.VkMod = nHotKey | nCurMods;
+
+					break;
+				} // EN_CHANGE
+
+				case CBN_SELCHANGE:
+				{
+					switch (LOWORD(wParam))
+					{
+						case lbHotKeyList:
+						{
+							BYTE vk = 0;
+							CSettings::GetListBoxHotKey(GetDlgItem(hDlg, lbHotKeyList), CSettings::eHkKeysHot, vk);
+
+							CSettings::SetHotkeyField(GetDlgItem(hDlg, hkHotKeySelect), vk);
+							
+							DWORD nMod = (CEHOTKEY_MODMASK & pDlg->m_HK.VkMod);
+							if (nMod == 0)
+							{
+								// Если модификатора вообще не было - ставим Win
+								BYTE b = VK_LWIN;
+								CSettings::FillListBoxHotKeys(GetDlgItem(hDlg, lbHotKeyMod1), CSettings::eHkModifiers, b);
+								nMod = (VK_LWIN << 8);
+							}
+							pDlg->m_HK.VkMod = ((DWORD)vk) | nMod;
+
+							break;
+						} // lbHotKeyList
+
+						case lbHotKeyMod1:
+						case lbHotKeyMod2:
+						case lbHotKeyMod3:
+						{
+							DWORD nModifers = 0;
+
+							for (UINT i = 0; i < 3; i++)
+							{
+								BYTE vk = 0;
+								CSettings::GetListBoxHotKey(GetDlgItem(hDlg,lbHotKeyMod1+i),CSettings::eHkModifiers,vk);
+								if (vk)
+									nModifers = ConEmuHotKey::SetModifier(nModifers, vk, false);
+							}
+
+							_ASSERTE((nModifers & 0xFF) == 0); // Модификаторы должны быть строго в старших 3-х байтах
+
+							if (!nModifers)
+								nModifers = CEHOTKEY_NOMOD;
+
+							pDlg->m_HK.VkMod = (cvk_VK_MASK & pDlg->m_HK.VkMod) | nModifers;
+
+							break;
+						} // lbHotKeyMod1, lbHotKeyMod2, lbHotKeyMod3
+
+					} // switch (LOWORD(wParam))
+
+					break;
+				} // CBN_SELCHANGE
+
+			} // switch (HIWORD(wParam))
+
+			break;
+		} // WM_COMMAND
+	}
+
+	return FALSE;
+}
+
+
+
+
+
+
+
+
+/* *********** Hotkey list processing *********** */
+
 
 // Некоторые комбинации нужно обрабатывать "на отпускание" во избежание глюков с интерфейсом
 const struct ConEmuHotKey* ConEmuSkipHotKey = ((ConEmuHotKey*)INVALID_HANDLE_VALUE);
@@ -42,12 +247,35 @@ const struct ConEmuHotKey* ConEmuSkipHotKey = ((ConEmuHotKey*)INVALID_HANDLE_VAL
 bool ConEmuHotKey::CanChangeVK() const
 {
 	//chk_System - пока не настраивается
-	if (HkType==chk_User || HkType==chk_Global || HkType==chk_Local || HkType==chk_Macro)
+	return (HkType==chk_User || HkType==chk_Global || HkType==chk_Local || HkType==chk_Macro || HkType==chk_Task);
+}
+
+bool ConEmuHotKey::IsTaskHotKey() const
+{
+	return (HkType==chk_Task && DescrLangID<0);
+}
+
+// 0-based
+int ConEmuHotKey::GetTaskIndex() const
+{
+	if (IsTaskHotKey())
+		return -(DescrLangID+1);
+	return -1;
+}
+
+// 0-based
+void ConEmuHotKey::SetTaskIndex(int iTaskIdx)
+{
+	if (iTaskIdx >= 0)
 	{
-		return true;
+		DescrLangID = -(iTaskIdx+1);
 	}
-	return false;
-};
+	else
+	{
+		_ASSERTE(iTaskIdx>=0);
+		DescrLangID = 0;
+	}
+}
 
 LPCWSTR ConEmuHotKey::GetDescription(wchar_t* pszDescr, int cchMaxLen, bool bAddMacroIndex /*= false*/) const
 {
@@ -63,9 +291,17 @@ LPCWSTR ConEmuHotKey::GetDescription(wchar_t* pszDescr, int cchMaxLen, bool bAdd
 
 	if (this->Enabled)
 	{
-		if (!this->Enabled())
+		if (this->Enabled == InSelection)
+		{
+			lstrcpyn(pszDescr, L"[InSelection] ", cchMaxLen);
+		}
+		else if (!this->Enabled())
 		{
 			lstrcpyn(pszDescr, L"[Disabled] ", cchMaxLen);
+		}
+
+		if (*pszDescr)
+		{
 			int nLen = lstrlen(pszDescr);
 			pszDescr += nLen;
 			cchMaxLen -= nLen;
@@ -81,7 +317,13 @@ LPCWSTR ConEmuHotKey::GetDescription(wchar_t* pszDescr, int cchMaxLen, bool bAdd
 		lbColon = true;
 	}
 
-	if ((HkType != chk_Macro) && !LoadString(g_hInstance, DescrLangID, pszDescr, cchMaxLen))
+	if (IsTaskHotKey())
+	{
+		const Settings::CommandTasks* pCmd = gpSet->CmdTaskGet(GetTaskIndex());
+		if (pCmd)
+			lstrcpyn(pszDescr, pCmd->pszName ? pCmd->pszName : L"", cchMaxLen);
+	}
+	else if ((HkType != chk_Macro) && !LoadString(g_hInstance, DescrLangID, pszDescr, cchMaxLen))
 	{
 		if ((HkType == chk_User) && GuiMacro && *GuiMacro)
 			lstrcpyn(pszDescr, GuiMacro, cchMaxLen);
@@ -430,7 +672,7 @@ bool ConEmuHotKey::HasModifier(DWORD VkMod, BYTE Mod/*VK*/)
 }
 
 // Вернуть имя модификатора (типа "Apps+Space")
-LPCWSTR ConEmuHotKey::GetHotkeyName(wchar_t (&szFull)[128]) const
+LPCWSTR ConEmuHotKey::GetHotkeyName(wchar_t (&szFull)[128], bool bShowNone /*= true*/) const
 {
 	_ASSERTE(this && this!=ConEmuSkipHotKey);
 
@@ -444,6 +686,7 @@ LPCWSTR ConEmuHotKey::GetHotkeyName(wchar_t (&szFull)[128]) const
 	case chk_Global:
 	case chk_Local:
 	case chk_User:
+	case chk_Task:
 	case chk_Modifier2:
 		lVkMod = VkMod;
 		break;
@@ -466,7 +709,7 @@ LPCWSTR ConEmuHotKey::GetHotkeyName(wchar_t (&szFull)[128]) const
 		break;
 	default:
 		// Неизвестный тип!
-		_ASSERTE(HkType == chk_User);
+		_ASSERTE(FALSE && "Unknown HkType");
 		lVkMod = 0;
 	}
 
@@ -500,13 +743,24 @@ LPCWSTR ConEmuHotKey::GetHotkeyName(wchar_t (&szFull)[128]) const
 				wcscat_c(szFull, L"+");
 			wcscat_c(szFull, szName);
 		}
-		else
+		else if (bShowNone)
 		{
 			wcscpy_c(szFull, L"<None>");
+		}
+		else
+		{
+			szFull[0] = 0;
 		}
 	}
 
 	return szFull;
+}
+
+// Return user-friendly key name
+LPCWSTR ConEmuHotKey::GetHotkeyName(DWORD aVkMod, wchar_t (&szFull)[128], bool bShowNone /*= true*/)
+{
+	ConEmuHotKey hk = {0, chk_User, NULL, L"", aVkMod};
+	return hk.GetHotkeyName(szFull, bShowNone);
 }
 
 void ConEmuHotKey::GetVkKeyName(BYTE vk, wchar_t (&szName)[32])
@@ -633,6 +887,16 @@ bool ConEmuHotKey::UseWinArrows()
 	return gpSet->isUseWinArrows;
 }
 
+bool ConEmuHotKey::InSelection()
+{
+	CVConGuard VCon;
+	if (gpConEmu->GetActiveVCon(&VCon) < 0)
+		return false;
+	if (!VCon->RCon()->isSelectionPresent())
+		return false;
+	return true;
+}
+
 bool ConEmuHotKey::UseCTSShiftArrow()
 {
 	CVConGuard VCon;
@@ -677,7 +941,7 @@ bool ConEmuHotKey::DontHookJumps(const ConEmuHotKey* pHK)
 
 
 /* ************************************* */
-ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
+int ConEmuHotKey::AllocateHotkeys(ConEmuHotKey** ppHotKeys)
 {
 	// Горячие клавиши
 
@@ -743,6 +1007,9 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkMultiCmd,       chk_User,  NULL,    L"Multi.CmdKey",          /*&vmMultiCmd,*/ MakeHotKey('X',VK_LWIN), CConEmuCtrl::key_MultiCmd},
 		{vkCTSVkBlockStart,chk_User,  NULL,    L"CTS.VkBlockStart",      /*&vmCTSVkBlockStart,*/ 0, CConEmuCtrl::key_CTSVkBlockStart}, // запуск выделения блока
 		{vkCTSVkTextStart, chk_User,  NULL,    L"CTS.VkTextStart",       /*&vmCTSVkTextStart,*/ 0, CConEmuCtrl::key_CTSVkTextStart},   // запуск выделения текста
+		{vkCTSCopyHtml0,   chk_User,  InSelection, L"CTS.VkCopyFmt0",    MakeHotKey('C',VK_CONTROL), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Copy(0,0)")},
+		{vkCTSCopyHtml1,   chk_User,  InSelection, L"CTS.VkCopyFmt1",    MakeHotKey('C',VK_CONTROL,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Copy(0,1)")},
+		{vkCTSCopyHtml2,   chk_User,  InSelection, L"CTS.VkCopyFmt2",    0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Copy(0,2)")},
 		{vkCTSVkCopyAll,   chk_User,  NULL,    L"CTS.VkCopyAll",         0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Copy(1)")},
 		{vkShowTabsList,   chk_User,  NULL,    L"Multi.ShowTabsList",    /*MakeHotKey(VK_F12)*/ 0, CConEmuCtrl::key_ShowTabsList},
 		{vkShowTabsList2,  chk_User,  NULL,    L"Multi.ShowTabsList2",   MakeHotKey(VK_F12,VK_APPS), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Tabs(8)")},
@@ -758,8 +1025,10 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkAlwaysOnTop,    chk_User,  NULL,    L"AlwaysOnTopKey",        0, CConEmuCtrl::key_AlwaysOnTop},
 		{vkTabMenu,        chk_User,  NULL,    L"Key.TabMenu",           MakeHotKey(VK_SPACE,VK_APPS), CConEmuCtrl::key_TabMenu, true/*OnKeyUp*/}, // Tab menu
 		{vkTabMenu2,       chk_User,  NULL,    L"Key.TabMenu2",          MakeHotKey(VK_RBUTTON,VK_SHIFT), CConEmuCtrl::key_TabMenu, true/*OnKeyUp*/}, // Tab menu
-		{vkAltF9,          chk_User,  NULL,    L"Key.Maximize",          MakeHotKey(VK_F9,VK_MENU), CConEmuCtrl::key_AltF9}, // Maximize window
-		{vkAltEnter,       chk_User,  NULL,    L"Key.FullScreen",        MakeHotKey(VK_RETURN,VK_MENU), CConEmuCtrl::key_AltEnter}, // Full screen
+		{vkMaximize,       chk_User,  NULL,    L"Key.Maximize",          MakeHotKey(VK_F9,VK_MENU), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMaximize()")}, // Maximize window
+		{vkMaximizeWidth,  chk_User,  NULL,    L"Key.MaximizeWidth",     0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMaximize(1)")}, // Maximize window width
+		{vkMaximizeHeight, chk_User,  NULL,    L"Key.MaximizeHeight",    0, CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowMaximize(2)")}, // Maximize window height
+		{vkAltEnter,       chk_User,  NULL,    L"Key.FullScreen",        MakeHotKey(VK_RETURN,VK_MENU), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowFullscreen()")}, // Full screen
 		{vkSystemMenu,     chk_User,  NULL,    L"Key.SysMenu",           MakeHotKey(VK_SPACE,VK_MENU), CConEmuCtrl::key_SystemMenu, true/*OnKeyUp*/}, // System menu
 		{vkSystemMenu2,    chk_User,  NULL,    L"Key.SysMenu2",          MakeHotKey(VK_RBUTTON,VK_CONTROL), CConEmuCtrl::key_SystemMenu, true/*OnKeyUp*/}, // System menu
 		{vkCtrlUp,         chk_User,  NULL,    L"Key.BufUp",             MakeHotKey(VK_UP,VK_CONTROL), CConEmuCtrl::key_BufferScrollUp}, // Buffer scroll
@@ -826,7 +1095,7 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkWinAltP,        chk_System, NULL, L"", MakeHotKey('P',VK_LWIN,VK_MENU), CConEmuCtrl::key_Settings, true/*OnKeyUp*/}, // Settings
 		{vkWinAltSpace,    chk_System, NULL, L"", MakeHotKey(VK_SPACE,VK_LWIN,VK_MENU), CConEmuCtrl::key_SystemMenu, true/*OnKeyUp*/}, // System menu
 		{vkCtrlWinAltSpace,chk_System, NULL, L"", MakeHotKey(VK_SPACE,VK_CONTROL,VK_LWIN,VK_MENU), CConEmuCtrl::key_ShowRealConsole}, // Show real console
-		{vkCtrlWinEnter,   chk_System, NULL, L"", MakeHotKey(VK_RETURN,VK_LWIN,VK_CONTROL), CConEmuCtrl::key_FullScreen},
+		{vkCtrlWinEnter,   chk_System, NULL, L"", MakeHotKey(VK_RETURN,VK_LWIN,VK_CONTROL), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"WindowFullscreen()")},
 		{vkCtrlTab,        chk_System, UseCtrlTab, L"", MakeHotKey(VK_TAB,VK_CONTROL), CConEmuCtrl::key_CtrlTab}, // Tab switch
 		{vkCtrlShiftTab,   chk_System, UseCtrlTab, L"", MakeHotKey(VK_TAB,VK_CONTROL,VK_SHIFT), CConEmuCtrl::key_CtrlShiftTab}, // Tab switch
 		{vkCtrlTab_Left,   chk_System, NULL, L"", MakeHotKey(VK_LEFT,VK_CONTROL), CConEmuCtrl::key_CtrlTab_Prev}, // Tab switch
@@ -836,6 +1105,8 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		{vkEscNoConsoles,  chk_System, NULL, L"", MakeHotKey(VK_ESCAPE), CConEmuCtrl::key_MinimizeByEsc, false/*OnKeyUp*/}, // Minimize ConEmu by Esc when no open consoles left
 		{vkCTSShiftLeft,   chk_System, UseCTSShiftArrow, L"", MakeHotKey(VK_LEFT,VK_SHIFT),  CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Select(0,-1)")},
 		{vkCTSShiftRight,  chk_System, UseCTSShiftArrow, L"", MakeHotKey(VK_RIGHT,VK_SHIFT), CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Select(0,1)")},
+		{vkCTSShiftHome,   chk_System, UseCTSShiftArrow, L"", MakeHotKey(VK_HOME,VK_SHIFT),  CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Select(0,-1,0,-1)")},
+		{vkCTSShiftEnd,    chk_System, UseCTSShiftArrow, L"", MakeHotKey(VK_END,VK_SHIFT),   CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Select(0,1,0,1)")},
 		{vkCTSShiftUp,     chk_System, UseCTSShiftArrow, L"", MakeHotKey(VK_UP,VK_SHIFT),    CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Select(1,0,-1)")},
 		{vkCTSShiftDown,   chk_System, UseCTSShiftArrow, L"", MakeHotKey(VK_DOWN,VK_SHIFT),  CConEmuCtrl::key_GuiMacro, false, lstrdup(L"Select(1,0,1)")},
 		// Все что ниже - было привязано к "HostKey"
@@ -858,15 +1129,16 @@ ConEmuHotKey* ConEmuHotKey::AllocateHotkeys()
 		//{vkConsole_11, chk_NumHost, &isUseWinNumber, L"", VK_F11|CEHOTKEY_NUMHOSTKEY, CConEmuCtrl::key_ConsoleNum, true/*OnKeyUp*/}, // Для WinF11 & WinF12 приходят только WM_KEYUP || WM_SYSKEYUP)
 		//{vkConsole_12, chk_NumHost, &isUseWinNumber, L"", VK_F12|CEHOTKEY_NUMHOSTKEY, CConEmuCtrl::key_ConsoleNum, true/*OnKeyUp*/}, // Для WinF11 & WinF12 приходят только WM_KEYUP || WM_SYSKEYUP)
 		// End
-		{},
 	};
+
 	// Чтобы не возникло проблем с инициализацией хуков (для обработки Win+<key>)
+	int nHotKeyCount = countof(HotKeys);
 	_ASSERTE(countof(HotKeys)<(HookedKeysMaxCount-1));
 
-	ConEmuHotKey* pKeys = (ConEmuHotKey*)malloc(sizeof(HotKeys));
-	_ASSERTE(pKeys!=NULL);
+	*ppHotKeys = (ConEmuHotKey*)malloc(sizeof(HotKeys));
+	_ASSERTE(*ppHotKeys!=NULL);
 
-	memmove(pKeys, HotKeys, sizeof(HotKeys));
+	memmove(*ppHotKeys, HotKeys, sizeof(HotKeys));
 
-	return pKeys;
+	return nHotKeyCount;
 }

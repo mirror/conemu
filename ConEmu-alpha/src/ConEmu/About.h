@@ -75,7 +75,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"/UpdateJumpList - Update Windows 7 taskbar jump list.\r\n" \
 	L"/LoadCfgFile <file> - Use specified xml file as configuration storage.\r\n" \
 	L"/SaveCfgFile <file> - Save configuration to the specified xml file.\r\n" \
-	L"/SetDefTerm - Set ConEmu as default terminal, may be used with \"/Exit\" switch.\r\n" \
+	L"/SetDefTerm - Set ConEmu as default terminal, use with \"/Exit\" switch.\r\n" \
 	L"/Exit - Don't create ConEmu window, exit after actions.\r\n" \
 	/* L"/Attach [PID] - intercept console of specified process\n" */ \
 	L"/cmd <commandline>|@<taskfile>|{taskname} - Command line to start. This must be the last used switch.\r\n" \
@@ -139,7 +139,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #define pConsoleHelpFull \
-	pConsoleHelp
+	pConsoleHelp \
+	L"When you run application from ConEmu console, you may use one or more -new_console[:switches]\r\n" \
+	L"Read about them on next page\r\n"
+
+#define pNewConsoleHelpFull \
+	pNewConsoleHelp
+
 
 #define pDosBoxHelpFull \
 	L"ConEmu supports DosBox, read more online:\r\n" \
@@ -161,10 +167,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"    close active tab or group (6)\r\n" \
 	L"    close all active processes of the active group (7)\r\n" \
 	L"    close all tabs (8)\r\n" \
-	L"Copy(<What>)\r\n" \
+	L"Copy(<What>[,<Format>])\r\n" \
 	L"  - Copy active console contents\r\n" \
 	L"    What==0: current selection\r\n" \
 	L"    What==1: all buffer contents\r\n" \
+	L"    Format==0: plain text, not formatting\r\n" \
+	L"    Format==1: copy HTML format\r\n" \
+	L"    Format==2: copy as HTML\r\n" \
 	L"FindEditor(\"<FullEditFileName>\")\r\n" \
 	L"FindViewer(\"<FullViewerFileName>\")\r\n" \
 	L"FindFarWindow(<WindowType>,\"<WindowTitle>\")\r\n" \
@@ -248,8 +257,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"WindowFullscreen()\r\n" \
 	L"  - Switch fullscreen window mode\r\n" \
 	L"     returns previous window mode\r\n" \
-	L"WindowMaximize()\r\n" \
-	L"  - Switch maximized window mode\r\n" \
+	L"WindowMaximize([<Cmd>])\r\n" \
+	L"  - Switch maximized window mode (Cmd==0)\r\n" \
+	L"  - Maximize window by width (Cmd==1) or height (Cmd==2)\r\n" \
 	L"     returns previous window mode\r\n" \
 	L"WindowMinimize() or WindowMinimize(1)\r\n" \
 	L"  - Minimize ConEmu window (\"1\" means \"minimize to the TSA\")\r\n" \

@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#endif
 
 #include <windows.h>
+#include <Tlhelp32.h>
 
 #ifndef TESTLINK
 #include "../common/common.hpp"
@@ -78,7 +79,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "GuiAttach.h"
 #include "Injects.h"
 #include "Ansi.h"
+#include "../ConEmu/version.h"
 #include "../ConEmuCD/ExitCodes.h"
+#include "../common/CmdLine.h"
 #include "../common/ConsoleAnnotation.h"
 #include "../common/RConStartArgs.h"
 #include "../common/WinConsole.h"
@@ -140,7 +143,7 @@ extern const wchar_t *user32  ;// = L"user32.dll";
 //extern const wchar_t *advapi32;// = L"Advapi32.dll";
 //extern const wchar_t *comdlg32;// = L"comdlg32.dll";
 extern bool gbHookExecutableOnly;
-extern DWORD gnAllowClinkUsage;
+//extern DWORD gnAllowClinkUsage;
 
 ConEmuHkDllState gnDllState = ds_Undefined;
 int gnDllThreadCount = 0;
@@ -378,7 +381,11 @@ wrap:
 	if (abForceRecreate || (bLastAnsi != bAnsi))
 	{
 		// Ёто может случитьс€ при запуске нового "чистого" cmd - "start cmd" из ConEmu\cmd
-		_ASSERTEX(bAnsi && "ANSI was disabled?");
+		#ifdef _DEBUG
+		wchar_t szCurAnsiVar[32] = L""; GetEnvironmentVariableW(ENV_CONEMUANSI_VAR_W, szCurAnsiVar, countof(szCurAnsiVar));
+		// »ли при аттаче свободно-запущенной-ранее консоли в ConEmu
+		_ASSERTEX((bAnsi || (!*szCurAnsiVar || lstrcmp(szCurAnsiVar,L"OFF")==0) || !gpConMap) && "ANSI was disabled?");
+		#endif
 		bLastAnsi = bAnsi;
 		SetEnvironmentVariable(ENV_CONEMUANSI_VAR_W, bAnsi ? L"ON" : L"OFF");
 	}
@@ -423,12 +430,85 @@ PipeServer<CESERVER_REQ> *gpHookServer = NULL;
 
 bool gbShowExeMsgBox = false;
 
-void InitDefaultTerm()
+bool InitDefaultTerm()
 {
+	bool lbRc = true;
+
 	gpDefaultTermParm = (ConEmuGuiMapping*)calloc(sizeof(*gpDefaultTermParm),1);
 
 	CShellProc sp;
 	sp.LoadSrvMapping(TRUE);
+
+	HMODULE hPrevHooks = NULL;
+	_ASSERTEX(gnSelfPID!=0 && ghOurModule!=NULL);
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, gnSelfPID);
+	if (hSnap != INVALID_HANDLE_VALUE)
+	{
+		MODULEENTRY32 mi = {sizeof(mi)};
+		//wchar_t szOurName[MAX_PATH] = L"";
+		//GetModuleFileName(ghOurModule, szOurName, MAX_PATH);
+		wchar_t szVer[2] = {MVV_4a[0], 0};
+		wchar_t szAddName[32];
+		_wsprintf(szAddName, SKIPLEN(countof(szAddName))
+			CEDEFTERMDLLFORMAT /*L"ConEmuHk%s.%02u%02u%02u%s.dll"*/,
+			WIN3264TEST(L"",L"64"), MVV_1, MVV_2, MVV_3, szVer);
+		//LPCWSTR pszOurName = PointToName(szOurName);
+		wchar_t* pszDot = wcschr(szAddName, L'.');
+		wchar_t szCheckName[MAX_PATH+1];
+
+		if (pszDot && Module32First(hSnap, &mi))
+		{
+			pszDot[1] = 0; // Need to check only name, without version number
+			int nCurLen = lstrlen(szAddName);
+			do {
+				if (mi.hModule == ghOurModule)
+					continue;
+				lstrcpyn(szCheckName, PointToName(mi.szExePath), nCurLen+1);
+				if (lstrcmpi(szCheckName, szAddName) == 0)
+				{
+					hPrevHooks = mi.hModule;
+					break; // Prev (old version) instance found!
+				}
+			} while (Module32Next(hSnap, &mi));
+		}
+
+		CloseHandle(hSnap);
+	}
+
+	//ghDefaultTerminalReady  = ... ;
+	if (hPrevHooks)
+	{
+		if (!FreeLibrary(hPrevHooks))
+		{
+			lbRc = false;
+		}
+	}
+
+	// For Visual Studio check all spawned processes (children of gnSelfPID), find *.vshost.exe
+	if (gbIsVStudio)
+	{
+		//_ASSERTE(FALSE && "Continue to find existing *.vshost.exe");
+		HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		if (hSnap != INVALID_HANDLE_VALUE)
+		{
+			PROCESSENTRY32 pe = {sizeof(pe)};
+			if (Process32First(hSnap, &pe)) do
+			{
+				if (pe.th32ParentProcessID == gnSelfPID)
+				{
+					if (IsVsNetHostExe(pe.szExeFile)) // *.vshost.exe
+					{
+						// Found! Hook it!
+						sp.StartDefTermHooker(pe.th32ProcessID);
+						break;
+					}
+				}
+			} while (Process32Next(hSnap, &pe));
+			CloseHandle(hSnap);
+		}
+	}
+
+	return lbRc;
 }
 
 DWORD WINAPI DllStart(LPVOID /*apParm*/)
@@ -503,6 +583,7 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 	}
 	#endif
 
+
 	if ((lstrcmpi(pszName, L"powershell.exe") == 0) || (lstrcmpi(pszName, L"powershell") == 0))
 	{
 		HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -524,7 +605,7 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 	}
 	else if ((lstrcmpi(pszName, L"cmd.exe") == 0) || (lstrcmpi(pszName, L"cmd") == 0))
 	{
-		gnAllowClinkUsage = 1; // пока не известно
+		gbIsCmdProcess = true;
 	}
 	else if ((lstrcmpi(pszName, L"sh.exe") == 0) || (lstrcmpi(pszName, L"sh") == 0)
 		|| (lstrcmpi(pszName, L"bash.exe") == 0) || (lstrcmpi(pszName, L"bash") == 0)
@@ -560,6 +641,14 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 	else if ((lstrcmpi(pszName, L"notepad.exe") == 0) || (lstrcmpi(pszName, L"notepad") == 0))
 	{
 		//_ASSERTE(FALSE && "Notepad.exe started!");
+	}
+	else if (IsVsNetHostExe(pszName)) // "*.vshost.exe"
+	{
+		gbIsNetVsHost = true;
+	}
+	else if ((lstrcmpi(pszName, L"devenv.exe") == 0) || (lstrcmpi(pszName, L"WDExpress.exe") == 0))
+	{
+		gbIsVStudio = true;
 	}
 
 	// ѕоскольку процедура в принципе может быть кем-то перехвачена, сразу найдем адрес
@@ -650,6 +739,7 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 	
 #ifdef USE_PIPE_SERVER
 	_ASSERTEX(gpHookServer==NULL);
+	// gbPrepareDefaultTerminal turned on in DllMain
 	if (!gbPrepareDefaultTerminal)
 	{
 		print_timings(L"gpHookServer");
@@ -680,6 +770,7 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 #endif
 
 	
+	// gbPrepareDefaultTerminal turned on in DllMain
 	if (gbPrepareDefaultTerminal)
 	{
 		TODO("ƒополнительна€ инициализаци€, если нужно, дл€ установки перехватов под DefaultTerminal");
@@ -817,9 +908,13 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 		}
 	}
 
+	// gbPrepareDefaultTerminal turned on in DllMain
 	if (gbPrepareDefaultTerminal)
 	{
-		InitDefaultTerm();
+		if (!InitDefaultTerm())
+		{
+			TODO("Show error message?");
+		}
 	}
 
 	//if (!gbSkipInjects)
@@ -897,6 +992,27 @@ DWORD WINAPI DllStart(LPVOID /*apParm*/)
 	
 	//if (hStartedEvent)
 	//	SetEvent(hStartedEvent);
+
+	// -- Ќе требуетс€, ConEmuC ждет успеха
+	//if (gbPrepareDefaultTerminal)
+	//{
+	//	if (!gpDefaultTermParm || !gpDefaultTermParm->hGuiWnd)
+	//	{
+	//		_ASSERTEX(gpDefaultTermParm && gpDefaultTermParm->hGuiWnd);
+	//	}
+	//	else
+	//	{
+	//		// ”ведомить GUI, что инициализаци€ хуков дл€ Default Terminal была завершена
+	//		CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_DEFTERMSTARTED, sizeof(CESERVER_REQ_HDR)+sizeof(DWORD));
+	//		if (pIn)
+	//		{
+	//			pIn->dwData[0] = GetCurrentProcessId();
+	//			CESERVER_REQ* pOut = ExecuteGuiCmd(gpDefaultTermParm->hGuiWnd, pIn, NULL, TRUE);
+	//			ExecuteFreeResult(pIn);
+	//			ExecuteFreeResult(pOut);
+	//		}
+	//	}
+	//}
 
 	print_timings(L"DllStart - done");
 
@@ -1199,6 +1315,15 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 				{
 					nWaitRoot = WaitForSingleObject(hRootProcessFlag, 0);
 					gbPrepareDefaultTerminal = (nWaitRoot == WAIT_OBJECT_0);
+					SafeCloseHandle(hRootProcessFlag);
+					// ≈сли ждут, что мы отметимс€...
+					if (gbPrepareDefaultTerminal)
+					{
+						msprintf(szEvtName, countof(szEvtName), CEDEFAULTTERMHOOKOK, gnSelfPID);
+						hRootProcessFlag = OpenEvent(SYNCHRONIZE|EVENT_MODIFY_STATE, FALSE, szEvtName);
+						if (hRootProcessFlag)
+							SetEvent(hRootProcessFlag);
+					}
 				}
 				SafeCloseHandle(hRootProcessFlag);
 			}
@@ -1211,8 +1336,8 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 			DLOGEND1();
 
 			DLOG1_("DllMain.InQueue",ul_reason_for_call);
-			gcchLastWriteConsoleMax = 4096;
-			gpszLastWriteConsole = (wchar_t*)calloc(gcchLastWriteConsoleMax,sizeof(*gpszLastWriteConsole));
+			//gcchLastWriteConsoleMax = 4096;
+			//gpszLastWriteConsole = (wchar_t*)calloc(gcchLastWriteConsoleMax,sizeof(*gpszLastWriteConsole));
 			gInQueue.Initialize(512, NULL);
 			DLOGEND1();
 
@@ -1270,7 +1395,14 @@ BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved
 			//DWORD nThreadWait = WaitForMultipleObjects(hEvents, countof(hEvents), FALSE, INFINITE);
 			//CloseHandle(hEvents[0]);
 			#else
-			DllStart(NULL);
+			if (DllStart(NULL) != 0)
+			{
+				if (gbPrepareDefaultTerminal)
+				{
+					_ASSERTEX(gbPrepareDefaultTerminal && "Failed to set up default terminal");
+					lbAllow = FALSE;
+				}
+			}
 			#endif
 			DLOGEND1();
 			
@@ -1777,7 +1909,20 @@ int DuplicateRoot(CESERVER_REQ_DUPLICATE* Duplicate)
 		Duplicate->nColors, Duplicate->nWidth, Duplicate->nHeight, Duplicate->nBufferHeight,
 		pszCmdLine);
 
-	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.dwFlags |= STARTF_USESHOWWINDOW;
+	si.wShowWindow = user->isWindowVisible(ghConWnd) ? SW_SHOWNORMAL : SW_HIDE;
+
+	if (Duplicate->nColors)
+	{
+		DWORD nTextColorIdx = (Duplicate->nColors & 0xFF);
+		DWORD nBackColorIdx = (Duplicate->nColors & 0xFF00) >> 8;
+		if (nTextColorIdx <= 15 && nBackColorIdx <= 15)
+		{
+			si.dwFlags |= STARTF_USEFILLATTRIBUTE;
+			si.dwFillAttribute = (nBackColorIdx << 4) | nTextColorIdx;
+		}
+	}
+
 
 	if (!CreateProcess(NULL, pszCmd, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi))
 	{
@@ -1948,6 +2093,13 @@ BOOL WINAPI HookServerCommand(LPVOID pInst, CESERVER_REQ* pCmd, CESERVER_REQ* &p
 					_wsprintf(szArgs, SKIPLEN(countof(szArgs)) L" /GID=%u /GHWND=%08X /ATTACH /PID=%u",
 						pCmd->NewServer.nGuiPID, (DWORD)pCmd->NewServer.hGuiWnd, GetCurrentProcessId());
 				}
+
+				if (user->isWindowVisible(ghConWnd))
+				{
+					si.dwFlags |= STARTF_USESHOWWINDOW;
+					si.wShowWindow = SW_SHOWNORMAL;
+				}
+
 				lbRc = CreateProcess(szSelf, szArgs, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &pi);
 				if (lbRc)
 				{

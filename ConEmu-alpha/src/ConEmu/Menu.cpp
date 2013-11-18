@@ -162,12 +162,12 @@ void CConEmuMenu::CmdTaskPopupItem::Reset(CmdTaskPopupItemType newItemType, int 
 	}
 }
 
-void CConEmuMenu::CmdTaskPopupItem::SetShortName(LPCWSTR asName, bool bRightQuote /*= false*/)
+void CConEmuMenu::CmdTaskPopupItem::SetShortName(LPCWSTR asName, bool bRightQuote /*= false*/, LPCWSTR asHotKey /*= NULL*/)
 {
-	CConEmuMenu::CmdTaskPopupItem::SetMenuName(this->szShort, countof(this->szShort), asName, (ItemType == eTaskPopup), bRightQuote);
+	CConEmuMenu::CmdTaskPopupItem::SetMenuName(this->szShort, countof(this->szShort), asName, (ItemType == eTaskPopup), bRightQuote, asHotKey);
 }
 
-void CConEmuMenu::CmdTaskPopupItem::SetMenuName(wchar_t* pszDisplay, INT_PTR cchDisplayMax, LPCWSTR asName, bool bTrailingPeriod, bool bRightQuote /*= false*/)
+void CConEmuMenu::CmdTaskPopupItem::SetMenuName(wchar_t* pszDisplay, INT_PTR cchDisplayMax, LPCWSTR asName, bool bTrailingPeriod, bool bRightQuote /*= false*/, LPCWSTR asHotKey /*= NULL*/)
 {
 	int nCurLen = _tcslen(pszDisplay);
 	int nLen = _tcslen(asName);
@@ -207,14 +207,39 @@ void CConEmuMenu::CmdTaskPopupItem::SetMenuName(wchar_t* pszDisplay, INT_PTR cch
 		*(pszDst++) = /*…*/L'\x2026';
 	}
 
-	// Для тасков, покаать ">>" когда они (сейчас) не разворачиваются в SubMenu
+	// Для тасков, показать "»" когда они (сейчас) не разворачиваются в SubMenu
+	wchar_t szRight[36] = L"";
 	if (bRightQuote)
 	{
-		if ((pszDst + 2) >= pszEnd)
-			pszDst = pszDisplay+cchDisplayMax-3;
+		if (asHotKey && *asHotKey)
+		{
+			szRight[0] = L'\t';
+			lstrcpyn(szRight+1, asHotKey, 32);
+			wcscat_c(szRight, L" \xBB");
+		}
+		else
+		{
+			wcscpy_c(szRight, L"\t\xBB");
+		}
+	}
+	else if (asHotKey && *asHotKey)
+	{
+		szRight[0] = L'\t';
+		lstrcpyn(szRight+1, asHotKey, 34);
+	}
 
-		*(pszDst++) = L'\t';
-		*(pszDst++) = 0xBB /* RightArrow/Quotes */;
+	if (*szRight)
+	{
+		INT_PTR nRight = _tcslen(szRight);
+		_ASSERTE((nRight+10) < cchDisplayMax);
+
+		if ((pszDst + nRight) >= pszEnd)
+			pszDst = pszDisplay+max(0,(cchDisplayMax-(nRight+1)));
+
+		_wcscpy_c(pszDst, cchDisplayMax-(pszDst-pszDisplay), szRight);
+		pszDst += _tcslen(pszDst);
+		//*(pszDst++) = L'\t';
+		//*(pszDst++) = 0xBB /* RightArrow/Quotes */;
 	}
 
 	// Terminate with '\0'
@@ -279,17 +304,17 @@ void CConEmuMenu::OnNewConPopupMenu(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 
 		InsertMenu(hPopup, nInsertPos, MF_BYPOSITION|MF_SEPARATOR, 0, 0);
 
 		// -- don't. let show current instance tasks only
-	//// Обновить группы команд
-	//gpSet->LoadCmdTasks(NULL);
+		//// Обновить группы команд
+		//gpSet->LoadCmdTasks(NULL);
 
 		int nGroup = 0, nCurGroupCount = 0;
-	const Settings::CommandTasks* pGrp = NULL;
+		const Settings::CommandTasks* pGrp = NULL;
 		HMENU hCurPopup = hPopup;
 		//const wchar_t* sMenuHotkey = L"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 		int nMenuHotkeyMax = _tcslen(sMenuHotkey);
 		//bool bWasTasks = false;
 		while ((pGrp = gpSet->CmdTaskGet(nGroup++)) != NULL)
-	{
+		{
 			if ((nCurGroupCount++) >= MAX_CMD_GROUP_SHOW)
 			{
 				itm.Reset(CmdTaskPopupItem::eMore, -1);
@@ -310,24 +335,25 @@ void CConEmuMenu::OnNewConPopupMenu(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 
 			_ASSERTE(nCurGroupCount>=1 && nCurGroupCount<=MAX_CMD_GROUP_SHOW);
 			if (nCurGroupCount <= nMenuHotkeyMax)
 				_wsprintf(itm.szShort, SKIPLEN(countof(itm.szShort)) L"&%c: ", sMenuHotkey[nCurGroupCount-1]);
-		else
+			else
 				itm.szShort[0] = 0;
 
-			itm.SetShortName(pGrp->pszName, !mb_CmdShowTaskItems);
+			wchar_t szHotkey[128];
+			itm.SetShortName(pGrp->pszName, !mb_CmdShowTaskItems, pGrp->HotKey.GetHotkeyName(szHotkey, false));
 
 			if (mb_CmdShowTaskItems)
-		{
+			{
 				itm.hPopup = CreatePopupMenu();
 				InsertMenu(hCurPopup, nInsertPos, MF_BYPOSITION|MF_POPUP|MF_STRING|MF_ENABLED, (UINT_PTR)itm.hPopup, itm.szShort);
-		}
-		else
-		{
+			}
+			else
+			{
 				InsertMenu(hCurPopup, nInsertPos, MF_BYPOSITION|MF_ENABLED|MF_STRING, itm.nCmd, itm.szShort);
-		}
+			}
 			m_CmdTaskPopup.push_back(itm);
 
 			//bWasTasks = true;
-	}
+		}
 		//// was any task appended?
 		//bSeparator = bWasTasks;
 
@@ -358,6 +384,7 @@ void CConEmuMenu::OnNewConPopupMenu(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 
 				itm.pszCmd = pszHistory;
 
 				InsertMenu(hPopup, nInsertPos, MF_BYPOSITION | MF_STRING | MF_ENABLED, itm.nCmd, itm.szShort);
+				m_CmdTaskPopup.push_back(itm);
 			}
 
 			pszHistory += _tcslen(pszHistory)+1;
@@ -405,13 +432,13 @@ void CConEmuMenu::OnNewConPopupMenu(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 
 	                         rcBtnRect.right,rcBtnRect.bottom, ghWnd, lpExcl);
 	mb_InNewConPopup = mb_InNewConRPopup = false;
 	//gpConEmu->mp_Tip->HideTip();
-	
+
 	if ((nId >= 1) || mp_CmdRClickForce)
 	{
 		if (mp_CmdRClickForce)
 		{
 			itm = *mp_CmdRClickForce;
-	}
+		}
 		else
 		{
 			itm.ItemType = CmdTaskPopupItem::eNone;
@@ -430,19 +457,19 @@ void CConEmuMenu::OnNewConPopupMenu(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 
 			gpConEmu->RecreateAction(gpSetCls->GetDefaultCreateAction(), TRUE);
 		}
 		else if (itm.ItemType == CmdTaskPopupItem::eSetupTasks)
-	{
-		CSettings::Dialog(IDD_SPG_CMDTASKS);
-	}
+		{
+			CSettings::Dialog(IDD_SPG_CMDTASKS);
+		}
 		else if (itm.ItemType == CmdTaskPopupItem::eClearHistory)
-	{
-		gpSetCls->ResetCmdHistory();
-	}
+		{
+			gpSetCls->ResetCmdHistory();
+		}
 		else if ((itm.ItemType == CmdTaskPopupItem::eCmd)
 			|| (itm.ItemType == CmdTaskPopupItem::eTaskCmd)
 			|| (itm.ItemType == CmdTaskPopupItem::eTaskAll)
 			|| (itm.ItemType == CmdTaskPopupItem::eTaskPopup))
-	{
-		RConStartArgs con;
+		{
+			RConStartArgs con;
 			if ((itm.ItemType == CmdTaskPopupItem::eTaskAll) || (itm.ItemType == CmdTaskPopupItem::eTaskPopup))
 			{
 				const Settings::CommandTasks* pGrp = (const Settings::CommandTasks*)itm.pGrp;
@@ -465,36 +492,36 @@ void CConEmuMenu::OnNewConPopupMenu(POINT* ptWhere /*= NULL*/, DWORD nFlags /*= 
 				con.ProcessNewConArg();
 
 				_ASSERTE(con.pszSpecialCmd && *con.pszSpecialCmd);
-		}
+			}
 			else if (itm.ItemType == CmdTaskPopupItem::eCmd)
-		{
+			{
 				_ASSERTE(itm.pszCmd && (*itm.pszCmd != L'>'));
 
 				con.pszSpecialCmd = lstrdup(itm.pszCmd);
 
 				_ASSERTE(con.pszSpecialCmd && *con.pszSpecialCmd);
-		}
+			}
 
-		if (isPressed(VK_SHIFT))
-		{
-			int nRc = gpConEmu->RecreateDlg(&con);
+			if (isPressed(VK_SHIFT))
+			{
+				int nRc = gpConEmu->RecreateDlg(&con);
 
-			if (nRc != IDC_START)
-				return;
+				if (nRc != IDC_START)
+					return;
 
-			CVConGroup::Redraw();
-		}
+				CVConGroup::Redraw();
+			}
 			else if (itm.ItemType == CmdTaskPopupItem::eCmd)
-		{
-			gpSet->HistoryAdd(con.pszSpecialCmd);
-		}
+			{
+				gpSet->HistoryAdd(con.pszSpecialCmd);
+			}
 
-		//Собственно, запуск
+			//Собственно, запуск
 			if (gpSetCls->IsMulti())
-			gpConEmu->CreateCon(&con, true);
-		else
-			gpConEmu->CreateWnd(&con);
-	}
+				gpConEmu->CreateCon(&con, true);
+			else
+				gpConEmu->CreateWnd(&con);
+		}
 	}
 
 	// Release handles
@@ -563,11 +590,11 @@ void CConEmuMenu::OnNewConPopupMenuRClick(HMENU hMenu, UINT nItemPos)
 	else
 	{
 		const Settings::CommandTasks* pGrp = (const Settings::CommandTasks*)itm->pGrp;
-	if (!pGrp || !pGrp->pszCommands || !*pGrp->pszCommands)
-		return;
+		if (!pGrp || !pGrp->pszCommands || !*pGrp->pszCommands)
+			return;
 
-	// Поехали
-	HMENU hPopup = CreatePopupMenu();
+		// Поехали
+		HMENU hPopup = CreatePopupMenu();
 		const int nStartID = mn_CmdLastID;
 		_ASSERTE(nStartID > 0);
 		int nLastID = FillTaskPopup(hPopup, itm);
@@ -608,20 +635,20 @@ void CConEmuMenu::OnNewConPopupMenuRClick(HMENU hMenu, UINT nItemPos)
 		//	pszNewLine = wcschr(pszLine, L'\n');
 		//}
 
-	int nRetID = -1;
+		int nRetID = -1;
 	
-	if (nLastID > 0)
-	{
-		RECT rcMenuItem = {};
-		GetMenuItemRect(ghWnd, hMenu, nItemPos, &rcMenuItem);
+		if (nLastID > 0)
+		{
+			RECT rcMenuItem = {};
+			GetMenuItemRect(ghWnd, hMenu, nItemPos, &rcMenuItem);
 
-		mb_InNewConRPopup = true;
-		nRetID = trackPopupMenu(tmp_CmdPopup, hPopup, TPM_RETURNCMD|TPM_NONOTIFY|TPM_RECURSE,
-	                         rcMenuItem.right,rcMenuItem.top, ghWnd, &rcMenuItem);
-		mb_InNewConRPopup = false;
-	}
+			mb_InNewConRPopup = true;
+			nRetID = trackPopupMenu(tmp_CmdPopup, hPopup, TPM_RETURNCMD|TPM_NONOTIFY|TPM_RECURSE,
+								 rcMenuItem.right,rcMenuItem.top, ghWnd, &rcMenuItem);
+			mb_InNewConRPopup = false;
+		}
 
-	DestroyMenu(hPopup);
+		DestroyMenu(hPopup);
 
 		CmdTaskPopupItem itm = {CmdTaskPopupItem::eNone};
 		if (nRetID > 0)
@@ -637,55 +664,55 @@ void CConEmuMenu::OnNewConPopupMenuRClick(HMENU hMenu, UINT nItemPos)
 		}
 
 		if (itm.ItemType == CmdTaskPopupItem::eTaskCmd)
-	{
-		// Need to close parentmenu
-		if (hMenuWnd)
 		{
-			PostMessage(hMenuWnd, WM_CLOSE, 0, 0);
-		}
+			// Need to close parentmenu
+			if (hMenuWnd)
+			{
+				PostMessage(hMenuWnd, WM_CLOSE, 0, 0);
+			}
 
-		bool bRunAs = false;
+			bool bRunAs = false;
 			//LPCWSTR pszCmd = gpConEmu->ParseScriptLineOptions(pszLines[nRetID-nStartID-1], &bRunAs, NULL);
 			LPCWSTR pszCmd = gpConEmu->ParseScriptLineOptions(itm.pszCmd, &bRunAs, NULL);
 
-		// Well, start selected line from Task
-		RConStartArgs con;
-		con.pszSpecialCmd = lstrdup(pszCmd);
-		if (!con.pszSpecialCmd)
-		{
-			_ASSERTE(con.pszSpecialCmd!=NULL);
-		}
-		else
-		{
-			con.bRunAsAdministrator = bRunAs; // May be set in style ">*powershell"
-
-			// May be directory was set in task properties?
-			pGrp->ParseGuiArgs(&con.pszStartupDir, NULL);
-
-			con.ProcessNewConArg();
-			
-			if (isPressed(VK_SHIFT))
+			// Well, start selected line from Task
+			RConStartArgs con;
+			con.pszSpecialCmd = lstrdup(pszCmd);
+			if (!con.pszSpecialCmd)
 			{
-				int nRc = gpConEmu->RecreateDlg(&con);
-
-				if (nRc != IDC_START)
-					return;
-
-				CVConGroup::Redraw();
+				_ASSERTE(con.pszSpecialCmd!=NULL);
 			}
+			else
+			{
+				con.bRunAsAdministrator = bRunAs; // May be set in style ">*powershell"
+
+				// May be directory was set in task properties?
+				pGrp->ParseGuiArgs(&con.pszStartupDir, NULL);
+
+				con.ProcessNewConArg();
+			
+				if (isPressed(VK_SHIFT))
+				{
+					int nRc = gpConEmu->RecreateDlg(&con);
+
+					if (nRc != IDC_START)
+						return;
+
+					CVConGroup::Redraw();
+				}
 				//Don't add task subitems to history
 				//else
 				//{
 				//	gpSet->HistoryAdd(con.pszSpecialCmd);
 				//}
 
-			//Собственно, запуск
+				//Собственно, запуск
 				if (gpSetCls->IsMulti())
-				gpConEmu->CreateCon(&con, true);
-			else
-				gpConEmu->CreateWnd(&con);
+					gpConEmu->CreateCon(&con, true);
+				else
+					gpConEmu->CreateWnd(&con);
+			}
 		}
-	}
 
 		//SafeFree(pszDataW);
 	}
@@ -1199,7 +1226,7 @@ LRESULT CConEmuMenu::OnInitMenuPopup(HWND hWnd, HMENU hMenu, LPARAM lParam)
 	{
 		if (mn_TrackMenuPlace != tmp_System)
 		{
-		_ASSERTE(mn_TrackMenuPlace == tmp_System);
+			_ASSERTE(mn_TrackMenuPlace == tmp_System);
 			return 0;
 		}
 
@@ -1560,7 +1587,10 @@ void CConEmuMenu::ShowSysmenu(int x, int y, bool bAlignUp /*= false*/)
 		mn_SysMenuCloseTick = 0;
 	}
 
-	if (Icon.isWindowInTray() && gpConEmu->isIconic())
+	wchar_t szInfo[64]; _wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"ShowSysmenu result: %i", command);
+	LogString(szInfo);
+
+	if (command && Icon.isWindowInTray() && gpConEmu->isIconic())
 	{
 		_ASSERTE(!gpConEmu->mp_Inside);
 
@@ -1577,7 +1607,7 @@ void CConEmuMenu::ShowSysmenu(int x, int y, bool bAlignUp /*= false*/)
 			default:
 				//SendMessage(ghWnd, WM_TRAYNOTIFY, 0, WM_LBUTTONDOWN);
 				//Icon.OnTryIcon(ghWnd, WM_TRAYNOTIFY, 0, WM_LBUTTONDOWN);
-				gpConEmu->OnMinimizeRestore(sih_Show);
+				gpConEmu->DoMinimizeRestore(sih_Show);
 				break;
 		}
 	}
@@ -1645,9 +1675,9 @@ HMENU CConEmuMenu::CreateVConListPopupMenu(HMENU ahExist, BOOL abFirstTabOnly)
 		}
 		else
 		{
-			CTab tab;
+			ConEmuTab tab = {};
 			int R = 0;
-			if (!pRCon->GetTab(R, tab))
+			if (!pRCon->GetTab(R, &tab))
 			{
 				wsprintf(szText, L"%i: RConsole", V+1);
 				AppendMenu(h, MF_STRING|nAddFlags, MAKELONG(1, V+1), szText);
@@ -1662,32 +1692,32 @@ HMENU CConEmuMenu::CreateVConListPopupMenu(HMENU ahExist, BOOL abFirstTabOnly)
 						| ((tab->Flags() & etfDisabled) ? (MF_DISABLED|MF_GRAYED) : 0)
 						#endif
 						;
-					int nLen = tab->Name.Length();
+					int nLen = lstrlen(tab.Name/*.Ptr()*/);
 					if (!R)
 						wsprintf(szText, L"%i: ", V+1);
 					else
 						wcscpy_c(szText, L"      ");
 					if (nLen <= nMaxStrLen)
 					{
-						wcscat_c(szText, tab->Name.Ptr());
+						wcscat_c(szText, tab.Name/*.Ptr()*/);
 					}
 					else
 					{
 						int nCurLen = lstrlen(szText);
 						_ASSERTE((nCurLen+10)<nMaxStrLen);
-						if (tab->Type() == fwt_Panels)
+						if ((tab.Type & fwt_TypeMask) == fwt_Panels)
 						{
-							lstrcpyn(szText+nCurLen, tab->Name.Ptr(), nMaxStrLen-1-nCurLen);
+							lstrcpyn(szText+nCurLen, tab.Name/*.Ptr()*/, nMaxStrLen-1-nCurLen);
 						}
 						else
 						{
 							szText[nCurLen++] = L'\x2026'; szText[nCurLen] = 0;
-							lstrcpyn(szText+nCurLen, tab->Name.Ptr()+nLen-nMaxStrLen, nMaxStrLen-1-nCurLen);
+							lstrcpyn(szText+nCurLen, tab.Name+nLen-nMaxStrLen, nMaxStrLen-1-nCurLen);
 						}
 						wcscat_c(szText, L"\x2026"); //...
 					}
 					AppendMenu(h, MF_STRING|nAddFlags, MAKELONG(R+1, V+1), szText);
-				} while (!abFirstTabOnly && pRCon->GetTab(++R, tab));
+				} while (!abFirstTabOnly && pRCon->GetTab(++R, &tab));
 			}
 		}
 	}
@@ -1856,7 +1886,7 @@ HMENU CConEmuMenu::CreateEditMenuPopup(CVirtualConsole* apVCon, HMENU ahExist /*
 		AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
 		AppendMenu(hMenu, MF_STRING | (lbSelectionExist?MF_ENABLED:MF_GRAYED), ID_CON_COPY, L"Cop&y");
 		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_COPY_ALL, MenuAccel(vkCTSVkCopyAll,L"Copy &all"));
-		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_PASTE, L"&Paste");
+		AppendMenu(hMenu, MF_STRING | (lbEnabled?MF_ENABLED:MF_GRAYED), ID_CON_PASTE, MenuAccel(vkPasteText,L"&Paste"));
 		AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
 		AppendMenu(hMenu, MF_STRING | ((gpSet->isCTSHtmlFormat == 0)?MF_CHECKED:MF_UNCHECKED), ID_CON_COPY_HTML0, L"Plain &text only");
 		AppendMenu(hMenu, MF_STRING | ((gpSet->isCTSHtmlFormat == 1)?MF_CHECKED:MF_UNCHECKED), ID_CON_COPY_HTML1, L"Copy &HTML format");
@@ -1884,7 +1914,7 @@ HMENU CConEmuMenu::CreateHelpMenuPopup()
 {
 	HMENU hHelp = CreatePopupMenu();
 
-	if (!gpConEmu->mb_MingwMode)
+	if (gpConEmu->isUpdateAllowed())
 	{
 		if (gpUpd && gpUpd->InUpdate())
 			AppendMenu(hHelp, MF_STRING | MF_ENABLED, ID_STOPUPDATE, _T("&Stop updates checking"));
@@ -2197,7 +2227,7 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 		case ID_TOMONITOR:
 		{
-			if (!gpConEmu->IsSizeFree())
+			if (!gpConEmu->IsSizePosFree())
 				return 0;
 			if (!IsWindowVisible(ghWnd))
 				Icon.RestoreWindowFromTray();
@@ -2317,7 +2347,7 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 				if (gpSet->isQuakeStyle)
 				{
-					gpConEmu->OnMinimizeRestore(sih_Show/*sih_HideTSA*/);
+					gpConEmu->DoMinimizeRestore(sih_Show/*sih_HideTSA*/);
 					break;
 				}
 
@@ -2368,7 +2398,7 @@ LRESULT CConEmuMenu::OnSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 				if (gpSet->isQuakeStyle)
 				{
-					gpConEmu->OnMinimizeRestore(sih_AutoHide);
+					gpConEmu->DoMinimizeRestore(sih_AutoHide);
 				}
 				else if (bMin2TSA)
 				{

@@ -31,10 +31,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef TEST_REFRESH_DELAYED
 
 #include "ConEmuC.h"
+#include "../common/CmdLine.h"
 #include "../common/ConsoleAnnotation.h"
 #include "../common/ConsoleRead.h"
 #include "../common/Execute.h"
 #include "../common/MStrSafe.h"
+#include "../common/SetEnvVar.h"
 #include "../common/WinConsole.h"
 //#include "TokenHelper.h"
 #include "SrvPipes.h"
@@ -210,8 +212,9 @@ BOOL ReloadGuiSettings(ConEmuGuiMapping* apFromCmd)
 		// соответственно, переменная наследуется серверами
 		//SetEnvironmentVariableW(L"ConEmuArgs", pInfo->sConEmuArgs);
 
-		wchar_t szHWND[16]; _wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", gpSrv->guiSettings.hGuiWnd.u);
-		SetEnvironmentVariableW(ENV_CONEMUHWND_VAR_W, szHWND);
+		//wchar_t szHWND[16]; _wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", gpSrv->guiSettings.hGuiWnd.u);
+		//SetEnvironmentVariableW(ENV_CONEMUHWND_VAR_W, szHWND);
+		SetConEmuEnvVar(gpSrv->guiSettings.hGuiWnd);
 
 		if (gpSrv->pConsole)
 		{
@@ -513,20 +516,11 @@ int ServerInitConsoleSize()
 		{
 			gpSrv->crReqSizeNewSize = lsbi.dwSize;
 			_ASSERTE(gpSrv->crReqSizeNewSize.X!=0);
-			gcrVisibleSize.X = lsbi.dwSize.X;
 
-			if (lsbi.dwSize.Y > lsbi.dwMaximumWindowSize.Y)
-			{
-				// Буферный режим
-				gcrVisibleSize.Y = (lsbi.srWindow.Bottom - lsbi.srWindow.Top + 1);
-				gnBufferHeight = lsbi.dwSize.Y;
-			}
-			else
-			{
-				// Режим без прокрутки!
-				gcrVisibleSize.Y = lsbi.dwSize.Y;
-				gnBufferHeight = 0;
-			}
+			gcrVisibleSize.X = lsbi.srWindow.Right - lsbi.srWindow.Left + 1;
+			gcrVisibleSize.Y = lsbi.srWindow.Bottom - lsbi.srWindow.Top + 1;
+			gnBufferHeight = (lsbi.dwSize.Y == gcrVisibleSize.Y) ? 0 : lsbi.dwSize.Y;
+			gnBufferWidth = (lsbi.dwSize.X == gcrVisibleSize.X) ? 0 : lsbi.dwSize.X;
 		}
 	}
 
@@ -835,8 +829,9 @@ void ServerInitEnvVars()
 		// соответственно, переменная наследуется серверами
 		//SetEnvironmentVariableW(L"ConEmuArgs", pInfo->sConEmuArgs);
 
-		wchar_t szHWND[16]; _wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", gpSrv->guiSettings.hGuiWnd.u);
-		SetEnvironmentVariableW(ENV_CONEMUHWND_VAR_W, szHWND);
+		//wchar_t szHWND[16]; _wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", gpSrv->guiSettings.hGuiWnd.u);
+		//SetEnvironmentVariableW(ENV_CONEMUHWND_VAR_W, szHWND);
+		SetConEmuEnvVar(gpSrv->guiSettings.hGuiWnd);
 
 		bool bAnsi = ((gpSrv->guiSettings.Flags & CECF_ProcessAnsi) != 0);
 		SetEnvironmentVariable(ENV_CONEMUANSI_VAR_W, bAnsi ? L"ON" : L"OFF");
@@ -1167,7 +1162,8 @@ int ServerInit(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/)
 	//gpSrv->pConsole->hdr.bConsoleActive = TRUE;
 	//gpSrv->pConsole->hdr.bThawRefreshThread = TRUE;
 
-	// Если указаны параметры (gbParmBufferSize && gcrVisibleSize.X && gcrVisibleSize.Y) - установить размер
+	// Если указаны параметры ((gbParmVisibleSize || gbParmBufSize) && gcrVisibleSize.X && gcrVisibleSize.Y)
+	//       - установить размер
 	// Иначе - получить текущие размеры из консольного окна
 	//DumpInitStatus("\nServerInit: ServerInitConsoleSize");
 	ServerInitConsoleSize();
@@ -1404,7 +1400,8 @@ void ServerDone(int aiRc, bool abReportShutdown /*= false*/)
 
 			// Послать в GUI уведомление, что сервер закрывается
 			/*CallNamedPipe(szServerPipe, &In, In.hdr.cbSize, &Out, sizeof(Out), &dwRead, 1000);*/
-			CESERVER_REQ* pOut = ExecuteCmd(szServerPipe, pIn, 1000, ghConWnd, TRUE/*bAsyncNoResult*/);
+			// 131017 При закрытии не успевает отработать. Серверу нужно дождаться ответа как обычно
+			CESERVER_REQ* pOut = ExecuteCmd(szServerPipe, pIn, 1000, ghConWnd, FALSE/*bAsyncNoResult*/);
 
 			ExecuteFreeResult(pIn);
 			ExecuteFreeResult(pOut);
@@ -2216,27 +2213,7 @@ void SetConEmuWindows(HWND hDcWnd, HWND hBackWnd)
 	ghConEmuWndDC = hDcWnd;
 	ghConEmuWndBack = hBackWnd;
 
-	wchar_t szHWND[16];
-
-	if (ghConEmuWndDC)
-	{
-		_wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", (DWORD)(DWORD_PTR)ghConEmuWndDC);
-		SetEnvironmentVariableW(ENV_CONEMUDRAW_VAR_W, szHWND);
-	}
-	else
-	{
-		SetEnvironmentVariableW(ENV_CONEMUDRAW_VAR_W, NULL);
-	}
-
-	if (ghConEmuWndBack)
-	{
-		_wsprintf(szHWND, SKIPLEN(countof(szHWND)) L"0x%08X", (DWORD)(DWORD_PTR)ghConEmuWndBack);
-		SetEnvironmentVariableW(ENV_CONEMUBACK_VAR_W, szHWND);
-	}
-	else
-	{
-		SetEnvironmentVariableW(ENV_CONEMUBACK_VAR_W, NULL);
-	}
+	SetConEmuEnvVarChild(hDcWnd, hBackWnd);
 }
 
 void CheckConEmuHwnd()
@@ -2693,7 +2670,7 @@ HWND Attach2Gui(DWORD nTimeout)
 	if (gpszRunCmd && *gpszRunCmd)
 	{
 		BOOL lbNeedCutQuot = FALSE, lbRootIsCmd = FALSE, lbConfirmExit = FALSE, lbAutoDisable = FALSE;
-		IsNeedCmd(gpszRunCmd, NULL, &lbNeedCutQuot, pIn->StartStop.sModuleName, lbRootIsCmd, lbConfirmExit, lbAutoDisable);
+		IsNeedCmd(true, gpszRunCmd, NULL, &lbNeedCutQuot, pIn->StartStop.sModuleName, lbRootIsCmd, lbConfirmExit, lbAutoDisable);
 		lstrcpy(pIn->StartStop.sCmdLine, gpszRunCmd);
 	}
 	else if (gpSrv->dwRootProcess)
@@ -3016,6 +2993,28 @@ wrap:
 	return iRc;
 }
 
+int Compare(const CESERVER_CONSOLE_MAPPING_HDR* p1, const CESERVER_CONSOLE_MAPPING_HDR* p2)
+{
+	if (!p1 || !p2)
+	{
+		_ASSERTE(FALSE && "Invalid arguments");
+		return 0;
+	}
+	#ifdef _DEBUG
+	_ASSERTE(p1->cbSize==sizeof(CESERVER_CONSOLE_MAPPING_HDR) && (p1->cbSize==p2->cbSize || p2->cbSize==0));
+	if (p1->cbSize != p2->cbSize)
+		return 1;
+	if (p1->nAltServerPID != p2->nAltServerPID)
+		return 2;
+	if (p1->nActiveFarPID != p2->nActiveFarPID)
+		return 3;
+	if (memcmp(&p1->crLockedVisible, &p2->crLockedVisible, sizeof(p1->crLockedVisible))!=0)
+		return 4;
+	#endif
+	int nCmp = memcmp(p1, p2, p1->cbSize);
+	return nCmp;
+};
+
 void UpdateConsoleMapHeader()
 {
 	WARNING("***ALT*** не нужно обновлять мэппинг одновременно и в сервере и в альт.сервере");
@@ -3030,6 +3029,7 @@ void UpdateConsoleMapHeader()
 				CreateColorerHeader(bRecreate);
 			}
 			gpSrv->pConsole->hdr.nServerPID = GetCurrentProcessId();
+			gpSrv->pConsole->hdr.nAltServerPID = gpSrv->dwAltServerPID;
 		}
 		else if (gnRunMode == RM_ALTSERVER)
 		{
@@ -3071,10 +3071,29 @@ void UpdateConsoleMapHeader()
 		_ASSERTE(gpSrv->pConsole->hdr.hConEmuRoot==NULL || gpSrv->pConsole->hdr.nGuiPID!=0);
 		gpSrv->pConsole->hdr.nActiveFarPID = gpSrv->nActiveFarPID;
 
+		#ifdef _DEBUG
+		int nMapCmp = -100;
+		if (gpSrv->pConsoleMap)
+			nMapCmp = Compare(&gpSrv->pConsole->hdr, gpSrv->pConsoleMap->Ptr());
+		#endif
+
 		// Нельзя альт.серверу мэппинг менять - подерутся
 		if (gnRunMode != RM_SERVER /*&& gnRunMode != RM_ALTSERVER*/)
 		{
 			_ASSERTE(gnRunMode == RM_SERVER || gnRunMode == RM_ALTSERVER);
+			// Могли измениться: gcrVisibleSize, nActiveFarPID
+			if (gpSrv->dwMainServerPID && gpSrv->dwMainServerPID != GetCurrentProcessId())
+			{
+				size_t nReqSize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_CONSOLE_MAPPING_HDR);
+				CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_UPDCONMAPHDR, nReqSize);
+				if (pIn)
+				{
+					pIn->ConInfo = gpSrv->pConsole->hdr;
+					CESERVER_REQ* pOut = ExecuteSrvCmd(gpSrv->dwMainServerPID, pIn, ghConWnd);
+					ExecuteFreeResult(pIn);
+					ExecuteFreeResult(pOut);
+				}
+			}
 			return;
 		}
 
@@ -3347,13 +3366,36 @@ BOOL CorrectVisibleRect(CONSOLE_SCREEN_BUFFER_INFO* pSbi)
 
 
 
+bool CheckWasFullScreen()
+{
+	bool bFullScreenHW = false;
 
+	if (gpSrv->pfnWasFullscreenMode)
+	{
+		DWORD nModeFlags = 0; gpSrv->pfnWasFullscreenMode(&nModeFlags);
+		if (nModeFlags & CONSOLE_FULLSCREEN_HARDWARE)
+		{
+			bFullScreenHW = true;
+		}
+		else
+		{
+			gpSrv->pfnWasFullscreenMode = NULL;
+		}
+	}
 
+	return bFullScreenHW;
+}
 
 static int ReadConsoleInfo()
 {
 	// Need to block all requests to output buffer in other threads
 	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
+
+	if (CheckWasFullScreen())
+	{
+		LogString("ReadConsoleInfo was skipped due to CONSOLE_FULLSCREEN_HARDWARE");
+		return -1;
+	}
 
 	//int liRc = 1;
 	BOOL lbChanged = gpSrv->pConsole->bDataChanged; // Если что-то еще не отослали - сразу TRUE
@@ -3434,6 +3476,7 @@ static int ReadConsoleInfo()
 		DWORD nCurScroll = (gnBufferHeight ? rbs_Vert : 0) | (gnBufferWidth ? rbs_Horz : 0);
 		DWORD nNewScroll = 0;
 		int TextWidth = 0, TextHeight = 0;
+		short nMaxWidth = -1, nMaxHeight = -1;
 		BOOL bSuccess = ::GetConWindowSize(lsbi, gcrVisibleSize.X, gcrVisibleSize.Y, nCurScroll, &TextWidth, &TextHeight, &nNewScroll);
 
 		// Скорректировать "видимый" буфер. Видимым считаем то, что показывается в ConEmu
@@ -3443,13 +3486,15 @@ static int ReadConsoleInfo()
 			if (!(nNewScroll & rbs_Horz))
 			{
 				lsbi.srWindow.Left = 0;
-				lsbi.srWindow.Right = lsbi.dwSize.X-1;
+				nMaxWidth = max(gpSrv->pConsole->hdr.crMaxConSize.X,(lsbi.srWindow.Right-lsbi.srWindow.Left+1));
+				lsbi.srWindow.Right = min(nMaxWidth,lsbi.dwSize.X-1);
 			}
 
 			if (!(nNewScroll & rbs_Vert))
 			{
 				lsbi.srWindow.Top = 0;
-				lsbi.srWindow.Bottom = lsbi.dwSize.Y-1;
+				nMaxHeight = max(gpSrv->pConsole->hdr.crMaxConSize.Y,(lsbi.srWindow.Bottom-lsbi.srWindow.Top+1));
+				lsbi.srWindow.Bottom = min(nMaxHeight,lsbi.dwSize.Y-1);
 			}
 		}
 
@@ -3470,11 +3515,21 @@ static int ReadConsoleInfo()
 			// Консольное приложение могло изменить размер буфера
 			if (!NTVDMACTIVE)  // НЕ при запущенном 16битном приложении - там мы все жестко фиксируем, иначе съезжает размер при закрытии 16бит
 			{
+				// ширина
+				if ((lsbi.srWindow.Left == 0  // или окно соответсвует полному буферу
+				        && lsbi.dwSize.X == (lsbi.srWindow.Right - lsbi.srWindow.Left + 1)))
+				{
+					// Это значит, что прокрутки нет, и консольное приложение изменило размер буфера
+					gnBufferWidth = 0;
+					gcrVisibleSize.X = lsbi.dwSize.X;
+				}
+				// высота
 				if ((lsbi.srWindow.Top == 0  // или окно соответсвует полному буферу
 				        && lsbi.dwSize.Y == (lsbi.srWindow.Bottom - lsbi.srWindow.Top + 1)))
 				{
 					// Это значит, что прокрутки нет, и консольное приложение изменило размер буфера
-					gnBufferHeight = 0; gcrVisibleSize = lsbi.dwSize;
+					gnBufferHeight = 0;
+					gcrVisibleSize.Y = lsbi.dwSize.Y;
 				}
 
 				if (lsbi.dwSize.X != gpSrv->sbi.dwSize.X
@@ -3619,11 +3674,20 @@ static BOOL ReadConsoleData()
 	DWORD nCurScroll = (gnBufferHeight ? rbs_Vert : 0) | (gnBufferWidth ? rbs_Horz : 0);
 	DWORD nNewScroll = 0;
 	int TextWidth = 0, TextHeight = 0;
+	short nMaxWidth = -1, nMaxHeight = -1;
+	char sFailedInfo[128];
 	BOOL bSuccess = ::GetConWindowSize(gpSrv->sbi, gcrVisibleSize.X, gcrVisibleSize.Y, nCurScroll, &TextWidth, &TextHeight, &nNewScroll);
 	UNREFERENCED_PARAMETER(bSuccess);
 	//TextWidth  = gpSrv->sbi.dwSize.X;
 	//TextHeight = (gpSrv->sbi.srWindow.Bottom - gpSrv->sbi.srWindow.Top + 1);
 	TextLen = TextWidth * TextHeight;
+
+	if (!gpSrv->pConsole)
+	{
+		_ASSERTE(gpSrv->pConsole!=NULL);
+		LogString("gpSrv->pConsole == NULL");
+		goto wrap;
+	}
 
 	//rgn = gpSrv->sbi.srWindow;
 	if (nNewScroll & rbs_Horz)
@@ -3634,7 +3698,8 @@ static BOOL ReadConsoleData()
 	else
 	{
 		rgn.Left = 0;
-		rgn.Right = gpSrv->sbi.dwSize.X-1;
+		nMaxWidth = max(gpSrv->pConsole->hdr.crMaxConSize.X,(gpSrv->sbi.srWindow.Right-gpSrv->sbi.srWindow.Left+1));
+		rgn.Right = min(nMaxWidth,(gpSrv->sbi.dwSize.X-1));
 	}
 
 	if (nNewScroll & rbs_Vert)
@@ -3645,7 +3710,8 @@ static BOOL ReadConsoleData()
 	else
 	{
 		rgn.Top = 0;
-		rgn.Bottom = gpSrv->sbi.dwSize.Y-1;
+		nMaxHeight = max(gpSrv->pConsole->hdr.crMaxConSize.Y,(gpSrv->sbi.srWindow.Bottom-gpSrv->sbi.srWindow.Top+1));
+		rgn.Bottom = min(nMaxHeight,(gpSrv->sbi.dwSize.Y-1));
 	}
 	
 
@@ -3658,17 +3724,22 @@ static BOOL ReadConsoleData()
 	nCurSize = TextLen * sizeof(CHAR_INFO);
 	nHdrSize = sizeof(CESERVER_REQ_CONINFO_FULL)-sizeof(CHAR_INFO);
 
-	if (!gpSrv->pConsole || gpSrv->pConsole->cbMaxSize < (nCurSize+nHdrSize))
+	if (gpSrv->pConsole->cbMaxSize < (nCurSize+nHdrSize))
 	{
 		_ASSERTE(gpSrv->pConsole && gpSrv->pConsole->cbMaxSize >= (nCurSize+nHdrSize));
-		TextHeight = (gpSrv->pConsole->info.crMaxSize.X * gpSrv->pConsole->info.crMaxSize.Y) / TextWidth;
 
-		if (!TextHeight)
+		_wsprintfA(sFailedInfo, SKIPLEN(countof(sFailedInfo)) "ReadConsoleData FAIL: MaxSize(%u) < CurSize(%u), TextSize(%ux%u)", gpSrv->pConsole->cbMaxSize, (nCurSize+nHdrSize), TextWidth, TextHeight);
+		LogString(sFailedInfo);
+
+		TextHeight = (gpSrv->pConsole->info.crMaxSize.X * gpSrv->pConsole->info.crMaxSize.Y - (TextWidth-1)) / TextWidth;
+
+		if (TextHeight <= 0)
 		{
-			_ASSERTE(TextHeight);
+			_ASSERTE(TextHeight > 0);
 			goto wrap;
 		}
 
+		rgn.Bottom = min(rgn.Bottom,(rgn.Top+TextHeight-1));
 		TextLen = TextWidth * TextHeight;
 		nCurSize = TextLen * sizeof(CHAR_INFO);
 		// Если MapFile еще не создавался, или был увеличен размер консоли
@@ -3746,6 +3817,7 @@ static BOOL ReadConsoleData()
 wrap:
 	//if (lbChanged)
 	//	gpSrv->pConsole->bDataChanged = TRUE;
+	UNREFERENCED_PARAMETER(nMaxWidth); UNREFERENCED_PARAMETER(nMaxHeight);
 	return lbChanged;
 }
 
@@ -3756,6 +3828,12 @@ wrap:
 // передернуть GUI по таймауту (не реже 1 сек).
 BOOL ReloadFullConsoleInfo(BOOL abForceSend)
 {
+	if (CheckWasFullScreen())
+	{
+		LogString("ReloadFullConsoleInfo was skipped due to CONSOLE_FULLSCREEN_HARDWARE");
+		return FALSE;
+	}
+
 	BOOL lbChanged = abForceSend;
 	BOOL lbDataChanged = abForceSend;
 	DWORD dwCurThId = GetCurrentThreadId();
@@ -3827,7 +3905,9 @@ BOOL ReloadFullConsoleInfo(BOOL abForceSend)
 			gpSrv->pConsole->hdr.bDataReady = TRUE;
 		}
 
-		if (memcmp(&(gpSrv->pConsole->hdr), gpSrv->pConsoleMap->Ptr(), gpSrv->pConsole->hdr.cbSize))
+		//if (memcmp(&(gpSrv->pConsole->hdr), gpSrv->pConsoleMap->Ptr(), gpSrv->pConsole->hdr.cbSize))
+		int iMapCmp = Compare(&gpSrv->pConsole->hdr, gpSrv->pConsoleMap->Ptr());
+		if (iMapCmp)
 		{
 			lbChanged = TRUE;
 			//gpSrv->pConsoleMap->SetFrom(&(gpSrv->pConsole->hdr));
@@ -3984,6 +4064,8 @@ DWORD WINAPI RefreshThread(LPVOID lpvParam)
 									AltServerWasStarted(info.nPrevPID, info.hPrev, true);
 								}
 							}
+							// Обновить мэппинг
+							UpdateConsoleMapHeader();
 						}
 
 						CsAlt.Unlock();

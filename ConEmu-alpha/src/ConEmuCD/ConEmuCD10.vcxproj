@@ -812,12 +812,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\common\CmdLine.h" />
     <ClInclude Include="..\common\common.hpp" />
     <ClInclude Include="ConEmuC.h" />
     <ClInclude Include="..\common\ConEmuCheck.h" />
     <ClInclude Include="..\common\ConsoleRead.h" />
     <ClInclude Include="Debugger.h" />
     <ClInclude Include="..\common\defines.h" />
+    <ClInclude Include="..\common\ExecPty.h" />
+    <ClInclude Include="..\common\SetEnvVar.h" />
     <ClInclude Include="..\common\Execute.h" />
     <ClInclude Include="ExitCodes.h" />
     <ClInclude Include="GuiHooks.h" />
@@ -1119,6 +1122,7 @@
     <ResourceCompile Include="ConEmuCD.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\common\CmdLine.cpp" />
     <ClCompile Include="..\common\Common.cpp" />
     <ClCompile Include="..\common\ConEmuCheck.cpp" />
     <ClCompile Include="..\common\ConsoleRead.cpp" />
@@ -1126,6 +1130,8 @@
     <ClCompile Include="ConEmuSrv.cpp" />
     <ClCompile Include="ConsoleMain.cpp" />
     <ClCompile Include="Debugger.cpp" />
+    <ClCompile Include="..\common\ExecPty.cpp" />
+    <ClCompile Include="..\common\SetEnvVar.cpp" />
     <ClCompile Include="..\common\Execute.cpp" />
     <ClCompile Include="GuiHooks.cpp" />
     <ClCompile Include="Infiltrate.cpp">

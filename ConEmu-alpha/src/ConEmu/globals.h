@@ -39,7 +39,7 @@ extern const TCHAR *const gsClassNameApp;
 struct Settings;
 class CSettings;
 class TrayIcon;
-class CTabBarClass;
+class TabBarClass;
 class CVirtualConsole;
 class CRealConsole;
 class CConEmuMain;

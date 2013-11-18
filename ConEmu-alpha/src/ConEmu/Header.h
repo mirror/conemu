@@ -34,6 +34,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define NEWRUNSTYLE
 //#undef NEWRUNSTYLE
 
+#define APPDISTINCTBACKGROUND
+
 //#define USEPORTABLEREGISTRY
 #undef USEPORTABLEREGISTRY
 
@@ -225,6 +227,7 @@ void LogString(LPCWSTR asInfo, bool abWriteTime = true, bool abWriteLine = true)
 
 extern BOOL gbInDisplayLastError;
 int DisplayLastError(LPCTSTR asLabel, DWORD dwError = 0, DWORD dwMsgFlags = 0, LPCWSTR asTitle = NULL, HWND hParent = NULL);
+RECT CenterInParent(RECT rcDlg, HWND hParent);
 
 void ShutdownGuiStep(LPCWSTR asInfo, int nParm1 = 0, int nParm2 = 0, int nParm3 = 0, int nParm4 = 0);
 void LogFocusInfo(LPCWSTR asInfo, int Level=1);
@@ -259,6 +262,7 @@ BOOL IntersectSmallRect(RECT& rc1, SMALL_RECT& rc2);
 wchar_t* GetDlgItemText(HWND hDlg, WORD nID);
 size_t MyGetDlgItemText(HWND hDlg, WORD nID, size_t& cchMax, wchar_t*& pszText/*, bool bEscapes = false*/);
 BOOL MySetDlgItemText(HWND hDlg, int nIDDlgItem, LPCTSTR lpString/*, bool bEscapes = false*/);
+bool GetColorRef(LPCWSTR pszText, COLORREF* pCR);
 
 extern const wchar_t* gsEscaped;
 //wchar_t* EscapeString(bool bSet, LPCWSTR pszSrc);
@@ -321,6 +325,7 @@ struct SettingsStorage
 #include "../common/UnicodeChars.h"
 #include "../common/defines.h"
 #include "../common/WinObjects.h"
+#include "../common/CmdLine.h"
 
 #define IsWindowsXP ((gOSVer.dwMajorVersion >= 6) || (gOSVer.dwMajorVersion == 5 && gOSVer.dwMinorVersion > 0))
 #define IsWindowsVista (gOSVer.dwMajorVersion >= 6)
@@ -466,6 +471,11 @@ enum BackgroundOp
 	eUpRight = 3,
 	eDownLeft = 4,
 	eDownRight = 5,
+	eFit = 6, // Stretch aspect ratio (Fit)
+	eFill = 7, // Stretch aspect ratio (Fill)
+	eCenter = 8,
+	//
+	eOpLast = eCenter,
 };
 
 enum ToolbarMainBitmapIdx
@@ -637,7 +647,8 @@ union CESize
 
 
 bool CheckLockFrequentExecute(DWORD& Tick, DWORD Interval);
-#define LockFrequentExecute(Interval) static DWORD LastExecuteTick; if (CheckLockFrequentExecute(LastExecuteTick,Interval))
+#define LockFrequentExecute(Interval,LastExecuteTick) if (CheckLockFrequentExecute(LastExecuteTick,Interval))
+#define LockFrequentExecuteStatic(Interval) static DWORD LastExecuteTick; if (CheckLockFrequentExecute(LastExecuteTick,Interval))
 
 extern const wchar_t* gsHomePage;    // = L"http://conemu-maximus5.googlecode.com";
 extern const wchar_t* gsReportBug;   // = L"http://code.google.com/p/conemu-maximus5/issues/entry";
@@ -695,5 +706,3 @@ typedef struct tagMYRGB
 #define AutoStartTaskName L"<Startup>"
 
 bool NextLine(const wchar_t*& pszFrom, wchar_t** pszLine);
-
-#include "TabID.h"

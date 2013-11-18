@@ -50,7 +50,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class CConEmuChild;
 class CConEmuBack;
-class CTabBarClass;
+class TabBarClass;
 class CConEmuMacro;
 class CAttachDlg;
 class CRecreateDlg;
@@ -106,6 +106,14 @@ typedef HIMC (WINAPI* ImmGetContext_t)(HWND hWnd);
 //};
 
 
+typedef DWORD ConEmuInstallMode;
+const ConEmuInstallMode
+	cm_Normal       = 0x0000,
+	cm_MinGW        = 0x0001, // ConEmu установлен как пакет MinGW
+	cm_PortableApps = 0x0002, // ConEmu установлен как пакет PortableApps.com
+	cm_MSysStartup  = 0x1000  // найден баш из msys: "%ConEmuDir%\..\msys\1.0\bin\sh.exe" (MinGW mode)
+	;
+
 
 class CConEmuMain :
 	public CDwmHelper,
@@ -127,9 +135,14 @@ class CConEmuMain :
 		LPCWSTR WorkDir(LPCWSTR asOverrideCurDir = NULL);
 		wchar_t ms_ComSpecInitial[MAX_PATH];
 		wchar_t *mps_IconPath;
+		void SetWindowIcon(LPCWSTR asNewIcon);
 		BOOL mb_DosBoxExists;
-		BOOL mb_MingwMode;   // ConEmu установлен как пакет MinGW
-		BOOL mb_MSysStartup; // найден баш из msys: "%ConEmuDir%\..\msys\1.0\bin\sh.exe" (MinGW mode)
+		//BOOL mb_MingwMode;   // ConEmu установлен как пакет MinGW
+		//BOOL mb_MSysStartup; // найден баш из msys: "%ConEmuDir%\..\msys\1.0\bin\sh.exe" (MinGW mode)
+		ConEmuInstallMode m_InstallMode;
+		bool isMingwMode();
+		bool isMSysStartup();
+		bool isUpdateAllowed();
 		// Portable Far Registry
 		BOOL mb_PortableRegExist;
 		wchar_t ms_PortableRegHive[MAX_PATH]; // полный путь к "Portable.S-x-x-..."
@@ -142,8 +155,13 @@ class CConEmuMain :
 		HKEY mh_PortableRoot; // Это открытый ключ
 		bool PreparePortableReg();
 		bool mb_UpdateJumpListOnStartup;
+		bool mb_FindBugMode;
 	private:
-		bool mb_BlockChildrenDebuggers;
+		struct
+		{
+			DWORD nLastCrashReported;
+			bool  bBlockChildrenDebuggers;
+		} m_DbgInfo;
 	private:
 		bool CheckBaseDir();
 		BOOL CheckDosBoxExists();
@@ -164,6 +182,8 @@ class CConEmuMain :
 		void CreateGuiAttachMapping(DWORD nGuiAppPID);
 		void InitComSpecStr(ConEmuComspec& ComSpec);
 		bool IsResetBasicSettings();
+		bool IsFastSetupDisabled();
+		bool IsAllowSaveSettingsOnExit();
 	private:
 		ConEmuGuiMapping m_GuiInfo;
 		MFileMapping<ConEmuGuiMapping> m_GuiInfoMapping;
@@ -194,7 +214,7 @@ class CConEmuMain :
 		//CConEmuBack  *m_Back;
 		//CConEmuMacro *m_Macro;
 		CConEmuMenu *mp_Menu;
-		CTabBarClass *mp_TabBar;
+		TabBarClass *mp_TabBar;
 		CConEmuInside *mp_Inside;
 		CStatus *mp_Status;
 		CToolTip *mp_Tip;
@@ -231,6 +251,8 @@ class CConEmuMain :
 		bool  ForceMinimizeToTray;  // ключики "/tsa" или "/tray"
 		bool  DisableAutoUpdate;    // ключик "/noupdate"
 		bool  DisableKeybHooks;     // ключик "/nokeyhook"
+		bool  DisableAllMacro;      // ключик "/nomacro"
+		bool  DisableAllHotkeys;    // ключик "/nohotkey"
 		bool  DisableSetDefTerm;    // ключик "/nodeftrm"
 		bool  DisableRegisterFonts; // ключик "/noregfont"
 
@@ -530,6 +552,7 @@ class CConEmuMain :
 		void OnWmHotkey(WPARAM wParam);
 		void UpdateWinHookSettings();
 		void CtrlWinAltSpace();
+		void DeleteVConMainThread(CVirtualConsole* apVCon);
 	protected:
 		friend class CConEmuCtrl;
 		friend class CRunQueue;
@@ -584,6 +607,7 @@ class CConEmuMain :
 		UINT mn_MsgPanelViewMapCoord;
 		UINT mn_MsgTaskBarBtnCreated;
 		UINT mn_MsgRequestRunProcess;
+		UINT mn_MsgDeleteVConMainThread;
 
 		void SetRunQueueTimer(bool bSet, UINT uElapse);
 
@@ -768,20 +792,27 @@ class CConEmuMain :
 		ConEmuWindowMode GetWindowMode();
 		bool SetWindowMode(ConEmuWindowMode inMode, BOOL abForce = FALSE, BOOL abFirstShow = FALSE);
 		bool SetQuakeMode(BYTE NewQuakeMode, ConEmuWindowMode nNewWindowMode = wmNotChanging, bool bFromDlg = false);
+		static LPCWSTR FormatTileMode(ConEmuWindowCommand Tile, wchar_t* pchBuf, size_t cchBufMax);
 		bool SetTileMode(ConEmuWindowCommand Tile);
 		ConEmuWindowCommand GetTileMode(bool Estimate, MONITORINFO* pmi=NULL);
 		bool IsSizeFree(ConEmuWindowMode CheckMode = wmFullScreen);
+		bool IsSizePosFree(ConEmuWindowMode CheckMode = wmFullScreen);
+		bool IsCantExceedMonitor();
+		bool IsPosLocked();
 		bool JumpNextMonitor(bool Next);
 		bool JumpNextMonitor(HWND hJumpWnd, HMONITOR hJumpMon, bool Next, const RECT rcJumpWnd);
 	private:
-		struct {
+		struct QuakePrevSize {
 			bool bWasSaved;
 			bool bWaitReposition; // Требуется смена позиции при OnHideCaption
 			CESize wndWidth, wndHeight; // Консоль
 			int wndX, wndY; // GUI
-			DWORD nFrame;
+			DWORD nFrame; // it's BYTE, DWORD here for alignment
 			ConEmuWindowMode WindowMode;
 			IdealRectInfo rcIdealInfo;
+			// helper methods
+			void Save(const CESize& awndWidth, const CESize& awndHeight, const int& awndX, const int& awndY, const BYTE& anFrame, const ConEmuWindowMode& aWindowMode, const IdealRectInfo& arcIdealInfo);
+			ConEmuWindowMode Restore(CESize& rwndWidth, CESize& rwndHeight, int& rwndX, int& rwndY, BYTE& rnFrame, IdealRectInfo& rrcIdealInfo);
 		} m_QuakePrevSize;
 		ConEmuWindowCommand m_TileMode;
 		struct {
@@ -835,10 +866,11 @@ class CConEmuMain :
 		BOOL setWindowPos(HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
 		LRESULT WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 	public:
-		void OnAltEnter();
-		void OnAltF9(BOOL abPosted=FALSE);
-		void OnMinimizeRestore(SingleInstanceShowHideType ShowHideType = sih_None);
-		void OnForcedFullScreen(bool bSet = true);
+		void DoFullScreen();
+		void DoMaximizeRestore();
+		bool DoMaximizeWidthHeight(bool bWidth, bool bHeight);
+		void DoMinimizeRestore(SingleInstanceShowHideType ShowHideType = sih_None);
+		void DoForcedFullScreen(bool bSet = true);
 		void OnSwitchGuiFocus(SwitchGuiFocusOp FocusOp);
 		void OnAlwaysOnTop();
 		void OnAlwaysShowScrollbar(bool abSync = true);

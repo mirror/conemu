@@ -29,65 +29,87 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
 #include "ConEmu.h"
+#include "VConGroup.h"
 #include "VConRelease.h"
 #include "VirtualConsole.h"
 
-#define REF_FINALIZE 0x7FFFFFFF
+//#define REF_FINALIZE 0x7FFFFFFF
 
-CVConRelease::CVConRelease()
+void CVConRelease::FinalRelease()
 {
-	mn_RefCount = 1;
-	
-	#ifdef _DEBUG
-	CVirtualConsole* pVCon = (CVirtualConsole*)this;
-	_ASSERTE((void*)pVCon == (void*)this);
-	#endif
-}
-
-CVConRelease::~CVConRelease()
-{
-	_ASSERTE(mn_RefCount==REF_FINALIZE);
-}
-
-void CVConRelease::AddRef()
-{
-	if (!this)
+	if (!gpConEmu->isMainThread() && ghWnd)
 	{
-		_ASSERTE(this!=NULL);
+		CVirtualConsole* pVCon = (CVirtualConsole*)this;
+		gpConEmu->DeleteVConMainThread(pVCon);
 		return;
 	}
-	
-	InterlockedIncrement(&mn_RefCount);
-}
+	DeleteFromMainThread();
+};
 
-int CVConRelease::Release()
+void CVConRelease::DeleteFromMainThread()
 {
-	if (!this)
-		return 0;
-
-	InterlockedDecrement(&mn_RefCount);
-	
-	_ASSERTE(mn_RefCount>=0);
-	if (mn_RefCount <= 0)
-	{
-		mn_RefCount = REF_FINALIZE; // принудительно, чтобы не было повторных срабатываний delete при вызове деструкторов
-		CVirtualConsole* pVCon = (CVirtualConsole*)this;
-		delete pVCon;
-		return 0;
-	}
-
-	return mn_RefCount;
+	CVirtualConsole* pVCon = (CVirtualConsole*)this;
+	delete pVCon;
 }
+
+//CVConRelease::CVConRelease()
+//{
+//	mn_RefCount = 1;
+//	
+//	#ifdef _DEBUG
+//	CVirtualConsole* pVCon = (CVirtualConsole*)this;
+//	_ASSERTE((void*)pVCon == (void*)this);
+//	#endif
+//}
+//
+//CVConRelease::~CVConRelease()
+//{
+//	_ASSERTE(mn_RefCount==REF_FINALIZE);
+//}
+//
+//void CVConRelease::AddRef()
+//{
+//	if (!this)
+//	{
+//		_ASSERTE(this!=NULL);
+//		return;
+//	}
+//	
+//	InterlockedIncrement(&mn_RefCount);
+//}
+//
+//int CVConRelease::Release()
+//{
+//	if (!this)
+//		return 0;
+//
+//	InterlockedDecrement(&mn_RefCount);
+//	
+//	_ASSERTE(mn_RefCount>=0);
+//	if (mn_RefCount <= 0)
+//	{
+//		mn_RefCount = REF_FINALIZE; // принудительно, чтобы не было повторных срабатываний delete при вызове деструкторов
+//		CVirtualConsole* pVCon = (CVirtualConsole*)this;
+//		delete pVCon;
+//		return 0;
+//	}
+//
+//	return mn_RefCount;
+//}
 
 
 CVConGuard::CVConGuard()
 {
 	mp_Ref = NULL;
+	mi_Valid = 0;
+	mn_Tick = GetTickCount();
 }
 
 CVConGuard::CVConGuard(CVirtualConsole* apRef)
 {
 	mp_Ref = NULL;
+	mi_Valid = 0;
+	mn_Tick = GetTickCount();
 
 	Attach(apRef);
 }
@@ -113,6 +135,9 @@ bool CVConGuard::Attach(CVirtualConsole* apRef)
 			}
 		}
 	}
+
+	mi_Valid = mp_Ref ? CVConGroup::isValid(mp_Ref) ? 1 : -1 : 0;
+	Assert(mi_Valid >= 0);
 
 	return (mp_Ref != NULL);
 }

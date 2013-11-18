@@ -42,6 +42,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/DbgHlpGcc.h"
 #endif
 #include "../common/ConEmuCheck.h"
+#include "../common/CmdLine.h"
+#include "../common/MMap.h"
 #include "../common/execute.h"
 //#include "../common/TokenHelper.h"
 #include "Options.h"
@@ -57,6 +59,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define FULL_STARTUP_ENV
 #include "../common/StartupEnv.h"
+
+#include "../common/Monitors.h"
 
 #ifdef _DEBUG
 //	#define SHOW_STARTED_MSGBOX
@@ -82,9 +86,6 @@ BOOL gbNoDblBuffer = false;
 #endif
 BOOL gbMessagingStarted = FALSE;
 
-#ifdef _DEBUG
-wchar_t gszDbgModLabel[6] = {0};
-#endif
 
 
 //externs
@@ -112,6 +113,10 @@ const TCHAR *const gsClassNameParent = VirtualConsoleClassMain; // главное окно
 const TCHAR *const gsClassNameWork = VirtualConsoleClassWork; // Holder для всех VCon
 const TCHAR *const gsClassNameBack = VirtualConsoleClassBack; // Подложка (со скроллерами) для каждого VCon
 const TCHAR *const gsClassNameApp = VirtualConsoleClassApp;
+
+
+MMap<HWND,CVirtualConsole*> gVConDcMap;
+MMap<HWND,CVirtualConsole*> gVConBkMap;
 
 
 OSVERSIONINFO gOSVer = {};
@@ -402,6 +407,7 @@ int __stdcall _MDEBUG_TRAP(LPCSTR asFile, int anLine)
 }
 int MDEBUG_CHK = TRUE;
 #endif
+
 
 void LogString(LPCWSTR asInfo, bool abWriteTime /*= true*/, bool abWriteLine /*= true*/)
 {
@@ -722,6 +728,72 @@ BOOL MySetDlgItemText(HWND hDlg, int nIDDlgItem, LPCTSTR lpString/*, bool bEscap
 
 	SafeFree(pszBuf);
 	return lbRc;
+}
+
+bool GetColorRef(LPCWSTR pszText, COLORREF* pCR)
+{
+	if (!pszText || !*pszText)
+		return false;
+
+	bool result = false;
+	int r = 0, g = 0, b = 0;
+	const wchar_t *pch;
+	wchar_t *pchEnd;
+
+	if ((pszText[0] == L'#') || (pszText[0] == L'x' || pszText[0] == L'X') || (pszText[0] == L'0' && (pszText[1] == L'x' || pszText[1] == L'X')))
+	{
+		pch = (pszText[0] == L'0') ? (pszText+2) : (pszText+1);
+		// Считаем значение 16-ричным rgb кодом
+		pchEnd = NULL;
+		COLORREF clr = wcstoul(pch, &pchEnd, 16);
+		if (clr && (pszText[0] == L'#'))
+		{
+			// "#rrggbb", обменять местами rr и gg, нам нужен COLORREF (bbggrr)
+			clr = ((clr & 0xFF)<<16) | ((clr & 0xFF00)) | ((clr & 0xFF0000)>>16);
+		}
+		// Done
+		if (pchEnd && (pchEnd > (pszText+1)) && (clr <= 0xFFFFFF) && (*pCR != clr))
+		{
+			*pCR = clr;
+			result = true;
+		}
+	}
+	else
+	{
+		pch = (wchar_t*)wcspbrk(pszText, L"0123456789");
+		pchEnd = NULL;
+		r = pch ? wcstol(pch, &pchEnd, 10) : 0;
+		if (pchEnd && (pchEnd > pch))
+		{
+			pch = (wchar_t*)wcspbrk(pchEnd, L"0123456789");
+			pchEnd = NULL;
+			g = pch ? wcstol(pch, &pchEnd, 10) : 0;
+
+			if (pchEnd && (pchEnd > pch))
+			{
+				pch = (wchar_t*)wcspbrk(pchEnd, L"0123456789");
+				pchEnd = NULL;
+				b = pch ? wcstol(pch, &pchEnd, 10) : 0;
+			}
+
+			// decimal format of UltraEdit?
+			if ((r > 255) && !g && !b)
+			{
+				g = (r & 0xFF00) >> 8;
+				b = (r & 0xFF0000) >> 16;
+				r &= 0xFF;
+			}
+
+			// Достаточно ввода одной компоненты
+			if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255 && *pCR != RGB(r, g, b))
+			{
+				*pCR = RGB(r, g, b);
+				result = true;
+			}
+		}
+	}
+
+	return result;
 }
 
 wchar_t* DupCygwinPath(LPCWSTR asWinPath, bool bAutoQuote)
@@ -1789,7 +1861,7 @@ int MessageBox(LPCTSTR lpText, UINT uType, LPCTSTR lpCaption /*= NULL*/, HWND hP
 
 
 // Возвращает текст с информацией о пути к сохраненному дампу
-DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024]);
+// DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPCWSTR pszComment = NULL);
 #include "../common/Dump.h"
 
 void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS ExceptionInfo /*= NULL*/)
@@ -1800,31 +1872,39 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 
 	int nRet = IDRETRY;
 
-	size_t cchMax = (szText ? _tcslen(szText) : 0) + (szFile ? _tcslen(szFile) : 0) + 255;
-	wchar_t* pszFull = (wchar_t*)malloc(cchMax*sizeof(*pszFull));
+	DWORD    nPreCode = GetLastError();
+	wchar_t  szAssertInfo[4096], szCodes[128];
+	wchar_t  szFullInfo[1024] = L"";
+	size_t   cchMax = (szText ? _tcslen(szText) : 0) + (szFile ? _tcslen(szFile) : 0) + 300;
+	wchar_t* pszFull = (cchMax <= countof(szAssertInfo)) ? szAssertInfo : (wchar_t*)malloc(cchMax*sizeof(*pszFull));
+
+	LPCWSTR  pszTitle = gpConEmu ? gpConEmu->GetDefaultTitle() : NULL;
+	if (!pszTitle || !*pszTitle) pszTitle = L"?ConEmu?";
 
 	if (pszFull)
 	{
 		_wsprintf(pszFull, SKIPLEN(cchMax)
-			L"Assertion\r\n%s\r\nat\r\n%s:%i\r\n\r\nPress <Retry> to copy text information to clipboard\r\nand report a bug (open project web page)",
+			L"Assertion\r\n%s\r\nat\r\n%s:%i\r\n\r\n"
+			L"Press <Abort> to throw exception, ConEmu will be terminated!\r\n\r\n"
+			L"Press <Retry> to copy text information to clipboard\r\n"
+			L"and report a bug (open project web page)",
 			szText, szFile, nLine);
 
-		nRet = MessageBox(NULL, pszFull, gpConEmu->GetDefaultTitle(), MB_RETRYCANCEL|MB_ICONSTOP|MB_SYSTEMMODAL);
+		nRet = MessageBox(NULL, pszFull, pszTitle, MB_ABORTRETRYIGNORE|MB_ICONSTOP|MB_SYSTEMMODAL);
+		DWORD nPostCode = GetLastError();
+		_wsprintf(szCodes, SKIPLEN(countof(szCodes)) L"\r\nPreError=%i, PostError=%i, Result=%i", nPreCode, nPostCode, nRet);
+		_wcscat_c(pszFull, cchMax, szCodes);
 	}
 
-	if (nRet == IDRETRY)
+	if ((nRet == IDRETRY) || (nRet == IDABORT))
 	{
 		bool bProcessed = false;
 
-		#ifdef _DEBUG
-		if (IsDebuggerPresent())
+		if (nRet == IDABORT)
 		{
-			MyAssertTrap();
+			RaiseTestException();
 			bProcessed = true;
 		}
-		#endif
-
-		wchar_t szFullInfo[1024] = L"";
 
 		if (!bProcessed)
 		{
@@ -1833,7 +1913,7 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 			//EXCEPTION_POINTERS ex0 = {&er0};
 			//if (!ExceptionInfo) ExceptionInfo = &ex0;
 
-			CreateDumpForReport(ExceptionInfo, szFullInfo);
+			CreateDumpForReport(ExceptionInfo, szFullInfo, pszFull);
 		}
 
 		if (szFullInfo[0])
@@ -1850,7 +1930,10 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 		gpConEmu->OnInfo_ReportCrash(szFullInfo[0] ? szFullInfo : NULL);
 	}
 
-	SafeFree(pszFull);
+	if (pszFull && pszFull != szAssertInfo)
+	{
+		free(pszFull);
+	}
 }
 
 BOOL gbInDisplayLastError = FALSE;
@@ -1888,6 +1971,39 @@ int DisplayLastError(LPCTSTR asLabel, DWORD dwError /* =0 */, DWORD dwMsgFlags /
 		delete [] out;
 	MCHKHEAP
 	return nBtn;
+}
+
+RECT CenterInParent(RECT rcDlg, HWND hParent)
+{
+	RECT rcParent; GetWindowRect(hParent, &rcParent);
+
+	int nWidth  = (rcDlg.right - rcDlg.left);
+	int nHeight = (rcDlg.bottom - rcDlg.top);
+
+	MONITORINFO mi = {sizeof(mi)};
+	GetNearestMonitorInfo(&mi, NULL, &rcParent);
+
+	RECT rcCenter = {
+		max(mi.rcWork.left,(rcParent.left+rcParent.right-rcDlg.right+rcDlg.left)/2),
+		max(mi.rcWork.top,(rcParent.top+rcParent.bottom-rcDlg.bottom+rcDlg.top)/2)
+	};
+
+	if (((rcCenter.left + nWidth) > mi.rcWork.right)
+		&& (rcCenter.left > mi.rcWork.left))
+	{
+		rcCenter.left = max(mi.rcWork.left, (mi.rcWork.right - nWidth));
+	}
+
+	if (((rcCenter.top + nWidth) > mi.rcWork.bottom)
+		&& (rcCenter.top > mi.rcWork.top))
+	{
+		rcCenter.top = max(mi.rcWork.top, (mi.rcWork.bottom - nHeight));
+	}
+
+	rcCenter.right = rcCenter.left + nWidth;
+	rcCenter.bottom = rcCenter.top + nHeight;
+
+	return rcCenter;
 }
 
 
@@ -2079,9 +2195,8 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 	{
 		// Эта переменная нужна для того, чтобы conemu можно было перезапустить
 		// из cmd файла с теми же аргументами (selfupdate)
-		SetEnvironmentVariableW(L"ConEmuArgs", cmdLine);
-		//lstrcpyn(gpConEmu->ms_ConEmuArgs, cmdLine, ARRAYSIZE(gpConEmu->ms_ConEmuArgs));
-		gpConEmu->mpsz_ConEmuArgs = lstrdup(cmdLine);
+		gpConEmu->mpsz_ConEmuArgs = lstrdup(SkipNonPrintable(cmdLine));
+		SetEnvironmentVariableW(L"ConEmuArgs", gpConEmu->mpsz_ConEmuArgs);
 
 		// Теперь проверяем наличие слеша
 		if (*pszStart != L'/' && *pszStart != L'-' && !wcschr(pszStart, L'/'))
@@ -2247,9 +2362,11 @@ HRESULT _CreateShellLink(PCWSTR pszArguments, PCWSTR pszPrefix, PCWSTR pszTitle,
 			}
 			if (pszIcon && *pszIcon)
 			{
+				wchar_t* pszIconEx = ExpandEnvStr(pszIcon);
+				if (pszIconEx) pszIcon = pszIconEx;
 				DWORD n;
 				wchar_t* pszFilePart;
-				n = GetFullPathName(szTmp, countof(szIcon), szIcon, &pszFilePart);
+				n = GetFullPathName(pszIcon, countof(szIcon), szIcon, &pszFilePart);
 				if (!n || (n >= countof(szIcon)) || !FileExists(szIcon))
 				{
 					n = SearchPath(NULL, pszIcon, NULL, countof(szIcon), szIcon, &pszFilePart);
@@ -2258,6 +2375,7 @@ HRESULT _CreateShellLink(PCWSTR pszArguments, PCWSTR pszPrefix, PCWSTR pszTitle,
 					if (!n || (n >= countof(szIcon)))
 						szIcon[0] = 0;
 				}
+				SafeFree(pszIconEx);
 			}
 			SafeFree(pszBatch);
 			psl->SetIconLocation(szIcon[0] ? szIcon : szAppPath, 0);
@@ -2725,10 +2843,52 @@ void UnitMaskTests()
 	bCheck = true;
 }
 
-void UnitTests()
+void UnitDriveTests()
+{
+	struct {
+		LPCWSTR asPath, asResult;
+	} Tests[] = {
+		{L"C:", L"C:"},
+		{L"C:\\Dir1\\Dir2\\File.txt", L"C:"},
+		{L"\\\\Server\\Share", L"\\\\Server\\Share"},
+		{L"\\\\Server\\Share\\Dir1\\Dir2\\File.txt", L"\\\\Server\\Share"},
+		{L"\\\\?\\UNC\\Server\\Share", L"\\\\?\\UNC\\Server\\Share"},
+		{L"\\\\?\\UNC\\Server\\Share\\Dir1\\Dir2\\File.txt", L"\\\\?\\UNC\\Server\\Share"},
+		{L"\\\\?\\C:", L"\\\\?\\C:"},
+		{L"\\\\?\\C:\\Dir1\\Dir2\\File.txt", L"\\\\?\\C:"},
+		{NULL}
+	};
+	bool bCheck;
+	wchar_t szDrive[MAX_PATH];
+	for (size_t i = 0; Tests[i].asPath; i++)
+	{
+		wmemset(szDrive, L'z', countof(szDrive));
+		bCheck = (wcscmp(GetDrive(Tests[i].asPath, szDrive, countof(szDrive)), Tests[i].asResult) == 0);
+		_ASSERTE(bCheck);
+	}
+	bCheck = true;
+}
+
+void UnitExpandTest()
+{
+	wchar_t szChoc[MAX_PATH] = L"powershell -NoProfile -ExecutionPolicy unrestricted -Command \"iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))\" && SET PATH=%PATH%;%systemdrive%\\chocolatey\\bin";
+	wchar_t* pszExpanded = ExpandEnvStr(szChoc);
+	int nLen = pszExpanded ? lstrlen(pszExpanded) : 0;
+	BOOL bFound = FileExistsSearch(szChoc, countof(szChoc));
+	wcscpy_c(szChoc, gpConEmu->ms_ConEmuExeDir);
+	wcscat_c(szChoc, L"\\Tests\\Executables\\abcd");
+	bFound = FileExistsSearch(szChoc, countof(szChoc));
+	// TakeCommand
+	ConEmuComspec tcc = {cst_AutoTccCmd};
+	FindComspec(&tcc, false);
+}
+
+void DebugUnitTests()
 {
 	RConStartArgs::RunArgTests();
 	UnitMaskTests();
+	UnitDriveTests();
+	UnitExpandTest();
 }
 #endif
 
@@ -2827,6 +2987,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	gpSetCls = new CSettings;
 	gpConEmu = new CConEmuMain;
+	gVConDcMap.Init(MAX_CONSOLE_COUNT,true);
+	gVConBkMap.Init(MAX_CONSOLE_COUNT,true);
 	/*int nCmp;
 	nCmp = StrCmpI(L" ", L"A"); // -1
 	nCmp = StrCmpI(L" ", L"+");
@@ -2846,7 +3008,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	//msprintf(szDbg, countof(szDbg), L"xx=0x%X.", 0);
 	#endif
 
-	DEBUGTEST(UnitTests());
+	DEBUGTEST(DebugUnitTests());
 
 //#ifdef _DEBUG
 //	wchar_t* pszShort = GetShortFileNameEx(L"T:\\VCProject\\FarPlugin\\ConEmu\\Maximus5\\Debug\\Far2x86\\ConEmu\\ConEmu.exe");
@@ -3316,6 +3478,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				{
 					gpConEmu->DisableKeybHooks = true;
 				}
+				else if (!klstricmp(curCommand, _T("/nomacro")))
+				{
+					gpConEmu->DisableAllMacro = true;
+				}
+				else if (!klstricmp(curCommand, _T("/nohotkey"))
+					|| !klstricmp(curCommand, _T("/nohotkeys")))
+				{
+					gpConEmu->DisableAllHotkeys = true;
+				}
 				else if (!klstricmp(curCommand, _T("/nodeftrm"))
 					|| !klstricmp(curCommand, _T("/nodefterm")))
 				{
@@ -3380,7 +3551,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					if (!IconPrm && *curCommand)
 					{
 						IconPrm = true;
-						gpConEmu->mps_IconPath = lstrdup(curCommand);
+						gpConEmu->mps_IconPath = ExpandEnvStr(curCommand);
 					}
 				}
 				else if (!klstricmp(curCommand, _T("/dir")) && i + 1 < params)
@@ -3430,14 +3601,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					gpSetCls->SingleInstanceShowHide = !klstricmp(curCommand, _T("/showhide"))
 						? sih_ShowMinimize : sih_ShowHideTSA;
 				}
-				else if (!klstricmp(curCommand, _T("/reset")))
+				else if (!klstricmp(curCommand, _T("/reset"))
+					|| !klstricmp(curCommand, _T("/resetdefault"))
+					|| !klstricmp(curCommand, _T("/basic")))
 				{
 					ResetSettings = true;
+					if (!klstricmp(curCommand, _T("/resetdefault")))
+					{
+						gpSetCls->isFastSetupDisabled = true;
+					}
+					else if (!klstricmp(curCommand, _T("/basic")))
+					{
+						gpSetCls->isFastSetupDisabled = true;
+						gpSetCls->isResetBasicSettings = true;
+					}
 				}
-				else if (!klstricmp(curCommand, _T("/basic")))
+				else if (!klstricmp(curCommand, _T("/nocascade"))
+					|| !klstricmp(curCommand, _T("/dontcascade")))
 				{
-					ResetSettings = true;
-					gpSetCls->isResetBasicSettings = true;
+					gpSetCls->isDontCascade = true;
 				}
 				//else if ( !klstricmp(curCommand, _T("/DontSetParent")) || !klstricmp(curCommand, _T("/Windows7")) )
 				//{
@@ -3451,7 +3633,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				//{
 				//    gpConEmu->setParent = true; gpConEmu->setParent2 = true;
 				//}
-				else if (!klstricmp(curCommand, _T("/BufferHeight")) && i + 1 < params)
+				else if ((!klstricmp(curCommand, _T("/Buffer")) || !klstricmp(curCommand, _T("/BufferHeight")))
+					&& i + 1 < params)
 				{
 					curCommand += _tcslen(curCommand) + 1; i++;
 
@@ -3520,6 +3703,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						return 100;
 					}
 					gpConEmu->SetTitleTemplate(pszTitle);
+				}
+				else if (!klstricmp(curCommand, _T("/FindBugMode")))
+				{
+					gpConEmu->mb_FindBugMode = true;
 				}
 				else if (!klstricmp(curCommand, _T("/?")) || !klstricmp(curCommand, _T("/h")) || !klstricmp(curCommand, _T("/help")))
 				{
@@ -3659,13 +3846,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	{
 		if (ExitAfterActionPrm)
 		{
-			MessageBox(L"'/Exit' switch can not be used together with '/SetDefTerm'!", MB_ICONSTOP);
+			//Just will exit after all running processes will be infiltrated
+			//MessageBox(L"'/Exit' switch can not be used together with '/SetDefTerm'!", MB_ICONSTOP);
+			gpSetCls->ibExitAfterDefTermSetup = true;
+			gpSetCls->ibDisableSaveSettingsOnExit = true;
+			ExitAfterActionPrm = false;
 		}
-		else
-		{
-			gpSet->isSetDefaultTerminal = true;
-			gpSet->isRegisterOnOsStartup = true;
-		}
+
+		gpSet->isSetDefaultTerminal = true;
+		gpSet->isRegisterOnOsStartup = true;
 	}
 
 	// Actions done

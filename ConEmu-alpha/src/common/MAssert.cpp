@@ -88,7 +88,7 @@ void MyAssertTrap()
 int MyAssertProc(const wchar_t* pszFile, int nLine, const wchar_t* pszTest, bool abNoPipe)
 {
 #ifdef _DEBUG
-	bool lbSkip = false;
+	static bool lbSkip = false;
 	if (lbSkip)
 		return 1;
 #endif
@@ -198,6 +198,31 @@ void MyAssertShutdown()
 
 		CloseHandle(ghInMyAssertTrap);
 		ghInMyAssertTrap = NULL;
+	}
+}
+
+wchar_t gszDbgModLabel[6] = {0};
+
+void _DEBUGSTR(LPCWSTR s)
+{
+	MCHKHEAP; CHEKCDBGMODLABEL;
+	SYSTEMTIME st; GetLocalTime(&st);
+	wchar_t szDEBUGSTRTime[1040];
+	_wsprintf(szDEBUGSTRTime, SKIPLEN(countof(szDEBUGSTRTime)) L"%i:%02i:%02i.%03i(%s.%i.%i) ", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, gszDbgModLabel, GetCurrentProcessId(), GetCurrentThreadId());
+	LPCWSTR psz = s; int nSLen = lstrlen(psz);
+	if (nSLen < 999)
+	{
+		wcscat_c(szDEBUGSTRTime, s);
+		if (nSLen && psz[nSLen-1]!=L'\n')
+			wcscat_c(szDEBUGSTRTime, L"\n");
+		OutputDebugString(szDEBUGSTRTime);
+	}
+	else
+	{
+		OutputDebugString(szDEBUGSTRTime);
+		OutputDebugString(psz);
+		if (nSLen && psz[nSLen-1]!=L'\n')
+			OutputDebugString(L"\n");
 	}
 }
 #endif

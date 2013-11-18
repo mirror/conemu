@@ -1195,23 +1195,6 @@ wrap:
 }
 
 
-// hConEmuWnd - HWND с отрисовкой!
-void SetConEmuEnvVar(HWND hConEmuWnd)
-{
-	if (hConEmuWnd)
-	{
-		// Установить переменную среды с дескриптором окна
-		wchar_t szVar[16];
-		msprintf(szVar, countof(szVar), L"0x%08X", (DWORD)hConEmuWnd); //-V205
-		SetEnvironmentVariable(ENV_CONEMUHWND_VAR_W, szVar);
-	}
-	else
-	{
-		SetEnvironmentVariable(ENV_CONEMUHWND_VAR_W, NULL);
-	}
-}
-
-
 // 0 -- All OK (ConEmu found, Version OK)
 // 1 -- NO ConEmu (simple console mode)
 // (obsolete) 2 -- ConEmu found, but old version

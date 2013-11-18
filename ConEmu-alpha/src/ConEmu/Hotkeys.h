@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Forward
 struct ConEmuHotKey;
+class CHotKeyDialog;
 
 // Некоторые комбинации нужно обрабатывать "на отпускание" во избежание глюков с интерфейсом
 extern const struct ConEmuHotKey* ConEmuSkipHotKey; // = ((ConEmuHotKey*)INVALID_HANDLE_VALUE)
@@ -51,12 +52,14 @@ enum ConEmuHotKeyType
 	chk_Global,    // globally registered hotkey
 	chk_Local,     // locally registered hotkey
 	chk_Macro,     // GUI Macro
+	chk_Task,      // Task hotkey
 };
 
 
 struct ConEmuHotKey
 {
-	// StringTable resource ID
+	// >0 StringTable resource ID
+	// <0 TaskIdx, 1-based
 	int DescrLangID;
 	
 	// 0 - hotkey, 1 - modifier (для драга, например), 2 - system hotkey (настройка nMultiHotkeyModifier)
@@ -82,6 +85,9 @@ struct ConEmuHotKey
 	bool   NotChanged;
 
 	bool CanChangeVK() const;
+	bool IsTaskHotKey() const;
+	int GetTaskIndex() const; // 0-based
+	void SetTaskIndex(int iTaskIdx); // 0-based
 
 	LPCWSTR GetDescription(wchar_t* pszDescr, int cchMaxLen, bool bAddMacroIndex = false) const;
 
@@ -89,7 +95,8 @@ struct ConEmuHotKey
 
 	// *** Service functions ***
 	// Вернуть имя модификатора (типа "Apps+Space")
-	LPCWSTR GetHotkeyName(wchar_t (&szFull)[128]) const;
+	LPCWSTR GetHotkeyName(wchar_t (&szFull)[128], bool bShowNone = true) const;
+	static LPCWSTR GetHotkeyName(DWORD aVkMod, wchar_t (&szFull)[128], bool bShowNone = true);
 
 	// nHostMod в младших 3-х байтах может содержать VK (модификаторы).
 	// Функция проверяет, чтобы они не дублировались
@@ -113,8 +120,28 @@ struct ConEmuHotKey
 	static bool UseWinArrows();
 	static bool UseCTSShiftArrow(); // { return gpSet->isUseWinArrows; }; // { return (OverrideClipboard || !AppNames) ? isCTSShiftArrowStart : gpSet->AppStd.isCTSShiftArrowStart; };
 	static bool UseCtrlTab();
+	static bool InSelection();
 	static bool DontHookJumps(const ConEmuHotKey* pHK);
 
 	// *** Default and all possible ConEmu hotkeys ***
-	static ConEmuHotKey* AllocateHotkeys();
+	static int AllocateHotkeys(ConEmuHotKey** ppHotKeys);
+};
+
+// IDD_HOTKEY { hkHotKeySelect, lbHotKeyList, lbHotKeyMod1, lbHotKeyMod2, lbHotKeyMod3 }
+class CHotKeyDialog
+{
+private:
+	HWND mh_Dlg;
+	HWND mh_Parent;
+	ConEmuHotKey m_HK;
+public:
+	static bool EditHotKey(HWND hParent, DWORD& VkMod);
+	DWORD GetVkMod();
+public:
+	static DWORD dlgGetHotkey(HWND hDlg, UINT iEditCtrl = hkHotKeySelect, UINT iListCtrl = lbHotKeyList);
+public:
+	CHotKeyDialog(HWND hParent, DWORD aVkMod);
+	~CHotKeyDialog();
+
+	static INT_PTR CALLBACK hkDlgProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam);
 };

@@ -41,12 +41,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 // Возвращает текст с информацией о пути к сохраненному дампу
-DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024])
+DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPWSTR pszComment = NULL)
 {
 	DWORD dwErr = 0;
 	const wchar_t *pszError = NULL;
 	INT_PTR nLen;
 	MINIDUMP_TYPE dumpType = MiniDumpWithFullMemory;
+	MINIDUMP_USER_STREAM_INFORMATION cmt;
+	MINIDUMP_USER_STREAM cmt1;
 	//bool bDumpSucceeded = false;
 	HANDLE hDmpFile = NULL;
 	HMODULE hDbghelp = NULL;
@@ -58,6 +60,15 @@ DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullIn
 	DWORD nSharingOption;
 
 	SetCursor(LoadCursor(NULL, IDC_WAIT));
+
+	if (pszComment)
+	{
+		cmt1.Type = 11/*CommentStreamW*/;
+		cmt1.BufferSize = (lstrlen(pszComment)+1)*sizeof(*pszComment);
+		cmt1.Buffer = pszComment;
+		cmt.UserStreamCount = 1;
+		cmt.UserStreamArray = &cmt1;
+	}
 
 	memset(szFullInfo, 0, sizeof(szFullInfo));
 
@@ -109,7 +120,8 @@ DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullIn
 		                    hDmpFile,
 		                    dumpType,
 		                    &mei,
-		                    NULL, NULL);
+		                    pszComment ? &cmt : NULL,
+		                    NULL);
 
 		if (!lbDumpRc)
 		{
@@ -183,11 +195,26 @@ wrap:
 		GetModuleFileName(NULL, szExeName, countof(szExeName)-1);
 		LPCWSTR pszExeName = PointToName(szExeName);
 
-		wchar_t what[64];
+		wchar_t what[100];
 		if (ExceptionInfo && ExceptionInfo->ExceptionRecord)
+		{
 			_wsprintf(what, SKIPLEN(countof(what)) L"Exception 0x%08X", ExceptionInfo->ExceptionRecord->ExceptionCode);
+			if (EXCEPTION_ACCESS_VIOLATION == ExceptionInfo->ExceptionRecord->ExceptionCode
+				&& ExceptionInfo->ExceptionRecord->NumberParameters >= 2)
+			{
+				ULONG_PTR iType = ExceptionInfo->ExceptionRecord->ExceptionInformation[0];
+				ULONG_PTR iAddr = ExceptionInfo->ExceptionRecord->ExceptionInformation[1];
+				INT_PTR iLen = lstrlen(what);
+				_wsprintf(what+iLen, SKIPLEN(countof(what)-iLen)
+					WIN3264TEST(L" (%sx%08X)",L" (%s x%08X%08X)"),
+					(iType==0) ? L"Read " : (iType==1) ? L"Write " : (iType==8) ? L"DEP " : L"",
+					WIN3264WSPRINT(iAddr));
+			}
+		}
 		else
+		{
 			wcscpy_c(what, L"Assertion");
+		}
 
 		_wsprintf(szFullInfo, SKIPLEN(countof(szFullInfo)) L"%s was occurred (%s, PID=%u)\r\nConEmu build %02u%02u%02u%s %s\r\n\r\n"
 			L"Memory dump was saved to\r\n%s\r\n\r\n"

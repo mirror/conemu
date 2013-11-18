@@ -238,6 +238,7 @@ enum LoadAltMode
 };
 
 enum ExpandTextRangeType;
+struct ConEmuHotKey;
 
 #include "RealServer.h"
 
@@ -369,6 +370,7 @@ class CRealConsole
 	public:
 		//BOOL FlushInputQueue(DWORD nTimeout = 500);
 		void OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, const wchar_t *pszChars, const MSG* pDeadCharMsg);
+		const ConEmuHotKey* ProcessSelectionHotKey(DWORD VkState, bool bKeyDown, const wchar_t *pszChars);
 		void ProcessKeyboard(UINT messg, WPARAM wParam, LPARAM lParam, const wchar_t *pszChars);
 		void OnKeyboardIme(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		void OnMouse(UINT messg, WPARAM wParam, int x, int y, bool abForceSend = false, bool abFromTouch = false);
@@ -422,6 +424,7 @@ class CRealConsole
 		bool isConSelectMode();
 		bool isFar(bool abPluginRequired=false);
 		bool isFarBufferSupported();
+		bool isSendMouseAllowed();
 		bool isFarInStack();
 		bool isFarKeyBarShown();
 		bool isSelectionAllowed();
@@ -429,8 +432,8 @@ class CRealConsole
 		bool isMouseSelectionPresent();
 		void AutoCopyTimer(); // Чтобы разрулить "Auto Copy" & "Double click - select word"
 		void StartSelection(BOOL abTextMode, SHORT anX=-1, SHORT anY=-1, BOOL abByMouse=FALSE);
-		void ExpandSelection(SHORT anX=-1, SHORT anY=-1);
-		bool DoSelectionCopy(bool bCopyAll = false);
+		void ExpandSelection(SHORT anX, SHORT anY);
+		bool DoSelectionCopy(bool bCopyAll = false, BYTE nFormat = 0xFF /* use gpSet->isCTSHtmlFormat */);
 		void DoSelectionStop();
 		void DoFindText(int nDirection);
 		void DoEndFindText();
@@ -458,7 +461,7 @@ class CRealConsole
 		//ExpandTextRangeType ExpandTextRange(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[Out]*/, ExpandTextRangeType etr, wchar_t* pszText = NULL, size_t cchTextMax = 0);
 		bool IsFarHyperlinkAllowed(bool abFarRequired);
 		bool ProcessFarHyperlink(UINT messg, COORD crFrom);
-		//void UpdateTabFlags(/*IN|OUT*/ ConEmuTab* pTab);
+		void UpdateTabFlags(/*IN|OUT*/ ConEmuTab* pTab);
 		static INT_PTR CALLBACK renameProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam);
 	public:
 		BOOL IsConsoleDataChanged();
@@ -471,7 +474,7 @@ class CRealConsole
 		//LRESULT OnConEmuCmd(BOOL abStarted, DWORD anConEmuC_PID);
 		BOOL BufferHeightTurnedOn(CONSOLE_SCREEN_BUFFER_INFO* psbi);
 		void UpdateScrollInfo();
-		void SetTabs(ConEmuTab* apTabs, int anTabsCount);
+		void SetTabs(ConEmuTab* tabs, int tabsCount);
 		void DoRenameTab();
 		bool DuplicateRoot(bool bSkipMsg = false, bool bRunAsAdmin = false, LPCWSTR asNewConsole = NULL, LPCWSTR asApp = NULL, LPCWSTR asParm = NULL);
 		void RenameTab(LPCWSTR asNewTabText = NULL);
@@ -480,7 +483,7 @@ class CRealConsole
 		int GetRootProcessIcon();
 		int GetActiveTab();
 		CEFarWindowType GetActiveTabType();
-		bool GetTab(int tabIdx, /*OUT*/ CTab& rTab);
+		bool GetTab(int tabIdx, /*OUT*/ ConEmuTab* pTab);
 		int GetModifiedEditors();
 		BOOL ActivateFarWindow(int anWndIndex);
 		DWORD CanActivateFarWindow(int anWndIndex);
@@ -507,8 +510,8 @@ class CRealConsole
 		bool isNtvdm();
 		//bool isPackets();
 		const RConStartArgs& GetArgs();
-		LPCWSTR GetCmd();
-		LPCWSTR GetDir();
+		LPCWSTR GetCmd(bool bThisOnly = false);
+		LPCWSTR GetStartupDir();
 		wchar_t* CreateCommandLine(bool abForTasks = false);
 		BOOL GetUserPwd(const wchar_t** ppszUser, const wchar_t** ppszDomain, BOOL* pbRestricted);
 		short GetProgress(int* rpnState/*1-error,2-ind*/, BOOL* rpbNotFromTitle = NULL);
@@ -570,6 +573,7 @@ class CRealConsole
 		void SetAltSrvPID(DWORD anAltSrvPID/*, HANDLE ahAltSrv*/);
 		// Сервер и альтернативный сервер
 		DWORD mn_MainSrv_PID; HANDLE mh_MainSrv;
+		DWORD mn_CheckFreqLock;
 		DWORD mn_ConHost_PID;
 		MMap<DWORD,BOOL>* mp_ConHostSearch;
 		void ConHostSearchPrepare();
@@ -613,6 +617,9 @@ class CRealConsole
 		BOOL AttachPID(DWORD dwPID); //120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
 #endif
 		BOOL StartProcess();
+		private:
+		BOOL StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR& lpszWorkDir, bool bNeedConHostSearch, HWND hSetForeground, DWORD& nCreateBegin, DWORD& nCreateEnd, DWORD& nCreateDuration, BYTE nTextColorIdx /*= 7*/, BYTE nBackColorIdx /*= 0*/, BYTE nPopTextColorIdx /*= 5*/, BYTE nPopBackColorIdx /*= 15*/, STARTUPINFO& si, PROCESS_INFORMATION& pi, DWORD& dwLastError);
+		protected:
 		BOOL StartMonitorThread();
 		void SetMonitorThreadEvent();
 		BOOL mb_NeedStartProcess;
@@ -637,12 +644,13 @@ class CRealConsole
 		BOOL mb_StartResult, mb_WaitingRootStartup;
 		BOOL mb_FullRetrieveNeeded; //, mb_Detached;
 		RConStartArgs m_Args;
+		wchar_t ms_ProfilePathTemp[MAX_PATH+1];
 		BOOL mb_WasStartDetached;
 		wchar_t ms_RootProcessName[MAX_PATH];
 		int mn_RootProcessIcon;
 		// Replace in asCmd some env.vars (!ConEmuBackHWND! and so on)
-		wchar_t* ParseConEmuSubst(LPCWSTR asCmd);
-		wchar_t* mpsz_CmdBuffer;
+		//wchar_t* ParseConEmuSubst(LPCWSTR asCmd);
+		//wchar_t* mpsz_CmdBuffer;
 		//BOOL mb_AdminShieldChecked;
 		//wchar_t* ms_SpecialCmd;
 		//BOOL mb_RunAsAdministrator;
@@ -721,17 +729,11 @@ class CRealConsole
 		wchar_t ms_LastProcessName[MAX_PATH];
 		int mn_LastAppSettingsId;
 		//
-		struct _TabsInfo
-		{
-			wchar_t    ms_RenameFirstTab[MAX_RENAME_TAB_LEN/*128*/];
-			//MSection   msc_Tabs;
-			CTabStack m_Tabs;
-			//int mn_tabsCount, mn_MaxTabs, mn_ActiveTab;
-			int  mn_tabsCount; // Число текущих табов. Может отличаться (в меньшую сторону) от m_Tabs.GetCount()
-			int  mn_ActiveTab;
-			bool mb_TabsWasChanged;
-			bool mb_HasModalWindow; // Far Manager modal editor/viewer
-		} tabs;
+		ConEmuTab* mp_tabs;
+		wchar_t    ms_RenameFirstTab[MAX_RENAME_TAB_LEN/*128*/];
+		MSection   msc_Tabs;
+		int mn_tabsCount, mn_MaxTabs, mn_ActiveTab;
+		bool mb_TabsWasChanged;
 		void CheckPanelTitle();
 		//
 		//void ProcessAdd(DWORD addPID);

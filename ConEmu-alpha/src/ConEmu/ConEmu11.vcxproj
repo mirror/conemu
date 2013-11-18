@@ -242,7 +242,7 @@
     <_ProjectFileVersion>11.0.50214.1</_ProjectFileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_E|Win32'">
-    <OutDir>E:\Source\FARUnicode\trunk\unicode_far\Debug.32.vc\ConEmu\</OutDir>
+    <OutDir>T:\Utils\Portable\PortableApps\ConEmuPortable\App\ConEmu\</OutDir>
     <IntDir>C:\Temp\CE\$(ProjectName).$(Platform).$(Configuration)\</IntDir>
     <TargetName>ConEmu</TargetName>
     <TargetExt>.exe</TargetExt>
@@ -322,7 +322,7 @@
     <LinkKeyFile />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_F|Win32'">
-    <OutDir>\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far1x86\ConEmu\</OutDir>
+    <OutDir>T:\Utils\ConEmu\</OutDir>
     <IntDir>C:\Temp\CE\$(ProjectName).$(Platform).$(Configuration)\</IntDir>
     <TargetName>ConEmu</TargetName>
     <TargetExt>.exe</TargetExt>
@@ -330,7 +330,7 @@
     <LinkKeyFile />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_F|x64'">
-    <OutDir>\VCProject\FarPlugin\ConEmu\Maximus5\Debug\Far1x64\ConEmu\</OutDir>
+    <OutDir>T:\Utils\ConEmu\</OutDir>
     <IntDir>C:\Temp\CE\$(ProjectName).$(Platform).$(Configuration)\</IntDir>
     <TargetName>ConEmu64</TargetName>
     <TargetExt>.exe</TargetExt>
@@ -388,7 +388,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_E|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;MSGLOGGER;_WIN32_WINNT=0x510;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;MSGLOGGER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -799,7 +799,6 @@
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
       <Profile>false</Profile>
-      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>conemu.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
@@ -892,6 +891,8 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\common\CmdLine.cpp" />
+    <ClCompile Include="..\common\SetEnvVar.cpp" />
     <ClCompile Include="Attach.cpp" />
     <ClCompile Include="Background.cpp" />
     <ClCompile Include="BaseDragDrops.cpp" />
@@ -937,12 +938,7 @@
     <ClCompile Include="RunQueue.cpp" />
     <ClCompile Include="ScreenDump.cpp" />
     <ClCompile Include="Status.cpp" />
-    <ClCompile Include="TabBar.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_F2|Win32'">
-      </ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="TabCtrlBase.cpp" />
-    <ClCompile Include="TabCtrlWin.cpp" />
+    <ClCompile Include="TabBar.cpp" />
     <ClCompile Include="TabID.cpp" />
     <ClCompile Include="TaskBar.cpp" />
     <ClCompile Include="TaskBarGhost.cpp" />
@@ -957,6 +953,13 @@
     <ClCompile Include="..\common\WinObjects.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\common\CmdLine.h" />
+    <ClInclude Include="..\common\DefTermHooker.h" />
+    <ClInclude Include="..\common\Dump.h" />
+    <ClInclude Include="..\common\MAssert.h" />
+    <ClInclude Include="..\common\SetEnvVar.h" />
+    <ClInclude Include="..\ConEmuCD\ConsoleHelp.h" />
+    <ClInclude Include="About.h" />
     <ClInclude Include="Attach.h" />
     <ClInclude Include="Background.h" />
     <ClInclude Include="BaseDragDrops.h" />
@@ -983,6 +986,7 @@
     <ClInclude Include="GuiServer.h" />
     <ClInclude Include="..\ConEmuCD\GuiHooks.h" />
     <ClInclude Include="Header.h" />
+    <ClInclude Include="HtmlCopy.h" />
     <ClInclude Include="IconList.h" />
     <ClInclude Include="kl_parts.h" />
     <ClInclude Include="Hotkeys.h" />
@@ -1006,6 +1010,7 @@
     <ClInclude Include="RealConsole.h" />
     <ClInclude Include="RealServer.h" />
     <ClInclude Include="Recreate.h" />
+    <ClInclude Include="RefRelease.h" />
     <ClInclude Include="Registry.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="..\common\RgnDetect.h" />
@@ -1013,8 +1018,6 @@
     <ClInclude Include="ScreenDump.h" />
     <ClInclude Include="Status.h" />
     <ClInclude Include="TabBar.h" />
-    <ClInclude Include="TabCtrlBase.h" />
-    <ClInclude Include="TabCtrlWin.h" />
     <ClInclude Include="TabID.h" />
     <ClInclude Include="TaskBar.h" />
     <ClInclude Include="TaskBarGhost.h" />
@@ -1050,7 +1053,6 @@
     <None Include="Version.rc2" />
     <None Include="vsplit.cur" />
     <None Include="!Todo.Tablet.txt" />
-    <None Include="!Todo.txt" />
     <None Include="..\..\Release\ConEmu\About-ConEmu.txt" />
     <None Include="ClassDiagram1.cd" />
     <None Include="..\..\Release\ConEmu\FAQ-ConEmu.txt" />
@@ -1062,7 +1064,14 @@
     <ResourceCompile Include="ConEmu.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="!ToDo.!000!.txt" />
+    <Text Include="!ToDo.!111!.txt" />
+    <Text Include="..\..\..\Maximus5\src\ConEmu\!Todo.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Copy24.bmp" />
+    <Image Include="Copy4.bmp" />
+    <Image Include="Scroll.bmp" />
+    <Image Include="Shield16.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

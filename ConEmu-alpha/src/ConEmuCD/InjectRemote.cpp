@@ -35,6 +35,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <shlobj.h>
 
 // 0 - OK, иначе - ошибка
+// Здесь вызывается CreateRemoteThread
 int InfiltrateDll(HANDLE hProcess, LPCWSTR asConEmuHk)
 {
 	int iRc = -150;
@@ -203,6 +204,7 @@ int PrepareHookModule(wchar_t (&szModule)[MAX_PATH+16])
 	int iRc = -251;
 	wchar_t szNewPath[MAX_PATH+16] = {}, szAddName[32] = {}, szVer[2] = {};
 	INT_PTR nLen = 0;
+	bool bAlreadyExists = false;
 
 	// Copy szModule to CSIDL_LOCAL_APPDATA and return new path
 	HRESULT hr = SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, szNewPath);
@@ -213,7 +215,9 @@ int PrepareHookModule(wchar_t (&szModule)[MAX_PATH+16])
 	}
 
 	szVer[0] = MVV_4a[0];
-	_wsprintf(szAddName, SKIPLEN(countof(szAddName)) L"\\ConEmuHk%s.%02u%02u%02u%s.dll", WIN3264TEST(L"",L"64"), MVV_1, MVV_2, MVV_3, szVer);
+	_wsprintf(szAddName, SKIPLEN(countof(szAddName))
+		L"\\" CEDEFTERMDLLFORMAT /*L"ConEmuHk%s.%02u%02u%02u%s.dll"*/,
+		WIN3264TEST(L"",L"64"), MVV_1, MVV_2, MVV_3, szVer);
 
 	nLen = lstrlen(szNewPath);
 	if (szNewPath[nLen-1] != L'\\')
@@ -239,12 +243,28 @@ int PrepareHookModule(wchar_t (&szModule)[MAX_PATH+16])
 
 	wcscat_c(szNewPath, szAddName);
 
-	if (FileExists(szNewPath) && FileCompare(szNewPath, szModule))
+	if ((bAlreadyExists = FileExists(szNewPath)) && FileCompare(szNewPath, szModule))
 	{
 		// OK, file exists and match the required
 	}
 	else
 	{
+		if (bAlreadyExists)
+		{
+			_ASSERTE(FALSE && "Continue to overwrite existing ConEmuHk in AppLocal");
+
+			// Try to delete or rename old version
+			if (!DeleteFile(szNewPath))
+			{
+				//SYSTEMTIME st; GetLocalTime(&st);
+				wchar_t szBakPath[MAX_PATH+32]; wcscpy_c(szBakPath, szNewPath);
+				wchar_t* pszExt = (wchar_t*)PointToExt(szBakPath);
+				msprintf(pszExt, 16, L".%u.dll", GetTickCount());
+				DeleteFile(szBakPath);
+				MoveFile(szNewPath, szBakPath);
+			}
+		}
+
 		if (!CopyFile(szModule, szNewPath, FALSE))
 		{
 			iRc = -254;
@@ -341,7 +361,7 @@ int InjectRemote(DWORD nRemotePID, bool abDefTermOnly /*= false */)
 		GetExitCodeProcess(pi.hProcess, &nWrapperResult);
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
-		if (nWrapperResult != CERR_HOOKS_WAS_SET)
+		if ((nWrapperResult != CERR_HOOKS_WAS_SET) && (nWrapperResult != CERR_HOOKS_WAS_ALREADY_SET))
 		{
 			iRc = -203;
 			SetLastError(nWrapperResult);

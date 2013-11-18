@@ -34,6 +34,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <windows.h>
 #include "MAssert.h"
 #include "WinObjects.h"
+#include "CmdLine.h"
 #include "../ConEmu/version.h"
 #include <TlHelp32.h>
 
@@ -176,9 +177,9 @@ BOOL isWindow(HWND hWnd)
 	return TRUE;
 }
 
-BOOL FileCompare(LPCWSTR asFilePath1, LPCWSTR asFilePath2)
+bool FileCompare(LPCWSTR asFilePath1, LPCWSTR asFilePath2)
 {
-	BOOL bMatch = FALSE;
+	bool bMatch = false;
 	HANDLE hFile1, hFile2 = NULL;
 	LPBYTE pBuf1 = NULL, pBuf2 = NULL;
 	LARGE_INTEGER lSize1 = {}, lSize2 = {};
@@ -224,10 +225,10 @@ wrap:
 }
 
 // pnSize заполняется только в том случае, если файл найден
-BOOL FileExists(LPCWSTR asFilePath, DWORD* pnSize /*= NULL*/)
+bool FileExists(LPCWSTR asFilePath, DWORD* pnSize /*= NULL*/)
 {
 	if (!asFilePath || !*asFilePath)
-		return FALSE;
+		return false;
 
 	_ASSERTE(wcschr(asFilePath, L'\t')==NULL);
 
@@ -236,7 +237,7 @@ BOOL FileExists(LPCWSTR asFilePath, DWORD* pnSize /*= NULL*/)
 
 	if (hFind == INVALID_HANDLE_VALUE)
 	{
-		BOOL lbFileFound = FALSE;
+		bool lbFileFound = false;
 
 		// FindFirstFile может обломаться из-за симлинков
 		if (GetLastError() == ERROR_ACCESS_DENIED)
@@ -249,7 +250,7 @@ BOOL FileExists(LPCWSTR asFilePath, DWORD* pnSize /*= NULL*/)
 
 				if (GetFileInformationByHandle(hFind, &fi) && !(fi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 				{
-					lbFileFound = TRUE;
+					lbFileFound = true;
 
 					if (pnSize)
 						*pnSize = fi.nFileSizeHigh ? 0xFFFFFFFF : fi.nFileSizeLow; //-V112
@@ -262,13 +263,13 @@ BOOL FileExists(LPCWSTR asFilePath, DWORD* pnSize /*= NULL*/)
 		return lbFileFound;
 	}
 
-	BOOL lbFound = FALSE;
+	bool lbFound = false;
 
 	do
 	{
 		if ((fnd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
 		{
-			lbFound = TRUE;
+			lbFound = true;
 
 			if (pnSize)
 				*pnSize = fnd.nFileSizeHigh ? 0xFFFFFFFF : fnd.nFileSizeLow; //-V112
@@ -282,39 +283,44 @@ BOOL FileExists(LPCWSTR asFilePath, DWORD* pnSize /*= NULL*/)
 	return lbFound;
 }
 
-BOOL FileExistsSearch(wchar_t* rsFilePath, size_t cchPathMax)
+bool FileExistsSearch(wchar_t* rsFilePath, size_t cchPathMax)
 {
 	if (!rsFilePath || !*rsFilePath)
 	{
 		_ASSERTEX(rsFilePath && *rsFilePath);
-		return FALSE;
+		return false;
 	}
 
 	if (FileExists(rsFilePath))
 	{
-		return TRUE;
+		return true;
 	}
 
 	// Переменные окружения
 	if (wcschr(rsFilePath, L'%'))
 	{
+		bool bFound = false;
 		wchar_t* pszExpand = ExpandEnvStr(rsFilePath);
-		if (pszExpand)
+		if (pszExpand && FileExists(rsFilePath))
 		{
 			_ASSERTEX(lstrlen(pszExpand) < (INT_PTR)cchPathMax);
 			lstrcpyn(rsFilePath, pszExpand, (int)cchPathMax);
+			bFound = true;
 		}
 		SafeFree(pszExpand);
 
-		if (FileExists(rsFilePath))
+		if (bFound)
 		{
-			return TRUE;
+			return true;
 		}
 	}
 
 	// Search "Path"
 	LPCWSTR pszSearchFile = rsFilePath;
 	LPCWSTR pszSlash = wcsrchr(rsFilePath, L'\\');
+	if (pszSlash && ((pszSlash - rsFilePath) >= MAX_PATH))
+		return FALSE; // No need to continue, this is invalid path to executable
+
 	wchar_t* pszSearchPath = NULL;
 	if (pszSlash)
 	{
@@ -338,22 +344,22 @@ BOOL FileExistsSearch(wchar_t* rsFilePath, size_t cchPathMax)
 	{
 		_ASSERTEX(lstrlen(szFind) < (INT_PTR)cchPathMax);
 		lstrcpyn(rsFilePath, szFind, (int)cchPathMax);
-		return TRUE;
+		return true;
 	}
 
-	return FALSE;
+	return false;
 }
 
-BOOL DirectoryExists(LPCWSTR asPath)
+bool DirectoryExists(LPCWSTR asPath)
 {
 	if (!asPath || !*asPath)
-		return FALSE;
+		return false;
 
 	WIN32_FIND_DATAW fnd = {0};
 	HANDLE hFind = FindFirstFile(asPath, &fnd);
 	if (hFind == INVALID_HANDLE_VALUE)
 	{
-		return FALSE;
+		return false;
 	}
 
 	BOOL lbFound = FALSE;
@@ -372,13 +378,13 @@ BOOL DirectoryExists(LPCWSTR asPath)
 	while (FindNextFile(hFind, &fnd));
 
 	FindClose(hFind);
-	return lbFound;
+	return (lbFound != FALSE);
 }
 
-BOOL MyCreateDirectory(wchar_t* asPath)
+bool MyCreateDirectory(wchar_t* asPath)
 {
 	if (!asPath || !*asPath)
-		return FALSE;
+		return false;
 
 	BOOL bOk = FALSE;
 	DWORD dwErr = 0;
@@ -396,13 +402,13 @@ BOOL MyCreateDirectory(wchar_t* asPath)
 		if ((pszSlash[1] == 0) && DirectoryExists(asPath))
 		{
 			*pszSlash = L'\\';
-			return TRUE;
+			return true;
 		}
 	}
 	else
 	{
 		if (DirectoryExists(asPath))
-			return TRUE;
+			return true;
 	}
 
 	if (CreateDirectory(asPath, NULL))
@@ -427,11 +433,11 @@ BOOL MyCreateDirectory(wchar_t* asPath)
 		*pszSlash = L'\\';
 	}
 
-	return bOk;
+	return (bOk != FALSE);
 }
 
 // Первичная проверка, может ли asFilePath быть путем
-BOOL IsFilePath(LPCWSTR asFilePath)
+bool IsFilePath(LPCWSTR asFilePath)
 {
 	// Если в пути встречаются недопустимые символы
 	if (wcschr(asFilePath, L'"') ||
@@ -439,7 +445,7 @@ BOOL IsFilePath(LPCWSTR asFilePath)
 	        wcschr(asFilePath, L'<') ||
 	        wcschr(asFilePath, L'|')
 	  )
-		return FALSE;
+		return false;
 
 	// Пропуск UNC "\\?\"
 	if (asFilePath[0] == L'\\' && asFilePath[1] == L'\\' && asFilePath[2] == L'?' && asFilePath[3] == L'\\')
@@ -452,14 +458,21 @@ BOOL IsFilePath(LPCWSTR asFilePath)
 	{
 		// Если есть ":", то это должен быть путь вида "X:\xxx", т.е. ":" - второй символ
 		if (pszColon != (asFilePath+1))
-			return FALSE;
+			return false;
 
 		if (wcschr(pszColon+1, L':'))
-			return FALSE;
+			return false;
 	}
 
 	// May be file path
-	return TRUE;
+	return true;
+}
+
+bool IsPathNeedQuot(LPCWSTR asPath)
+{
+	if (wcspbrk(asPath, L"<>()&|^\""))
+		return true;
+	return false;
 }
 
 BOOL GetShortFileName(LPCWSTR asFullPath, int cchShortNameMax, wchar_t* rsShortName/*[MAX_PATH+1]-name only*/, BOOL abFavorLength=FALSE)
@@ -660,14 +673,14 @@ wrap:
 //}
 
 #ifndef CONEMU_MINIMAL
-BOOL IsUserAdmin()
+bool IsUserAdmin()
 {
 	OSVERSIONINFO osv = {sizeof(OSVERSIONINFO)};
 	GetVersionEx(&osv);
 
 	// Проверять нужно только для висты, чтобы на XP лишний "Щит" не отображался
 	if (osv.dwMajorVersion < 6)
-		return FALSE;
+		return false;
 
 	BOOL b;
 	SID_IDENTIFIER_AUTHORITY NtAuthority = {SECURITY_NT_AUTHORITY};
@@ -690,15 +703,15 @@ BOOL IsUserAdmin()
 		FreeSid(AdministratorsGroup);
 	}
 
-	return(b);
+	return (b != FALSE);
 }
 
 
 #include <Sddl.h> // ConvertSidToStringSid
 // *ppszSID - must be LocalFree'd
-BOOL GetLogonSID (HANDLE hToken, wchar_t **ppszSID)
+bool GetLogonSID (HANDLE hToken, wchar_t **ppszSID)
 {
-	BOOL bSuccess = FALSE;
+	bool bSuccess = false;
 	//DWORD dwIndex;
 	DWORD dwLength = 0;
 	TOKEN_USER user;
@@ -747,7 +760,7 @@ BOOL GetLogonSID (HANDLE hToken, wchar_t **ppszSID)
 	if (!ConvertSidToStringSid(ptu->User.Sid, ppszSID) || (*ppszSID == NULL))
 		goto Cleanup;
 
-	bSuccess = TRUE;
+	bSuccess = true;
 
 Cleanup: 
 
@@ -821,6 +834,30 @@ bool IsWindows64()
 
 	isOsChecked = true;
 	return is64bitOs;
+}
+
+bool IsHwFullScreenAvailable()
+{
+	if (IsWindows64())
+		return false;
+
+	// HW FullScreen was available in Win2k & WinXP (32bit)
+	OSVERSIONINFO osv = {sizeof(OSVERSIONINFO)};
+	GetVersionEx(&osv);
+	return (osv.dwMajorVersion <= 5);
+}
+
+bool IsVsNetHostExe(LPCWSTR asFilePatName)
+{
+	bool bVsNetHostRequested = false;
+	int iNameLen = asFilePatName ? lstrlen(asFilePatName) : 0;
+	LPCWSTR pszVsHostSuffix = L".vshost.exe";
+	int iVsHostSuffix = lstrlen(pszVsHostSuffix);
+	if ((iNameLen >= iVsHostSuffix) && (lstrcmpi(asFilePatName+iNameLen-iVsHostSuffix, pszVsHostSuffix) == 0))
+	{
+		bVsNetHostRequested = true;
+	}
+	return bVsNetHostRequested;
 }
 
 // Check running process bits - 32/64
@@ -978,20 +1015,6 @@ bool isTerminalMode()
 	return TerminalMode;
 }
 
-bool IsFarExe(LPCWSTR asModuleName)
-{
-	if (asModuleName && *asModuleName)
-	{
-		LPCWSTR pszName = PointToName(asModuleName);
-		if (lstrcmpi(pszName, L"far.exe") == 0 || lstrcmpi(pszName, L"far") == 0
-			|| lstrcmpi(pszName, L"far64.exe") == 0 || lstrcmpi(pszName, L"far64") == 0)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 // Проверить, валиден ли модуль?
 bool IsModuleValid(HMODULE module)
 {
@@ -1043,17 +1066,17 @@ bool IsModuleValid(HMODULE module)
 #endif
 }
 
-BOOL CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL abCheckModuleInfo, BOOL abAllowNTDLL)
+bool CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL abCheckModuleInfo, BOOL abAllowNTDLL)
 {
 	if ((hModule == NULL) || (hModule == INVALID_HANDLE_VALUE) || LDR_IS_RESOURCE(hModule))
 	{
 		_ASSERTE((hModule != NULL) && (hModule != INVALID_HANDLE_VALUE) && !LDR_IS_RESOURCE(hModule));
-		return FALSE;
+		return false;
 	}
 	if (!CallBack || !ProcCount)
 	{
 		_ASSERTE(CallBack && ProcCount);
-		return FALSE;
+		return false;
 	}
 
 	DWORD_PTR nModulePtr = (DWORD_PTR)hModule;
@@ -1074,7 +1097,7 @@ BOOL CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL
 		if (!IsModuleValid(hModule))
 		{
 			_ASSERTE("!IsModuleValid(hModule)" && 0);
-			return FALSE;
+			return false;
 		}
 
 		IMAGE_NT_HEADERS* nt_header = (IMAGE_NT_HEADERS*)((char*)hModule + ((IMAGE_DOS_HEADER*)hModule)->e_lfanew);
@@ -1094,25 +1117,25 @@ BOOL CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL
 		if (!(CallBack[i]))
 		{
 			_ASSERTE((CallBack[i])!=NULL);
-			return FALSE;
+			return false;
 		}
 
 		if ((((DWORD_PTR)(CallBack[i])) < nModulePtr)
 			&& (!nModulePtr2 || (((DWORD_PTR)(CallBack[i])) < nModulePtr2)))
 		{
 			_ASSERTE(((DWORD_PTR)(CallBack[i])) >= nModulePtr);
-			return FALSE;
+			return false;
 		}
 
 		if ((((DWORD_PTR)(CallBack[i])) > (nModuleSize + nModulePtr))
 			&& (!nModulePtr2 || (((DWORD_PTR)(CallBack[i])) > (nModuleSize2 + nModulePtr2))))
 		{
 			_ASSERTE(((DWORD_PTR)(CallBack[i])) <= (nModuleSize + nModulePtr));
-			return FALSE;
+			return false;
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 #ifndef CONEMU_MINIMAL
@@ -1213,14 +1236,14 @@ const wchar_t* PointToExt(const wchar_t* asFullPath)
 
 // !!! Меняет asParm !!!
 // Cut leading and trailing quotas
-const wchar_t* Unquote(wchar_t* asParm)
+const wchar_t* Unquote(wchar_t* asParm, bool abFirstQuote /*= false*/)
 {
 	if (!asParm)
 		return NULL;
 	if (*asParm != L'"')
 		return asParm;
-	wchar_t* pszEndQ = wcsrchr(asParm, L'"');
-	if (!pszEndQ || (pszEndQ == asParm))
+	wchar_t* pszEndQ = abFirstQuote ? wcschr(asParm+1, L'"') : wcsrchr(asParm+1, L'"');
+	if (!pszEndQ)
 	{
 		*asParm = 0;
 		return asParm;
@@ -1317,14 +1340,19 @@ wchar_t* ExpandEnvStr(LPCWSTR pszCommand)
 	if (!pszCommand || !*pszCommand)
 		return NULL;
 
-	DWORD cchMax = MAX_PATH*2;
-	wchar_t* pszExpand = (wchar_t*)malloc(cchMax*sizeof(*pszExpand));
+	DWORD cchMax = ExpandEnvironmentStrings(pszCommand, NULL, 0);
+	if (!cchMax)
+		return lstrdup(pszCommand);
+
+	wchar_t* pszExpand = (wchar_t*)malloc((cchMax+2)*sizeof(*pszExpand));
 	if (pszExpand)
 	{
 		pszExpand[0] = 0;
+		pszExpand[cchMax] = 0xFFFF;
+		pszExpand[cchMax+1] = 0xFFFF;
 
 		DWORD nExp = ExpandEnvironmentStrings(pszCommand, pszExpand, cchMax);
-		if (nExp && (nExp < cchMax) && *pszExpand)
+		if (nExp && (nExp <= cchMax) && *pszExpand)
 			return pszExpand;
 
 		SafeFree(pszExpand);
@@ -1371,464 +1399,8 @@ wchar_t* GetFullPathNameEx(LPCWSTR asPath)
 
 
 
-#ifndef __GNUC__
-#pragma warning( push )
-#pragma warning(disable : 6400)
-#endif
-BOOL IsExecutable(LPCWSTR aszFilePathName, wchar_t** rsExpandedVars /*= NULL*/)
-{
-#ifndef __GNUC__
-#pragma warning( push )
-#pragma warning(disable : 6400)
-#endif
-
-	wchar_t* pszExpand = NULL;
-
-	for (int i = 0; i <= 1; i++)
-	{
-		LPCWSTR pwszDot = PointToExt(aszFilePathName);
-
-		if (pwszDot)  // Если указан .exe или .com файл
-		{
-			if (lstrcmpiW(pwszDot, L".exe")==0 || lstrcmpiW(pwszDot, L".com")==0)
-			{
-				if (FileExists(aszFilePathName))
-					return TRUE;
-			}
-		}
-
-		if (!i && wcschr(aszFilePathName, L'%'))
-		{
-			pszExpand = ExpandEnvStr(aszFilePathName);
-			if (!pszExpand)
-				break;
-			aszFilePathName = pszExpand;
-		}
-	}
-
-	if (rsExpandedVars)
-	{
-		*rsExpandedVars = pszExpand; pszExpand = NULL;
-	}
-	else
-	{
-		SafeFree(pszExpand);
-	}
-
-	return FALSE;
-}
-#ifndef __GNUC__
-#pragma warning( pop )
-#endif
-
-// Команды, которые не нужно пытаться развернуть в exe?
-// кроме того, если команда содержит "?" или "*" - тоже не пытаться.
-const wchar_t* gsInternalCommands = L"ACTIVATE\0ALIAS\0ASSOC\0ATTRIB\0BEEP\0BREAK\0CALL\0CDD\0CHCP\0COLOR\0COPY\0DATE\0DEFAULT\0DEL\0DELAY\0DESCRIBE\0DETACH\0DIR\0DIRHISTORY\0DIRS\0DRAWBOX\0DRAWHLINE\0DRAWVLINE\0ECHO\0ECHOERR\0ECHOS\0ECHOSERR\0ENDLOCAL\0ERASE\0ERRORLEVEL\0ESET\0EXCEPT\0EXIST\0EXIT\0FFIND\0FOR\0FREE\0FTYPE\0GLOBAL\0GOTO\0HELP\0HISTORY\0IF\0IFF\0INKEY\0INPUT\0KEYBD\0KEYS\0LABEL\0LIST\0LOG\0MD\0MEMORY\0MKDIR\0MOVE\0MSGBOX\0NOT\0ON\0OPTION\0PATH\0PAUSE\0POPD\0PROMPT\0PUSHD\0RD\0REBOOT\0REN\0RENAME\0RMDIR\0SCREEN\0SCRPUT\0SELECT\0SET\0SETDOS\0SETLOCAL\0SHIFT\0SHRALIAS\0START\0TEE\0TIME\0TIMER\0TITLE\0TOUCH\0TREE\0TRUENAME\0TYPE\0UNALIAS\0UNSET\0VER\0VERIFY\0VOL\0VSCRPUT\0WINDOW\0Y\0\0";
-
-BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
-			   wchar_t (&szExe)[MAX_PATH+1],
-			   BOOL& rbRootIsCmdExe, BOOL& rbAlwaysConfirmExit, BOOL& rbAutoDisableConfirmExit)
-{
-	_ASSERTE(asCmdLine && *asCmdLine);
-	rbRootIsCmdExe = TRUE;
-
-	#ifdef _DEBUG
-	// Это минимальные проверки, собственно к коду - не относятся
-	wchar_t szDbgFirst[MAX_PATH+1];
-	bool bIsBatch = false;
-	{
-		LPCWSTR psz = asCmdLine;
-		NextArg(&psz, szDbgFirst);
-		psz = PointToExt(szDbgFirst);
-		if (lstrcmpi(psz, L".cmd")==0 || lstrcmpi(psz, L".bat")==0)
-			bIsBatch = true;
-	}
-	#endif
-
-	memset(szExe, 0, sizeof(szExe));
-
-	if (!asCmdLine || *asCmdLine == 0)
-	{
-		_ASSERTE(asCmdLine && *asCmdLine);
-		return TRUE;
-	}
-		
-	//110202 перенес вниз, т.к. это уже может быть cmd.exe, и тогда у него сносит крышу
-	//// Если есть одна из команд перенаправления, или слияния - нужен CMD.EXE
-	//if (wcschr(asCmdLine, L'&') ||
-	//        wcschr(asCmdLine, L'>') ||
-	//        wcschr(asCmdLine, L'<') ||
-	//        wcschr(asCmdLine, L'|') ||
-	//        wcschr(asCmdLine, L'^') // или экранирования
-	//  )
-	//{
-	//	return TRUE;
-	//}
-
-	//wchar_t szArg[MAX_PATH+10] = {0};
-	int iRc = 0;
-	BOOL lbFirstWasGot = FALSE;
-	LPCWSTR pwszCopy = asCmdLine;
-	// cmd /c ""c:\program files\arc\7z.exe" -?"   // да еще и внутри могут быть двойными...
-	// cmd /c "dir c:\"
-	int nLastChar = lstrlenW(pwszCopy) - 1;
-
-	if (pwszCopy[0] == L'"' && pwszCopy[nLastChar] == L'"')
-	{
-		if (pwszCopy[1] == L'"' && pwszCopy[2])
-		{
-			pwszCopy ++; // Отбросить первую кавычку в командах типа: ""c:\program files\arc\7z.exe" -?"
-
-			if (rbNeedCutStartEndQuot) *rbNeedCutStartEndQuot = TRUE;
-		}
-		else
-			// глючила на ""F:\VCProject\FarPlugin\#FAR180\far.exe  -new_console""
-			//if (wcschr(pwszCopy+1, L'"') == (pwszCopy+nLastChar)) {
-			//	LPCWSTR pwszTemp = pwszCopy;
-			//	// Получим первую команду (исполняемый файл?)
-			//	if ((iRc = NextArg(&pwszTemp, szArg)) != 0) {
-			//		//Parsing command line failed
-			//		return TRUE;
-			//	}
-			//	pwszCopy ++; // Отбросить первую кавычку в командах типа: "c:\arc\7z.exe -?"
-			//	lbFirstWasGot = TRUE;
-			//	if (rbNeedCutStartEndQuot) *rbNeedCutStartEndQuot = TRUE;
-			//} else
-		{
-			// отбросить первую кавычку в: "C:\GCC\msys\bin\make.EXE -f "makefile" COMMON="../../../plugins/common""
-			LPCWSTR pwszTemp = pwszCopy + 1;
-
-			// Получим первую команду (исполняемый файл?)
-			if ((iRc = NextArg(&pwszTemp, szExe)) != 0)
-			{
-				//Parsing command line failed
-				#ifdef WARN_NEED_CMD
-				_ASSERTE(FALSE);
-				#endif
-				return TRUE;
-			}
-			
-			if (lstrcmpiW(szExe, L"start") == 0)
-			{
-				// Команду start обрабатывает только процессор
-				#ifdef WARN_NEED_CMD
-				_ASSERTE(FALSE);
-				#endif
-				return TRUE;
-			}
-
-			LPCWSTR pwszQ = pwszCopy + 1 + lstrlen(szExe);
-			wchar_t* pszExpand = NULL;
-
-			if (*pwszQ != L'"' && IsExecutable(szExe, &pszExpand))
-			{
-				pwszCopy ++; // отбрасываем
-				lbFirstWasGot = TRUE;
-
-				if (pszExpand)
-				{
-					lstrcpyn(szExe, pszExpand, countof(szExe));
-					SafeFree(pszExpand);
-					if (rsArguments)
-						*rsArguments = pwszQ;
-				}
-
-				if (rbNeedCutStartEndQuot) *rbNeedCutStartEndQuot = TRUE;
-			}
-		}
-	}
-
-	// Получим первую команду (исполняемый файл?)
-	if (!lbFirstWasGot)
-	{
-		szExe[0] = 0;
-		// 17.10.2010 - поддержка переданного исполняемого файла без параметров, но с пробелами в пути
-		LPCWSTR pchEnd = pwszCopy + lstrlenW(pwszCopy);
-
-		while (pchEnd > pwszCopy && *(pchEnd-1) == L' ') pchEnd--;
-
-		if ((pchEnd - pwszCopy) < MAX_PATH)
-		{
-			memcpy(szExe, pwszCopy, (pchEnd - pwszCopy)*sizeof(wchar_t));
-			szExe[(pchEnd - pwszCopy)] = 0;
-
-			if (lstrcmpiW(szExe, L"start") == 0)
-			{
-				// Команду start обрабатывает только процессор
-				#ifdef WARN_NEED_CMD
-				_ASSERTE(FALSE);
-				#endif
-				return TRUE;
-			}
-
-			// Обработка переменных окружения и поиск в PATH
-			if (FileExistsSearch(/*IN|OUT*/szExe, countof(szExe)))
-			{
-				if (rsArguments)
-					*rsArguments = pchEnd;
-			}
-			else
-			{
-				szExe[0] = 0;
-			}
-		}
-
-		if (szExe[0] == 0)
-		{
-			if ((iRc = NextArg(&pwszCopy, szExe)) != 0)
-			{
-				//Parsing command line failed
-				#ifdef WARN_NEED_CMD
-				_ASSERTE(FALSE);
-				#endif
-				return TRUE;
-			}
-
-			if (lstrcmpiW(szExe, L"start") == 0)
-			{
-				// Команду start обрабатывает только процессор
-				#ifdef WARN_NEED_CMD
-				_ASSERTE(FALSE);
-				#endif
-				return TRUE;
-			}
-
-			// Обработка переменных окружения и поиск в PATH
-			if (FileExistsSearch(/*IN|OUT*/szExe, countof(szExe)))
-			{
-				if (rsArguments)
-					*rsArguments = pwszCopy;
-			}
-		}
-	}
-	
-	if (!*szExe)
-	{
-		_ASSERTE(szExe[0] != 0);
-	}
-	else
-	{
-		// Если юзеру нужен редирект - то он должен явно указать ком.процессор
-		// Иначе нереально (или достаточно сложно) определить, является ли символ
-		// редиректом, или это просто один из аргументов команды...
-
-		// "Левые" символы в имени файла (а вот в "первом аргументе" все однозначно)
-		if (wcspbrk(szExe, L"?*<>|"))
-		{
-			rbRootIsCmdExe = TRUE; // запуск через "процессор"
-			return TRUE; // добавить "cmd.exe"
-		}
-		
-		// если "путь" не указан
-		if (wcschr(szExe, L'\\') == NULL) 
-		{
-			bool bHasExt = (wcschr(szExe, L'.') != NULL);
-			// Проверим, может это команда процессора (типа "DIR")?
-			if (!bHasExt)
-			{
-				bool bIsCommand = false;
-				wchar_t* pszUppr = lstrdup(szExe);
-				if (pszUppr)
-				{
-					// избежать линковки на user32.dll
-					//CharUpperBuff(pszUppr, lstrlen(pszUppr));
-					for (wchar_t* p = pszUppr; *p; p++)
-					{
-						if (*p >= L'a' && *p <= 'z')
-							*p -= 0x20;
-					}
-					
-					const wchar_t* pszFind = gsInternalCommands;
-					while (*pszFind)
-					{
-						if (lstrcmp(pszUppr, pszFind) == 0)
-						{
-							bIsCommand = true;
-							break;
-						}
-						pszFind += lstrlen(pszFind)+1;
-					}
-					free(pszUppr);
-				}
-				if (bIsCommand)
-				{
-					#ifdef WARN_NEED_CMD
-					_ASSERTE(FALSE);
-					#endif
-					rbRootIsCmdExe = TRUE; // запуск через "процессор"
-					return TRUE; // добавить "cmd.exe"
-				}
-			}
-			
-			// Пробуем найти "по путям" соответствующий exe-шник.
-			DWORD nCchMax = countof(szExe); // выделить память, длинее чем szExe вернуть не сможем
-			wchar_t* pszSearch = (wchar_t*)malloc(nCchMax*sizeof(wchar_t));
-			if (pszSearch)
-			{
-				#ifndef CONEMU_MINIMAL
-				MWow64Disable wow; wow.Disable(); // Отключить редиректор!
-				#endif
-				wchar_t *pszName = NULL;
-				DWORD nRc = SearchPath(NULL, szExe, bHasExt ? NULL : L".exe", nCchMax, pszSearch, &pszName);
-				if (nRc && (nRc < nCchMax))
-				{
-					// Нашли, возвращаем что нашли
-					wcscpy_c(szExe, pszSearch);
-				}
-				free(pszSearch);
-			}
-		} // end: if (wcschr(szExe, L'\\') == NULL) 
-	}
-
-	// Если szExe не содержит путь к файлу - запускаем через cmd
-	// "start "" C:\Utils\Files\Hiew32\hiew32.exe C:\00\Far.exe"
-	if (!IsFilePath(szExe))
-	{
-		#ifdef WARN_NEED_CMD
-		_ASSERTE(FALSE);
-		#endif
-		rbRootIsCmdExe = TRUE; // запуск через "процессор"
-		return TRUE; // добавить "cmd.exe"
-	}
-
-	//pwszCopy = wcsrchr(szArg, L'\\'); if (!pwszCopy) pwszCopy = szArg; else pwszCopy ++;
-	pwszCopy = PointToName(szExe);
-	//2009-08-27
-	wchar_t *pwszEndSpace = szExe + lstrlenW(szExe) - 1;
-
-	while ((*pwszEndSpace == L' ') && (pwszEndSpace > szExe))
-	{
-		*(pwszEndSpace--) = 0;
-	}
-
-#ifndef __GNUC__
-#pragma warning( push )
-#pragma warning(disable : 6400)
-#endif
-
-	if (lstrcmpiW(pwszCopy, L"cmd")==0 || lstrcmpiW(pwszCopy, L"cmd.exe")==0
-		|| lstrcmpiW(pwszCopy, L"tcc")==0 || lstrcmpiW(pwszCopy, L"tcc.exe")==0)
-	{
-		rbRootIsCmdExe = TRUE; // уже должен быть выставлен, но проверим
-		rbAlwaysConfirmExit = TRUE; rbAutoDisableConfirmExit = FALSE;
-		_ASSERTE(!bIsBatch);
-		return FALSE; // уже указан командный процессор, cmd.exe в начало добавлять не нужно
-	}
 
 
-	// Issue 1211: Decide not to do weird heuristic.
-	//   If user REALLY needs redirection (root command, huh?)
-	//   - he must call "cmd /c ..." directly
-	// Если есть одна из команд перенаправления, или слияния - нужен CMD.EXE
-	if (!bRootCmd)
-	{
-		if (wcschr(asCmdLine, L'&') ||
-			wcschr(asCmdLine, L'>') ||
-			wcschr(asCmdLine, L'<') ||
-			wcschr(asCmdLine, L'|') ||
-			wcschr(asCmdLine, L'^') // или экранирования
-			)
-		{
-			#ifdef WARN_NEED_CMD
-			_ASSERTE(FALSE);
-			#endif
-			return TRUE;
-		}
-	}
-
-	//if (lstrcmpiW(pwszCopy, L"far")==0 || lstrcmpiW(pwszCopy, L"far.exe")==0)
-	if (IsFarExe(pwszCopy))
-	{
-		bool bFound = (wcschr(pwszCopy, L'.') != NULL);
-		// Если указали при запуске просто "far" - это может быть батник, расположенный в %PATH%
-		if (!bFound)
-		{
-			wchar_t szSearch[MAX_PATH+1], *pszPart = NULL;
-			DWORD n = SearchPath(NULL, pwszCopy, L".exe", countof(szSearch), szSearch, &pszPart);
-			if (n && (n < countof(szSearch)))
-			{
-				if (lstrcmpi(PointToExt(pszPart), L".exe") == 0)
-					bFound = true;
-			}
-		}
-
-		if (bFound)
-		{
-			rbAutoDisableConfirmExit = TRUE;
-			rbRootIsCmdExe = FALSE; // FAR!
-			_ASSERTE(!bIsBatch);
-			return FALSE; // уже указан исполняемый файл, cmd.exe в начало добавлять не нужно
-		}
-	}
-
-	if (IsExecutable(szExe))
-	{
-		rbRootIsCmdExe = FALSE; // Для других программ - буфер не включаем
-		_ASSERTE(!bIsBatch);
-		return FALSE; // Запускается конкретная консольная программа. cmd.exe не требуется
-	}
-
-	//Можно еще Доделать поиски с: SearchPath, GetFullPathName, добавив расширения .exe & .com
-	//хотя фар сам формирует полные пути к командам, так что можно не заморачиваться
-	#ifdef WARN_NEED_CMD
-	_ASSERTE(FALSE);
-	#endif
-	rbRootIsCmdExe = TRUE;
-#ifndef __GNUC__
-#pragma warning( pop )
-#endif
-	return TRUE;
-}
-
-const wchar_t* SkipNonPrintable(const wchar_t* asParams)
-{
-	if (!asParams)
-		return NULL;
-	const wchar_t* psz = asParams;
-	while (*psz == L' ' || *psz == L'\t' || *psz == L'\r' || *psz == L'\n') psz++;
-	return psz;
-}
-
-// One trailing (or middle) asterisk allowed
-bool CompareFileMask(const wchar_t* asFileName, const wchar_t* asMask)
-{
-	if (!asFileName || !*asFileName || !asMask || !*asMask)
-		return false;
-	// Any file?
-	if (*asMask == L'*' && *(asMask+1) == 0)
-		return true;
-
-	int iCmp = -1;
-	
-	wchar_t sz1[MAX_PATH+1], sz2[MAX_PATH+1];
-	lstrcpyn(sz1, asFileName, countof(sz1));
-	size_t nLen1 = lstrlen(sz1);
-	CharUpperBuffW(sz1, (DWORD)nLen1);
-	lstrcpyn(sz2, asMask, countof(sz2));
-	size_t nLen2 = lstrlen(sz2);
-	CharUpperBuffW(sz2, (DWORD)nLen2);
-
-	wchar_t* pszAst = wcschr(sz2, L'*');
-	if (!pszAst)
-	{
-		iCmp = lstrcmp(sz1, sz2);
-	}
-	else
-	{
-		*pszAst = 0;
-		size_t nLen = pszAst - sz2;
-		size_t nRight = lstrlen(pszAst+1);
-		if (wcsncmp(sz1, sz2, nLen) == 0)
-		{
-			if (!nRight)
-				iCmp = 0;
-			else if (nLen1 >= (nRight + nLen))
-				iCmp = lstrcmp(sz1+nLen1-nRight, pszAst+1);
-		}
-	}
-
-	return (iCmp == 0);
-}
 
 
 //// Вернуть путь к папке, содержащей ConEmuC.exe
@@ -4145,7 +3717,7 @@ HANDLE DuplicateProcessHandle(DWORD anTargetPID)
 
 #ifndef CONEMU_MINIMAL
 // используется в GUI при загрузке настроек
-void FindComspec(ConEmuComspec* pOpt)
+void FindComspec(ConEmuComspec* pOpt, bool bCmdAlso /*= true*/)
 {
 	if (!pOpt)
 		return;
@@ -4171,6 +3743,7 @@ void FindComspec(ConEmuComspec* pOpt)
 			}
 		}
 
+		// On this step - check "Take Command"!
 		if (!*pOpt->Comspec32 || !*pOpt->Comspec64)
 		{
 			// [HKEY_LOCAL_MACHINE\SOFTWARE\JP Software\Take Command 13.0]
@@ -4190,34 +3763,30 @@ void FindComspec(ConEmuComspec* pOpt)
 						HKEY hk2;
 						if (!RegOpenKeyEx(hk, szName, 0, KEY_READ|nOpt, &hk2))
 						{
-							memset(szPath, 0, sizeof(szPath)); DWORD nSize = (countof(szPath)-1)*sizeof(szPath[0]);
-							if (!RegQueryValueExW(hk2, NULL, NULL, NULL, (LPBYTE)szPath, &nSize) && *szPath)
+							// Just in case, check "Path" too
+							LPCWSTR rsNames[] = {NULL, L"Path"};
+
+							for (size_t n = 0; n < countof(rsNames); n++)
 							{
-								wchar_t* psz, *pszEnd;
-								if (szPath[0] == L'"')
+								memset(szPath, 0, sizeof(szPath)); DWORD nSize = (countof(szPath)-1)*sizeof(szPath[0]);
+								if (!RegQueryValueExW(hk2, rsNames[n], NULL, NULL, (LPBYTE)szPath, &nSize) && *szPath)
 								{
-									psz = szPath + 1;
-									pszEnd = wcschr(psz, L'"');
-									if (pszEnd)
-										*pszEnd = 0;
+									wchar_t* psz, *pszEnd;
+									psz = (wchar_t*)Unquote(szPath, true);
+									pszEnd = wcsrchr(psz, L'\\');
+									if (!pszEnd || lstrcmpi(pszEnd, L"\\tcmd.exe") || !FileExists(psz))
+										continue;
+									lstrcpyn(pszEnd+1, L"tcc.exe", 8);
+									if (FileExists(psz))
+									{
+										bFound = true;
+										if (b == 0)
+                                			wcscpy_c(pOpt->Comspec32, psz);
+                            			else
+                                			wcscpy_c(pOpt->Comspec64, psz);
+									}
 								}
-								else
-								{
-									psz = szPath;
-								}
-								pszEnd = wcsrchr(psz, L'\\');
-								if (!pszEnd || lstrcmpi(pszEnd, L"\\tcmd.exe") || !FileExists(psz))
-									continue;
-								lstrcpyn(pszEnd+1, L"tcc.exe", 8);
-								if (FileExists(psz))
-								{
-									bFound = true;
-									if (b == 0)
-                                		wcscpy_c(pOpt->Comspec32, psz);
-                            		else
-                                		wcscpy_c(pOpt->Comspec64, psz);
-								}
-							}
+							} // for (size_t n = 0; n < countof(rsNames); n++)
 							RegCloseKey(hk2);
 						}
 					} //  for, подключи
@@ -4232,6 +3801,7 @@ void FindComspec(ConEmuComspec* pOpt)
 				wcscpy_c(pOpt->Comspec32, pOpt->Comspec64);
 		}
 
+		// If "Take Command" not installed - try "TCC/LE"
 		if (!*pOpt->Comspec32 || !*pOpt->Comspec64)
 		{
 			// [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{16A21882-4138-4ADA-A390-F62DC27E4504}]
@@ -4445,112 +4015,95 @@ void UpdateComspec(ConEmuComspec* pOpt, bool DontModifyPath /*= false*/)
 		{
 			wchar_t* pszCur = GetEnvVar(L"PATH");
 
-			if (!pszCur || !*pszCur)
+			if (!pszCur)
+				pszCur = lstrdup(L"");
+
+			DWORD n = lstrlen(pszCur);
+			wchar_t* pszUpr = lstrdup(pszCur);
+			wchar_t* pszDirUpr = (wchar_t*)malloc(MAX_PATH*sizeof(*pszCur));
+
+			MCHKHEAP;
+
+			if (!pszUpr || !pszDirUpr)
 			{
-				// Not existing or empty, just add
-				SafeFree(pszCur);
-				
-				// ConEmuC.exe is near to ConEmu.exe?
-				if (lstrcmp(pOpt->ConEmuBaseDir, pOpt->ConEmuExeDir) == 0)
-				{
-					SetEnvironmentVariable(L"PATH", pOpt->ConEmuBaseDir);
-				}
-				else
-				{
-					pszCur = lstrmerge(pOpt->ConEmuBaseDir, L";", pOpt->ConEmuExeDir, L";");
-					_ASSERTE(pszCur && *pszCur);
-					SetEnvironmentVariable(L"PATH", pszCur);
-				}
+				_ASSERTE(pszUpr && pszDirUpr);
 			}
 			else
 			{
-				DWORD n = lstrlen(pszCur);
-				wchar_t* pszUpr = lstrdup(pszCur);
-				wchar_t* pszDirUpr = (wchar_t*)malloc(MAX_PATH*sizeof(*pszCur));
+				bool bChanged = false;
+				wchar_t* pszAdd = NULL;
 
-				MCHKHEAP;
+				CharUpperBuff(pszUpr, n);
 
-				if (!pszUpr || !pszDirUpr)
+				for (int i = 0; i <= 1; i++)
 				{
-					_ASSERTE(pszUpr && pszDirUpr);
-				}
-				else
-				{
-					bool bChanged = false;
-					wchar_t* pszAdd = NULL;
-
-					CharUpperBuff(pszUpr, n);
-
-					for (int i = 0; i <= 1; i++)
+					switch (i)
 					{
-						switch (i)
-						{
-						case 0:
-							if (!(pOpt->AddConEmu2Path & CEAP_AddConEmuExeDir))
-								continue;
-							pszAdd = pOpt->ConEmuExeDir;
-							break;
-						case 1:
-							if (!(pOpt->AddConEmu2Path & CEAP_AddConEmuBaseDir))
-								continue;
-							if (lstrcmp(pOpt->ConEmuExeDir, pOpt->ConEmuBaseDir) == 0)
-								continue; // второй раз ту же директорию не добавляем
-							pszAdd = pOpt->ConEmuBaseDir;
-							break;
-						}
-
-						int nDirLen = lstrlen(pszAdd);
-						lstrcpyn(pszDirUpr, pszAdd, MAX_PATH);
-						CharUpperBuff(pszDirUpr, nDirLen);
-
-						MCHKHEAP;
-
-						// Need to find exact match!
-						bool bFound = false;
-						
-						LPCWSTR pszFind = wcsstr(pszUpr, pszDirUpr);
-						while (pszFind)
-						{
-							if (pszFind[nDirLen] == L';' || pszFind[nDirLen] == 0)
-							{
-								// OK, found
-								bFound = true;
-								break;
-							}
-							// Next try (may be partial match of subdirs...)
-							pszFind = wcsstr(pszFind+nDirLen, pszDirUpr);
-						}
-
-						if (!bFound)
-						{
-							wchar_t* pszNew = lstrmerge(pszAdd, L";", pszCur);
-							if (!pszNew)
-							{
-								_ASSERTE(pszNew && "Failed to reallocate PATH variable");
-								break;
-							}
-							MCHKHEAP;
-							SafeFree(pszCur);
-							pszCur = pszNew;
-							bChanged = true; // Set flag, check next dir
-						}
+					case 0:
+						if (!(pOpt->AddConEmu2Path & CEAP_AddConEmuExeDir))
+							continue;
+						pszAdd = pOpt->ConEmuExeDir;
+						break;
+					case 1:
+						if (!(pOpt->AddConEmu2Path & CEAP_AddConEmuBaseDir))
+							continue;
+						if (lstrcmp(pOpt->ConEmuExeDir, pOpt->ConEmuBaseDir) == 0)
+							continue; // второй раз ту же директорию не добавляем
+						pszAdd = pOpt->ConEmuBaseDir;
+						break;
 					}
+
+					int nDirLen = lstrlen(pszAdd);
+					lstrcpyn(pszDirUpr, pszAdd, MAX_PATH);
+					CharUpperBuff(pszDirUpr, nDirLen);
 
 					MCHKHEAP;
 
-					if (bChanged)
+					// Need to find exact match!
+					bool bFound = false;
+						
+					LPCWSTR pszFind = wcsstr(pszUpr, pszDirUpr);
+					while (pszFind)
 					{
-						SetEnvironmentVariable(L"PATH", pszCur);
+						if (pszFind[nDirLen] == L';' || pszFind[nDirLen] == 0)
+						{
+							// OK, found
+							bFound = true;
+							break;
+						}
+						// Next try (may be partial match of subdirs...)
+						pszFind = wcsstr(pszFind+nDirLen, pszDirUpr);
+					}
+
+					if (!bFound)
+					{
+						wchar_t* pszNew = lstrmerge(pszAdd, L";", pszCur);
+						if (!pszNew)
+						{
+							_ASSERTE(pszNew && "Failed to reallocate PATH variable");
+							break;
+						}
+						MCHKHEAP;
+						SafeFree(pszCur);
+						pszCur = pszNew;
+						bChanged = true; // Set flag, check next dir
 					}
 				}
 
 				MCHKHEAP;
-				
-				SafeFree(pszUpr);
-				SafeFree(pszDirUpr);
 
-				MCHKHEAP;
+				if (bChanged)
+				{
+					SetEnvironmentVariable(L"PATH", pszCur);
+				}
 			}
+
+			MCHKHEAP;
+				
+			SafeFree(pszUpr);
+			SafeFree(pszDirUpr);
+
+			MCHKHEAP;
 			SafeFree(pszCur);
 		}
 	}

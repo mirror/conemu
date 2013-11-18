@@ -799,6 +799,7 @@
       <MapExports>true</MapExports>
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(ProjectDir)..\..\Release\plugins\ConEmu\ConEmuPlugin_*.lng" "$(TargetDir)"</Command>
@@ -833,6 +834,7 @@
     <ClCompile Include="..\common\Common.cpp" />
     <ClCompile Include="..\common\ConEmuCheck.cpp" />
     <ClCompile Include="..\common\ConEmuCheckEx.cpp" />
+    <ClCompile Include="..\common\SetEnvVar.cpp" />
     <ClCompile Include="ConEmuInjects.cpp" />
     <ClCompile Include="ConEmuPlugin.cpp" />
     <ClCompile Include="ConEmuPlugin1900.cpp">
@@ -937,6 +939,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\common.hpp" />
+    <ClInclude Include="..\common\SetEnvVar.h" />
     <ClInclude Include="ConEmu_Lang.h" />
     <ClInclude Include="..\common\ConEmuCheck.h" />
     <ClInclude Include="..\common\ConEmuCheckEx.h" />

@@ -98,7 +98,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DEBUGSTRLLKB(s) //DEBUGSTR(s)
 #define DEBUGSTRTIMER(s) //DEBUGSTR(s)
 #define DEBUGSTRMSG(s) //DEBUGSTR(s)
-#define DEBUGSTRMSG2(s) DEBUGSTR(s)
+#define DEBUGSTRMSG2(s) //DEBUGSTR(s)
 #define DEBUGSTRANIMATE(s) //DEBUGSTR(s)
 #define DEBUGSTRFOCUS(s) //DEBUGSTR(s)
 #ifdef _DEBUG
@@ -145,6 +145,10 @@ const wchar_t* gsHomePage    = CEHOMEPAGE;    //L"http://conemu-maximus5.googlec
 const wchar_t* gsReportBug   = CEREPORTBUG;   //L"http://code.google.com/p/conemu-maximus5/issues/entry";
 const wchar_t* gsReportCrash = CEREPORTCRASH; //L"http://code.google.com/p/conemu-maximus5/issues/entry";
 const wchar_t* gsWhatsNew    = CEWHATSNEW;    //L"http://code.google.com/p/conemu-maximus5/wiki/Whats_New";
+
+#define gsPortableApps_LauncherIni  L"\\..\\AppInfo\\Launcher\\ConEmuPortable.ini"
+#define gsPortableApps_DefaultXml   L"\\..\\DefaultData\\settings\\ConEmu.xml"
+#define gsPortableApps_ConEmuXmlDir L"\\..\\..\\Data\\settings"
 
 static struct RegisteredHotKeys
 {
@@ -258,6 +262,7 @@ const wchar_t gsFocusQuakeCheckTimer[] = L"TIMER_QUAKE_AUTOHIDE_ID";
 CConEmuMain::CConEmuMain()
 {
 	gpConEmu = this; // сразу!
+	mb_FindBugMode = false;
 
 	DEBUGTEST(mb_DestroySkippedInAssert=false);
 
@@ -318,6 +323,8 @@ CConEmuMain::CConEmuMain()
 	mn_QuakePercent = 0; // 0 - отключен
 	DisableAutoUpdate = false;
 	DisableKeybHooks = false;
+	DisableAllMacro = false;
+	DisableAllHotkeys = false;
 	DisableSetDefTerm = false;
 	DisableRegisterFonts = false;
 	//mn_SysMenuOpenTick = mn_SysMenuCloseTick = 0;
@@ -498,20 +505,24 @@ CConEmuMain::CConEmuMain()
 	bool lbBaseFound = false;
 
 	// Mingw/msys installation?
-	mb_MingwMode = FALSE; // проверка ниже
-	wchar_t szBashFile[MAX_PATH+64];
-	wcscpy_c(szBashFile, ms_ConEmuExeDir);
-	pszSlash = wcsrchr(szBashFile, L'\\');
+	m_InstallMode = cm_Normal; // проверка ниже
+	wchar_t szFindFile[MAX_PATH+64];
+	wcscpy_c(szFindFile, ms_ConEmuExeDir);
+	pszSlash = wcsrchr(szFindFile, L'\\');
 	if (pszSlash) *pszSlash = 0;
-	pszSlash = szBashFile + _tcslen(szBashFile);
-	wcscat_c(szBashFile, L"\\msys\\1.0\\bin\\sh.exe");
-	mb_MSysStartup = FileExists(szBashFile);
-	if (!mb_MSysStartup)
+	pszSlash = szFindFile + _tcslen(szFindFile);
+	wcscat_c(szFindFile, L"\\msys\\1.0\\bin\\sh.exe");
+	if (FileExists(szFindFile))
+	{
+		m_InstallMode |= cm_MSysStartup;
+	}
+	else
 	{
 		// Git-bash mode
 		*pszSlash = 0;
-		wcscat_c(szBashFile, L"\\bin\\sh.exe");
-		mb_MSysStartup = FileExists(szBashFile);
+		wcscat_c(szFindFile, L"\\bin\\sh.exe");
+		if (FileExists(szFindFile))
+			m_InstallMode |= cm_MSysStartup;
 	}
 
 	// Сначала проверяем подпапку
@@ -542,7 +553,7 @@ CConEmuMain::CConEmuMain()
 			lbBaseFound = CheckBaseDir();
 			if (lbBaseFound)
 			{
-				mb_MingwMode = lbBaseFound;
+				m_InstallMode |= cm_MinGW;
 			}
 			else
 			{
@@ -552,19 +563,70 @@ CConEmuMain::CConEmuMain()
 		}
 	}
 
-	if (mb_MingwMode && mb_MSysStartup)
+	if (isMingwMode() && isMSysStartup())
 	{
 		// This is example. Will be replaced with full path.
-		gpSetCls->SetDefaultCmd(L"sh.exe --login -i");
+		gpSetCls->SetDefaultCmd(NULL /*L"sh.exe --login -i"*/);
 	}
 
-	mb_BlockChildrenDebuggers = false;
+	if (!isMingwMode())
+	{
+		// PortableApps.com?
+		LPCWSTR pszCheck[] = {
+			gsPortableApps_LauncherIni /* L"\\..\\AppInfo\\Launcher\\ConEmuPortable.ini" */,
+			gsPortableApps_DefaultXml /* L"\\..\\DefaultData\\settings\\ConEmu.xml"*/};
+		for (size_t c = 0; c < countof(pszCheck); c++)
+		{
+			wcscpy_c(szFindFile, ms_ConEmuExeDir);
+			wcscat_c(szFindFile, pszCheck[c]);
+			if (!FileExists(szFindFile))
+				goto NonPortable;
+		}
+		
+		// Ищем где должен лежать файл настроек в структуре PortableApps
+		wcscpy_c(ms_ConEmuXml, ms_ConEmuExeDir);
+		wchar_t* pszCut = wcsrchr(ms_ConEmuXml, L'\\');
+		if (pszCut)
+		{
+			*pszCut = 0;
+			pszCut = wcsrchr(ms_ConEmuXml, L'\\');
+			// gsPortableApps_ConEmuXml   L"\\..\\..\\Data\\settings"
+			if (pszCut)
+			{
+				LPCWSTR pszAppendPath = gsPortableApps_ConEmuXmlDir;
+				_ASSERTE(wcsncmp(pszAppendPath, L"\\..\\..\\D", 8)==0);
+				*pszCut = 0;
+				wcscat_c(ms_ConEmuXml, pszAppendPath+6);
+				if (!DirectoryExists(ms_ConEmuXml))
+					MyCreateDirectory(ms_ConEmuXml);
+				wcscat_c(ms_ConEmuXml, L"\\ConEmu.xml");
+				if (!FileExists(ms_ConEmuXml))
+				{
+					// Нужно скопировать дефолтный файл настроек?
+					CopyFile(szFindFile, ms_ConEmuXml, FALSE);
+				}
+				// Turn it on
+				m_InstallMode |= cm_PortableApps;
+			}
+
+			if (!(m_InstallMode & cm_PortableApps))
+			{
+				// Fail
+				ms_ConEmuXml[0] = 0;
+			}
+		}
+
+
+	}
+	NonPortable:
+
+	ZeroStruct(m_DbgInfo);
 	if (IsDebuggerPresent())
 	{
 		wchar_t szDebuggers[32];
 		if (GetEnvironmentVariable(ENV_CONEMU_BLOCKCHILDDEBUGGERS, szDebuggers, countof(szDebuggers)))
 		{
-			mb_BlockChildrenDebuggers = (lstrcmp(szDebuggers, ENV_CONEMU_BLOCKCHILDDEBUGGERS_YES) == 0);
+			m_DbgInfo.bBlockChildrenDebuggers = (lstrcmp(szDebuggers, ENV_CONEMU_BLOCKCHILDDEBUGGERS_YES) == 0);
 		}
 	}
 	// И сразу сбросить ее, чтобы не было мусора
@@ -577,6 +639,10 @@ CConEmuMain::CConEmuMain()
 	SetEnvironmentVariable(ENV_CONEMUANSI_BUILD_W, ms_ConEmuBuild);
 	SetEnvironmentVariable(ENV_CONEMUANSI_CONFIG_W, L"");
 	// переменная "ConEmuArgs" заполняется в ConEmuApp.cpp:PrepareCommandLine
+
+	wchar_t szDrive[MAX_PATH];
+	SetEnvironmentVariable(ENV_CONEMUDRIVE_VAR_W, GetDrive(ms_ConEmuExeDir, szDrive, countof(szDrive)));
+	
 
 	// Ищем файл портабельных настроек. Сначала пробуем в BaseDir
 	ConEmuXml();
@@ -712,10 +778,26 @@ CConEmuMain::CConEmuMain()
 	mn_MsgTaskBarBtnCreated = RegisterMessage("TaskbarButtonCreated",L"TaskbarButtonCreated");
 	mn_MsgSheelHook = RegisterMessage("SHELLHOOK",L"SHELLHOOK");
 	mn_MsgRequestRunProcess = RegisterMessage("RequestRunProcess");
+	mn_MsgDeleteVConMainThread = RegisterMessage("DeleteVConMainThread");
 	//// В Win7x64 WM_INPUTLANGCHANGEREQUEST не приходит (по крайней мере при переключении мышкой)
 	//wmInputLangChange = WM_INPUTLANGCHANGE;
 
 	//InitFrameHolder();
+}
+
+bool CConEmuMain::isMingwMode()
+{
+	return (m_InstallMode & cm_MinGW) == cm_MinGW;
+}
+
+bool CConEmuMain::isUpdateAllowed()
+{
+	return !(m_InstallMode & (cm_MinGW));
+}
+
+bool CConEmuMain::isMSysStartup()
+{
+	return (m_InstallMode & cm_MSysStartup) == cm_MSysStartup;
 }
 
 void LogFocusInfo(LPCWSTR asInfo, int Level/*=1*/)
@@ -769,6 +851,9 @@ void CConEmuMain::StoreWorkDir(LPCWSTR asNewCurDir /*= NULL*/)
 			ms_ConEmuWorkDir[nDirLen-1] = 0; // пусть будет БЕЗ слеша, для однообразия с ms_ConEmuExeDir
 		}
 	}
+
+	wchar_t szDrive[MAX_PATH];
+	SetEnvironmentVariable(ENV_CONEMUWORKDRIVE_VAR_W, GetDrive(ms_ConEmuWorkDir, szDrive, countof(szDrive)));
 }
 
 LPCWSTR CConEmuMain::WorkDir(LPCWSTR asOverrideCurDir /*= NULL*/)
@@ -1219,7 +1304,7 @@ BOOL CConEmuMain::Init()
 	LoadIcons();
 
 	mp_Tip = new CToolTip();
-	mp_TabBar = new CTabBarClass();
+	mp_TabBar = new TabBarClass();
 	//m_Child = new CConEmuChild();
 	//m_Back = new CConEmuBack();
 	//m_Macro = new CConEmuMacro();
@@ -1260,6 +1345,16 @@ BOOL CConEmuMain::Init()
 bool CConEmuMain::IsResetBasicSettings()
 {
 	return gpSetCls->isResetBasicSettings;
+}
+
+bool CConEmuMain::IsFastSetupDisabled()
+{
+	return (gpSetCls->isResetBasicSettings || gpSetCls->isFastSetupDisabled);
+}
+
+bool CConEmuMain::IsAllowSaveSettingsOnExit()
+{
+	return !(gpSetCls->ibDisableSaveSettingsOnExit || gpSetCls->ibExitAfterDefTermSetup);
 }
 
 void CConEmuMain::OnUseGlass(bool abEnableGlass)
@@ -1434,9 +1529,9 @@ SIZE CConEmuMain::GetDefaultSize(bool bCells, const CESize* pSizeW/*=NULL*/, con
 			// Maximized/Fullscreen - frame may come out of working area
 			RECT rcFrameOnly = CalcMargins(CEM_FRAMEONLY);
 			_ASSERTE(nFrameX>=0 && nFrameY>=0 && rcFrameOnly.left>=0 && rcFrameOnly.top>=0 && rcFrameOnly.right>=0 && rcFrameOnly.bottom>=0);
-			WARNING("Новое уточнение, может на что-то еще повлиять");
-			nMaxWidth += (rcFrameOnly.left + rcFrameOnly.right) - nFrameX;
-			nMaxHeight += (rcFrameOnly.top + rcFrameOnly.bottom) - nFrameY;
+			// 131029 - Was nFrameX&nFrameY, which was less then required. Quake goes of the screen
+			nMaxWidth += (rcFrameOnly.left + rcFrameOnly.right) - nShiftX;
+			nMaxHeight += (rcFrameOnly.top + rcFrameOnly.bottom) - nShiftY;
 			// Check it
 			if (nPixelWidth > nMaxWidth)
 				nPixelWidth = nMaxWidth;
@@ -2505,7 +2600,7 @@ void CConEmuMain::FinalizePortableReg()
 void CConEmuMain::GetComSpecCopy(ConEmuComspec& ComSpec)
 {
 	_ASSERTE(m_GuiInfo.ComSpec.csType==gpSet->ComSpec.csType);
-	_ASSERTE(m_GuiInfo.ComSpec.csBits==(mb_BlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits));
+	_ASSERTE(m_GuiInfo.ComSpec.csBits==(m_DbgInfo.bBlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits));
 	ComSpec = m_GuiInfo.ComSpec;
 }
 
@@ -2559,7 +2654,7 @@ void CConEmuMain::UpdateGuiInfoMapping()
 		SetConEmuFlags(m_GuiInfo.Flags,CECF_UseClink_Any,CECF_Empty);
 	}
 
-	SetConEmuFlags(m_GuiInfo.Flags,CECF_BlockChildDbg,(mb_BlockChildrenDebuggers ? CECF_BlockChildDbg : 0));
+	SetConEmuFlags(m_GuiInfo.Flags,CECF_BlockChildDbg,(m_DbgInfo.bBlockChildrenDebuggers ? CECF_BlockChildDbg : 0));
 	
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_SleepInBackg,(gpSet->isSleepInBackground ? CECF_SleepInBackg : 0));
 	m_GuiInfo.bGuiActive = isMeForeground(true, true);
@@ -2628,7 +2723,7 @@ void CConEmuMain::UpdateGuiInfoMapping()
 		// Теперь перенести в мэппинг, для информирования других процессов
 		ComSpecType csType = gpSet->ComSpec.csType;
 		// Если мы в режиме "отладки дерева процессов" - предпочитать ComSpec битности приложения!
-		ComSpecBits csBits = mb_BlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits;
+		ComSpecBits csBits = m_DbgInfo.bBlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits;
 		//m_GuiInfo.ComSpec.csType = gpSet->ComSpec.csType;
 		//m_GuiInfo.ComSpec.csBits = gpSet->ComSpec.csBits;
 		wchar_t szExpand[MAX_PATH] = {}, szFull[MAX_PATH] = {}, *pszFile;
@@ -3055,6 +3150,7 @@ void CConEmuMain::Destroy()
 CConEmuMain::~CConEmuMain()
 {
 	_ASSERTE(ghWnd==NULL || !IsWindow(ghWnd));
+	MCHKHEAP;
 	//ghWnd = NULL;
 
 	SafeDelete(mp_DefTrm);
@@ -3720,7 +3816,7 @@ bool CConEmuMain::FixWindowRect(RECT& rcWnd, DWORD nBorders /* enum of ConEmuBor
 		rcWnd.top = max(rcWork.top-rcMargins.top,min(rcStore.top,rcWork.bottom-nHeight+rcMargins.bottom));
 
 		// Add Width/Height. They may exceeds monitor in wmNormal.
-		if ((wndMode == wmNormal) && IsSizeFree())
+		if ((wndMode == wmNormal) && !IsCantExceedMonitor())
 		{
 			rcWnd.right = rcWnd.left+nWidth;
 			rcWnd.bottom = rcWnd.top+nHeight;
@@ -4314,6 +4410,20 @@ void CConEmuMain::StoreNormalRect(RECT* prcWnd)
 	// Если сейчас окно в смене размера - игнорируем, размер запомнит SetWindowMode
 	if ((WindowMode == wmNormal) && !mp_Inside && !isIconic())
 	{
+		if (prcWnd == NULL)
+		{
+			if (isFullScreen() || isZoomed() || isIconic())
+				return;
+
+			//131023 Otherwise, after tiling (Win+Left) 
+			//       and Lose/Get focus (Alt+Tab,Alt+Tab)
+			//       StoreNormalRect will be called unexpectedly
+			// Don't call Estimate here? Avoid excess calculations?
+			ConEmuWindowCommand CurTile = GetTileMode(false/*Estimate*/);
+			if (CurTile != cwc_Current)
+				return;
+		}
+
 		RECT rcNormal = {};
 		if (prcWnd)
 			rcNormal = *prcWnd;
@@ -4475,6 +4585,30 @@ BOOL CConEmuMain::ShowWindow(int anCmdShow, DWORD nAnimationMS /*= (DWORD)-1*/)
 	return lbRc;
 }
 
+void CConEmuMain::QuakePrevSize::Save(const CESize& awndWidth, const CESize& awndHeight, const int& awndX, const int& awndY, const BYTE& anFrame, const ConEmuWindowMode& aWindowMode, const IdealRectInfo& arcIdealInfo)
+{
+	wndWidth = awndWidth;
+	wndHeight = awndHeight;
+	wndX = awndX;
+	wndY = awndY;
+	nFrame = anFrame;
+	WindowMode = aWindowMode;
+	rcIdealInfo = arcIdealInfo;
+	//
+	bWasSaved = true;
+}
+
+ConEmuWindowMode CConEmuMain::QuakePrevSize::Restore(CESize& rwndWidth, CESize& rwndHeight, int& rwndX, int& rwndY, BYTE& rnFrame, IdealRectInfo& rrcIdealInfo)
+{
+	rwndWidth = wndWidth;
+	rwndHeight = wndHeight;
+	rwndX = wndX;
+	rwndY = wndY;
+	rnFrame = nFrame;
+	rrcIdealInfo = rcIdealInfo;
+	return WindowMode;
+}
+
 bool CConEmuMain::SetQuakeMode(BYTE NewQuakeMode, ConEmuWindowMode nNewWindowMode /*= wmNotChanging*/, bool bFromDlg /*= false*/)
 {
 	if (mb_InSetQuakeMode)
@@ -4526,25 +4660,11 @@ bool CConEmuMain::SetQuakeMode(BYTE NewQuakeMode, ConEmuWindowMode nNewWindowMod
 
 	if (gpSet->isQuakeStyle && !bPrevStyle)
 	{
-		m_QuakePrevSize.bWasSaved = true;
-		m_QuakePrevSize.wndWidth = gpConEmu->WndWidth;
-		m_QuakePrevSize.wndHeight = gpConEmu->WndHeight;
-		m_QuakePrevSize.wndX = gpConEmu->wndX;
-		m_QuakePrevSize.wndY = gpConEmu->wndY;
-		m_QuakePrevSize.nFrame = gpSet->nHideCaptionAlwaysFrame;
-		m_QuakePrevSize.WindowMode = gpConEmu->WindowMode;
-		m_QuakePrevSize.rcIdealInfo = mr_Ideal;
-		//gpSet->nHideCaptionAlwaysFrame = 0;
+		m_QuakePrevSize.Save(this->WndWidth, this->WndHeight, this->wndX, this->wndY, gpSet->nHideCaptionAlwaysFrame, this->WindowMode, mr_Ideal);
 	}
 	else if (!gpSet->isQuakeStyle && m_QuakePrevSize.bWasSaved)
 	{
-		gpConEmu->WndWidth = m_QuakePrevSize.wndWidth;
-		gpConEmu->WndHeight = m_QuakePrevSize.wndHeight;
-		gpConEmu->wndX = m_QuakePrevSize.wndX;
-		gpConEmu->wndY = m_QuakePrevSize.wndY;
-		gpSet->nHideCaptionAlwaysFrame = m_QuakePrevSize.nFrame;
-		nNewWindowMode = m_QuakePrevSize.WindowMode;
-		mr_Ideal = m_QuakePrevSize.rcIdealInfo;
+		nNewWindowMode = m_QuakePrevSize.Restore(this->WndWidth, this->WndHeight, this->wndX, this->wndY, gpSet->nHideCaptionAlwaysFrame, mr_Ideal);
 	}
 
 
@@ -4594,22 +4714,51 @@ ConEmuWindowMode CConEmuMain::GetWindowMode()
 	return wndMode;
 }
 
+LPCWSTR CConEmuMain::FormatTileMode(ConEmuWindowCommand Tile, wchar_t* pchBuf, size_t cchBufMax)
+{
+	switch (Tile)
+	{
+	case cwc_TileLeft:
+		_wcscpy_c(pchBuf, cchBufMax, L"cwc_TileLeft"); break;
+	case cwc_TileRight:
+		_wcscpy_c(pchBuf, cchBufMax, L"cwc_TileRight"); break;
+	case cwc_TileHeight:
+		_wcscpy_c(pchBuf, cchBufMax, L"cwc_TileHeight"); break;
+	default:
+		_wsprintf(pchBuf, SKIPLEN(cchBufMax) L"%u", (UINT)Tile);
+	}
+
+	return pchBuf;
+}
+
 bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 {
+	wchar_t szInfo[200], szName[32];
+
+	if (gpSetCls->isAdvLogging)
+	{
+		_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"SetTileMode(%s)", FormatTileMode(Tile,szName,countof(szName)));
+		gpConEmu->LogString(szInfo);
+	}
+
+
 	if (isIconic())
 	{
+		gpConEmu->LogString(L"SetTileMode SKIPPED due to isIconic");
 		return false;
 	}
 
-	if (!IsSizeFree())
+	if (!IsSizePosFree())
 	{
 		_ASSERTE(FALSE && "Tiling not allowed in Quake and Inside modes");
+		gpConEmu->LogString(L"SetTileMode SKIPPED due to Quake/Inside");
 		return false;
 	}
 
 	if (Tile != cwc_TileLeft && Tile != cwc_TileRight)
 	{
 		_ASSERTE(Tile==cwc_TileLeft || Tile==cwc_TileRight);
+		gpConEmu->LogString(L"SetTileMode SKIPPED due to invalid mode");
 		return false;
 	}
 
@@ -4627,14 +4776,18 @@ bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 			StoreNormalRect(NULL);
 		}
 
+		HMONITOR hMon = NULL;
 
 		// When window is tiled to the right edge, and user press Win+Right
 		// ConEmu must jump to next monitor and set tile to Left
 		if ((CurTile == Tile) && (CurTile == cwc_TileLeft || CurTile == cwc_TileRight))
 		{
 			MONITORINFO nxt = {0};
-			HMONITOR hNext = GetNextMonitorInfo(&nxt, &mi.rcWork, (CurTile == cwc_TileRight)/*Next*/);
-			if (hNext && nxt.cbSize && memcmp(&mi.rcWork, &nxt.rcWork, sizeof(nxt.rcWork)))
+			hMon = GetNextMonitorInfo(&nxt, &mi.rcWork, (CurTile == cwc_TileRight)/*Next*/);
+			//131022 - if there is only one monitor - just switch Left/Right tiling...
+			if (!hMon || !nxt.cbSize)
+				hMon = GetNearestMonitorInfo(&nxt, NULL, &mi.rcWork);
+			if (hMon && nxt.cbSize /* && memcmp(&mi.rcWork, &nxt.rcWork, sizeof(nxt.rcWork))*/)
 			{
 				memmove(&mi, &nxt, sizeof(nxt));
 				Tile = (CurTile == cwc_TileRight) ? cwc_TileLeft : cwc_TileRight;
@@ -4646,14 +4799,14 @@ bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 			{
 				rcNewWnd = GetDefaultRect();
 				m_TileMode = Tile = cwc_Current;
-				HMONITOR hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
+				hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
 				JumpNextMonitor(ghWnd, hMon, false, rcNewWnd);
 			}
 			else if ((Tile == cwc_TileRight) && (CurTile == cwc_TileLeft))
 			{
 				rcNewWnd = GetDefaultRect();
 				m_TileMode = Tile = cwc_Current;
-				HMONITOR hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
+				hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
 				JumpNextMonitor(ghWnd, hMon, true, rcNewWnd);
 			}
 		}
@@ -4696,6 +4849,22 @@ bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 			
 			changeFromWindowMode = wmNotChanging;
 		}
+
+		if (gpSetCls->isAdvLogging)
+		{
+			RECT rc = {}; GetWindowRect(ghWnd, &rc);
+			ConEmuWindowCommand NewTile = GetTileMode(true/*Estimate*/, &mi);
+			wchar_t szNewTile[32];
+			_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"result of SetTileMode(%s) -> %u {%i,%i}-{%i,%i} x%08X -> %s {%i,%i}-{%i,%i}", 
+				 FormatTileMode(Tile,szName,countof(szName)),
+				 (UINT)bChange,
+				 rcNewWnd.left, rcNewWnd.top, rcNewWnd.right, rcNewWnd.bottom,
+				 (DWORD)(DWORD_PTR)hMon,
+				 FormatTileMode(NewTile,szNewTile,countof(szNewTile)),
+				 rc.left, rc.top, rc.right, rc.bottom
+				 );
+			gpConEmu->LogString(szInfo);
+		}
 	}
 
 	return true;
@@ -4703,10 +4872,10 @@ bool CConEmuMain::SetTileMode(ConEmuWindowCommand Tile)
 
 ConEmuWindowCommand CConEmuMain::GetTileMode(bool Estimate, MONITORINFO* pmi/*=NULL*/)
 {
-	_ASSERTE(IsWindowVisible(ghWnd) && !isFullScreen() && !isZoomed() && !isIconic());
-
-	if (Estimate && IsSizeFree())
+	if (Estimate && IsSizePosFree())
 	{
+		_ASSERTE(IsWindowVisible(ghWnd) && !isFullScreen() && !isZoomed() && !isIconic());
+
 		ConEmuWindowCommand CurTile = cwc_Current;
 
 		MONITORINFO mi;
@@ -4741,8 +4910,9 @@ ConEmuWindowCommand CConEmuMain::GetTileMode(bool Estimate, MONITORINFO* pmi/*=N
 		if (m_TileMode != CurTile)
 		{
 			// Сменился!
-			wchar_t szTile[100];
-			_wsprintf(szTile, SKIPLEN(countof(szTile)) L"Tile mode was changed externally: Old=%u, New=%u", (int)m_TileMode, (int)CurTile);
+			wchar_t szTile[100], szNewTile[32], szOldTile[32];
+			_wsprintf(szTile, SKIPLEN(countof(szTile)) L"Tile mode was changed externally: Our=%s, New=%s",
+				FormatTileMode(m_TileMode,szOldTile,countof(szOldTile)), FormatTileMode(CurTile,szNewTile,countof(szNewTile)));
 			LogString(szTile);
 
 			m_TileMode = CurTile;
@@ -4758,13 +4928,45 @@ ConEmuWindowCommand CConEmuMain::GetTileMode(bool Estimate, MONITORINFO* pmi/*=N
 bool CConEmuMain::IsSizeFree(ConEmuWindowMode CheckMode /*= wmFullScreen*/)
 {
 	// В некоторых режимах - нельзя
-	if (gpSet->isQuakeStyle || mp_Inside)
+	if (mp_Inside)
 		return false;
+
+	// В режиме "Desktop" переходить в FullScreen - нельзя
 	if (gpSet->isDesktopMode && (CheckMode == wmFullScreen))
 		return false;
 
 	// Размер И положение можно менять произвольно
 	return true;
+}
+bool CConEmuMain::IsSizePosFree(ConEmuWindowMode CheckMode /*= wmFullScreen*/)
+{
+	// В некоторых режимах - нельзя
+	if (gpSet->isQuakeStyle || mp_Inside)
+		return false;
+
+	// В режиме "Desktop" переходить в FullScreen - нельзя
+	if (gpSet->isDesktopMode && (CheckMode == wmFullScreen))
+		return false;
+
+	// Размер И положение можно менять произвольно
+	return true;
+}
+// В некоторых режимах - не должен выходить за пределы экрана
+bool CConEmuMain::IsCantExceedMonitor()
+{
+	_ASSERTE(!mp_Inside);
+	if (gpSet->isQuakeStyle)
+		return true;
+	return false;
+}
+bool CConEmuMain::IsPosLocked()
+{
+	// В некоторых режимах - двигать окно юзеру вообще нельзя
+	if (mp_Inside)
+		return true;
+
+	// Положение - строго не ограничивается
+	return false;
 }
 
 bool CConEmuMain::JumpNextMonitor(bool Next)
@@ -5013,7 +5215,7 @@ bool CConEmuMain::SetWindowMode(ConEmuWindowMode inMode, BOOL abForce /*= FALSE*
 	if ((inMode != wmFullScreen) && (WindowMode == wmFullScreen))
 	{
 		// Отмена vkForceFullScreen
-		OnForcedFullScreen(false);
+		DoForcedFullScreen(false);
 	}
 
 	#ifdef _DEBUG
@@ -5063,7 +5265,7 @@ bool CConEmuMain::SetWindowMode(ConEmuWindowMode inMode, BOOL abForce /*= FALSE*
 		StoreNormalRect(&rcWnd);
 
 	// Коррекция для Quake/Inside/Desktop
-	ConEmuWindowMode NewMode = IsSizeFree(inMode) ? inMode : wmNormal;
+	ConEmuWindowMode NewMode = IsSizePosFree(inMode) ? inMode : wmNormal;
 
 	// И сразу запоминаем _новый_ режим
 	changeFromWindowMode = WindowMode;
@@ -6265,7 +6467,15 @@ LRESULT CConEmuMain::OnWindowPosChanged(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 
 			if ((changeFromWindowMode == wmNotChanging) && isWindowNormal())
 			{
-				StoreNormalRect(&rc);
+				//131023 Otherwise, after tiling (Win+Left) 
+				//       and Lose/Get focus (Alt+Tab,Alt+Tab)
+				//       StoreNormalRect will be called unexpectedly
+				// Don't call Estimate here? Avoid excess calculations?
+				ConEmuWindowCommand CurTile = GetTileMode(false/*Estimate*/);
+				if (CurTile == cwc_Current)
+				{
+					StoreNormalRect(&rc);
+				}
 			}
 
 			if (gpConEmu->hPictureView)
@@ -7481,6 +7691,31 @@ void CConEmuMain::ExecuteProcessFinished(bool bOpt)
 //    return (dwCtrlType == CTRL_C_EVENT || dwCtrlType == CTRL_BREAK_EVENT ? true : false);
 //}
 
+void CConEmuMain::SetWindowIcon(LPCWSTR asNewIcon)
+{
+	if (!asNewIcon || !*asNewIcon)
+		return;
+
+	HICON hOldClassIcon = hClassIcon, hOldClassIconSm = hClassIconSm;
+	hClassIcon = NULL; hClassIconSm = NULL;
+	SafeFree(gpConEmu->mps_IconPath);
+	gpConEmu->mps_IconPath = ExpandEnvStr(asNewIcon);
+
+	LoadIcons();
+
+	if (hClassIcon)
+	{
+		SetClassLongPtr(ghWnd, GCLP_HICON, (LONG_PTR)hClassIcon);
+		SetClassLongPtr(ghWnd, GCLP_HICONSM, (LONG_PTR)hClassIconSm);
+		SendMessage(ghWnd, WM_SETICON, ICON_BIG, (LPARAM)hClassIcon);
+		SendMessage(ghWnd, WM_SETICON, ICON_SMALL, (LPARAM)hClassIconSm);
+	}
+	else
+	{
+		hClassIcon = hOldClassIcon; hClassIconSm = hOldClassIconSm;
+	}
+}
+
 // Нужно вызывать после загрузки настроек!
 void CConEmuMain::LoadIcons()
 {
@@ -7675,13 +7910,16 @@ void CConEmuMain::PostMacroFontSetName(wchar_t* pszFontName, WORD anHeight /*= 0
 
 void CConEmuMain::PostDisplayRConError(CRealConsole* apRCon, wchar_t* pszErrMsg)
 {
-#ifdef _DEBUG
-	CVConGuard VCon(apRCon->VCon());
-	_ASSERTE(FALSE && "Strange 'ConEmuCInput not found' error");
-	SendMessage(ghWnd, mn_MsgDisplayRConError, (WPARAM)apRCon, (LPARAM)pszErrMsg);
-#else
+	//CVConGuard VCon(apRCon->VCon());
+	//SendMessage(ghWnd, mn_MsgDisplayRConError, (WPARAM)apRCon, (LPARAM)pszErrMsg);
+
+	if (RELEASEDEBUGTEST(gpConEmu->mb_FindBugMode,true))
+	{
+		//_ASSERTE(FALSE && "Strange 'ConEmuCInput not found' error");
+		RaiseTestException();
+	}
+
 	PostMessage(ghWnd, mn_MsgDisplayRConError, (WPARAM)apRCon, (LPARAM)pszErrMsg);
-#endif
 }
 
 bool CConEmuMain::PtDiffTest(POINT C, int aX, int aY, UINT D)
@@ -8167,7 +8405,7 @@ void CConEmuMain::OnWmHotkey(WPARAM wParam)
 		//// vmMinimizeRestore -> Win+C
 		//else if (gpConEmu->mn_MinRestoreRegistered && (int)wParam == gpConEmu->mn_MinRestoreRegistered)
 		//{
-		//	gpConEmu->OnMinimizeRestore();
+		//	gpConEmu->DoMinimizeRestore();
 		//}
 
 		for (size_t i = 0; i < countof(gRegisteredHotKeys); i++)
@@ -8178,13 +8416,13 @@ void CConEmuMain::OnWmHotkey(WPARAM wParam)
 				{
 				case vkMinimizeRestore:
 				case vkMinimizeRestor2:
-					OnMinimizeRestore();
+					DoMinimizeRestore();
 					break;
 				case vkGlobalRestore:
-					OnMinimizeRestore(sih_Show);
+					DoMinimizeRestore(sih_Show);
 					break;
 				case vkForceFullScreen:
-					OnForcedFullScreen(true);
+					DoForcedFullScreen(true);
 					break;
 				}
 				break;
@@ -8200,6 +8438,20 @@ void CConEmuMain::CtrlWinAltSpace()
 	{
 		VCon->RCon()->CtrlWinAltSpace(); // Toggle visibility
 	}
+}
+
+void CConEmuMain::DeleteVConMainThread(CVirtualConsole* apVCon)
+{
+	// We can't use SendMessage because of server thread blocking
+	DEBUGTEST(LRESULT lRc =)
+		PostMessage(ghWnd, mn_MsgDeleteVConMainThread, 0, (LPARAM)apVCon);
+	//if (!lRc)
+	//{
+	//	if (CVConGroup::isValid(apVCon))
+	//	{
+	//		apVCon->DeleteFromMainThread();
+	//	}
+	//}
 }
 
 // abRecreate: TRUE - пересоздать текущую, FALSE - создать новую
@@ -10283,6 +10535,16 @@ void CConEmuMain::EndSizing(UINT nMouseMsg/*=0*/)
 
 	if (!isIconic())
 	{
+		if (m_TileMode != cwc_Current)
+		{
+			wchar_t szTile[100], szOldTile[32];
+			_wsprintf(szTile, SKIPLEN(countof(szTile)) L"Tile mode was stopped on resizing: Was=%s, New=cwc_Current",
+				FormatTileMode(m_TileMode,szOldTile,countof(szOldTile)));
+			LogString(szTile);
+
+			m_TileMode = cwc_Current;
+		}
+
 		// Сама разберется, что надо/не надо
 		StoreNormalRect(NULL);
 		// Теоретически, в некоторых случаях размер окна может (?) измениться с задержкой,
@@ -10872,28 +11134,35 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Task(LPCWSTR asSource, wchar_t** ppszStar
 		}
 		else
 		{
-		for (int i = 0; (pGrp = gpSet->CmdTaskGet(i)) != NULL; i++)
-		{
-			if (lstrcmpi(pGrp->pszName, szName) == 0)
+			for (int i = 0; (pGrp = gpSet->CmdTaskGet(i)) != NULL; i++)
 			{
+				if (lstrcmpi(pGrp->pszName, szName) == 0)
+				{
 					break;
 				}
 			}
 		}
 		if (pGrp)
 		{
-				pszDataW = lstrdup(pGrp->pszCommands);
-				if (ppszStartupDir && !*ppszStartupDir && pGrp->pszGuiArgs)
+			pszDataW = lstrdup(pGrp->pszCommands);
+			if (ppszStartupDir && !*ppszStartupDir && pGrp->pszGuiArgs)
+			{
+				wchar_t* pszIcon = NULL;
+				pGrp->ParseGuiArgs(ppszStartupDir, &pszIcon);
+
+				if (pszIcon)
 				{
-					pGrp->ParseGuiArgs(ppszStartupDir, NULL);
+					SetWindowIcon(pszIcon);
+					SafeFree(pszIcon);
 				}
+			}
 		}
 
 		if (!pszDataW || !*pszDataW)
 		{
 			size_t cchMax = _tcslen(szName)+100;
 			wchar_t* pszErrMsg = (wchar_t*)calloc(cchMax,sizeof(*pszErrMsg));
-			_wsprintf(pszErrMsg, SKIPLEN(cchMax) L"Command group %s %s!\nStart default shell?",
+			_wsprintf(pszErrMsg, SKIPLEN(cchMax) L"Command group %s %s!\nChoose your shell?",
 				szName, pszDataW ? L"is empty" : L"not found");
 
 			int nBtn = MessageBox(pszErrMsg, MB_YESNO|MB_ICONEXCLAMATION);
@@ -10901,10 +11170,23 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Task(LPCWSTR asSource, wchar_t** ppszStar
 			SafeFree(pszErrMsg);
 			SafeFree(pszDataW);
 
-			if (nBtn != IDNO)
+			if (nBtn == IDYES)
 			{
 				LPCWSTR pszDefCmd = gpSetCls->GetDefaultCmd();
-				return lstrdup(pszDefCmd);
+
+				RConStartArgs args;
+				args.aRecreate = cra_EditTab;
+				if (pszDefCmd && *pszDefCmd)
+					args.pszSpecialCmd = lstrdup(pszDefCmd);
+
+				int nCreateRc = gpConEmu->RecreateDlg(&args);
+
+				if (nCreateRc == IDC_START)
+				{
+					wchar_t* pszNewCmd = args.CreateCommandLine();
+					return pszNewCmd;
+					//return lstrdup(pszDefCmd);
+				}
 			}
 			return NULL;
 		}
@@ -11036,7 +11318,9 @@ void CConEmuMain::PostCreate(BOOL abReceived/*=FALSE*/)
 		gpSet->CheckConsoleSettings();
 
 		if (gpSet->isShowBgImage)
+		{
 			gpSetCls->LoadBackgroundFile(gpSet->sBgImage);
+		}
 
 		// Перенес перед созданием консоли, чтобы не блокировать SendMessage
 		// (mp_DragDrop->Register() может быть относительно длительной операцией)
@@ -11226,7 +11510,7 @@ void CConEmuMain::PostCreate(BOOL abReceived/*=FALSE*/)
 				if (WindowStartTSA)
 				{
 					LogString(L"Set up {isMultiLeaveOnClose=1 && isMultiHideOnClose=1} due to WindowStartTSA");
-					_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1 && isMultiHideOnClose=1}");
+					//_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1 && isMultiHideOnClose=1}");
 					gpSet->isMultiLeaveOnClose = 1;
 					gpSet->isMultiHideOnClose = 1;
 				}
@@ -11614,7 +11898,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			if (!lbSkipQuakeActivation)
 			{
 				// Обработать клик по кнопке на таскбаре
-				OnMinimizeRestore(sih_ShowMinimize);
+				DoMinimizeRestore(sih_ShowMinimize);
 			}
 		}
 
@@ -11651,7 +11935,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 		{
 			if (!mb_IgnoreQuakeActivation)
 			{
-				OnMinimizeRestore(sih_Show);
+				DoMinimizeRestore(sih_Show);
 			}
 		}
 
@@ -11890,7 +12174,7 @@ LRESULT CConEmuMain::OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 		{
 			if (!mb_IgnoreQuakeActivation)
 			{
-				OnMinimizeRestore(sih_AutoHide);
+				DoMinimizeRestore(sih_AutoHide);
 			}
 		}
 		else if (!mn_ForceTimerCheckLoseFocus)
@@ -12432,7 +12716,7 @@ void CConEmuMain::OnTaskbarSettingsChanged()
 	apiSetForegroundWindow(ghOpWnd ? ghOpWnd : ghWnd);
 }
 
-void CConEmuMain::OnAltEnter()
+void CConEmuMain::DoFullScreen()
 {
 	if (mp_Inside)
 	{
@@ -12450,17 +12734,79 @@ void CConEmuMain::OnAltEnter()
 		gpConEmu->SetWindowMode(gpConEmu->isWndNotFSMaximized ? wmMaximized : wmNormal);
 }
 
-void CConEmuMain::OnAltF9(BOOL abPosted/*=FALSE*/)
+bool CConEmuMain::DoMaximizeWidthHeight(bool bWidth, bool bHeight)
 {
+	RECT rcWnd, rcNewWnd;
+	GetWindowRect(ghWnd, &rcWnd);
+	rcNewWnd = rcWnd;
+	MONITORINFO mon = {sizeof(MONITORINFO)};
+
+	if (bWidth)
+	{
+		// найти новую левую границу
+		POINT pt = {rcWnd.left,((rcWnd.top+rcWnd.bottom)>>2)};
+		HMONITOR hMonLeft = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+
+		if (!GetMonitorInfo(hMonLeft, &mon))
+			return false;
+
+		rcNewWnd.left = mon.rcWork.left;
+		// найти новую правую границу
+		pt.x = rcWnd.right;
+		HMONITOR hMonRight = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+
+		if (hMonRight != hMonLeft)
+			if (!GetMonitorInfo(hMonRight, &mon))
+				return false;
+
+		rcNewWnd.right = mon.rcWork.right;
+
+		//// Скорректировать границы на ширину рамки
+		//RECT rcFrame = CalcMargins(CEM_FRAMECAPTION);
+		//rcNewWnd.left -= rcFrame.left;
+		//rcNewWnd.right += rcFrame.right;
+	}
+	
+	if (bHeight)
+	{
+		// найти новую верхнюю границу
+		POINT pt = {((rcWnd.left+rcWnd.right)>>2),rcWnd.top};
+		HMONITOR hMonTop = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+
+		if (!GetMonitorInfo(hMonTop, &mon))
+			return false;
+
+		rcNewWnd.top = mon.rcWork.top;
+		// найти новую нижнюю границу
+		pt.y = rcWnd.bottom;
+		HMONITOR hMonBottom = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+
+		if (hMonBottom != hMonTop)
+			if (!GetMonitorInfo(hMonBottom, &mon))
+				return false;
+
+		rcNewWnd.bottom = mon.rcWork.bottom;
+
+		//// Скорректировать границы на ширину рамки
+		//RECT rcFrame = CalcMargins(CEM_FRAMECAPTION);
+		//rcNewWnd.top -= rcFrame.bottom; // т.к. в top учтена высота заголовка
+		//rcNewWnd.bottom += rcFrame.bottom;
+	}
+
+	// Двигаем окошко
+	if (rcNewWnd.left != rcWnd.left || rcNewWnd.right != rcWnd.right || rcNewWnd.top != rcWnd.top || rcNewWnd.bottom != rcWnd.bottom)
+		MOVEWINDOW(ghWnd, rcNewWnd.left, rcNewWnd.top, rcNewWnd.right-rcNewWnd.left, rcNewWnd.bottom-rcNewWnd.top, 1);
+
+	return true;
+}
+
+void CConEmuMain::DoMaximizeRestore()
+{
+	// abPosted - removed, all calls was as TRUE
+
 	if (mp_Inside)
 	{
 		_ASSERTE(FALSE && "Must not change mode in the Inside mode");
-		return;
-	}
-
-	if (!abPosted)
-	{
-		PostMessage(ghWnd, gpConEmu->mn_MsgPostAltF9, 0, 0);
 		return;
 	}
 
@@ -12621,7 +12967,7 @@ bool CConEmuMain::InMinimizing()
 	return false;
 }
 
-void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= sih_None*/)
+void CConEmuMain::DoMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= sih_None*/)
 {
 	if (mp_Inside)
 		return;
@@ -12636,7 +12982,7 @@ void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= 
 	BOOL bVis = IsWindowVisible(ghWnd);
 
 	wchar_t szInfo[120];
-	_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"OnMinimizeRestore(%i) Fore=x%08X Our=%u Iconic=%u Vis=%u",
+	_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"DoMinimizeRestore(%i) Fore=x%08X Our=%u Iconic=%u Vis=%u",
 		ShowHideType, (DWORD)hCurForeground, bIsForeground, bIsIconic, bVis);
 	LogFocusInfo(szInfo);
 
@@ -12649,7 +12995,7 @@ void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= 
 				DWORD nDelay = GetTickCount() - mn_LastQuakeShowHide;
 				if (nDelay < QUAKE_FOCUS_CHECK_TIMER_DELAY)
 				{
-					_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"OnMinimizeRestore skipped, delay was %u ms", nDelay);
+					_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"DoMinimizeRestore skipped, delay was %u ms", nDelay);
 					LogFocusInfo(szInfo);
 					return;
 				}
@@ -12763,25 +13109,25 @@ void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= 
 		switch (cmd)
 		{
 		case sih_None:
-			LogFocusInfo(L"OnMinimizeRestore(sih_None)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_None)"); break;
 		case sih_ShowMinimize:
-			LogFocusInfo(L"OnMinimizeRestore(sih_ShowMinimize)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_ShowMinimize)"); break;
 		case sih_ShowHideTSA:
-			LogFocusInfo(L"OnMinimizeRestore(sih_ShowHideTSA)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_ShowHideTSA)"); break;
 		case sih_Show:
-			LogFocusInfo(L"OnMinimizeRestore(sih_Show)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_Show)"); break;
 		case sih_SetForeground:
-			LogFocusInfo(L"OnMinimizeRestore(sih_SetForeground)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_SetForeground)"); break;
 		case sih_HideTSA:
-			LogFocusInfo(L"OnMinimizeRestore(sih_HideTSA)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_HideTSA)"); break;
 		case sih_Minimize:
-			LogFocusInfo(L"OnMinimizeRestore(sih_Minimize)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_Minimize)"); break;
 		case sih_AutoHide:
-			LogFocusInfo(L"OnMinimizeRestore(sih_AutoHide)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_AutoHide)"); break;
 		case sih_QuakeShowHide:
-			LogFocusInfo(L"OnMinimizeRestore(sih_QuakeShowHide)"); break;
+			LogFocusInfo(L"DoMinimizeRestore(sih_QuakeShowHide)"); break;
 		default:
-			LogFocusInfo(L"OnMinimizeRestore(Unknown cmd)");
+			LogFocusInfo(L"DoMinimizeRestore(Unknown cmd)");
 		}
 	}
 
@@ -12939,7 +13285,7 @@ void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= 
 		if (GetActiveVCon(&VCon) >= 0)
 		{
 			VCon->PostRestoreChildFocus();
-			//gpConEmu->OnFocus(ghWnd, WM_ACTIVATEAPP, TRUE, 0, L"From OnMinimizeRestore(sih_Show)");
+			//gpConEmu->OnFocus(ghWnd, WM_ACTIVATEAPP, TRUE, 0, L"From DoMinimizeRestore(sih_Show)");
 		}
 
 		if (bIsIconic)
@@ -12966,7 +13312,7 @@ void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= 
 				setFocus();
 				apiSetForegroundWindow(ghWnd);
 			}
-			//TODO: Тут наверное нужно выйти и позвать Post для OnMinimizeRestore(cmd)
+			//TODO: Тут наверное нужно выйти и позвать Post для DoMinimizeRestore(cmd)
 			//TODO: иначе при сворачивании не активируется "следующее" окно, фокус ввода
 			//TODO: остается в дочернем Notepad (ввод текста идет в него)
 		}
@@ -13099,15 +13445,16 @@ void CConEmuMain::OnMinimizeRestore(SingleInstanceShowHideType ShowHideType /*= 
 	}
 
 	mn_LastQuakeShowHide = GetTickCount();
-	LogFocusInfo(L"OnMinimizeRestore finished");
+	LogFocusInfo(L"DoMinimizeRestore finished");
 
 	bInFunction = false;
  }
 
-void CConEmuMain::OnForcedFullScreen(bool bSet /*= true*/)
+void CConEmuMain::DoForcedFullScreen(bool bSet /*= true*/)
 {
 	static bool bWasSetTopMost = false;
 
+	// определить возможность перейти в текстовый FullScreen
 	if (!bSet)
 	{
 		// Снять флаг "OnTop", вернуть нормальные приоритеты процессам
@@ -13120,26 +13467,26 @@ void CConEmuMain::OnForcedFullScreen(bool bSet /*= true*/)
 		return;
 	}
 
-	TODO("Пока глюкавит - не открываем");
-#if 0
-	// определить возможность перейти в текстовый FullScreen
-	if (!IsWindows64())
+	if (IsHwFullScreenAvailable())
 	{
-		//BOOL WINAPI SetConsoleDisplayMode(HANDLE hConsoleOutput, DWORD dwFlags, PCOORD lpNewScreenBufferDimensions);
-		if (mp_ VActive && mp_ VActive->RCon())
-		{
-			if (!isIconic())
-				SendMessage(ghWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
 
-			CVConGuard guard(mp_ VActive);
-			if (mp_ VActive->RCon()->SetFullScreen())
+		CVConGuard VCon;
+		if (CVConGroup::GetActiveVCon(&VCon) >= 0)
+		{
+			//BOOL WINAPI SetConsoleDisplayMode(HANDLE hConsoleOutput, DWORD dwFlags, PCOORD lpNewScreenBufferDimensions);
+			//if (!isIconic())
+			//	SendMessage(ghWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+
+			::ShowWindow(ghWnd, SW_SHOWMINNOACTIVE);
+
+			bool bFRc = VCon->RCon()->SetFullScreen();
+
+			if (bFRc)
 				return;
 
 			SendMessage(ghWnd, WM_SYSCOMMAND, SC_RESTORE, 0);
 		}
 	}
-#endif
-
 
 	if (gpSet->isDesktopMode)
 	{
@@ -13602,7 +13949,7 @@ LRESULT CConEmuMain::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPa
 			//{
 			//	if (messg == WM_KEYUP)
 			//	{
-			//		OnMinimizeRestore(sih_Minimize);
+			//		DoMinimizeRestore(sih_Minimize);
 			//	}
 			//}
 		}
@@ -13648,7 +13995,7 @@ void CConEmuMain::OnConsoleKey(WORD vk, LPARAM Mods)
 		_ASSERTE(vk != VK_RETURN);
 		if (!gpSet->isSendAltEnter)
 		{
-			OnAltEnter();
+			DoFullScreen();
 			return;
 		}
 	}
@@ -15860,63 +16207,7 @@ BOOL CConEmuMain::OnMouse_NCBtnDblClk(HWND hWnd, UINT& messg, WPARAM wParam, LPA
 			return FALSE;
 		}
 
-		RECT rcWnd, rcNewWnd;
-		GetWindowRect(ghWnd, &rcWnd);
-		rcNewWnd = rcWnd;
-		MONITORINFO mon = {sizeof(MONITORINFO)};
-
-		if (wParam == HTLEFT || wParam == HTRIGHT)
-		{
-			// найти новую левую границу
-			POINT pt = {rcWnd.left,((rcWnd.top+rcWnd.bottom)>>2)};
-			HMONITOR hMonLeft = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-
-			if (!GetMonitorInfo(hMonLeft, &mon))
-				return FALSE;
-
-			rcNewWnd.left = mon.rcWork.left;
-			// найти новую правую границу
-			pt.x = rcWnd.right;
-			HMONITOR hMonRight = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-
-			if (hMonRight != hMonLeft)
-				if (!GetMonitorInfo(hMonRight, &mon))
-					return FALSE;
-
-			rcNewWnd.right = mon.rcWork.right;
-			// Скорректировать границы на ширину рамки
-			RECT rcFrame = CalcMargins(CEM_FRAMECAPTION);
-			rcNewWnd.left -= rcFrame.left;
-			rcNewWnd.right += rcFrame.right;
-		}
-		else if (wParam == HTTOP || wParam == HTBOTTOM)
-		{
-			// найти новую верхнюю границу
-			POINT pt = {((rcWnd.left+rcWnd.right)>>2),rcWnd.top};
-			HMONITOR hMonTop = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-
-			if (!GetMonitorInfo(hMonTop, &mon))
-				return FALSE;
-
-			rcNewWnd.top = mon.rcWork.top;
-			// найти новую нижнюю границу
-			pt.y = rcWnd.bottom;
-			HMONITOR hMonBottom = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-
-			if (hMonBottom != hMonTop)
-				if (!GetMonitorInfo(hMonBottom, &mon))
-					return FALSE;
-
-			rcNewWnd.bottom = mon.rcWork.bottom;
-			// Скорректировать границы на ширину рамки
-			RECT rcFrame = CalcMargins(CEM_FRAMECAPTION);
-			rcNewWnd.top -= rcFrame.bottom; // т.к. в top учтена высота заголовка
-			rcNewWnd.bottom += rcFrame.bottom;
-		}
-
-		// Двигаем окошко
-		if (rcNewWnd.left != rcWnd.left || rcNewWnd.right != rcWnd.right || rcNewWnd.top != rcWnd.top || rcNewWnd.bottom != rcWnd.bottom)
-			MOVEWINDOW(ghWnd, rcNewWnd.left, rcNewWnd.top, rcNewWnd.right-rcNewWnd.left, rcNewWnd.bottom-rcNewWnd.top, 1);
+		DoMaximizeWidthHeight( (wParam == HTLEFT || wParam == HTRIGHT), (wParam == HTTOP || wParam == HTBOTTOM) );
 
 		return TRUE;
 	}
@@ -16101,7 +16392,7 @@ void CConEmuMain::CheckFocus(LPCWSTR asFrom)
 
 void CConEmuMain::CheckUpdates(BOOL abShowMessages)
 {
-	if (gpConEmu->mb_MingwMode)
+	if (!gpConEmu->isUpdateAllowed())
 		return;
 
 	_ASSERTE(isMainThread());
@@ -16739,6 +17030,7 @@ INT_PTR CConEmuMain::aboutProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPa
 		{L"Command line", pCmdLine},
 		{L"Macro", pGuiMacro},
 		{L"Console", pConsoleHelpFull},
+		{L"-new_console", pNewConsoleHelpFull},
 		{L"DosBox", pDosBoxHelpFull},
 		{L"Contributors", pAboutContributors},
 		{L"License", pAboutLicense},
@@ -17029,6 +17321,17 @@ void CConEmuMain::OnInfo_ReportBug()
 
 void CConEmuMain::OnInfo_ReportCrash(LPCWSTR asDumpWasCreatedMsg)
 {
+	if (m_DbgInfo.nLastCrashReported)
+	{
+		// if previous gsReportCrash was opened less than 60 sec ago
+		DWORD nLast = GetTickCount() - m_DbgInfo.nLastCrashReported;
+		if (nLast < 60000)
+		{
+			// Skip this time
+			return;
+		}
+	}
+
 	if (asDumpWasCreatedMsg && !*asDumpWasCreatedMsg)
 	{
 		asDumpWasCreatedMsg = NULL;
@@ -17043,6 +17346,8 @@ void CConEmuMain::OnInfo_ReportCrash(LPCWSTR asDumpWasCreatedMsg)
 	{
 		MessageBox(asDumpWasCreatedMsg, MB_OK|MB_ICONEXCLAMATION|MB_SYSTEMMODAL);
 	}
+
+	m_DbgInfo.nLastCrashReported = GetTickCount();
 }
 
 void CConEmuMain::OnInfo_ThrowTrapException(bool bMainThread)
@@ -17447,11 +17752,13 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 	if (mh_ConEmuAliveEvent && !mb_ConEmuAliveOwned)
 		isFirstInstance(); // Заодно и проверит...
 
+	#ifndef APPDISTINCTBACKGROUND
 	// Если был изменен файл background
 	if (gpSetCls->PollBackgroundFile())
 	{
 		gpConEmu->Update(true);
 	}
+	#endif
 
 	if (mp_Menu->GetTrackMenuPlace() != tmp_None && mp_Tip)
 	{
@@ -17731,6 +18038,9 @@ void CConEmuMain::OnVConCreated(CVirtualConsole* apVCon, const RConStartArgs *ar
 {
 	SetScClosePending(false); // сброс
 
+	// Если ConEmu не был закрыт после закрытия всех табов, и запущен новый таб...
+	gpSet->ResetSavedOnExit();
+
 	CVConGroup::OnVConCreated(apVCon, args);
 }
 
@@ -18002,10 +18312,8 @@ LRESULT CConEmuMain::MainWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lP
 
 	if (hWnd == ghWnd)
 		result = gpConEmu->WndProc(hWnd, messg, wParam, lParam);
-	else //if (hWnd == 'ghWnd DC')
+	else
 		result = CConEmuChild::ChildWndProc(hWnd, messg, wParam, lParam);
-	//else if (messg)
-	//	result = DefWindowProc(hWnd, messg, wParam, lParam);
 
 	return result;
 }
@@ -18599,6 +18907,7 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			{
 				ShutdownGuiStep(L"DestroyWindow");
 				//this->OnDestroy(hWnd);
+				_ASSERTE(hWnd == ghWnd);
 				DestroyWindow(hWnd);
 				return 0;
 			}
@@ -18681,10 +18990,10 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 					i = isVConValid(pVCon);
 					if (i >= 1)
 					{
-						CTab tab;
-						pVCon->RCon()->GetTab(0, tab);
-						wsprintf(szDbg+_tcslen(szDbg), L": #%i: ", i);
-						lstrcpyn(szDbg+_tcslen(szDbg), tab->Name.Ptr(), 128); // чтобы не вылезло из szDbg
+						ConEmuTab tab = {0};
+						pVCon->RCon()->GetTab(0, &tab);
+						tab.Name[128] = 0; // чтобы не вылезло из szDbg
+						wsprintf(szDbg+_tcslen(szDbg), L": #%i: %s", i, tab.Name);
 					}
 
 					lstrcat(szDbg, L"\n");
@@ -18793,7 +19102,7 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			}
 			else if (messg == this->mn_MsgPostAltF9)
 			{
-				OnAltF9(TRUE);
+				DoMaximizeRestore();
 				return 0;
 			}
 			else if (messg == this->mn_MsgInitInactiveDC)
@@ -18899,6 +19208,18 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			{
 				this->mp_RunQueue->ProcessRunQueue(true);
 				return 0;
+			}
+			else if (messg == this->mn_MsgDeleteVConMainThread)
+			{
+				// Танцы с бубном, если последний Release() пришелся в фоновом потоке
+				LRESULT lDelRc = 0;
+				CVirtualConsole* pVCon = (CVirtualConsole*)lParam;
+				if (CVConGroup::isValid(pVCon))
+				{
+					pVCon->DeleteFromMainThread();
+					lDelRc = 1;
+				}
+				return lDelRc;
 			}
 
 			//else if (messg == this->mn_MsgCmdStarted || messg == this->mn_MsgCmdStopped) {

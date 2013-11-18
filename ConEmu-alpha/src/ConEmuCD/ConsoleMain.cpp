@@ -31,6 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef _DEBUG
 //  Раскомментировать, чтобы сразу после запуска процесса (conemuc.exe) показать MessageBox, чтобы прицепиться дебаггером
 //	#define SHOW_STARTED_MSGBOX
+//	#define SHOW_MAIN_MSGBOX
 //	#define SHOW_ALTERNATIVE_MSGBOX
 //  #define SHOW_DEBUG_STARTED_MSGBOX
 //	#define SHOW_COMSPEC_STARTED_MSGBOX
@@ -41,7 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#define SHOW_EXITWAITKEY_MSGBOX
 //	#define SHOW_INJECT_MSGBOX
 //	#define SHOW_INJECTREM_MSGBOX
-//	#define SHOW_ATTACH_MSGBOX
+	#define SHOW_ATTACH_MSGBOX
 //  #define SHOW_ROOT_STARTED
 	#define WINE_PRINT_PROC_INFO
 //	#define USE_PIPE_DEBUG_BOXES
@@ -74,6 +75,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/ConsoleAnnotation.h"
 #include "../common/ConsoleRead.h"
 #include "../common/WinConsole.h"
+#include "../common/CmdLine.h"
 #include "ConsoleHelp.h"
 #include "Debugger.h"
 #include "UnicodeTest.h"
@@ -93,10 +95,6 @@ namespace PipeServerLogger
     Event g_events[BUFFER_SIZE];
     LONG g_pos = -1;
 }
-#endif
-
-#ifdef _DEBUG
-wchar_t gszDbgModLabel[6] = {0};
 #endif
 
 WARNING("!!!! Пока можно при появлении события запоминать текущий тик");
@@ -120,6 +118,7 @@ FGetConsoleKeyboardLayoutName pfnGetConsoleKeyboardLayoutName = NULL;
 FGetConsoleProcessList pfnGetConsoleProcessList = NULL;
 FDebugActiveProcessStop pfnDebugActiveProcessStop = NULL;
 FDebugSetProcessKillOnExit pfnDebugSetProcessKillOnExit = NULL;
+FGetConsoleDisplayMode pfnGetConsoleDisplayMode = NULL;
 
 
 /* Console Handles */
@@ -203,6 +202,7 @@ bool gbIsDBCS = false;
 
 
 SrvInfo* gpSrv = NULL;
+
 
 //#pragma pack(push, 1)
 //CESERVER_CONSAVE* gpStoredOutput = NULL;
@@ -718,7 +718,7 @@ extern "C" {
 #endif
 
 // Возвращает текст с информацией о пути к сохраненному дампу
-DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024]);
+// DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPWSTR pszComment = NULL);
 #include "../common/Dump.h"
 
 LPTOP_LEVEL_EXCEPTION_FILTER gpfnPrevExFilter = NULL;
@@ -773,6 +773,16 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 {
 	TODO("можно при ошибках показать консоль, предварительно поставив 80x25 и установив крупный шрифт");
 	
+	#ifdef SHOW_MAIN_MSGBOX
+	if (!IsDebuggerPresent())
+	{
+		char szMsg[MAX_PATH+128]; msprintf(szMsg, countof(szMsg), WIN3264TEST("ConEmuCD.dll","ConEmuCD64.dll") " loaded, PID=%u, TID=%u\r\n", GetCurrentProcessId(), GetCurrentThreadId());
+		int nMsgLen = lstrlenA(szMsg);
+		GetModuleFileNameA(NULL, szMsg+nMsgLen, countof(szMsg)-nMsgLen);
+		MessageBoxA(NULL, szMsg, "ConEmu server" WIN3264TEST(""," x64"), 0);
+	}
+	#endif
+
 	//WARNING("После создания AltServer - проверить в ConEmuCD все условия на RM_SERVER!!!");
 	//_ASSERTE(anWorkMode==FALSE);
 
@@ -916,6 +926,7 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 	{
 		pfnGetConsoleKeyboardLayoutName = (FGetConsoleKeyboardLayoutName)GetProcAddress(hKernel, "GetConsoleKeyboardLayoutNameW");
 		pfnGetConsoleProcessList = (FGetConsoleProcessList)GetProcAddress(hKernel, "GetConsoleProcessList");
+		pfnGetConsoleDisplayMode = (FGetConsoleDisplayMode)GetProcAddress(hKernel, "GetConsoleDisplayMode");
 	}
 
 
@@ -1181,6 +1192,14 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 	{
 		_ASSERTE(gnRunMode != RM_ALTSERVER);
 		nExitPlaceStep = 350;
+
+		// Process environment variables
+		wchar_t* pszExpandedCmd = ParseConEmuSubst(gpszRunCmd, true/*UpdateTitle*/);
+		if (pszExpandedCmd)
+		{
+			free(gpszRunCmd);
+			gpszRunCmd = pszExpandedCmd;
+		}
 
 		#ifdef _DEBUG
 		if (ghFarInExecuteEvent && wcsstr(gpszRunCmd,L"far.exe"))
@@ -1911,12 +1930,16 @@ wrap:
 	/* *** "Общее" завершение *** */
 	/* ************************** */
 
-	if (gpszPrevConTitle)
+	// Наверное, не нужно возвращать заголовок консоли в режиме сервера
+	if (gnRunMode == RM_COMSPEC)
 	{
-		if (ghConWnd)
-			SetConsoleTitleW(gpszPrevConTitle);
+		if (gpszPrevConTitle)
+		{
+			if (ghConWnd)
+				SetTitle(false, gpszPrevConTitle);
 
-		free(gpszPrevConTitle);
+			free(gpszPrevConTitle);
+		}
 	}
 
 	SafeCloseHandle(ghRootProcessFlag);
@@ -2123,6 +2146,7 @@ void Help()
 {
 	PrintVersion();
 	_wprintf(pConsoleHelp);
+	_wprintf(pNewConsoleHelp);
 	
 	//_printf(
 	//	    "This is a console part of ConEmu product.\n"
@@ -2697,18 +2721,9 @@ int DoInjectHooks(LPWSTR asCmdArg)
 	LPWSTR pszEnd = NULL;
 	BOOL lbForceGui = FALSE;
 	PROCESS_INFORMATION pi = {NULL};
+
+
 	pi.hProcess = (HANDLE)wcstoul(pszNext, &pszEnd, 16);
-
-
-	#ifdef SHOW_INJECT_MSGBOX
-	wchar_t szDbgMsg[512], szTitle[128];
-	PROCESSENTRY32 pinf;
-	GetProcessInfo(nRemotePID, &pinf);
-	swprintf_c(szTitle, SKIPLEN(countof(szTitle)) L"ConEmuCD PID=%u", GetCurrentProcessId());
-	swprintf_c(szDbgMsg, SKIPLEN(countof(szDbgMsg)) L"InjectsTo PID=%s {%s}\nConEmuCD PID=%u", asCmdArg ? asCmdArg : L"", pinf.szExeFile, GetCurrentProcessId());
-	MessageBoxW(NULL, szDbgMsg, szTitle, MB_SYSTEMMODAL);
-	#endif
-
 
 	if (pi.hProcess && pszEnd && *pszEnd)
 	{
@@ -2734,6 +2749,17 @@ int DoInjectHooks(LPWSTR asCmdArg)
 		lbForceGui = wcstoul(pszNext, &pszEnd, 10);
 	}
 	
+
+	#ifdef SHOW_INJECT_MSGBOX
+	wchar_t szDbgMsg[512], szTitle[128];
+	PROCESSENTRY32 pinf;
+	GetProcessInfo(pi.dwProcessId, &pinf);
+	swprintf_c(szTitle, SKIPLEN(countof(szTitle)) L"ConEmuCD PID=%u", GetCurrentProcessId());
+	swprintf_c(szDbgMsg, SKIPLEN(countof(szDbgMsg)) L"InjectsTo PID=%s {%s}\nConEmuCD PID=%u", asCmdArg ? asCmdArg : L"", pinf.szExeFile, GetCurrentProcessId());
+	MessageBoxW(NULL, szDbgMsg, szTitle, MB_SYSTEMMODAL);
+	#endif
+
+
 	if (pi.hProcess && pi.hThread && pi.dwProcessId && pi.dwThreadId)
 	{
 		//BOOL gbLogProcess = FALSE;
@@ -2804,18 +2830,26 @@ int DoInjectRemote(LPWSTR asCmdArg, bool abDefTermOnly)
 		#endif
 
 		// Preparing Events
-		wchar_t szName[64]; HANDLE hEvent;
+		wchar_t szName[64]; HANDLE hEvent = NULL, hEventReady = NULL;
+		_wsprintf(szName, SKIPLEN(countof(szName)) CEDEFAULTTERMHOOK, nRemotePID);
 		if (!abDefTermOnly)
 		{
 			// When running in normal mode (NOT set up as default terminal)
 			// we need full initialization procedure, not a light one when hooking explorer.exe
-			_wsprintf(szName, SKIPLEN(countof(szName)) CEDEFAULTTERMHOOK, nRemotePID);
 			hEvent = OpenEvent(EVENT_MODIFY_STATE|SYNCHRONIZE, FALSE, szName);
 			if (hEvent)
 			{
 				ResetEvent(hEvent);
 				CloseHandle(hEvent);
 			}
+		}
+		else
+		{
+			hEvent = CreateEvent(LocalSecurity(), FALSE, FALSE, szName);
+			SetEvent(hEvent);
+			_wsprintf(szName, SKIPLEN(countof(szName)) CEDEFAULTTERMHOOKOK, nRemotePID);
+			hEventReady = CreateEvent(LocalSecurity(), FALSE, FALSE, szName);
+			ResetEvent(hEventReady);
 		}
 		// Creating as remote thread, need to determine MainThread?
 		_wsprintf(szName, SKIPLEN(countof(szName)) CECONEMUROOTTHREAD, nRemotePID);
@@ -2827,28 +2861,51 @@ int DoInjectRemote(LPWSTR asCmdArg, bool abDefTermOnly)
 		}
 
 		int iHookRc = -1;
+		bool bAlreadyInjected = false;
 		// Hey, may be ConEmuHk.dll is already loaded?
 		HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, nRemotePID);
 		MODULEENTRY32 mi = {sizeof(mi)};
 		if (hSnap && Module32First(hSnap, &mi))
 		{
+			// 130829 - Let load newer(!) ConEmuHk.dll into target process.
+
 			LPCWSTR pszConEmuHk = WIN3264TEST(L"conemuhk.", L"conemuhk64.");
+			size_t nDllNameLen = lstrlen(pszConEmuHk);
+			// Out preferred module name
+			wchar_t szOurName[32] = {}, szVer[2] = {MVV_4a[0],0};
+			_wsprintf(szOurName, SKIPLEN(countof(szOurName))
+				CEDEFTERMDLLFORMAT /*L"ConEmuHk%s.%02u%02u%02u%s.dll"*/,
+				WIN3264TEST(L"",L"64"), MVV_1, MVV_2, MVV_3, szVer);
+			CharLowerBuff(szOurName, lstrlen(szOurName));
+
+			// Go to enumeration
+			wchar_t szName[64];
 			do {
 				LPCWSTR pszName = PointToName(mi.szModule);
 				// Name of hooked module may be changed (copied to %APPDATA%)
 				if (pszName && *pszName)
 				{
-					wchar_t szName[64]; lstrcpyn(szName, pszName, countof(szName));
+					lstrcpyn(szName, pszName, countof(szName));
 					CharLowerBuff(szName, lstrlen(szName));
-					if (wmemcmp(szName, pszConEmuHk, lstrlen(pszConEmuHk)) == 0
+					// ConEmuHk*.*.dll?
+					if (wmemcmp(szName, pszConEmuHk, nDllNameLen) == 0
 						&& wmemcmp(szName+lstrlen(szName)-4, L".dll", 4) == 0)
 					{
 						// Yes! ConEmuHk.dll already loaded into nRemotePID!
-						iHookRc = 0;
+						// But what is the version? Let don't downgrade loaded version!
+						if (lstrcmp(szName, szOurName) >= 0)
+						{
+							// OK, szName is newer or equal to our build
+							iHookRc = 0;
+							bAlreadyInjected = true;
+						}
+						// Stop enumeration
 						break;
 					}
 				}
 			} while (Module32Next(hSnap, &mi));
+
+			// Check done
 		}
 		SafeCloseHandle(hSnap);
 
@@ -2857,11 +2914,23 @@ int DoInjectRemote(LPWSTR asCmdArg, bool abDefTermOnly)
 		if (iHookRc == -1)
 		{
 			iHookRc = InjectRemote(nRemotePID, abDefTermOnly);
+			// Дождаться, пока поток стартует и можно будет закрыть hEventReady
+			if ((iHookRc == 0) && hEventReady)
+			{
+				DWORD nWaitReady = WaitForSingleObject(hEventReady, CEDEFAULTTERMHOOKWAIT);
+				if (nWaitReady == WAIT_TIMEOUT)
+				{
+					iHookRc = -300; // Failed to start hooking thread in remote process
+				}
+			}
 		}
+
+		SafeCloseHandle(hEvent);
+		SafeCloseHandle(hEventReady);
 
 		if (iHookRc == 0)
 		{
-			return CERR_HOOKS_WAS_SET;
+			return bAlreadyInjected ? CERR_HOOKS_WAS_ALREADY_SET : CERR_HOOKS_WAS_SET;
 		}
 
 		// Ошибку (пока во всяком случае) лучше показать, для отлова возможных проблем
@@ -2897,8 +2966,8 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	MArray<ProcInfo> List;
 	LPWSTR pszAllVars = NULL, pszSrc;
 	CESERVER_REQ *pIn = NULL;
-	DWORD nPID = GetCurrentProcessId();
-	DWORD nParentPID;
+	const DWORD nSelfPID = GetCurrentProcessId();
+	DWORD nTestPID, nParentPID;
 	DWORD nSrvPID = 0;
 	CESERVER_CONSOLE_MAPPING_HDR test = {};
 	BOOL lbMapExist = false;
@@ -2996,6 +3065,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 				goto wrap;
 			}
 
+			bool bFound = false;
 			size_t cchLeft = cchMaxEnvLen - 1;
 			// Loop through variable names
 			pszSrc = pszAllVars;
@@ -3028,9 +3098,29 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 					pszBuffer += cchAdd;
 					_ASSERTE(*pszBuffer == 0);
 					cchLeft -= cchAdd;
+					bFound = true;
 				}
 				*pszEq = L'=';
 				pszSrc = pszNext;
+
+				// continue scan, only if it is a mask
+				if (bFound && !wcschr(szTest, L'*'))
+					break;
+			} // end of 'while (*pszSrc)'
+
+			if (!bFound && !wcschr(szTest, L'*'))
+			{
+				// To avoid "nothing to export"
+				size_t cchAdd = lstrlen(szTest) + 1;
+				if (cchAdd < cchLeft)
+				{
+					// Copy "Name\0\0"
+					wmemmove(pszBuffer, szTest, cchAdd);
+					cchAdd++; // We need second zero after a Name
+					pszBuffer += cchAdd;
+					cchLeft -= cchAdd;
+					_ASSERTE(*pszBuffer == 0);
+				}
 			}
 		}
 	}
@@ -3068,7 +3158,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	}
 
 	// Go, build tree (first step - query all running PIDs in the system)
-	nParentPID = nPID;
+	nParentPID = nSelfPID;
 	h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (h && (h != INVALID_HANDLE_VALUE))
 	{
@@ -3076,7 +3166,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 		if (Process32First(h, &PI))
 		{
 			do {
-				if (PI.th32ProcessID == nPID)
+				if (PI.th32ProcessID == nSelfPID)
 				{
 					// On the first step we'll get our parent process
 					nParentPID = PI.th32ParentProcessID;
@@ -3096,14 +3186,14 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	}
 
 	// Send to parents tree
-	if (!List.empty() && (nParentPID != nPID))
+	if (!List.empty() && (nParentPID != nSelfPID))
 	{
 		DWORD nOurParentPID = nParentPID;
 		// Loop while parent is found
 		bool bParentFound = true;
 		while (nParentPID != nSrvPID)
 		{
-			nPID = nParentPID;
+			nTestPID = nParentPID;
 			bParentFound = false;
 			// find next parent
 			INT_PTR i = 0;
@@ -3111,14 +3201,14 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 			while (i < nCount)
 			{
 				const ProcInfo& pi = List[i];
-				if (pi.nPID == nPID)
+				if (pi.nPID == nTestPID)
 				{
 					nParentPID = pi.nParentPID;
 					if (pi.Flags & 1)
 					{
 						// ConEmuC - пропустить
 						i = 0;
-						nPID = nParentPID;
+						nTestPID = nParentPID;
 						continue;
 					}
 					bParentFound = true;
@@ -3127,19 +3217,19 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 				i++;
 			}
 
-			if (nPID == nSrvPID)
+			if (nTestPID == nSrvPID)
 				break; // Fin, this is root server
-			if (bParentFound)
+			if (!bParentFound)
 				break; // Fin, no more parents
-
-			_ASSERTE(nPID != nOurParentPID);
+			if (nTestPID == nOurParentPID)
+				continue; // Useless, we just inherited ALL those variables from our parent
 
 			// Apply environment
-			CESERVER_REQ *pOut = ExecuteHkCmd(nPID, pIn, ghConWnd);
+			CESERVER_REQ *pOut = ExecuteHkCmd(nTestPID, pIn, ghConWnd);
 
 			if (!pOut && !bSilent)
 			{
-				_printf(ExpFailedPref " to PID=%u, check <Inject ConEmuHk>\n", nPID);
+				_printf(ExpFailedPref " to PID=%u, check <Inject ConEmuHk>\n", nTestPID);
 			}
 
 			ExecuteFreeResult(pOut);
@@ -3153,7 +3243,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 		if (!pOut)
 		{
 			if (!bSilent)
-				_printf(ExpFailedPref " to PID=%u, root server was terminated?\n", nPID);
+				_printf(ExpFailedPref " to PID=%u, root server was terminated?\n", nSrvPID);
 		}
 		else
 		{
@@ -3165,7 +3255,14 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	if ((eExecAction != ea_ExportCon) && lbMapExist && test.hConEmuRoot && IsWindow((HWND)test.hConEmuRoot))
 	{
 		if (eExecAction == ea_ExportAll)
+		{
 			pIn->hdr.nCmd = CECMD_EXPORTVARSALL;
+		}
+		else
+		{
+			_ASSERTE(pIn->hdr.nCmd == CECMD_EXPORTVARS);
+		}
+
 		ExecuteGuiCmd(ghConWnd, pIn, ghConWnd, TRUE);
 	}
 
@@ -3179,8 +3276,10 @@ wrap:
 	return iRc;
 }
 
-int DoGuiMacro(LPCWSTR asCmdArg)
+int DoGuiMacro(LPCWSTR asCmdArg, HWND hMacroInstance = NULL)
 {
+	HWND hCallWnd = hMacroInstance ? hMacroInstance : ghConWnd;
+
 	// Все что в asCmdArg - выполнить в Gui
 	int iRc = CERR_GUIMACRO_FAILED;
 	int nLen = lstrlen(asCmdArg);
@@ -3188,7 +3287,9 @@ int DoGuiMacro(LPCWSTR asCmdArg)
 	CESERVER_REQ *pIn = NULL, *pOut = NULL;
 	pIn = ExecuteNewCmd(CECMD_GUIMACRO, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_GUIMACRO)+nLen*sizeof(wchar_t));
 	lstrcpyW(pIn->GuiMacro.sMacro, asCmdArg);
-	pOut = ExecuteGuiCmd(ghConWnd, pIn, ghConWnd);
+
+	pOut = ExecuteGuiCmd(hCallWnd, pIn, ghConWnd);
+
 	if (pOut)
 	{
 		if (pOut->GuiMacro.nSucceeded)
@@ -3208,7 +3309,7 @@ int DoGuiMacro(LPCWSTR asCmdArg)
 	return iRc;
 }
 
-int DoExecAction(ConEmuExecAction eExecAction, LPCWSTR asCmdArg /* rest of cmdline */)
+int DoExecAction(ConEmuExecAction eExecAction, LPCWSTR asCmdArg /* rest of cmdline */, HWND hMacroInstance = NULL)
 {
 	int iRc = CERR_CARGUMENT;
 
@@ -3233,7 +3334,7 @@ int DoExecAction(ConEmuExecAction eExecAction, LPCWSTR asCmdArg /* rest of cmdli
 		}
 	case ea_GuiMacro:
 		{
-			iRc = DoGuiMacro(asCmdArg);
+			iRc = DoGuiMacro(asCmdArg, hMacroInstance);
 			break;
 		}
 	case ea_CheckUnicodeFont:
@@ -3255,6 +3356,196 @@ int DoExecAction(ConEmuExecAction eExecAction, LPCWSTR asCmdArg /* rest of cmdli
 	return iRc;
 }
 
+void SetWorkEnvVar()
+{
+	_ASSERTE(gnRunMode == RM_SERVER && !gbNoCreateProcess);
+	wchar_t szPath[MAX_PATH*2] = L"";
+	GetCurrentDirectory(countof(szPath), szPath);
+	SetEnvironmentVariable(ENV_CONEMUWORKDIR_VAR_W, szPath);
+
+	wchar_t szDrive[MAX_PATH];
+	SetEnvironmentVariable(ENV_CONEMUWORKDRIVE_VAR_W, GetDrive(szPath, szDrive, countof(szDrive)));
+	GetModuleFileName(ghOurModule, szPath, countof(szPath));
+	SetEnvironmentVariable(ENV_CONEMUDRIVE_VAR_W, GetDrive(szPath, szDrive, countof(szDrive)));
+}
+
+// 1. Заменить подстановки вида: !ConEmuHWND!, !ConEmuDrawHWND!, !ConEmuBackHWND!, !ConEmuWorkDir!
+// 2. Развернуть переменные окружения (PowerShell, например, не признает переменные в качестве параметров)
+wchar_t* ParseConEmuSubst(LPCWSTR asCmd, bool bUpdateTitle /*= false*/)
+{
+	if (!asCmd || !*asCmd)
+		return NULL;
+
+	// Другие имена нет смысла передавать через "!" вместо "%"
+	LPCWSTR szNames[] = {ENV_CONEMUHWND_VAR_W, ENV_CONEMUDRAW_VAR_W, ENV_CONEMUBACK_VAR_W, ENV_CONEMUWORKDIR_VAR_W};
+
+#ifdef _DEBUG
+	// Переменные уже должны быть определены!
+	for (size_t i = 0; i < countof(szNames); ++i)
+	{
+		LPCWSTR pszName = szNames[i];
+		wchar_t szDbg[MAX_PATH+1] = L"";
+		GetEnvironmentVariable(pszName, szDbg, countof(szDbg));
+		if (!*szDbg)
+		{
+			_ASSERTE(*szDbg && "Variables must be set already!");
+		}
+	}
+#endif
+
+	// Если ничего похожего нет, то и не дергаться
+	wchar_t szFind[] = L"!ConEmu";
+	bool bExclSubst = (StrStrI(asCmd, szFind) != NULL);
+	if (!bExclSubst && (wcschr(asCmd, L'%') == NULL))
+		return NULL;
+
+	//_ASSERTE(FALSE && "Continue to ParseConEmuSubst");
+
+	wchar_t* pszCmdCopy = NULL;
+
+	if (bExclSubst)
+	{
+		wchar_t* pszCmdCopy = lstrdup(asCmd);
+		if (!pszCmdCopy)
+			return NULL; // Ошибка выделения памяти вообще-то
+
+		for (size_t i = 0; i < countof(szNames); ++i)
+		{
+			wchar_t szName[64]; _wsprintf(szName, SKIPLEN(countof(szName)) L"!%s!", szNames[i]);
+			size_t iLen = lstrlen(szName);
+
+			wchar_t* pszStart = StrStrI(pszCmdCopy, szName);
+			if (!pszStart)
+				continue;
+			while (pszStart)
+			{
+				pszStart[0] = L'%';
+				pszStart[iLen-1] = L'%';
+
+				pszStart = StrStrI(pszStart+iLen, szName);
+			}
+		}
+
+		asCmd = pszCmdCopy;
+	}
+
+	wchar_t* pszExpand = ExpandEnvStr(asCmd);
+	if (bUpdateTitle && pszExpand)
+	{
+		BOOL lbNeedCutStartEndQuot = (pszExpand[0] == L'"');
+		UpdateConsoleTitle(pszExpand, /* IN/OUT */lbNeedCutStartEndQuot, false);
+	}
+
+	SafeFree(pszCmdCopy);
+	return pszExpand;
+}
+
+BOOL SetTitle(bool bExpandVars, LPCWSTR lsTitle)
+{
+	wchar_t* pszExpanded = (bExpandVars && lsTitle) ? ParseConEmuSubst(lsTitle, false) : NULL;
+	BOOL bRc = SetConsoleTitle(pszExpanded ? pszExpanded : lsTitle ? lsTitle : L"");
+	SafeFree(pszExpanded);
+	return bRc;
+}
+
+void UpdateConsoleTitle(LPCWSTR lsCmdLine, BOOL& lbNeedCutStartEndQuot, bool bExpandVars)
+{
+	// Сменим заголовок консоли
+	if (*lsCmdLine == L'"')
+	{
+		if (lsCmdLine[1])
+		{
+			wchar_t *pszTitle = gpszRunCmd;
+			wchar_t *pszEndQ = pszTitle + lstrlenW(pszTitle) - 1;
+
+			if (pszEndQ > (pszTitle+1) && *pszEndQ == L'"'
+			        && wcschr(pszTitle+1, L'"') == pszEndQ)
+			{
+				*pszEndQ = 0; pszTitle ++;
+				bool lbCont = true;
+
+				// "F:\Temp\1\ConsoleTest.exe ." - кавычки не нужны, после программы идут параметры
+				if (lbCont && (*pszTitle != L'"') && ((*(pszEndQ-1) == L'.') ||(*(pszEndQ-1) == L' ')))
+				{
+					LPCWSTR pwszCopy = pszTitle;
+					wchar_t szTemp[MAX_PATH+1];
+
+					if (NextArg(&pwszCopy, szTemp) == 0)
+					{
+						// В полученном пути к файлу (исполняемому) не должно быть пробелов?
+						if (!wcschr(szTemp, ' ') && IsFilePath(szTemp) && FileExists(szTemp))
+						{
+							lbCont = false;
+							lbNeedCutStartEndQuot = TRUE;
+						}
+					}
+				}
+
+				// "C:\Program Files\FAR\far.exe" - кавычки нужны, иначе не запустится
+				if (lbCont)
+				{
+					if (IsFilePath(pszTitle) && FileExists(pszTitle))
+					{
+						lbCont = false;
+						lbNeedCutStartEndQuot = FALSE;
+					}
+
+					//DWORD dwFileAttr = GetFileAttributes(pszTitle);
+					//if (dwFileAttr != INVALID_FILE_ATTRIBUTES && !(dwFileAttr & FILE_ATTRIBUTE_DIRECTORY))
+					//	lbNeedCutStartEndQuot = FALSE;
+					//else
+					//	lbNeedCutStartEndQuot = TRUE;
+				}
+			}
+			else
+			{
+				pszEndQ = NULL;
+			}
+
+			int nLen = 4096; //GetWindowTextLength(ghConWnd); -- KIS2009 гундит "Посылка оконного сообщения"...
+
+			if (nLen > 0)
+			{
+				gpszPrevConTitle = (wchar_t*)calloc(nLen+1,2);
+
+				if (gpszPrevConTitle)
+				{
+					if (!GetConsoleTitleW(gpszPrevConTitle, nLen+1))
+					{
+						free(gpszPrevConTitle); gpszPrevConTitle = NULL;
+					}
+				}
+			}
+
+			SetTitle(bExpandVars/*true*/, pszTitle);
+
+			if (pszEndQ) *pszEndQ = L'"';
+
+			return; // Done
+		}
+	}
+	
+	if (*lsCmdLine)
+	{
+		int nLen = 4096; //GetWindowTextLength(ghConWnd); -- KIS2009 гундит "Посылка оконного сообщения"...
+
+		if (nLen > 0)
+		{
+			gpszPrevConTitle = (wchar_t*)calloc(nLen+1,2);
+
+			if (gpszPrevConTitle)
+			{
+				if (!GetConsoleTitleW(gpszPrevConTitle, nLen+1))
+				{
+					free(gpszPrevConTitle); gpszPrevConTitle = NULL;
+				}
+			}
+		}
+
+		SetTitle(bExpandVars/*true*/, lsCmdLine);
+	}
+}
+
 // Разбор параметров командной строки
 int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackgroundTab*/)
 {
@@ -3268,7 +3559,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	wchar_t szArg[MAX_PATH+1] = {0}, szExeTest[MAX_PATH+1];
 	LPCWSTR pszArgStarts = NULL;
 	//wchar_t szComSpec[MAX_PATH+1] = {0};
-	LPCWSTR pwszCopy = NULL;
+	//LPCWSTR pwszCopy = NULL;
 	//wchar_t* psFilePart = NULL;
 	//BOOL bViaCmdExe = TRUE;
 	gbRunViaCmdExe = TRUE;
@@ -3276,12 +3567,14 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	gbRunInBackgroundTab = FALSE;
 	size_t nCmdLine = 0;
 	LPCWSTR pwszStartCmdLine = asCmdLine;
+	LPCWSTR lsCmdLine = asCmdLine;
 	BOOL lbNeedCutStartEndQuot = FALSE;
 
 	ConEmuStateCheck eStateCheck = ec_None;
 	ConEmuExecAction eExecAction = ea_None;
+	HWND hMacroInstance = NULL; // Special ConEmu instance for GUIMACRO
 
-	if (!asCmdLine || !*asCmdLine)
+	if (!lsCmdLine || !*lsCmdLine)
 	{
 		DWORD dwErr = GetLastError();
 		_printf("GetCommandLineW failed! ErrCode=0x%08X\n", dwErr);
@@ -3290,14 +3583,14 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 
 	#ifdef _DEBUG
 	// Для отлова запуска дебаггера
-	//_ASSERTE(wcsstr(asCmdLine, L"/DEBUGPID=")==0);
+	//_ASSERTE(wcsstr(lsCmdLine, L"/DEBUGPID=")==0);
 	#endif
 
 	gnRunMode = RM_UNDEFINED;
 
 	BOOL lbAttachGuiApp = FALSE;
 
-	while ((iRc = NextArg(&asCmdLine, szArg, &pszArgStarts)) == 0)
+	while ((iRc = NextArg(&lsCmdLine, szArg, &pszArgStarts)) == 0)
 	{
 		xf_check();
 
@@ -3324,31 +3617,66 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		if (wcsncmp(szArg, L"/REGCONFONT=", 12)==0)
 		{
 			eExecAction = ea_RegConFont;
-			asCmdLine = szArg+12;
+			lsCmdLine = szArg+12;
 			break;
 		}
 		else if (wcsncmp(szArg, L"/SETHOOKS=", 10) == 0)
 		{
 			eExecAction = ea_InjectHooks;
-			asCmdLine = szArg+10;
+			lsCmdLine = szArg+10;
 			break;
 		}
 		else if (wcsncmp(szArg, L"/INJECT=", 8) == 0)
 		{
 			eExecAction = ea_InjectRemote;
-			asCmdLine = szArg+8;
+			lsCmdLine = szArg+8;
 			break;
 		}
 		else if (wcsncmp(szArg, L"/DEFTRM=", 8) == 0)
 		{
 			eExecAction = ea_InjectDefTrm;
-			asCmdLine = szArg+8;
+			lsCmdLine = szArg+8;
 			break;
 		}
-		else if (lstrcmpi(szArg, L"/GUIMACRO")==0)
+		// /GUIMACRO[:PID|HWND] <Macro string>
+		else if (lstrcmpni(szArg, L"/GUIMACRO", 9) == 0)
 		{
-			// Все что в asCmdLine - выполнить в Gui
+			// Все что в lsCmdLine - выполнить в Gui
 			eExecAction = ea_GuiMacro;
+			// Могли указать PID или HWND требуемого инстанса
+			if (szArg[9] == L':' || szArg[9] == L'=')
+			{
+				wchar_t* pszID = szArg+10;
+				if (*pszID == L'0') pszID ++;
+				wchar_t* pszEnd;
+				if ((pszID[0] == L'0' && (pszID[1] == L'x' || pszID[1] == L'X'))
+					|| (pszID[0] == L'x' || pszID[0] == L'X'))
+				{
+					hMacroInstance = (HWND)(DWORD_PTR)wcstoul(pszID[0] == L'0' ? (pszID+2) : (pszID+1), &pszEnd, 16);
+				}
+				else
+				{
+					// Если тут передать "0" - то выполняем в первом попавшемся (наверное в верхнем окне ConEmu)
+					DWORD nPID = wcstoul(pszID+1, &pszEnd, 10);
+					HWND hFind = FindWindowEx(NULL, NULL, VirtualConsoleClassMain, NULL);
+					while (hFind)
+					{
+						DWORD nTestPID = 0; GetWindowThreadProcessId(hFind, &nTestPID);
+						if (nTestPID == nPID || !nPID)
+						{
+							hMacroInstance = hFind;
+							break;
+						}
+						hFind = FindWindowEx(NULL, hFind, VirtualConsoleClassMain, NULL);
+					}
+				}
+
+				if (hMacroInstance)
+				{
+					DWORD nGuiPID = 0; GetWindowThreadProcessId(hMacroInstance, &nGuiPID);
+					AllowSetForegroundWindow(nGuiPID);
+				}
+			}
 			break;
 		}
 		else if (lstrcmpi(szArg, L"/CHECKUNICODE")==0)
@@ -3358,6 +3686,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		}
 		else if (lstrcmpni(szArg, L"/EXPORT", 7)==0)
 		{
+			//_ASSERTE(FALSE && "Continue to export");
 			if (lstrcmpi(szArg, L"/EXPORT=ALL")==0 || lstrcmpi(szArg, L"/EXPORTALL")==0)
 				eExecAction = ea_ExportAll;
 			else if (lstrcmpi(szArg, L"/EXPORT=CON")==0 || lstrcmpi(szArg, L"/EXPORTCON")==0)
@@ -3472,14 +3801,21 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			pszStart = szArg+14;
 			gpSrv->dwParentFarPID = wcstoul(pszStart, &pszEnd, 10);
 		}
-		else if (wcsncmp(szArg, L"/PID=", 5)==0 || wcsncmp(szArg, L"/FARPID=", 8)==0 || wcsncmp(szArg, L"/CONPID=", 8)==0)
+		else if (wcsncmp(szArg, L"/PID=", 5)==0 || wcsncmp(szArg, L"/TRMPID=", 8)==0
+			|| wcsncmp(szArg, L"/FARPID=", 8)==0 || wcsncmp(szArg, L"/CONPID=", 8)==0)
 		{
 			gnRunMode = RM_SERVER;
-			gbNoCreateProcess = TRUE;
-			gbAlienMode = TRUE;
+			gbNoCreateProcess = TRUE; // Процесс УЖЕ запущен
+			gbAlienMode = TRUE; // Консоль создана НЕ нами
 			wchar_t* pszEnd = NULL, *pszStart;
 
-			if (wcsncmp(szArg, L"/FARPID=", 8)==0)
+			if (wcsncmp(szArg, L"/TRMPID=", 8)==0)
+			{
+				// This is called from *.vshost.exe when "AllocConsole" just created
+				gbDontInjectConEmuHk = TRUE;
+				pszStart = szArg+8;
+			}
+			else if (wcsncmp(szArg, L"/FARPID=", 8)==0)
 			{
 				gbAttachFromFar = TRUE;
 				gbRootIsCmdExe = FALSE;
@@ -3819,6 +4155,17 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 				_ASSERTE(FALSE);
 				return CERR_CARGUMENT;
 			}
+
+			if (pszEnd && (*pszEnd == L','))
+			{
+				gpSrv->DbgInfo.pDebugAttachProcesses = new MArray<DWORD>;
+				while (pszEnd && (*pszEnd == L','))
+				{
+					DWORD nPID = wcstoul(pszEnd+1, &pszEnd, 10);
+					if (nPID != 0)
+						gpSrv->DbgInfo.pDebugAttachProcesses->push_back(nPID);
+				}
+			}
 		}
 		else if (lstrcmpi(szArg, L"/DEBUGEXE")==0 || lstrcmpi(szArg, L"/DEBUGTREE")==0)
 		{
@@ -3896,7 +4243,8 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		else if (wcscmp(szArg, L"/ROOT")==0 || wcscmp(szArg, L"/root")==0)
 		{
 			gnRunMode = RM_SERVER; gbNoCreateProcess = FALSE;
-			break; // asCmdLine уже указывает на запускаемую программу
+			SetWorkEnvVar();
+			break; // lsCmdLine уже указывает на запускаемую программу
 		}
 		else if (lstrcmpi(szArg, L"/NOINJECT")==0)
 		{
@@ -3928,9 +4276,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			{
 				gnRunMode = RM_COMSPEC;
 				// Поддержка возможности "cmd /cecho xxx"
-				asCmdLine = pszArgStarts + 2;
-
-				while(*asCmdLine==L' ' || *asCmdLine==L'\t') asCmdLine++;
+				lsCmdLine = SkipNonPrintable(pszArgStarts + 2);
 			}
 
 			if (gnRunMode == RM_COMSPEC)
@@ -3938,7 +4284,14 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 				gpSrv->bK = (szArg[1] & ~0x20) == L'K';
 			}
 
-			break; // asCmdLine уже указывает на запускаемую программу
+			break; // lsCmdLine уже указывает на запускаемую программу
+		}
+		else
+		{
+			_ASSERTE(FALSE && "Unknown switch!");
+			_wprintf(L"Unknown switch: ");
+			_wprintf(szArg);
+			_wprintf(L"\r\n");
 		}
 	}
 
@@ -3955,7 +4308,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		}
 		else if (eExecAction)
 		{
-			iFRc = DoExecAction(eExecAction, asCmdLine);
+			iFRc = DoExecAction(eExecAction, lsCmdLine, hMacroInstance);
 		}
 
 		// И сразу на выход
@@ -3981,7 +4334,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		{
 			// Но это может быть все-таки наше окошко. Как проверить...
 			// Найдем первый параметр
-			LPCWSTR pszSlash = asCmdLine ? wcschr(asCmdLine, L'/') : NULL;
+			LPCWSTR pszSlash = lsCmdLine ? wcschr(lsCmdLine, L'/') : NULL;
 			if (pszSlash)
 			{
 				// И сравним с используемыми у нас. Возможно потом еще что-то добавить придется
@@ -4073,12 +4426,12 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	{
 		// Может просили открыть новую консоль?
 		int nArgLen = lstrlenA("-new_console");
-		pwszCopy = (wchar_t*)wcsstr(asCmdLine, L"-new_console");
+		LPCWSTR pwszCopy = (wchar_t*)wcsstr(lsCmdLine, L"-new_console");
 
 		// Если после -new_console идет пробел, или это вообще конец строки
 		// 111211 - после -new_console: допускаются параметры
 		if (pwszCopy
-			&& ((pwszCopy > asCmdLine) || (*(pwszCopy-1) == L' ') || (*(pwszCopy-1) == L'"'))
+			&& ((pwszCopy > lsCmdLine) || (*(pwszCopy-1) == L' ') || (*(pwszCopy-1) == L'"'))
 			&& (pwszCopy[nArgLen]==L' ' || pwszCopy[nArgLen]==L':' || pwszCopy[nArgLen]==0
 		         || (pwszCopy[nArgLen]==L'"' || pwszCopy[nArgLen+1]==0)))
 		{
@@ -4106,13 +4459,13 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 
 				int iNewConRc = CERR_RUNNEWCONSOLE;
 
-				DWORD nCmdLen = lstrlen(asCmdLine);
+				DWORD nCmdLen = lstrlen(lsCmdLine);
 				CESERVER_REQ* pIn = ExecuteNewCmd(CECMD_NEWCMD, sizeof(CESERVER_REQ_HDR)+sizeof(CESERVER_REQ_NEWCMD)+(nCmdLen*sizeof(wchar_t)));
 				if (pIn)
 				{
 					pIn->NewCmd.hFromConWnd = ghConWnd;
 					GetCurrentDirectory(countof(pIn->NewCmd.szCurDir), pIn->NewCmd.szCurDir);
-					lstrcpyn(pIn->NewCmd.szCommand, asCmdLine, nCmdLen+1);
+					lstrcpyn(pIn->NewCmd.szCommand, lsCmdLine, nCmdLen+1);
 
 					CESERVER_REQ* pOut = ExecuteGuiCmd(hConEmu, pIn, ghConWnd);
 					if (pOut)
@@ -4140,9 +4493,9 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			}
 		}
 
-		//pwszCopy = asCmdLine;
+		//pwszCopy = lsCmdLine;
 		//if ((iRc = NextArg(&pwszCopy, szArg)) != 0) {
-		//    wprintf (L"Parsing command line failed:\n%s\n", asCmdLine);
+		//    wprintf (L"Parsing command line failed:\n%s\n", lsCmdLine);
 		//    return iRc;
 		//}
 		//pwszCopy = wcsrchr(szArg, L'\\'); if (!pwszCopy) pwszCopy = szArg;
@@ -4158,7 +4511,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 
 	LPCWSTR pszArguments4EnvVar = NULL;
 
-	if (gnRunMode == RM_COMSPEC && (!asCmdLine || !*asCmdLine))
+	if (gnRunMode == RM_COMSPEC && (!lsCmdLine || !*lsCmdLine))
 	{
 		if (gpSrv->bK)
 		{
@@ -4177,9 +4530,9 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	{
 		BOOL bAlwaysConfirmExit = gbAlwaysConfirmExit, bAutoDisableConfirmExit = gbAutoDisableConfirmExit;
 
-		gpszCheck4NeedCmd = asCmdLine; // Для отладки
+		gpszCheck4NeedCmd = lsCmdLine; // Для отладки
 
-		gbRunViaCmdExe = IsNeedCmd(asCmdLine, &pszArguments4EnvVar, &lbNeedCutStartEndQuot, szExeTest, 
+		gbRunViaCmdExe = IsNeedCmd((gnRunMode == RM_SERVER), lsCmdLine, &pszArguments4EnvVar, &lbNeedCutStartEndQuot, szExeTest, 
 			gbRootIsCmdExe, bAlwaysConfirmExit, bAutoDisableConfirmExit);
 
 		if (gnConfirmExitParm == 0)
@@ -4195,7 +4548,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	// Для них нельзя отключать редиректор (wow.Disable()), иначе SysNative будет недоступен
 	if (IsWindows64())
 	{
-		LPCWSTR pszTest = asCmdLine;
+		LPCWSTR pszTest = lsCmdLine;
 		wchar_t szApp[MAX_PATH+1];
 
 		if (NextArg(&pszTest, szApp) == 0)
@@ -4228,7 +4581,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	}
 
 #endif
-	nCmdLine = lstrlenW(asCmdLine);
+	nCmdLine = lstrlenW(lsCmdLine);
 
 	if (!gbRunViaCmdExe)
 	{
@@ -4248,7 +4601,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		{
 			// Только если это (случайно) не conemuc.exe
 			//pwszCopy = wcsrchr(gszComSpec, L'\\'); if (!pwszCopy) pwszCopy = gszComSpec;
-			pwszCopy = PointToName(gszComSpec);
+			LPCWSTR pwszCopy = PointToName(gszComSpec);
 #ifndef __GNUC__
 #pragma warning( push )
 #pragma warning(disable : 6400)
@@ -4281,7 +4634,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		nCmdLine += lstrlenW(gszComSpec)+15; // "/C", кавычки и возможный "/U"
 	}
 
-	size_t nCchLen = nCmdLine+1; // nCmdLine учитывает длинну asCmdLine + gszComSpec + еще чуть-чуть на "/C" и прочее
+	size_t nCchLen = nCmdLine+1; // nCmdLine учитывает длинну lsCmdLine + gszComSpec + еще чуть-чуть на "/C" и прочее
 	gpszRunCmd = (wchar_t*)calloc(nCchLen,2);
 
 	if (!gpszRunCmd)
@@ -4307,102 +4660,14 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	}
 	else
 	{
-		_wcscpy_c(gpszRunCmd, nCchLen, asCmdLine);
+		_wcscpy_c(gpszRunCmd, nCchLen, lsCmdLine);
 	}
 	// !!! gpszRunCmd может поменяться ниже!
 
 	// Сменим заголовок консоли
-	if (*asCmdLine == L'"')
-	{
-		if (asCmdLine[1])
-		{
-			wchar_t *pszTitle = gpszRunCmd;
-			wchar_t *pszEndQ = pszTitle + lstrlenW(pszTitle) - 1;
+	UpdateConsoleTitle(lsCmdLine, /* IN/OUT */lbNeedCutStartEndQuot, true);
 
-			if (pszEndQ > (pszTitle+1) && *pszEndQ == L'"'
-			        && wcschr(pszTitle+1, L'"') == pszEndQ)
-			{
-				*pszEndQ = 0; pszTitle ++;
-				bool lbCont = true;
-
-				// "F:\Temp\1\ConsoleTest.exe ." - кавычки не нужны, после программы идут параметры
-				if (lbCont && (*pszTitle != L'"') && ((*(pszEndQ-1) == L'.') ||(*(pszEndQ-1) == L' ')))
-				{
-					pwszCopy = pszTitle;
-					wchar_t szTemp[MAX_PATH+1];
-
-					if (NextArg(&pwszCopy, szTemp) == 0)
-					{
-						// В полученном пути к файлу (исполняемому) не должно быть пробелов?
-						if (!wcschr(szTemp, ' ') && IsFilePath(szTemp) && FileExists(szTemp))
-						{
-							lbCont = false;
-							lbNeedCutStartEndQuot = TRUE;
-						}
-					}
-				}
-
-				// "C:\Program Files\FAR\far.exe" - кавычки нужны, иначе не запустится
-				if (lbCont)
-				{
-					if (IsFilePath(pszTitle) && FileExists(pszTitle))
-					{
-						lbCont = false;
-						lbNeedCutStartEndQuot = FALSE;
-					}
-
-					//DWORD dwFileAttr = GetFileAttributes(pszTitle);
-					//if (dwFileAttr != INVALID_FILE_ATTRIBUTES && !(dwFileAttr & FILE_ATTRIBUTE_DIRECTORY))
-					//	lbNeedCutStartEndQuot = FALSE;
-					//else
-					//	lbNeedCutStartEndQuot = TRUE;
-				}
-			}
-			else
-			{
-				pszEndQ = NULL;
-			}
-
-			int nLen = 4096; //GetWindowTextLength(ghConWnd); -- KIS2009 гундит "Посылка оконного сообщения"...
-
-			if (nLen > 0)
-			{
-				gpszPrevConTitle = (wchar_t*)calloc(nLen+1,2);
-
-				if (gpszPrevConTitle)
-				{
-					if (!GetConsoleTitleW(gpszPrevConTitle, nLen+1))
-					{
-						free(gpszPrevConTitle); gpszPrevConTitle = NULL;
-					}
-				}
-			}
-
-			SetConsoleTitleW(pszTitle);
-
-			if (pszEndQ) *pszEndQ = L'"';
-		}
-	}
-	else if (*asCmdLine)
-	{
-		int nLen = 4096; //GetWindowTextLength(ghConWnd); -- KIS2009 гундит "Посылка оконного сообщения"...
-
-		if (nLen > 0)
-		{
-			gpszPrevConTitle = (wchar_t*)calloc(nLen+1,2);
-
-			if (gpszPrevConTitle)
-			{
-				if (!GetConsoleTitleW(gpszPrevConTitle, nLen+1))
-				{
-					free(gpszPrevConTitle); gpszPrevConTitle = NULL;
-				}
-			}
-		}
-
-		SetConsoleTitleW(asCmdLine);
-	}
-
+	// ====
 	if (gbRunViaCmdExe)
 	{
 		CheckUnicodeMode();
@@ -4432,28 +4697,28 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		//BOOL lbNeedQuatete = FALSE;
 		// Команды в cmd.exe лучше передавать так:
 		// ""c:\program files\arc\7z.exe" -?"
-		//int nLastChar = lstrlenW(asCmdLine) - 1;
-		//if (asCmdLine[0] == L'"' && asCmdLine[nLastChar] == L'"') {
+		//int nLastChar = lstrlenW(lsCmdLine) - 1;
+		//if (lsCmdLine[0] == L'"' && lsCmdLine[nLastChar] == L'"') {
 		//	// Наверное можно положиться на фар, и не кавычить самостоятельно
 		//	if (gnRunMode == RM_COMSPEC)
 		//		lbNeedQuatete = FALSE;
-		//	//if (asCmdLine[1] == L'"' && asCmdLine[2])
+		//	//if (lsCmdLine[1] == L'"' && lsCmdLine[2])
 		//	//	lbNeedQuatete = FALSE; // уже
-		//	//else if (wcschr(asCmdLine+1, L'"') == (asCmdLine+nLastChar))
+		//	//else if (wcschr(lsCmdLine+1, L'"') == (lsCmdLine+nLastChar))
 		//	//	lbNeedQuatete = FALSE; // не требуется. внутри кавычек нет
 		//}
 		//if (lbNeedQuatete) { // надо
 		//	lstrcatW(gpszRunCmd, L"\"" );
 		//}
 		// Собственно, командная строка
-		_wcscat_c(gpszRunCmd, nCchLen, asCmdLine);
+		_wcscat_c(gpszRunCmd, nCchLen, lsCmdLine);
 		//if (lbNeedQuatete)
 		//	lstrcatW(gpszRunCmd, L"\"" );
 	}
 	else if (lbNeedCutStartEndQuot)
 	{
 		// ""c:\arc\7z.exe -?"" - не запустится!
-		_wcscpy_c(gpszRunCmd, nCchLen, asCmdLine+1);
+		_wcscpy_c(gpszRunCmd, nCchLen, lsCmdLine+1);
 		wchar_t *pszEndQ = gpszRunCmd + lstrlenW(gpszRunCmd) - 1;
 		_ASSERTE(pszEndQ && *pszEndQ == L'"');
 
@@ -4498,6 +4763,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	OutputDebugString(gpszRunCmd); OutputDebugString(L"\n");
 #endif
 	UNREFERENCED_PARAMETER(pwszStartCmdLine);
+	_ASSERTE(pwszStartCmdLine==asCmdLine);
 	return 0;
 }
 
@@ -5006,6 +5272,7 @@ void SendStarted()
 			// Подготовить хэндл своего процесса для MainServer
 			pIn->StartStop.hServerProcessHandle = (u64)(DWORD_PTR)DuplicateProcessHandle(nMainServerPID);
 
+			_ASSERTE(pIn->hdr.nCmd == CECMD_CMDSTARTSTOP);
 			pSrvOut = ExecuteSrvCmd(nMainServerPID, pIn, ghConWnd);
 
 			// MainServer должен был вернуть PID предыдущего AltServer (если он был)
@@ -7043,6 +7310,9 @@ BOOL cmd_CmdStartStop(CESERVER_REQ& in, CESERVER_REQ** out)
 		}
 	}
 
+	// Обновить мэппинг
+	UpdateConsoleMapHeader();
+
 	CsAlt.Unlock();
 
 	int nOutSize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_STARTSTOPRET);
@@ -7076,9 +7346,9 @@ BOOL cmd_SetFarPID(CESERVER_REQ& in, CESERVER_REQ** out)
 {
 	BOOL lbRc = FALSE;
 
-	WARNING("***ALT*** не нужно звать ConEmuC, если вызывающий процесс уже альт.сервер");
-
 	gpSrv->nActiveFarPID = in.hdr.nSrcPID;
+
+	// Will update mapping using MainServer if this is Alternative
 	UpdateConsoleMapHeader();
 
 	return lbRc;
@@ -7392,8 +7662,8 @@ BOOL cmd_SetFullScreen(CESERVER_REQ& in, CESERVER_REQ** out)
 	typedef BOOL (WINAPI* SetConsoleDisplayMode_t)(HANDLE, DWORD, PCOORD);
 	SetConsoleDisplayMode_t _SetConsoleDisplayMode = (SetConsoleDisplayMode_t)GetProcAddress(GetModuleHandle(L"kernel32.dll"), "SetConsoleDisplayMode");
 
-	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(DWORD);
-	*out = ExecuteNewCmd(CECMD_CONSOLEFULL, cbReplySize);
+	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_FULLSCREEN);
+	*out = ExecuteNewCmd(CECMD_SETFULLSCREEN, cbReplySize);
 
 	// Need to block all requests to output buffer in other threads
 	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
@@ -7410,7 +7680,10 @@ BOOL cmd_SetFullScreen(CESERVER_REQ& in, CESERVER_REQ** out)
 			(*out)->FullScreenRet.bSucceeded = _SetConsoleDisplayMode(ghConOut, 1/*CONSOLE_FULLSCREEN_MODE*/, &(*out)->FullScreenRet.crNewSize);
 			if (!(*out)->FullScreenRet.bSucceeded)
 				(*out)->FullScreenRet.nErrCode = GetLastError();
+			else
+				gpSrv->pfnWasFullscreenMode = pfnGetConsoleDisplayMode;
 		}
+		lbRc = TRUE;
 	}
 	else
 	{
@@ -7429,7 +7702,7 @@ BOOL cmd_SetConColors(CESERVER_REQ& in, CESERVER_REQ** out)
 	MSectionLockSimple csRead; csRead.Lock(&gpSrv->csReadConsoleInfo, LOCK_READOUTPUT_TIMEOUT);
 
 	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_SETCONSOLORS);
-	*out = ExecuteNewCmd(CECMD_CONSOLEFULL, cbReplySize);
+	*out = ExecuteNewCmd(CECMD_SETCONCOLORS, cbReplySize);
 
 	if ((*out) != NULL)
 	{
@@ -7592,7 +7865,7 @@ BOOL cmd_SetConTitle(CESERVER_REQ& in, CESERVER_REQ** out)
 
 	if ((*out) != NULL)
 	{
-		(*out)->dwData[0] = SetConsoleTitle((wchar_t*)in.wData);
+		(*out)->dwData[0] = SetTitle(false, (wchar_t*)in.wData);
 	}
 	else
 	{
@@ -7614,10 +7887,25 @@ BOOL cmd_AltBuffer(CESERVER_REQ& in, CESERVER_REQ** out)
 	//     а не скорректированное функцией MyGetConsoleScreenBufferInfo
 	if (!GetConsoleScreenBufferInfo(ghConOut, &lsbi))
 	{
+		LogString("cmd_AltBuffer: GetConsoleScreenBufferInfo failed");
 		lbRc = FALSE;
 	}
 	else
 	{
+		if (gpLogSize)
+		{
+			char szInfo[100];
+			_wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "cmd_AltBuffer: (%u) %s%s%s%s",
+				in.AltBuf.BufferHeight,
+				!in.AltBuf.AbFlags ? "AbFlags==0" :
+				(in.AltBuf.AbFlags & abf_SaveContents) ? " abf_SaveContents" : "",
+				(in.AltBuf.AbFlags & abf_RestoreContents) ? " abf_RestoreContents" : "",
+				(in.AltBuf.AbFlags & abf_BufferOn) ? " abf_BufferOn" : "",
+				(in.AltBuf.AbFlags & abf_BufferOff) ? " abf_BufferOff" : "");
+			LogString(szInfo);
+		}
+
+
 		if (in.AltBuf.AbFlags & abf_SaveContents)
 		{
 			CmdOutputStore();
@@ -7724,6 +8012,42 @@ BOOL cmd_ApplyExportVars(CESERVER_REQ& in, CESERVER_REQ** out)
 	if ((*out) != NULL)
 	{
 		(*out)->dwData[0] = TRUE;
+	}
+	else
+	{
+		lbRc = FALSE;
+	}
+
+	return lbRc;
+}
+
+BOOL cmd_UpdConMapHdr(CESERVER_REQ& in, CESERVER_REQ** out)
+{
+	BOOL lbRc = TRUE, lbAccepted = FALSE;
+
+	size_t cbInSize = in.DataSize(), cbReqSize = sizeof(CESERVER_CONSOLE_MAPPING_HDR);
+	if (cbInSize == cbReqSize)
+	{
+		if (in.ConInfo.cbSize == sizeof(CESERVER_CONSOLE_MAPPING_HDR)
+			&& in.ConInfo.nProtocolVersion == CESERVER_REQ_VER
+			&& in.ConInfo.nServerPID == GetCurrentProcessId())
+		{
+			//SetVisibleSize(in.ConInfo.crLockedVisible.X, in.ConInfo.crLockedVisible.Y); // ??
+
+			if (gpSrv->pConsoleMap)
+			{
+				gpSrv->pConsoleMap->SetFrom(&in.ConInfo);
+			}
+
+			lbAccepted = TRUE;
+		}
+	}
+
+	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(DWORD);
+	*out = ExecuteNewCmd(CECMD_UPDCONMAPHDR, cbReplySize);
+	if ((*out) != NULL)
+	{
+		(*out)->dwData[0] = lbAccepted;
 	}
 	else
 	{
@@ -7916,6 +8240,10 @@ BOOL ProcessSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out)
 		{
 			lbRc = cmd_ApplyExportVars(in, out);
 		} break;
+		case CECMD_UPDCONMAPHDR:
+		{
+			lbRc = cmd_UpdConMapHdr(in, out);
+		} break;
 		default:
 		{
 			// Отлов необработанных
@@ -8000,11 +8328,16 @@ BOOL MyGetConsoleScreenBufferInfo(HANDLE ahConOut, PCONSOLE_SCREEN_BUFFER_INFO a
 			gnBufferWidth = 0;
 	}
 
-	if (GetConsoleDisplayMode(&gpSrv->dwDisplayMode) && gpSrv->dwDisplayMode)
+	if (pfnGetConsoleDisplayMode && pfnGetConsoleDisplayMode(&gpSrv->dwDisplayMode))
 	{
-		_ASSERTE(!csbi.srWindow.Left && !csbi.srWindow.Top);
-		csbi.dwSize.X = csbi.srWindow.Right+1;
-		csbi.dwSize.Y = csbi.srWindow.Bottom+1;
+		if (gpSrv->dwDisplayMode)
+		{
+			// While in hardware fullscreen - srWindow still shows window region
+			// as it can be, if returned in GUI mode (I suppose)
+			//_ASSERTE(!csbi.srWindow.Left && !csbi.srWindow.Top);
+			csbi.dwSize.X = csbi.srWindow.Right+1-csbi.srWindow.Left;
+			csbi.dwSize.Y = csbi.srWindow.Bottom+1+csbi.srWindow.Top;
+		}
 	}
 
 	//
@@ -8202,6 +8535,12 @@ BOOL SetConsoleSize(USHORT BufferHeight, COORD crNewSize, SMALL_RECT rNewRect, L
 
 	if (!ghConWnd) return FALSE;
 
+	if (CheckWasFullScreen())
+	{
+		LogString("SetConsoleSize was skipped due to CONSOLE_FULLSCREEN_HARDWARE");
+		return FALSE;
+	}
+
 //#ifdef _DEBUG
 //	if (gnRunMode != RM_SERVER || !gpSrv->DbgInfo.bDebuggerActive)
 //	{
@@ -8296,12 +8635,13 @@ BOOL SetConsoleSize(USHORT BufferHeight, COORD crNewSize, SMALL_RECT rNewRect, L
 		lbNeedChange = (csbi.dwSize.X != crNewSize.X) || (csbi.dwSize.Y != crNewSize.Y)
 			|| ((csbi.srWindow.Right - csbi.srWindow.Left + 1) != crNewSize.X)
 			|| ((csbi.srWindow.Bottom - csbi.srWindow.Top + 1) != crNewSize.Y);
-#ifdef _DEBUG
 
+		#ifdef _DEBUG
 		if (!lbNeedChange)
-			BufferHeight = BufferHeight;
-
-#endif
+		{
+			int nDbg = 0;
+		}
+		#endif
 	}
 
 
@@ -8362,8 +8702,9 @@ BOOL SetConsoleSize(USHORT BufferHeight, COORD crNewSize, SMALL_RECT rNewRect, L
 	// Делаем это ПОСЛЕ MyGetConsoleScreenBufferInfo, т.к. некоторые коррекции размера окна
 	// она делает ориентируясь на gnBufferHeight
 	gnBufferHeight = BufferHeight;
+	// Размер видимой области (слишком большой?)
+	_ASSERTE(crNewSize.X<=500 && crNewSize.Y<=300);
 	gcrVisibleSize = crNewSize;
-	_ASSERTE(gcrVisibleSize.Y<200);
 	
 	if (gnRunMode == RM_SERVER || gnRunMode == RM_ALTSERVER)
 		UpdateConsoleMapHeader(); // Обновить pConsoleMap.crLockedVisible

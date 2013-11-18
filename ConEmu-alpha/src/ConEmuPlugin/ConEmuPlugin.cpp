@@ -59,6 +59,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include "../common/ConEmuCheckEx.h"
 #include "../common/ConsoleAnnotation.h"
+#include "../common/SetEnvVar.h"
 #include "../common/WinObjects.h"
 #include "../common/WinConsole.h"
 #include "../common/TerminalMode.h"
@@ -82,8 +83,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MAKEFARVERSION(major,minor,build) ( ((major)<<8) | (minor) | ((build)<<16))
 
 //#define ConEmu_SysID 0x43454D55 // 'CEMU'
-#define SETWND_CALLPLUGIN_SENDTABS 100
-#define SETWND_CALLPLUGIN_BASE (SETWND_CALLPLUGIN_SENDTABS+1)
+enum CallPluginCmdId
+{
+	// Add new items - before first numbered item!
+	CE_CALLPLUGIN_UPDATEBG = 99,
+	CE_CALLPLUGIN_SENDTABS = 100,
+	SETWND_CALLPLUGIN_BASE /*= (CE_CALLPLUGIN_SENDTABS+1)*/
+	// Following number are reserved for "SetWnd(idx)" switching
+};
 #define CHECK_RESOURCES_INTERVAL 5000
 #define CHECK_FARINFO_INTERVAL 2000
 #define ATTACH_START_SERVER_TIMEOUT 10000
@@ -97,10 +104,6 @@ struct SyncExecuteArg
 	SyncExecuteCallback_t CallBack;
 	LONG_PTR lParam;
 };
-
-#ifdef _DEBUG
-wchar_t gszDbgModLabel[6] = {0};
-#endif
 
 #if defined(__GNUC__)
 extern "C" {
@@ -453,15 +456,24 @@ HANDLE OpenPluginWcmn(int OpenFrom,INT_PTR Item,bool FromMacro)
 				SetEvent(ghSetWndSendTabsEvent);
 				return hResult;
 			}
-			else if (Item == SETWND_CALLPLUGIN_SENDTABS)
+			else if (Item == CE_CALLPLUGIN_SENDTABS)
 			{
-				DEBUGSTRCMD(L"Plugin: SETWND_CALLPLUGIN_SENDTABS\n");
+				DEBUGSTRCMD(L"Plugin: CE_CALLPLUGIN_SENDTABS\n");
 				// Force Send tabs to ConEmu
 				//MSectionLock SC; SC.Lock(csTabs, TRUE);
 				//SendTabs(gnCurTabCount, TRUE);
 				//SC.Unlock();
 				UpdateConEmuTabs(0,false,false);
 				SetEvent(ghSetWndSendTabsEvent);
+				return hResult;
+			}
+			else if (Item == CE_CALLPLUGIN_UPDATEBG)
+			{
+				if (gpBgPlugin)
+				{
+					gpBgPlugin->SetForceUpdate(true);
+					gpBgPlugin->OnMainThreadActivated();
+				}
 				return hResult;
 			}
 		}
@@ -659,17 +671,17 @@ void OnMainThreadActivated()
 			if (gFarVersion.dwVerMajor == 2)
 			{
 				_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"$if (Search) Esc $end $if (Shell||Viewer||Editor) callplugin(0x%08X,%i) $else callplugin(0x%08X,%i) $end",
-					  ConEmu_SysID, nTabShift, ConEmu_SysID, SETWND_CALLPLUGIN_SENDTABS);
+					  ConEmu_SysID, nTabShift, ConEmu_SysID, CE_CALLPLUGIN_SENDTABS);
 			}
 			else if (!gFarVersion.IsFarLua())
 			{
 				_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"$if (Search) Esc $end $if (Shell||Viewer||Editor) callplugin(\"%s\",%i) $else callplugin(\"%s\",%i) $end",
-					  ConEmu_GuidS, nTabShift, ConEmu_GuidS, SETWND_CALLPLUGIN_SENDTABS);
+					  ConEmu_GuidS, nTabShift, ConEmu_GuidS, CE_CALLPLUGIN_SENDTABS);
 			}
 			else
 			{
 				_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"if Area.Search then Keys(\"Esc\") end if Area.Shell or Area.Viewer or Area.Editor then Plugin.Call(\"%s\",%i) else Plugin.Call(\"%s\",%i) end",
-					  ConEmu_GuidS, nTabShift, ConEmu_GuidS, SETWND_CALLPLUGIN_SENDTABS);
+					  ConEmu_GuidS, nTabShift, ConEmu_GuidS, CE_CALLPLUGIN_SENDTABS);
 			}
 			gnReqCommand = -1;
 			gpReqCommandData = NULL;
@@ -728,12 +740,12 @@ void OnConsolePeekReadInput(BOOL abPeek)
 
 			if (nMapPID == 0 || nMapPID != gnSelfPID)
 			{
-				WARNING("***ALT*** не нужно звать ConEmuC, если текущий процесс уже альт.сервер");
+				//Выполнить команду в главном сервере, альтернативный не имеет права писать в мэппинг
 				bNeedReload = true;
 				dwLastTickCount = GetTickCount();
 				CESERVER_REQ_HDR in;
 				ExecutePrepareCmd(&in, CECMD_SETFARPID, sizeof(CESERVER_REQ_HDR));
-				CESERVER_REQ *pOut = ExecuteSrvCmd(gpConMapInfo->nServerPID, (CESERVER_REQ*)&in, FarHwnd);
+				CESERVER_REQ *pOut = ExecuteSrvCmd(gpConMapInfo->ActiveServerPID(), (CESERVER_REQ*)&in, FarHwnd);
 				if (pOut)
 					ExecuteFreeResult(pOut);
 			}
@@ -819,7 +831,7 @@ void OnConsolePeekReadInput(BOOL abPeek)
 	//
 	//	// Если панели-редактор-вьювер - сменить окно. Иначе - отослать в GUI табы
 	//	_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"$if (Search) Esc $end $if (Shell||Viewer||Editor) callplugin(0x%08X,%i) $else callplugin(0x%08X,%i) $end",
-	//		ConEmu_SysID, nTabShift, ConEmu_SysID, SETWND_CALLPLUGIN_SENDTABS);
+	//		ConEmu_SysID, nTabShift, ConEmu_SysID, CE_CALLPLUGIN_SENDTABS);
 	//
 	//	gnReqCommand = -1;
 	//	gpReqCommandData = NULL;
@@ -1010,7 +1022,7 @@ VOID WINAPI OnShellExecuteExW_Except(HookCallbackArg* pArgs)
 {
 	if (pArgs->bMainThread)
 	{
-		ShowMessage(CEShellExecuteException,1);
+		ShowMessage(CEShellExecuteException,0);
 	}
 
 	*((LPBOOL*)pArgs->lpResult) = FALSE;
@@ -1512,7 +1524,7 @@ int WINAPI ProcessSynchroEventW(int Event,void *Param)
 //
 //					// Если панели-редактор-вьювер - сменить окно. Иначе - отослать в GUI табы
 //					_wsprintf(szMacro, SKIPLEN(countof(szMacro)) L"$if (Shell||Viewer||Editor) callplugin(0x%08X,%i) $else callplugin(0x%08X,%i) $end",
-//						ConEmu_SysID, nTabShift, ConEmu_SysID, SETWND_CALLPLUGIN_SENDTABS);
+//						ConEmu_SysID, nTabShift, ConEmu_SysID, CE_CALLPLUGIN_SENDTABS);
 //
 //					gnReqCommand = -1;
 //					gpReqCommandData = NULL;
@@ -3648,6 +3660,29 @@ void CommonPluginStartup()
 	// Надо табы загрузить
 	UpdateConEmuTabs(0,false,false);
 
+
+	// Пробежаться по всем загруженным в данный момент плагинам и дернуть в них "OnConEmuLoaded"
+	// А все из за того, что при запуске "Far.exe /co" - порядок загрузки плагинов МЕНЯЕТСЯ
+	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0);
+	if (snapshot != INVALID_HANDLE_VALUE)
+	{
+		MODULEENTRY32 module = {sizeof(MODULEENTRY32)};
+
+		for (BOOL res = Module32First(snapshot, &module); res; res = Module32Next(snapshot, &module))
+		{
+			OnConEmuLoaded_t fnOnConEmuLoaded;
+
+			if (((fnOnConEmuLoaded = (OnConEmuLoaded_t)GetProcAddress(module.hModule, "OnConEmuLoaded")) != NULL)
+				&& /* Наверное, только для плагинов фара */
+				((GetProcAddress(module.hModule, "SetStartupInfoW") || GetProcAddress(module.hModule, "SetStartupInfo"))))
+			{
+				OnLibraryLoaded(module.hModule);
+			}
+		}
+
+		CloseHandle(snapshot);
+	}
+
 	
 	//if (gpConMapInfo)  //2010-03-04 Имеет смысл только при запуске из-под ConEmu
 	//{
@@ -4651,7 +4686,7 @@ void NotifyConEmuUnloaded()
 	{
 		MODULEENTRY32 module = {sizeof(MODULEENTRY32)};
 
-		for(BOOL res = Module32First(snapshot, &module); res; res = Module32Next(snapshot, &module))
+		for (BOOL res = Module32First(snapshot, &module); res; res = Module32Next(snapshot, &module))
 		{
 			if ((fnOnConEmuLoaded = (OnConEmuLoaded_t)GetProcAddress(module.hModule, "OnConEmuLoaded")) != NULL)
 			{
@@ -5472,13 +5507,13 @@ void ShowPluginMenu(PluginCallCommands nCallID /*= pcc_None*/)
 
 	if (!FarHwnd)
 	{
-		ShowMessage(CEInvalidConHwnd,1); // "ConEmu plugin\nGetConsoleWindow()==FarHwnd is NULL\nOK"
+		ShowMessage(CEInvalidConHwnd,0); // "ConEmu plugin\nGetConsoleWindow()==FarHwnd is NULL"
 		return;
 	}
 
 	if (IsTerminalMode())
 	{
-		ShowMessage(CEUnavailableInTerminal,1); // "ConEmu plugin\nConEmu is not available in terminal mode\nCheck TERM environment variable\nOK"
+		ShowMessage(CEUnavailableInTerminal,0); // "ConEmu plugin\nConEmu is not available in terminal mode\nCheck TERM environment variable"
 		return;
 	}
 
@@ -5699,7 +5734,7 @@ void ShowPluginMenu(PluginCallCommands nCallID /*= pcc_None*/)
 			}
 			else
 			{
-				ShowMessage(CEGetAllTabsFailed, 1);
+				ShowMessage(CEGetAllTabsFailed, 0);
 			}
 			ExecuteFreeResult(pIn);
 		} break;
@@ -6079,13 +6114,13 @@ BOOL StartDebugger()
 {
 	if (IsDebuggerPresent())
 	{
-		ShowMessage(CEAlreadyDebuggerPresent,1); // "ConEmu plugin\nDebugger is already attached to current process\nOK"
+		ShowMessage(CEAlreadyDebuggerPresent,0); // "ConEmu plugin\nDebugger is already attached to current process"
 		return FALSE; // Уже
 	}
 
 	if (IsTerminalMode())
 	{
-		ShowMessage(CECantDebugInTerminal,1); // "ConEmu plugin\nDebugger is not available in terminal mode\nOK"
+		ShowMessage(CECantDebugInTerminal,0); // "ConEmu plugin\nDebugger is not available in terminal mode"
 		return FALSE; // Уже
 	}
 
@@ -6103,7 +6138,7 @@ BOOL StartDebugger()
 
 	if ((nLen = GetEnvironmentVariableW(ENV_CONEMUBASEDIR_VAR_W, szConEmuC, MAX_PATH-16)) < 1)
 	{
-		ShowMessage(CECantDebugNotEnvVar,1); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available\nOK"
+		ShowMessage(CECantDebugNotEnvVar,0); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available"
 		return FALSE; // Облом
 	}
 
@@ -6115,7 +6150,7 @@ BOOL StartDebugger()
 
 		if (((nLen=GetModuleFileName(0, szConEmuC, MAX_PATH-24)) < 1) || ((pszSlash = wcsrchr(szConEmuC, L'\\')) == NULL))
 		{
-			ShowMessage(CECantDebugNotEnvVar,1); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available\nOK"
+			ShowMessage(CECantDebugNotEnvVar,0); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available"
 			return FALSE; // Облом
 		}
 
@@ -6127,7 +6162,7 @@ BOOL StartDebugger()
 
 			if (!FileExists(szConEmuC))
 			{
-				ShowMessage(CECantDebugNotEnvVar,1); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available\nOK"
+				ShowMessage(CECantDebugNotEnvVar,0); // "ConEmu plugin\nEnvironment variable 'ConEmuBaseDir' not defined\nDebugger is not available"
 				return FALSE; // Облом
 			}
 		}
@@ -6173,7 +6208,7 @@ BOOL StartDebugger()
 #ifdef _DEBUG
 		DWORD dwErr = GetLastError();
 #endif
-		ShowMessage(CECantStartDebugger,1); // "ConEmu plugin\nНе удалось запустить процесс отладчика\nOK"
+		ShowMessage(CECantStartDebugger,0); // "ConEmu plugin\nНе удалось запустить процесс отладчика"
 	}
 	else
 	{
@@ -6307,10 +6342,6 @@ bool RunExternalProgramW(wchar_t* pszCommand, wchar_t* pszCurDir, bool bSilent/*
 	}
 	else
 	{
-		//wchar_t strCmd[MAX_PATH+1];
-		//wchar_t* strArgs = pszCommand;
-		//NextArg((const wchar_t**)&strArgs, strCmd);
-		//wchar_t strDir[10]; lstrcpy(strDir, L"C:\\");
 		STARTUPINFO cif= {sizeof(STARTUPINFO)};
 		PROCESS_INFORMATION pri= {0};
 		HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);

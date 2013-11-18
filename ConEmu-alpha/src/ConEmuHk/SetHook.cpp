@@ -77,6 +77,8 @@ extern HWND    ghConWnd;      // RealConsole
 
 extern BOOL gbDllStopCalled;
 
+extern bool gbPrepareDefaultTerminal;
+
 #ifdef _DEBUG
 bool gbSuppressShowCall = false;
 bool gbSkipSuppressShowCall = false;
@@ -921,6 +923,7 @@ bool __stdcall InitHooks(HookItem* apHooks)
 			}
 
 			gpHooks[j].Name = apHooks[i].Name;
+			gpHooks[j].NameOrdinal = apHooks[i].NameOrdinal;
 			gpHooks[j].DllName = apHooks[i].DllName;
 			gpHooks[j].NewAddress = apHooks[i].NewAddress;
 			gpHooks[j].NameCRC = NameCRC;
@@ -959,7 +962,8 @@ bool __stdcall InitHooks(HookItem* apHooks)
 			else
 			{
 				WARNING("Тут часто возвращается XXXStub вместо самой функции!");
-				gpHooks[i].OldAddress = (void*)GetProcAddress(mod, gpHooks[i].Name);
+				const char* ExportName = gpHooks[i].NameOrdinal ? ((const char*)gpHooks[i].NameOrdinal) : gpHooks[i].Name;
+				gpHooks[i].OldAddress = (void*)GetProcAddress(mod, ExportName);
 
 				if (gpHooks[i].OldAddress == NULL)
 				{
@@ -3261,6 +3265,10 @@ HMODULE WINAPI OnLoadLibraryAWork(FARPROC lpfn, HookItem *ph, BOOL bMainThread, 
 	if (gbHooksTemporaryDisabled)
 		return module;
 
+	// Issue 1079: Almost hangs with PHP
+	if (lstrcmpiA(lpFileName, "kernel32.dll") == 0)
+		return module;
+
 	if (PrepareNewModule(module, lpFileName, NULL))
 	{
 		if (ph && ph->PostCallBack)
@@ -3323,6 +3331,10 @@ HMODULE WINAPI OnLoadLibraryWWork(FARPROC lpfn, HookItem *ph, BOOL bMainThread, 
 	DWORD dwLoadErrCode = GetLastError();
 
 	if (gbHooksTemporaryDisabled)
+		return module;
+
+	// Issue 1079: Almost hangs with PHP
+	if (lstrcmpi(lpFileName, L"kernel32.dll") == 0)
 		return module;
 
 	// Больше не требуется. Загрузка ExtendedConsole обработана выше
@@ -3468,17 +3480,41 @@ FARPROC WINAPI OnGetProcAddressWork(FARPROC lpfn, HookItem *ph, BOOL bMainThread
 	{
 		TODO("!!!");
 		#ifdef LOG_ORIGINAL_CALL
-		msprintf(gszLastGetProcAddress, countof(gszLastGetProcAddress), "   OnGetProcAddress(x%08X,%s)",
-			(DWORD)hModule, lsProcNameCut);
+		msprintf(gszLastGetProcAddress, countof(gszLastGetProcAddress), "   OnGetProcAddress(x%08X,%s,%u)",
+			(DWORD)hModule, (((DWORD_PTR)lpProcName) <= 0xFFFF) ? "" : lsProcNameCut,
+			(((DWORD_PTR)lpProcName) <= 0xFFFF) ? (UINT)(DWORD_PTR)lsProcNameCut : 0);
 		#endif
+	}
+	else if (gbDllStopCalled)
+	{
+		//-- assert нельзя, т.к. все уже деинициализировано!
+		//_ASSERTE(ghHeap!=NULL);
+		//-- lpfnRc = NULL; -- уже
 	}
 	else if (((DWORD_PTR)lpProcName) <= 0xFFFF)
 	{
 		TODO("!!! Обрабатывать и ORDINAL values !!!");
 		#ifdef LOG_ORIGINAL_CALL
-		msprintf(gszLastGetProcAddress, countof(gszLastGetProcAddress), "   OnGetProcAddress(x%08X,%s)",
-			(DWORD)hModule, lsProcNameCut);
+		msprintf(gszLastGetProcAddress, countof(gszLastGetProcAddress), "   OnGetProcAddress(x%08X,%u)",
+			(DWORD)hModule, (UINT)(DWORD_PTR)lsProcNameCut);
 		#endif
+
+		// Ordinal - пока используется только для "ShellExecCmdLine"
+		if (gpHooks && gbPrepareDefaultTerminal)
+		{
+			for (int i = 0; gpHooks[i].Name; i++)
+			{
+				// The spelling and case of a function name pointed to by lpProcName must be identical
+				// to that in the EXPORTS statement of the source DLL's module-definition (.Def) file
+				if (gpHooks[i].hDll == hModule
+						&& gpHooks[i].NameOrdinal
+						&& (gpHooks[i].NameOrdinal == (DWORD)(DWORD_PTR)lpProcName))
+				{
+					lpfnRc = (FARPROC)gpHooks[i].NewAddress;
+					break;
+				}
+			}
+		}
 	}
 	else
 	{
@@ -3489,24 +3525,15 @@ FARPROC WINAPI OnGetProcAddressWork(FARPROC lpfn, HookItem *ph, BOOL bMainThread
 
 		if (gpHooks)
 		{
-			if (gbDllStopCalled)
+			for (int i = 0; gpHooks[i].Name; i++)
 			{
-				//-- assert нельзя, т.к. все уже деинициализировано!
-				//_ASSERTE(ghHeap!=NULL);
-				lpfnRc = NULL;
-			}
-			else
-			{
-				for (int i = 0; gpHooks[i].Name; i++)
+				// The spelling and case of a function name pointed to by lpProcName must be identical
+				// to that in the EXPORTS statement of the source DLL's module-definition (.Def) file
+				if (gpHooks[i].hDll == hModule
+						&& strcmp(gpHooks[i].Name, lpProcName) == 0)
 				{
-					// The spelling and case of a function name pointed to by lpProcName must be identical
-					// to that in the EXPORTS statement of the source DLL's module-definition (.Def) file
-					if (gpHooks[i].hDll == hModule
-							&& strcmp(gpHooks[i].Name, lpProcName) == 0)
-					{
-						lpfnRc = (FARPROC)gpHooks[i].NewAddress;
-						break;
-					}
+					lpfnRc = (FARPROC)gpHooks[i].NewAddress;
+					break;
 				}
 			}
 		}

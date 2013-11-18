@@ -41,6 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/ConEmuPipeMode.h"
 #include "../common/Execute.h"
 #include "../common/RgnDetect.h"
+#include "../common/SetEnvVar.h"
 #include "ConEmu.h"
 #include "ConEmuApp.h"
 #include "ConEmuPipe.h"
@@ -140,6 +141,7 @@ CRealConsole::CRealConsole()
 bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 {
 	Assert(apVCon && args);
+	MCHKHEAP;
 
 	mp_VCon = apVCon;
 	mp_Log = NULL;
@@ -163,16 +165,15 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	//mn_LastRgnFlags = -1;
 	m_ConsoleKeyShortcuts = 0;
 	memset(Title,0,sizeof(Title)); memset(TitleCmp,0,sizeof(TitleCmp));
-
+	mn_tabsCount = 0;
 	ms_PanelTitle[0] = 0;
-	// Tabs
-	tabs.mn_tabsCount = 0; 
-	tabs.mn_ActiveTab = 0;
-	tabs.mb_TabsWasChanged = false;
-	TODO("tabs.ms_RenameFirstTab pending to remove, all must be in tabs.m_Tabs[]->Renamed");
-	lstrcpyn(tabs.ms_RenameFirstTab, args->pszRenameTab ? args->pszRenameTab : L"", countof(tabs.ms_RenameFirstTab));
-	// -- т.к. автопоказ табов может вызвать ресайз - то табы в самом конце инициализации!
-	//SetTabs(NULL,1);
+	mn_ActiveTab = 0;
+	mn_MaxTabs = 20;
+	mb_TabsWasChanged = false;
+	mp_tabs = (ConEmuTab*)Alloc(mn_MaxTabs, sizeof(ConEmuTab));
+	_ASSERTE(mp_tabs!=NULL);
+	
+	lstrcpyn(ms_RenameFirstTab, args->pszRenameTab ? args->pszRenameTab : L"", countof(ms_RenameFirstTab));
 
 	//memset(&m_PacketQueue, 0, sizeof(m_PacketQueue));
 	mn_FlushIn = mn_FlushOut = 0;
@@ -198,6 +199,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	//mh_InputThread = NULL; mn_InputThreadID = 0;
 	mp_sei = NULL;
 	mn_MainSrv_PID = mn_ConHost_PID = 0; mh_MainSrv = NULL; mb_MainSrv_Ready = false;
+	mn_CheckFreqLock = 0;
 	mp_ConHostSearch = NULL;
 	mn_ActiveLayout = 0;
 	mn_AltSrv_PID = 0;  //mh_AltSrv = NULL;
@@ -227,7 +229,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	//mh_CursorChanged = NULL;
 	//mb_Detached = FALSE;
 	//m_Args.pszSpecialCmd = NULL; -- не требуется
-	mpsz_CmdBuffer = NULL;
+	//mpsz_CmdBuffer = NULL;
 	mb_FullRetrieveNeeded = FALSE;
 	//mb_AdminShieldChecked = FALSE;
 	ZeroStruct(m_LastMouse);
@@ -332,13 +334,11 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	mb_WasStartDetached = m_Args.bDetached;
 	_ASSERTE(mb_WasStartDetached == args->bDetached);
 
-	/* *** TABS *** */
 	// -- т.к. автопоказ табов может вызвать ресайз - то табы в самом конце инициализации!
 	_ASSERTE(gpConEmu->isMainThread()); // Иначе табы сразу не перетряхнутся
 	SetTabs(NULL,1); // Для начала - показывать вкладку Console, а там ФАР разберется
 	MCHKHEAP;
 
-	/* *** Set start pending *** */
 	if (mb_NeedStartProcess)
 	{
 		// Push request to "startup queue"
@@ -351,6 +351,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 
 CRealConsole::~CRealConsole()
 {
+	MCHKHEAP;
 	DEBUGSTRCON(L"CRealConsole::~CRealConsole()\n");
 
 	if (!gpConEmu->isMainThread())
@@ -393,14 +394,13 @@ CRealConsole::~CRealConsole()
 	}
 
 
-	//if (mp_tabs) Free(mp_tabs);
-	//mp_tabs = NULL;
-	//mn_MaxTabs = 0;
-
-	tabs.mn_ActiveTab = 0;
-	tabs.mn_tabsCount = 0;
-	tabs.m_Tabs.ReleaseTabs(FALSE);
-
+	if (mp_tabs) Free(mp_tabs);
+	mp_tabs = NULL;
+	mn_MaxTabs = 0;
+	
+	mn_ActiveTab = 0;
+	mn_tabsCount = 0;
+	
 	//
 	CloseLogFiles();
 
@@ -416,13 +416,14 @@ CRealConsole::~CRealConsole()
 	CloseMapHeader(); // CloseMapData() & CloseFarMapData() зовет сам CloseMapHeader
 	CloseColorMapping(); // Colorer data
 
-	SafeFree(mpsz_CmdBuffer);
+	//SafeFree(mpsz_CmdBuffer);
 
 	//if (mp_Rgn)
 	//{
 	//	delete mp_Rgn;
 	//	mp_Rgn = NULL;
 	//}
+	MCHKHEAP;
 }
 
 CVirtualConsole* CRealConsole::VCon()
@@ -2035,11 +2036,17 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 			//_ASSERTE(hAltServerHandle!=NULL);
 			//hEvents[IDEVENT_SERVERPH] = hAltServerHandle ? hAltServerHandle : mh_MainSrv;
 
-			ReopenServerPipes();
-
-			// Done
-			mb_SwitchActiveServer = false;
-			SetEvent(mh_ActiveServerSwitched);
+			if (!ReopenServerPipes())
+			{
+				// Try again?
+				mb_SwitchActiveServer = true;
+			}
+			else
+			{
+				// Done
+				mb_SwitchActiveServer = false;
+				SetEvent(mh_ActiveServerSwitched);
+			}
 		}
 
 		bool bNeedUpdateServerActive = (nWait == IDEVENT_UPDATESERVERACTIVE);
@@ -2364,10 +2371,10 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 
 
 			// обновить статусы, найти панели, и т.п.
-			if (mb_DataChanged || tabs.mb_TabsWasChanged)
+			if (mb_DataChanged || mb_TabsWasChanged)
 			{
 				lbForceUpdate = true; // чтобы если консоль неактивна - не забыть при ее активации передернуть что нужно...
-				tabs.mb_TabsWasChanged = false;
+				mb_TabsWasChanged = false;
 				mb_DataChanged = false;
 				// Функция загружает ТОЛЬКО ms_PanelTitle, чтобы показать
 				// корректный текст в закладке, соответсвующей панелям
@@ -2751,49 +2758,85 @@ void CRealConsole::PrepareDefaultColors(BYTE& nTextColorIdx, BYTE& nBackColorIdx
 	}
 }
 
-wchar_t* CRealConsole::ParseConEmuSubst(LPCWSTR asCmd)
-{
-	if (!this || !mp_VCon || !asCmd || !*asCmd)
-		return NULL;
-
-	wchar_t* pszChange = lstrdup(asCmd);
-	LPCWSTR szNames[] = {ENV_CONEMUHWND_VAR_W, ENV_CONEMUDRAW_VAR_W, ENV_CONEMUBACK_VAR_W};
-	HWND hWnd[] = {ghWnd, mp_VCon->GetView(), mp_VCon->GetBack()};
-	bool bChanged = false;
-
-	for (size_t i = 0; i < countof(szNames); ++i)
-	{
-		wchar_t szReplace[16];
-		_wsprintf(szReplace, SKIPLEN(countof(szReplace)) L"0x%08X", (DWORD)(DWORD_PTR)(hWnd[i]));
-		size_t rLen = _tcslen(szReplace); _ASSERTE(rLen==10);
-
-		size_t iLen = _tcslen(szNames[i]); _ASSERTE(iLen>=rLen);
-
-		wchar_t* pszStart = StrStrI(pszChange, szNames[i]);
-		if (!pszStart || pszStart == pszChange)
-			continue;
-		while (pszStart)
-		{
-			if ((pszStart > pszChange)
-				&& ((*(pszStart-1) == L'!' && *(pszStart+iLen) == L'!')
-					|| (*(pszStart-1) == L'%' && *(pszStart+iLen) == L'%')))
-			{
-				bChanged = true;
-				pszStart--;
-				memmove(pszStart, szReplace, rLen*sizeof(*szReplace));
-				wchar_t* pszEnd = pszStart + iLen+2;
-				_ASSERTE(*(pszEnd-1)==L'!' || *(pszEnd-1)==L'%');
-				size_t cchLeft = _tcslen(pszEnd)+1;
-				memmove(pszStart+rLen, pszEnd, cchLeft*sizeof(*pszEnd));
-			}
-			pszStart = StrStrI(pszStart+2, szNames[i]);
-		}
-	}
-
-	if (!bChanged)
-		SafeFree(pszChange);
-	return pszChange;
-}
+//// Заменить подстановки вида: !ConEmuHWND!, !ConEmuDrawHWND!, !ConEmuBackHWND!, !ConEmuWorkDir!
+//wchar_t* CRealConsole::ParseConEmuSubst(LPCWSTR asCmd)
+//{
+//	if (!this || !mp_VCon || !asCmd || !*asCmd)
+//		return NULL;
+//
+//	size_t cchMax = _tcslen(asCmd) + 1;
+//
+//	// Прикинуть, сколько путей нужно будет заменять
+//	size_t nPathCount = 0;
+//	wchar_t* pszCount = StrStrI(asCmd, ENV_CONEMUWORKDIR_VAR_W);
+//	while (pszCount)
+//	{
+//		nPathCount++;
+//		pszCount = StrStrI(pszCount+_tcslen(ENV_CONEMUWORKDIR_VAR_W), ENV_CONEMUWORKDIR_VAR_W);
+//	}
+//	LPCWSTR pszStartupDir = NULL;
+//	if (nPathCount > 0)
+//	{
+//		pszStartupDir = GetStartupDir();
+//		cchMax += _tcslen(pszStartupDir)*nPathCount;
+//	}
+//
+//
+//	wchar_t* pszChange = (wchar_t*)calloc(cchMax, sizeof(*pszChange)); //lstrdup(asCmd);
+//	_wcscpy_c(pszChange, cchMax, asCmd);
+//	LPCWSTR szNames[] = {ENV_CONEMUHWND_VAR_W, ENV_CONEMUDRAW_VAR_W, ENV_CONEMUBACK_VAR_W, ENV_CONEMUWORKDIR_VAR_W};
+//	struct { HWND hWnd; LPCWSTR pszStr; } Repl[] = {{ghWnd}, {mp_VCon->GetView()}, {mp_VCon->GetBack()}, {NULL, pszStartupDir}};
+//	bool bChanged = false;
+//
+//	for (size_t i = 0; i < countof(szNames); ++i)
+//	{
+//		wchar_t szTemp[16];
+//		LPCWSTR pszReplace = NULL;
+//		if (Repl[i].hWnd)
+//		{
+//			_wsprintf(szTemp, SKIPLEN(countof(szTemp)) L"0x%08X", (DWORD)(DWORD_PTR)(Repl[i].hWnd));
+//			pszReplace = szTemp;
+//		}
+//		else if (Repl[i].pszStr)
+//		{
+//			pszReplace = Repl[i].pszStr;
+//		}
+//		else
+//		{
+//			continue;
+//		}
+//
+//		size_t rLen = _tcslen(pszReplace); _ASSERTE(rLen==10 || Repl[i].pszStr!=NULL);
+//
+//		size_t iLen = _tcslen(szNames[i]); _ASSERTE(iLen>=rLen || Repl[i].pszStr!=NULL);
+//
+//		wchar_t* pszStart = StrStrI(pszChange, szNames[i]);
+//		if (!pszStart /*|| pszStart == pszChange*/)
+//			continue;
+//		while (pszStart)
+//		{
+//			if ((pszStart > pszChange)
+//				&& ((*(pszStart-1) == L'!' && *(pszStart+iLen) == L'!')
+//					|| (*(pszStart-1) == L'%' && *(pszStart+iLen) == L'%')))
+//			{
+//				bChanged = true;
+//				pszStart--;
+//				wchar_t* pszEnd = pszStart + iLen+2;
+//				_ASSERTE(*(pszEnd-1)==L'!' || *(pszEnd-1)==L'%');
+//
+//				size_t cchLeft = _tcslen(pszEnd)+1;
+//				// Сначала - двигаем хвост, т.к. тело может быть перетерто, если rLen>iLen
+//				memmove(pszStart+rLen, pszEnd, cchLeft*sizeof(*pszEnd));
+//				memmove(pszStart, pszReplace, rLen*sizeof(*pszReplace));
+//			}
+//			pszStart = StrStrI(pszStart+2, szNames[i]);
+//		}
+//	}
+//
+//	if (!bChanged)
+//		SafeFree(pszChange);
+//	return pszChange;
+//}
 
 void CRealConsole::OnStartProcessAllowed()
 {
@@ -2961,6 +3004,51 @@ void CRealConsole::ConHostSetPID(DWORD nConHostPID)
 	}
 }
 
+LPCWSTR CRealConsole::GetStartupDir()
+{
+	LPCWSTR pszStartupDir = m_Args.pszStartupDir;
+
+	if (m_Args.pszUserName != NULL)
+	{
+		// When starting under another credentials - try to use %USERPROFILE% instead of "system32"
+		if (!pszStartupDir || !*pszStartupDir)
+		{
+			HANDLE hLogonToken = m_Args.CheckUserToken();
+			if (hLogonToken)
+			{
+				HRESULT hr = E_FAIL;
+
+				// Windows 2000 - hLogonToken - not supported
+				if (gOSVer.dwMajorVersion <= 5 && gOSVer.dwMinorVersion == 0)
+				{
+					if (ImpersonateLoggedOnUser(hLogonToken))
+					{
+						memset(ms_ProfilePathTemp, 0, sizeof(ms_ProfilePathTemp));
+						hr = SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, ms_ProfilePathTemp);
+						RevertToSelf();
+					}
+				}
+				else
+				{
+					memset(ms_ProfilePathTemp, 0, sizeof(ms_ProfilePathTemp));
+					hr = SHGetFolderPath(NULL, CSIDL_PROFILE, hLogonToken, SHGFP_TYPE_CURRENT, ms_ProfilePathTemp);
+				}
+
+				if (SUCCEEDED(hr) && *ms_ProfilePathTemp)
+				{
+					pszStartupDir = ms_ProfilePathTemp;
+				}
+
+				CloseHandle(hLogonToken);
+			}
+		}
+	}
+
+	LPCWSTR lpszWorkDir = gpConEmu->WorkDir(pszStartupDir);
+
+	return lpszWorkDir;
+}
+
 BOOL CRealConsole::StartProcess()
 {
 	if (!this)
@@ -2976,6 +3064,9 @@ BOOL CRealConsole::StartProcess()
 
 	BOOL lbRc = FALSE;
 	SetConStatus(L"Preparing process startup line...", true);
+
+	SetConEmuEnvVarChild(mp_VCon->GetView(), mp_VCon->GetBack());
+	SetConEmuEnvVar(ghWnd);
 
 	// Для валидации объектов
 	CVirtualConsole* pVCon = mp_VCon;
@@ -3035,7 +3126,6 @@ BOOL CRealConsole::StartProcess()
 	//si.dwX = rcDC.left; si.dwY = rcDC.top;
 	ZeroMemory(&pi, sizeof(pi));
 	MCHKHEAP;
-	int nStep = (m_Args.pszSpecialCmd!=NULL) ? 2 : 1;
 	wchar_t* psCurCmd = NULL;
 	_ASSERTE((m_Args.pszStartupDir == NULL) || (*m_Args.pszStartupDir != 0));
 
@@ -3107,13 +3197,14 @@ BOOL CRealConsole::StartProcess()
 	}
 
 	// Prepare cmd line
-	LPCWSTR lpszRawCmd = (m_Args.pszSpecialCmd && *m_Args.pszSpecialCmd) ? m_Args.pszSpecialCmd : gpSetCls->GetCmd();
+	LPCWSTR lpszRawCmd = (m_Args.pszSpecialCmd && *m_Args.pszSpecialCmd) ? m_Args.pszSpecialCmd : gpSetCls->GetCmd(NULL, true);
 	_ASSERTE(lpszRawCmd && *lpszRawCmd);
-	SafeFree(mpsz_CmdBuffer);
-	mpsz_CmdBuffer = ParseConEmuSubst(lpszRawCmd);
-	LPCWSTR lpszCmd = mpsz_CmdBuffer ? mpsz_CmdBuffer : lpszRawCmd;
+	//SafeFree(mpsz_CmdBuffer);
+	//mpsz_CmdBuffer = ParseConEmuSubst(lpszRawCmd);
+	//LPCWSTR lpszCmd = mpsz_CmdBuffer ? mpsz_CmdBuffer : lpszRawCmd;
+	LPCWSTR lpszCmd = lpszRawCmd;
 	LPCWSTR lpszWorkDir = NULL;
-	
+	DWORD dwLastError = 0;
 	DWORD nCreateBegin, nCreateEnd, nCreateDuration = 0;
 
 	bool bNeedConHostSearch = false;
@@ -3137,314 +3228,27 @@ BOOL CRealConsole::StartProcess()
 	}
 
 
+	bool bAllowDefaultCmd = (!m_Args.pszSpecialCmd || !*m_Args.pszSpecialCmd);
+	//int nStep = (m_Args.pszSpecialCmd!=NULL) ? 2 : 1;
+	int nStep = 1;
+
+
 	// Go
 	while (nStep <= 2)
 	{
+		_ASSERTE(nStep==1 || nStep==2);
 		MCHKHEAP;
-		MCHKHEAP;
 
-
-		DWORD nColors = (nTextColorIdx) | (nBackColorIdx << 8) | (nPopTextColorIdx << 16) | (nPopBackColorIdx << 24);
-
-		int nCurLen = 0;
-		int nLen = _tcslen(lpszCmd);
-		nLen += _tcslen(gpConEmu->ms_ConEmuExe) + 330 + MAX_PATH*2;
-		MCHKHEAP;
-		psCurCmd = (wchar_t*)malloc(nLen*sizeof(wchar_t));
-		_ASSERTE(psCurCmd);
-
-
-		// Begin generation of execution command line
-		*psCurCmd = 0;
-
-		#if 0
-		// Issue 791: Server fails, when GUI started under different credentials (login) as server
-		if (m_Args.bRunAsAdministrator)
-		{
-			_wcscat_c(psCurCmd, nLen, L"\"");
-			_wcscat_c(psCurCmd, nLen, gpConEmu->ms_ConEmuExe);
-			_wcscat_c(psCurCmd, nLen, L"\" /bypass /cmd ");
-		}
-		#endif
-
-		_wcscat_c(psCurCmd, nLen, L"\"");
-		// Copy to psCurCmd full path to ConEmuC.exe or ConEmuC64.exe
-		_wcscat_c(psCurCmd, nLen, gpConEmu->ConEmuCExeFull(lpszCmd));
-		//lstrcat(psCurCmd, L"\\");
-		//lstrcpy(psCurCmd, gpConEmu->ms_ConEmuCExeName);
-		_wcscat_c(psCurCmd, nLen, L"\" ");
-
-		if (m_Args.bRunAsAdministrator && !gpConEmu->mb_IsUacAdmin)
-		{
-			m_Args.bDetached = TRUE;
-			_wcscat_c(psCurCmd, nLen, L" /ATTACH ");
-		}
-
-		if ((gpSet->nConInMode != (DWORD)-1) || m_Args.bOverwriteMode)
-		{
-			DWORD nMode = (gpSet->nConInMode != (DWORD)-1) ? gpSet->nConInMode : 0;
-			if (m_Args.bOverwriteMode)
-			{
-				nMode |= (ENABLE_INSERT_MODE << 16); // Mask
-				nMode &= ~ENABLE_INSERT_MODE; // Turn bit OFF
-			}
-
-			nCurLen = _tcslen(psCurCmd);
-			_wsprintf(psCurCmd+nCurLen, SKIPLEN(nLen-nCurLen) L" /CINMODE=%X ", nMode);
-		}
-
-		_ASSERTE(mp_RBuf==mp_ABuf);
-		int nWndWidth = mp_RBuf->GetTextWidth();
-		int nWndHeight = mp_RBuf->GetTextHeight();
-		/*было - GetConWindowSize(con.m_sbi, nWndWidth, nWndHeight);*/
-		_ASSERTE(nWndWidth>0 && nWndHeight>0);
-
-		const DWORD nAID = GetMonitorThreadID();
-		_ASSERTE(gpConEmu->isMainThread());
-		_ASSERTE(mn_MonitorThreadID!=0 && mn_MonitorThreadID==nAID && nAID!=GetCurrentThreadId());
-		
-		nCurLen = _tcslen(psCurCmd);
-		_wsprintf(psCurCmd+nCurLen, SKIPLEN(nLen-nCurLen)
-		          L"/AID=%u /GID=%u /GHWND=%08X /BW=%i /BH=%i /BZ=%i \"/FN=%s\" /FW=%i /FH=%i /TA=%08X",
-		          nAID, GetCurrentProcessId(), (DWORD)ghWnd, nWndWidth, nWndHeight, mn_DefaultBufferHeight,
-		          gpSet->ConsoleFont.lfFaceName, gpSet->ConsoleFont.lfWidth, gpSet->ConsoleFont.lfHeight,
-		          nColors);
-
-		/*if (gpSet->FontFile[0]) { --  РЕГИСТРАЦИЯ ШРИФТА НА КОНСОЛЬ НЕ РАБОТАЕТ!
-		    wcscat(psCurCmd, L" \"/FF=");
-		    wcscat(psCurCmd, gpSet->FontFile);
-		    wcscat(psCurCmd, L"\"");
-		}*/
-		if (m_UseLogs) _wcscat_c(psCurCmd, nLen, (m_UseLogs==3) ? L" /LOG3" : (m_UseLogs==2) ? L" /LOG2" : L" /LOG");
-
-		if (!gpSet->isConVisible) _wcscat_c(psCurCmd, nLen, L" /HIDE");
-
-		// /CONFIRM | /NOCONFIRM | /NOINJECT
-		m_Args.AppendServerArgs(psCurCmd, nLen);
-
-		_wcscat_c(psCurCmd, nLen, L" /ROOT ");
-		_wcscat_c(psCurCmd, nLen, lpszCmd);
-		MCHKHEAP;
-		DWORD dwLastError = 0;
-		#ifdef MSGLOGGER
-		DEBUGSTRPROC(psCurCmd); DEBUGSTRPROC(_T("\n"));
-		#endif
-
-		SetConEmuEnvVar(GetView());
-
-		#ifdef _DEBUG
-		wchar_t szMonitorID[20]; _wsprintf(szMonitorID, SKIPLEN(countof(szMonitorID)) L"%u", nAID);
-		SetEnvironmentVariable(ENV_CONEMU_MONITOR_INTERNAL, szMonitorID);
-		#endif
-
-		if (bNeedConHostSearch)
-			ConHostSearchPrepare();
-
-		// Если сам ConEmu запущен под админом - нет смысла звать ShellExecuteEx("RunAs")
-		if (!m_Args.bRunAsAdministrator || gpConEmu->mb_IsUacAdmin)
-		{
-			LockSetForegroundWindow(LSFW_LOCK);
-			SetConStatus(L"Starting root process...", true);
-
-			if (m_Args.pszUserName != NULL)
-			{
-				// When starting under another credentials - try to use %USERPROFILE% instead of "system32"
-				LPCWSTR pszStartupDir = m_Args.pszStartupDir;
-				wchar_t szProfilePath[MAX_PATH+1] = {};
-				if (!pszStartupDir || !*pszStartupDir)
-				{
-					HANDLE hLogonToken = m_Args.CheckUserToken();
-					if (hLogonToken)
-					{
-						HRESULT hr = E_FAIL;
-
-						// Windows 2000 - hLogonToken - not supported
-						if (gOSVer.dwMajorVersion <= 5 && gOSVer.dwMinorVersion == 0)
-						{
-							if (ImpersonateLoggedOnUser(hLogonToken))
-							{
-								hr = SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, szProfilePath);
-								RevertToSelf();
-							}
-						}
-						else
-						{
-							hr = SHGetFolderPath(NULL, CSIDL_PROFILE, hLogonToken, SHGFP_TYPE_CURRENT, szProfilePath);
-						}
-
-						if (SUCCEEDED(hr) && *szProfilePath)
-						{
-							pszStartupDir = szProfilePath;
-						}
-
-						CloseHandle(hLogonToken);
-					}
-				}
-
-				nCreateBegin = GetTickCount();
-				lpszWorkDir = gpConEmu->WorkDir(pszStartupDir);
-				lbRc = CreateProcessWithLogonW(m_Args.pszUserName, m_Args.pszDomain, m_Args.szUserPassword,
-				                           LOGON_WITH_PROFILE, NULL, psCurCmd,
-				                           NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
-										   , NULL, lpszWorkDir, &si, &pi);
-					//if (CreateProcessAsUser(m_Args.hLogonToken, NULL, psCurCmd, NULL, NULL, FALSE,
-					//	NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
-					//	, NULL, m_Args.pszStartupDir, &si, &pi))
-				nCreateEnd = GetTickCount();
-				if (lbRc)
-				{
-					//mn_MainSrv_PID = pi.dwProcessId;
-					SetMainSrvPID(pi.dwProcessId, NULL);
-				}
-				else
-				{
-					dwLastError = GetLastError();
-				}
-
-				SecureZeroMemory(m_Args.szUserPassword, sizeof(m_Args.szUserPassword));
-			}
-			else if (m_Args.bRunAsRestricted)
-			{
-				nCreateBegin = GetTickCount();
-				lpszWorkDir = gpConEmu->WorkDir(m_Args.pszStartupDir);
-				lbRc = CreateProcessRestricted(NULL, psCurCmd, NULL, NULL, FALSE,
-				                        NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
-				                        , NULL, lpszWorkDir, &si, &pi, &dwLastError);
-				nCreateEnd = GetTickCount();
-
-				if (lbRc)
-				{
-					//mn_MainSrv_PID = pi.dwProcessId;
-					SetMainSrvPID(pi.dwProcessId, NULL);
-				}
-
-			}
-			else
-			{
-				nCreateBegin = GetTickCount();
-				lpszWorkDir = gpConEmu->WorkDir(m_Args.pszStartupDir);
-				lbRc = CreateProcess(NULL, psCurCmd, NULL, NULL, FALSE,
-				                     NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
-				                     //|CREATE_NEW_PROCESS_GROUP - низя! перестает срабатывать Ctrl-C
-				                     , NULL, lpszWorkDir, &si, &pi);
-				nCreateEnd = GetTickCount();
-
-				if (!lbRc)
-				{
-					dwLastError = GetLastError();
-				}
-				else
-				{
-					//mn_MainSrv_PID = pi.dwProcessId;
-					SetMainSrvPID(pi.dwProcessId, NULL);
-				}
-			}
-
-			nCreateDuration = nCreateEnd - nCreateBegin;
-			UNREFERENCED_PARAMETER(nCreateDuration);
-
-			DEBUGSTRPROC(L"CreateProcess finished\n");
-			//if (m_Args.hLogonToken) { CloseHandle(m_Args.hLogonToken); m_Args.hLogonToken = NULL; }
-			LockSetForegroundWindow(LSFW_UNLOCK);
-		}
-		else
-		{
-			LPCWSTR pszCmd = psCurCmd;
-			wchar_t szExec[MAX_PATH+1];
-
-			if (NextArg(&pszCmd, szExec) != 0)
-			{
-				lbRc = FALSE;
-				dwLastError = -1;
-			}
-			else
-			{
-				if (mp_sei)
-				{
-					SafeCloseHandle(mp_sei->hProcess);
-					SafeFree(mp_sei);
-				}
-
-				wchar_t szCurrentDirectory[MAX_PATH+1];
-
-				lpszWorkDir = gpConEmu->WorkDir(m_Args.pszStartupDir);
-				wcscpy(szCurrentDirectory, lpszWorkDir);
-
-				int nWholeSize = sizeof(SHELLEXECUTEINFO)
-				                 + sizeof(wchar_t) *
-				                 (10  /* Verb */
-				                  + _tcslen(szExec)+2
-				                  + ((pszCmd == NULL) ? 0 : (_tcslen(pszCmd)+2))
-				                  + _tcslen(szCurrentDirectory) + 2
-				                 );
-				mp_sei = (SHELLEXECUTEINFO*)calloc(nWholeSize, 1);
-				mp_sei->cbSize = sizeof(SHELLEXECUTEINFO);
-				mp_sei->hwnd = ghWnd;
-				//mp_sei->hwnd = /*NULL; */ ghWnd; // почему я тут NULL ставил?
-
-				// 121025 - remove SEE_MASK_NOCLOSEPROCESS
-				mp_sei->fMask = SEE_MASK_NO_CONSOLE|SEE_MASK_NOASYNC;
-				// Issue 791: Console server fails to duplicate self Process handle to GUI
-				mp_sei->fMask |= SEE_MASK_NOCLOSEPROCESS;
-
-				mp_sei->lpVerb = (wchar_t*)(mp_sei+1);
-				wcscpy((wchar_t*)mp_sei->lpVerb, L"runas");
-				mp_sei->lpFile = mp_sei->lpVerb + _tcslen(mp_sei->lpVerb) + 2;
-				wcscpy((wchar_t*)mp_sei->lpFile, szExec);
-				mp_sei->lpParameters = mp_sei->lpFile + _tcslen(mp_sei->lpFile) + 2;
-
-				if (pszCmd)
-				{
-					*(wchar_t*)mp_sei->lpParameters = L' ';
-					wcscpy((wchar_t*)(mp_sei->lpParameters+1), pszCmd);
-				}
-
-				mp_sei->lpDirectory = mp_sei->lpParameters + _tcslen(mp_sei->lpParameters) + 2;
-
-				if (szCurrentDirectory[0])
-					wcscpy((wchar_t*)mp_sei->lpDirectory, szCurrentDirectory);
-				else
-					mp_sei->lpDirectory = NULL;
-
-				//mp_sei->nShow = gpSet->isConVisible ? SW_SHOWNORMAL : SW_HIDE;
-				//mp_sei->nShow = SW_SHOWMINIMIZED;
-				mp_sei->nShow = SW_SHOWNORMAL;
-
-				// GuiShellExecuteEx запускается в основном потоке, поэтому nCreateDuration здесь не считаем
-				SetConStatus((gOSVer.dwMajorVersion>=6) ? L"Starting root process as Administrator..." : L"Starting root process as user...", true);
-				//lbRc = gpConEmu->GuiShellExecuteEx(mp_sei, mp_VCon);
-
-				bool bPrevIgnore = gpConEmu->mb_IgnoreQuakeActivation;
-				gpConEmu->mb_IgnoreQuakeActivation = true;
-
-				lbRc = ShellExecuteEx(mp_sei);
-
-				gpConEmu->mb_IgnoreQuakeActivation = bPrevIgnore;
-
-				// ошибку покажем дальше
-				dwLastError = GetLastError();
-			}
-		}
+		// Do actual process creation
+		lbRc = StartProcessInt(lpszCmd, psCurCmd, lpszWorkDir, bNeedConHostSearch, hSetForeground, 
+			nCreateBegin, nCreateEnd, nCreateDuration, nTextColorIdx, nBackColorIdx, nPopTextColorIdx, nPopBackColorIdx, si, pi, dwLastError);
 
 		if (lbRc)
 		{
-			if (!m_Args.bRunAsAdministrator)
-			{
-				ProcessUpdate(&pi.dwProcessId, 1);
-				AllowSetForegroundWindow(pi.dwProcessId);
-			}
-
-			apiSetForegroundWindow(hSetForeground);
-			DEBUGSTRPROC(L"CreateProcess OK\n");
-			lbRc = TRUE;
-			/*if (!AttachPID(pi.dwProcessId)) {
-			    DEBUGSTRPROC(_T("AttachPID failed\n"));
-				SetEvent(mh_CreateRootEvent); mb_InCreateRoot = FALSE;
-			    { lbRc = FALSE; goto wrap; }
-			}
-			DEBUGSTRPROC(_T("AttachPID OK\n"));*/
 			break; // OK, запустили
 		}
+
+		/* End of process start-up */
 
 		// ОШИБКА!!
 		if (InRecreate())
@@ -3460,35 +3264,49 @@ BOOL CRealConsole::StartProcess()
 		//DWORD dwLastError = GetLastError();
 		DEBUGSTRPROC(L"CreateProcess failed\n");
 		size_t nErrLen = _tcslen(psCurCmd)+100+(lpszWorkDir ? _tcslen(lpszWorkDir) : 0);
-		TCHAR* pszErr = (TCHAR*)Alloc(nErrLen,sizeof(TCHAR));
 
+		LPCWSTR pszDefaultCmd = bAllowDefaultCmd ? gpSetCls->GetDefaultCmd() : NULL;
+		nErrLen += pszDefaultCmd ? (100 + _tcslen(pszDefaultCmd)) : 0;
+
+		// Get description of 'dwLastError'
+		size_t cchFormatMax = 1024;
+		TCHAR* pszErr = (TCHAR*)Alloc(cchFormatMax,sizeof(TCHAR));
 		if (0==FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		                    NULL, dwLastError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-		                    pszErr, 1024, NULL))
+		                    pszErr, cchFormatMax, NULL))
 		{
-			_wsprintf(pszErr, SKIPLEN(nErrLen) L"Unknown system error: 0x%x", dwLastError);
+			_wsprintf(pszErr, SKIPLEN(cchFormatMax) L"Unknown system error: 0x%x", dwLastError);
 		}
 
 		nErrLen += _tcslen(pszErr);
-		TCHAR* psz = (TCHAR*)Alloc(nErrLen+100,sizeof(TCHAR));
+		TCHAR* psz = (TCHAR*)Alloc(nErrLen+255,sizeof(TCHAR));
 		int nButtons = MB_OK|MB_ICONEXCLAMATION|MB_SETFOREGROUND;
-		_wcscpy_c(psz, nErrLen, _T("Command execution failed\n\n"));
-		_wcscat_c(psz, nErrLen, psCurCmd);
-		_wcscat_c(psz, nErrLen, _T("\n\nWorking folder:"));
-		_wcscat_c(psz, nErrLen, lpszWorkDir ? lpszWorkDir : L"");
-		_wcscat_c(psz, nErrLen, _T("\n\n"));
-		_wcscat_c(psz, nErrLen, pszErr);
-
-		if (m_Args.pszSpecialCmd == NULL)
+		switch (dwLastError)
 		{
-			if (psz[_tcslen(psz)-1]!=_T('\n')) _wcscat_c(psz, nErrLen, _T("\n"));
+		case ERROR_ACCESS_DENIED:
+			_wsprintf(psz, SKIPLEN(nErrLen) L"Can't create new console, check your antivirus (code %i)!\r\n", (int)dwLastError); break;
+		default:
+			_wsprintf(psz, SKIPLEN(nErrLen) L"Can't create new console, command execution failed (code %i)\r\n", (int)dwLastError);
+		}
+		_wcscat_c(psz, nErrLen, pszErr);
+		_wcscat_c(psz, nErrLen, L"\r\n\r\n");
+		_wcscat_c(psz, nErrLen, psCurCmd);
+		_wcscat_c(psz, nErrLen, L"\r\n\r\nWorking folder:\r\n\"");
+		_wcscat_c(psz, nErrLen, lpszWorkDir ? lpszWorkDir : L"");
+		_wcscat_c(psz, nErrLen, L"\"");
+		
+		
 
-			if (!gpSetCls->GetCurCmd() && StrStrI(gpSetCls->GetCmd(), gpSetCls->GetDefaultCmd())==NULL)
+		if ((nStep==1) && pszDefaultCmd && *pszDefaultCmd)
+		{
+			if (psz[_tcslen(psz)-1]!=L'\n') _wcscat_c(psz, nErrLen, L"\r\n");
+
+			if (!gpSetCls->GetCurCmd() && StrStrI(gpSetCls->GetCmd(NULL, true), gpSetCls->GetDefaultCmd())==NULL)
 			{
-				_wcscat_c(psz, nErrLen, _T("\n\n"));
-				_wcscat_c(psz, nErrLen, _T("Do You want to simply start "));
+				_wcscat_c(psz, nErrLen, L"\r\n\r\n");
+				_wcscat_c(psz, nErrLen, L"Do You want to start ");
 				_wcscat_c(psz, nErrLen, gpSetCls->GetDefaultCmd());
-				_wcscat_c(psz, nErrLen, _T("?"));
+				_wcscat_c(psz, nErrLen, L"?");
 				nButtons |= MB_YESNO;
 			}
 		}
@@ -3524,7 +3342,7 @@ BOOL CRealConsole::StartProcess()
 		}
 
 		// Выполнить стандартную команду...
-		if (m_Args.pszSpecialCmd == NULL)
+		if (!m_Args.pszSpecialCmd || !*m_Args.pszSpecialCmd)
 		{
 			if (!gpSetCls->GetCurCmd())
 			{
@@ -3537,7 +3355,7 @@ BOOL CRealConsole::StartProcess()
 		nStep ++;
 		MCHKHEAP
 
-		if (psCurCmd) free(psCurCmd); psCurCmd = NULL;
+		SafeFree(psCurCmd);
 
 		// Изменилась команда, пересчитать настройки
 		PrepareDefaultColors(nTextColorIdx, nBackColorIdx, nPopTextColorIdx, nPopBackColorIdx, true);
@@ -3606,6 +3424,309 @@ wrap:
 	#ifdef _DEBUG
 	SetEnvironmentVariable(ENV_CONEMU_MONITOR_INTERNAL, NULL);
 	#endif
+	return lbRc;
+}
+
+BOOL CRealConsole::StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR& lpszWorkDir,
+								   bool bNeedConHostSearch, HWND hSetForeground,
+								   DWORD& nCreateBegin, DWORD& nCreateEnd, DWORD& nCreateDuration,
+								   BYTE nTextColorIdx /*= 7*/, BYTE nBackColorIdx /*= 0*/, BYTE nPopTextColorIdx /*= 5*/, BYTE nPopBackColorIdx /*= 15*/,
+								   STARTUPINFO& si, PROCESS_INFORMATION& pi, DWORD& dwLastError)
+{
+	BOOL lbRc = FALSE;
+	DWORD nColors = (nTextColorIdx) | (nBackColorIdx << 8) | (nPopTextColorIdx << 16) | (nPopBackColorIdx << 24);
+
+	int nCurLen = 0;
+	if (lpszCmd == NULL)
+	{
+		_ASSERTE(lpszCmd!=NULL);
+		lpszCmd = L"";
+	}
+	int nLen = _tcslen(lpszCmd);
+	nLen += _tcslen(gpConEmu->ms_ConEmuExe) + 330 + MAX_PATH*2;
+	MCHKHEAP;
+	psCurCmd = (wchar_t*)malloc(nLen*sizeof(wchar_t));
+	_ASSERTE(psCurCmd);
+
+
+	// Begin generation of execution command line
+	*psCurCmd = 0;
+
+	#if 0
+	// Issue 791: Server fails, when GUI started under different credentials (login) as server
+	if (m_Args.bRunAsAdministrator)
+	{
+		_wcscat_c(psCurCmd, nLen, L"\"");
+		_wcscat_c(psCurCmd, nLen, gpConEmu->ms_ConEmuExe);
+		_wcscat_c(psCurCmd, nLen, L"\" /bypass /cmd ");
+	}
+	#endif
+
+	_wcscat_c(psCurCmd, nLen, L"\"");
+	// Copy to psCurCmd full path to ConEmuC.exe or ConEmuC64.exe
+	_wcscat_c(psCurCmd, nLen, gpConEmu->ConEmuCExeFull(lpszCmd));
+	//lstrcat(psCurCmd, L"\\");
+	//lstrcpy(psCurCmd, gpConEmu->ms_ConEmuCExeName);
+	_wcscat_c(psCurCmd, nLen, L"\" ");
+
+	if (m_Args.bRunAsAdministrator && !gpConEmu->mb_IsUacAdmin)
+	{
+		m_Args.bDetached = TRUE;
+		_wcscat_c(psCurCmd, nLen, L" /ATTACH ");
+	}
+
+	if ((gpSet->nConInMode != (DWORD)-1) || m_Args.bOverwriteMode)
+	{
+		DWORD nMode = (gpSet->nConInMode != (DWORD)-1) ? gpSet->nConInMode : 0;
+		if (m_Args.bOverwriteMode)
+		{
+			nMode |= (ENABLE_INSERT_MODE << 16); // Mask
+			nMode &= ~ENABLE_INSERT_MODE; // Turn bit OFF
+		}
+
+		nCurLen = _tcslen(psCurCmd);
+		_wsprintf(psCurCmd+nCurLen, SKIPLEN(nLen-nCurLen) L" /CINMODE=%X ", nMode);
+	}
+
+	_ASSERTE(mp_RBuf==mp_ABuf);
+	int nWndWidth = mp_RBuf->GetTextWidth();
+	int nWndHeight = mp_RBuf->GetTextHeight();
+	/*было - GetConWindowSize(con.m_sbi, nWndWidth, nWndHeight);*/
+	_ASSERTE(nWndWidth>0 && nWndHeight>0);
+
+	const DWORD nAID = GetMonitorThreadID();
+	_ASSERTE(gpConEmu->isMainThread());
+	_ASSERTE(mn_MonitorThreadID!=0 && mn_MonitorThreadID==nAID && nAID!=GetCurrentThreadId());
+		
+	nCurLen = _tcslen(psCurCmd);
+	_wsprintf(psCurCmd+nCurLen, SKIPLEN(nLen-nCurLen)
+		        L"/AID=%u /GID=%u /GHWND=%08X /BW=%i /BH=%i /BZ=%i \"/FN=%s\" /FW=%i /FH=%i /TA=%08X",
+		        nAID, GetCurrentProcessId(), (DWORD)ghWnd, nWndWidth, nWndHeight, mn_DefaultBufferHeight,
+		        gpSet->ConsoleFont.lfFaceName, gpSet->ConsoleFont.lfWidth, gpSet->ConsoleFont.lfHeight,
+		        nColors);
+
+	/*if (gpSet->FontFile[0]) { --  РЕГИСТРАЦИЯ ШРИФТА НА КОНСОЛЬ НЕ РАБОТАЕТ!
+		wcscat(psCurCmd, L" \"/FF=");
+		wcscat(psCurCmd, gpSet->FontFile);
+		wcscat(psCurCmd, L"\"");
+	}*/
+	if (m_UseLogs) _wcscat_c(psCurCmd, nLen, (m_UseLogs==3) ? L" /LOG3" : (m_UseLogs==2) ? L" /LOG2" : L" /LOG");
+
+	if (!gpSet->isConVisible) _wcscat_c(psCurCmd, nLen, L" /HIDE");
+
+	// /CONFIRM | /NOCONFIRM | /NOINJECT
+	m_Args.AppendServerArgs(psCurCmd, nLen);
+
+	_wcscat_c(psCurCmd, nLen, L" /ROOT ");
+	_wcscat_c(psCurCmd, nLen, lpszCmd);
+	MCHKHEAP;
+	dwLastError = 0;
+	#ifdef MSGLOGGER
+	DEBUGSTRPROC(psCurCmd); DEBUGSTRPROC(_T("\n"));
+	#endif
+
+	#ifdef _DEBUG
+	wchar_t szMonitorID[20]; _wsprintf(szMonitorID, SKIPLEN(countof(szMonitorID)) L"%u", nAID);
+	SetEnvironmentVariable(ENV_CONEMU_MONITOR_INTERNAL, szMonitorID);
+	#endif
+
+	if (bNeedConHostSearch)
+		ConHostSearchPrepare();
+
+	// Если сам ConEmu запущен под админом - нет смысла звать ShellExecuteEx("RunAs")
+	if (!m_Args.bRunAsAdministrator || gpConEmu->mb_IsUacAdmin)
+	{
+		LockSetForegroundWindow(LSFW_LOCK);
+		SetConStatus(L"Starting root process...", true);
+
+		if (m_Args.pszUserName != NULL)
+		{
+			nCreateBegin = GetTickCount();
+
+			// When starting under another credentials - try to use %USERPROFILE% instead of "system32"
+			lpszWorkDir = GetStartupDir();
+				
+			lbRc = CreateProcessWithLogonW(m_Args.pszUserName, m_Args.pszDomain, m_Args.szUserPassword,
+				                        LOGON_WITH_PROFILE, NULL, psCurCmd,
+				                        NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
+										, NULL, lpszWorkDir, &si, &pi);
+				//if (CreateProcessAsUser(m_Args.hLogonToken, NULL, psCurCmd, NULL, NULL, FALSE,
+				//	NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
+				//	, NULL, m_Args.pszStartupDir, &si, &pi))
+			nCreateEnd = GetTickCount();
+			if (lbRc)
+			{
+				//mn_MainSrv_PID = pi.dwProcessId;
+				SetMainSrvPID(pi.dwProcessId, NULL);
+			}
+			else
+			{
+				dwLastError = GetLastError();
+			}
+
+			SecureZeroMemory(m_Args.szUserPassword, sizeof(m_Args.szUserPassword));
+		}
+		else if (m_Args.bRunAsRestricted)
+		{
+			nCreateBegin = GetTickCount();
+			lpszWorkDir = GetStartupDir();
+			lbRc = CreateProcessRestricted(NULL, psCurCmd, NULL, NULL, FALSE,
+				                    NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
+				                    , NULL, lpszWorkDir, &si, &pi, &dwLastError);
+			nCreateEnd = GetTickCount();
+
+			if (lbRc)
+			{
+				//mn_MainSrv_PID = pi.dwProcessId;
+				SetMainSrvPID(pi.dwProcessId, NULL);
+			}
+
+		}
+		else
+		{
+			nCreateBegin = GetTickCount();
+			lpszWorkDir = GetStartupDir();
+			lbRc = CreateProcess(NULL, psCurCmd, NULL, NULL, FALSE,
+				                    NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
+				                    //|CREATE_NEW_PROCESS_GROUP - низя! перестает срабатывать Ctrl-C
+				                    , NULL, lpszWorkDir, &si, &pi);
+			nCreateEnd = GetTickCount();
+
+			if (!lbRc)
+			{
+				dwLastError = GetLastError();
+			}
+			else
+			{
+				//mn_MainSrv_PID = pi.dwProcessId;
+				SetMainSrvPID(pi.dwProcessId, NULL);
+			}
+		}
+
+		nCreateDuration = nCreateEnd - nCreateBegin;
+		UNREFERENCED_PARAMETER(nCreateDuration);
+
+		DEBUGSTRPROC(L"CreateProcess finished\n");
+		//if (m_Args.hLogonToken) { CloseHandle(m_Args.hLogonToken); m_Args.hLogonToken = NULL; }
+		LockSetForegroundWindow(LSFW_UNLOCK);
+	}
+	else // m_Args.bRunAsAdministrator
+	{
+		LPCWSTR pszCmd = psCurCmd;
+		wchar_t szExec[MAX_PATH+1];
+
+		if (NextArg(&pszCmd, szExec) != 0)
+		{
+			lbRc = FALSE;
+			dwLastError = -1;
+		}
+		else
+		{
+			if (mp_sei)
+			{
+				SafeCloseHandle(mp_sei->hProcess);
+				SafeFree(mp_sei);
+			}
+
+			wchar_t szCurrentDirectory[MAX_PATH+1];
+
+			lpszWorkDir = GetStartupDir();
+			wcscpy(szCurrentDirectory, lpszWorkDir);
+
+			int nWholeSize = sizeof(SHELLEXECUTEINFO)
+				                + sizeof(wchar_t) *
+				                (10  /* Verb */
+				                + _tcslen(szExec)+2
+				                + ((pszCmd == NULL) ? 0 : (_tcslen(pszCmd)+2))
+				                + _tcslen(szCurrentDirectory) + 2
+				                );
+			mp_sei = (SHELLEXECUTEINFO*)calloc(nWholeSize, 1);
+			mp_sei->cbSize = sizeof(SHELLEXECUTEINFO);
+			mp_sei->hwnd = ghWnd;
+			//mp_sei->hwnd = /*NULL; */ ghWnd; // почему я тут NULL ставил?
+
+			// 121025 - remove SEE_MASK_NOCLOSEPROCESS
+			mp_sei->fMask = SEE_MASK_NO_CONSOLE|SEE_MASK_NOASYNC;
+			// Issue 791: Console server fails to duplicate self Process handle to GUI
+			mp_sei->fMask |= SEE_MASK_NOCLOSEPROCESS;
+
+			mp_sei->lpVerb = (wchar_t*)(mp_sei+1);
+			wcscpy((wchar_t*)mp_sei->lpVerb, L"runas");
+			mp_sei->lpFile = mp_sei->lpVerb + _tcslen(mp_sei->lpVerb) + 2;
+			wcscpy((wchar_t*)mp_sei->lpFile, szExec);
+			mp_sei->lpParameters = mp_sei->lpFile + _tcslen(mp_sei->lpFile) + 2;
+
+			if (pszCmd)
+			{
+				*(wchar_t*)mp_sei->lpParameters = L' ';
+				wcscpy((wchar_t*)(mp_sei->lpParameters+1), pszCmd);
+			}
+
+			mp_sei->lpDirectory = mp_sei->lpParameters + _tcslen(mp_sei->lpParameters) + 2;
+
+			if (szCurrentDirectory[0])
+				wcscpy((wchar_t*)mp_sei->lpDirectory, szCurrentDirectory);
+			else
+				mp_sei->lpDirectory = NULL;
+
+			//mp_sei->nShow = gpSet->isConVisible ? SW_SHOWNORMAL : SW_HIDE;
+			//mp_sei->nShow = SW_SHOWMINIMIZED;
+			mp_sei->nShow = SW_SHOWNORMAL;
+
+			// GuiShellExecuteEx запускается в основном потоке, поэтому nCreateDuration здесь не считаем
+			SetConStatus((gOSVer.dwMajorVersion>=6) ? L"Starting root process as Administrator..." : L"Starting root process as user...", true);
+			//lbRc = gpConEmu->GuiShellExecuteEx(mp_sei, mp_VCon);
+
+			bool bPrevIgnore = gpConEmu->mb_IgnoreQuakeActivation;
+			gpConEmu->mb_IgnoreQuakeActivation = true;
+
+			lbRc = ShellExecuteEx(mp_sei);
+
+			gpConEmu->mb_IgnoreQuakeActivation = bPrevIgnore;
+
+			// ошибку покажем дальше
+			dwLastError = GetLastError();
+		}
+	}
+
+	if (lbRc)
+	{
+		if (!m_Args.bRunAsAdministrator)
+		{
+			ProcessUpdate(&pi.dwProcessId, 1);
+			AllowSetForegroundWindow(pi.dwProcessId);
+		}
+
+		// 131022 If any other process was activated by user during our initialization - don't grab the focus
+		HWND hCurFore = NULL;
+		bool bMeFore = gpConEmu->isMeForeground(true/*real*/, true/*dialog*/, &hCurFore) || (hCurFore == NULL);
+		DEBUGTEST(wchar_t szForeClass[255] = L"");
+		if (!bMeFore && !::IsWindowVisible(hCurFore))
+		{
+			// But current console window handle may not initialized yet, try to check it
+			#ifdef _DEBUG
+			GetClassName(hCurFore, szForeClass, countof(szForeClass));
+			_ASSERTE(!isConsoleClass(szForeClass)); // Some other GUI application was started by user?
+			#endif
+			bMeFore = true;
+		}
+		if (bMeFore)
+		{
+			apiSetForegroundWindow(hSetForeground);
+		}
+
+		DEBUGSTRPROC(L"CreateProcess OK\n");
+		//lbRc = TRUE;
+		/*if (!AttachPID(pi.dwProcessId)) {
+			DEBUGSTRPROC(_T("AttachPID failed\n"));
+			SetEvent(mh_CreateRootEvent); mb_InCreateRoot = FALSE;
+			{ lbRc = FALSE; goto wrap; }
+		}
+		DEBUGSTRPROC(_T("AttachPID OK\n"));*/
+		//break; // OK, запустили
+	}
+
+	/* End of process start-up */
 	return lbRc;
 }
 
@@ -3773,7 +3894,13 @@ void CRealConsole::OnMouse(UINT messg, WPARAM wParam, int x, int y, bool abForce
 	if (gpSet->isDisableMouse)
 		return;
 
-	BOOL lbFarBufferSupported = isFarBufferSupported(); UNREFERENCED_PARAMETER(lbFarBufferSupported);
+	// Issue 1165: Don't send "Mouse events" into console input buffer if ENABLE_QUICK_EDIT_MODE
+	if (!abForceSend && !isSendMouseAllowed())
+	{
+		return;
+	}
+
+	DEBUGTEST(bool lbFarBufferSupported = isFarBufferSupported());
 
 	// Если консоль в режиме с прокруткой - не посылать мышь в консоль
 	// Иначе получаются казусы. Если во время выполнения команды (например "dir c: /s")
@@ -4048,7 +4175,7 @@ void CRealConsole::StartSelection(BOOL abTextMode, SHORT anX/*=-1*/, SHORT anY/*
 	mp_ABuf->StartSelection(abTextMode, anX, anY, abByMouse);
 }
 
-void CRealConsole::ExpandSelection(SHORT anX/*=-1*/, SHORT anY/*=-1*/)
+void CRealConsole::ExpandSelection(SHORT anX, SHORT anY)
 {
 	mp_ABuf->ExpandSelection(anX, anY);
 }
@@ -4058,7 +4185,7 @@ void CRealConsole::DoSelectionStop()
 	mp_ABuf->DoSelectionStop();
 }
 
-bool CRealConsole::DoSelectionCopy(bool bCopyAll /*= false*/)
+bool CRealConsole::DoSelectionCopy(bool bCopyAll /*= false*/, BYTE nFormat /*= 0xFF*/ /* use gpSet->isCTSHtmlFormat */)
 {
 	bool bCopyRc = false;
 	bool bReturnPrimary = false;
@@ -4089,7 +4216,7 @@ bool CRealConsole::DoSelectionCopy(bool bCopyAll /*= false*/)
 		}
 	}
 
-	bCopyRc = pBuf->DoSelectionCopy(bCopyAll);
+	bCopyRc = pBuf->DoSelectionCopy(bCopyAll, nFormat);
 wrap:
 	if (bReturnPrimary)
 	{
@@ -4529,7 +4656,7 @@ void CRealConsole::StopSignal()
 
 		// Чтобы при закрытии не было попытка активировать
 		// другую вкладку ЭТОЙ консоли
-		tabs.mn_tabsCount = 0;
+		mn_tabsCount = 0;
 
 		// Очистка массива консолей и обновление вкладок
 		gpConEmu->OnVConClosed(mp_VCon);
@@ -4789,9 +4916,9 @@ LPCTSTR CRealConsole::GetTitle(bool abGetRenamed/*=false*/)
 	if (!this /*|| !mn_ProcessCount*/)
 		return NULL;
 
-	if (abGetRenamed && *tabs.ms_RenameFirstTab)
+	if (abGetRenamed && *ms_RenameFirstTab)
 	{
-		return tabs.ms_RenameFirstTab;
+		return ms_RenameFirstTab;
 	}
 		
 	if (isAdministrator() && gpSet->szAdminTitleSuffix[0])
@@ -4820,6 +4947,14 @@ LRESULT CRealConsole::OnSetScrollPos(WPARAM wParam)
 	if (!this) return 0;
 
 	return mp_ABuf->OnSetScrollPos(wParam);
+}
+
+const ConEmuHotKey* CRealConsole::ProcessSelectionHotKey(DWORD VkState, bool bKeyDown, const wchar_t *pszChars)
+{
+	if (!isSelectionPresent())
+		return NULL;
+
+	return mp_ABuf->ProcessSelectionHotKey(VkState, bKeyDown, pszChars);
 }
 
 void CRealConsole::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, const wchar_t *pszChars, const MSG* pDeadCharMsg)
@@ -4983,6 +5118,8 @@ void CRealConsole::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 				if ((gpSet->isCTSEndOnTyping && (pszChars && *pszChars))
 					// +все, что не генерит символы (стрелки, Fn, и т.п.)
 					|| (gpSet->isCTSEndOnKeyPress
+						&& (messg==WM_KEYDOWN || messg==WM_SYSKEYDOWN)
+						&& !(wParam==VK_SHIFT || wParam==VK_CONTROL || wParam==VK_MENU || wParam==VK_LWIN || wParam==VK_RWIN || wParam==VK_APPS)
 						&& !gpSet->IsModifierPressed(mp_ABuf->isStreamSelection() ? vkCTSVkText : vkCTSVkBlock, false)
 					))
 				{
@@ -5072,13 +5209,13 @@ void CRealConsole::ProcessKeyboard(UINT messg, WPARAM wParam, LPARAM lParam, con
 	if (mn_LastVKeyPressed == VK_ESCAPE)
 	{
 		if ((gpSet->isMapShiftEscToEsc && (gpSet->isMultiMinByEsc == 1))
-		&& ((r.Event.KeyEvent.dwControlKeyState & ALL_MODIFIERS) == SHIFT_PRESSED))
-	{
-		// When enabled feature "Minimize by Esc always"
-		// we need easy way to send simple "Esc" to console
-		// There is an option for this: Map Shift+Esc to Esc
-		r.Event.KeyEvent.dwControlKeyState &= ~ALL_MODIFIERS;
-	}
+			&& ((r.Event.KeyEvent.dwControlKeyState & ALL_MODIFIERS) == SHIFT_PRESSED))
+		{
+			// When enabled feature "Minimize by Esc always"
+			// we need easy way to send simple "Esc" to console
+			// There is an option for this: Map Shift+Esc to Esc
+			r.Event.KeyEvent.dwControlKeyState &= ~ALL_MODIFIERS;
+		}
 	}
 
 	#ifdef _DEBUG
@@ -5273,7 +5410,7 @@ void CRealConsole::OnDosAppStartStop(enum StartStopType sst, DWORD anPID)
 		}
 
 		if (!(mn_ProgramStatus & CES_NTVDM))
-			SetProgramStatus(mn_ProgramStatus|CES_NTVDM);
+			mn_ProgramStatus |= CES_NTVDM;
 
 		// -- в cmdStartStop - mb_IgnoreCmdStop устанавливался всегда, поэтому условие убрал
 		//if (gOSVer.dwMajorVersion>5 || (gOSVer.dwMajorVersion==5 && gOSVer.dwMinorVersion>=1))
@@ -5289,7 +5426,7 @@ void CRealConsole::OnDosAppStartStop(enum StartStopType sst, DWORD anPID)
 
 		if (mn_Comspec4Ntvdm == 0)
 		{
-			SetProgramStatus(mn_ProgramStatus & ~CES_NTVDM);
+			mn_ProgramStatus &= ~CES_NTVDM;
 		}
 
 		//2010-02-26 убрал. может прийти с задержкой и только создать проблемы
@@ -5372,7 +5509,7 @@ void CRealConsole::OnServerStarted(const HWND ahConWnd, const DWORD anServerPID,
 //				//}
 //
 //				//if (!(mn_ProgramStatus & CES_NTVDM))
-//				//	SetProgramStatus(mn_ProgramStatus|CES_NTVDM);
+//				//	mn_ProgramStatus |= CES_NTVDM;
 //
 //				//if (gOSVer.dwMajorVersion>5 || (gOSVer.dwMajorVersion==5 && gOSVer.dwMinorVersion>=1))
 //				//	mb_IgnoreCmdStop = TRUE;
@@ -5405,6 +5542,8 @@ void CRealConsole::OnServerClosing(DWORD anSrvPID)
 {
 	if (anSrvPID == mn_MainSrv_PID && mh_MainSrv)
 	{
+		// 131017 set flags to ON
+		StopSignal();
 		//int nCurProcessCount = m_Processes.size();
 		//_ASSERTE(nCurProcessCount <= 1);
 		m_ServerClosing.nRecieveTick = GetTickCount();
@@ -5566,7 +5705,7 @@ bool CRealConsole::isServerAlive()
 
 #ifdef _DEBUG
 	DWORD dwExitCode = 0, nSrvPID = 0, nErrCode = 0;
-	LockFrequentExecute(500)
+	LockFrequentExecute(500,mn_CheckFreqLock)
 	{
 		SetLastError(0);
 		BOOL fSuccess = GetExitCodeProcess(mh_MainSrv, &dwExitCode);
@@ -5849,6 +5988,8 @@ void CRealConsole::SetFarStatus(DWORD nNewFarStatus)
 // Вызывается при запуске в консоли ComSpec
 void CRealConsole::SetFarPID(DWORD nFarPID)
 {
+	bool bNeedUpdate = (mn_FarPID != nFarPID);
+
 	if (nFarPID)
 	{
 		if ((mn_ProgramStatus & (CES_FARACTIVE|CES_FARINSTACK)) != (CES_FARACTIVE|CES_FARINSTACK))
@@ -5861,6 +6002,12 @@ void CRealConsole::SetFarPID(DWORD nFarPID)
 	}
 
 	mn_FarPID = nFarPID;
+
+	// Для фара могут быть настроены другие параметры фона и прочего...
+	if (bNeedUpdate)
+	{
+		mp_VCon->Update(true);
+	}
 }
 
 void CRealConsole::SetFarPluginPID(DWORD nFarPluginPID)
@@ -5915,7 +6062,7 @@ int CRealConsole::GetDefaultAppSettingsId()
 
 	int iAppId = -1;
 	LPCWSTR lpszCmd = NULL;
-	wchar_t* pszBuffer = NULL;
+	//wchar_t* pszBuffer = NULL;
 	LPCWSTR pszName = NULL;
 	wchar_t szExe[MAX_PATH+1];
 	wchar_t szName[MAX_PATH+1];
@@ -5939,12 +6086,12 @@ int CRealConsole::GetDefaultAppSettingsId()
 		// may return task name instead of real command.
 		_ASSERTE(m_Args.pszSpecialCmd && *m_Args.pszSpecialCmd && "Command line must be specified already!");
 
-		lpszCmd = gpSetCls->GetCmd();
+		lpszCmd = gpSetCls->GetCmd(NULL, true);
 		
-		// May be this is batch?
-		pszBuffer = gpConEmu->LoadConsoleBatch(lpszCmd);
-		if (pszBuffer && *pszBuffer)
-			lpszCmd = pszBuffer;
+		//// May be this is batch?
+		//pszBuffer = gpConEmu->LoadConsoleBatch(lpszCmd);
+		//if (pszBuffer && *pszBuffer)
+		//	lpszCmd = pszBuffer;
 	}
 
 	if (!lpszCmd || !*lpszCmd)
@@ -6001,7 +6148,6 @@ wrap:
 	// Load (or create) icon for new tab
 	mn_RootProcessIcon = gpConEmu->mp_TabBar->CreateTabIcon(pszIconFile, bAsAdmin);
 	// Fin
-	SafeFree(pszBuffer);
 	if (!*ms_RootProcessName)
 		mn_RootProcessIcon = -1;
 	return iAppId;
@@ -8362,102 +8508,140 @@ void CRealConsole::UpdateScrollInfo()
 	mp_VCon->SetScroll(mp_ABuf->isScroll()/*con.bBufferHeight*/, nLastTop, nLastWndHeight, nLastHeight);
 }
 
-void CRealConsole::SetTabs(ConEmuTab* apTabs, int anTabsCount)
+void CRealConsole::SetTabs(ConEmuTab* tabs, int tabsCount)
 {
 #ifdef _DEBUG
 	wchar_t szDbg[128];
-	_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"CRealConsole::SetTabs.  ItemCount=%i, PrevItemCount=%i\n", anTabsCount, tabs.mn_tabsCount);
+	_wsprintf(szDbg, SKIPLEN(countof(szDbg)) L"CRealConsole::SetTabs.  ItemCount=%i, PrevItemCount=%i\n", tabsCount, mn_tabsCount);
 	DEBUGSTRTABS(szDbg);
 #endif
-	ConEmuTab lTmpTabs = {0};
-	//const size_t nMaxTabName = countof(apTabs->Name);
+	ConEmuTab* lpTmpTabs = NULL;
+	//const size_t nMaxTabName = countof(tabs->Name);
 	// Табы нужно проверить и подготовить
 	int nActiveTab = 0, i;
 
-	if (apTabs && (anTabsCount > 0))
+	if (tabs && tabsCount)
 	{
-		_ASSERTE(apTabs->Type>1 || !apTabs->Modified);
+		_ASSERTE(tabs->Type>1 || !tabs->Modified);
+
+		//int nNewSize = sizeof(ConEmuTab)*tabsCount;
+		//lpNewTabs = (ConEmuTab*)Alloc(nNewSize, 1);
+		//if (!lpNewTabs)
+		//    return;
+		//memmove ( lpNewTabs, tabs, nNewSize );
 
 		// иначе вместо "Panels" будет то что в заголовке консоли. Например "edit - doc1.doc"
 		// это например, в процессе переключения закладок
-		if (anTabsCount > 1 && apTabs[0].Type == 1/*WTYPE_PANELS*/ && apTabs[0].Current)
-			apTabs[0].Name[0] = 0;
+		if (tabsCount > 1 && tabs[0].Type == 1/*WTYPE_PANELS*/ && tabs[0].Current)
+			tabs[0].Name[0] = 0;
 
-		if (anTabsCount == 1)  // принудительно. вдруг флажок не установлен
-			apTabs[0].Current = 1;
+		if (tabsCount == 1)  // принудительно. вдруг флажок не установлен
+			tabs[0].Current = 1;
 
 		// найти активную закладку
-		for (i = (anTabsCount-1); i >= 0; i--)
+		for (i = (tabsCount-1); i >= 0; i--)
 		{
-			if (apTabs[i].Current)
+			if (tabs[i].Current)
 			{
 				nActiveTab = i; break;
 			}
 		}
 
+#ifdef _DEBUG
 
-		#ifdef _DEBUG
 		// отладочно: имена закладок (редакторов/вьюверов) должны быть заданы!
-		for (i=1; i<anTabsCount; i++)
+		for(i=1; i<tabsCount; i++)
 		{
-			if (apTabs[i].Name[0] == 0)
+			if (tabs[i].Name[0] == 0)
 			{
-				_ASSERTE(apTabs[i].Name[0]!=0);
+				_ASSERTE(tabs[i].Name[0]!=0);
+				//wcscpy(tabs[i].Name, gpConEmu->GetDefaultTitle());
 			}
 		}
-		#endif
+
+#endif
 	}
-	else if ((anTabsCount == 1 && apTabs == NULL) || (anTabsCount <= 0 || apTabs == NULL))
+	else if (tabsCount == 1 && tabs == NULL)
 	{
-		_ASSERTE(anTabsCount>=1);
-		apTabs = &lTmpTabs;
-		apTabs->Current = 1;
-		apTabs->Type = 1;
-		anTabsCount = 1;
+		lpTmpTabs = (ConEmuTab*)Alloc(sizeof(ConEmuTab),1);
+
+		if (!lpTmpTabs)
+			return;
+
+		tabs = lpTmpTabs;
+		tabs->Current = 1;
+		tabs->Type = 1;
 	}
 
-	// Already must be
-	_ASSERTE(anTabsCount>0 && apTabs!=NULL);
-
-	// Started "as admin"
-	// 131021 - let it be fwt_Elevated always, gpSet->bAdminShield must be checked by TabBar itself
-	if (isAdministrator() /*&& (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0])*/)
+	// Если запущено под "администратором"
+	if (tabsCount && isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
 	{
 		// В идеале - иконкой на закладке (если пользователь это выбрал) или суффиксом (добавляется в GetTab)
-		for (i = 0; i < anTabsCount; i++)
+		//if (gpSet->bAdminShield)
 		{
-			apTabs[i].Type |= fwt_Elevated;
+			for (i = 0; i < tabsCount; i++)
+			{
+				tabs[i].Type |= fwt_Elevated;
+			}
 		}
+		//else
+		//{
+		//	// Иначе - суффиксом (если он задан)
+		//	size_t nAddLen = _tcslen(gpSet->szAdminTitleSuffix) + 1;
+		//	for(i=0; i<tabsCount; i++)
+		//	{
+		//		if (tabs[i].Name[0])
+		//		{
+		//			// Если есть место
+		//			if (_tcslen(tabs[i].Name) < (nMaxTabName + nAddLen))
+		//				lstrcat(tabs[i].Name, gpSet->szAdminTitleSuffix);
+		//		}
+		//	}
+		//}
 	}
 
-	//if (anTabsCount != tabs.mn_tabsCount)
-	//	tabs.mb_TabsWasChanged = true;
+	if (tabsCount != mn_tabsCount)
+		mb_TabsWasChanged = TRUE;
 
-	HANDLE hUpdate = tabs.m_Tabs.UpdateBegin();
+	MSectionLock SC;
 
-	bool bHasModal = false;
-
-	for (i = 0; i < anTabsCount; i++)
+	if (tabsCount > mn_MaxTabs)
 	{
-		CEFarWindowType TypeAndFlags = apTabs[i].Type
-			| (apTabs[i].Modified ? fwt_ModifiedFarWnd : fwt_Any)
-			| (apTabs[i].Current ? fwt_CurrentFarWnd : fwt_Any)
-			| (apTabs[i].Modal ? fwt_ModalFarWnd : fwt_Any);
-
-		int nPID = ((TypeAndFlags & (fwt_ModalFarWnd|fwt_Editor|fwt_Viewer)) != 0) ? GetFarPID() : 0;
-
-		bHasModal |= (TypeAndFlags & fwt_ModalFarWnd) == fwt_ModalFarWnd;
-
-		if (tabs.m_Tabs.UpdateFarWindow(hUpdate, mp_VCon, apTabs[i].Name, TypeAndFlags, nPID, apTabs[i].Pos, apTabs[i].EditViewId))
-			tabs.mb_TabsWasChanged = true;
+		SC.Lock(&msc_Tabs, TRUE);
+		mn_tabsCount = 0; Free(mp_tabs); mp_tabs = NULL;
+		mn_MaxTabs = tabsCount*2+10;
+		mp_tabs = (ConEmuTab*)Alloc(mn_MaxTabs,sizeof(ConEmuTab));
+		mb_TabsWasChanged = TRUE;
+	}
+	else
+	{
+		SC.Lock(&msc_Tabs, FALSE);
 	}
 
-	tabs.mn_tabsCount = anTabsCount;
-	tabs.mn_ActiveTab = nActiveTab;
-	tabs.mb_HasModalWindow = bHasModal;
+	for (i = 0; i < tabsCount; i++)
+	{
+		if (!mb_TabsWasChanged)
+		{
+			if (mp_tabs[i].Current != tabs[i].Current
+			        || mp_tabs[i].Type != tabs[i].Type
+			        || mp_tabs[i].Modified != tabs[i].Modified
+			  )
+				mb_TabsWasChanged = TRUE;
+			else if (wcscmp(mp_tabs[i].Name, tabs[i].Name)!=0)
+				mb_TabsWasChanged = TRUE;
+		}
 
-	if (tabs.m_Tabs.UpdateEnd(hUpdate, FALSE))
-		tabs.mb_TabsWasChanged = true;
+		mp_tabs[i] = tabs[i];
+	}
+
+	mn_tabsCount = tabsCount; mn_ActiveTab = nActiveTab;
+	SC.Unlock(); // больше не нужно
+
+	//if (mb_TabsWasChanged && mp_tabs && mn_tabsCount) {
+	//    CheckPanelTitle();
+	//    CheckFarStates();
+	//    FindPanels();
+	//}
 
 	// Передернуть gpConEmu->mp_TabBar->..
 	if (gpConEmu->isValid(mp_VCon))    // Во время создания консоли она еще не добавлена в список...
@@ -8465,10 +8649,6 @@ void CRealConsole::SetTabs(ConEmuTab* apTabs, int anTabsCount)
 		// На время появления автотабов - отключалось
 		gpConEmu->mp_TabBar->SetRedraw(TRUE);
 		gpConEmu->mp_TabBar->Update();
-	}
-	else
-	{
-		_ASSERTE(FALSE && "Must be added in valid-list for consistense!");
 	}
 }
 
@@ -8491,18 +8671,18 @@ INT_PTR CRealConsole::renameProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lP
 			HWND hEdit = GetDlgItem(hDlg, tNewTabName);
 
 			int nLen = 0;
-			if (pRCon->tabs.ms_RenameFirstTab[0])
+			if (pRCon->ms_RenameFirstTab[0])
 			{
-				nLen = lstrlen(pRCon->tabs.ms_RenameFirstTab);
-				SetWindowText(hEdit, pRCon->tabs.ms_RenameFirstTab);
+				nLen = lstrlen(pRCon->ms_RenameFirstTab);
+				SetWindowText(hEdit, pRCon->ms_RenameFirstTab);
 			}
 			else
 			{
-				CTab tab;
-				if (pRCon->GetTab(0, tab))
+				ConEmuTab tab = {};
+				if (pRCon->GetTab(0, &tab))
 				{
-					nLen = lstrlen(tab->Name.Ptr());
-					SetWindowText(hEdit, tab->Name.Ptr());
+					nLen = lstrlen(tab.Name);
+					SetWindowText(hEdit, tab.Name);
 				}
 			}
 
@@ -8710,7 +8890,7 @@ void CRealConsole::RenameTab(LPCWSTR asNewTabText /*= NULL*/)
 	if (!this)
 		return;
 
-	lstrcpyn(tabs.ms_RenameFirstTab, asNewTabText ? asNewTabText : L"", countof(tabs.ms_RenameFirstTab));
+	lstrcpyn(ms_RenameFirstTab, asNewTabText ? asNewTabText : L"", countof(ms_RenameFirstTab));
 	gpConEmu->mp_TabBar->Update();
 	mp_VCon->OnTitleChanged();
 }
@@ -8773,10 +8953,10 @@ int CRealConsole::GetTabCount(BOOL abVisibleOnly /*= FALSE*/)
 		return 1; // На время выполнения команд - ТОЛЬКО одна закладка
 
 	TODO("Обработать gpSet->bHideDisabledTabs, вдруг какие-то табы засерены");
-	//if (tabs.mn_tabsCount > 1 && gpSet->bHideDisabledConsoleTabs)
+	//if (mn_tabsCount > 1 && gpSet->bHideDisabledConsoleTabs)
 	//{
 	//	int nCount = 0;
-	//	for (int i = 0; i < tabs.mn_tabsCount; i++)
+	//	for (int i = 0; i < mn_tabsCount; i++)
 	//	{
 	//		if (CanActivateFarWindow(i))
 	//			nCount++;
@@ -8789,7 +8969,7 @@ int CRealConsole::GetTabCount(BOOL abVisibleOnly /*= FALSE*/)
 	//	return nCount;
 	//}
 
-	return max(tabs.mn_tabsCount,1);
+	return max(mn_tabsCount,1);
 }
 
 int CRealConsole::GetActiveTab()
@@ -8798,302 +8978,230 @@ int CRealConsole::GetActiveTab()
 		return 0;
 
 	int nCount = GetTabCount();
-	return (tabs.mn_ActiveTab < nCount) ? tabs.mn_ActiveTab : 0;
+	return (mn_ActiveTab < nCount) ? mn_ActiveTab : 0;
 }
 
 // (Panels=1, Viewer=2, Editor=3) |(Elevated=0x100) |(NotElevated=0x200) |(Modal=0x400)
 CEFarWindowType CRealConsole::GetActiveTabType()
 {
-	int nType = fwt_Any/*0*/;
-
-	if (tabs.mn_tabsCount < 1)
+	int nType = 0;
+	if (!mp_tabs)
 	{
-		_ASSERTE(tabs.mn_tabsCount>=1);
-		nType = fwt_Panels;
+		nType = 1;
 	}
 	else
 	{
-		TabInfo rInfo;
 		int iModal = -1;
-		for (int i = 0; i < tabs.mn_tabsCount; i++)
+		for (int i = 0; i < mn_tabsCount; i++)
 		{
-			if (tabs.m_Tabs.GetTabInfoByIndex(i, rInfo) && (rInfo.Type & fwt_ModalFarWnd))
+			if (mp_tabs[i].Modal)
 			{
 				iModal = i;
-				nType = rInfo.Type;
 				break;
 			}
 		}
 
-		if (iModal == -1)
+		int iActive = (iModal != -1) ? iModal : GetActiveTab();
+		if (iActive >= 0 && iActive < mn_tabsCount)
 		{
-			int iActive = GetActiveTab();
-			if (tabs.m_Tabs.GetTabInfoByIndex(iActive, rInfo))
-			{
-				nType = rInfo.Type;
-			}
+			nType = mp_tabs[iActive].Type;
+			if (mp_tabs[iActive].Modal)
+				nType |= 0x400;
 		}
 	}
 
-	#ifdef _DEBUG
 	TODO("Надо/не надо?");
 	if (isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
 	{
-		_ASSERTE((nType&fwt_Elevated)==fwt_Elevated);
-		//if (gpSet->bAdminShield)
-		//{
-		//	nType |= fwt_Elevated;
-		//}
+		if (gpSet->bAdminShield)
+		{
+			nType |= 0x100;
+		}
 	}
-	#endif
 
 	return nType;
 }
 
-//void CRealConsole::UpdateTabFlags(/*IN|OUT*/ ConEmuTab* pTab)
-//{
-//	if (tabs.ms_RenameFirstTab[0])
-//		pTab->Type |= fwt_Renamed;
-//
-//	if (isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
-//	{
-//		if (gpSet->bAdminShield)
-//		{
-//			pTab->Type |= fwt_Elevated;
-//		}
-//		else
-//		{
-//			INT_PTR nMaxLen = min(countof(TitleFull), countof(pTab->Name));
-//			if ((INT_PTR)(_tcslen(pTab->Name) + _tcslen(gpSet->szAdminTitleSuffix)) < nMaxLen)
-//				_wcscat_c(pTab->Name, nMaxLen, gpSet->szAdminTitleSuffix);
-//		}
-//	}
-//}
+void CRealConsole::UpdateTabFlags(/*IN|OUT*/ ConEmuTab* pTab)
+{
+	if (ms_RenameFirstTab[0])
+		pTab->Type |= fwt_Renamed;
+
+	if (isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
+	{
+		if (gpSet->bAdminShield)
+		{
+			pTab->Type |= fwt_Elevated;
+		}
+		else
+		{
+			INT_PTR nMaxLen = min(countof(TitleFull), countof(pTab->Name));
+			if ((INT_PTR)(_tcslen(pTab->Name) + _tcslen(gpSet->szAdminTitleSuffix)) < nMaxLen)
+				_wcscat_c(pTab->Name, nMaxLen, gpSet->szAdminTitleSuffix);
+		}
+	}
+}
 
 // Если такого таба нет - pTab НЕ ОБНУЛЯТЬ!!!
-bool CRealConsole::GetTab(int tabIdx, /*OUT*/ CTab& rTab)
+bool CRealConsole::GetTab(int tabIdx, /*OUT*/ ConEmuTab* pTab)
 {
 	if (!this)
 		return false;
 
-	// Должен быть как минимум один (хотя бы пустой) таб
-	_ASSERTE(tabs.mn_tabsCount>0);
-
-	if ((tabIdx < 0) || (tabIdx >= tabs.mn_tabsCount))
-		return false;
-
-	int iGetTabIdx = tabIdx;
-
-	// На время выполнения DOS-команд - только один таб
-	if (mn_ProgramStatus & CES_FARACTIVE)
-	{
-		// Only Far Manager can get several tab in one console
-
-		// Есть модальный редактор/вьювер?
-		if (tabs.mb_HasModalWindow)
-		{
-			if (tabIdx > 0)
-				return false;
-
-			CTab Test;
-			for (int i = 0; i < tabs.mn_tabsCount; i++)
-			{
-				if (tabs.m_Tabs.GetTabByIndex(iGetTabIdx, Test)
-					&& (Test->Flags() & fwt_ModalFarWnd))
-				{
-					iGetTabIdx = i;
-					break;
-				}
-			}
-		}
-	}
-	else if (tabIdx > 0)
-	{
-		return false;
-	}
-
-	// Go
-	if (!tabs.m_Tabs.GetTabByIndex(iGetTabIdx, rTab))
-		return false;
-
-	if (tabIdx == 0)
-	{
-		if (*tabs.ms_RenameFirstTab)
-			rTab->Info.Type |= fwt_Renamed;
-		else
-			rTab->Info.Type &= ~fwt_Renamed;
-		rTab->Renamed.Set(tabs.ms_RenameFirstTab);
-	}
-	else
-	{
-		rTab->Info.Type &= ~fwt_Renamed;
-	}
-
-	return true;
-
-	////if (hGuiWnd ???
-
-	//PRAGMA_ERROR("CRealConsole::GetTab переделать на CTab& Tab");
-
-	////if (hGuiWnd)
-	////{
-	////	if (tabIdx == 0)
-	////	{
-	////		pTab->Pos = 0; pTab->Current = 1; pTab->Type = 1; pTab->Modified = 0;
-	////		int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
-	////		GetWindowText(hGuiWnd, pTab->Name, nMaxLen);
-	////		return true;
-	////	}
-	////	return false;
-	////}
-
-	//if (!mp_tabs || tabIdx<0 || tabIdx>=tabs.mn_tabsCount || hGuiWnd)
+	//if (hGuiWnd)
 	//{
-	//	// На всякий случай, даже если табы не инициализированы, а просят первый -
-	//	// вернем просто заголовок консоли
 	//	if (tabIdx == 0)
 	//	{
 	//		pTab->Pos = 0; pTab->Current = 1; pTab->Type = 1; pTab->Modified = 0;
 	//		int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
-	//		lstrcpyn(pTab->Name, tabs.ms_RenameFirstTab[0] ? tabs.ms_RenameFirstTab : TitleFull, nMaxLen);
-	//		UpdateTabFlags(pTab);
+	//		GetWindowText(hGuiWnd, pTab->Name, nMaxLen);
 	//		return true;
 	//	}
-
 	//	return false;
 	//}
 
-	//// На время выполнения DOS-команд - только один таб
-	//if ((mn_ProgramStatus & CES_FARACTIVE) == 0 && tabIdx > 0)
-	//	return false;
+	if (!mp_tabs || tabIdx<0 || tabIdx>=mn_tabsCount || hGuiWnd)
+	{
+		// На всякий случай, даже если табы не инициализированы, а просят первый -
+		// вернем просто заголовок консоли
+		if (tabIdx == 0)
+		{
+			pTab->Pos = 0; pTab->Current = 1; pTab->Type = 1; pTab->Modified = 0;
+			int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
+			lstrcpyn(pTab->Name, ms_RenameFirstTab[0] ? ms_RenameFirstTab : TitleFull, nMaxLen);
+			UpdateTabFlags(pTab);
+			return true;
+		}
 
-	//// Есть модальный редактор/вьювер?
-	//int iModal = -1;
-	//if (tabs.mn_tabsCount > 1)
+		return false;
+	}
+
+	// На время выполнения DOS-команд - только один таб
+	if ((mn_ProgramStatus & CES_FARACTIVE) == 0 && tabIdx > 0)
+		return false;
+
+	// Есть модальный редактор/вьювер?
+	int iModal = -1;
+	if (mn_tabsCount > 1)
+	{
+		for (int i = 0; i < mn_tabsCount; i++)
+		{
+			if (mp_tabs[i].Modal)
+			{
+				iModal = i;
+				break;
+			}
+		}
+		/*
+		if (iModal != -1)
+		{
+			if (tabIdx == 0)
+				tabIdx = iModal;
+			else
+				return false; // Показываем только модальный редактор/вьювер
+			TODO("Доделать для новых табов, чтобы история не сбивалась");
+		}
+		*/
+	}
+
+	memmove(pTab, mp_tabs+tabIdx, sizeof(ConEmuTab));
+
+	// Rename tab. Пока только первый (панель/cmd/powershell/...)
+	if ((tabIdx == 0) && ms_RenameFirstTab[0])
+	{
+		lstrcpyn(pTab->Name, ms_RenameFirstTab, countof(pTab->Name));
+	}
+
+	// Если панель единственная - точно показываем заголовок консоли
+	if (((mn_tabsCount == 1) || (mn_ProgramStatus & CES_FARACTIVE) == 0) && pTab->Type == 1)
+	{
+		// И есть заголовок консоли
+		if (TitleFull[0] && (ms_RenameFirstTab[0] == 0))  
+		{
+			int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
+			lstrcpyn(pTab->Name, TitleFull, nMaxLen);
+		}
+	}
+
+	if (pTab->Name[0] == 0)
+	{
+		if (ms_PanelTitle[0])  // скорее всего - это Panels?
+		{
+			// 03.09.2009 Maks -> min
+			int nMaxLen = min(countof(ms_PanelTitle) , countof(pTab->Name));
+			lstrcpyn(pTab->Name, ms_PanelTitle, nMaxLen);
+
+			//if (isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
+			//{
+			//	if (gpSet->bAdminShield)
+			//	{
+			//		pTab->Type |= fwt_Elevated;
+			//	}
+			//	else
+			//	{
+			//		if ((INT_PTR)_tcslen(ms_PanelTitle) < (INT_PTR)(countof(pTab->Name) + _tcslen(gpSet->szAdminTitleSuffix) + 1))
+			//			lstrcat(pTab->Name, gpSet->szAdminTitleSuffix);
+			//	}
+			//}
+		}
+		else if (mn_tabsCount == 1 && TitleFull[0])  // Если панель единственная - точно показываем заголовок консоли
+		{
+			// 03.09.2009 Maks -> min
+			int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
+			lstrcpyn(pTab->Name, TitleFull, nMaxLen);
+		}
+	}
+
+	//if (tabIdx == 0 && isAdministrator() && gpSet->bAdminShield)
 	//{
-	//	for (int i = 0; i < tabs.mn_tabsCount; i++)
-	//	{
-	//		if (mp_tabs[i].Modal)
-	//		{
-	//			iModal = i;
-	//			break;
-	//		}
-	//	}
-	//	/*
-	//	if (iModal != -1)
-	//	{
-	//		if (tabIdx == 0)
-	//			tabIdx = iModal;
-	//		else
-	//			return false; // Показываем только модальный редактор/вьювер
-	//		TODO("Доделать для новых табов, чтобы история не сбивалась");
-	//	}
-	//	*/
+	//	pTab->Type |= fwt_Elevated;
 	//}
 
-	//memmove(pTab, mp_tabs+tabIdx, sizeof(ConEmuTab));
+	wchar_t* pszAmp = pTab->Name;
+	int nCurLen = _tcslen(pTab->Name), nMaxLen = countof(pTab->Name)-1;
+	
+	#ifdef HT_CONEMUTAB
+	WARNING("После перевода табов на ручную отрисовку - эту часть с амперсандами можно будет убрать");
+	if (gpSet->isTabsInCaption)
+	{
+		//_ASSERTE(FALSE);
+	}
+	#endif
 
-	//// Rename tab. Пока только первый (панель/cmd/powershell/...)
-	//if ((tabIdx == 0) && tabs.ms_RenameFirstTab[0])
-	//{
-	//	lstrcpyn(pTab->Name, tabs.ms_RenameFirstTab, countof(pTab->Name));
-	//}
+	while ((pszAmp = wcschr(pszAmp, L'&')) != NULL)
+	{
+		if (nCurLen >= (nMaxLen - 2))
+		{
+			*pszAmp = L'_';
+			pszAmp ++;
+		}
+		else
+		{
+			size_t nMove = nCurLen-(pszAmp-pTab->Name)+1; // right part of string + \0
+			wmemmove_s(pszAmp+1, nMove, pszAmp, nMove);
+			nCurLen ++;
+			pszAmp += 2;
+		}
+	}
 
-	//// Если панель единственная - точно показываем заголовок консоли
-	//if (((tabs.mn_tabsCount == 1) || (mn_ProgramStatus & CES_FARACTIVE) == 0) && pTab->Type == 1)
-	//{
-	//	// И есть заголовок консоли
-	//	if (TitleFull[0] && (tabs.ms_RenameFirstTab[0] == 0))  
-	//	{
-	//		int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
-	//		lstrcpyn(pTab->Name, TitleFull, nMaxLen);
-	//	}
-	//}
+	if ((iModal != -1) && (tabIdx != iModal))
+		pTab->Type |= fwt_Disabled;
 
-	//if (pTab->Name[0] == 0)
-	//{
-	//	if (ms_PanelTitle[0])  // скорее всего - это Panels?
-	//	{
-	//		// 03.09.2009 Maks -> min
-	//		int nMaxLen = min(countof(ms_PanelTitle) , countof(pTab->Name));
-	//		lstrcpyn(pTab->Name, ms_PanelTitle, nMaxLen);
+	UpdateTabFlags(pTab);
 
-	//		//if (isAdministrator() && (gpSet->bAdminShield || gpSet->szAdminTitleSuffix[0]))
-	//		//{
-	//		//	if (gpSet->bAdminShield)
-	//		//	{
-	//		//		pTab->Type |= fwt_Elevated;
-	//		//	}
-	//		//	else
-	//		//	{
-	//		//		if ((INT_PTR)_tcslen(ms_PanelTitle) < (INT_PTR)(countof(pTab->Name) + _tcslen(gpSet->szAdminTitleSuffix) + 1))
-	//		//			lstrcat(pTab->Name, gpSet->szAdminTitleSuffix);
-	//		//	}
-	//		//}
-	//	}
-	//	else if (tabs.mn_tabsCount == 1 && TitleFull[0])  // Если панель единственная - точно показываем заголовок консоли
-	//	{
-	//		// 03.09.2009 Maks -> min
-	//		int nMaxLen = min(countof(TitleFull) , countof(pTab->Name));
-	//		lstrcpyn(pTab->Name, TitleFull, nMaxLen);
-	//	}
-	//}
-
-	////if (tabIdx == 0 && isAdministrator() && gpSet->bAdminShield)
-	////{
-	////	pTab->Type |= fwt_Elevated;
-	////}
-
-	//wchar_t* pszAmp = pTab->Name;
-	//int nCurLen = _tcslen(pTab->Name), nMaxLen = countof(pTab->Name)-1;
-	//
-	//#ifdef HT_CONEMUTAB
-	//WARNING("После перевода табов на ручную отрисовку - эту часть с амперсандами можно будет убрать");
-	//if (gpSet->isTabsInCaption)
-	//{
-	//	//_ASSERTE(FALSE);
-	//}
-	//#endif
-
-	//while ((pszAmp = wcschr(pszAmp, L'&')) != NULL)
-	//{
-	//	if (nCurLen >= (nMaxLen - 2))
-	//	{
-	//		*pszAmp = L'_';
-	//		pszAmp ++;
-	//	}
-	//	else
-	//	{
-	//		size_t nMove = nCurLen-(pszAmp-pTab->Name)+1; // right part of string + \0
-	//		wmemmove_s(pszAmp+1, nMove, pszAmp, nMove);
-	//		nCurLen ++;
-	//		pszAmp += 2;
-	//	}
-	//}
-
-	//if ((iModal != -1) && (tabIdx != iModal))
-	//	pTab->Type |= fwt_Disabled;
-
-	//UpdateTabFlags(pTab);
-
-	//return true;
+	return true;
 }
 
 int CRealConsole::GetModifiedEditors()
 {
 	int nEditors = 0;
 	
-	if (tabs.mn_tabsCount > 0)
+	if (mp_tabs && mn_tabsCount)
 	{
-		TabInfo Info;
-
-		for (int j = 0; j < tabs.mn_tabsCount; j++)
+		for (int j = 0; j < mn_tabsCount; j++)
 		{
-			if (tabs.m_Tabs.GetTabInfoByIndex(j, Info))
-			{
-				if (((Info.Type & fwt_TypeMask) == fwt_Editor) && (Info.Type & fwt_ModifiedFarWnd))
-					nEditors++;
-			}
+			if ((mp_tabs[j].Type == /*Editor*/3) && (mp_tabs[j].Modified != 0))
+				nEditors++;
 		}
 	}
 
@@ -9109,9 +9217,9 @@ void CRealConsole::CheckPanelTitle()
 
 #endif
 
-	if (tabs.mn_tabsCount > 0)
+	if (mp_tabs && mn_tabsCount)
 	{
-		if ((tabs.mn_ActiveTab >= 0 && tabs.mn_ActiveTab < tabs.mn_tabsCount) || tabs.mn_tabsCount == 1)
+		if ((mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount) || mn_tabsCount == 1)
 		{
 			WCHAR szPanelTitle[CONEMUTABMAX];
 
@@ -9135,7 +9243,7 @@ DWORD CRealConsole::CanActivateFarWindow(int anWndIndex)
 	if (!dwPID)
 	{
 		return -1; // консоль активируется без разбора по вкладкам (фара нет)
-		//if (anWndIndex == tabs.mn_ActiveTab)
+		//if (anWndIndex == mn_ActiveTab)
 		//return 0;
 	}
 
@@ -9143,14 +9251,14 @@ DWORD CRealConsole::CanActivateFarWindow(int anWndIndex)
 	// Если идет процесс (в заголовке консоли {n%}) - выходим
 	// Если висит диалог - выходим (диалог обработает сам плагин)
 
-	if (anWndIndex < 0 || anWndIndex >= tabs.mn_tabsCount)
+	if (anWndIndex < 0 || anWndIndex >= mn_tabsCount)
 	{
-		AssertCantActivate((anWndIndex>=0 && anWndIndex<tabs.mn_tabsCount));
+		AssertCantActivate((anWndIndex>=0 && anWndIndex<mn_tabsCount));
 		return 0;
 	}
 
 	// Добавил такую проверочку. По идее, у нас всегда должен быть актуальный номер текущего окна.
-	if (tabs.mn_ActiveTab == anWndIndex)
+	if (mn_ActiveTab == anWndIndex)
 		return (DWORD)-1; // Нужное окно уже выделено, лучше не дергаться...
 
 	if (isPictureView(TRUE))
@@ -9196,10 +9304,10 @@ DWORD CRealConsole::CanActivateFarWindow(int anWndIndex)
 
 	BOOL lbMenuOrMacro = FALSE;
 
-	if (tabs.mn_ActiveTab >= 0 && tabs.mn_ActiveTab < tabs.mn_tabsCount)
+	if (mp_tabs && mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount)
 	{
 		// Меню может быть только в панелях
-		if ((GetActiveTabType() & fwt_TypeMask) == fwt_Panels)
+		if (mp_tabs[mn_ActiveTab].Type == 1/*WTYPE_PANELS*/)
 		{
 			lbMenuOrMacro = mp_RBuf->isFarMenuOrMacro();
 		}
@@ -9254,7 +9362,7 @@ BOOL CRealConsole::ActivateFarWindow(int anWndIndex)
 		DWORD nData[2] = {anWndIndex,0};
 
 		// Если в панелях висит QSearch - его нужно предварительно "снять"
-		if (!tabs.mn_ActiveTab && (mp_ABuf && (mp_ABuf->GetDetector()->GetFlags() & FR_QSEARCH)))
+		if (!mn_ActiveTab && (mp_ABuf && (mp_ABuf->GetDetector()->GetFlags() & FR_QSEARCH)))
 			nData[1] = TRUE;
 
 		DEBUGSTRCMD(L"GUI send CMD_SETWINDOW\n");
@@ -10208,15 +10316,13 @@ void CRealConsole::CheckFarStates()
 	{
 		// Сначала пытаемся проверить статус по закладкам: если к нам из плагина пришло,
 		// что активен "viewer/editor" - то однозначно ставим CES_VIEWER/CES_EDITOR
-		if (tabs.mn_ActiveTab >= 0 && tabs.mn_ActiveTab < tabs.mn_tabsCount)
+		if (mp_tabs && mn_ActiveTab >= 0 && mn_ActiveTab < mn_tabsCount)
 		{
-			CEFarWindowType nActiveType = (GetActiveTabType() & fwt_TypeMask);
-
-			if (nActiveType != fwt_Panels)
+			if (mp_tabs[mn_ActiveTab].Type != 1)
 			{
-				if (nActiveType == fwt_Viewer)
+				if (mp_tabs[mn_ActiveTab].Type == 2)
 					nNewState |= CES_VIEWER;
-				else if (nActiveType == fwt_Editor)
+				else if (mp_tabs[mn_ActiveTab].Type == 3)
 					nNewState |= CES_EDITOR;
 			}
 		}
@@ -10385,6 +10491,8 @@ void CRealConsole::OnTitleChanged()
 	#endif
 	
 	wcscpy(Title, TitleCmp);
+	SetWindowText(mp_VCon->GetView(), TitleCmp);
+
 	// Обработка прогресса операций
 	//short nLastProgress = mn_Progress;
 	short nNewProgress;
@@ -10525,17 +10633,15 @@ bool CRealConsole::isEditorModified()
 
 	if (!isEditor()) return false;
 
-	if (tabs.mn_tabsCount)
+	if (mp_tabs && mn_tabsCount)
 	{
-		TabInfo Info;
-
-		for (int j = 0; j < tabs.mn_tabsCount; j++)
+		for(int j = 0; j < mn_tabsCount; j++)
 		{
-			if (tabs.m_Tabs.GetTabInfoByIndex(j, Info) && (Info.Type & fwt_CurrentFarWnd))
+			if (mp_tabs[j].Current)
 			{
-				if ((Info.Type & fwt_TypeMask) == fwt_Editor)
+				if (mp_tabs[j].Type == /*Editor*/3)
 				{
-					return ((Info.Type & fwt_ModifiedFarWnd) == fwt_ModifiedFarWnd);
+					return (mp_tabs[j].Modified != 0);
 				}
 
 				return false;
@@ -10579,21 +10685,16 @@ const RConStartArgs& CRealConsole::GetArgs()
 	return m_Args;
 }
 
-LPCWSTR CRealConsole::GetCmd()
+LPCWSTR CRealConsole::GetCmd(bool bThisOnly /*= false*/)
 {
 	if (!this) return L"";
 
 	if (m_Args.pszSpecialCmd)
 		return m_Args.pszSpecialCmd;
+	else if (!bThisOnly)
+		return gpSetCls->GetCmd(NULL, true);
 	else
-		return gpSetCls->GetCmd();
-}
-
-LPCWSTR CRealConsole::GetDir()
-{
-	if (!this) return L"";
-
-	return gpConEmu->WorkDir(m_Args.pszStartupDir);
+		return L"";
 }
 
 wchar_t* CRealConsole::CreateCommandLine(bool abForTasks /*= false*/)
@@ -11591,6 +11692,19 @@ bool CRealConsole::isFarBufferSupported()
 		return false;
 
 	return (m_FarInfo.cbSize && m_FarInfo.bBufferSupport && (m_FarInfo.nFarPID == GetFarPID()));
+}
+
+// Проверить, разрешен ли в консоли прием мышиных сообщений
+// Программы могут отключать прием через SetConsoleMode
+bool CRealConsole::isSendMouseAllowed()
+{
+	if (!this || (mp_ABuf->m_Type != rbt_Primary))
+		return false;
+
+	if (mp_ABuf->GetConsoleMode() & ENABLE_QUICK_EDIT_MODE)
+		return false;
+
+	return true;
 }
 
 bool CRealConsole::isFarKeyBarShown()

@@ -29,6 +29,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define HIDE_USE_EXCEPTION_INFO
 #include "Header.h"
 #include "../common/common.hpp"
+#include "../common/MMap.h"
+#include "../common/SetEnvVar.h"
 #include "../common/WinObjects.h"
 #include "ConEmu.h"
 #include "VConChild.h"
@@ -60,8 +62,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define TIMER_AUTOCOPY_DELAY      (GetDoubleClickTime()*10/9)
 #define TIMER_AUTOCOPY            3204
 
+extern MMap<HWND,CVirtualConsole*> gVConDcMap;
+extern MMap<HWND,CVirtualConsole*> gVConBkMap;
+static HWND ghDcInDestroing = NULL;
+static HWND ghBkInDestroing = NULL;
+
 CConEmuChild::CConEmuChild()
 {
+	mn_AlreadyDestroyed = 0;
+
 	mn_MsgTabChanged = RegisterWindowMessage(CONEMUTABCHANGED);
 	mn_MsgPostFullPaint = RegisterWindowMessage(L"CConEmuChild::PostFullPaint");
 	mn_MsgSavePaneSnapshoot = RegisterWindowMessage(L"CConEmuChild::SavePaneSnapshoot");
@@ -96,16 +105,40 @@ CConEmuChild::CConEmuChild()
 
 CConEmuChild::~CConEmuChild()
 {
+	if (mh_WndDC || mh_WndBack)
+	{
+		DoDestroyDcWindow();
+	}
+}
+
+bool CConEmuChild::isAlreadyDestroyed()
+{
+	return (mn_AlreadyDestroyed!=0);
+}
+
+void CConEmuChild::DoDestroyDcWindow()
+{
+	// Set flag immediately
+	mn_AlreadyDestroyed = GetTickCount();
+
+	// Go
+	ghDcInDestroing = mh_WndDC;
+	ghBkInDestroing = mh_WndBack;
+	// Remove from MMap before DestroyWindow, because pVCon is no longer Valid
 	if (mh_WndDC)
 	{
+		gVConDcMap.Del(mh_WndDC);
 		DestroyWindow(mh_WndDC);
 		mh_WndDC = NULL;
 	}
 	if (mh_WndBack)
 	{
+		gVConBkMap.Del(mh_WndBack);
 		DestroyWindow(mh_WndBack);
 		mh_WndBack = NULL;
 	}
+	ghDcInDestroing = NULL;
+	ghBkInDestroing = NULL;
 }
 
 HWND CConEmuChild::CreateView()
@@ -255,28 +288,31 @@ LRESULT CConEmuChild::ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM 
 		gpConEmu->LogMessage(hWnd, messg, wParam, lParam);
 	}
 
+	CVConGuard guard;
 	CVirtualConsole* pVCon = NULL;
 	if (messg == WM_CREATE || messg == WM_NCCREATE)
 	{
 		LPCREATESTRUCT lp = (LPCREATESTRUCT)lParam;
-		pVCon = (CVirtualConsole*)lp->lpCreateParams;
-		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)pVCon);
+		guard = (CVirtualConsole*)lp->lpCreateParams;
+		pVCon = guard.VCon();
+		if (pVCon)
+		{
+			gVConDcMap.Set(hWnd, pVCon);
 
-		pVCon->m_TAutoCopy.Init(hWnd, TIMER_AUTOCOPY, TIMER_AUTOCOPY_DELAY);
+			pVCon->m_TAutoCopy.Init(hWnd, TIMER_AUTOCOPY, TIMER_AUTOCOPY_DELAY);
 
-		pVCon->m_TScrollShow.Init(hWnd, TIMER_SCROLL_SHOW, TIMER_SCROLL_SHOW_DELAY);
-		pVCon->m_TScrollHide.Init(hWnd, TIMER_SCROLL_HIDE, TIMER_SCROLL_HIDE_DELAY);
-		#ifndef SKIP_HIDE_TIMER
-		pVCon->m_TScrollCheck.Init(hWnd, TIMER_SCROLL_CHECK, TIMER_SCROLL_CHECK_DELAY);
-		#endif
-
+			pVCon->m_TScrollShow.Init(hWnd, TIMER_SCROLL_SHOW, TIMER_SCROLL_SHOW_DELAY);
+			pVCon->m_TScrollHide.Init(hWnd, TIMER_SCROLL_HIDE, TIMER_SCROLL_HIDE_DELAY);
+			#ifndef SKIP_HIDE_TIMER
+			pVCon->m_TScrollCheck.Init(hWnd, TIMER_SCROLL_CHECK, TIMER_SCROLL_CHECK_DELAY);
+			#endif
+		}
 	}
-	else
+	else if (hWnd != ghDcInDestroing)
 	{
-		pVCon = (CVirtualConsole*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+		if (!gVConDcMap.Get(hWnd, &pVCon) || !guard.Attach(pVCon))
+			pVCon = NULL;
 	}
-
-	CVConGuard guard(pVCon);
 
 
 	if (messg == WM_SYSCHAR)
@@ -289,7 +325,7 @@ LRESULT CConEmuChild::ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM 
 
 	if (!pVCon)
 	{
-		_ASSERTE(pVCon!=NULL);
+		_ASSERTE(pVCon!=NULL || hWnd==ghDcInDestroing);
 		result = DefWindowProc(hWnd, messg, wParam, lParam);
 		goto wrap;
 	}
@@ -617,18 +653,20 @@ LRESULT CConEmuChild::BackWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM l
 	}
 
 	CVConGuard guard;
+	CVirtualConsole* pVCon = NULL;
 	if (messg == WM_CREATE || messg == WM_NCCREATE)
 	{
 		LPCREATESTRUCT lp = (LPCREATESTRUCT)lParam;
 		guard = (CVirtualConsole*)lp->lpCreateParams;
-		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)guard.VCon());
+		pVCon = guard.VCon();
+		if (pVCon)
+			gVConBkMap.Set(hWnd, pVCon);
 	}
-	else
+	else if (hWnd != ghBkInDestroing)
 	{
-		guard = (CVirtualConsole*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+		if (!gVConBkMap.Get(hWnd, &pVCon) || !guard.Attach(pVCon))
+			pVCon = NULL;
 	}
-
-	CVirtualConsole* pVCon = guard.VCon();
 
 	if (messg == WM_SYSCHAR)
 	{
@@ -640,7 +678,7 @@ LRESULT CConEmuChild::BackWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM l
 
 	if (!pVCon)
 	{
-		_ASSERTE(pVCon!=NULL);
+		_ASSERTE(pVCon!=NULL || hWnd==ghBkInDestroing);
 		result = DefWindowProc(hWnd, messg, wParam, lParam);
 		goto wrap;
 	}
@@ -858,22 +896,22 @@ INT_PTR CConEmuChild::DbgChildDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LP
 
 LRESULT CConEmuChild::OnPaintGaps()
 {
-	CVirtualConsole* pVCon = (CVirtualConsole*)this;
-	if (!pVCon)
+	CVConGuard VCon((CVirtualConsole*)this);
+	if (!VCon.VCon())
 	{
-		_ASSERTE(pVCon!=NULL);
+		_ASSERTE(VCon.VCon()!=NULL);
 		return 0;
 	}
 
 	int nColorIdx = RELEASEDEBUGTEST(0/*Black*/,1/*Blue*/);
-	COLORREF* clrPalette = pVCon->GetColors();
+	COLORREF* clrPalette = VCon->GetColors();
 	if (!clrPalette)
 	{
 		_ASSERTE(clrPalette!=NULL);
 		return 0;
 	}
 
-	CRealConsole* pRCon = pVCon->RCon();
+	CRealConsole* pRCon = VCon->RCon();
 	if (pRCon)
 	{
 		nColorIdx = pRCon->GetDefaultBackColorIdx();
@@ -912,14 +950,12 @@ LRESULT CConEmuChild::OnPaint()
 	if (mb_DisableRedraw)
 		return 0;
 
-	CVirtualConsole* pVCon = (CVirtualConsole*)this;
-	_ASSERTE(pVCon!=NULL);
-	CVConGuard guard(pVCon);
+	CVConGuard VCon((CVirtualConsole*)this);
 
 	mb_PostFullPaint = FALSE;
 
 	if (gpSetCls->isAdvLogging>2)
-		pVCon->RCon()->LogString("CConEmuChild::OnPaint", TRUE);
+		VCon->RCon()->LogString("CConEmuChild::OnPaint", TRUE);
 
 	gpSetCls->Performance(tPerfBlt, FALSE);
 
@@ -950,7 +986,7 @@ LRESULT CConEmuChild::OnPaint()
 			//_ASSERTE(FALSE);
 			lbSkipDraw = TRUE;
 
-			pVCon->CheckTransparent();
+			VCon->CheckTransparent();
 
 			// Типа "зальет цветом фона окна"?
 			result = DefWindowProc(mh_WndDC, WM_PAINT, 0, 0);
@@ -969,27 +1005,27 @@ LRESULT CConEmuChild::OnPaint()
 		}
 		else
 		{
-			mh_LastGuiChild = pVCon->RCon() ? pVCon->RCon()->GuiWnd() : NULL;
+			mh_LastGuiChild = VCon->RCon() ? VCon->RCon()->GuiWnd() : NULL;
 		}
 
-		bool bRightClickingPaint = gpConEmu->isRightClickingPaint() && gpConEmu->isActive(pVCon);
+		bool bRightClickingPaint = gpConEmu->isRightClickingPaint() && gpConEmu->isActive(VCon.VCon());
 		if (bRightClickingPaint)
 		{
 			// Скрыть окошко с "кружочком"
-			gpConEmu->RightClickingPaint((HDC)INVALID_HANDLE_VALUE, pVCon);
+			gpConEmu->RightClickingPaint((HDC)INVALID_HANDLE_VALUE, VCon.VCon());
 		}
 
 		PAINTSTRUCT ps;
 		HDC hDc = BeginPaint(mh_WndDC, &ps);
 		UNREFERENCED_PARAMETER(hDc);
 
-		//RECT rcClient = pVCon->GetDcClientRect();
-		pVCon->PaintVCon(ps.hdc);
+		//RECT rcClient = VCon->GetDcClientRect();
+		VCon->PaintVCon(ps.hdc);
 
 		if (bRightClickingPaint)
 		{
 			// Нарисует кружочек, или сбросит таймер, если кнопку отпустили
-			gpConEmu->RightClickingPaint(pVCon->GetIntDC()/*ps.hdc*/, pVCon);
+			gpConEmu->RightClickingPaint(VCon->GetIntDC()/*ps.hdc*/, VCon.VCon());
 		}
 
 		EndPaint(mh_WndDC, &ps);
@@ -999,6 +1035,8 @@ LRESULT CConEmuChild::OnPaint()
 	gpSetCls->Performance(tPerfBlt, TRUE);
 	// Если открыто окно настроек - обновить системную информацию о размерах
 	gpConEmu->UpdateSizes();
+
+	_ASSERTE(CVConGroup::isValid(VCon.VCon()));
 	return result;
 }
 
@@ -1319,22 +1357,22 @@ BOOL CConEmuChild::TrackMouse()
 	return lbCapture;
 }
 
-BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
+bool CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 {
 	if (abCheckVisible)
 	{
 		if (gpSet->isAlwaysShowScrollbar == 0)
 		{
-			return FALSE; // не показывается вообще
+			return false; // не показывается вообще
 		}
 		else if ((gpSet->isAlwaysShowScrollbar != 1) // 1 -- показывать всегда
 			&& !mb_ScrollVisible)
 		{
-			return FALSE; // не показывается сейчас
+			return false; // не показывается сейчас
 		}
 	}
 
-	BOOL lbOverVScroll = FALSE;
+	bool lbOverVScroll = false;
 
 	CVirtualConsole* pVCon = (CVirtualConsole*)this;
 	CVConGuard guard(pVCon);
@@ -1359,7 +1397,7 @@ BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 			// чтобы полоса не скрылась, когда ее тащат мышкой
 			if (mb_VTracking)
 			{
-				lbOverVScroll = TRUE;
+				lbOverVScroll = true;
 			}
 			else // Теперь проверим, если мышь в над скроллбаром - показать его
 			{
@@ -1374,11 +1412,11 @@ BOOL CConEmuChild::CheckMouseOverScroll(bool abCheckVisible /*= false*/)
 				{
 					// Если прокрутка УЖЕ видна - то мышку в консоль не пускать! Она для прокрутки!
 					if (mb_ScrollVisible)
-						lbOverVScroll = TRUE;
+						lbOverVScroll = true;
 					// Если не проверять - не получится начать выделение с правого края окна
 					//if (!gpSet->isSelectionModifierPressed())
 					else if (!(isPressed(VK_SHIFT) || isPressed(VK_CONTROL) || isPressed(VK_MENU) || isPressed(VK_LBUTTON)))
-						lbOverVScroll = TRUE;
+						lbOverVScroll = true;
 				}
 			}
 		}

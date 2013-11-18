@@ -89,6 +89,7 @@ ConEmuBgSettings gSettings[] = {
 
 BOOL gbBackgroundEnabled = FALSE;
 wchar_t gsXmlConfigFile[MAX_PATH] = {};
+BOOL gbMonitorFileChange = FALSE;
 //COLORREF gcrLinesColor = RGB(0,0,0xA8); // чуть светлее синего
 //int giHilightType = 0; // 0 - линии, 1 - полосы
 //BOOL gbHilightPlugins = FALSE;
@@ -227,7 +228,7 @@ void ReportFail(LPCWSTR asInfo)
 
 struct DrawInfo
 {
-	LPCWSTR  szVolume, szVolumeRoot, szVolumeSize;
+	LPCWSTR  szVolume, szVolumeRoot, szVolumeSize, szVolumeFree;
 	DWORD    nDriveType;
 	enum {
 		dib_Small = 0, dib_Large = 1, dib_Off = 2
@@ -273,6 +274,11 @@ wchar_t* gpszXmlFile = NULL;
 wchar_t* gpszXmlFolder = NULL;
 HANDLE ghXmlNotification = NULL;
 const wchar_t* szDefaultXmlName = L"Background.xml";
+
+bool WasXmlLoaded()
+{
+	return (XmlFile.FileData != NULL);
+}
 
 // Возвращает TRUE, если файл изменился
 bool CheckXmlFile(bool abUpdateName /*= false*/)
@@ -346,7 +352,17 @@ bool CheckXmlFile(bool abUpdateName /*= false*/)
 				else
 					pszSlash[1] = 0;
 			}
-			ghXmlNotification = FindFirstChangeNotification(gpszXmlFolder, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME|FILE_NOTIFY_CHANGE_SIZE|FILE_NOTIFY_CHANGE_LAST_WRITE);
+
+			//Issue 1230
+			if (gbMonitorFileChange)
+			{
+				ghXmlNotification = FindFirstChangeNotification(gpszXmlFolder, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME|FILE_NOTIFY_CHANGE_SIZE|FILE_NOTIFY_CHANGE_LAST_WRITE);
+			}
+			else
+			{
+				_ASSERTE(ghXmlNotification==NULL);
+				lbNeedCheck = true;
+			}
 		}
 	}
 
@@ -1571,6 +1587,8 @@ int FillPanelParams(PaintBackgroundArg* pBk, PaintBackgroundArg::BkPanelInfo *pP
 											lstrcpyn(szTemp, pDraw->szVolume, countof(szTemp));
 										else if (lstrcmpi(szTemp, L"VOLUMESIZE") == 0)
 											lstrcpyn(szTemp, pDraw->szVolumeSize, countof(szTemp));
+										else if (lstrcmpi(szTemp, L"VOLUMEFREE") == 0)
+											lstrcpyn(szTemp, pDraw->szVolumeFree, countof(szTemp));
 										else if (lstrcmpi(szTemp, L"PANELFORMAT") == 0)
 											lstrcpyn(szTemp, pPanel->szFormat ? pPanel->szFormat : L"", countof(szTemp));
 
@@ -1958,11 +1976,24 @@ int GetStatusLineCount(struct PaintBackgroundArg* pBk, BOOL bLeft)
 		
 	COORD bufSize = {(SHORT)(rcPanel.right-rcPanel.left+1),min(10,(SHORT)(rcPanel.bottom-rcPanel.top))};
 	COORD bufCoord = {0,0};
+
+	HANDLE hStd = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
+	short nShiftX = 0, nShiftY = 0;
+	if (GetConsoleScreenBufferInfo(hStd, &csbi))
+	{
+		// Начиная с какой-то версии в фаре поменяли координаты :(
+		if (rcPanel.top <= 1)
+		{
+			nShiftY = csbi.dwSize.Y - (csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+		}
+	}
+
 	SMALL_RECT readRect = {
-		(SHORT)rcPanel.left,
-		(SHORT)(rcPanel.bottom-bufSize.Y),
-		(SHORT)rcPanel.right,
-		(SHORT)rcPanel.bottom
+		(SHORT)rcPanel.left + nShiftX,
+		(SHORT)(rcPanel.bottom-bufSize.Y)+nShiftY,
+		(SHORT)rcPanel.right+nShiftX,
+		(SHORT)rcPanel.bottom+nShiftY
 	};
 	
 	PCHAR_INFO pChars = (PCHAR_INFO)malloc(bufSize.X*bufSize.Y*sizeof(*pChars));
@@ -1974,7 +2005,7 @@ int GetStatusLineCount(struct PaintBackgroundArg* pBk, BOOL bLeft)
 	
 	int nLines = 0;
 	
-	BOOL lbReadRc = ReadConsoleOutputW(GetStdHandle(STD_OUTPUT_HANDLE), pChars, bufSize, bufCoord, &readRect);
+	BOOL lbReadRc = ReadConsoleOutputW(hStd, pChars, bufSize, bufCoord, &readRect);
 	if (!lbReadRc)
 	{
 		_ASSERTE(lbReadRc);
@@ -2015,6 +2046,36 @@ int GetStatusLineCount(struct PaintBackgroundArg* pBk, BOOL bLeft)
 }
 
 
+void FormatSize(ULARGE_INTEGER size, wchar_t* out)
+{
+	if (size.QuadPart)
+	{
+		// Сформатировать размер
+		u64 lSize = size.QuadPart, lDec = 0;
+		const wchar_t *SizeSymbol[]={L"B",L"KB",L"MB",L"GB",L"TB",L"PB"};
+		for (size_t n = 0; n < countof(SizeSymbol); n++)
+		{
+			if (lSize < 1000)
+			{
+				if (lDec > 0 && lDec < 10 && lSize < 10)
+					_wsprintf(out, SKIPLEN(MAX_PATH) L"%u.%u %s", (UINT)lSize, (UINT)lDec, SizeSymbol[n]);
+				else
+					_wsprintf(out, SKIPLEN(MAX_PATH) L"%u %s", (UINT)lSize, SizeSymbol[n]);
+				break;
+			}
+
+			u64 lNext = lSize >> 10;
+			lDec = (lSize % 1024) / 100;
+			lSize = lNext;
+		}
+		//if (!*szVolumeSize)
+		//{
+		//	_wsprintf(szVolumeSize, SKIPLEN(MAX_PATH) L"%u %s", (UINT)lSize, SizeSymbol[countof(SizeSymbol)-1]);
+		//}
+	}
+}
+
+
 int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColor, int& cOtherDrive)
 {
 	DrawInfo* pDraw = (DrawInfo*)calloc(sizeof(*pDraw), 1);
@@ -2040,15 +2101,6 @@ int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColo
 	if (nStatusLines > 0)
 		rcInt.bottom -= ((rcPanel.bottom - rcPanel.top + 1) * (nStatusLines + 1) / nPanelHeight);
 	int nMaxPicSize = (rcInt.bottom - rcInt.top) * 35 / 100;
-	LOGFONT lf = {};
-	lf.lfHeight = max(20, (rcInt.bottom - rcInt.top) * 12 / 100);
-	lf.lfWeight = 700;
-	lstrcpy(lf.lfFaceName, L"Arial");
-
-	#define IMG_SHIFT_X 0
-	#define IMG_SHIFT_Y 0
-	#define LINE_SHIFT_Y (lf.lfHeight)
-	#define LINE_SHIFT_X (lf.lfHeight/6)
 
 	ULARGE_INTEGER llTotalSize = {}, llFreeSize = {};
 	UINT nDriveType = DRIVE_UNKNOWN;
@@ -2057,6 +2109,7 @@ int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColo
 	int nMaxVolumeLen = lstrlen(bkInfo->szCurDir ? bkInfo->szCurDir : L"");
 	wchar_t* szVolumeRoot = (wchar_t*)calloc(nMaxVolumeLen+2,sizeof(*szVolumeRoot));
 	wchar_t* szVolumeSize = (wchar_t*)calloc(MAX_PATH,sizeof(*szVolumeSize));
+	wchar_t* szVolumeFree = (wchar_t*)calloc(MAX_PATH,sizeof(*szVolumeFree));
 	wchar_t* szVolume = (wchar_t*)calloc(MAX_PATH,sizeof(*szVolume));
 	if (bkInfo->szCurDir && *bkInfo->szCurDir)
 	{
@@ -2108,31 +2161,8 @@ int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColo
 				}
 			}
 			
-			if (llTotalSize.QuadPart)
-			{
-				// Сформатировать размер
-				u64 lSize = llTotalSize.QuadPart, lDec = 0;
-				const wchar_t *SizeSymbol[]={L"B",L"KB",L"MB",L"GB",L"TB",L"PB"};
-				for (size_t n = 0; n < countof(SizeSymbol); n++)
-				{
-					if (lSize < 1000)
-					{
-						if (lDec > 0 && lDec < 10 && lSize < 10)
-							_wsprintf(szVolumeSize, SKIPLEN(MAX_PATH) L"%u.%u %s", (UINT)lSize, (UINT)lDec, SizeSymbol[n]);
-						else
-							_wsprintf(szVolumeSize, SKIPLEN(MAX_PATH) L"%u %s", (UINT)lSize, SizeSymbol[n]);
-						break;
-					}
-					
-					u64 lNext = lSize >> 10;
-					lDec = (lSize % 1024) / 100;
-					lSize = lNext;
-				}
-				//if (!*szVolumeSize)
-				//{
-				//	_wsprintf(szVolumeSize, SKIPLEN(MAX_PATH) L"%u %s", (UINT)lSize, SizeSymbol[countof(SizeSymbol)-1]);
-				//}
-			}
+			FormatSize(llTotalSize, szVolumeSize);
+			FormatSize(llFreeSize, szVolumeFree);
 		}
 		
 		// Извлечь "Букву" диска
@@ -2155,6 +2185,7 @@ int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColo
 	pDraw->szVolume = szVolume;
 	pDraw->szVolumeRoot = szVolumeRoot;
 	pDraw->szVolumeSize = szVolumeSize;
+	pDraw->szVolumeFree = szVolumeFree;
 	pDraw->nDriveType = nDriveType;
 
 	if (nDriveType != DRIVE_UNKNOWN && nDriveType != DRIVE_CDROM && nDriveType != DRIVE_NO_ROOT_DIR)
@@ -2345,21 +2376,43 @@ int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColo
 			FillRect(pBk->hdc, &rcPanel, hBrush);
 			DeleteObject(hBrush);
 		}
-		
-		
 
-
-
+		LOGFONT lf = {};
+		lf.lfHeight = max(20, (rcInt.bottom - rcInt.top) * 12 / 100);
+		lf.lfWeight = 700;
+		lstrcpy(lf.lfFaceName, L"Arial");
 
 		// GO
 		HFONT hText = CreateFontIndirect(&lf);
 		HFONT hOldFont = (HFONT)SelectObject(pBk->hdc, hText);
 
+		#define IMG_SHIFT_X 0
+		#define IMG_SHIFT_Y 0
+		#define LINE_SHIFT_Y (lf.lfHeight)
+		#define LINE_SHIFT_X (lf.lfHeight/6)
 
+		// Determine appropriate font size:
 		int nY = max(rcInt.top, rcInt.bottom - (LINE_SHIFT_Y));
 		RECT rcText = {rcInt.left+IMG_SHIFT_X, nY, rcInt.right-LINE_SHIFT_X, nY+LINE_SHIFT_Y};
-		//wchar_t szText[MAX_PATH*2];
+		RECT rcTemp = rcText;
+
+		DrawText(pBk->hdc, pDraw->szText, -1, &rcTemp, DT_HIDEPREFIX|DT_RIGHT|DT_SINGLELINE|DT_TOP|DT_CALCRECT);
+
+		LONG width = rcText.right - rcText.left;
+		LONG actualWidth = rcTemp.right - rcTemp.left;
 		
+		if (actualWidth > width)
+		{
+			// Delete current font:
+			SelectObject(pBk->hdc, hOldFont);
+			DeleteObject(hText);
+
+			// Create new font of appropriate size:
+			lf.lfHeight *= ((double)width / actualWidth);			
+			hText = CreateFontIndirect(&lf);
+			hOldFont = (HFONT)SelectObject(pBk->hdc, hText);
+		}
+
 		CachedImage* pI = NULL;
 		if (gpDecoder && *pDraw->szPic)
 		{
@@ -2608,6 +2661,7 @@ int PaintPanel(struct PaintBackgroundArg* pBk, BOOL bLeft, COLORREF& crOtherColo
 	free(pDraw);
 	free(szVolume);
 	free(szVolumeSize);
+	free(szVolumeFree);
 	return TRUE;
 }
 

@@ -166,6 +166,8 @@ void TrayIcon::HideWindowToTray(LPCTSTR asInfoTip /* = NULL */)
 		return;
 	}
 
+	gpConEmu->LogString(L"TrayIcon::HideWindowToTray");
+
 	mb_InHidingToTray = true;
 
 	ShowTrayIcon(asInfoTip);
@@ -292,7 +294,7 @@ LRESULT TrayIcon::OnTryIcon(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 				}
 				else
 				{
-					gpConEmu->OnMinimizeRestore(sih);
+					gpConEmu->DoMinimizeRestore(sih);
 				}
 			}
 			else if (gpSet->isAlwaysShowTrayIcon && IsWindowVisible(ghWnd))

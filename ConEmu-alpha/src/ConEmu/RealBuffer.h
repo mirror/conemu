@@ -124,21 +124,22 @@ public:
 
 private:
 	bool OnMouseSelection(UINT messg, WPARAM wParam, int x, int y);
-	bool DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int X1, int Y1, int X2, int Y2);
+	bool DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int X1, int Y1, int X2, int Y2, BYTE nFormat = 0xFF /* use gpSet->isCTSHtmlFormat */);
 
 public:
 	void MarkFindText(int nDirection, LPCWSTR asText, bool abCaseSensitive, bool abWholeWords); // <<== CRealConsole::DoFindText
 	void StartSelection(BOOL abTextMode, SHORT anX=-1, SHORT anY=-1, BOOL abByMouse=FALSE, UINT anFromMsg=0, COORD *pcrTo=NULL);
-	void ExpandSelection(SHORT anX=-1, SHORT anY=-1);
+	void ExpandSelection(SHORT anX, SHORT anY);
 	bool DoSelectionFinalize(bool abCopy, WPARAM wParam = 0);
 	void DoSelectionStop();
-	bool DoSelectionCopy(bool bCopyAll = false);
+	bool DoSelectionCopy(bool bCopyAll = false, BYTE nFormat = 0xFF /* use gpSet->isCTSHtmlFormat */);
 	void UpdateSelection();
 	bool isConSelectMode();
 	bool isSelfSelectMode();
 	bool isStreamSelection();
 
 	bool OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, const wchar_t *pszChars);
+	const ConEmuHotKey* CRealBuffer::ProcessSelectionHotKey(DWORD VkState, bool bKeyDown, const wchar_t *pszChars);
 	
 	COORD GetDefaultNtvdmHeight();
 	
@@ -168,6 +169,7 @@ public:
 
 	DWORD GetConsoleCP();
 	DWORD GetConsoleOutputCP();
+	DWORD GetConsoleMode();
 
 	void FindPanels();
 	BOOL GetPanelRect(BOOL abRight, RECT* prc, BOOL abFull = FALSE, BOOL abIncludeEdges = FALSE);

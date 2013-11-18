@@ -80,8 +80,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "UserImp.h"
 #include "GuiAttach.h"
 #include "Ansi.h"
+#include "../common/CmdLine.h"
 #include "../common/ConsoleAnnotation.h"
-#include "../common/clink.h"
+//#include "../common/clink.h"
 #include "../common/UnicodeChars.h"
 #include "../common/WinConsole.h"
 
@@ -180,14 +181,17 @@ HANDLE ghConsoleCursorChanged = NULL;
 /* ************ Globals for Far Hooks ************ */
 
 
-/* ************ Globals for clink ************ */
-size_t   gcchLastWriteConsoleMax = 0;
-wchar_t *gpszLastWriteConsole = NULL;
-HMODULE  ghClinkDll = NULL;
-call_readline_t gpfnClinkReadLine = NULL;
-bool     gbClinkInitialized = false;
-DWORD    gnAllowClinkUsage = 0; // cmd.exe only. 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
-/* ************ Globals for clink ************ */
+/* ************ Globals for cmd.exe/clink ************ */
+bool     gbIsCmdProcess = false;
+//size_t   gcchLastWriteConsoleMax = 0;
+//wchar_t *gpszLastWriteConsole = NULL;
+//HMODULE  ghClinkDll = NULL;
+//call_readline_t gpfnClinkReadLine = NULL;
+int      gnCmdInitialized = 0; // 0 - Not already, 1 - OK, -1 - Fail
+bool     gbAllowClinkUsage = false;
+bool     gbAllowUncPaths = false;
+wchar_t* gszClinkCmdLine = NULL;
+/* ************ Globals for cmd.exe/clink ************ */
 
 /* ************ Globals for powershell ************ */
 bool gbPowerShellMonitorProgress = false;
@@ -218,8 +222,14 @@ bool gbDosBoxProcess = false;
 
 /* ************ Globals for "Default terminal ************ */
 bool gbPrepareDefaultTerminal = false;
+bool gbIsNetVsHost = false;
+bool gbIsVStudio = false;
+//HANDLE ghDefaultTerminalReady = NULL; // 
 ConEmuGuiMapping* gpDefaultTermParm = NULL;
-
+// forward and external
+bool InitHooksDefaultTrm();
+extern bool InitDefaultTerm();
+// helper
 bool isDefaultTerminalEnabled()
 {
 	if (!gbPrepareDefaultTerminal || !gpDefaultTermParm)
@@ -272,6 +282,7 @@ BOOL WINAPI OnTrackPopupMenu(HMENU hMenu, UINT uFlags, int x, int y, int nReserv
 BOOL WINAPI OnTrackPopupMenuEx(HMENU hmenu, UINT fuFlags, int x, int y, HWND hWnd, LPTPMPARAMS lptpm);
 BOOL WINAPI OnShellExecuteExA(LPSHELLEXECUTEINFOA lpExecInfo);
 BOOL WINAPI OnShellExecuteExW(LPSHELLEXECUTEINFOW lpExecInfo);
+HRESULT WINAPI OnShellExecCmdLine(HWND hwnd, LPCWSTR pwszCommand, LPCWSTR pwszStartDir, int nShow, LPVOID pUnused, DWORD dwSeclFlags);
 HINSTANCE WINAPI OnShellExecuteA(HWND hwnd, LPCSTR lpOperation, LPCSTR lpFile, LPCSTR lpParameters, LPCSTR lpDirectory, INT nShowCmd);
 HINSTANCE WINAPI OnShellExecuteW(HWND hwnd, LPCWSTR lpOperation, LPCWSTR lpFile, LPCWSTR lpParameters, LPCWSTR lpDirectory, INT nShowCmd);
 BOOL WINAPI OnFlashWindow(HWND hWnd, BOOL bInvert);
@@ -350,6 +361,12 @@ LONG WINAPI OnSetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
 LONG_PTR WINAPI OnSetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 LONG_PTR WINAPI OnSetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 #endif
+int WINAPI OnGetWindowTextLengthA(HWND hWnd);
+int WINAPI OnGetWindowTextLengthW(HWND hWnd);
+int WINAPI OnGetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount);
+int WINAPI OnGetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount);
+BOOL WINAPI OnSetConsoleTitleA(LPCSTR lpConsoleTitle);
+BOOL WINAPI OnSetConsoleTitleW(LPCWSTR lpConsoleTitle);
 BOOL WINAPI OnGetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
 BOOL WINAPI OnSetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
 BOOL WINAPI OnPostMessageA(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
@@ -404,6 +421,10 @@ LPCH WINAPI OnGetEnvironmentStringsA();
 #endif
 LPWCH WINAPI OnGetEnvironmentStringsW();
 
+void WINAPI OnGetSystemTime(LPSYSTEMTIME lpSystemTime);
+void WINAPI OnGetLocalTime(LPSYSTEMTIME lpSystemTime);
+void WINAPI OnGetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime);
+
 
 
 bool InitHooksCommon()
@@ -452,6 +473,8 @@ bool InitHooksCommon()
 																kernel32},
 		{(void*)CEAnsi::OnSetConsoleMode,
 										"SetConsoleMode",  		kernel32},
+		{(void*)OnSetConsoleTitleA,		"SetConsoleTitleA",		kernel32},
+		{(void*)OnSetConsoleTitleW,		"SetConsoleTitleW",		kernel32},
 		//#endif
 		/* Others console functions */
 		{(void*)OnSetConsoleTextAttribute, "SetConsoleTextAttribute", kernel32},
@@ -518,15 +541,19 @@ bool InitHooksCommon()
 			kernel32
 		},
 		#endif
-		{(void*)OnGetEnvironmentVariableA, "GetEnvironmentVariableA", kernel32},
-		{(void*)OnGetEnvironmentVariableW, "GetEnvironmentVariableW", kernel32},
+		{(void*)OnGetEnvironmentVariableA,	"GetEnvironmentVariableA",	kernel32},
+		{(void*)OnGetEnvironmentVariableW,	"GetEnvironmentVariableW",	kernel32},
 		#if 0
-		{(void*)OnGetEnvironmentStringsA,  "GetEnvironmentStringsA",  kernel32},
+		{(void*)OnGetEnvironmentStringsA,  "GetEnvironmentStringsA",	kernel32},
 		#endif
-		{(void*)OnGetEnvironmentStringsW,  "GetEnvironmentStringsW",  kernel32},
+		{(void*)OnGetEnvironmentStringsW,	"GetEnvironmentStringsW",	kernel32},
 		/* ************************ */
-		{(void*)OnGetCurrentConsoleFont, "GetCurrentConsoleFont", kernel32},
-		{(void*)OnGetConsoleFontSize,    "GetConsoleFontSize",    kernel32},
+		{(void*)OnGetSystemTime,			"GetSystemTime",			kernel32},
+		{(void*)OnGetLocalTime,				"GetLocalTime",				kernel32},
+		{(void*)OnGetSystemTimeAsFileTime,	"GetSystemTimeAsFileTime",	kernel32},
+		/* ************************ */
+		{(void*)OnGetCurrentConsoleFont, "GetCurrentConsoleFont",		kernel32},
+		{(void*)OnGetConsoleFontSize,    "GetConsoleFontSize",			kernel32},
 		/* ************************ */
 
 		#ifdef _DEBUG
@@ -583,9 +610,37 @@ bool InitHooksDefaultTrm()
 		{(void*)OnWinExec,				"WinExec",				kernel32},
 		// Need for hook "Run as administrator"
 		{(void*)OnShellExecuteExW,		"ShellExecuteExW",		shell32},
+		// Issue 1125: "Run as administrator" too. Must be last export
+		{(void*)OnShellExecCmdLine,		"ShellExecCmdLine",		shell32,   265},
+		// Issue 1312: .Net applications runs in "*.vshost.exe" helper GUI apllication when debugging
+		{(void*)OnAllocConsole,			"AllocConsole",			kernel32}, // Only for "*.vshost.exe"?
 		/* ************************ */
 		{0}
 	};
+
+	size_t iNullIdx = countof(HooksCommon)-1;
+	size_t iAllocIdx = countof(HooksCommon)-2;
+	size_t iCmdLineIdx = countof(HooksCommon)-3;
+
+	//if (GetModuleHandle(L"MSCOREE.DLL") != NULL) -- excess check?
+	_ASSERTE(HooksCommon[iAllocIdx].NewAddress == (void*)OnAllocConsole);
+	if (!gbIsNetVsHost)
+	{
+		HooksCommon[iAllocIdx] = HooksCommon[iNullIdx];
+	}
+
+	// Windows 8. There is new undocumented function "ShellExecCmdLine" used by Explorer
+	if (!(gpStartEnv->os.dwMajorVersion == 6 && gpStartEnv->os.dwMinorVersion <= 2))
+	{
+		_ASSERTEX(HooksCommon[iCmdLineIdx].NameOrdinal == 265);
+		HooksCommon[iCmdLineIdx] = HooksCommon[iAllocIdx];
+		HooksCommon[iAllocIdx] = HooksCommon[iNullIdx];
+	}
+	else
+	{
+		//_ASSERTEX(FALSE && "Continue to hook");
+	}
+
 	InitHooks(HooksCommon);
 
 	return true;
@@ -631,6 +686,11 @@ bool InitHooksUser32()
 		{(void*)OnSetWindowLongPtrA,	"SetWindowLongPtrA",	user32},
 		{(void*)OnSetWindowLongPtrW,	"SetWindowLongPtrW",	user32},
 		#endif
+		{(void*)OnGetWindowTextLengthA,	"GetWindowTextLengthA",	user32},
+		{(void*)OnGetWindowTextLengthW,	"GetWindowTextLengthW",	user32},
+		{(void*)OnGetWindowTextA,		"GetWindowTextA",		user32},
+		{(void*)OnGetWindowTextW,		"GetWindowTextW",		user32},
+		//
 		{(void*)OnGetWindowPlacement,	"GetWindowPlacement",	user32},
 		{(void*)OnSetWindowPlacement,	"SetWindowPlacement",	user32},
 		{(void*)OnPostMessageA,			"PostMessageA",			user32},
@@ -703,7 +763,8 @@ bool InitHooksFar()
 
 bool InitHooksClink()
 {
-	if (!gnAllowClinkUsage)
+	//if (!gnAllowClinkUsage)
+	if (!gbIsCmdProcess)
 		return true;
 
 	HookItem HooksCmdOnly[] =
@@ -910,7 +971,8 @@ BOOL StartupHooks(HMODULE ahOurDll)
 		HLOGEND1();
 
 		// Cmd.exe only functions
-		if (gnAllowClinkUsage)
+		//if (gnAllowClinkUsage)
+		if (gbIsCmdProcess)
 		{
 			HLOG1_("StartupHooks.InitHooks",3);
 			InitHooksClink();
@@ -1567,6 +1629,51 @@ BOOL WINAPI OnShellExecuteExW(LPSHELLEXECUTEINFOW lpExecInfo)
 	return lbRc;
 }
 
+// Issue 1125: Hook undocumented function used for running commands typed in Windows 7 Win-menu search string.
+HRESULT WINAPI OnShellExecCmdLine(HWND hwnd, LPCWSTR pwszCommand, LPCWSTR pwszStartDir, int nShow, LPVOID pUnused, DWORD dwSeclFlags)
+{
+	typedef BOOL (WINAPI* OnShellExecCmdLine_t)(HWND hwnd, LPCWSTR pwszCommand, LPCWSTR pwszStartDir, int nShow, LPVOID pUnused, DWORD dwSeclFlags);
+	ORIGINALFASTEX(ShellExecCmdLine,NULL);
+	HRESULT hr = S_OK;
+
+	if (nShow && (dwSeclFlags & 0x40) && pwszCommand && pwszStartDir)
+	{
+		if (!IsBadStringPtrW(pwszCommand, MAX_PATH) && !IsBadStringPtrW(pwszStartDir, MAX_PATH))
+		{
+			// Bad thing, ShellExecuteEx needs File&Parm, but we get both in pwszCommand
+			wchar_t szExe[MAX_PATH+1];
+			LPCWSTR pszFile = pwszCommand;
+			LPCWSTR pszParm = pwszCommand;
+			if (NextArg(&pszParm, szExe) == 0)
+			{
+				pszFile = szExe; pszParm = SkipNonPrintable(pszParm);
+			}
+			else
+			{
+				// Failed
+				pszFile = pwszCommand; pszParm = NULL;
+			}
+
+			SHELLEXECUTEINFO sei = {sizeof(sei), 0, hwnd, L"runas", pszFile, pszParm, pwszStartDir, nShow};
+			BOOL bShell = OnShellExecuteExW(&sei);
+			hr = bShell ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+			goto wrap;
+		}
+	}
+
+	if (!F(ShellExecCmdLine))
+	{
+		hr = HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION);
+	}
+	else
+	{
+		hr = F(ShellExecCmdLine)(hwnd, pwszCommand, pwszStartDir, nShow, pUnused, dwSeclFlags);
+	}
+
+wrap:
+	return hr;
+}
+
 
 HINSTANCE WINAPI OnShellExecuteA(HWND hwnd, LPCSTR lpOperation, LPCSTR lpFile, LPCSTR lpParameters, LPCSTR lpDirectory, INT nShowCmd)
 {
@@ -2214,6 +2321,84 @@ LONG_PTR WINAPI OnSetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong)
 }
 #endif
 
+void FixHwnd4ConText(HWND& hWnd)
+{
+	if (ghConEmuWndDC && (hWnd == ghConEmuWndDC || hWnd == ghConEmuWnd))
+		hWnd = ghConWnd;
+}
+
+int WINAPI OnGetWindowTextLengthA(HWND hWnd)
+{
+	typedef int (WINAPI* OnGetWindowTextLengthA_t)(HWND hWnd);
+	ORIGINALFASTEX(GetWindowTextLengthA,NULL);
+	int iRc = 0;
+
+	FixHwnd4ConText(hWnd);
+
+	if (F(GetWindowTextLengthA))
+		iRc = F(GetWindowTextLengthA)(hWnd);
+
+	return iRc;
+}
+int WINAPI OnGetWindowTextLengthW(HWND hWnd)
+{
+	typedef int (WINAPI* OnGetWindowTextLengthW_t)(HWND hWnd);
+	ORIGINALFASTEX(GetWindowTextLengthW,NULL);
+	int iRc = 0;
+
+	FixHwnd4ConText(hWnd);
+
+	if (F(GetWindowTextLengthW))
+		iRc = F(GetWindowTextLengthW)(hWnd);
+
+	return iRc;
+}
+int WINAPI OnGetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)
+{
+	typedef int (WINAPI* OnGetWindowTextA_t)(HWND hWnd, LPSTR lpString, int nMaxCount);
+	ORIGINALFASTEX(GetWindowTextA,NULL);
+	int iRc = 0;
+
+	FixHwnd4ConText(hWnd);
+
+	if (F(GetWindowTextA))
+		iRc = F(GetWindowTextA)(hWnd, lpString, nMaxCount);
+
+	return iRc;
+}
+int WINAPI OnGetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)
+{
+	typedef int (WINAPI* OnGetWindowTextW_t)(HWND hWnd, LPWSTR lpString, int nMaxCount);
+	ORIGINALFASTEX(GetWindowTextW,NULL);
+	int iRc = 0;
+
+	FixHwnd4ConText(hWnd);
+
+	if (F(GetWindowTextW))
+		iRc = F(GetWindowTextW)(hWnd, lpString, nMaxCount);
+
+	return iRc;
+}
+// Не перехватываются пока, для информации
+BOOL WINAPI OnSetConsoleTitleA(LPCSTR lpConsoleTitle)
+{
+	typedef BOOL (WINAPI* OnSetConsoleTitleA_t)(LPCSTR lpConsoleTitle);
+	ORIGINALFASTEX(SetConsoleTitleA,NULL);
+	BOOL bRc = FALSE;
+	if (F(SetConsoleTitleA))
+		bRc = F(SetConsoleTitleA)(lpConsoleTitle);
+	return bRc;
+}
+BOOL WINAPI OnSetConsoleTitleW(LPCWSTR lpConsoleTitle)
+{
+	typedef BOOL (WINAPI* OnSetConsoleTitleW_t)(LPCWSTR lpConsoleTitle);
+	ORIGINALFASTEX(SetConsoleTitleW,NULL);
+	BOOL bRc = FALSE;
+	if (F(SetConsoleTitleW))
+		bRc = F(SetConsoleTitleW)(lpConsoleTitle);
+	return bRc;
+}
+
 
 BOOL WINAPI OnSetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags)
 {
@@ -2312,6 +2497,8 @@ bool CanSendMessage(HWND& hWnd, UINT Msg, WPARAM wParam, LPARAM lParam, LRESULT&
 			case WM_CLOSE:
 			case WM_ENABLE:
 			case WM_SETREDRAW:
+			case WM_GETTEXT:
+			case WM_GETTEXTLENGTH:
 				// Эти сообщения - нужно посылать в RealConsole
 				hWnd = ghConWnd;
 				return true;
@@ -3653,81 +3840,108 @@ BOOL WINAPI OnReadConsoleA(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberO
 
 bool InitializeClink()
 {
-	if (gbClinkInitialized)
+	if (gnCmdInitialized)
 		return true;
-	gbClinkInitialized = true; // Single
+	gnCmdInitialized = 1; // Single
 
-	if (!gnAllowClinkUsage)
-		return false;
+	//if (!gnAllowClinkUsage)
+	//	return false;
 
 	CESERVER_CONSOLE_MAPPING_HDR* pConMap = GetConMap();
-	if (!pConMap || !(pConMap->Flags & CECF_UseClink_Any))
+	if (!pConMap /*|| !(pConMap->Flags & CECF_UseClink_Any)*/)
 	{
-		gnAllowClinkUsage = 0;
+		//gnAllowClinkUsage = 0;
+		gnCmdInitialized = -1;
 		return false;
 	}
 
 	// Запомнить режим
-	gnAllowClinkUsage =
-		(pConMap->Flags & CECF_UseClink_2) ? 2 :
-		(pConMap->Flags & CECF_UseClink_1) ? 1 :
-		CECF_Empty;
+	//gnAllowClinkUsage =
+	//	(pConMap->Flags & CECF_UseClink_2) ? 2 :
+	//	(pConMap->Flags & CECF_UseClink_1) ? 1 :
+	//	CECF_Empty;
+	gbAllowClinkUsage = ((pConMap->Flags & CECF_UseClink_Any) != 0);
+	gbAllowUncPaths = (pConMap->ComSpec.isAllowUncPaths != FALSE);
 
-	BOOL bRunRc = FALSE;
-	DWORD nErrCode = 0;
-
-	if (gnAllowClinkUsage == 2)
+	if (gbAllowClinkUsage)
 	{
-		// New style. TODO
-		wchar_t szClinkDir[MAX_PATH+32], szClinkArgs[MAX_PATH+64];
-
-		wcscpy_c(szClinkDir, pConMap->ComSpec.ConEmuBaseDir);
-		wcscat_c(szClinkDir, L"\\clink");
-
-		wcscpy_c(szClinkArgs, L"\"");
-		wcscat_c(szClinkArgs, szClinkDir);
-		wcscat_c(szClinkArgs, WIN3264TEST(L"\\clink_x86.exe",L"\\clink_x64.exe"));
-		wcscat_c(szClinkArgs, L"\" inject");
-
-		STARTUPINFO si = {sizeof(si)};
-		PROCESS_INFORMATION pi = {};
-		bRunRc = CreateProcess(NULL, szClinkArgs, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS, NULL, szClinkDir, &si, &pi);
-		
-		if (bRunRc)
+		wchar_t szClinkBat[MAX_PATH+32];
+		wcscpy_c(szClinkBat, pConMap->ComSpec.ConEmuBaseDir);
+		wcscat_c(szClinkBat, L"\\clink\\clink.bat");
+		if (!FileExists(szClinkBat))
 		{
-			WaitForSingleObject(pi.hProcess, INFINITE);
-			CloseHandle(pi.hProcess);
-			CloseHandle(pi.hThread);
+			gbAllowClinkUsage = false;
 		}
 		else
 		{
-			nErrCode = GetLastError();
-			_ASSERTEX(FALSE && "Clink loader failed");
-			UNREFERENCED_PARAMETER(nErrCode);
-			UNREFERENCED_PARAMETER(bRunRc);
-		}
-	}
-	else if (gnAllowClinkUsage == 1)
-	{
-		if (!ghClinkDll)
-		{
-			wchar_t szClinkModule[MAX_PATH+30];
-			_wsprintf(szClinkModule, SKIPLEN(countof(szClinkModule)) L"%s\\clink\\%s",
-				pConMap->ComSpec.ConEmuBaseDir, WIN3264TEST(L"clink_dll_x86.dll",L"clink_dll_x64.dll"));
-			
-			ghClinkDll = LoadLibrary(szClinkModule);
-			if (!ghClinkDll)
-				return false;
-		}
-
-		if (!gpfnClinkReadLine)
-		{
-			gpfnClinkReadLine = (call_readline_t)GetProcAddress(ghClinkDll, "call_readline");
-			_ASSERTEX(gpfnClinkReadLine!=NULL);
+			int iLen = lstrlen(szClinkBat) + 16;
+			gszClinkCmdLine = (wchar_t*)malloc(iLen*sizeof(*gszClinkCmdLine));
+			if (gszClinkCmdLine)
+			{
+				*gszClinkCmdLine = L'"';
+				_wcscpy_c(gszClinkCmdLine+1, iLen-1, szClinkBat);
+				_wcscat_c(gszClinkCmdLine, iLen, L"\" inject");
+			}
 		}
 	}
 
-	return (gpfnClinkReadLine != NULL);
+	return true;
+
+	//BOOL bRunRc = FALSE;
+	//DWORD nErrCode = 0;
+
+	//if (gnAllowClinkUsage == 2)
+	//{
+	//	// New style. TODO
+	//	wchar_t szClinkDir[MAX_PATH+32], szClinkArgs[MAX_PATH+64];
+
+	//	wcscpy_c(szClinkDir, pConMap->ComSpec.ConEmuBaseDir);
+	//	wcscat_c(szClinkDir, L"\\clink");
+
+	//	wcscpy_c(szClinkArgs, L"\"");
+	//	wcscat_c(szClinkArgs, szClinkDir);
+	//	wcscat_c(szClinkArgs, WIN3264TEST(L"\\clink_x86.exe",L"\\clink_x64.exe"));
+	//	wcscat_c(szClinkArgs, L"\" inject");
+
+	//	STARTUPINFO si = {sizeof(si)};
+	//	PROCESS_INFORMATION pi = {};
+	//	bRunRc = CreateProcess(NULL, szClinkArgs, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS, NULL, szClinkDir, &si, &pi);
+	//	
+	//	if (bRunRc)
+	//	{
+	//		WaitForSingleObject(pi.hProcess, INFINITE);
+	//		CloseHandle(pi.hProcess);
+	//		CloseHandle(pi.hThread);
+	//	}
+	//	else
+	//	{
+	//		nErrCode = GetLastError();
+	//		_ASSERTEX(FALSE && "Clink loader failed");
+	//		UNREFERENCED_PARAMETER(nErrCode);
+	//		UNREFERENCED_PARAMETER(bRunRc);
+	//	}
+	//}
+	//else if (gnAllowClinkUsage == 1)
+	//{
+	//	if (!ghClinkDll)
+	//	{
+	//		wchar_t szClinkModule[MAX_PATH+30];
+	//		_wsprintf(szClinkModule, SKIPLEN(countof(szClinkModule)) L"%s\\clink\\%s",
+	//			pConMap->ComSpec.ConEmuBaseDir, WIN3264TEST(L"clink_dll_x86.dll",L"clink_dll_x64.dll"));
+	//		
+	//		ghClinkDll = LoadLibrary(szClinkModule);
+	//		if (!ghClinkDll)
+	//			return false;
+	//	}
+
+	//	if (!gpfnClinkReadLine)
+	//	{
+	//		gpfnClinkReadLine = (call_readline_t)GetProcAddress(ghClinkDll, "call_readline");
+	//		_ASSERTEX(gpfnClinkReadLine!=NULL);
+	//	}
+	//}
+
+	//return (gpfnClinkReadLine != NULL);
 }
 
 // cmd.exe only!
@@ -3735,20 +3949,114 @@ LONG WINAPI OnRegQueryValueExW(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserve
 {
 	typedef LONG (WINAPI* OnRegQueryValueExW_t)(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData);
 	ORIGINALFASTEX(RegQueryValueExW,NULL);
-	BOOL bMainThread = TRUE; // Does not care
+	//BOOL bMainThread = TRUE; // Does not care
 	LONG lRc = -1;
+	bool bNeedAppendClink = false;
 
-	if (!gbClinkInitialized && hKey && lpValueName)
+	if (gbIsCmdProcess && hKey && lpValueName)
 	{
-		if (lstrcmpi(lpValueName, L"AutoRun") == 0)
+		if (InitializeClink())
 		{
-			InitializeClink();
+			if (lstrcmpi(lpValueName, L"DisableUNCCheck") == 0)
+			{
+				if (lpData)
+				{
+					if (lpcbData && *lpcbData >= sizeof(DWORD))
+						*((LPDWORD)lpData) = gbAllowUncPaths;
+					else
+						*lpData = gbAllowUncPaths;
+				}
+				if (lpType)
+					*lpType = REG_DWORD;
+				if (lpcbData)
+					*lpcbData = sizeof(DWORD);
+				lRc = 0;
+				goto wrap;
+			}
+			if (gbAllowClinkUsage && gszClinkCmdLine && lstrcmpi(lpValueName, L"AutoRun") == 0)
+			{
+				
+				// Is already loaded?
+				HMODULE hClink = GetModuleHandle(WIN3264TEST(L"clink_dll_x86.dll",L"clink_dll_x64.dll"));
+				if (hClink == NULL)
+				{
+					// May be it is set up itself?
+					typedef LONG (WINAPI* RegOpenKeyEx_t)(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult);
+					typedef LONG (WINAPI* RegCloseKey_t)(HKEY hKey);
+					HMODULE hAdvApi = LoadLibrary(L"AdvApi32.dll");
+					if (hAdvApi)
+					{
+						RegOpenKeyEx_t _RegOpenKeyEx = (RegOpenKeyEx_t)GetProcAddress(hAdvApi, "RegOpenKeyExW");
+						RegCloseKey_t  _RegCloseKey  = (RegCloseKey_t)GetProcAddress(hAdvApi, "RegCloseKey");
+						if (_RegOpenKeyEx && _RegCloseKey)
+						{
+							const DWORD cchMax = 0x3FF0;
+							const DWORD cbMax = cchMax*2;
+							wchar_t* pszCmd = (wchar_t*)malloc(cbMax);
+							if (pszCmd)
+							{
+								DWORD cbSize;
+								bool bClinkInstalled = false;
+								for (int i = 0; i <= 1 && !bClinkInstalled; i++)
+								{
+									HKEY hk;
+									if (_RegOpenKeyEx(i?HKEY_LOCAL_MACHINE:HKEY_CURRENT_USER, L"Software\\Microsoft\\Command Processor", 0, KEY_READ, &hk))
+										continue;
+									if (!F(RegQueryValueExW)(hk, lpValueName, NULL, NULL, (LPBYTE)pszCmd, &(cbSize = cbMax))
+										&& (cbSize+2) < cbMax)
+									{
+										cbSize /= 2; pszCmd[cbSize] = 0;
+										CharLowerBuffW(pszCmd, cbSize);
+										if (wcsstr(pszCmd, L"\\clink.bat"))
+											bClinkInstalled = true;
+									}
+									_RegCloseKey(hk);
+								}
+								// Not installed via "Autorun"
+								if (!bClinkInstalled)
+								{
+									bNeedAppendClink = true;
+
+									int iLen = lstrlen(gszClinkCmdLine);
+									_wcscpy_c(pszCmd, cchMax, gszClinkCmdLine);
+									_wcscpy_c(pszCmd+iLen, cchMax-iLen, L" & "); // conveyer next command indifferent to %errorlevel%
+
+									cbSize = cbMax - (iLen + 3)*sizeof(*pszCmd);
+									if (F(RegQueryValueExW)(hKey, lpValueName, NULL, NULL, (LPBYTE)pszCmd, &(cbSize = cbMax))
+										|| (pszCmd[iLen+3] == 0))
+									{
+										pszCmd[iLen] = 0; // There is no self value in registry
+									}
+									cbSize = (lstrlen(pszCmd)+1)*sizeof(*pszCmd);
+
+									// Return
+									lRc = 0;
+									if (lpData && lpcbData)
+									{
+										if (*lpcbData < cbSize)
+											lRc = ERROR_MORE_DATA;
+										else
+											_wcscpy_c((wchar_t*)lpData, (*lpcbData)/2, pszCmd);
+									}
+									if (lpcbData)
+										*lpcbData = cbSize;
+									free(pszCmd);
+									goto wrap;
+								}
+								free(pszCmd);
+							}
+						}
+						FreeLibrary(hAdvApi);
+					}
+				}
+			}
 		}
 	}
 
 	if (F(RegQueryValueExW))
 		lRc = F(RegQueryValueExW)(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData);
 
+wrap:
 	return lRc;
 }
 
@@ -3764,6 +4072,7 @@ BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberO
 
 	OnReadConsoleStart(TRUE, hConsoleInput, lpBuffer, nNumberOfCharsToRead, lpNumberOfCharsRead, pInputControl);
 
+#if 0
 	// Запускаемся только в главном потоке
 	// Попытка стартовать в telnet.exe (запущенном без параметров в Win7 x64) привела к зависанию
 	if ((gnAllowClinkUsage == 1) && bMainThread && (nNumberOfCharsToRead > 1))
@@ -3807,6 +4116,7 @@ BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberO
 			}
 		}
 	}
+#endif
 
 	// Если не обработано через clink - то стандартно, через API
 	if (!lbProcessed)
@@ -3818,6 +4128,59 @@ BOOL WINAPI OnReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer, DWORD nNumberO
 	}
 
 	OnReadConsoleEnd(lbRc, TRUE, hConsoleInput, lpBuffer, nNumberOfCharsToRead, lpNumberOfCharsRead, pInputControl);
+
+	// cd \\server\share\dir\...
+	if (gbAllowUncPaths && lpBuffer && lpNumberOfCharsRead && *lpNumberOfCharsRead
+		&& (nNumberOfCharsToRead >= *lpNumberOfCharsRead) && (nNumberOfCharsToRead > 6))
+	{
+		wchar_t* pszCmd = (wchar_t*)lpBuffer;
+		// "cd " ?
+		if ((pszCmd[0]==L'c' || pszCmd[0]==L'C') && (pszCmd[1]==L'd' || pszCmd[1]==L'D') && pszCmd[2] == L' ')
+		{
+			pszCmd[*lpNumberOfCharsRead] = 0;
+			wchar_t* pszPath = (wchar_t*)SkipNonPrintable(pszCmd+3);
+			// Don't worry about local paths, check only network
+			if (pszPath[0] == L'\\' && pszPath[1] == L'\\')
+			{
+				wchar_t* pszEnd;
+				if (*pszPath == L'"')
+					pszEnd = wcschr(++pszPath, L'"');
+				else
+					pszEnd = wcspbrk(pszPath, L"\r\n\t&| ");
+				if (!pszEnd)
+					pszEnd = pszPath + lstrlen(pszPath);
+				if ((pszEnd - pszPath) < MAX_PATH)
+				{
+					wchar_t ch = *pszEnd; *pszEnd = 0;
+					BOOL bSet = SetCurrentDirectory(pszPath);
+					if (ch) *pszEnd = ch;
+					if (bSet)
+					{
+						if (*pszEnd == L'"') pszEnd++;
+						pszEnd = (wchar_t*)SkipNonPrintable(pszEnd);
+						if (*pszEnd && wcschr(L"&|", *pszEnd))
+						{
+							while (*pszEnd && wcschr(L"&|", *pszEnd)) pszEnd++;
+							pszEnd = (wchar_t*)SkipNonPrintable(pszEnd);
+						}
+						// Return anything...
+						if (*pszEnd)
+						{
+							int nLeft = lstrlen(pszEnd);
+							memmove(lpBuffer, pszEnd, (nLeft+1)*sizeof(*pszEnd));
+						}
+						else
+						{
+							lstrcpyn((wchar_t*)lpBuffer, L"cd\r\n", nNumberOfCharsToRead);
+						
+						}
+						*lpNumberOfCharsRead = lstrlen((wchar_t*)lpBuffer);
+					}
+				}
+			}
+		}
+	}
+
 	SetLastError(nErr);
 
 	UNREFERENCED_PARAMETER(nStartTick);
@@ -4431,6 +4794,7 @@ BOOL WINAPI OnAllocConsole(void)
 	HMODULE hKernel = NULL;
 	DWORD nErrCode = 0;
 	BOOL lbAttachRc = FALSE;
+	HWND hOldConWnd = GetRealConsoleWindow();
 
 	if (ph && ph->PreCallBack)
 	{
@@ -4442,7 +4806,7 @@ BOOL WINAPI OnAllocConsole(void)
 
 	// GUI приложение во вкладке. Если окна консоли еще нет - попробовать прицепиться
 	// к родительской консоли (консоли серверного процесса)
-	if (gbAttachGuiClient || ghAttachGuiClient)
+	if ((gbAttachGuiClient || ghAttachGuiClient) && !gbPrepareDefaultTerminal)
 	{
 		HWND hCurCon = GetRealConsoleWindow();
 		if (hCurCon == NULL && gnServerPID != 0)
@@ -4471,7 +4835,7 @@ BOOL WINAPI OnAllocConsole(void)
 	{
 		lbRc = F(AllocConsole)();
 
-		if (lbRc && IsVisibleRectLocked(crLocked))
+		if (lbRc && !gbPrepareDefaultTerminal && IsVisibleRectLocked(crLocked))
 		{
 			// Размер _видимой_ области. Консольным приложениям запрещено менять его "изнутри".
 			// Размер может менять только пользователь ресайзом окна ConEmu
@@ -4498,8 +4862,30 @@ BOOL WINAPI OnAllocConsole(void)
 		ph->PostCallBack(&args);
 	}
 
+	HWND hNewConWnd = GetRealConsoleWindow();
+
 	// Обновить ghConWnd и мэппинг
-	OnConWndChanged(GetRealConsoleWindow());
+	OnConWndChanged(hNewConWnd);
+
+	#ifdef _DEBUG
+	//_ASSERTEX(lbRc && ghConWnd);
+	wchar_t szAlloc[500], szFile[MAX_PATH];
+	GetModuleFileName(NULL, szFile, countof(szFile));
+	msprintf(szAlloc, countof(szAlloc), L"OnAllocConsole\nOld=x%08X, New=x%08X, ghConWnd=x%08X\ngbPrepareDefaultTerminal=%i, gbIsNetVsHost=%i\n%s",
+		(DWORD)hOldConWnd, (DWORD)hNewConWnd, (DWORD)ghConWnd, gbPrepareDefaultTerminal, gbIsNetVsHost, szFile);
+	MessageBox(NULL, szAlloc, L"OnAllocConsole called", MB_SYSTEMMODAL);
+	#endif
+
+	if (hNewConWnd && (hNewConWnd != hOldConWnd) && gbPrepareDefaultTerminal && gbIsNetVsHost)
+	{
+		CShellProc* sp = new CShellProc();
+		if (sp)
+		{
+			sp->OnAllocConsoleFinished();
+			delete sp;
+		}
+		SetLastError(0);
+	}
 
 	TODO("Можно бы по настройке установить параметры. Кодовую страницу, например");
 
@@ -5309,6 +5695,115 @@ LPWCH WINAPI OnGetEnvironmentStringsW()
 	LPWCH lpRc = F(GetEnvironmentStringsW)();
 	return lpRc;
 }
+
+
+// Helper function
+bool LocalToSystemTime(LPFILETIME lpLocal, LPSYSTEMTIME lpSystem)
+{
+	false;
+	FILETIME ftSystem;
+	bool bOk = LocalFileTimeToFileTime(lpLocal, &ftSystem)
+		&& FileTimeToSystemTime(&ftSystem, lpSystem);
+	return bOk;
+}
+
+bool GetTime(bool bSystem, LPSYSTEMTIME lpSystemTime)
+{
+	bool bHacked = false;
+	wchar_t szEnvVar[32] = L""; // 2013-01-01T15:16:17.95
+	if (GetEnvironmentVariable(ENV_CONEMURELAYDT_VAR_W, szEnvVar, countof(szEnvVar)) && *szEnvVar)
+	{
+		SYSTEMTIME st = {0}; FILETIME ft; wchar_t* p = szEnvVar;
+
+		if (!(st.wYear = wcstol(p, &p, 10)) || !p || (*p != L'-' && *p != L'.'))
+			goto wrap;
+		if (!(st.wMonth = wcstol(p+1, &p, 10)) || !p || (*p != L'-' && *p != L'.'))
+			goto wrap;
+		if (!(st.wDay = wcstol(p+1, &p, 10)) || !p || (*p != L'T' && *p != L' '))
+			goto wrap;
+		// Possible format 'dd.mm.yyyy'? This is returned by "cmd /k echo %DATE%"
+		if (st.wDay >= 1900 && st.wYear <= 31)
+		{
+			WORD w = st.wDay; st.wDay = st.wYear; st.wYear = w;
+		}
+
+		// Time. Optional?
+		if (!p || !*p)
+		{
+			SYSTEMTIME lt; GetLocalTime(&lt);
+			st.wHour = lt.wHour;
+			st.wMinute = lt.wMinute;
+			st.wSecond = lt.wSecond;
+			st.wMilliseconds = lt.wMilliseconds;
+		}
+		else
+		{
+			if (((st.wHour = wcstol(p+1, &p, 10))>=24) || !p || (*p != L':' && *p != L'.'))
+				goto wrap;
+			if (((st.wMinute = wcstol(p+1, &p, 10))>=60))
+				goto wrap;
+
+			// Seconds and MS are optional
+			if ((p && (*p == L':' || *p == L'.')) && ((st.wSecond = wcstol(p+1, &p, 10)) >= 60))
+				goto wrap;
+			// cmd`s %TIME% shows Milliseconds as two digits
+			if ((p && (*p == L':' || *p == L'.')) && ((st.wMilliseconds = (10*wcstol(p+1, &p, 10))) >= 1000))
+				goto wrap;
+		}
+
+		// Check it
+		if (!SystemTimeToFileTime(&st, &ft))
+			goto wrap;
+		if (bSystem)
+		{
+			if (!LocalToSystemTime(&ft, lpSystemTime))
+				goto wrap;
+		}
+		else
+		{
+			*lpSystemTime = st;
+		}
+		bHacked = true;
+	}
+wrap:
+	return bHacked;
+}
+
+// TODO: GetSystemTimeAsFileTime??
+void WINAPI OnGetSystemTime(LPSYSTEMTIME lpSystemTime)
+{
+	typedef void (WINAPI* OnGetSystemTime_t)(LPSYSTEMTIME);
+	ORIGINALFAST(GetSystemTime);
+
+	if (!GetTime(true, lpSystemTime))
+		F(GetSystemTime)(lpSystemTime);
+}
+
+void WINAPI OnGetLocalTime(LPSYSTEMTIME lpSystemTime)
+{
+	typedef void (WINAPI* OnGetLocalTime_t)(LPSYSTEMTIME);
+	ORIGINALFAST(GetLocalTime);
+
+	if (!GetTime(false, lpSystemTime))
+		F(GetLocalTime)(lpSystemTime);
+}
+
+void WINAPI OnGetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
+{
+	typedef void (WINAPI* OnGetSystemTimeAsFileTime_t)(LPFILETIME);
+	ORIGINALFAST(GetSystemTimeAsFileTime);
+
+	SYSTEMTIME st;
+	if (GetTime(true, &st))
+	{
+		SystemTimeToFileTime(&st, lpSystemTimeAsFileTime);
+	}
+	else
+	{
+		F(GetSystemTimeAsFileTime)(lpSystemTimeAsFileTime);
+	}
+}
+
 
 BOOL IsVisibleRectLocked(COORD& crLocked)
 {

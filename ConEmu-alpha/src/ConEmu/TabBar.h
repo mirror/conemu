@@ -29,6 +29,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#ifdef _DEBUG
+#include "TabBarEx.h"
+#endif
+
 #if !defined(CONEMU_TABBAR_EX)
 
 #include <commctrl.h>
@@ -56,47 +60,56 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "DwmHelper.h"
 
-class CTabPanelBase;
-class CVConGuard;
 
-class CTabBarClass
+class TabBarClass
 {
 	private:
-		//// Пока - банально. VCon, номер в FAR
-		//typedef struct tag_FAR_WND_ID
+		// Пока - банально. VCon, номер в FAR
+		typedef struct tag_FAR_WND_ID
+		{
+			CVirtualConsole* pVCon;
+			int nFarWindowId;
+
+			bool operator==(struct tag_FAR_WND_ID c)
+			{
+				return (this->pVCon==c.pVCon) && (this->nFarWindowId==c.nFarWindowId);
+			};
+			bool operator!=(struct tag_FAR_WND_ID c)
+			{
+				return (this->pVCon!=c.pVCon) || (this->nFarWindowId!=c.nFarWindowId);
+			};
+		} VConTabs;
+
+	private:
+		HWND mh_Tabbar, mh_Toolbar, mh_Rebar, mh_TabTip, mh_Balloon;
+		HFONT mh_TabFont;
+		TOOLINFO tiBalloon; wchar_t ms_TabErrText[512];
+		//HIMAGELIST mh_TabIcons; int mn_AdminIcon;
+		//int GetTabIcon(bool bAdmin);
+		CIconList m_TabIcons;
+		//struct CmdHistory
 		//{
-		//	CVirtualConsole* pVCon;
-		//	int nFarWindowId;
-		//	bool operator==(struct tag_FAR_WND_ID c)
-		//	{
-		//		return (this->pVCon==c.pVCon) && (this->nFarWindowId==c.nFarWindowId);
-		//	};
-		//	bool operator!=(struct tag_FAR_WND_ID c)
-		//	{
-		//		return (this->pVCon!=c.pVCon) || (this->nFarWindowId!=c.nFarWindowId);
-		//	};
-		//} VConTabs;
-
-	private:
-		CTabPanelBase* mp_Rebar;
-
-	private:
-		CIconList      m_TabIcons;
-	public:
-		int CreateTabIcon(LPCWSTR asIconDescr, bool bAdmin);
-		HIMAGELIST GetTabIcons();
-		int GetTabIcon(bool bAdmin);
-
-	private:
+		//	int nCmd;
+		//	LPCWSTR pszCmd;
+		//	wchar_t szShort[32];
+		//} m_CmdPopupMenu[MAX_CMD_HISTORY+1]; // структура для меню выбора команды новой консоли
+		//bool mb_InNewConPopup, mb_InNewConRPopup;
+		//int mn_FirstTaskID, mn_LastTaskID; // MenuItemID for Tasks, when mb_InNewConPopup==true
 		bool _active, _visible;
 		int _tabHeight;
-		int mn_CurSelTab;
 		bool mb_ForceRecalcHeight;
+		int mn_ThemeHeightDiff;
 		//RECT m_Margins;
-		//bool _titleShouldChange;
+		bool _titleShouldChange;
+		int _prevTab;
+		BOOL mb_ChangeAllowed; //, mb_Enabled;
+		void AddTab(LPCWSTR text, int i, bool bAdmin, int iTabIcon);
 		void SelectTab(int i);
+		CVirtualConsole* FarSendChangeTab(int tabIndex);
+		LONG mn_LastToolbarWidth;
 		void UpdateToolbarPos();
-		void PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon);
+		int PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon);
+		BOOL GetVConFromTab(int nTabIdx, CVirtualConsole** rpVCon, DWORD* rpWndIndex);
 		ConEmuTab m_Tab4Tip;
 		WCHAR  ms_TmpTabText[MAX_PATH];
 		LPCWSTR GetTabText(int nTabIdx);
@@ -106,45 +119,51 @@ class CTabBarClass
 		int GetCurSel();
 		int GetItemCount();
 		void DeleteItem(int I);
-		//void AddTab2VCon(VConTabs& vct);
-		void ShowTabError(LPCTSTR asInfo, int tabIndex);
+		void AddTab2VCon(VConTabs& vct);
+		void ShowTabError(LPCTSTR asInfo, int tabIndex = 0);
 		//void CheckTheming();
-
-	public:
-		// Tabs updating (populating)
-		void Update(BOOL abPosted=FALSE);
-		bool NeedPostUpdate();
-
-	private:
-		int  mn_InUpdate;
-		UINT mn_PostUpdateTick;
-		bool mb_PostUpdateCalled;
-		bool mb_PostUpdateRequested;
-		
-		void RequestPostUpdate();
-		int  CountActiveTabs(int nMax = 0);
 		
 	protected:
-		friend class CTabPanelBase;
-		
-		//int GetIndexByTab(VConTabs tab);
+		static LRESULT CALLBACK TabProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+		static WNDPROC _defaultTabProc;
+		static LRESULT CALLBACK ToolProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+		static WNDPROC _defaultToolProc;
+		static LRESULT CALLBACK ReBarProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+		static WNDPROC _defaultReBarProc;
+		static LRESULT TabHitTest(bool abForce = false, int* pnOverTabHit = NULL);
+
+		//typedef union tag_FAR_WND_ID {
+		//	struct {
+		//		CVirtualConsole* pVCon;
+		//		int nFarWindowId/*HighPart*/;
+		//	};
+		//	struct {
+		//		CVirtualConsole* pVCon;
+		//		int nFarWindowId/*HighPart*/;
+		//	} u;
+		//	ULONGLONG ID;
+		//} VConTabs;
+		MArray<VConTabs> m_Tab2VCon;
+		BOOL mb_PostUpdateCalled, mb_PostUpdateRequested;
+		DWORD mn_PostUpdateTick;
+		void RequestPostUpdate();
+		//UINT mn_MsgUpdateTabs;
+		int mn_CurSelTab;
+		int GetIndexByTab(VConTabs tab);
+		int mn_InUpdate;
+
+		//BOOL mb_ThemingEnabled;
 
 		// Tab stack
-		CTabStack m_Tabs; // Открытые табы
-		MArray<CTabID*> m_TabStack; // История табов (для переключения в Recent mode)
-		//MArray<VConTabs> m_Tab2VCon;
-		//MArray<VConTabs> m_TabStack;
+		MArray<VConTabs> m_TabStack;
 		void CheckStack(); // Убьет из стека отсутствующих
-		void AddStack(CTab& tab); // Убьет из стека отсутствующих и поместит tab на верх стека
+		void AddStack(VConTabs tab); // Убьет из стека отсутствующих и поместит tab на верх стека
 
 		BOOL mb_DisableRedraw;
 
-		
-		bool GetVConFromTab(int nTabIdx, CVConGuard* rpVCon, DWORD* rpWndIndex);
-
 	public:
-		CTabBarClass();
-		virtual ~CTabBarClass();
+		TabBarClass();
+		virtual ~TabBarClass();
 		//virtual bool OnMenuSelected(HMENU hMenu, WORD nID, WORD nFlags);
 		//void Enable(BOOL abEnabled);
 		//void Refresh(BOOL abFarActive);
@@ -156,10 +175,18 @@ class CTabBarClass
 		//BOOL IsAllowed();
 		RECT GetMargins();
 		void Activate(BOOL abPreSyncConsole=FALSE);
+		HWND CreateToolbar();
+		HWND CreateTabbar(bool abDummyCreate = false);
+		HWND GetTabbar();
 		int GetTabbarHeight();
+		void CreateRebar();
 		void Deactivate(BOOL abPreSyncConsole=FALSE);
 		void RePaint();
+		//void Update(ConEmuTab* tabs, int tabsCount);
 		bool GetRebarClientRect(RECT* rc);
+		void Update(BOOL abPosted=FALSE);
+		int CreateTabIcon(LPCWSTR asIconDescr, bool bAdmin);
+		BOOL NeedPostUpdate();
 		void UpdatePosition();
 		void UpdateTabFont();
 		void Reposition();
@@ -187,7 +214,7 @@ class CTabBarClass
 		void SetRedraw(BOOL abEnableRedraw);
 		//void PaintHeader(HDC hdc, RECT rcPaint);
 		int  ActiveTabByName(int anType, LPCWSTR asName, CVirtualConsole** ppVCon);
-		bool GetActiveTabRect(RECT* rcTab);
+		void GetActiveTabRect(RECT* rcTab);
 		void OnShowButtonsChanged();
 
 		// Из Samples\Tabs

@@ -163,6 +163,7 @@ struct Settings
 		// Replace default terminal
 		bool isSetDefaultTerminal;
 		bool isRegisterOnOsStartup;
+		bool isRegisterOnOsStartupTSA;
 		bool isDefaultTerminalNoInjects;
 		BYTE nDefaultTerminalConfirmClose; // "Press Enter to close console". 0 - Auto, 1 - Always, 2 - Never
 		wchar_t* GetDefaultTerminalApps(); // "|" delimited
@@ -334,8 +335,8 @@ struct Settings
 			WCHAR sBgImage[MAX_PATH]; // tBgImage
 			LPCWSTR BgImage() const { return (OverrideBgImage || !AppNames) ? sBgImage : gpSet->AppStd.sBgImage; };
 			//reg->Load(L"bgOperation", nBgOperation);
-			char nBgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2, ...}
-			char BgOperation() const { return (OverrideBgImage || !AppNames) ? nBgOperation : gpSet->AppStd.nBgOperation; };
+			BYTE nBgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2, ...}
+			BYTE BgOperation() const { return (OverrideBgImage || !AppNames) ? nBgOperation : gpSet->AppStd.nBgOperation; };
 
 
 			void SetNames(LPCWSTR asAppNames)
@@ -384,6 +385,8 @@ struct Settings
 			wchar_t* pszGuiArgs;
 			size_t   cchCmdMax;
 			wchar_t* pszCommands; // "\r\n" separated commands
+
+			ConEmuHotKey HotKey;
 
 			void FreePtr()
 			{
@@ -497,7 +500,7 @@ struct Settings
 				wchar_t szArg[MAX_PATH+1];
 				while (0 == NextArg(&pszArgs, szArg))
 				{
-					if (lstrcmpi(szArg, L"/DIR") == 0)
+					if (lstrcmpi(szArg, L"/dir") == 0)
 					{
 						if (0 != NextArg(&pszArgs, szArg))
 							break;
@@ -514,7 +517,7 @@ struct Settings
 							*pszDir = pszExpand ? pszExpand : lstrdup(szArg);
 						}
 					}
-					else if (lstrcmpi(szArg, L"/ICON") == 0)
+					else if (lstrcmpi(szArg, L"/icon") == 0)
 					{
 						if (0 != NextArg(&pszArgs, szArg))
 							break;
@@ -535,6 +538,7 @@ struct Settings
 			};
 		};
 		const CommandTasks* CmdTaskGet(int anIndex); // 0-based, index of CmdTasks. "-1" == autosaved task
+		void CmdTaskSetVkMod(int anIndex, DWORD VkMod); // 0-based, index of CmdTasks
 		void CmdTaskSet(int anIndex, LPCWSTR asName, LPCWSTR asGuiArgs, LPCWSTR asCommands); // 0-based, index of CmdTasks
 		bool CmdTaskXch(int anIndex1, int anIndex2); // 0-based, index of CmdTasks
 
@@ -649,7 +653,7 @@ struct Settings
 		//reg->Load(L"bgImageColors", nBgImageColors);
 		DWORD nBgImageColors;
 		//reg->Load(L"bgOperation", bgOperation);
-		char bgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2, ...}
+		BYTE bgOperation; // BackgroundOp {eUpLeft = 0, eStretch = 1, eTile = 2, ...}
 		//reg->Load(L"bgPluginAllowed", isBgPluginAllowed);
 		char isBgPluginAllowed;
 		
@@ -1341,6 +1345,7 @@ struct Settings
 		//void UpdateConsoleMode(DWORD nMode);
 		//BOOL CheckConIme();
 		void CheckConsoleSettings();
+		void ResetSavedOnExit();
 		
 		SettingsBase* CreateSettings(const SettingsStorage* apStorage);
 		

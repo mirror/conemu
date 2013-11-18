@@ -143,7 +143,8 @@ BEGIN
     CONTROL         "&Standard",rStandardAA,"Button",BS_AUTORADIOBUTTON,57,70,47,8
     CONTROL         "&Clear Type",rCTAA,"Button",BS_AUTORADIOBUTTON,110,70,48,8
     GROUPBOX        "",IDC_STATIC,4,95,319,98
-    CONTROL         "Back&ground image (bmp, jpg, png):",cbBgImage,"Button",BS_AUTO3STATE | WS_TABSTOP,10,95,128,8
+    CONTROL         "Back&ground image (bmp, jpg, png, tif):",cbBgImage,
+                    "Button",BS_AUTO3STATE | WS_TABSTOP,10,95,139,8
     LTEXT           "Path:",IDC_STATIC,10,109,18,8
     EDITTEXT        tBgImage,34,107,261,12,ES_AUTOHSCROLL
     PUSHBUTTON      "...",bBgImage,299,107,16,12
@@ -283,7 +284,7 @@ BEGIN
     GROUPBOX        "Minimize ConEmu automatically",IDC_STATIC,4,140,319,57
     CONTROL         "Minimize on focus lose (not in Quake style)",cbMinimizeOnLoseFocus,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,153,199,8
-    GROUPBOX        "When Esc pressed",IDC_STATIC,4,168,319,29
+    GROUPBOX        "Minimize when Esc pressed",IDC_STATIC,4,168,319,29
     CONTROL         "If all consoles closed",rbMinByEscEmpty,"Button",BS_AUTORADIOBUTTON | WS_GROUP,11,181,99,8
     CONTROL         "Always",rbMinByEscAlways,"Button",BS_AUTORADIOBUTTON,113,181,42,8
     CONTROL         "Never",rbMinByEscNever,"Button",BS_AUTORADIOBUTTON,161,181,38,8
@@ -341,19 +342,19 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    GROUPBOX        "ConEmu Inside - Explorer context menu integration",IDC_STATIC,4,84,319,81
-    LTEXT           "Menu item:",IDC_STATIC,11,97,39,8
-    COMBOBOX        cbInsideName,54,95,114,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
-    RTEXT           "Configuration:",IDC_STATIC,173,97,59,8
-    EDITTEXT        tInsideConfig,238,95,79,13,ES_AUTOHSCROLL
-    LTEXT           "Command:",IDC_STATIC,11,114,39,8
-    EDITTEXT        tInsideShell,54,112,263,13,ES_AUTOHSCROLL
-    LTEXT           "Icon file:",IDC_STATIC,11,130,39,8
-    EDITTEXT        tInsideIcon,54,128,263,13,ES_AUTOHSCROLL
-    CONTROL         "Sync dir",cbInsideSyncDir,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,147,39,10
-    EDITTEXT        tInsideSyncDir,54,144,144,13,ES_AUTOHSCROLL
-    PUSHBUTTON      "Register",bInsideRegister,212,144,50,14
-    PUSHBUTTON      "Unregister",bInsideUnregister,267,144,50,14
+    GROUPBOX        "ConEmu Inside - Explorer context menu integration",IDC_STATIC,4,91,319,96
+    LTEXT           "Menu item:",IDC_STATIC,11,120,39,8
+    COMBOBOX        cbInsideName,54,118,114,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    RTEXT           "Configuration:",IDC_STATIC,173,120,59,8
+    EDITTEXT        tInsideConfig,238,118,79,13,ES_AUTOHSCROLL
+    LTEXT           "Command:",IDC_STATIC,11,137,39,8
+    EDITTEXT        tInsideShell,54,135,263,13,ES_AUTOHSCROLL
+    LTEXT           "Icon file:",IDC_STATIC,11,153,39,8
+    EDITTEXT        tInsideIcon,54,151,263,13,ES_AUTOHSCROLL
+    CONTROL         "Sync dir",cbInsideSyncDir,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,170,39,10
+    EDITTEXT        tInsideSyncDir,54,167,144,13,ES_AUTOHSCROLL
+    PUSHBUTTON      "Register",bInsideRegister,212,167,50,14
+    PUSHBUTTON      "Unregister",bInsideUnregister,267,167,50,14
     GROUPBOX        "ConEmu Here - Explorer context menu integration",IDC_STATIC,4,1,319,81
     LTEXT           "Menu item:",IDC_STATIC,11,14,39,8
     COMBOBOX        cbHereName,54,11,114,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
@@ -365,18 +366,27 @@ BEGIN
     EDITTEXT        tHereIcon,54,46,263,13,ES_AUTOHSCROLL
     PUSHBUTTON      "Register",bHereRegister,213,62,50,14
     PUSHBUTTON      "Unregister",bHereUnregister,267,62,50,14
-    GROUPBOX        "WARNING!!! Enabling this option may cause false alarms in antiviral programs!!!",IDC_STATIC,4,168,319,64
+    LTEXT           "Use this if you want ConEmu act as a page of Windows Explorer window",IDC_STATIC,11,103,232,8
+END
+
+IDD_SPG_DEFTERM DIALOGEX 0, 0, 328, 235
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD
+EXSTYLE WS_EX_CONTROLPARENT
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    GROUPBOX        "WARNING!!! Enabling this option may cause false alarms in antiviral programs!!!",IDC_STATIC,4,1,319,107
     CONTROL         "Force ConEmu as default terminal for console applications",cbDefaultTerminal,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,179,208,8
-    LTEXT           "List of hooked executables delimited with ""|"" (e.g. ""explorer.exe|devenv.exe|totalcmd.exe""):",IDC_STATIC,10,190,306,8
-    EDITTEXT        tDefaultTerminal,9,201,308,13,ES_AUTOHSCROLL
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,14,208,8
+    LTEXT           "List of hooked executables delimited with ""|"" (e.g. ""explorer.exe|devenv.exe|totalcmd.exe""):",IDC_STATIC,10,44,306,8
+    EDITTEXT        tDefaultTerminal,9,55,308,13,ES_AUTOHSCROLL
     CONTROL         "Don't use ConEmuHk.dll in started console",cbDefaultTerminalNoInjects,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,168,219,152,8
-    LTEXT           "Confirm close:",IDC_STATIC,10,219,51,8
-    CONTROL         "Auto",rbDefaultTerminalConfAuto,"Button",BS_AUTORADIOBUTTON,60,219,31,8
-    CONTROL         "Always",rbDefaultTerminalConfAlways,"Button",BS_AUTORADIOBUTTON,92,219,38,8
-    CONTROL         "Never",rbDefaultTerminalConfNever,"Button",BS_AUTORADIOBUTTON,131,219,34,8
-    CONTROL         "Register on OS startup",cbDefaultTerminalStartup,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,222,179,96,8
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,93,152,8
+    LTEXT           "Confirm close:",IDC_STATIC,10,79,51,8
+    CONTROL         "Auto",rbDefaultTerminalConfAuto,"Button",BS_AUTORADIOBUTTON,63,79,31,8
+    CONTROL         "Always",rbDefaultTerminalConfAlways,"Button",BS_AUTORADIOBUTTON,95,79,38,8
+    CONTROL         "Never",rbDefaultTerminalConfNever,"Button",BS_AUTORADIOBUTTON,134,79,34,8
+    CONTROL         "Register on OS startup",cbDefaultTerminalStartup,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,28,96,8
+    CONTROL         "Leave in TSA",cbDefaultTerminalTSA,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,111,28,70,8
 END
 
 IDD_SPG_STARTUP DIALOGEX 0, 0, 328, 235
@@ -693,36 +703,43 @@ BEGIN
     COMBOBOX        lbRDragKey,47,25,56,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Copy by default",cbDnDCopy,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,107,27,66,8
     CONTROL         "Use drop menu",cbDropUseMenu,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,193,27,66,8
-    GROUPBOX        "Far Manager options",IDC_STATIC,4,44,319,48
+    GROUPBOX        "Far Manager options",IDC_STATIC,4,44,319,60
     CONTROL         "Hourglass if not responding",cbFarHourglass,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,55,101,8
     PUSHBUTTON      "...",bFarHourglass,113,54,13,11,WS_DISABLED
     CONTROL         "Extend Unicode CharMap",cbExtendUCharMap,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,67,117,8
     CONTROL         "Resize panels by mouse",cbDragPanel,"Button",BS_AUTO3STATE | WS_TABSTOP,131,55,104,8
+    CONTROL         "use both panel edges",cbDragPanelBothEdges,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,141,67,94,8
     CONTROL         "ASCII sort function in Far",cbFARuseASCIIsort,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,131,79,104,8
     CONTROL         "Right selection fix",cbRSelectionFix,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,238,55,81,8
     CONTROL         "No zone check",cbShellNoZoneCheck,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,238,67,81,8
     CONTROL         "KeyBar RClick",cbKeyBarRClick,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,238,79,81,8
     CONTROL         "Disable Far flashing",cbDisableFarFlashing,"Button",BS_AUTO3STATE | WS_TABSTOP,9,79,117,8
-    GROUPBOX        "Far macros",IDC_STATIC,4,95,319,73
-    CONTROL         "&RightClick 4 EMenu",cbRClick,"Button",BS_AUTO3STATE | WS_TABSTOP,9,107,78,8
-    EDITTEXT        tRClickMacro,88,105,229,12,ES_AUTOHSCROLL
-    CONTROL         "Safe Far close",cbSafeFarClose,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,9,122,78,8
-    EDITTEXT        tSafeFarCloseMacro,88,120,229,12,ES_AUTOHSCROLL
-    LTEXT           "Close tab:",IDC_STATIC,10,137,54,8
-    EDITTEXT        tCloseTabMacro,70,135,247,12,ES_AUTOHSCROLL
-    LTEXT           "Save all editors:",IDC_STATIC,10,152,54,8
-    EDITTEXT        tSaveAllMacro,70,150,247,12,ES_AUTOHSCROLL
-    CONTROL         "use both panel edges",cbDragPanelBothEdges,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,141,67,94,8
-    GROUPBOX        "Tab templates",IDC_STATIC,4,170,319,62
-    RTEXT           "Panels:",IDC_STATIC,8,200,30,8
-    RTEXT           "Viewer:",IDC_STATIC,168,200,29,8
-    EDITTEXT        tTabViewer,201,198,117,12,ES_AUTOHSCROLL
-    RTEXT           "Editor:",IDC_STATIC,16,218,22,8
-    EDITTEXT        tTabEditor,42,216,117,12,ES_AUTOHSCROLL
-    RTEXT           "Modified:",IDC_STATIC,161,218,36,8
-    EDITTEXT        tTabEditorMod,201,216,117,12,ES_AUTOHSCROLL
-    LTEXT           "%s - Title, %c - Console number, %p - Active PID, %n - Name of active process, %% - %,\n%i - Far window number (you can see it in standard F12 menu)",IDC_STATIC,10,179,309,17
-    EDITTEXT        tTabPanels,42,198,117,12,ES_AUTOHSCROLL
+    GROUPBOX        "Tab templates",IDC_STATIC,4,107,319,63
+    RTEXT           "Panels:",IDC_STATIC,8,137,30,8
+    EDITTEXT        tTabPanels,42,135,117,12,ES_AUTOHSCROLL
+    RTEXT           "Viewer:",IDC_STATIC,168,137,29,8
+    EDITTEXT        tTabViewer,201,135,117,12,ES_AUTOHSCROLL
+    RTEXT           "Editor:",IDC_STATIC,16,155,22,8
+    EDITTEXT        tTabEditor,42,153,117,12,ES_AUTOHSCROLL
+    RTEXT           "Modified:",IDC_STATIC,161,155,36,8
+    EDITTEXT        tTabEditorMod,201,153,117,12,ES_AUTOHSCROLL
+    LTEXT           "%s - Title, %c - Console number, %p - Active PID, %n - Name of active process, %% - %,\n%i - Far window number (you can see it in standard F12 menu)",IDC_STATIC,10,116,309,17
+END
+
+IDD_SPG_FARMACRO DIALOGEX 0, 0, 328, 235
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD
+EXSTYLE WS_EX_CONTROLPARENT
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    GROUPBOX        "Far Manager macros",IDC_STATIC,4,1,319,131
+    CONTROL         "&RightClick 4 EMenu",cbRClick,"Button",BS_AUTO3STATE | WS_TABSTOP,10,13,306,8
+    EDITTEXT        tRClickMacro,9,25,308,12,ES_AUTOHSCROLL
+    CONTROL         "Safe Far close",cbSafeFarClose,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,44,306,8
+    EDITTEXT        tSafeFarCloseMacro,9,56,308,12,ES_AUTOHSCROLL
+    LTEXT           "Close tab (Panel, Editor, Viewer):",IDC_STATIC,10,74,306,8
+    EDITTEXT        tCloseTabMacro,9,84,308,12,ES_AUTOHSCROLL
+    LTEXT           "Save all editors:",IDC_STATIC,10,102,306,8
+    EDITTEXT        tSaveAllMacro,9,113,308,12,ES_AUTOHSCROLL
 END
 
 IDD_SPG_DEBUG DIALOGEX 0, 0, 328, 235
@@ -827,7 +844,7 @@ BEGIN
     CONTROL         "any key",cbCTSEndOnKeyPress,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,114,136,45,8
     GROUPBOX        "Select text with mouse (LeftClick+Drag)",IDC_STATIC,4,65,319,40
     GROUPBOX        "Select text with keyboard (Also there are two hotkeys on Keys&Macro page)",IDC_STATIC,4,109,319,42
-    CONTROL         "Start selection with Shift+Arrow (Text = Left/Right, Block = Up/Down)",cbCTSShiftArrowStartSel,
+    CONTROL         "Start selection with Shift+Arrow (Text = Left/Right/Home/End, Block = Up/Down)",cbCTSShiftArrowStartSel,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,122,308,8
     CONTROL         "copy before reset",cbCTSEndCopyBefore,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,163,136,73,8
 END
@@ -1181,24 +1198,28 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    GROUPBOX        "Predefined tasks (command groups)",gbCmdTasks,4,1,319,230
-    LISTBOX         lbCmdTasks,9,12,93,180,LBS_USETABSTOPS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP
-    LTEXT           "Task name (alias), surrounded by {...}, used in «[+] menu», «Recreate dialog» or «/cmd» agrument of ConEmu.exe",stCmdGroupName,111,11,207,16
-    EDITTEXT        tCmdGroupName,109,29,208,12,ES_AUTOHSCROLL
-    LTEXT           "Commands (application, arguments, ""-new_console"" params)\nDelimit commands with empty lines\nEach command creates tab in ConEmu when group started\nMark active console tab with '>' sign\nStart console 'As Administrator' with '*' sign",stCmdGroupCommands,111,71,208,41
+    GROUPBOX        "&Predefined tasks (command groups)",gbCmdTasks,4,1,319,230
+    LISTBOX         lbCmdTasks,9,12,93,163,LBS_USETABSTOPS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP
+    LTEXT           "&Task name (alias), surrounded by {...}, used in «[+] menu», «Recreate dialog» or «/cmd» agrument of ConEmu.exe",stCmdGroupName,111,11,207,16
+    EDITTEXT        tCmdGroupName,109,29,81,12,ES_AUTOHSCROLL
+    LTEXT           "&Commands (application, arguments, ""-new_console"" params)\nDelimit commands with empty lines\nEach command creates tab in ConEmu when group started\nMark active console tab with '>' sign\nStart console 'As Administrator' with '*' sign",stCmdGroupCommands,111,71,208,41
     EDITTEXT        tCmdGroupCommands,109,113,208,97,ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL
-    PUSHBUTTON      "Tab...",cbCmdGroupApp,132,213,34,14
-    PUSHBUTTON      "File path...",cbCmdTasksParm,221,213,47,14
-    PUSHBUTTON      "+",cbCmdTasksAdd,9,213,17,14
-    PUSHBUTTON      "-",cbCmdTasksDel,27,213,17,14
-    PUSHBUTTON      "Up",cbCmdTasksUp,47,213,27,14
-    PUSHBUTTON      "Down",cbCmdTasksDown,75,213,27,14
+    PUSHBUTTON      "&+",cbCmdTasksAdd,9,213,17,14
+    PUSHBUTTON      "&-",cbCmdTasksDel,27,213,17,14
+    PUSHBUTTON      "&Up",cbCmdTasksUp,47,213,27,14
+    PUSHBUTTON      "&Down",cbCmdTasksDown,75,213,27,14
+    PUSHBUTTON      "Add default tasks...",cbAddDefaults,9,179,93,14
     PUSHBUTTON      "Reload...",cbCmdTasksReload,9,196,93,14
     LTEXT           "Task parameters. Example: /dir ""C:\\"" /icon ""cmd.exe"" /single",stCmdGroupGuiArg,111,44,208,8
     EDITTEXT        tCmdGroupGuiArg,110,54,208,12,ES_AUTOHSCROLL
-    PUSHBUTTON      "Startup dir...",cbCmdTasksDir,167,213,53,14
     RTEXT           "Add:",stCmdTaskAdd,106,217,21,8
+    PUSHBUTTON      "Tab...",cbCmdGroupApp,132,213,34,14
+    PUSHBUTTON      "Startup dir...",cbCmdTasksDir,167,213,53,14
+    PUSHBUTTON      "File path...",cbCmdTasksParm,221,213,47,14
     PUSHBUTTON      "Active tabs",cbCmdTasksActive,270,213,49,14
+    RTEXT           "&Hotkey:",IDC_STATIC,193,30,30,8
+    EDITTEXT        tCmdGroupKey,227,29,72,12,ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "...",cbCmdGroupKey,303,28,16,13
 END
 
 IDD_SPG_APPDISTINCT DIALOGEX 0, 0, 328, 235
@@ -1294,17 +1315,17 @@ BEGIN
     EDITTEXT        tInactiveCursorMinSize,256,99,25,12,ES_AUTOHSCROLL
 END
 
-IDD_ABOUT DIALOGEX 0, 0, 325, 205
+IDD_ABOUT DIALOGEX 0, 0, 379, 205
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 CAPTION "Dialog"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,268,187,50,14
-    ICON            IDI_ICON1,IDC_STATIC,7,7,21,20,WS_DISABLED
-    CONTROL         "",tbAboutTabs,"SysTabControl32",TCS_BUTTONS | WS_TABSTOP,6,33,302,16
-    EDITTEXT        tAboutText,7,50,311,131,ES_MULTILINE | ES_AUTOVSCROLL | ES_NOHIDESEL | ES_READONLY | WS_VSCROLL
-    LTEXT           "Console emulation program. Visit home page:",stConEmuAbout,50,7,268,8
-    LTEXT           "http://conemu-maximus5.googlecode.com",stConEmuUrl,50,18,268,8,SS_NOTIFY
+    DEFPUSHBUTTON   "OK",IDOK,322,187,50,14
+    ICON            IDI_ICON1,IDC_STATIC,7,7,20,20,WS_DISABLED
+    CONTROL         "",tbAboutTabs,"SysTabControl32",TCS_BUTTONS | WS_TABSTOP,6,33,366,16
+    EDITTEXT        tAboutText,7,50,365,131,ES_MULTILINE | ES_AUTOVSCROLL | ES_NOHIDESEL | ES_READONLY | WS_VSCROLL
+    LTEXT           "Console emulation program. Visit home page:",stConEmuAbout,104,7,268,8
+    LTEXT           "http://conemu-maximus5.googlecode.com",stConEmuUrl,104,18,268,8,SS_NOTIFY
 END
 
 IDD_ACTION DIALOGEX 0, 0, 325, 157
@@ -1342,6 +1363,21 @@ BEGIN
     EDITTEXT        IDC_HELP_DESCR,0,0,166,75,ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY
 END
 
+IDD_HOTKEY DIALOGEX 0, 0, 173, 70
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Choose hotkey"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,116,49,50,14
+    LTEXT           "Key:",stHotKeySelect,7,9,37,8
+    CONTROL         "",hkHotKeySelect,"msctls_hotkey32",WS_BORDER | WS_TABSTOP,45,7,54,13
+    COMBOBOX        lbHotKeyList,104,7,61,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        lbHotKeyMod1,45,28,38,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        lbHotKeyMod2,86,28,38,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        lbHotKeyMod3,127,28,38,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Modifiers:",IDC_STATIC,7,30,37,8
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -1367,7 +1403,19 @@ BEGIN
         BOTTOMMARGIN, 181
     END
 
+    IDD_SPG_MAIN, DIALOG
+    BEGIN
+    END
+
     IDD_SPG_TASKBAR, DIALOG
+    BEGIN
+    END
+
+    IDD_SPG_INTEGRATION, DIALOG
+    BEGIN
+    END
+
+    IDD_SPG_DEFTERM, DIALOG
     BEGIN
     END
 
@@ -1394,6 +1442,10 @@ BEGIN
     END
 
     IDD_SPG_FEATURE_FAR, DIALOG
+    BEGIN
+    END
+
+    IDD_SPG_FARMACRO, DIALOG
     BEGIN
     END
 
@@ -1426,6 +1478,10 @@ BEGIN
         BOTTOMMARGIN, 146
     END
 
+    IDD_SPG_KEYS, DIALOG
+    BEGIN
+    END
+
     IDD_SPG_UPDATE, DIALOG
     BEGIN
     END
@@ -1450,7 +1506,7 @@ BEGIN
     IDD_ABOUT, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 318
+        RIGHTMARGIN, 372
         TOPMARGIN, 7
         BOTTOMMARGIN, 143
     END
@@ -1468,6 +1524,14 @@ BEGIN
         RIGHTMARGIN, 180
         TOPMARGIN, 6
         BOTTOMMARGIN, 48
+    END
+
+    IDD_HOTKEY, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 166
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 63
     END
 END
 #endif    // APSTUDIO_INVOKED

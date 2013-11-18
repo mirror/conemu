@@ -157,49 +157,30 @@ Settings::ColorPalette gLastColors = {};
 
 namespace SettingsNS
 {
-	const WCHAR* szBgOper[] = {L"UpLeft", L"UpRight", L"DownLeft", L"DownRight", L"Stretch", L"Tile"};
-	const DWORD  nBgOper[] =  {eUpLeft,   eUpRight,   eDownLeft,   eDownRight,   eStretch,   eTile};
-	const WCHAR* szKeys[] = {L"<None>", L"Left Ctrl", L"Right Ctrl", L"Left Alt", L"Right Alt", L"Left Shift", L"Right Shift"};
-	const DWORD  nKeys[] =  {0,         VK_LCONTROL,  VK_RCONTROL,   VK_LMENU,    VK_RMENU,     VK_LSHIFT,     VK_RSHIFT};
-	const WCHAR* szModifiers[] = {L" ", L"Win",  L"Apps",  L"Ctrl", L"LCtrl", L"RCtrl",           L"Alt", L"LAlt", L"RAlt",     L"Shift", L"LShift", L"RShift"};
-	const DWORD  nModifiers[] =  {0,    VK_LWIN, VK_APPS,  VK_CONTROL, VK_LCONTROL, VK_RCONTROL,  VK_MENU, VK_LMENU, VK_RMENU,  VK_SHIFT, VK_LSHIFT, VK_RSHIFT};
-	const WCHAR* szKeysAct[] = {L"<Always>", L"Left Ctrl", L"Right Ctrl", L"Left Alt", L"Right Alt", L"Left Shift", L"Right Shift"};
-	const DWORD  nKeysAct[] =  {0,         VK_LCONTROL,  VK_RCONTROL,   VK_LMENU,    VK_RMENU,     VK_LSHIFT,     VK_RSHIFT};
-	const WCHAR* szKeysHot[] = {L"", L"Esc", L"Delete", L"Tab", L"Enter", L"Space", L"Backspace", L"Pause", L"Wheel Up", L"Wheel Down", L"Wheel Left", L"Wheel Right", L"LButton", L"RButton", L"MButton"};
-	const DWORD  nKeysHot[] =  {0, VK_ESCAPE, VK_DELETE, VK_TAB, VK_RETURN, VK_SPACE, VK_BACK, VK_PAUSE, VK_WHEEL_UP, VK_WHEEL_DOWN, VK_WHEEL_LEFT, VK_WHEEL_RIGHT, VK_LBUTTON, VK_RBUTTON, VK_MBUTTON};
+	CSettings::ListBoxItem  BgOper[] = {{eUpLeft,L"UpLeft"}, {eUpRight,L"UpRight"}, {eDownLeft,L"DownLeft"}, {eDownRight,L"DownRight"}, {eCenter,L"Center"}, {eStretch,L"Stretch"}, {eFit,L"Stretch-Fit"}, {eFill,L"Stretch-Fill"}, {eTile,L"Tile"}};
+
+	CSettings::ListBoxItem  Modifiers[] = {{0,L" "}, {VK_LWIN,L"Win"},  {VK_APPS,L"Apps"},  {VK_CONTROL,L"Ctrl"}, {VK_LCONTROL,L"LCtrl"}, {VK_RCONTROL,L"RCtrl"},           {VK_MENU,L"Alt"}, {VK_LMENU,L"LAlt"}, {VK_RMENU,L"RAlt"},     {VK_SHIFT,L"Shift"}, {VK_LSHIFT,L"LShift"}, {VK_RSHIFT,L"RShift"}};
+	CSettings::ListBoxItem  KeysHot[] = {{0,L""}, {VK_ESCAPE,L"Esc"}, {VK_DELETE,L"Delete"}, {VK_TAB,L"Tab"}, {VK_RETURN,L"Enter"}, {VK_SPACE,L"Space"}, {VK_BACK,L"Backspace"}, {VK_PAUSE,L"Pause"}, {VK_WHEEL_UP,L"Wheel Up"}, {VK_WHEEL_DOWN,L"Wheel Down"}, {VK_WHEEL_LEFT,L"Wheel Left"}, {VK_WHEEL_RIGHT,L"Wheel Right"}, {VK_LBUTTON,L"LButton"}, {VK_RBUTTON,L"RButton"}, {VK_MBUTTON,L"MButton"}};
+	CSettings::ListBoxItem  Keys[] = {{0,L"<None>"}, {VK_LCONTROL,L"Left Ctrl"}, {VK_RCONTROL,L"Right Ctrl"}, {VK_LMENU,L"Left Alt"}, {VK_RMENU,L"Right Alt"}, {VK_LSHIFT,L"Left Shift"}, {VK_RSHIFT,L"Right Shift"}};
+	CSettings::ListBoxItem  KeysAct[] = {{0,L"<Always>"}, {VK_CONTROL,L"Ctrl"}, {VK_LCONTROL,L"Left Ctrl"}, {VK_RCONTROL,L"Right Ctrl"}, {VK_MENU,L"Alt"}, {VK_LMENU,L"Left Alt"}, {VK_RMENU,L"Right Alt"}, {VK_SHIFT,L"Shift"}, {VK_LSHIFT,L"Left Shift"}, {VK_RSHIFT,L"Right Shift"}};
+
 	const DWORD  FSizes[] = {0, 8, 9, 10, 11, 12, 14, 16, 18, 19, 20, 24, 26, 28, 30, 32, 34, 36, 40, 46, 50, 52, 72};
 	const DWORD  FSizesSmall[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 20, 24, 26, 28, 30, 32};
-	const WCHAR* szClipAct[] = {L"<None>", L"Copy", L"Paste", L"Auto"};
-	const DWORD  nClipAct[] =  {0,         1,       2,        3};
-	const WCHAR* szColorIdx[] = {L" 0", L" 1", L" 2", L" 3", L" 4", L" 5", L" 6", L" 7", L" 8", L" 9", L"10", L"11", L"12", L"13", L"14", L"15", L"None"};
-	const DWORD  nColorIdx[] = {    0,     1,     2,     3,     4,     5,     6,     7,     8,     9,    10,    11,    12,    13,    14,    15,    16};
-	const WCHAR* szColorIdxSh[] = {L"# 0", L"# 1", L"# 2", L"# 3", L"# 4", L"# 5", L"# 6", L"# 7", L"# 8", L"# 9", L"#10", L"#11", L"#12", L"#13", L"#14", L"#15"};
-	const DWORD  nColorIdxSh[] =  {    0,      1,      2,      3,      4,      5,      6,      7,      8,      9,     10,     11,     12,     13,     14,     15};
-	const WCHAR* szColorIdxTh[] = {L"# 0", L"# 1", L"# 2", L"# 3", L"# 4", L"# 5", L"# 6", L"# 7", L"# 8", L"# 9", L"#10", L"#11", L"#12", L"#13", L"#14", L"#15", L"Auto"};
-	const DWORD  nColorIdxTh[] =  {    0,      1,      2,      3,      4,      5,      6,      7,      8,      9,     10,     11,     12,     13,     14,     15,    16};
-	const WCHAR* szThumbMaxZoom[] = {L"100%",L"200%",L"300%",L"400%",L"500%",L"600%"};
-	const DWORD  nThumbMaxZoom[] = {100,200,300,400,500,600};
-	const DWORD  nCharSets[] = {0, 178, 186, 136, 1, 238, 134, 161, 177, 129, 130, 77, 255, 204, 128, 2, 222, 162, 163};
-	const WCHAR* szCharSets[] = {L"ANSI", L"Arabic", L"Baltic", L"Chinese Big 5", L"Default", L"East Europe",
-		L"GB 2312", L"Greek", L"Hebrew", L"Hangul", L"Johab", L"Mac", L"OEM", L"Russian", L"Shiftjis",
-		L"Symbol", L"Thai", L"Turkish", L"Vietnamese"
-	};
-	//const struct StatusBarIds { CEStatusItems stItem; UINT nDlgID; } StatusItems[] = 
-	//{
-	//	{csi_ActiveProcess, cbStatusActiveProcess}, {csi_ConsoleTitle, cbStatusConsoleTitle},
-	//	{csi_ActiveVCon, cbStatusActiveVCon}, {csi_NewVCon, cbStatusNewVCon}, {csi_CapsLock, cbStatusCapsLock}, {csi_NumLock, cbStatusNumLock},
-	//	{csi_ScrollLock, cbStatusScrlLock}, {csi_InputLocale, cbStatusInputLang}, {csi_WindowPos, cbStatusWindowPos},
-	//	{csi_WindowSize, cbStatusWindowSize}, {csi_WindowClient, cbStatusWindowClient}, {csi_WindowWork, cbStatusWindowWorkspace},
-	//	{csi_ActiveBuffer, cbStatusActiveBuffer}, {csi_ConsolePos, cbStatusConsolePos}, {csi_ConsoleSize, cbStatusConsoleSize},
-	//	{csi_BufferSize, cbStatusBufferSize}, {csi_CursorX, cbStatusCursorX}, {csi_CursorY, cbStatusCursorY},
-	//	{csi_CursorSize, cbStatusCursorSize}, {csi_CursorInfo, cbStatusCursorInfo}, {csi_ConEmuPID, cbStatusGuiPID},
-	//	{csi_ConEmuHWND, cbStatusGuiHwnd}, {csi_ConEmuView, cbStatusViewHwnd}, {csi_Server, cbStatusServer},
-	//	{csi_ServerHWND, cbStatusRealHwnd}, {csi_Transparency, cbStatusTransparency}
-	//};
-	const WCHAR* szCRLF[] = {L"CR+LF", L"LF", L"CR"};
-	const DWORD  nCRLF[] =  {0, 1, 2};
+	CSettings::ListBoxItem  CharSets[] = {{0,L"ANSI"}, {178,L"Arabic"}, {186,L"Baltic"}, {136,L"Chinese Big 5"}, {1,L"Default"}, {238,L"East Europe"},
+		{134,L"GB 2312"}, {161,L"Greek"}, {177,L"Hebrew"}, {129,L"Hangul"}, {130,L"Johab"}, {77,L"Mac"}, {255,L"OEM"}, {204,L"Russian"}, {128,L"Shiftjis"},
+		{2,L"Symbol"}, {222,L"Thai"}, {162,L"Turkish"}, {163,L"Vietnamese"}};
+	
+	CSettings::ListBoxItem  ClipAct[] = {{0,L"<None>"}, {1,L"Copy"}, {2,L"Paste"}, {3,L"Auto"}};
+
+	CSettings::ListBoxItem  ColorIdx[] = {{0,L" 0"}, {1,L" 1"}, {2,L" 2"}, {3,L" 3"}, {4,L" 4"}, {5,L" 5"}, {6,L" 6"}, {7,L" 7"}, {8,L" 8"}, {9,L" 9"}, {10,L"10"}, {11,L"11"}, {12,L"12"}, {13,L"13"}, {14,L"14"}, {15,L"15"}, {16,L"None"}};
+	CSettings::ListBoxItem  ColorIdxSh[] = {{0,L"# 0"}, {1,L"# 1"}, {2,L"# 2"}, {3,L"# 3"}, {4,L"# 4"}, {5,L"# 5"}, {6,L"# 6"}, {7,L"# 7"}, {8,L"# 8"}, {9,L"# 9"}, {10,L"#10"}, {11,L"#11"}, {12,L"#12"}, {13,L"#13"}, {14,L"#14"}, {15,L"#15"}};
+	CSettings::ListBoxItem  ColorIdxTh[] = {{0,L"# 0"}, {1,L"# 1"}, {2,L"# 2"}, {3,L"# 3"}, {4,L"# 4"}, {5,L"# 5"}, {6,L"# 6"}, {7,L"# 7"}, {8,L"# 8"}, {9,L"# 9"}, {10,L"#10"}, {11,L"#11"}, {12,L"#12"}, {13,L"#13"}, {14,L"#14"}, {15,L"#15"}, {16,L"Auto"}};
+	CSettings::ListBoxItem  ThumbMaxZoom[] = {{100,L"100%"},{200,L"200%"},{300,L"300%"},{400,L"400%"},{500,L"500%"},{600,L"600%"}};
+
+	CSettings::ListBoxItem  CRLF[] = {{0,L"CR+LF"}, {1,L"LF"}, {2,L"CR"}};
+
 	const WORD nSizeCtrlId[] = {tWndWidth, stWndWidth, tWndHeight, stWndHeight};
-	const WORD nTaskCtrlId[] = {tCmdGroupName, tCmdGroupGuiArg, tCmdGroupCommands, stCmdTaskAdd, cbCmdGroupApp, cbCmdTasksDir, cbCmdTasksParm, cbCmdTasksActive};
+	const WORD nTaskCtrlId[] = {tCmdGroupName, tCmdGroupKey, cbCmdGroupKey, tCmdGroupGuiArg, tCmdGroupCommands, stCmdTaskAdd, cbCmdGroupApp, cbCmdTasksDir, cbCmdTasksParm, cbCmdTasksActive};
 	const WORD nStatusColorIds[] = {stStatusColorBack, tc35, c35, stStatusColorLight, tc36, c36, stStatusColorDark, tc37, c37};
 	const struct TabDefaultClickAction { int value; WCHAR *name; } tabBtnDblClickActions[] =
 	{// gpSet->nTabBtnDblClickAction
@@ -218,24 +199,22 @@ namespace SettingsNS
 	};
 };
 
-#define FillListBox(hDlg,nDlgID,Items,Values,Value) \
-	_ASSERTE(countof(Items) == countof(Values)); \
-	FillListBoxItems(GetDlgItem(hDlg,nDlgID), countof(Items), Items, Values, Value)
+#define FillListBox(hDlg,nDlgID,Items,Value) \
+	FillListBoxItems(GetDlgItem(hDlg,nDlgID), countof(Items), Items, Value)
 #define FillListBoxInt(hDlg,nDlgID,Values,Value) \
-	FillListBoxItems(GetDlgItem(hDlg,nDlgID), countof(Values), NULL, Values, Value)
-#define FillListBoxByte(hDlg,nDlgID,Items,Values,Value) \
-	_ASSERTE(countof(Items) == countof(Values)); { \
+	FillListBoxItems(GetDlgItem(hDlg,nDlgID), countof(Values), Values, Value)
+#define FillListBoxByte(hDlg,nDlgID,Items,Value) \
+	{ \
 		DWORD dwVal = Value; \
-		FillListBoxItems(GetDlgItem(hDlg,nDlgID), countof(Items), Items, Values, dwVal); \
+		FillListBoxItems(GetDlgItem(hDlg,nDlgID), countof(Items), Items, dwVal); \
 		Value = dwVal; }
 #define FillListBoxCharSet(hDlg,nDlgID,Value) \
 	{ \
-		_ASSERTE(countof(SettingsNS::nCharSets) == countof(SettingsNS::szCharSets)); \
 		u8 num = 4; /*индекс DEFAULT_CHARSET*/ \
-		for (size_t i = 0; i < countof(SettingsNS::nCharSets); i++) \
+		for (size_t i = 0; i < countof(SettingsNS::CharSets); i++) \
 		{ \
-			SendDlgItemMessageW(hDlg, nDlgID, CB_ADDSTRING, 0, (LPARAM)SettingsNS::szCharSets[i]); \
-			if (SettingsNS::nCharSets[i] == Value) num = i; \
+			SendDlgItemMessageW(hDlg, nDlgID, CB_ADDSTRING, 0, (LPARAM)SettingsNS::CharSets[i].sValue); \
+			if (SettingsNS::CharSets[i].nValue == Value) num = i; \
 		} \
 		SendDlgItemMessage(hDlg, nDlgID, CB_SETCURSEL, num, 0); \
 	}
@@ -251,13 +230,12 @@ namespace SettingsNS
 		SendDlgItemMessage(hDlg, nDlgID, CB_SETCURSEL, num, 0); \
 	}
 
-#define GetListBox(hDlg,nDlgID,Items,Values,Value) \
-	_ASSERTE(countof(Items) == countof(Values)); \
-	GetListBoxItem(GetDlgItem(hDlg,nDlgID), countof(Items), Items, Values, Value)
-#define GetListBoxByte(hDlg,nDlgID,Items,Values,Value) \
-	_ASSERTE(countof(Items) == countof(Values)); { \
+#define GetListBox(hDlg,nDlgID,Items,Value) \
+	GetListBoxItem(GetDlgItem(hDlg,nDlgID), countof(Items), Items, Value)
+#define GetListBoxByte(hDlg,nDlgID,Items,Value) \
+	{ \
 		DWORD dwVal = Value; \
-		GetListBoxItem(GetDlgItem(hDlg,nDlgID), countof(Items), Items, Values, dwVal); \
+		GetListBoxItem(GetDlgItem(hDlg,nDlgID), countof(Items), Items, dwVal); \
 		Value = dwVal; }
 
 #define BST(v) (int)(v & 3) // BST_UNCHECKED/BST_CHECKED/BST_INDETERMINATE
@@ -297,7 +275,11 @@ CSettings::CSettings()
 	UpdateDpi();
 
 	// Go
+	ibExitAfterDefTermSetup = false;
 	isResetBasicSettings = false;
+	isFastSetupDisabled = false;
+	isDontCascade = false;
+	ibDisableSaveSettingsOnExit = false;
 	isAdvLogging = 0;
 	m_ActivityLoggingType = glt_None; mn_ActivityCmdStartTick = 0;
 	bForceBufferHeight = false; nForceBufferHeight = 1000; /* устанавливается в true, из ком.строки /BufferHeight */
@@ -374,11 +356,16 @@ CSettings::CSettings()
 	memset(mn_RFPS, 0, sizeof(mn_RFPS)); mn_RFPS_CUR_FRAME = 0;
 	memset(mn_CounterTick, 0, sizeof(*mn_CounterTick)*(tPerfInterval-gbPerformance));
 	//hBgBitmap = NULL; bgBmp = MakeCoord(0,0); hBgDc = NULL;
+	#ifndef APPDISTINCTBACKGROUND
+	mb_BgLastFade = false;
+	mp_Bg = NULL;
+	mp_BgImgData = NULL;
 	isBackgroundImageValid = false;
 	mb_NeedBgUpdate = FALSE; //mb_WasVConBgImage = FALSE;
-	mb_BgLastFade = false;
 	ftBgModified.dwHighDateTime = ftBgModified.dwLowDateTime = nBgModifiedTick = 0;
-	mp_Bg = NULL; mp_BgImgData = NULL;
+	#else
+	mp_BgInfo = NULL;
+	#endif
 	ZeroStruct(mh_Font);
 	mh_Font2 = NULL;
 	ZeroStruct(m_tm);
@@ -428,7 +415,8 @@ CSettings::CSettings()
 
 	mp_HelpPopup = new CEHelpPopup;
 
-	m_HotKeys = NULL;
+	mp_HotKeys = NULL;
+	mn_HotKeys = 0;
 	mp_ActiveHotKey = NULL;
 
 	// Горячие клавиши
@@ -454,19 +442,27 @@ int CSettings::UpdateDpi()
 	return _dpiY;
 }
 
-void CSettings::InitVars_Hotkeys()
-{	
-	if (m_HotKeys)
+void CSettings::ReleaseHotkeys()
+{
+	if (mp_HotKeys)
 	{
-		for (size_t i = 0; m_HotKeys[i].DescrLangID; i++)
+		for (int i = 0; i < mn_HotKeys; i++)
 		{
-			SafeFree(m_HotKeys[i].GuiMacro);
+			SafeFree(mp_HotKeys[i].GuiMacro);
 		}
-		free(m_HotKeys);
+		free(mp_HotKeys);
 	}
 
+	mp_HotKeys = NULL;
+	mn_HotKeys = 0;
+}
+
+void CSettings::InitVars_Hotkeys()
+{	
+	ReleaseHotkeys();
+
 	// Горячие клавиши (умолчания)
-	m_HotKeys = ConEmuHotKey::AllocateHotkeys();
+	mn_HotKeys = ConEmuHotKey::AllocateHotkeys(&mp_HotKeys);
 
 	mp_ActiveHotKey = NULL;
 }
@@ -490,6 +486,30 @@ void CSettings::SetHotkeyVkMod(ConEmuHotKey *pHK, DWORD VkMod)
 	}
 }
 
+const ConEmuHotKey* CSettings::GetHotKeyPtr(int idx)
+{
+	const ConEmuHotKey* pHK = NULL;
+
+	if (idx >= 0 && this && mp_HotKeys)
+	{
+		if (idx < mn_HotKeys)
+		{
+			pHK = (mp_HotKeys+idx);
+		}
+		else
+		{
+			const Settings::CommandTasks* pCmd = gpSet->CmdTaskGet(idx - mn_HotKeys);
+			if (pCmd)
+			{
+				_ASSERTE(pCmd->HotKey.HkType==chk_Task && pCmd->HotKey.GetTaskIndex()==(idx-mn_HotKeys));
+				pHK = &pCmd->HotKey;
+			}
+		}
+	}
+
+	return pHK;
+}
+
 // pRCon may be NULL
 const ConEmuHotKey* CSettings::GetHotKeyInfo(DWORD VkMod, bool bKeyDown, CRealConsole* pRCon)
 {
@@ -507,14 +527,17 @@ const ConEmuHotKey* CSettings::GetHotKeyInfo(DWORD VkMod, bool bKeyDown, CRealCo
 
 	DWORD nState = (VkMod & cvk_ALLMASK);
 
-	// Теперь бежим по m_HotKeys и сравниваем требуемые модификаторы
-	for (int i = 0; m_HotKeys[i].DescrLangID; i++)
+	// Теперь бежим по mp_HotKeys и сравниваем требуемые модификаторы
+	for (int i = 0;; i++)
 	{
-		if (m_HotKeys[i].HkType == chk_Modifier)
+		const ConEmuHotKey* pi = GetHotKeyPtr(i);
+		if (!pi)
+			break;
+
+		if (pi->HkType == chk_Modifier)
 			continue;
 
-		WARNING("ConEmuHotKey: Требуется заменить. Указатели вообще не нужны, вся инфа должна храниться в m_HotKeys");
-		DWORD TestVkMod = m_HotKeys[i].VkMod;
+		DWORD TestVkMod = pi->VkMod;
 		if (ConEmuHotKey::GetHotkey(TestVkMod) != vk)
 			continue; // Не совпадает сама кнопка
 
@@ -576,18 +599,19 @@ const ConEmuHotKey* CSettings::GetHotKeyInfo(DWORD VkMod, bool bKeyDown, CRealCo
 		if ((nState & TestMask) != TestValue)
 			continue;
 
-		if (m_HotKeys[i].fkey)
+		if (pi->fkey)
 		{
 			// Допускается ли этот хоткей в текущем контексте?
-			if (m_HotKeys[i].fkey(VkMod, true, (m_HotKeys+i), pRCon))
+			if (pi->fkey(VkMod, true, pi, pRCon))
 			{
-				p = (m_HotKeys+i);
+				p = pi;
 				break; // Нашли
 			}
 		}
 		else
 		{
-			_ASSERTE(m_HotKeys[i].fkey!=NULL);
+			// Хоткей должен знать, что он "делает"
+			_ASSERTE(pi->fkey!=NULL);
 		}
 	}
 
@@ -604,11 +628,14 @@ const ConEmuHotKey* CSettings::GetHotKeyInfo(DWORD VkMod, bool bKeyDown, CRealCo
 
 bool CSettings::HasSingleWinHotkey()
 {
-	for (int i = 0; m_HotKeys[i].DescrLangID; i++)
+	for (int i = 0;; i++)
 	{
-		if (m_HotKeys[i].HkType == chk_Modifier)
+		const ConEmuHotKey* pHK = GetHotKeyPtr(i);
+		if (!pHK)
+			break;
+		if (pHK->HkType == chk_Modifier)
 			continue;
-		DWORD VkMod = m_HotKeys[i].VkMod;
+		DWORD VkMod = pHK->VkMod;
 		if (ConEmuHotKey::GetModifier(VkMod, 1) == VK_LWIN)
 		{
 			// Win+<другой модификатор> вроде винда в приложение таки присылает?
@@ -656,20 +683,24 @@ void CSettings::UpdateWinHookSettings(HMODULE hLLKeyHookDll)
 		DWORD *pn = pnHookedKeys;
 
 		//WARNING("CConEmuCtrl:: Тут вообще наверное нужно по всем HotKeys проехаться, а не только по «избранным»");
-		for (int i = 0; m_HotKeys[i].DescrLangID; i++)
+		for (int i = 0;; i++)
 		{
-			if ((m_HotKeys[i].HkType == chk_Modifier) || (m_HotKeys[i].HkType == chk_Global) || (m_HotKeys[i].HkType == chk_Local))
+			const ConEmuHotKey* pHK = GetHotKeyPtr(i);
+			if (!pHK)
+				break;
+
+			if ((pHK->HkType == chk_Modifier) || (pHK->HkType == chk_Global) || (pHK->HkType == chk_Local))
 				continue;
 
-			DWORD VkMod = m_HotKeys[i].VkMod;
+			DWORD VkMod = pHK->VkMod;
 
 			if (!ConEmuHotKey::HasModifier(VkMod, VK_LWIN))
 				continue;
 
-			if (m_HotKeys[i].Enabled && !m_HotKeys[i].Enabled())
+			if (pHK->Enabled && !pHK->Enabled())
 				continue;
 
-			if (m_HotKeys[i].DontWinHook && m_HotKeys[i].DontWinHook(&(m_HotKeys[i])))
+			if (pHK->DontWinHook && pHK->DontWinHook(pHK))
 				continue;
 
 			DWORD nFlags = ConEmuHotKey::GetHotkey(VkMod);
@@ -706,7 +737,7 @@ void CSettings::UpdateWinHookSettings(HMODULE hLLKeyHookDll)
 
 			*(pn++) = nFlags;
 		}
-		
+
 		*pn = 0;
 		_ASSERTE((pn - pnHookedKeys) < (HookedKeysMaxCount-1));
 	}
@@ -731,12 +762,14 @@ void CSettings::InitVars_Pages()
 		{IDD_SPG_TRANSPARENT, 1, L"Transparency",   thi_Transparent/*, OnInitDialog_Transparent*/},
 		{IDD_SPG_TABS,        1, L"Tabs",           thi_Tabs/*,    OnInitDialog_Tabs*/},
 		{IDD_SPG_STATUSBAR,   1, L"Status bar",     thi_Status,/*  OnInitDialog_Status*/},
-		{IDD_SPG_INTEGRATION, 1, L"Integration",    thi_Integr/*,  OnInitDialog_Integr*/},
 		{IDD_SPG_APPDISTINCT, 1, L"App distinct",   thi_Apps/*,    OnInitDialog_CmdTasks*/},
+		{IDD_SPG_INTEGRATION, 0, L"Integration",    thi_Integr/*,  OnInitDialog_Integr*/},
+		{IDD_SPG_DEFTERM,     1, L"Default term",   thi_DefTerm/*,  OnInitDialog_DefTerm*/},
 		{IDD_SPG_KEYS,        0, L"Keys & Macro",   thi_Keys/*,    OnInitDialog_Keys*/},
 		{IDD_SPG_CONTROL,     1, L"Controls",       thi_KeybMouse/*,OnInitDialog_Control*/},
 		{IDD_SPG_SELECTION,   1, L"Mark & Paste",   thi_Selection/*OnInitDialog_Selection*/},
-		{IDD_SPG_FEATURE_FAR, 0, L"Far Manager",    thi_Far/*,     OnInitDialog_Ext*/, true/*Collapsed*/},
+		{IDD_SPG_FEATURE_FAR, 0, L"Far Manager",    thi_Far/*,     OnInitDialog_Far*/, true/*Collapsed*/},
+		{IDD_SPG_FARMACRO,    1, L"Far macros",     thi_FarMacro/*, OnInitDialog_FarMacro*/},
 		{IDD_SPG_VIEWS,       1, L"Views",          thi_Views/*,   OnInitDialog_Views*/},
 		{IDD_SPG_INFO,        0, L"Info",           thi_Info/*,    OnInitDialog_Info*/, RELEASEDEBUGTEST(true,false)/*Collapsed in Release*/},
 		{IDD_SPG_DEBUG,       1, L"Debug",          thi_Debug/*,   OnInitDialog_Debug*/},
@@ -754,9 +787,9 @@ void CSettings::InitVars_Pages()
 		{tFontSizeX, sit_ULong, &gpSet->FontSizeX, 0, sit_Byte, SettingsNS::FSizes, countof(SettingsNS::FSizes)},
 		{tFontSizeX2, sit_ULong, &gpSet->FontSizeX2, 0, sit_Byte, SettingsNS::FSizes, countof(SettingsNS::FSizes)},
 		{tFontSizeX3, sit_ULong, &gpSet->FontSizeX3, 0, sit_Byte, SettingsNS::FSizes, countof(SettingsNS::FSizes)},
-		{lbExtendFontBoldIdx, sit_Byte, &gpSet->AppStd.nFontBoldColor, 0, sit_FixString, SettingsNS::szColorIdx, countof(SettingsNS::szColorIdx)},
-		{lbExtendFontItalicIdx, sit_Byte, &gpSet->AppStd.nFontItalicColor, 0, sit_FixString, SettingsNS::szColorIdx, countof(SettingsNS::szColorIdx)},
-		{lbExtendFontNormalIdx, sit_Byte, &gpSet->AppStd.nFontNormalColor, 0, sit_FixString, SettingsNS::szColorIdx, countof(SettingsNS::szColorIdx)},
+		{lbExtendFontBoldIdx, sit_Byte, &gpSet->AppStd.nFontBoldColor, 0, sit_FixString, SettingsNS::ColorIdx, countof(SettingsNS::ColorIdx)},
+		{lbExtendFontItalicIdx, sit_Byte, &gpSet->AppStd.nFontItalicColor, 0, sit_FixString, SettingsNS::ColorIdx, countof(SettingsNS::ColorIdx)},
+		{lbExtendFontNormalIdx, sit_Byte, &gpSet->AppStd.nFontNormalColor, 0, sit_FixString, SettingsNS::ColorIdx, countof(SettingsNS::ColorIdx)},
 		{cbExtendFonts, sit_Bool, &gpSet->AppStd.isExtendFonts},
 		// End
 		{},
@@ -765,14 +798,6 @@ void CSettings::InitVars_Pages()
 
 	m_Pages = (ConEmuSetupPages*)malloc(sizeof(Pages));
 	memmove(m_Pages, Pages, sizeof(Pages));
-	//ConEmuSetupPages* p = m_Pages;
-	//for (int i = 0; i < countof(Pages); i++)
-	//{
-	//	// Если установлено как пакет MinGW - стандартное обновление через googlecode не работает.
-	//	if ((Pages[i].PageID == IDD_SPG_UPDATE) && gpConEmu->mb_MingwMode)
-	//		continue;
-	//	*(p++) = Pages[i];
-	//}
 }
 
 void CSettings::ReleaseHandles()
@@ -782,16 +807,19 @@ void CSettings::ReleaseHandles()
 	//if (sSaveAllMacro) {free(sSaveAllMacro); sSaveAllMacro = NULL;}
 	//if (sRClickMacro) {free(sRClickMacro); sRClickMacro = NULL;}
 
-	if (mp_Bg) { delete mp_Bg; mp_Bg = NULL; }
-
+	#ifndef APPDISTINCTBACKGROUND
+	SafeDelete(mp_Bg);
 	SafeFree(mp_BgImgData);
+	#else
+	SafeRelease(mp_BgInfo);
+	#endif
 }
 
 CSettings::~CSettings()
 {
 	ReleaseHandles();
 
-	for(int i=0; i<MAX_FONT_STYLES; i++)
+	for (int i=0; i<MAX_FONT_STYLES; i++)
 	{
 		mh_Font[i].Delete();
 
@@ -819,7 +847,8 @@ CSettings::~CSettings()
 	//	delete gpSet;
 	//	gpSet = NULL;
 	//}
-	SafeFree(m_HotKeys);
+
+	ReleaseHotkeys();
 	mp_ActiveHotKey = NULL;
 
 	SafeFree(m_Pages);
@@ -858,6 +887,9 @@ void CSettings::SetConfigName(LPCWSTR asConfigName)
 
 void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig, LPCWSTR pszCmdLine /*= NULL*/, bool abOnResetReload /*= false*/)
 {
+	// Обработать 32/64 (найти tcc.exe и т.п.)
+	FindComspec(&gpSet->ComSpec);
+
 	// Зовем "FastConfiguration" (перед созданием новой/чистой конфигурации)
 	if (abAllowFastConfig)
 	{
@@ -878,7 +910,7 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 		// Single instance?
 		if (gpSet->isSingleInstance && (gpSetCls->SingleInstanceArg == sgl_Default))
 		{
-			if (pszCmdLine && *pszCmdLine)
+			if ((pszCmdLine && *pszCmdLine) || gpConEmu->mb_StartDetached)
 			{
 				// Должен быть "sih_None" иначе существующая копия не запустит команду
 				_ASSERTE(SingleInstanceShowHide == sih_None);
@@ -954,12 +986,6 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 	gpConEmu->InitComSpecStr(gpSet->ComSpec);
 	// -- должно вообще вызываться в UpdateGuiInfoMapping
 	//UpdateComspec(&gpSet->ComSpec);
-
-	// Обновить реестр на предмет поддержки UNC путей в cmd.exe
-	if (gpSet->ComSpec.isAllowUncPaths)
-	{
-		UpdateComSpecUncSupport();
-	}
 	
 	// Инициализация кастомной палитры для диалога выбора цвета
 	memmove(acrCustClr, gpSet->Colors, sizeof(COLORREF)*16);
@@ -1028,7 +1054,7 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 			SystemParametersInfo(SPI_GETWORKAREA, 0, &rcScreen, 0);
 		}
 
-		HWND hPrev = FindWindow(VirtualConsoleClassMain, NULL);
+		HWND hPrev = isDontCascade ? NULL : FindWindow(VirtualConsoleClassMain, NULL);
 
 		while (hPrev)
 		{
@@ -1663,7 +1689,7 @@ LRESULT CSettings::OnInitDialog()
 		bool bNeedExpand = true;
 		for (size_t i = 0; m_Pages[i].PageID; i++)
 		{
-			if ((m_Pages[i].PageID == IDD_SPG_UPDATE) && gpConEmu->mb_MingwMode)
+			if ((m_Pages[i].PageID == IDD_SPG_UPDATE) && !gpConEmu->isUpdateAllowed())
 			{
 				m_Pages[i].hTI = NULL;
 				continue;
@@ -1809,12 +1835,12 @@ LRESULT CSettings::OnInitDialog_Main(HWND hWnd2)
 		SendMessage(GetDlgItem(hWnd2, lbExtendFontBoldIdx), CB_RESETCONTENT, 0, 0);
 		SendMessage(GetDlgItem(hWnd2, lbExtendFontItalicIdx), CB_RESETCONTENT, 0, 0);
 		SendMessage(GetDlgItem(hWnd2, lbExtendFontNormalIdx), CB_RESETCONTENT, 0, 0);
-		for (uint i=0; i < countof(SettingsNS::szColorIdx); i++)
+		for (uint i=0; i < countof(SettingsNS::ColorIdx); i++)
 		{
 			//_wsprintf(temp, SKIPLEN(countof(temp))(i==16) ? L"None" : L"%2i", i);
-			SendDlgItemMessage(hWnd2, lbExtendFontBoldIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::szColorIdx[i]);
-			SendDlgItemMessage(hWnd2, lbExtendFontItalicIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::szColorIdx[i]);
-			SendDlgItemMessage(hWnd2, lbExtendFontNormalIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::szColorIdx[i]);
+			SendDlgItemMessage(hWnd2, lbExtendFontBoldIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::ColorIdx[i].sValue);
+			SendDlgItemMessage(hWnd2, lbExtendFontItalicIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::ColorIdx[i].sValue);
+			SendDlgItemMessage(hWnd2, lbExtendFontNormalIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::ColorIdx[i].sValue);
 		}
 
 		checkDlgButton(hWnd2, cbExtendFonts, gpSet->AppStd.isExtendFonts);
@@ -1883,6 +1909,8 @@ LRESULT CSettings::OnInitDialog_Main(HWND hWnd2)
 	//*pszTemp = 0;
 	//SetDlgItemText(hWnd2, tBgImageColors, tmp);
 
+	checkDlgButton(hWnd2, cbBgImage, BST(gpSet->isShowBgImage));
+
 	_wsprintf(tmp, SKIPLEN(countof(tmp)) L"%i", gpSet->bgImageDarker);
 	SendDlgItemMessage(hWnd2, tDarker, EM_SETLIMITTEXT, 3, 0);
 	SetDlgItemText(hWnd2, tDarker, tmp);
@@ -1891,11 +1919,10 @@ LRESULT CSettings::OnInitDialog_Main(HWND hWnd2)
 	
 	//checkDlgButton(hWnd2, rBgUpLeft+(UINT)gpSet->bgOperation, BST_CHECKED);
 	BYTE b = gpSet->bgOperation;
-	FillListBoxByte(hWnd2, lbBgPlacement, SettingsNS::szBgOper, SettingsNS::nBgOper, b);
+	FillListBoxByte(hWnd2, lbBgPlacement, SettingsNS::BgOper, b);
 
 	checkDlgButton(hWnd2, cbBgAllowPlugin, BST(gpSet->isBgPluginAllowed));
 
-	checkDlgButton(hWnd2, cbBgImage, BST(gpSet->isShowBgImage));
 	WORD nImgCtrls[] = {tBgImage, bBgImage};
 	EnableDlgItems(hWnd2, nImgCtrls, countof(nImgCtrls), gpSet->isShowBgImage);
 
@@ -2400,17 +2427,6 @@ LRESULT CSettings::OnInitDialog_Ext(HWND hWnd2)
 	return 0;
 }
 
-void CSettings::UpdateComSpecUncSupport()
-{
-	// Обновить реестр на предмет поддержки UNC путей в cmd.exe
-	SettingsRegistry UncChk;
-	if (UncChk.OpenKey(HKEY_CURRENT_USER, L"Software\\Microsoft\\Command Processor", KEY_WRITE))
-	{
-		DWORD DisableUNCCheck = gpSet->ComSpec.isAllowUncPaths ? 1 : 0;
-		UncChk.Save(L"DisableUNCCheck", (LPBYTE)&DisableUNCCheck, REG_DWORD, DisableUNCCheck);
-	}
-}
-
 LRESULT CSettings::OnInitDialog_Comspec(HWND hWnd2, bool abInitial)
 {
 	_ASSERTE((rbComspecAuto+cst_Explicit)==rbComspecExplicit && (rbComspecAuto+cst_Cmd)==rbComspecCmd  && (rbComspecAuto+cst_EnvVar)==rbComspecEnvVar);
@@ -2460,28 +2476,28 @@ LRESULT CSettings::OnInitDialog_Selection(HWND hWnd2)
 	checkDlgButton(hWnd2, cbCTSFreezeBeforeSelect, gpSet->isCTSFreezeBeforeSelect);
 	checkDlgButton(hWnd2, cbCTSBlockSelection, gpSet->isCTSSelectBlock);
 	DWORD VkMod = gpSet->GetHotkeyById(vkCTSVkBlock);
-	FillListBoxByte(hWnd2, lbCTSBlockSelection, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+	FillListBoxByte(hWnd2, lbCTSBlockSelection, SettingsNS::KeysAct, VkMod);
 	checkDlgButton(hWnd2, cbCTSTextSelection, gpSet->isCTSSelectText);
 	VkMod = gpSet->GetHotkeyById(vkCTSVkText);
-	FillListBoxByte(hWnd2, lbCTSTextSelection, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+	FillListBoxByte(hWnd2, lbCTSTextSelection, SettingsNS::KeysAct, VkMod);
 	checkDlgButton(hWnd2, (gpSet->isCTSActMode==1)?rbCTSActAlways:rbCTSActBufferOnly, BST_CHECKED);
 	VkMod = gpSet->GetHotkeyById(vkCTSVkAct);
 
-	FillListBoxByte(hWnd2, lbCTSActAlways, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
-	FillListBoxByte(hWnd2, lbCTSRBtnAction, SettingsNS::szClipAct, SettingsNS::nClipAct, gpSet->isCTSRBtnAction);
-	FillListBoxByte(hWnd2, lbCTSMBtnAction, SettingsNS::szClipAct, SettingsNS::nClipAct, gpSet->isCTSMBtnAction);
+	FillListBoxByte(hWnd2, lbCTSActAlways, SettingsNS::KeysAct, VkMod);
+	FillListBoxByte(hWnd2, lbCTSRBtnAction, SettingsNS::ClipAct, gpSet->isCTSRBtnAction);
+	FillListBoxByte(hWnd2, lbCTSMBtnAction, SettingsNS::ClipAct, gpSet->isCTSMBtnAction);
 	DWORD idxBack = (gpSet->isCTSColorIndex & 0xF0) >> 4;
 	DWORD idxFore = (gpSet->isCTSColorIndex & 0xF);
-	FillListBoxItems(GetDlgItem(hWnd2, lbCTSForeIdx), countof(SettingsNS::szColorIdx)-1,
-		SettingsNS::szColorIdx, SettingsNS::nColorIdx, idxFore);
-	FillListBoxItems(GetDlgItem(hWnd2, lbCTSBackIdx), countof(SettingsNS::szColorIdx)-1,
-		SettingsNS::szColorIdx, SettingsNS::nColorIdx, idxBack);
+	FillListBoxItems(GetDlgItem(hWnd2, lbCTSForeIdx), countof(SettingsNS::ColorIdx)-1,
+		SettingsNS::ColorIdx, idxFore);
+	FillListBoxItems(GetDlgItem(hWnd2, lbCTSBackIdx), countof(SettingsNS::ColorIdx)-1,
+		SettingsNS::ColorIdx, idxBack);
 
 	checkDlgButton(hWnd2, cbCTSDetectLineEnd, gpSet->AppStd.isCTSDetectLineEnd);
 	checkDlgButton(hWnd2, cbCTSBashMargin, gpSet->AppStd.isCTSBashMargin);
 	checkDlgButton(hWnd2, cbCTSTrimTrailing, gpSet->AppStd.isCTSTrimTrailing);
 	BYTE b = gpSet->AppStd.isCTSEOL;
-	FillListBoxByte(hWnd2, lbCTSEOL, SettingsNS::szCRLF, SettingsNS::nCRLF, b);
+	FillListBoxByte(hWnd2, lbCTSEOL, SettingsNS::CRLF, b);
 
 	checkDlgButton(hWnd2, cbClipShiftIns, gpSet->AppStd.isPasteAllLines);
 	checkDlgButton(hWnd2, cbClipCtrlV, gpSet->AppStd.isPasteFirstLine);
@@ -2564,32 +2580,16 @@ void CSettings::CheckSelectionModifiers(HWND hWnd2)
 
 LRESULT CSettings::OnInitDialog_Far(HWND hWnd2, BOOL abInitial)
 {
-	#if 0
-	if (gpSetCls->EnableThemeDialogTextureF)
-		gpSetCls->EnableThemeDialogTextureF(hWnd2, 6/*ETDT_ENABLETAB*/);
-	#endif
-
 	// Сначала - то что обновляется при активации вкладки
 
 	// Списки
 	DWORD VkMod = gpSet->GetHotkeyById(vkLDragKey);
-	FillListBoxByte(hWnd2, lbLDragKey, SettingsNS::szKeys, SettingsNS::nKeys, VkMod);
+	FillListBoxByte(hWnd2, lbLDragKey, SettingsNS::Keys, VkMod);
 	VkMod = gpSet->GetHotkeyById(vkRDragKey);
-	FillListBoxByte(hWnd2, lbRDragKey, SettingsNS::szKeys, SettingsNS::nKeys, VkMod);
+	FillListBoxByte(hWnd2, lbRDragKey, SettingsNS::Keys, VkMod);
 
 	if (!abInitial)
 		return 0;
-
-	_ASSERTE(gpSet->isRClickSendKey==0 || gpSet->isRClickSendKey==1 || gpSet->isRClickSendKey==2);
-	checkDlgButton(hWnd2, cbRClick, gpSet->isRClickSendKey);
-	SetDlgItemText(hWnd2, tRClickMacro, gpSet->RClickMacro(fmv_Default));
-
-	checkDlgButton(hWnd2, cbSafeFarClose, gpSet->isSafeFarClose);
-	SetDlgItemText(hWnd2, tSafeFarCloseMacro, gpSet->SafeFarCloseMacro(fmv_Default));
-
-	SetDlgItemText(hWnd2, tCloseTabMacro, gpSet->TabCloseMacro(fmv_Default));
-	
-	SetDlgItemText(hWnd2, tSaveAllMacro, gpSet->SaveAllMacro(fmv_Default));
 
 	checkDlgButton(hWnd2, cbFARuseASCIIsort, gpSet->isFARuseASCIIsort);
 
@@ -2632,14 +2632,28 @@ LRESULT CSettings::OnInitDialog_Far(HWND hWnd2, BOOL abInitial)
 	return 0;
 }
 
+LRESULT CSettings::OnInitDialog_FarMacro(HWND hWnd2, BOOL abInitial)
+{
+	_ASSERTE(gpSet->isRClickSendKey==0 || gpSet->isRClickSendKey==1 || gpSet->isRClickSendKey==2);
+	checkDlgButton(hWnd2, cbRClick, gpSet->isRClickSendKey);
+	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tRClickMacro)) == 0)
+		SetDlgItemText(hWnd2, tRClickMacro, gpSet->RClickMacro(fmv_Default));
+
+	checkDlgButton(hWnd2, cbSafeFarClose, gpSet->isSafeFarClose);
+	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tSafeFarCloseMacro)) == 0)
+		SetDlgItemText(hWnd2, tSafeFarCloseMacro, gpSet->SafeFarCloseMacro(fmv_Default));
+
+	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tCloseTabMacro)) == 0)
+		SetDlgItemText(hWnd2, tCloseTabMacro, gpSet->TabCloseMacro(fmv_Default));
+	
+	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tSaveAllMacro)) == 0)
+		SetDlgItemText(hWnd2, tSaveAllMacro, gpSet->SaveAllMacro(fmv_Default));
+
+	return 0;
+}
+
 void CSettings::FillHotKeysList(HWND hWnd2, BOOL abInitial)
 {
-	if (!m_HotKeys)
-	{
-		_ASSERTE(m_HotKeys!=NULL);
-		return;
-	}
-
 	static UINT nLastShowType = rbHotkeysAll;
 	UINT nShowType = rbHotkeysAll;
 	if (IsChecked(hWnd2, rbHotkeysUser))
@@ -2673,17 +2687,20 @@ void CSettings::FillHotKeysList(HWND hWnd2, BOOL abInitial)
 	int ItemsCount = (int)ListView_GetItemCount(hList);
 	int nItem = -1; // если -1 то будет добавлен новый
 
+	// Если выбран режим "Показать только макросы"
+	// то сначала отобразить пользовательские "Macro 00"
+	// а после них все системные, которые используют Macro (для справки)
 	size_t stepMax = (nShowType == rbHotkeysMacros) ? 1 : 0;
 	for (size_t step = 0; step <= stepMax; step++)
 	{
-		const ConEmuHotKey *ppNext = m_HotKeys;
+		int iHkIdx = 0;
 
 		while (TRUE)
 		{
 			if (abInitial)
 			{
-				ppHK = ppNext; ppNext++;
-				if (!ppHK->DescrLangID)
+				ppHK = GetHotKeyPtr(iHkIdx++);
+				if (!ppHK)
 					break; // кончились
 				nItem = -1; // если -1 то будет добавлен новый
 
@@ -2691,7 +2708,7 @@ void CSettings::FillHotKeysList(HWND hWnd2, BOOL abInitial)
 				{
 				case rbHotkeysUser:
 					if ((ppHK->HkType != chk_User) && (ppHK->HkType != chk_Global) && (ppHK->HkType != chk_Local)
-						&& (ppHK->HkType != chk_Modifier) && (ppHK->HkType != chk_Modifier2))
+						&& (ppHK->HkType != chk_Modifier) && (ppHK->HkType != chk_Modifier2) && (ppHK->HkType != chk_Task))
 						continue;
 					break;
 				case rbHotkeysMacros:
@@ -2751,9 +2768,11 @@ void CSettings::FillHotKeysList(HWND hWnd2, BOOL abInitial)
 				wcscpy_c(szName, L"System"); break;
 			case chk_System:
 				wcscpy_c(szName, L"System"); break;
+			case chk_Task:
+				wcscpy_c(szName, L"Task"); break;
 			default:
 				// Неизвестный тип!
-				_ASSERTE(ppHK->HkType == chk_User);
+				_ASSERTE(FALSE && "Unknown ppHK->HkType");
 				//wcscpy_c(szName, L"???");
 				continue;
 			}
@@ -2788,23 +2807,6 @@ void CSettings::FillHotKeysList(HWND hWnd2, BOOL abInitial)
 			else
 			{
 				ppHK->GetDescription(szDescr, countof(szDescr));
-				//if (!LoadString(g_hInstance, ppHK->DescrLangID, szDescr, countof(szDescr)))
-				//{
-				//	if ((ppHK->HkType == chk_User) && ppHK->GuiMacro && *ppHK->GuiMacro)
-				//		lstrcpyn(szDescr, ppHK->GuiMacro, countof(szDescr));
-				//	else
-				//		_wsprintf(szDescr, SKIPLEN(countof(szDescr)) L"%i", ppHK->DescrLangID);
-				//}
-				//else if ((ppHK->HkType == chk_User) && ppHK->GuiMacro && *ppHK->GuiMacro)
-				//{
-				//	int nLen = lstrlen(szDescr);
-				//	if ((nLen + 64) < countof(szDescr))
-				//	{
-				//		wcscat_c(szDescr, L": ");
-				//		nLen -= 2;
-				//		lstrcpyn(szDescr + nLen, ppHK->GuiMacro, countof(szDescr) - nLen - 1);
-				//	}
-				//}
 				ListView_SetItemText(hList, nItem, klc_Desc, szDescr);
 			}
 		}
@@ -2855,6 +2857,7 @@ LRESULT CSettings::OnHotkeysNotify(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				case chk_User:
 				case chk_Global:
 				case chk_Local:
+				case chk_Task:
 					pszLabel = L"Choose hotkey:";
 					VkMod = pk->VkMod;
 					bHotKeyEnabled = bKeyListEnabled = bModifiersEnabled = TRUE;
@@ -2914,17 +2917,23 @@ LRESULT CSettings::OnHotkeysNotify(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				BYTE vk = ConEmuHotKey::GetHotkey(VkMod);
 				if (bHotKeyEnabled)
 				{
-					SendMessage(hHk, HKM_SETHOTKEY, 
-						vk|((vk==VK_DELETE||vk==VK_UP||vk==VK_DOWN||vk==VK_LEFT||vk==VK_RIGHT
-						||vk==VK_PRIOR||vk==VK_NEXT||vk==VK_HOME||vk==VK_END
-						||vk==VK_INSERT) ? (HOTKEYF_EXT<<8) : 0), 0);
+					SetHotkeyField(hHk, vk);
+					//SendMessage(hHk, HKM_SETHOTKEY, 
+					//	vk|((vk==VK_DELETE||vk==VK_UP||vk==VK_DOWN||vk==VK_LEFT||vk==VK_RIGHT
+					//	||vk==VK_PRIOR||vk==VK_NEXT||vk==VK_HOME||vk==VK_END
+					//	||vk==VK_INSERT) ? (HOTKEYF_EXT<<8) : 0), 0);
+
 					// Warning! Если nVK не указан в SettingsNS::nKeysHot - nVK будет обнулен
-					FillListBoxByte(hWnd2, lbHotKeyList, SettingsNS::szKeysHot, SettingsNS::nKeysHot, vk);
+					//FillListBoxByte(hWnd2, lbHotKeyList, SettingsNS::KeysHot, vk);
+					FillListBoxHotKeys(GetDlgItem(hWnd2, lbHotKeyList), eHkKeysHot, vk);
 				}
 				else if (bKeyListEnabled)
 				{
-					SendMessage(hHk, HKM_SETHOTKEY, 0, 0);
-					FillListBoxByte(hWnd2, lbHotKeyList, SettingsNS::szKeys, SettingsNS::nKeys, vk);
+					SetHotkeyField(hHk, 0);
+					//SendMessage(hHk, HKM_SETHOTKEY, 0, 0);
+
+					//FillListBoxByte(hWnd2, lbHotKeyList, SettingsNS::Keys, vk);
+					FillListBoxHotKeys(GetDlgItem(hWnd2, lbHotKeyList), eHkKeys, vk);
 				}
 			}
 		}
@@ -2945,9 +2954,10 @@ LRESULT CSettings::OnHotkeysNotify(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		EnableWindow(hMacro, (mp_ActiveHotKey!=NULL));
 		SendMessage(hMacro, EM_SETREADONLY, !bMacroEnabled, 0);
 		MySetDlgItemText(hWnd2, tGuiMacro, pszDescription/*, bMacroEnabled*/);
-		EnableWindow(GetDlgItem(hWnd2, cbGuiMacroHelp), (mp_ActiveHotKey!=NULL) && bMacroEnabled);
+		EnableWindow(GetDlgItem(hWnd2, cbGuiMacroHelp), (mp_ActiveHotKey!=NULL) && (bMacroEnabled || mp_ActiveHotKey->GuiMacro));
 		if (!bHotKeyEnabled)
-			SendMessage(hHk, HKM_SETHOTKEY, 0, 0);
+			SetHotkeyField(hHk, 0);
+			//SendMessage(hHk, HKM_SETHOTKEY, 0, 0);
 		if (!bKeyListEnabled)
 			SendDlgItemMessage(hWnd2, lbHotKeyList, CB_RESETCONTENT, 0, 0);
 		// Modifiers
@@ -2956,7 +2966,8 @@ LRESULT CSettings::OnHotkeysNotify(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		for (int n = 0; n < 3; n++)
 		{
 			BYTE b = (bShow && VkMod) ? ConEmuHotKey::GetModifier(VkMod,n+1) : 0;
-			FillListBoxByte(hWnd2, lbHotKeyMod1+n, SettingsNS::szModifiers, SettingsNS::nModifiers, b);
+			//FillListBoxByte(hWnd2, lbHotKeyMod1+n, SettingsNS::Modifiers, b);
+			FillListBoxHotKeys(GetDlgItem(hWnd2, lbHotKeyMod1+n), eHkModifiers, b);
 			EnableWindow(GetDlgItem(hWnd2, lbHotKeyMod1+n), bEnabled);
 		}
 		//for (size_t n = 0; n < countof(HostkeyCtrlIds); n++)
@@ -3017,9 +3028,8 @@ int CSettings::HotkeysCompare(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
 		case 1:
 			// Hotkey
 			{
-				wchar_t szFull1[128]; pHk1->GetHotkeyName(szFull1);
-				wchar_t szFull2[128]; pHk2->GetHotkeyName(szFull2);
-				nCmp = lstrcmp(szFull1, szFull2);
+				wchar_t szFull1[128], szFull2[128]; ;
+				nCmp = lstrcmp(pHk1->GetHotkeyName(szFull1), pHk2->GetHotkeyName(szFull2));
 				if (nCmp == 0)
 					nCmp = (pHk1 < pHk2) ? -1 : (pHk1 > pHk2) ? 1 : 0;
 			}
@@ -3093,13 +3103,13 @@ LRESULT CSettings::OnInitDialog_Control(HWND hWnd2, BOOL abInitial)
 	// Hyperlinks & compiler errors
 	checkDlgButton(hWnd2, cbFarGotoEditor, gpSet->isFarGotoEditor);
 	DWORD VkMod = gpSet->GetHotkeyById(vkFarGotoEditorVk);
-	FillListBoxByte(hWnd2, lbFarGotoEditorVk, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+	FillListBoxByte(hWnd2, lbFarGotoEditorVk, SettingsNS::KeysAct, VkMod);
 	SetDlgItemText(hWnd2, tGotoEditorCmd, gpSet->sFarGotoEditor);
 
 	// Prompt click
 	checkDlgButton(hWnd2, cbCTSClickPromptPosition, gpSet->AppStd.isCTSClickPromptPosition);
 	VkMod = gpSet->GetHotkeyById(vkCTSVkPromptClk);
-	FillListBoxByte(hWnd2, lbCTSClickPromptPosition, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+	FillListBoxByte(hWnd2, lbCTSClickPromptPosition, SettingsNS::KeysAct, VkMod);
 
 	// Ctrl+BS - del left word
 	checkDlgButton(hWnd2, cbCTSDeleteLeftWord, gpSet->AppStd.isCTSDeleteLeftWord);
@@ -3117,9 +3127,9 @@ LRESULT CSettings::OnInitDialog_Keys(HWND hWnd2, BOOL abInitial)
 
 	checkRadioButton(hWnd2, rbHotkeysAll, rbHotkeysMacros, rbHotkeysAll);
 
-	for (int i = 0; m_HotKeys[i].DescrLangID; i++)
+	for (int i = 0; i < mn_HotKeys; i++)
 	{
-		m_HotKeys[i].cchGuiMacroMax = m_HotKeys[i].GuiMacro ? (wcslen(m_HotKeys[i].GuiMacro)+1) : 0;
+		mp_HotKeys[i].cchGuiMacroMax = mp_HotKeys[i].GuiMacro ? (wcslen(mp_HotKeys[i].GuiMacro)+1) : 0;
 	}
 
 	HWND hList = GetDlgItem(hWnd2, lbConEmuHotKeys);
@@ -3149,10 +3159,14 @@ LRESULT CSettings::OnInitDialog_Keys(HWND hWnd2, BOOL abInitial)
 
 	FillHotKeysList(hWnd2, abInitial);
 		
-	BYTE b = 0;
-	FillListBoxByte(hWnd2, lbHotKeyMod1, SettingsNS::szModifiers, SettingsNS::nModifiers, b);
-	FillListBoxByte(hWnd2, lbHotKeyMod2, SettingsNS::szModifiers, SettingsNS::nModifiers, b);
-	FillListBoxByte(hWnd2, lbHotKeyMod3, SettingsNS::szModifiers, SettingsNS::nModifiers, b);
+	for (int i = 0; i < 3; i++)
+	{
+		BYTE b = 0;
+		FillListBoxHotKeys(GetDlgItem(hWnd2, lbHotKeyMod1+i), eHkModifiers, b);
+	}
+	//FillListBoxByte(hWnd2, lbHotKeyMod1, SettingsNS::Modifiers, b);
+	//FillListBoxByte(hWnd2, lbHotKeyMod2, SettingsNS::Modifiers, b);
+	//FillListBoxByte(hWnd2, lbHotKeyMod3, SettingsNS::Modifiers, b);
 
 	return 0;
 }
@@ -3333,13 +3347,13 @@ LRESULT CSettings::OnInitDialog_Color(HWND hWnd2)
 		ColorSetEdit(hWnd2, c);
 
 	nVal = gpSet->AppStd.nTextColorIdx;
-	FillListBox(hWnd2, lbConClrText, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbConClrText, SettingsNS::ColorIdxTh, nVal);
 	nVal = gpSet->AppStd.nBackColorIdx;
-	FillListBox(hWnd2, lbConClrBack, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbConClrBack, SettingsNS::ColorIdxTh, nVal);
 	nVal = gpSet->AppStd.nPopTextColorIdx;
-	FillListBox(hWnd2, lbConClrPopText, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbConClrPopText, SettingsNS::ColorIdxTh, nVal);
 	nVal = gpSet->AppStd.nPopBackColorIdx;
-	FillListBox(hWnd2, lbConClrPopBack, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbConClrPopBack, SettingsNS::ColorIdxTh, nVal);
 
 	//WARNING("Отладка...");
 	//if (gpSet->AppStd.nPopTextColorIdx <= 15 || gpSet->AppStd.nPopBackColorIdx <= 15
@@ -3350,7 +3364,7 @@ LRESULT CSettings::OnInitDialog_Color(HWND hWnd2)
 	//}
 
 	nVal = gpSet->AppStd.nExtendColorIdx;
-	FillListBox(hWnd2, lbExtendIdx, SettingsNS::szColorIdxSh, SettingsNS::nColorIdxSh, nVal);
+	FillListBox(hWnd2, lbExtendIdx, SettingsNS::ColorIdxSh, nVal);
 	gpSet->AppStd.nExtendColorIdx = nVal;
 	checkDlgButton(hWnd2, cbExtendColors, gpSet->AppStd.isExtendColors ? BST_CHECKED : BST_UNCHECKED);
 	OnButtonClicked(hWnd2, cbExtendColors, 0);
@@ -3500,6 +3514,27 @@ LRESULT CSettings::OnInitDialog_Apps(HWND hWnd2, bool abForceReload)
 LRESULT CSettings::OnInitDialog_Integr(HWND hWnd2, BOOL abInitial)
 {
 	pageOpProc_Integr(hWnd2, WM_INITDIALOG, 0, abInitial);
+
+	return 0;
+}
+
+LRESULT CSettings::OnInitDialog_DefTerm(HWND hWnd2, BOOL abInitial)
+{
+	// Default terminal apps
+	CheckDlgButton(hWnd2, cbDefaultTerminal, gpSet->isSetDefaultTerminal);
+	bool bLeaveInTSA = gpSet->isRegisterOnOsStartupTSA;
+	bool bRegister = gpSet->isRegisterOnOsStartup || gpConEmu->mp_DefTrm->IsRegisteredOsStartup(NULL,0,&bLeaveInTSA);
+	CheckDlgButton(hWnd2, cbDefaultTerminalStartup, bRegister);
+	CheckDlgButton(hWnd2, cbDefaultTerminalTSA, bLeaveInTSA);
+	EnableWindow(GetDlgItem(hWnd2, cbDefaultTerminalTSA), bRegister);
+	CheckDlgButton(hWnd2, cbDefaultTerminalNoInjects, gpSet->isDefaultTerminalNoInjects);
+	CheckRadioButton(hWnd2, rbDefaultTerminalConfAuto, rbDefaultTerminalConfNever, rbDefaultTerminalConfAuto+gpSet->nDefaultTerminalConfirmClose);
+	wchar_t* pszApps = gpSet->GetDefaultTerminalApps();
+	_ASSERTE(pszApps!=NULL);
+	SetDlgItemText(hWnd2, tDefaultTerminal, pszApps);
+	if (wcschr(pszApps, L',') != NULL && wcschr(pszApps, L'|') == NULL)
+		Icon.ShowTrayIcon(L"List of hooked executables must be delimited with \"|\" but not commas", tsa_Default_Term);
+	SafeFree(pszApps);
 
 	return 0;
 }
@@ -3668,18 +3703,6 @@ INT_PTR CSettings::pageOpProc_Integr(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 				SetDlgItemText(hWnd2, tHereIcon, szIcon);
 			}
 
-			// Default terminal apps
-			CheckDlgButton(hWnd2, cbDefaultTerminal, gpSet->isSetDefaultTerminal);
-			CheckDlgButton(hWnd2, cbDefaultTerminalStartup, gpSet->isRegisterOnOsStartup || gpConEmu->mp_DefTrm->IsRegisteredOsStartup(NULL,0));
-			CheckDlgButton(hWnd2, cbDefaultTerminalNoInjects, gpSet->isDefaultTerminalNoInjects);
-			CheckRadioButton(hWnd2, rbDefaultTerminalConfAuto, rbDefaultTerminalConfNever, rbDefaultTerminalConfAuto+gpSet->nDefaultTerminalConfirmClose);
-			wchar_t* pszApps = gpSet->GetDefaultTerminalApps();
-			_ASSERTE(pszApps!=NULL);
-			SetDlgItemText(hWnd2, tDefaultTerminal, pszApps);
-			if (wcschr(pszApps, L',') != NULL && wcschr(pszApps, L'|') == NULL)
-				Icon.ShowTrayIcon(L"List of hooked executables must be delimited with \"|\" but not commas", tsa_Default_Term);
-			SafeFree(pszApps);
-
 			bSkipCbSel = false;
 		}
 		break; // WM_INITDIALOG
@@ -3689,7 +3712,6 @@ INT_PTR CSettings::pageOpProc_Integr(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 		{
 		case BN_CLICKED:
 			{
-				bool bUpdateGuiMapping = false, bSetupDefaultTerminal = false;
 				WORD CB = LOWORD(wParam);
 
 				switch (CB)
@@ -3704,64 +3726,16 @@ INT_PTR CSettings::pageOpProc_Integr(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 				case bInsideUnregister:
 					ShellIntegration(hWnd2, ShellIntgr_Inside, CB==bInsideRegister);
 					pageOpProc_Integr(hWnd2, UM_RELOAD_HERE_LIST, UM_RELOAD_HERE_LIST, 0);
+					if (CB==bInsideUnregister)
+						pageOpProc_Integr(hWnd2, WM_COMMAND, MAKELONG(cbInsideName,CBN_SELCHANGE), 0);
 					break;
 				case bHereRegister:
 				case bHereUnregister:
 					ShellIntegration(hWnd2, ShellIntgr_Here, CB==bHereRegister);
 					pageOpProc_Integr(hWnd2, UM_RELOAD_HERE_LIST, UM_RELOAD_HERE_LIST, 0);
+					if (CB==bHereUnregister)
+						pageOpProc_Integr(hWnd2, WM_COMMAND, MAKELONG(cbHereName,CBN_SELCHANGE), 0);
 					break;
-				case cbDefaultTerminal:
-					gpSet->isSetDefaultTerminal = IsChecked(hWnd2, cbDefaultTerminal);
-					bUpdateGuiMapping = true;
-					bSetupDefaultTerminal = gpSet->isSetDefaultTerminal;
-					break;
-				case cbDefaultTerminalStartup:
-					if (IsChecked(hWnd2, cbDefaultTerminalStartup))
-					{
-						if (!gpSet->isSetDefaultTerminal)
-						{
-							if (MessageBox(L"Default Terminal feature was not enabled. Enable it now?", MB_YESNO, NULL, ghOpWnd) != IDYES)
-								break;
-							gpSet->isSetDefaultTerminal = true;
-							checkDlgButton(hWnd2, cbDefaultTerminal, BST_CHECKED);
-							bUpdateGuiMapping = true;
-							bSetupDefaultTerminal = true;
-						}
-						gpSet->isRegisterOnOsStartup = true;
-					}
-					else
-					{
-						gpSet->isRegisterOnOsStartup = false;
-					}
-					gpConEmu->mp_DefTrm->CheckRegisterOsStartup();
-					break;
-				case cbDefaultTerminalNoInjects:
-					gpSet->isDefaultTerminalNoInjects = IsChecked(hWnd2, cbDefaultTerminalNoInjects);
-					bUpdateGuiMapping = true;
-					break;
-				case rbDefaultTerminalConfAuto:
-				case rbDefaultTerminalConfAlways:
-				case rbDefaultTerminalConfNever:
-					gpSet->nDefaultTerminalConfirmClose = 
-						IsChecked(hWnd2, rbDefaultTerminalConfAuto) ? 0 : 
-						IsChecked(hWnd2, rbDefaultTerminalConfAlways) ? 1 : 2;
-					bUpdateGuiMapping = true;
-					break;
-				}
-
-				if (bUpdateGuiMapping)
-				{
-					gpConEmu->OnGlobalSettingsChanged();
-				}
-
-				if (gpSet->isSetDefaultTerminal && bSetupDefaultTerminal)
-				{
-					// Change mouse cursor due to long operation
-					SetCursor(LoadCursor(NULL,IDC_WAIT));
-					// Redraw checkboxes to avoid lags in painting while installing hooks
-					RedrawWindow(hWnd2, NULL, NULL, RDW_UPDATENOW|RDW_ALLCHILDREN);
-					// Инициировать эксплорер, если он еще не был обработан
-					gpConEmu->mp_DefTrm->PostCreated(true, true);
 				}
 			}
 			break; // BN_CLICKED
@@ -3775,20 +3749,6 @@ INT_PTR CSettings::pageOpProc_Integr(HWND hWnd2, UINT messg, WPARAM wParam, LPAR
 					{
 						SafeFree(gpConEmu->mp_Inside->ms_InsideSynchronizeCurDir);
                         gpConEmu->mp_Inside->ms_InsideSynchronizeCurDir = GetDlgItemText(hWnd2, tInsideSyncDir);
-					}
-					break;
-				case tDefaultTerminal:
-					if (!bSkipCbSel)
-					{
-						wchar_t* pszApps = GetDlgItemText(hWnd2, tDefaultTerminal);
-						if (!pszApps || !*pszApps)
-						{
-							SafeFree(pszApps);
-							pszApps = lstrdup(DEFAULT_TERMINAL_APPS/*L"explorer.exe"*/);
-							SetDlgItemText(hWnd2, tDefaultTerminal, pszApps);
-						}
-						gpSet->SetDefaultTerminalApps(pszApps);
-						SafeFree(pszApps);
 					}
 					break;
 				}
@@ -4424,24 +4384,24 @@ LRESULT CSettings::OnInitDialog_Views(HWND hWnd2)
 	SetDlgItemInt(hWnd2, tTilesY2, gpSet->ThSet.Tiles.nSpaceY2, FALSE);
 	SetDlgItemInt(hWnd2, tTilesSpacing, gpSet->ThSet.Tiles.nLabelSpacing, FALSE);
 	SetDlgItemInt(hWnd2, tTilesPadding, gpSet->ThSet.Tiles.nLabelPadding, FALSE);
-	FillListBox(hWnd2, tThumbMaxZoom, SettingsNS::szThumbMaxZoom, SettingsNS::nThumbMaxZoom, gpSet->ThSet.nMaxZoom);
+	FillListBox(hWnd2, tThumbMaxZoom, SettingsNS::ThumbMaxZoom, gpSet->ThSet.nMaxZoom);
 
 	// Colors
 	for(uint c = c32; c <= c34; c++)
 		ColorSetEdit(hWnd2, c);
 
 	nVal = gpSet->ThSet.crBackground.ColorIdx;
-	FillListBox(hWnd2, lbThumbBackColorIdx, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbThumbBackColorIdx, SettingsNS::ColorIdxTh, nVal);
 	checkRadioButton(hWnd2, rbThumbBackColorIdx, rbThumbBackColorRGB,
 	                 gpSet->ThSet.crBackground.UseIndex ? rbThumbBackColorIdx : rbThumbBackColorRGB);
 	checkDlgButton(hWnd2, cbThumbPreviewBox, gpSet->ThSet.nPreviewFrame ? 1 : 0);
 	nVal = gpSet->ThSet.crPreviewFrame.ColorIdx;
-	FillListBox(hWnd2, lbThumbPreviewBoxColorIdx, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbThumbPreviewBoxColorIdx, SettingsNS::ColorIdxTh, nVal);
 	checkRadioButton(hWnd2, rbThumbPreviewBoxColorIdx, rbThumbPreviewBoxColorRGB,
 	                 gpSet->ThSet.crPreviewFrame.UseIndex ? rbThumbPreviewBoxColorIdx : rbThumbPreviewBoxColorRGB);
 	checkDlgButton(hWnd2, cbThumbSelectionBox, gpSet->ThSet.nSelectFrame ? 1 : 0);
 	nVal = gpSet->ThSet.crSelectFrame.ColorIdx;
-	FillListBox(hWnd2, lbThumbSelectionBoxColorIdx, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+	FillListBox(hWnd2, lbThumbSelectionBoxColorIdx, SettingsNS::ColorIdxTh, nVal);
 	checkRadioButton(hWnd2, rbThumbSelectionBoxColorIdx, rbThumbSelectionBoxColorRGB,
 	                 gpSet->ThSet.crSelectFrame.UseIndex ? rbThumbSelectionBoxColorIdx : rbThumbSelectionBoxColorRGB);
 
@@ -4892,7 +4852,6 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			break;
 		case cbComspecUncPaths:
 			gpSet->ComSpec.isAllowUncPaths = IsChecked(hWnd2, cbComspecUncPaths);
-			UpdateComSpecUncSupport();
 			break;
 		case cbCmdAutorunNewWnd:
 			// does not insterested in ATM, this is used in ShellIntegration function only
@@ -4917,7 +4876,12 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				//EnableWindow(GetDlgItem(hWnd2, rBgUpLeft), gpSet->isShowBgImage);
 				//EnableWindow(GetDlgItem(hWnd2, rBgStretch), gpSet->isShowBgImage);
 				//EnableWindow(GetDlgItem(hWnd2, rBgTile), gpSet->isShowBgImage);
-				BOOL lbNeedLoad = (mp_Bg == NULL);
+				BOOL lbNeedLoad;
+				#ifndef APPDISTINCTBACKGROUND
+				lbNeedLoad = (mp_Bg == NULL);
+				#else
+				lbNeedLoad = (mp_BgInfo == NULL) || (lstrcmpi(mp_BgInfo->BgImage(), gpSet->sBgImage) != 0);
+				#endif
 
 				if (gpSet->isShowBgImage && gpSet->bgImageDarker == 0)
 				{
@@ -4940,6 +4904,8 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				{
 					gpSetCls->LoadBackgroundFile(gpSet->sBgImage, true);
 				}
+
+				NeedBackgroundUpdate();
 
 				gpConEmu->Update(true);
 
@@ -5445,7 +5411,7 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1/2}");
+				//_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1/2}");
 				gpSet->isMultiLeaveOnClose = IsChecked(hWnd2, cbCloseConEmuOnCrossClicking) ? 2 : 1;
 			}
 			gpConEmu->LogString(L"isMultiLeaveOnClose changed from dialog (cbCloseConEmuWithLastTab)");
@@ -5460,7 +5426,7 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		case cbCloseConEmuOnCrossClicking:
 			if (!IsChecked(hWnd2, cbCloseConEmuWithLastTab))
 			{
-				_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1/2}");
+				//_ASSERTE(FALSE && "Set up {isMultiLeaveOnClose=1/2}");
 				gpSet->isMultiLeaveOnClose = IsChecked(hWnd2, cbCloseConEmuOnCrossClicking) ? 2 : 1;
 				gpConEmu->LogString(L"isMultiLeaveOnClose changed from dialog (cbCloseConEmuOnCrossClicking)");
 			}
@@ -6066,16 +6032,95 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		case cbCmdTasksDel:
 		case cbCmdTasksUp:
 		case cbCmdTasksDown:
+		case cbCmdGroupKey:
 		case cbCmdGroupApp:
 		case cbCmdTasksParm:
 		case cbCmdTasksDir:
 		case cbCmdTasksActive:
 		case cbCmdTasksReload:
+		case cbAddDefaults:
 		case cbCmdTaskbarTasks:
 		case cbCmdTaskbarCommands:
 		case cbCmdTaskbarUpdate:
 			return OnButtonClicked_Tasks(hWnd2, wParam, lParam);
 		/* *** Command groups *** */
+
+
+		/* *** Default terminal *** */
+		case cbDefaultTerminal:
+		case cbDefaultTerminalStartup:
+		case cbDefaultTerminalTSA:
+		case cbDefaultTerminalNoInjects:
+		case rbDefaultTerminalConfAuto:
+		case rbDefaultTerminalConfAlways:
+		case rbDefaultTerminalConfNever:
+			{
+				bool bUpdateGuiMapping = false;
+				bool bSetupDefaultTerminal = false;
+
+				switch (CB)
+				{
+				case cbDefaultTerminal:
+					gpSet->isSetDefaultTerminal = IsChecked(hWnd2, cbDefaultTerminal);
+					bUpdateGuiMapping = true;
+					bSetupDefaultTerminal = gpSet->isSetDefaultTerminal;
+					break;
+				case cbDefaultTerminalStartup:
+				case cbDefaultTerminalTSA:
+					if (IsChecked(hWnd2, cbDefaultTerminalStartup))
+					{
+						if (!gpSet->isSetDefaultTerminal)
+						{
+							if (MessageBox(L"Default Terminal feature was not enabled. Enable it now?", MB_YESNO, NULL, ghOpWnd) != IDYES)
+								break;
+							gpSet->isSetDefaultTerminal = true;
+							checkDlgButton(hWnd2, cbDefaultTerminal, BST_CHECKED);
+							bUpdateGuiMapping = true;
+							bSetupDefaultTerminal = true;
+						}
+						gpSet->isRegisterOnOsStartup = true;
+					}
+					else
+					{
+						gpSet->isRegisterOnOsStartup = false;
+					}
+					gpSet->isRegisterOnOsStartupTSA = IsChecked(hWnd2, cbDefaultTerminalTSA);
+					EnableWindow(GetDlgItem(hWnd2, cbDefaultTerminalTSA), gpSet->isRegisterOnOsStartup);
+					// And update registry
+					gpConEmu->mp_DefTrm->CheckRegisterOsStartup();
+					break;
+				case cbDefaultTerminalNoInjects:
+					gpSet->isDefaultTerminalNoInjects = IsChecked(hWnd2, cbDefaultTerminalNoInjects);
+					bUpdateGuiMapping = true;
+					break;
+				case rbDefaultTerminalConfAuto:
+				case rbDefaultTerminalConfAlways:
+				case rbDefaultTerminalConfNever:
+					gpSet->nDefaultTerminalConfirmClose = 
+						IsChecked(hWnd2, rbDefaultTerminalConfAuto) ? 0 : 
+						IsChecked(hWnd2, rbDefaultTerminalConfAlways) ? 1 : 2;
+					bUpdateGuiMapping = true;
+					break;
+				}
+
+				if (bUpdateGuiMapping)
+				{
+					gpConEmu->OnGlobalSettingsChanged();
+				}
+
+				if (gpSet->isSetDefaultTerminal && bSetupDefaultTerminal)
+				{
+					// Change mouse cursor due to long operation
+					SetCursor(LoadCursor(NULL,IDC_WAIT));
+					// Redraw checkboxes to avoid lags in painting while installing hooks
+					RedrawWindow(hWnd2, NULL, NULL, RDW_UPDATENOW|RDW_ALLCHILDREN);
+					// Инициировать эксплорер, если он еще не был обработан
+					gpConEmu->mp_DefTrm->PostCreated(true, true);
+				}
+			}
+			break;
+		/* *** Default terminal *** */
+
 
 		case bGotoEditorCmd:
 			{
@@ -6103,63 +6148,6 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 
 		default:
 		{
-			//if (CB >= cbHostWin && CB <= cbHostRShift)
-			//{
-			//	//memset(gpSet->mn_HostModOk, 0, sizeof(gpSet->mn_HostModOk));
-			//	DWORD nModifers = 0;
-			//	//if (IsChecked(hWnd2, CB))
-			//	//{
-			//	//	nModifers = gpSet->XorModifier(nModifers, HostkeyCtrlId2Vk(CB));
-			//	//}
-			//	for (UINT i = 0; i < 3; i++)
-			//	{
-			//		BYTE vk = 0;
-			//		GetListBoxByte(hWnd2,lbHotKeyMod1+i,SettingsNS::szModifiers,SettingsNS::nModifiers,vk);
-			//		nModifers = gpSet->SetModifier(nModifers, vk, false);
-			//		//if ((CB != HostkeyCtrlIds[i]) && IsChecked(hWnd2, HostkeyCtrlIds[i]))
-			//		//	nModifers = gpSet->XorModifier(nModifers, HostkeyCtrlId2Vk(HostkeyCtrlIds[i]));
-			//		//	//gpSet->CheckHostkeyModifier(HostkeyCtrlId2Vk(HostkeyCtrlIds[i]));
-			//	}
-			//	if (mp_ActiveHotKey && (mp_ActiveHotKey->HkType != chk_Modifier) && (mp_ActiveHotKey->HkType != chk_System))
-			//	{
-			//		if (mp_ActiveHotKey->VkModPtr)
-			//		{
-			//			*mp_ActiveHotKey->VkModPtr = (cvk_VK_MASK & *mp_ActiveHotKey->VkModPtr) | nModifers;
-			//		}
-			//		else if (mp_ActiveHotKey->HkType == chk_Hostkey)
-			//		{
-			//			// Для этой группы - модификаторы назначаются "чохом"
-			//			for (int i = 0; m_HotKeys[i].DescrLangID; i++)
-			//			{
-			//				if (m_HotKeys[i].HkType == chk_Hostkey)
-			//				{
-			//					_ASSERTE(m_HotKeys[i].VkModPtr == NULL && m_HotKeys[i].VkMod != 0);
-			//					if (m_HotKeys[i].VkMod)
-			//					{
-			//						m_HotKeys[i].VkMod = (cvk_VK_MASK & m_HotKeys[i].VkMod) | nModifers;
-			//					}
-			//				}
-			//			}
-			//		}
-			//		else if (mp_ActiveHotKey->VkMod)
-			//		{
-			//			SetHotkeyVkMod(mp_ActiveHotKey, (cvk_VK_MASK & mp_ActiveHotKey->VkMod) | nModifers);
-			//		}
-			//	}
-			//	//gpSet->TrimHostkeys();
-			//	WARNING("ConEmuHotKey: Убрать nMultiHotkeyModifier как пережиток");
-			//	_ASSERTE((nModifers & 0xFF) == 0); // Модификаторы должны быть в старших 3-х байтах
-			//	gpSet->nMultiHotkeyModifier = (nModifers >> 8); // а тут они хранятся в младших (так сложилось)
-			//	//if (IsChecked(hWnd2, CB))
-			//	//{
-			//	//	gpSet->CheckHostkeyModifier(HostkeyCtrlId2Vk(CB));
-			//	//	gpSet->TrimHostkeys();
-			//	//}
-			//	// Обновить, что осталось
-			//	//gpSetCls->SetupHotkeyChecks(hWnd2);
-			//	//gpSet->MakeHostkeyModifier();
-			//} // if (CB >= cbHostWin && CB <= cbHostRShift)
-			//else
 			if (CB >= c32 && CB <= c34)
 			{
 				if (gpSetCls->ColorEditDialog(hWnd2, CB))
@@ -6480,6 +6468,25 @@ LRESULT CSettings::OnButtonClicked_Tasks(HWND hWnd2, WPARAM wParam, LPARAM lPara
 		} // cbCmdTasksUp, cbCmdTasksDown
 		break;
 
+	case cbCmdGroupKey:
+		{
+			int iCur = (int)SendDlgItemMessage(hWnd2, lbCmdTasks, LB_GETCURSEL, 0,0);
+			if (iCur < 0)
+				break;
+			const Settings::CommandTasks* pCmd = gpSet->CmdTaskGet(iCur);
+			if (!pCmd)
+				break;
+
+			DWORD VkMod = pCmd->HotKey.VkMod;
+			if (CHotKeyDialog::EditHotKey(ghOpWnd, VkMod))
+			{
+				gpSet->CmdTaskSetVkMod(iCur, VkMod);
+				wchar_t szKey[128] = L"";
+				SetDlgItemText(hWnd2, tCmdGroupKey, ConEmuHotKey::GetHotkeyName(pCmd->HotKey.VkMod, szKey));
+			}
+		} // cbCmdGroupKey
+		break;
+
 	case cbCmdGroupApp:
 		{
 			// Добавить команду в группу
@@ -6628,6 +6635,20 @@ LRESULT CSettings::OnButtonClicked_Tasks(HWND hWnd2, WPARAM wParam, LPARAM lPara
 		}
 		break;
 
+	case cbAddDefaults:
+		{
+			if (MessageBox(ghOpWnd, L"Do you want to ADD default tasks in your task list?",
+					gpConEmu->GetDefaultTitle(), MB_YESNO|MB_ICONEXCLAMATION) != IDYES)
+				break;
+
+			// Добавить таски В КОНЕЦ
+			CreateDefaultTasks(true);
+
+			// Обновить список на экране
+			OnInitDialog_Tasks(hWnd2, true);
+		} // case cbAddDefaults:
+		break;
+
 	case cbCmdTasksReload:
 		{
 			if (MessageBox(ghOpWnd, L"Warning! All unsaved changes will be lost!\n\nReload command groups from settings?",
@@ -6673,74 +6694,74 @@ bool CSettings::GetColorRef(HWND hDlg, WORD TB, COLORREF* pCR)
 	if (!GetDlgItemText(hDlg, TB, temp, countof(temp)) || !*temp)
 		return false;
 
-	return GetColorRef(temp, pCR);
+	return ::GetColorRef(temp, pCR);
 }
 
-bool CSettings::GetColorRef(LPCWSTR pszText, COLORREF* pCR)
-{
-	if (!pszText || !*pszText)
-		return false;
-
-	bool result = false;
-	int r = 0, g = 0, b = 0;
-	const wchar_t *pch;
-	wchar_t *pchEnd;
-
-	if ((pszText[0] == L'#') || (pszText[0] == L'x' || pszText[0] == L'X') || (pszText[0] == L'0' && (pszText[1] == L'x' || pszText[1] == L'X')))
-	{
-		pch = (pszText[0] == L'0') ? (pszText+2) : (pszText+1);
-		// Считаем значение 16-ричным rgb кодом
-		pchEnd = NULL;
-		COLORREF clr = wcstoul(pch, &pchEnd, 16);
-		if (clr && (pszText[0] == L'#'))
-		{
-			// "#rrggbb", обменять местами rr и gg, нам нужен COLORREF (bbggrr)
-			clr = ((clr & 0xFF)<<16) | ((clr & 0xFF00)) | ((clr & 0xFF0000)>>16);
-		}
-		// Done
-		if (pchEnd && (pchEnd > (pszText+1)) && (clr <= 0xFFFFFF) && (*pCR != clr))
-		{
-			*pCR = clr;
-			result = true;
-		}
-	}
-	else
-	{
-		pch = (wchar_t*)wcspbrk(pszText, L"0123456789");
-		pchEnd = NULL;
-		r = pch ? wcstol(pch, &pchEnd, 10) : 0;
-		if (pchEnd && (pchEnd > pch))
-		{
-			pch = (wchar_t*)wcspbrk(pchEnd, L"0123456789");
-			pchEnd = NULL;
-			g = pch ? wcstol(pch, &pchEnd, 10) : 0;
-
-			if (pchEnd && (pchEnd > pch))
-			{
-				pch = (wchar_t*)wcspbrk(pchEnd, L"0123456789");
-				pchEnd = NULL;
-				b = pch ? wcstol(pch, &pchEnd, 10) : 0;
-			}
-
-			// decimal format of UltraEdit?
-			if ((r > 255) && !g && !b)
-			{
-				g = (r & 0xFF00) >> 8;
-				b = (r & 0xFF0000) >> 16;
-				r &= 0xFF;
-			}
-
-			// Достаточно ввода одной компоненты
-			if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255 && *pCR != RGB(r, g, b))
-			{
-				*pCR = RGB(r, g, b);
-				result = true;
-			}
-		}
-	}
-
-	return result;
-}
+//bool CSettings::GetColorRef(LPCWSTR pszText, COLORREF* pCR)
+//{
+//	if (!pszText || !*pszText)
+//		return false;
+//
+//	bool result = false;
+//	int r = 0, g = 0, b = 0;
+//	const wchar_t *pch;
+//	wchar_t *pchEnd;
+//
+//	if ((pszText[0] == L'#') || (pszText[0] == L'x' || pszText[0] == L'X') || (pszText[0] == L'0' && (pszText[1] == L'x' || pszText[1] == L'X')))
+//	{
+//		pch = (pszText[0] == L'0') ? (pszText+2) : (pszText+1);
+//		// Считаем значение 16-ричным rgb кодом
+//		pchEnd = NULL;
+//		COLORREF clr = wcstoul(pch, &pchEnd, 16);
+//		if (clr && (pszText[0] == L'#'))
+//		{
+//			// "#rrggbb", обменять местами rr и gg, нам нужен COLORREF (bbggrr)
+//			clr = ((clr & 0xFF)<<16) | ((clr & 0xFF00)) | ((clr & 0xFF0000)>>16);
+//		}
+//		// Done
+//		if (pchEnd && (pchEnd > (pszText+1)) && (clr <= 0xFFFFFF) && (*pCR != clr))
+//		{
+//			*pCR = clr;
+//			result = true;
+//		}
+//	}
+//	else
+//	{
+//		pch = (wchar_t*)wcspbrk(pszText, L"0123456789");
+//		pchEnd = NULL;
+//		r = pch ? wcstol(pch, &pchEnd, 10) : 0;
+//		if (pchEnd && (pchEnd > pch))
+//		{
+//			pch = (wchar_t*)wcspbrk(pchEnd, L"0123456789");
+//			pchEnd = NULL;
+//			g = pch ? wcstol(pch, &pchEnd, 10) : 0;
+//
+//			if (pchEnd && (pchEnd > pch))
+//			{
+//				pch = (wchar_t*)wcspbrk(pchEnd, L"0123456789");
+//				pchEnd = NULL;
+//				b = pch ? wcstol(pch, &pchEnd, 10) : 0;
+//			}
+//
+//			// decimal format of UltraEdit?
+//			if ((r > 255) && !g && !b)
+//			{
+//				g = (r & 0xFF00) >> 8;
+//				b = (r & 0xFF0000) >> 16;
+//				r &= 0xFF;
+//			}
+//
+//			// Достаточно ввода одной компоненты
+//			if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255 && *pCR != RGB(r, g, b))
+//			{
+//				*pCR = RGB(r, g, b);
+//				result = true;
+//			}
+//		}
+//	}
+//
+//	return result;
+//}
 
 LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 {
@@ -6762,6 +6783,7 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			if (LoadBackgroundFile(temp, true))
 			{
 				wcscpy_c(gpSet->sBgImage, temp);
+				NeedBackgroundUpdate();
 				gpConEmu->Update(true);
 			}
 		}
@@ -6808,6 +6830,7 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		if (newBgColors && gpSet->nBgImageColors != newBgColors)
 		{
 			gpSet->nBgImageColors = newBgColors;
+			NeedBackgroundUpdate();
 			gpConEmu->Update(true);
 		}
 		
@@ -6940,19 +6963,8 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 
 	case hkHotKeySelect:
 	{
-		UINT nHotKey = 0xFF & SendDlgItemMessage(hWnd2, TB, HKM_GETHOTKEY, 0, 0);
-		bool bList = false;
-		for (size_t i = 0; i < countof(SettingsNS::nKeysHot); i++)
-		{
-			if (SettingsNS::nKeysHot[i] == nHotKey)
-			{
-				SendDlgItemMessage(hWnd2, lbHotKeyList, CB_SETCURSEL, i, 0);
-				bList = true;
-				break;
-			}
-		}
-		if (!bList)
-			SendDlgItemMessage(hWnd2, lbHotKeyList, CB_SETCURSEL, 0, 0);
+		UINT nHotKey = CHotKeyDialog::dlgGetHotkey(hWnd2, hkHotKeySelect, lbHotKeyList);
+
 		if (mp_ActiveHotKey && mp_ActiveHotKey->CanChangeVK())
 		{
 			DWORD nCurMods = (CEHOTKEY_MODMASK & mp_ActiveHotKey->VkMod);
@@ -7129,6 +7141,20 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	/* *** Command groups *** */
+
+	case tDefaultTerminal:
+		{
+			wchar_t* pszApps = GetDlgItemText(hWnd2, tDefaultTerminal);
+			if (!pszApps || !*pszApps)
+			{
+				SafeFree(pszApps);
+				pszApps = lstrdup(DEFAULT_TERMINAL_APPS/*L"explorer.exe"*/);
+				SetDlgItemText(hWnd2, tDefaultTerminal, pszApps);
+			}
+			gpSet->SetDefaultTerminalApps(pszApps);
+			SafeFree(pszApps);
+		}
+		break;
 
 
 	/* *** GUI Macro - hotkeys *** */
@@ -7464,7 +7490,7 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 	case lbBgPlacement:
 	{
 		BYTE bg = 0;
-		GetListBoxByte(hWnd2,lbBgPlacement,SettingsNS::szBgOper,SettingsNS::nBgOper,bg);
+		GetListBoxByte(hWnd2,lbBgPlacement,SettingsNS::BgOper,bg);
 		gpSet->bgOperation = bg;
 		gpSetCls->LoadBackgroundFile(gpSet->sBgImage, true);
 		gpConEmu->Update(true);
@@ -7474,14 +7500,14 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 	case lbLDragKey:
 	{
 		BYTE VkMod = 0;
-		GetListBoxByte(hWnd2,wId,SettingsNS::szKeys,SettingsNS::nKeys,VkMod);
+		GetListBoxByte(hWnd2,wId,SettingsNS::Keys,VkMod);
 		gpSet->SetHotkeyById(vkLDragKey, VkMod);
 		break;
 	}
 	case lbRDragKey:
 	{
 		BYTE VkMod = 0;
-		GetListBoxByte(hWnd2,wId,SettingsNS::szKeys,SettingsNS::nKeys,VkMod);
+		GetListBoxByte(hWnd2,wId,SettingsNS::Keys,VkMod);
 		gpSet->SetHotkeyById(vkLDragKey, VkMod);
 		break;
 	}
@@ -7535,22 +7561,28 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		{
 			if (mp_ActiveHotKey->CanChangeVK())
 			{
-				GetListBoxByte(hWnd2, wId, SettingsNS::szKeysHot, SettingsNS::nKeysHot, vk);
-				SendDlgItemMessage(hWnd2, hkHotKeySelect, HKM_SETHOTKEY, vk|(vk==VK_DELETE ? (HOTKEYF_EXT<<8) : 0), 0);
+				//GetListBoxByte(hWnd2, wId, SettingsNS::KeysHot, vk);
+				CSettings::GetListBoxHotKey(GetDlgItem(hWnd2, wId), CSettings::eHkKeysHot, vk);
+
+				SetHotkeyField(GetDlgItem(hWnd2, hkHotKeySelect), vk);
+				//SendDlgItemMessage(hWnd2, hkHotKeySelect, HKM_SETHOTKEY, vk|(vk==VK_DELETE ? (HOTKEYF_EXT<<8) : 0), 0);
+				
 				DWORD nMod = (CEHOTKEY_MODMASK & mp_ActiveHotKey->VkMod);
 				if (nMod == 0)
 				{
 					// Если модификатора вообще не было - ставим Win
 					BYTE b = VK_LWIN;
-					FillListBoxByte(hWnd2, lbHotKeyMod1, SettingsNS::szModifiers, SettingsNS::nModifiers, b);
+					//FillListBoxByte(hWnd2, lbHotKeyMod1, SettingsNS::Modifiers, b);
+					FillListBoxHotKeys(GetDlgItem(hWnd2, lbHotKeyMod1), eHkModifiers, b);
 					nMod = (VK_LWIN << 8);
 				}
 				SetHotkeyVkMod(mp_ActiveHotKey, ((DWORD)vk) | nMod);
 			}
 			else if (mp_ActiveHotKey->HkType == chk_Modifier)
 			{
-				GetListBoxByte(hWnd2, wId, SettingsNS::szKeys, SettingsNS::nKeys, vk);
-				SendDlgItemMessage(hWnd2, hkHotKeySelect, HKM_SETHOTKEY, 0, 0);
+				GetListBoxByte(hWnd2, wId, SettingsNS::Keys, vk);
+				//SendDlgItemMessage(hWnd2, hkHotKeySelect, HKM_SETHOTKEY, 0, 0);
+				SetHotkeyField(GetDlgItem(hWnd2, hkHotKeySelect), 0);
 				SetHotkeyVkMod(mp_ActiveHotKey, vk);
 			}
 			FillHotKeysList(hWnd2, FALSE);
@@ -7568,7 +7600,8 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		for (UINT i = 0; i < 3; i++)
 		{
 			BYTE vk = 0;
-			GetListBoxByte(hWnd2,lbHotKeyMod1+i,SettingsNS::szModifiers,SettingsNS::nModifiers,vk);
+			//GetListBoxByte(hWnd2,lbHotKeyMod1+i,SettingsNS::Modifiers,vk);
+			GetListBoxHotKey(GetDlgItem(hWnd2,lbHotKeyMod1+i),eHkModifiers,vk);
 			BYTE vkChange = vk;
 
 			// Некоторые модификаторы НЕ допустимы при регистрации глобальных хоткеев (ограничения WinAPI)
@@ -7590,7 +7623,8 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			if (vkChange != vk)
 			{
 				vk = vkChange;
-				FillListBoxByte(hWnd2, lbHotKeyMod1+i, SettingsNS::szModifiers, SettingsNS::nModifiers, vkChange);
+				//FillListBoxByte(hWnd2, lbHotKeyMod1+i, SettingsNS::Modifiers, vkChange);
+				FillListBoxHotKeys(GetDlgItem(hWnd2, lbHotKeyMod1+i), eHkModifiers, vkChange);
 			}
 
 			if (vk)
@@ -7672,8 +7706,8 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 					gpSet->nTabFontHeight = SettingsNS::FSizesSmall[nSel];
 				break;
 			case tTabFontCharset:
-				if (nSel >= 0 && nSel < (INT_PTR)countof(SettingsNS::nCharSets))
-					gpSet->nTabFontCharSet = SettingsNS::nCharSets[nSel];
+				if (nSel >= 0 && nSel < (INT_PTR)countof(SettingsNS::CharSets))
+					gpSet->nTabFontCharSet = SettingsNS::CharSets[nSel].nValue;
 				else
 					gpSet->nTabFontCharSet = DEFAULT_CHARSET;
 			}
@@ -7742,8 +7776,8 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 					gpSet->nStatusFontHeight = SettingsNS::FSizesSmall[nSel];
 				break;
 			case tStatusFontCharset:
-				if (nSel >= 0 && nSel < (INT_PTR)countof(SettingsNS::nCharSets))
-					gpSet->nStatusFontCharSet = SettingsNS::nCharSets[nSel];
+				if (nSel >= 0 && nSel < (INT_PTR)countof(SettingsNS::CharSets))
+					gpSet->nStatusFontCharSet = SettingsNS::CharSets[nSel].nValue;
 				else
 					gpSet->nStatusFontCharSet = DEFAULT_CHARSET;
 			}
@@ -7771,6 +7805,10 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				pszNoBrk[_tcslen(pszNoBrk)-1] = 0;
 			SetDlgItemText(hWnd2, tCmdGroupName, pszNoBrk);
 			SafeFree(pszNoBrk);
+
+			wchar_t szKey[128] = L"";
+			SetDlgItemText(hWnd2, tCmdGroupKey, ConEmuHotKey::GetHotkeyName(pCmd->HotKey.VkMod, szKey));
+
 			SetDlgItemText(hWnd2, tCmdGroupGuiArg, pCmd->pszGuiArgs ? pCmd->pszGuiArgs : L"");
 			SetDlgItemText(hWnd2, tCmdGroupCommands, pCmd->pszCommands ? pCmd->pszCommands : L"");
 			lbEnable = TRUE;
@@ -7947,13 +7985,13 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 					DWORD nVal;
 
 					nVal = pPal->nTextColorIdx;
-					FillListBox(hWnd2, lbConClrText, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+					FillListBox(hWnd2, lbConClrText, SettingsNS::ColorIdxTh, nVal);
 					nVal = pPal->nBackColorIdx;
-					FillListBox(hWnd2, lbConClrBack, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+					FillListBox(hWnd2, lbConClrBack, SettingsNS::ColorIdxTh, nVal);
 					nVal = pPal->nPopTextColorIdx;
-					FillListBox(hWnd2, lbConClrPopText, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+					FillListBox(hWnd2, lbConClrPopText, SettingsNS::ColorIdxTh, nVal);
 					nVal = pPal->nPopBackColorIdx;
-					FillListBox(hWnd2, lbConClrPopBack, SettingsNS::szColorIdxTh, SettingsNS::nColorIdxTh, nVal);
+					FillListBox(hWnd2, lbConClrPopBack, SettingsNS::ColorIdxTh, nVal);
 
 					BOOL bTextChanged = (gpSet->AppStd.nTextColorIdx != pPal->nTextColorIdx) || (gpSet->AppStd.nBackColorIdx != pPal->nBackColorIdx);
 					BOOL bPopupChanged = (gpSet->AppStd.nPopTextColorIdx != pPal->nPopTextColorIdx) || (gpSet->AppStd.nPopBackColorIdx != pPal->nPopBackColorIdx);
@@ -7968,7 +8006,7 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 					}
 
 					nVal = pPal->nExtendColorIdx;
-					FillListBox(hWnd2, lbExtendIdx, SettingsNS::szColorIdxSh, SettingsNS::nColorIdxSh, nVal);
+					FillListBox(hWnd2, lbExtendIdx, SettingsNS::ColorIdxSh, nVal);
 					gpSet->AppStd.nExtendColorIdx = nVal;
 					gpSet->AppStd.isExtendColors = pPal->isExtendColors;
 					checkDlgButton(hWnd2, cbExtendColors, pPal->isExtendColors ? BST_CHECKED : BST_UNCHECKED);
@@ -7991,51 +8029,51 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				case lbCTSBlockSelection:
 					{
 						BYTE VkMod = 0;
-						GetListBoxByte(hWnd2, lbCTSBlockSelection, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+						GetListBoxByte(hWnd2, lbCTSBlockSelection, SettingsNS::KeysAct, VkMod);
 						gpSet->SetHotkeyById(vkCTSVkBlock, VkMod);
 						CheckSelectionModifiers(hWnd2);
 					} break;
 				case lbCTSTextSelection:
 					{
 						BYTE VkMod = 0;
-						GetListBoxByte(hWnd2, lbCTSTextSelection, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+						GetListBoxByte(hWnd2, lbCTSTextSelection, SettingsNS::KeysAct, VkMod);
 						gpSet->SetHotkeyById(vkCTSVkText, VkMod);
 						CheckSelectionModifiers(hWnd2);
 					} break;
 				case lbCTSActAlways:
 					{
 						BYTE VkMod = 0;
-						GetListBoxByte(hWnd2, lbCTSActAlways, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+						GetListBoxByte(hWnd2, lbCTSActAlways, SettingsNS::KeysAct, VkMod);
 						gpSet->SetHotkeyById(vkCTSVkAct, VkMod);
 					} break;
 				case lbCTSEOL:
 					{
 						BYTE eol = 0;
-						GetListBoxByte(hWnd2,lbCTSEOL,SettingsNS::szCRLF,SettingsNS::nCRLF,eol);
+						GetListBoxByte(hWnd2,lbCTSEOL,SettingsNS::CRLF,eol);
 						gpSet->AppStd.isCTSEOL = eol;
 					} // lbCTSEOL
 					break;
 				case lbCTSRBtnAction:
 					{
-						GetListBoxByte(hWnd2, lbCTSRBtnAction, SettingsNS::szClipAct, SettingsNS::nClipAct, gpSet->isCTSRBtnAction);
+						GetListBoxByte(hWnd2, lbCTSRBtnAction, SettingsNS::ClipAct, gpSet->isCTSRBtnAction);
 					} break;
 				case lbCTSMBtnAction:
 					{
-						GetListBoxByte(hWnd2, lbCTSMBtnAction, SettingsNS::szClipAct, SettingsNS::nClipAct, gpSet->isCTSMBtnAction);
+						GetListBoxByte(hWnd2, lbCTSMBtnAction, SettingsNS::ClipAct, gpSet->isCTSMBtnAction);
 					} break;
 				case lbCTSForeIdx:
 					{
 						DWORD nFore = 0;
-						GetListBoxItem(GetDlgItem(hWnd2, lbCTSForeIdx), countof(SettingsNS::szColorIdx)-1,
-							SettingsNS::szColorIdx, SettingsNS::nColorIdx, nFore);
+						GetListBoxItem(GetDlgItem(hWnd2, lbCTSForeIdx), countof(SettingsNS::ColorIdx)-1,
+							SettingsNS::ColorIdx, nFore);
 						gpSet->isCTSColorIndex = (gpSet->isCTSColorIndex & 0xF0) | (nFore & 0xF);
 						gpConEmu->Update(true);
 					} break;
 				case lbCTSBackIdx:
 					{
 						DWORD nBack = 0;
-						GetListBoxItem(GetDlgItem(hWnd2, lbCTSBackIdx), countof(SettingsNS::szColorIdx)-1,
-							SettingsNS::szColorIdx, SettingsNS::nColorIdx, nBack);
+						GetListBoxItem(GetDlgItem(hWnd2, lbCTSBackIdx), countof(SettingsNS::ColorIdx)-1,
+							SettingsNS::ColorIdx, nBack);
 						gpSet->isCTSColorIndex = (gpSet->isCTSColorIndex & 0xF) | ((nBack & 0xF) << 4);
 						gpConEmu->Update(true);
 					} break;
@@ -8053,14 +8091,14 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				case lbCTSClickPromptPosition:
 					{
 						BYTE VkMod = 0;
-						GetListBoxByte(hWnd2, lbCTSClickPromptPosition, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+						GetListBoxByte(hWnd2, lbCTSClickPromptPosition, SettingsNS::KeysAct, VkMod);
 						gpSet->SetHotkeyById(vkCTSVkPromptClk, VkMod);
 						CheckSelectionModifiers(hWnd2);
 					} break;
 				case lbFarGotoEditorVk:
 					{
 						BYTE VkMod = 0;
-						GetListBoxByte(hWnd2, lbFarGotoEditorVk, SettingsNS::szKeysAct, SettingsNS::nKeysAct, VkMod);
+						GetListBoxByte(hWnd2, lbFarGotoEditorVk, SettingsNS::KeysAct, VkMod);
 						gpSet->SetHotkeyById(vkFarGotoEditorVk, VkMod);
 					} break;
 				default:
@@ -8641,7 +8679,15 @@ INT_PTR CSettings::wndOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPara
 				HELPINFO* hi = (HELPINFO*)lParam;
 				if (hi->cbSize >= sizeof(HELPINFO))
 				{
-					gpSetCls->mp_HelpPopup->ShowItemHelp(hi);
+					switch (hi->iCtrlId)
+					{
+					case tCmdGroupCommands:
+						// Some controls are processed personally
+						gpConEmu->OnInfo_About(L"-new_console");
+						break;
+					default:
+						gpSetCls->mp_HelpPopup->ShowItemHelp(hi);
+					}
 				}
 			}
 			return TRUE;
@@ -8770,6 +8816,9 @@ INT_PTR CSettings::pageOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPar
 		case IDD_SPG_FEATURE_FAR:
 			gpSetCls->OnInitDialog_Far(hWnd2, TRUE);
 			break;
+		case IDD_SPG_FARMACRO:
+			gpSetCls->OnInitDialog_FarMacro(hWnd2, TRUE);
+			break;
 		case IDD_SPG_KEYS:
 			{
 			bool lbOld = bSkipSelChange; bSkipSelChange = true;
@@ -8804,6 +8853,13 @@ INT_PTR CSettings::pageOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPar
 			break;
 		case IDD_SPG_INTEGRATION:
 			gpSetCls->OnInitDialog_Integr(hWnd2, true);
+			break;
+		case IDD_SPG_DEFTERM:
+			{
+			bool lbOld = bSkipSelChange; bSkipSelChange = true;
+			gpSetCls->OnInitDialog_DefTerm(hWnd2, true);
+			bSkipSelChange = lbOld;
+			}
 			break;
 		case IDD_SPG_VIEWS:
 			gpSetCls->OnInitDialog_Views(hWnd2);
@@ -8862,6 +8918,9 @@ INT_PTR CSettings::pageOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPar
 		case IDD_SPG_FEATURE_FAR:
 			gpSetCls->OnInitDialog_Far(hWnd2, FALSE);
 			break;
+		case IDD_SPG_FARMACRO:
+			gpSetCls->OnInitDialog_FarMacro(hWnd2, FALSE);
+			break;
 		case IDD_SPG_KEYS:
 			{
 			bool lbOld = bSkipSelChange; bSkipSelChange = true;
@@ -8888,6 +8947,13 @@ INT_PTR CSettings::pageOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPar
 			break;
 		case IDD_SPG_INTEGRATION:
 			gpSetCls->OnInitDialog_Integr(hWnd2, false);
+			break;
+		case IDD_SPG_DEFTERM:
+			{
+			bool lbOld = bSkipSelChange; bSkipSelChange = true;
+			gpSetCls->OnInitDialog_DefTerm(hWnd2, false);
+			bSkipSelChange = lbOld;
+			}
 			break;
 		case IDD_SPG_VIEWS:   /*gpSetCls->OnInitDialog_Views(hWnd2);*/  break;
 		case IDD_SPG_DEBUG:   /*gpSetCls->OnInitDialog_Debug(hWnd2);*/  break;
@@ -9315,12 +9381,12 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 			SendMessage(GetDlgItem(hChild, lbExtendFontBoldIdx), CB_RESETCONTENT, 0, 0);
 			SendMessage(GetDlgItem(hChild, lbExtendFontItalicIdx), CB_RESETCONTENT, 0, 0);
 			SendMessage(GetDlgItem(hChild, lbExtendFontNormalIdx), CB_RESETCONTENT, 0, 0);
-			for (uint i=0; i < countof(SettingsNS::szColorIdx); i++)
+			for (uint i=0; i < countof(SettingsNS::ColorIdx); i++)
 			{
 				//_wsprintf(temp, SKIPLEN(countof(temp))(i==16) ? L"None" : L"%2i", i);
-				SendDlgItemMessage(hChild, lbExtendFontBoldIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::szColorIdx[i]);
-				SendDlgItemMessage(hChild, lbExtendFontItalicIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::szColorIdx[i]);
-				SendDlgItemMessage(hChild, lbExtendFontNormalIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::szColorIdx[i]);
+				SendDlgItemMessage(hChild, lbExtendFontBoldIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::ColorIdx[i].sValue);
+				SendDlgItemMessage(hChild, lbExtendFontItalicIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::ColorIdx[i].sValue);
+				SendDlgItemMessage(hChild, lbExtendFontNormalIdx, CB_ADDSTRING, 0, (LPARAM) SettingsNS::ColorIdx[i].sValue);
 			}
 		}
 
@@ -9404,7 +9470,7 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 			checkDlgButton(hChild, cbCTSBashMargin, pApp->isCTSBashMargin);
 			checkDlgButton(hChild, cbCTSTrimTrailing, pApp->isCTSTrimTrailing);
 			b = pApp->isCTSEOL;
-			FillListBoxByte(hChild, lbCTSEOL, SettingsNS::szCRLF, SettingsNS::nCRLF, b);
+			FillListBoxByte(hChild, lbCTSEOL, SettingsNS::CRLF, b);
 			//
 			checkDlgButton(hChild, cbClipShiftIns, pApp->isPasteAllLines);
 			checkDlgButton(hChild, cbClipCtrlV, pApp->isPasteFirstLine);
@@ -9418,7 +9484,7 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 			checkDlgButton(hChild, cbBgImage, BST(pApp->isShowBgImage));
 			SetDlgItemText(hChild, tBgImage, pApp->sBgImage);
 			b = pApp->nBgOperation;
-			FillListBoxByte(hChild, lbBgPlacement, SettingsNS::szBgOper, SettingsNS::nBgOper, b);
+			FillListBoxByte(hChild, lbBgPlacement, SettingsNS::BgOper, b);
 
 		} // UM_FILL_CONTROLS
 		break;
@@ -9981,7 +10047,7 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 						case lbCTSEOL:
 							{
 								BYTE eol = 0;
-								GetListBoxByte(hChild,lbCTSEOL,SettingsNS::szCRLF,SettingsNS::nCRLF,eol);
+								GetListBoxByte(hChild,lbCTSEOL,SettingsNS::CRLF,eol);
 								pApp->isCTSEOL = eol;
 							} // lbCTSEOL
 							break;
@@ -9989,7 +10055,7 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 						case lbBgPlacement:
 							{
 								BYTE bg = 0;
-								GetListBoxByte(hChild,lbBgPlacement,SettingsNS::szBgOper,SettingsNS::nBgOper,bg);
+								GetListBoxByte(hChild,lbBgPlacement,SettingsNS::BgOper,bg);
 								pApp->nBgOperation = bg;
 								TODO("LoadBackgroundFile");
 								//gpSetCls->LoadBackgroundFile(gpSet->sBgImage, true);
@@ -11094,8 +11160,8 @@ void CSettings::RecreateFont(WORD wFromID)
 			//gpSet->mb_CharSetWasSet = FALSE;
 			INT_PTR newCharSet = SendDlgItemMessage(mh_Tabs[thi_Main], tFontCharset, CB_GETCURSEL, 0, 0);
 
-			if (newCharSet != CB_ERR && newCharSet >= 0 && newCharSet < (INT_PTR)countof(SettingsNS::nCharSets))
-				LF.lfCharSet = SettingsNS::nCharSets[newCharSet];
+			if (newCharSet != CB_ERR && newCharSet >= 0 && newCharSet < (INT_PTR)countof(SettingsNS::CharSets))
+				LF.lfCharSet = SettingsNS::CharSets[newCharSet].nValue;
 			else
 				LF.lfCharSet = DEFAULT_CHARSET;
 		}
@@ -11810,9 +11876,9 @@ CEFONT CSettings::CreateFontIndirectMy(LOGFONT *inFont)
 		{
 			inFont->lfCharSet = m_tm->tmCharSet;
 
-			for (uint i = 0; i < countof(SettingsNS::nCharSets); i++)
+			for (uint i = 0; i < countof(SettingsNS::CharSets); i++)
 			{
-				if (SettingsNS::nCharSets[i] == m_tm->tmCharSet)
+				if (SettingsNS::CharSets[i].nValue == m_tm->tmCharSet)
 				{
 					SendDlgItemMessage(mh_Tabs[thi_Main], tFontCharset, CB_SETCURSEL, i, 0);
 					break;
@@ -12252,7 +12318,8 @@ void CSettings::SetArgBufferHeight(int anBufferHeight)
 
 void CSettings::SetDefaultCmd(LPCWSTR asCmd)
 {
-	if (gpConEmu && gpConEmu->mb_MingwMode && gpConEmu->mb_MSysStartup)
+	// !!! gpConEmu may be NULL due starting time !!!
+	if (gpConEmu && gpConEmu->isMingwMode() && gpConEmu->isMSysStartup())
 	{
 		wchar_t szSearch[MAX_PATH+32], *pszFile;
 		wcscpy_c(szSearch, gpConEmu->ms_ConEmuExeDir);
@@ -12483,12 +12550,33 @@ void CSettings::ResetCmdArg()
 
 bool CSettings::ResetCmdHistory(HWND hParent)
 {
-	if (IDYES != MessageBox(L"Clear command history?", MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2, gpConEmu->GetDefaultTitle(), hParent ? hParent : ghWnd))
+	if (IDYES != MessageBox(L"Do you want to clear current history?\nThis can not be undone!", MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2, gpConEmu->GetDefaultTitle(), hParent ? hParent : ghWnd))
 		return false;
 
 	gpSet->HistoryReset();
 
 	return true;
+}
+
+void CSettings::SetSaveCmdHistory(bool bSaveHistory)
+{
+	gpSet->isSaveCmdHistory = bSaveHistory;
+
+	// И сразу сохранить в настройках
+	SettingsBase* reg = gpSet->CreateSettings(NULL);
+	if (!reg)
+	{
+		_ASSERTE(reg!=NULL);
+		return;
+	}
+
+	if (reg->OpenKey(gpSetCls->GetConfigPath(), KEY_WRITE))
+	{
+		reg->Save(L"SaveCmdHistory", gpSet->isSaveCmdHistory);
+		reg->CloseKey();
+	}
+
+	delete reg;
 }
 
 void CSettings::GetMainLogFont(LOGFONT& lf)
@@ -13760,7 +13848,61 @@ bool CSettings::SetColorById(WORD nID, COLORREF color)
 	return true;
 }
 
-void CSettings::FillListBoxItems(HWND hList, uint nItems, const WCHAR** pszItems, const DWORD* pnValues, DWORD& nValue, BOOL abExact /*= FALSE*/)
+uint CSettings::GetHotKeyListItems(eFillListBoxHotKeys eWhat, ListBoxItem** ppItems)
+{
+	uint nItems;
+
+	switch (eWhat)
+	{
+	case eHkModifiers:
+		nItems = countof(SettingsNS::Modifiers); *ppItems = SettingsNS::Modifiers; break;
+	case eHkKeysHot:
+		nItems = countof(SettingsNS::KeysHot); *ppItems = SettingsNS::KeysHot; break;
+	case eHkKeys:
+		nItems = countof(SettingsNS::Keys); *ppItems = SettingsNS::Keys; break;
+	case eHkKeysAct:
+		nItems = countof(SettingsNS::KeysAct); *ppItems = SettingsNS::KeysAct; break;
+	default:
+		_ASSERTE(FALSE && "eFillListBoxHotKeys was not processed");
+		return 0;
+	}
+
+	return nItems;
+}
+
+void CSettings::FillListBoxHotKeys(HWND hList, eFillListBoxHotKeys eWhat, BYTE& vk)
+{
+	ListBoxItem* pItems;
+	uint nItems = GetHotKeyListItems(eWhat, &pItems);
+	if (!nItems)
+		return;
+	
+	DWORD nValue = vk;
+	FillListBoxItems(hList, nItems, pItems, nValue);
+	vk = nValue;
+}
+
+void CSettings::SetHotkeyField(HWND hHk, BYTE vk)
+{
+	SendMessage(hHk, HKM_SETHOTKEY, 
+				vk|((vk==VK_DELETE||vk==VK_UP||vk==VK_DOWN||vk==VK_LEFT||vk==VK_RIGHT
+				||vk==VK_PRIOR||vk==VK_NEXT||vk==VK_HOME||vk==VK_END
+				||vk==VK_INSERT) ? (HOTKEYF_EXT<<8) : 0), 0);
+}
+
+void CSettings::GetListBoxHotKey(HWND hList, eFillListBoxHotKeys eWhat, BYTE& vk)
+{
+	ListBoxItem* pItems;
+	uint nItems = GetHotKeyListItems(eWhat, &pItems);
+	if (!nItems)
+		return;
+	
+	DWORD nValue = vk;
+	GetListBoxItem(hList, nItems, pItems, nValue);
+	vk = nValue;
+}
+
+void CSettings::FillListBoxItems(HWND hList, uint nItems, ListBoxItem* Items /*const WCHAR** pszItems, const DWORD* pnValues*/, DWORD& nValue, BOOL abExact /*= FALSE*/)
 {
 	_ASSERTE(hList!=NULL);
 	uint num = 0;
@@ -13770,15 +13912,36 @@ void CSettings::FillListBoxItems(HWND hList, uint nItems, const WCHAR** pszItems
 
 	for (uint i = 0; i < nItems; i++)
 	{
-		if (pszItems)
-		{
-			SendMessage(hList, CB_ADDSTRING, 0, (LPARAM) pszItems[i]); //-V108
-		}
-		else
-		{
-			_wsprintf(szNumber, SKIPLEN(countof(szNumber)) L"%i", pnValues[i]);
-			SendMessage(hList, CB_ADDSTRING, 0, (LPARAM)szNumber);
-		}
+		SendMessage(hList, CB_ADDSTRING, 0, (LPARAM) Items[i].sValue); //-V108
+
+		if (Items[i].nValue == nValue) num = i; //-V108
+	}
+
+	if (abExact)
+	{
+		_wsprintf(szNumber, SKIPLEN(countof(szNumber)) L"%i", nValue);
+		SelectStringExact(hList, 0, szNumber);
+	}
+	else
+	{
+		if (!num)
+			nValue = 0;  // если код неизвестен?
+		SendMessage(hList, CB_SETCURSEL, num, 0);
+	}
+}
+
+void CSettings::FillListBoxItems(HWND hList, uint nItems, const DWORD* pnValues, DWORD& nValue, BOOL abExact /*= FALSE*/)
+{
+	_ASSERTE(hList!=NULL);
+	uint num = 0;
+	wchar_t szNumber[32];
+
+	SendMessage(hList, CB_RESETCONTENT, 0, 0);
+
+	for (uint i = 0; i < nItems; i++)
+	{
+		_wsprintf(szNumber, SKIPLEN(countof(szNumber)) L"%i", pnValues[i]);
+		SendMessage(hList, CB_ADDSTRING, 0, (LPARAM)szNumber);
 
 		if (pnValues[i] == nValue) num = i; //-V108
 	}
@@ -13796,7 +13959,26 @@ void CSettings::FillListBoxItems(HWND hList, uint nItems, const WCHAR** pszItems
 	}
 }
 
-void CSettings::GetListBoxItem(HWND hList, uint nItems, const WCHAR** pszItems, const DWORD* pnValues, DWORD& nValue)
+void CSettings::GetListBoxItem(HWND hList, uint nItems, ListBoxItem* Items /*const WCHAR** pszItems, const DWORD* pnValues*/, DWORD& nValue)
+{
+	_ASSERTE(hList!=NULL);
+	INT_PTR num = SendMessage(hList, CB_GETCURSEL, 0, 0);
+
+	//int nKeyCount = countof(SettingsNS::szKeys);
+	if (num>=0 && num<(int)nItems)
+	{
+		nValue = Items[num].nValue; //-V108
+	}
+	else
+	{
+		nValue = Items[0].nValue;
+
+		if (num)  // Invalid index?
+			SendMessage(hList, CB_SETCURSEL, num=0, 0);
+	}
+}
+
+void CSettings::GetListBoxItem(HWND hList, uint nItems, const DWORD* pnValues, DWORD& nValue)
 {
 	_ASSERTE(hList!=NULL);
 	INT_PTR num = SendMessage(hList, CB_GETCURSEL, 0, 0);
@@ -13808,7 +13990,7 @@ void CSettings::GetListBoxItem(HWND hList, uint nItems, const WCHAR** pszItems, 
 	}
 	else
 	{
-		nValue = 0;
+		nValue = pnValues[0];
 
 		if (num)  // Invalid index?
 			SendMessage(hList, CB_SETCURSEL, num=0, 0);
@@ -13835,199 +14017,6 @@ void CSettings::OnPanelViewAppeared(BOOL abAppear)
 	}
 }
 
-#ifndef APPDISTINCTBACKGROUND
-bool CSettings::PollBackgroundFile()
-{
-	bool lbChanged = false;
-
-	if (gpSet->isShowBgImage && gpSet->sBgImage[0] && ((GetTickCount() - nBgModifiedTick) > BACKGROUND_FILE_POLL)
-		&& wcspbrk(gpSet->sBgImage, L"%\\.")) // только для файлов!
-	{
-		WIN32_FIND_DATA fnd = {0};
-		HANDLE hFind = FindFirstFile(gpSet->sBgImage, &fnd);
-
-		if (hFind != INVALID_HANDLE_VALUE)
-		{
-			if (fnd.ftLastWriteTime.dwHighDateTime != ftBgModified.dwHighDateTime
-			        || fnd.ftLastWriteTime.dwLowDateTime != ftBgModified.dwLowDateTime)
-			{
-				//NeedBackgroundUpdate(); -- поставит LoadBackgroundFile, если у него получится файл открыть
-				lbChanged = LoadBackgroundFile(gpSet->sBgImage, false);
-				nBgModifiedTick = GetTickCount();
-			}
-
-			FindClose(hFind);
-		}
-	}
-
-	return lbChanged;
-}
-#endif
-
-// Должна вернуть true, если файл изменился
-// Работает ТОЛЬКО с файлом. Данные плагинов обрабатываются в самом CVirtualConsole!
-bool CSettings::PrepareBackground(CVirtualConsole* apVCon, HDC* phBgDc, COORD* pbgBmpSize)
-{
-	#ifdef APPDISTINCTBACKGROUND
-	PRAGMA_ERROR("Пенесести основной код в CBackgroundFile!");
-	#endif
-
-	bool lbForceUpdate = false;
-	LONG lMaxBgWidth = 0, lMaxBgHeight = 0;
-	bool bIsForeground = gpConEmu->isMeForeground(false);
-
-	if (!mb_NeedBgUpdate)
-	{
-		if ((mb_BgLastFade == bIsForeground && gpSet->isFadeInactive)
-		        || (!gpSet->isFadeInactive && mb_BgLastFade))
-		{
-			NeedBackgroundUpdate();
-		}
-	}
-
-	PollBackgroundFile();
-
-	if (mp_Bg == NULL)
-	{
-		NeedBackgroundUpdate();
-	}
-
-	// Если это НЕ плагиновая подложка - необходимо проверить размер требуемой картинки
-	// -- здесь - всегда только файловая подложка
-	//if (!mb_WasVConBgImage)
-	{
-		if ((gpSet->bgOperation == eUpLeft) || (gpSet->bgOperation == eUpRight)
-			|| (gpSet->bgOperation == eDownLeft) || (gpSet->bgOperation == eDownRight))
-		{
-			// MemoryDC создается всегда по размеру картинки, т.е. изменение размера окна - игнорируется
-		}
-		else
-		{
-			RECT rcWnd, rcWork; GetClientRect(ghWnd, &rcWnd);
-			WARNING("DoubleView: тут непонятно, какой и чей размер, видимо, нужно ветвиться, и хранить Background в самих VCon");
-			rcWork = gpConEmu->CalcRect(CER_WORKSPACE, rcWnd, CER_MAINCLIENT);
-
-			// Смотрим дальше
-			if (gpSet->bgOperation == eStretch)
-			{
-				// Строго по размеру клиентской (точнее Workspace) области окна
-				lMaxBgWidth = rcWork.right - rcWork.left;
-				lMaxBgHeight = rcWork.bottom - rcWork.top;
-			}
-			else if (gpSet->bgOperation == eTile)
-			{
-				// Max между клиентской (точнее Workspace) областью окна и размером текущего монитора
-				// Окно может быть растянуто на несколько мониторов, т.е. размер клиентской области может быть больше
-				HMONITOR hMon = MonitorFromWindow(ghWnd, MONITOR_DEFAULTTONEAREST);
-				MONITORINFO mon = {sizeof(MONITORINFO)};
-				GetMonitorInfo(hMon, &mon);
-				//
-				lMaxBgWidth = klMax(rcWork.right - rcWork.left,mon.rcMonitor.right - mon.rcMonitor.left);
-				lMaxBgHeight = klMax(rcWork.bottom - rcWork.top,mon.rcMonitor.bottom - mon.rcMonitor.top);
-			}
-
-			if (mp_Bg)
-			{
-				if (mp_Bg->bgSize.X != lMaxBgWidth || mp_Bg->bgSize.Y != lMaxBgHeight)
-					NeedBackgroundUpdate();
-			}
-			else
-			{
-				NeedBackgroundUpdate();
-			}
-		}
-	}
-
-	if (mb_NeedBgUpdate)
-	{
-		mb_NeedBgUpdate = FALSE;
-		lbForceUpdate = true;
-		_ASSERTE(gpConEmu->isMainThread());
-		//MSectionLock SBG; SBG.Lock(&mcs_BgImgData);
-		//BITMAPFILEHEADER* pImgData = mp_BgImgData;
-		BackgroundOp op = (BackgroundOp)gpSet->bgOperation;
-		BOOL lbImageExist = (mp_BgImgData != NULL);
-		//BOOL lbVConImage = FALSE;
-		//LONG lBgWidth = 0, lBgHeight = 0;
-		//CVirtualConsole* pVCon = gpConEmu->ActiveCon();
-
-		////MSectionLock SBK;
-		//if (apVCon && gpSet->isBgPluginAllowed)
-		//{
-		//	//SBK.Lock(&apVCon->csBkImgData);
-		//	if (apVCon->HasBackgroundImage(&lBgWidth, &lBgHeight)
-		//	        && lBgWidth && lBgHeight)
-		//	{
-		//		lbVConImage = lbImageExist = TRUE;
-		//	}
-		//}
-
-		//mb_WasVConBgImage = lbVConImage;
-
-		if (lbImageExist)
-		{
-			if (!mp_Bg)
-				mp_Bg = new CBackground;
-
-			mb_BgLastFade = (!bIsForeground && gpSet->isFadeInactive);
-			TODO("Переделать, ориентироваться только на размер картинки - неправильно");
-			TODO("DoubleView - скорректировать X,Y");
-
-			//if (lbVConImage)
-			//{
-			//	if (lMaxBgWidth && lMaxBgHeight)
-			//	{
-			//		lBgWidth = lMaxBgWidth;
-			//		lBgHeight = lMaxBgHeight;
-			//	}
-
-			//	if (!mp_Bg->CreateField(lBgWidth, lBgHeight) ||
-			//	        !apVCon->PutBackgroundImage(mp_Bg, 0,0, lBgWidth, lBgHeight))
-			//	{
-			//		delete mp_Bg;
-			//		mp_Bg = NULL;
-			//	}
-			//}
-			//else
-			{
-				BITMAPINFOHEADER* pBmp = (BITMAPINFOHEADER*)(mp_BgImgData+1);
-
-				if (!lMaxBgWidth || !lMaxBgHeight)
-				{
-					// Сюда мы можем попасть только в случае eUpLeft/eUpRight/eDownLeft/eDownRight
-					lMaxBgWidth = pBmp->biWidth;
-					lMaxBgHeight = pBmp->biHeight;
-				}
-
-				if (!mp_Bg->CreateField(lMaxBgWidth, lMaxBgHeight) ||
-				        !mp_Bg->FillBackground(mp_BgImgData, 0,0, lMaxBgWidth, lMaxBgHeight, op, mb_BgLastFade))
-				{
-					delete mp_Bg;
-					mp_Bg = NULL;
-				}
-			}
-		}
-		else
-		{
-			delete mp_Bg;
-			mp_Bg = NULL;
-		}
-	}
-
-	if (mp_Bg)
-	{
-		*phBgDc = mp_Bg->hBgDc;
-		*pbgBmpSize = mp_Bg->bgSize;
-	}
-	else
-	{
-		*phBgDc = NULL;
-		*pbgBmpSize = MakeCoord(0,0);
-	}
-
-	return lbForceUpdate;
-}
-
 bool CSettings::IsBackgroundEnabled(CVirtualConsole* apVCon)
 {
 	// Если плагин фара установил свой фон
@@ -14040,8 +14029,16 @@ bool CSettings::IsBackgroundEnabled(CVirtualConsole* apVCon)
 	}
 
 	// Иначе - по настрокам ConEmu
+	#ifndef APPDISTINCTBACKGROUND
 	if (!isBackgroundImageValid)
 		return false;
+	#else
+	CBackgroundInfo* pBgObject = apVCon ? apVCon->GetBackgroundObject() : mp_BgInfo;
+	bool bBgExist = (pBgObject && pBgObject->GetBgImgData() != NULL);
+	SafeRelease(pBgObject);
+	if (!bBgExist)
+		return false;
+	#endif
 
 	if (apVCon && (apVCon->isEditor || apVCon->isViewer))
 	{
@@ -14053,7 +14050,6 @@ bool CSettings::IsBackgroundEnabled(CVirtualConsole* apVCon)
 	}
 }
 
-#ifndef APPDISTINCTBACKGROUND
 void CSettings::SetBgImageDarker(u8 newValue, bool bUpdate)
 {
 	if (/*newV < 256*/ newValue != gpSet->bgImageDarker)
@@ -14074,16 +14070,31 @@ void CSettings::SetBgImageDarker(u8 newValue, bool bUpdate)
 			// Картинку может установить и плагин
 			if (gpSet->isShowBgImage && gpSet->sBgImage[0])
 				LoadBackgroundFile(gpSet->sBgImage);
-			else
-				NeedBackgroundUpdate();
+
+			NeedBackgroundUpdate();
 
 			gpConEmu->Update(true);
 		}
 	}
 }
 
+CBackgroundInfo* CSettings::GetBackgroundObject()
+{
+	if (mp_BgInfo)
+		mp_BgInfo->AddRef();
+	return mp_BgInfo;
+}
+
 bool CSettings::LoadBackgroundFile(TCHAR *inPath, bool abShowErrors)
 {
+	bool lRes = false;
+
+#ifdef APPDISTINCTBACKGROUND
+	CBackgroundInfo* pNew = CBackgroundInfo::CreateBackgroundObject(inPath, abShowErrors);
+	SafeRelease(mp_BgInfo);
+	mp_BgInfo = pNew;
+	lRes = (mp_BgInfo != NULL);
+#else
 	//_ASSERTE(gpConEmu->isMainThread());
 	if (!inPath || _tcslen(inPath)>=MAX_PATH)
 	{
@@ -14094,7 +14105,6 @@ bool CSettings::LoadBackgroundFile(TCHAR *inPath, bool abShowErrors)
 	}
 
 	_ASSERTE(gpConEmu->isMainThread());
-	bool lRes = false;
 	BY_HANDLE_FILE_INFORMATION inf = {0};
 	BITMAPFILEHEADER* pBkImgData = NULL;
 
@@ -14102,7 +14112,7 @@ bool CSettings::LoadBackgroundFile(TCHAR *inPath, bool abShowErrors)
 	{
 		// May be "Solid color"
 		COLORREF clr = (COLORREF)-1;
-		if (GetColorRef(inPath, &clr))
+		if (::GetColorRef(inPath, &clr))
 		{
 			pBkImgData = CreateSolidImage(clr, 128, 128);
 		}
@@ -14140,14 +14150,22 @@ bool CSettings::LoadBackgroundFile(TCHAR *inPath, bool abShowErrors)
 		mp_BgImgData = pBkImgData;
 		lRes = true;
 	}
-	
+#endif
 	return lRes;
 }
-#endif
+
 
 void CSettings::NeedBackgroundUpdate()
 {
+	#ifndef APPDISTINCTBACKGROUND
 	mb_NeedBgUpdate = TRUE;
+	#else
+	CVConGuard VCon;
+	for (INT_PTR i = 0; CVConGroup::GetVCon(i, &VCon); i++)
+	{
+		VCon->NeedBackgroundUpdate();
+	}
+	#endif
 }
 
 // общая функция
