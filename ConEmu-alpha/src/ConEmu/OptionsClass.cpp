@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "../ConEmuCD/ExitCodes.h"
 #include "../ConEmuCD/GuiHooks.h"
+#include "../ConEmuPlugin/FarDefaultMacros.h"
 #include "Background.h"
 #include "ConEmu.h"
 #include "ConEmuApp.h"
@@ -885,13 +886,13 @@ void CSettings::SetConfigName(LPCWSTR asConfigName)
 	SetEnvironmentVariable(ENV_CONEMUANSI_CONFIG_W, ConfigName);
 }
 
-void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig, LPCWSTR pszCmdLine /*= NULL*/, bool abOnResetReload /*= false*/)
+void CSettings::SettingsLoaded(SettingsLoadedFlags slfFlags, LPCWSTR pszCmdLine /*= NULL*/)
 {
 	// Обработать 32/64 (найти tcc.exe и т.п.)
 	FindComspec(&gpSet->ComSpec);
 
 	// Зовем "FastConfiguration" (перед созданием новой/чистой конфигурации)
-	if (abAllowFastConfig)
+	if (slfFlags & slf_AllowFastConfig)
 	{
 		LPCWSTR pszDef = gpConEmu->GetDefaultTitle();
 		//wchar_t szType[8];
@@ -905,7 +906,8 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 		else
 			_wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"%s fast configuration %s", pszDef, Storage.szType);
 		
-		CheckOptionsFast(szTitle, abNeedCreateVanilla);
+		// Run "Fast configuration dialog" and apply some final defaults (if was Reset of new settings)
+		CheckOptionsFast(szTitle, slfFlags);
 
 		// Single instance?
 		if (gpSet->isSingleInstance && (gpSetCls->SingleInstanceArg == sgl_Default))
@@ -923,9 +925,17 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 	}
 	
 
-	if (abNeedCreateVanilla)
+	if (slfFlags & slf_NeedCreateVanilla)
 	{
-		gpSet->SaveSettings(TRUE/*abSilent*/);
+		if (!gpConEmu->IsResetBasicSettings())
+		{
+			gpSet->SaveSettings(TRUE/*abSilent*/);
+		}
+		else
+		{
+			// Must not be here when using "/basic" switch!
+			_ASSERTE(!gpConEmu->IsResetBasicSettings());
+		}
 	}
 
 	// Issue 1191: ConEmu was launched instead of explorer from taskbar pinned library icon
@@ -1001,7 +1011,7 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 	
 	isMonospaceSelected = gpSet->isMonospace ? gpSet->isMonospace : 1; // запомнить, чтобы выбирать то что нужно при смене шрифта
 
-	if (abOnResetReload)
+	if (slfFlags & slf_OnResetReload)
 	{
 		// Шрифт пере-создать сразу, его характеристики используются при ресайзе окна
 		RecreateFont((WORD)-1);
@@ -1015,7 +1025,7 @@ void CSettings::SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig,
 	// Т.к. вызывается из Settings::LoadSettings() то проверка на валидность уже не нужно, оставим только ассерт
 	_ASSERTE(gpSet->_WindowMode == rNormal || gpSet->_WindowMode == rMaximized || gpSet->_WindowMode == rFullScreen);
 
-	if ((ghWnd == NULL) || abOnResetReload)
+	if ((ghWnd == NULL) || slfFlags & slf_OnResetReload)
 	{
 		gpConEmu->wndX = gpSet->_wndX;
 		gpConEmu->wndY = gpSet->_wndY;
@@ -2392,6 +2402,8 @@ LRESULT CSettings::OnInitDialog_Ext(HWND hWnd2)
 
 	checkDlgButton(hWnd2, cbProcessAnsi, gpSet->isProcessAnsi);
 
+	checkDlgButton(hWnd2, cbProcessNewConArg, gpSet->isProcessNewConArg);
+
 	checkDlgButton(hWnd2, cbSuppressBells, gpSet->isSuppressBells);
 
 	checkDlgButton(hWnd2, cbConsoleExceptionHandler, gpSet->isConsoleExceptionHandler);
@@ -2635,19 +2647,50 @@ LRESULT CSettings::OnInitDialog_Far(HWND hWnd2, BOOL abInitial)
 LRESULT CSettings::OnInitDialog_FarMacro(HWND hWnd2, BOOL abInitial)
 {
 	_ASSERTE(gpSet->isRClickSendKey==0 || gpSet->isRClickSendKey==1 || gpSet->isRClickSendKey==2);
+
 	checkDlgButton(hWnd2, cbRClick, gpSet->isRClickSendKey);
-	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tRClickMacro)) == 0)
-		SetDlgItemText(hWnd2, tRClickMacro, gpSet->RClickMacro(fmv_Default));
-
 	checkDlgButton(hWnd2, cbSafeFarClose, gpSet->isSafeFarClose);
-	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tSafeFarCloseMacro)) == 0)
-		SetDlgItemText(hWnd2, tSafeFarCloseMacro, gpSet->SafeFarCloseMacro(fmv_Default));
 
-	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tCloseTabMacro)) == 0)
-		SetDlgItemText(hWnd2, tCloseTabMacro, gpSet->TabCloseMacro(fmv_Default));
-	
-	if (abInitial || GetWindowTextLength(GetDlgItem(hWnd2, tSaveAllMacro)) == 0)
-		SetDlgItemText(hWnd2, tSaveAllMacro, gpSet->SaveAllMacro(fmv_Default));
+	struct MacroItem {
+		int nDlgItem;
+		LPCWSTR pszEditor;
+		LPCWSTR pszVariants[6];
+	} Macros[] = {
+		{tRClickMacro, gpSet->RClickMacro(fmv_Default),
+			{FarRClickMacroDefault2, FarRClickMacroDefault3, NULL}},
+		{tSafeFarCloseMacro, gpSet->SafeFarCloseMacro(fmv_Default),
+		{FarSafeCloseMacroDefault2, FarSafeCloseMacroDefault3, FarSafeCloseMacroDefaultD2, FarSafeCloseMacroDefaultD3, L"#Close(0)", NULL}},
+		{tCloseTabMacro, gpSet->TabCloseMacro(fmv_Default),
+			{FarTabCloseMacroDefault2, FarTabCloseMacroDefault3, NULL}},
+		{tSaveAllMacro, gpSet->SaveAllMacro(fmv_Default),
+			{FarSaveAllMacroDefault2, FarSaveAllMacroDefault3, NULL}},
+		{0}
+	};
+
+	for (MacroItem* p = Macros; p->nDlgItem; p++)
+	{
+		HWND hCombo = GetDlgItem(hWnd2, p->nDlgItem);
+
+		// Variants
+		bool bUser = true;
+		if (abInitial)
+		{
+			for (LPCWSTR* ppsz = p->pszVariants; *ppsz; ppsz++)
+			{
+				SendMessageW(hCombo, CB_ADDSTRING, 0, (LPARAM)*ppsz);
+				if (p->pszEditor && (lstrcmp(*ppsz, p->pszEditor) == 0))
+					bUser = false; // This is our predefined macro
+			}
+			// Add user defined macro to list
+			if (bUser)
+				SendMessageW(hCombo, CB_ADDSTRING, 0, (LPARAM)p->pszEditor);
+		}
+
+		if (abInitial || GetWindowTextLength(hCombo) == 0)
+		{
+			SetWindowText(hCombo, p->pszEditor);
+		}
+	}
 
 	return 0;
 }
@@ -5298,6 +5341,10 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			gpSet->isProcessAnsi = IsChecked(hWnd2, cbProcessAnsi);
 			gpConEmu->OnGlobalSettingsChanged();
 			break;
+		case cbProcessNewConArg:
+			gpSet->isProcessNewConArg = IsChecked(hWnd2, cbProcessNewConArg);
+			gpConEmu->OnGlobalSettingsChanged();
+			break;
 		case cbSuppressBells:
 			gpSet->isSuppressBells = IsChecked(hWnd2, cbSuppressBells);
 			gpConEmu->OnGlobalSettingsChanged();
@@ -7035,30 +7082,6 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 		gpConEmu->mp_TabBar->Update(TRUE);
 		break;
 	} // case tAdminSuffix:
-	
-	case tRClickMacro:
-	{
-		GetString(hWnd2, tRClickMacro, &gpSet->sRClickMacro, gpSet->RClickMacroDefault(fmv_Default));
-		break;
-	} // case tRClickMacro:
-	
-	case tSafeFarCloseMacro:
-	{
-		GetString(hWnd2, tSafeFarCloseMacro, &gpSet->sSafeFarCloseMacro, gpSet->SafeFarCloseMacroDefault(fmv_Default));
-		break;
-	} // case tSafeFarCloseMacro:
-	
-	case tCloseTabMacro:
-	{
-		GetString(hWnd2, tCloseTabMacro, &gpSet->sTabCloseMacro, gpSet->TabCloseMacroDefault(fmv_Default));
-		break;
-	} // case tCloseTabMacro:
-	
-	case tSaveAllMacro:
-	{
-		GetString(hWnd2, tSaveAllMacro, &gpSet->sSaveAllMacro, gpSet->SaveAllMacroDefault(fmv_Default));
-		break;
-	} // case tSaveAllMacro:
 
 	case tClipConfirmLimit:
 	{
@@ -7828,6 +7851,41 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 	} // lbCmdTasks:
 
 
+	// Far macros:
+	case tRClickMacro:
+	case tSafeFarCloseMacro:
+	case tCloseTabMacro:
+	case tSaveAllMacro:
+	{
+		wchar_t** ppszMacro = NULL;
+		LPCWSTR pszDefaultMacro;
+		switch (wId)
+		{
+			case tRClickMacro:
+				ppszMacro = &gpSet->sRClickMacro; pszDefaultMacro = gpSet->RClickMacroDefault(fmv_Default);
+				break;
+			case tSafeFarCloseMacro:
+				ppszMacro = &gpSet->sSafeFarCloseMacro; pszDefaultMacro = gpSet->SafeFarCloseMacroDefault(fmv_Default);
+				break;
+			case tCloseTabMacro:
+				ppszMacro = &gpSet->sTabCloseMacro; pszDefaultMacro = gpSet->TabCloseMacroDefault(fmv_Default);
+				break;
+			case tSaveAllMacro:
+				ppszMacro = &gpSet->sSaveAllMacro; pszDefaultMacro = gpSet->SaveAllMacroDefault(fmv_Default);
+				break;
+		}
+
+		if (HIWORD(wParam) == CBN_EDITCHANGE)
+		{
+			GetString(hWnd2, wId, ppszMacro, pszDefaultMacro, false);
+		}
+		else if (HIWORD(wParam) == CBN_SELCHANGE)
+		{
+			GetString(hWnd2, wId, ppszMacro, pszDefaultMacro, true);
+		}
+		break;
+	} // case tRClickMacro, tSafeFarCloseMacro, tCloseTabMacro, tSaveAllMacro
+
 
 
 	default:
@@ -8341,7 +8399,11 @@ void CSettings::OnResetOrReload(BOOL abResetOnly)
 		gpSet->LoadSettings(&bNeedCreateVanilla);
 	}
 
-	SettingsLoaded(false, false, NULL, true);
+
+	SettingsLoadedFlags slfFlags = slf_OnResetReload
+		| (abResetOnly ? (slf_DefaultSettings|slf_AllowFastConfig) : slf_None);
+
+	SettingsLoaded(slfFlags, NULL);
 	
 	if (lbWasPos && !ghOpWnd)
 	{
@@ -12133,53 +12195,70 @@ int CSettings::GetNumber(HWND hParent, WORD nCtrlId)
 	return nValue;
 }
 
-INT_PTR CSettings::GetString(HWND hParent, WORD nCtrlId, wchar_t** ppszStr, LPCWSTR asNoDefault /*= NULL*/)
+INT_PTR CSettings::GetString(HWND hParent, WORD nCtrlId, wchar_t** ppszStr, LPCWSTR asNoDefault /*= NULL*/, bool abListBox /*= false*/)
 {
-	INT_PTR nLen = SendDlgItemMessage(hParent, nCtrlId, WM_GETTEXTLENGTH, 0, 0);
+	INT_PTR nSel = abListBox ? SendDlgItemMessage(hParent, nCtrlId, CB_GETCURSEL, 0, 0) : -1;
+
+	INT_PTR nLen = abListBox
+		? ((nSel >= 0) ? SendDlgItemMessage(hParent, nCtrlId, CB_GETLBTEXTLEN, nSel, 0) : 0)
+		: SendDlgItemMessage(hParent, nCtrlId, WM_GETTEXTLENGTH, 0, 0);
+
 	if (!ppszStr)
 		return nLen;
 	
 	if (nLen<=0)
 	{
-		if (*ppszStr) {free(*ppszStr); *ppszStr = NULL;}
+		SafeFree(*ppszStr);
+		return nLen;
+	}
+
+	wchar_t* pszNew = (TCHAR*)calloc(nLen+1, sizeof(TCHAR));
+	if (!pszNew)
+	{
+		_ASSERTE(pszNew!=NULL);
 	}
 	else
 	{
-		wchar_t* pszNew = (TCHAR*)calloc(nLen+1, sizeof(TCHAR));
-		if (!pszNew)
+		if (abListBox)
 		{
-			_ASSERTE(pszNew!=NULL);
+			if (nSel >= 0)
+				SendDlgItemMessage(hParent, nCtrlId, CB_GETLBTEXT, nSel, (LPARAM)pszNew);
 		}
 		else
 		{
 			GetDlgItemText(hParent, nCtrlId, pszNew, nLen+1);
+		}
+			
 
-			if (*ppszStr)
+		if (*ppszStr)
+		{
+			if (lstrcmp(*ppszStr, pszNew) == 0)
 			{
-				if (lstrcmp(*ppszStr, pszNew) == 0)
-				{
-					free(pszNew);
-					return nLen; // Изменений не было
-				}
-			}
-
-			// Значение "по умолчанию" не запоминаем
-			if (asNoDefault && lstrcmp(pszNew, asNoDefault) == 0)
-			{
-				SafeFree(pszNew);
-			}
-
-			if (nLen > (*ppszStr ? (INT_PTR)_tcslen(*ppszStr) : 0))
-			{
-				if (*ppszStr) free(*ppszStr);
-				*ppszStr = pszNew; pszNew = NULL;
-			}
-			else
-			{
-				_wcscpy_c(*ppszStr, nLen+1, pszNew);
-				SafeFree(pszNew);
+				free(pszNew);
+				return nLen; // Изменений не было
 			}
 		}
+
+		// Значение "по умолчанию" не запоминаем
+		if (asNoDefault && lstrcmp(pszNew, asNoDefault) == 0)
+		{
+			SafeFree(*ppszStr);
+			SafeFree(pszNew);
+			nLen = 0;
+			// Reset (it is default value!)
+			return nLen;
+		}
+
+		if (nLen > (*ppszStr ? (INT_PTR)_tcslen(*ppszStr) : 0))
+		{
+			if (*ppszStr) free(*ppszStr);
+			*ppszStr = pszNew; pszNew = NULL;
+		}
+		else if (*ppszStr)
+		{
+			_wcscpy_c(*ppszStr, nLen+1, pszNew);
+		}
+		SafeFree(pszNew);
 	}
 	
 	return nLen;

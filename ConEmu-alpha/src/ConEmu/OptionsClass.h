@@ -251,7 +251,7 @@ class CSettings
 		void debugLogInfo(HWND hWnd2, CESERVER_REQ_PEEKREADINFO* pInfo);
 		void debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTick, DWORD anDur, LPCWSTR asPipe, CESERVER_REQ* pResult = NULL);
 		//
-		void SettingsLoaded(bool abNeedCreateVanilla, bool abAllowFastConfig, LPCWSTR pszCmdLine = NULL, bool abOnResetReload = false);
+		void SettingsLoaded(SettingsLoadedFlags slfFlags, LPCWSTR pszCmdLine = NULL);
 		void SettingsPreSave();
 		//void InitSettings();
 		//BOOL SaveSettings(BOOL abSilent = FALSE);
@@ -437,7 +437,7 @@ class CSettings
 		static int checkRadioButton(HWND hParent, int nIDFirstButton, int nIDLastButton, int nIDCheckButton);
 		static int IsChecked(HWND hParent, WORD nCtrlId);
 		static int GetNumber(HWND hParent, WORD nCtrlId);
-		static INT_PTR GetString(HWND hParent, WORD nCtrlId, wchar_t** ppszStr, LPCWSTR asNoDefault = NULL);
+		static INT_PTR GetString(HWND hParent, WORD nCtrlId, wchar_t** ppszStr, LPCWSTR asNoDefault = NULL, bool abListBox = false);
 		static INT_PTR GetSelectedString(HWND hParent, WORD nListCtrlId, wchar_t** ppszStr);
 		static int SelectString(HWND hParent, WORD nCtrlId, LPCWSTR asText);
 		static int SelectStringExact(HWND hParent, WORD nCtrlId, LPCWSTR asText);

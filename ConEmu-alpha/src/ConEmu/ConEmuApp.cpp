@@ -1870,6 +1870,8 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 //	_ASSERTE(FALSE);
 #endif
 
+	static bool bInAssert = false;
+
 	int nRet = IDRETRY;
 
 	DWORD    nPreCode = GetLastError();
@@ -1890,8 +1892,21 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 			L"and report a bug (open project web page)",
 			szText, szFile, nLine);
 
-		nRet = MessageBox(NULL, pszFull, pszTitle, MB_ABORTRETRYIGNORE|MB_ICONSTOP|MB_SYSTEMMODAL);
-		DWORD nPostCode = GetLastError();
+		DWORD nPostCode = (DWORD)-1;
+
+		if (bInAssert)
+		{
+			nPostCode = (DWORD)-2;
+			nRet = IDCANCEL;
+		}
+		else
+		{
+			bInAssert = true;
+			nRet = MessageBox(NULL, pszFull, pszTitle, MB_ABORTRETRYIGNORE|MB_ICONSTOP|MB_SYSTEMMODAL|MB_DEFBUTTON3);
+			bInAssert = false;
+			nPostCode = GetLastError();
+		}
+		
 		_wsprintf(szCodes, SKIPLEN(countof(szCodes)) L"\r\nPreError=%i, PostError=%i, Result=%i", nPreCode, nPostCode, nRet);
 		_wcscat_c(pszFull, cchMax, szCodes);
 	}
@@ -2919,6 +2934,12 @@ void RaiseTestException()
 	DebugBreak();
 }
 
+// Clear some rubbish in the environment
+void ResetEnvironmentVariables()
+{
+	SetEnvironmentVariable(ENV_CONEMUFAKEDT_VAR, NULL);
+	SetEnvironmentVariable(ENV_CONEMU_HOOKS, NULL);
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -2984,6 +3005,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 	}
 
+	ResetEnvironmentVariables();
 
 	gpSetCls = new CSettings;
 	gpConEmu = new CConEmuMain;
@@ -3792,8 +3814,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		// load settings from registry
 		gpSet->LoadSettings(&bNeedCreateVanilla);
 	}
+	SettingsLoadedFlags slfFlags = slf_OnStartupLoad | slf_AllowFastConfig
+		| (bNeedCreateVanilla ? slf_NeedCreateVanilla : slf_None)
+		| (ResetSettings ? slf_DefaultSettings : slf_None);
 	// выполнить дополнительные действи€ в классе настроек здесь
-	gpSetCls->SettingsLoaded(bNeedCreateVanilla, true, cmdNew);
+	gpSetCls->SettingsLoaded(slfFlags, cmdNew);
 
 	// ƒл€ gpSet->isQuakeStyle - принудительно включаетс€ gpSetCls->SingleInstanceArg
 

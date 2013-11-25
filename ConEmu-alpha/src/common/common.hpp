@@ -31,7 +31,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _COMMON_HEADER_HPP_
 
 // Версия интерфейса
-#define CESERVER_REQ_VER    133
+#define CESERVER_REQ_VER    134
 
 #include "defines.h"
 #include "ConEmuColors.h"
@@ -108,15 +108,15 @@ typedef struct _CONSOLE_SELECTION_INFO
 #define ENV_CONEMUBACK_VAR_W L"ConEmuBackHWND"
 #define ENV_CONEMUANSI_VAR_A  "ConEmuANSI"
 #define ENV_CONEMUANSI_VAR_W L"ConEmuANSI"
-#define ENV_CONEMURELAYDT_VAR_A  "ConEmuRelyDT"
-#define ENV_CONEMURELAYDT_VAR_W L"ConEmuRelyDT"
+#define ENV_CONEMUFAKEDT_VAR L"ConEmuFakeDT"
 #define ENV_CONEMUANSI_BUILD_W L"ConEmuBuild"
 #define ENV_CONEMUANSI_CONFIG_W L"ConEmuConfig"
 #define ENV_CONEMUANSI_WAITKEY L"ConEmuWaitKey"
 #define ENV_CONEMUREPORTEXE_VAR_W L"ConEmuReportExe"
-#define ENV_CONEMU_HOOKS L"ConEmuHooks" // when this is "OFF" - don't set hooks from "ConEmuHk.dll"
+#define ENV_CONEMU_HOOKS L"ConEmuHooks" // Modifies behavior of starting processes inside ConEmu tab
 #define ENV_CONEMU_HOOKS_ENABLED L"Enabled" // Informational
-#define ENV_CONEMU_HOOKS_DISABLED L"OFF" // This is only significant value
+#define ENV_CONEMU_HOOKS_DISABLED L"OFF" // don't set hooks from "ConEmuHk.dll"
+#define ENV_CONEMU_HOOKS_NOARGS L"NOARG" // don't process -new_console & -cur_console arguments
 #define ENV_CONEMU_INUPDATE L"ConEmuInUpdate" // This is set to "YES" during AutoUpdate script execution
 #define ENV_CONEMU_INUPDATE_YES L"YES" // This is set to "YES" during AutoUpdate script execution
 #define ENV_CONEMU_BLOCKCHILDDEBUGGERS L"ConEmuBlockChildDebuggers" // When ConEmuC tries to debug process tree - force disable DEBUG_PROCESS/DEBUG_ONLY_THIS_PROCESS flags when creating subchildren
@@ -1005,6 +1005,8 @@ const ConEmuConsoleFlags
 	CECF_SuppressBells   = 0x00000080, // Suppress output of char(7) to console (wich producess annoing bell sound)
 
 	CECF_ConExcHandler   = 0x00000100, // Set up "SetUnhandledExceptionFilter(CreateDumpOnException)" in alternative servers too
+
+	CECF_ProcessNewCon   = 0x00000200, // Enable processing of '-new_console' and '-cur_console' switches in your shell prompt, scripts etc. started in ConEmu tabs
 
 	CECF_Empty = 0
 	;
