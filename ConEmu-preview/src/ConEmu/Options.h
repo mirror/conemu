@@ -127,6 +127,16 @@ enum TabStyle
 	ts_Win8   = 1,
 };
 
+typedef DWORD SettingsLoadedFlags;
+const SettingsLoadedFlags
+	slf_NeedCreateVanilla = 0x0001, // Call gpSet->SaveSettings after initializing
+	slf_AllowFastConfig   = 0x0002,
+	slf_OnStartupLoad     = 0x0004,
+	slf_OnResetReload     = 0x0008,
+	slf_DefaultSettings   = 0x0010,
+	slf_None              = 0x0000
+;
+
 #define DEFAULT_TERMINAL_APPS L"explorer.exe"
 
 #define TABBAR_DEFAULT_CLICK_ACTION 1
@@ -1270,6 +1280,8 @@ struct Settings
 		bool isUseInjects; // 0 - off, 1 - always /*, 2 - only executable*/. Note, Root process is infiltrated always.
 		//reg->Load(L"ProcessAnsi", isProcessAnsi);
 		bool isProcessAnsi; // ANSI X3.64 & XTerm-256-colors Support
+		//reg->Load(L"ProcessNewConArg", isProcessNewConArg)
+		bool isProcessNewConArg; // Enable processing of '-new_console' and '-cur_console' switches in your shell prompt, scripts etc. started in ConEmu tabs
 		//reg->Load(L"UseClink", mb_UseClink);
 		bool mb_UseClink; // использовать расширение командной строки (ReadConsole)
 		DWORD isUseClink(bool abCheckVersion = false);
@@ -1328,6 +1340,7 @@ struct Settings
 		void InitSettings();
 		void LoadCmdTasks(SettingsBase* reg, bool abFromOpDlg = false);
 		void LoadPalettes(SettingsBase* reg);
+		void CreatePredefinedPalettes(int iAddUserCount);
 		void LoadProgresses(SettingsBase* reg);
 		BOOL SaveSettings(BOOL abSilent = FALSE, const SettingsStorage* apStorage = NULL);
 		void SaveAppSettings(SettingsBase* reg);

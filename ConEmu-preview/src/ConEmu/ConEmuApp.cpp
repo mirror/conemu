@@ -43,6 +43,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include "../common/ConEmuCheck.h"
 #include "../common/CmdLine.h"
+#include "../common/MMap.h"
 #include "../common/execute.h"
 //#include "../common/TokenHelper.h"
 #include "Options.h"
@@ -112,6 +113,10 @@ const TCHAR *const gsClassNameParent = VirtualConsoleClassMain; // главное окно
 const TCHAR *const gsClassNameWork = VirtualConsoleClassWork; // Holder для всех VCon
 const TCHAR *const gsClassNameBack = VirtualConsoleClassBack; // Подложка (со скроллерами) для каждого VCon
 const TCHAR *const gsClassNameApp = VirtualConsoleClassApp;
+
+
+MMap<HWND,CVirtualConsole*> gVConDcMap;
+MMap<HWND,CVirtualConsole*> gVConBkMap;
 
 
 OSVERSIONINFO gOSVer = {};
@@ -1856,7 +1861,7 @@ int MessageBox(LPCTSTR lpText, UINT uType, LPCTSTR lpCaption /*= NULL*/, HWND hP
 
 
 // Возвращает текст с информацией о пути к сохраненному дампу
-DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024]);
+// DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPCWSTR pszComment = NULL);
 #include "../common/Dump.h"
 
 void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS ExceptionInfo /*= NULL*/)
@@ -1865,33 +1870,56 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 //	_ASSERTE(FALSE);
 #endif
 
+	static bool bInAssert = false;
+
 	int nRet = IDRETRY;
 
-	size_t cchMax = (szText ? _tcslen(szText) : 0) + (szFile ? _tcslen(szFile) : 0) + 255;
-	wchar_t* pszFull = (wchar_t*)malloc(cchMax*sizeof(*pszFull));
+	DWORD    nPreCode = GetLastError();
+	wchar_t  szAssertInfo[4096], szCodes[128];
+	wchar_t  szFullInfo[1024] = L"";
+	size_t   cchMax = (szText ? _tcslen(szText) : 0) + (szFile ? _tcslen(szFile) : 0) + 300;
+	wchar_t* pszFull = (cchMax <= countof(szAssertInfo)) ? szAssertInfo : (wchar_t*)malloc(cchMax*sizeof(*pszFull));
+
+	LPCWSTR  pszTitle = gpConEmu ? gpConEmu->GetDefaultTitle() : NULL;
+	if (!pszTitle || !*pszTitle) pszTitle = L"?ConEmu?";
 
 	if (pszFull)
 	{
 		_wsprintf(pszFull, SKIPLEN(cchMax)
-			L"Assertion\r\n%s\r\nat\r\n%s:%i\r\n\r\nPress <Retry> to copy text information to clipboard\r\nand report a bug (open project web page)",
+			L"Assertion\r\n%s\r\nat\r\n%s:%i\r\n\r\n"
+			L"Press <Abort> to throw exception, ConEmu will be terminated!\r\n\r\n"
+			L"Press <Retry> to copy text information to clipboard\r\n"
+			L"and report a bug (open project web page)",
 			szText, szFile, nLine);
 
-		nRet = MessageBox(NULL, pszFull, gpConEmu->GetDefaultTitle(), MB_RETRYCANCEL|MB_ICONSTOP|MB_SYSTEMMODAL);
+		DWORD nPostCode = (DWORD)-1;
+
+		if (bInAssert)
+		{
+			nPostCode = (DWORD)-2;
+			nRet = IDCANCEL;
+		}
+		else
+		{
+			bInAssert = true;
+			nRet = MessageBox(NULL, pszFull, pszTitle, MB_ABORTRETRYIGNORE|MB_ICONSTOP|MB_SYSTEMMODAL|MB_DEFBUTTON3);
+			bInAssert = false;
+			nPostCode = GetLastError();
+		}
+		
+		_wsprintf(szCodes, SKIPLEN(countof(szCodes)) L"\r\nPreError=%i, PostError=%i, Result=%i", nPreCode, nPostCode, nRet);
+		_wcscat_c(pszFull, cchMax, szCodes);
 	}
 
-	if (nRet == IDRETRY)
+	if ((nRet == IDRETRY) || (nRet == IDABORT))
 	{
 		bool bProcessed = false;
 
-		#ifdef _DEBUG
-		if (IsDebuggerPresent())
+		if (nRet == IDABORT)
 		{
-			MyAssertTrap();
+			RaiseTestException();
 			bProcessed = true;
 		}
-		#endif
-
-		wchar_t szFullInfo[1024] = L"";
 
 		if (!bProcessed)
 		{
@@ -1900,7 +1928,7 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 			//EXCEPTION_POINTERS ex0 = {&er0};
 			//if (!ExceptionInfo) ExceptionInfo = &ex0;
 
-			CreateDumpForReport(ExceptionInfo, szFullInfo);
+			CreateDumpForReport(ExceptionInfo, szFullInfo, pszFull);
 		}
 
 		if (szFullInfo[0])
@@ -1917,7 +1945,10 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 		gpConEmu->OnInfo_ReportCrash(szFullInfo[0] ? szFullInfo : NULL);
 	}
 
-	SafeFree(pszFull);
+	if (pszFull && pszFull != szAssertInfo)
+	{
+		free(pszFull);
+	}
 }
 
 BOOL gbInDisplayLastError = FALSE;
@@ -2903,6 +2934,12 @@ void RaiseTestException()
 	DebugBreak();
 }
 
+// Clear some rubbish in the environment
+void ResetEnvironmentVariables()
+{
+	SetEnvironmentVariable(ENV_CONEMUFAKEDT_VAR, NULL);
+	SetEnvironmentVariable(ENV_CONEMU_HOOKS, NULL);
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -2968,9 +3005,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		}
 	}
 
+	ResetEnvironmentVariables();
 
 	gpSetCls = new CSettings;
 	gpConEmu = new CConEmuMain;
+	gVConDcMap.Init(MAX_CONSOLE_COUNT,true);
+	gVConBkMap.Init(MAX_CONSOLE_COUNT,true);
 	/*int nCmp;
 	nCmp = StrCmpI(L" ", L"A"); // -1
 	nCmp = StrCmpI(L" ", L"+");
@@ -3774,8 +3814,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		// load settings from registry
 		gpSet->LoadSettings(&bNeedCreateVanilla);
 	}
+	SettingsLoadedFlags slfFlags = slf_OnStartupLoad | slf_AllowFastConfig
+		| (bNeedCreateVanilla ? slf_NeedCreateVanilla : slf_None)
+		| (ResetSettings ? slf_DefaultSettings : slf_None);
 	// выполнить дополнительные действия в классе настроек здесь
-	gpSetCls->SettingsLoaded(bNeedCreateVanilla, true, cmdNew);
+	gpSetCls->SettingsLoaded(slfFlags, cmdNew);
 
 	// Для gpSet->isQuakeStyle - принудительно включается gpSetCls->SingleInstanceArg
 

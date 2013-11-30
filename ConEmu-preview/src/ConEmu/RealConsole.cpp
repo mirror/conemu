@@ -251,6 +251,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	CloseConfirmReset();
 	mb_WasSendClickToReadCon = false;
 	mn_LastSetForegroundPID = 0;
+	mb_InPostCloseMacro = false;
 
 	mn_TextColorIdx = 7; mn_BackColorIdx = 0;
 	mn_PopTextColorIdx = 5; mn_PopBackColorIdx = 15;
@@ -3092,6 +3093,8 @@ BOOL CRealConsole::StartProcess()
 	mb_InCreateRoot = TRUE;
 	mb_InCloseConsole = FALSE;
 	mb_SwitchActiveServer = false;
+	//Drop flag after Restart console
+	mb_InPostCloseMacro = false;
 	//mb_WasStartDetached = FALSE; -- не сбрасывать, на него смотрит и isDetached()
 	ZeroStruct(m_ServerClosing);
 	STARTUPINFO si;
@@ -4659,7 +4662,7 @@ void CRealConsole::StopSignal()
 		mn_tabsCount = 0;
 
 		// Очистка массива консолей и обновление вкладок
-		gpConEmu->OnVConClosed(mp_VCon);
+		CConEmuChild::ProcessVConClosed(mp_VCon);
 	}
 }
 
@@ -9934,7 +9937,8 @@ void CRealConsole::CloseConsole(bool abForceTerminate, bool abConfirm, bool abAl
 	_ASSERTE(!mb_ProcessRestarted);
 
 	// Для Terminate - спрашиваем отдельно
-	if (abConfirm && !abForceTerminate)
+	// Don't show confirmation dialog, if this method was reentered (via GuiMacro call)
+	if (abConfirm && !abForceTerminate && !mb_InPostCloseMacro)
 	{
 		if (!isCloseConfirmed(NULL))
 			return;
@@ -9954,6 +9958,12 @@ void CRealConsole::CloseConsole(bool abForceTerminate, bool abConfirm, bool abAl
 	bool lbCleared = false;
 	//mp_VCon->SetBackgroundImageData(&BackClear);
 
+	if (abAllowMacro && mb_InPostCloseMacro)
+	{
+		abAllowMacro = false;
+		LogString(L"Post close macro in progress, disabling abAllowMacro");
+	}
+
 	if (hConWnd)
 	{
 		if (!IsWindow(hConWnd))
@@ -9968,6 +9978,9 @@ void CRealConsole::CloseConsole(bool abForceTerminate, bool abConfirm, bool abAl
 
 			if (nFarPID)
 			{
+				// Set flag immediately
+				mb_InPostCloseMacro = true;
+
 				LPCWSTR pszMacro = gpSet->SafeFarCloseMacro(fmv_Default);
 				_ASSERTE(pszMacro && *pszMacro);
 
@@ -10000,6 +10013,11 @@ void CRealConsole::CloseConsole(bool abForceTerminate, bool abConfirm, bool abAl
 
 					gpConEmu->DebugStep(NULL);
 				}
+
+				// Don't return to false, otherwise it is impossible
+				// to close "Hanged Far instance"
+				// -- // Post failed? Continue to simple close
+				//mb_InPostCloseMacro = false;
 
 				if (lbExecuted)
 					return;
@@ -10109,7 +10127,7 @@ void CRealConsole::CloseConsole(bool abForceTerminate, bool abConfirm, bool abAl
 		m_Args.bDetached = FALSE;
 
 		if (mp_VCon)
-			gpConEmu->OnVConClosed(mp_VCon);
+			CConEmuChild::ProcessVConClosed(mp_VCon);
 	}
 }
 
@@ -11818,7 +11836,7 @@ BOOL CRealConsole::isMouseButtonDown()
 // Аргумент - DWORD(!) а не DWORD_PTR. Это приходит из консоли.
 void CRealConsole::OnConsoleKeyboardLayout(const DWORD dwNewLayout)
 {
-	_ASSERTE(dwNewLayout!=0);
+	_ASSERTE(dwNewLayout!=0 || gbIsWine);
 
 	// LayoutName: "00000409", "00010409", ...
 	// А HKL от него отличается, так что передаем DWORD
@@ -11827,7 +11845,10 @@ void CRealConsole::OnConsoleKeyboardLayout(const DWORD dwNewLayout)
 	// Информационно?
 	mn_ActiveLayout = dwNewLayout;
 
-	gpConEmu->OnLangChangeConsole(mp_VCon, dwNewLayout);
+	if (dwNewLayout)
+	{
+		gpConEmu->OnLangChangeConsole(mp_VCon, dwNewLayout);
+	}
 }
 
 // Вызывается из CConEmuMain::OnLangChangeConsole в главной нити
@@ -12725,7 +12746,7 @@ void CRealConsole::Detach(bool bPosted /*= false*/, bool bSendCloseConsole /*= f
 	// Чтобы случайно не закрыть RealConsole?
 	m_Args.bDetached = TRUE;
 	
-	gpConEmu->OnVConClosed(mp_VCon);
+	CConEmuChild::ProcessVConClosed(mp_VCon);
 }
 
 const CEFAR_INFO_MAPPING* CRealConsole::GetFarInfo()

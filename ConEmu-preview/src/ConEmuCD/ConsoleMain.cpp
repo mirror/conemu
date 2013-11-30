@@ -718,7 +718,7 @@ extern "C" {
 #endif
 
 // Возвращает текст с информацией о пути к сохраненному дампу
-DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024]);
+// DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPWSTR pszComment = NULL);
 #include "../common/Dump.h"
 
 LPTOP_LEVEL_EXCEPTION_FILTER gpfnPrevExFilter = NULL;
@@ -2913,11 +2913,13 @@ int DoInjectRemote(LPWSTR asCmdArg, bool abDefTermOnly)
 		// Go to hook
 		if (iHookRc == -1)
 		{
+			// InjectRemote waits for thread termination
 			iHookRc = InjectRemote(nRemotePID, abDefTermOnly);
-			// Дождаться, пока поток стартует и можно будет закрыть hEventReady
+			// But check the result of the operation
 			if ((iHookRc == 0) && hEventReady)
 			{
-				DWORD nWaitReady = WaitForSingleObject(hEventReady, CEDEFAULTTERMHOOKWAIT);
+				_ASSERTE(abDefTermOnly);
+				DWORD nWaitReady = WaitForSingleObject(hEventReady, CEDEFAULTTERMHOOKWAIT/*==0*/);
 				if (nWaitReady == WAIT_TIMEOUT)
 				{
 					iHookRc = -300; // Failed to start hooking thread in remote process
@@ -3065,6 +3067,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 				goto wrap;
 			}
 
+			bool bFound = false;
 			size_t cchLeft = cchMaxEnvLen - 1;
 			// Loop through variable names
 			pszSrc = pszAllVars;
@@ -3097,9 +3100,29 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 					pszBuffer += cchAdd;
 					_ASSERTE(*pszBuffer == 0);
 					cchLeft -= cchAdd;
+					bFound = true;
 				}
 				*pszEq = L'=';
 				pszSrc = pszNext;
+
+				// continue scan, only if it is a mask
+				if (bFound && !wcschr(szTest, L'*'))
+					break;
+			} // end of 'while (*pszSrc)'
+
+			if (!bFound && !wcschr(szTest, L'*'))
+			{
+				// To avoid "nothing to export"
+				size_t cchAdd = lstrlen(szTest) + 1;
+				if (cchAdd < cchLeft)
+				{
+					// Copy "Name\0\0"
+					wmemmove(pszBuffer, szTest, cchAdd);
+					cchAdd++; // We need second zero after a Name
+					pszBuffer += cchAdd;
+					cchLeft -= cchAdd;
+					_ASSERTE(*pszBuffer == 0);
+				}
 			}
 		}
 	}

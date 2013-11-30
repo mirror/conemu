@@ -45,6 +45,10 @@ class CConEmuChild
 		static LRESULT WINAPI ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 		static LRESULT WINAPI BackWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam);
 	public:
+		bool isAlreadyDestroyed();
+		void DoDestroyDcWindow();
+		static void ProcessVConClosed(CVirtualConsole* apVCon, BOOL abPosted = FALSE);
+
 		LRESULT OnPaint();
 		LRESULT OnPaintGaps();
 		HWND CreateView();
@@ -85,7 +89,9 @@ class CConEmuChild
 #endif
 
 	protected:
+		void PostOnVConClosed();
 		virtual void OnDestroy() = 0; // WM_DESTROY
+		DWORD mn_AlreadyDestroyed;
 
 		#define CRITICAL_DCWND_STYLES (WS_CAPTION|WS_VSCROLL|WS_HSCROLL|WS_SYSMENU|WS_THICKFRAME|WS_GROUP|WS_TABSTOP)
 		DWORD mn_WndDCStyle;
@@ -93,6 +99,7 @@ class CConEmuChild
 		HWND mh_WndDC;
 		HWND mh_WndBack; // скроллинг и фон
 		HWND mh_LastGuiChild;
+		long mn_MsgVConTerminated; // == 0, Registered when post destroing
 		UINT mn_MsgTabChanged;
 		UINT mn_MsgPostFullPaint;
 		UINT mn_MsgSavePaneSnapshoot;

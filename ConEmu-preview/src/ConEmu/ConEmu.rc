@@ -636,11 +636,11 @@ BEGIN
     PUSHBUTTON      "...",bRealConsoleSettings,306,12,13,11
     CONTROL         "Sleep in background",cbSleepInBackground,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,132,27,87,8
     CONTROL         "Debug steps in caption",cbDebugSteps,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,27,87,8
-    CONTROL         "Portable registry",cbPortableRegistry,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,132,90,75,8
-    PUSHBUTTON      "...",bPortableRegistrySettings,213,89,13,11,WS_DISABLED
+    CONTROL         "Portable registry",cbPortableRegistry,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,132,105,75,8
+    PUSHBUTTON      "...",bPortableRegistrySettings,213,104,13,11,WS_DISABLED
     CONTROL         "ANSI X3.64 / xterm 256 colors",cbProcessAnsi,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,90,119,8
     CONTROL         "Use Clink in prompt",cbUseClink,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,231,74,75,8
-    CONTROL         "Suppress bells",cbSuppressBells,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,231,90,87,8
+    CONTROL         "Suppress bells",cbSuppressBells,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,231,105,87,8
     CONTROL         "Disable all flashing",cbDisableAllFlashing,"Button",BS_AUTO3STATE | WS_TABSTOP,132,41,89,8
     CONTROL         "Show «was hidden» warning",cbShowWasHiddenMsg,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,41,119,8
     GROUPBOX        "In-console options",IDC_STATIC,4,62,319,58
@@ -648,6 +648,8 @@ BEGIN
     PUSHBUTTON      "...",cbClinkWebPage,306,72,13,11
     CONTROL         "Exception handler (debug)",cbConsoleExceptionHandler,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,105,119,8
+    CONTROL         "Process '-new_console' and '-cur_console' switches",cbProcessNewConArg,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,132,90,187,8
 END
 
 IDD_SPG_COMSPEC DIALOGEX 0, 0, 328, 235
@@ -733,13 +735,13 @@ FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     GROUPBOX        "Far Manager macros",IDC_STATIC,4,1,319,131
     CONTROL         "&RightClick 4 EMenu",cbRClick,"Button",BS_AUTO3STATE | WS_TABSTOP,10,13,306,8
-    EDITTEXT        tRClickMacro,9,25,308,12,ES_AUTOHSCROLL
+    COMBOBOX        tRClickMacro,9,25,308,12,CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Safe Far close",cbSafeFarClose,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,44,306,8
-    EDITTEXT        tSafeFarCloseMacro,9,56,308,12,ES_AUTOHSCROLL
+    COMBOBOX        tSafeFarCloseMacro,9,56,308,12,CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Close tab (Panel, Editor, Viewer):",IDC_STATIC,10,74,306,8
-    EDITTEXT        tCloseTabMacro,9,84,308,12,ES_AUTOHSCROLL
+    COMBOBOX        tCloseTabMacro,9,84,308,12,CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Save all editors:",IDC_STATIC,10,102,306,8
-    EDITTEXT        tSaveAllMacro,9,113,308,12,ES_AUTOHSCROLL
+    COMBOBOX        tSaveAllMacro,9,113,308,12,CBS_DROPDOWN | CBS_AUTOHSCROLL | CBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP
 END
 
 IDD_SPG_DEBUG DIALOGEX 0, 0, 328, 235

@@ -1325,19 +1325,6 @@ void CEAnsi::EscCopyCtrlString(wchar_t* pszDst, LPCWSTR asMsg, INT_PTR cchMaxLen
 // ESC ] 9 ; 2 ; "txt" ST          Show GUI MessageBox ( txt ) for dubug purposes
 void CEAnsi::DoMessage(LPCWSTR asMsg, INT_PTR cchLen)
 {
-	//if (cchLen < 0)
-	//{
-	//	_ASSERTE(cchLen >= 0);
-	//	cchLen = 0;
-	//}
-	//if (cchLen > 1)
-	//{
-	//	if ((asMsg[0] == L'"') && (asMsg[cchLen-1] == L'"'))
-	//	{
-	//		asMsg++;
-	//		cchLen -= 2;
-	//	}
-	//}
 	wchar_t* pszText = (wchar_t*)malloc((cchLen+1)*sizeof(*pszText));
 
 	if (pszText)
@@ -1358,6 +1345,67 @@ void CEAnsi::DoMessage(LPCWSTR asMsg, INT_PTR cchLen)
 	}
 }
 
+// ESC ] 9 ; 7 ; "cmd" ST        Run some process with arguments
+void CEAnsi::DoProcess(LPCWSTR asCmd, INT_PTR cchLen)
+{
+	// We need zero-terminated string
+	wchar_t* pszCmdLine = (wchar_t*)malloc((cchLen + 1)*sizeof(*asCmd));
+
+	if (pszCmdLine)
+	{
+		EscCopyCtrlString(pszCmdLine, asCmd, cchLen);
+
+		STARTUPINFO si = {sizeof(si)};
+		PROCESS_INFORMATION pi = {};
+
+		BOOL bCreated = CreateProcess(NULL, pszCmdLine, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+		if (bCreated)
+		{
+			WaitForSingleObject(pi.hProcess, INFINITE);
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+		}
+
+		free(pszCmdLine);
+	}
+}
+
+// ESC ] 9 ; 8 ; "env" ST        Output value of environment variable
+void CEAnsi::DoPrintEnv(LPCWSTR asCmd, INT_PTR cchLen)
+{
+	if (!pfnWriteConsoleW)
+		return;
+
+	// We need zero-terminated string
+	wchar_t* pszVarName = (wchar_t*)malloc((cchLen + 1)*sizeof(*asCmd));
+
+	if (pszVarName)
+	{
+		EscCopyCtrlString(pszVarName, asCmd, cchLen);
+
+		wchar_t szValue[MAX_PATH];
+		wchar_t* pszValue = szValue;
+		DWORD cchMax = countof(szValue);
+		DWORD nMax = GetEnvironmentVariable(pszVarName, pszValue, cchMax);
+		if (nMax >= cchMax)
+		{
+			cchMax = nMax+1;
+			pszValue = (wchar_t*)malloc(cchMax*sizeof(*pszValue));
+			nMax = pszValue ? GetEnvironmentVariable(pszVarName, szValue, countof(szValue)) : 0;
+		}
+
+		if (nMax)
+		{
+			TODO("Process here ANSI colors TOO! But now it will be 'reentrance'?");
+			WriteText(pfnWriteConsoleW, mh_WriteOutput, pszValue, nMax, &cchMax);
+		}
+
+		if (pszValue && pszValue != szValue)
+			free(pszValue);
+		free(pszVarName);
+	}
+}
+
 BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten)
 {
 	BOOL lbRc = TRUE, lbApply = FALSE;
@@ -1369,6 +1417,8 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 
 	// Store this pointer
 	pfnWriteConsoleW = _WriteConsoleW;
+	// Ans current output handle
+	mh_WriteOutput = hConsoleOutput;
 
 	//ExtWriteTextParm write = {sizeof(write), ewtf_Current, hConsoleOutput};
 	//write.Private = _WriteConsoleW;
@@ -1814,14 +1864,22 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 
 							case L'n':
 								{
-									TODO("ECMA-48 Status Report Commands");
-									//ESC [ 5 n
-									//      Device status report (DSR): Answer is ESC [ 0 n (Terminal OK).
-									//
-									//ESC [ 6 n
-									//      Cursor position report (CPR): Answer is ESC [ y ; x R, where x,y is the
-									//      cursor location.
-									DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
+									switch (*Code.ArgSZ)
+									{
+									case '5':
+									case '6':
+										DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
+										break;
+									default:
+										TODO("ECMA-48 Status Report Commands");
+										//ESC [ 5 n
+										//      Device status report (DSR): Answer is ESC [ 0 n (Terminal OK).
+										//
+										//ESC [ 6 n
+										//      Cursor position report (CPR): Answer is ESC [ y ; x R, where x,y is the
+										//      cursor location.
+										DumpUnknownEscape(Code.pszEscStart,Code.nTotalLen);
+									}
 								}
 								break;
 
@@ -1974,6 +2032,8 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 								// ESC ] 9 ; 4 ; st ; pr ST      When _st_ is 0: remove progress. When _st_ is 1: set progress value to _pr_ (number, 0-100). When _st_ is 2: set error state in progress on Windows 7 taskbar
 								// ESC ] 9 ; 5 ST                Wait for ENTER/SPACE/ESC. Set EnvVar "ConEmuWaitKey" to ENTER/SPACE/ESC on exit.
 								// ESC ] 9 ; 6 ; "txt" ST        Execute GuiMacro. Set EnvVar "ConEmuMacroResult" on exit.
+								// ESC ] 9 ; 7 ; "cmd" ST        Run some process with arguments
+								// ESC ] 9 ; 8 ; "env" ST        Output value of environment variable
 								// -- You may specify timeout _s_ in seconds. - не работает
 								if (Code.ArgSZ[1] == L';')
 								{
@@ -2080,6 +2140,14 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 
 										ExecuteFreeResult(pOut);
 										ExecuteFreeResult(pIn);
+									}
+									else if (Code.ArgSZ[2] == L'7' && Code.ArgSZ[3] == L';')
+									{
+										DoProcess(Code.ArgSZ+4, Code.cchArgSZ - 4);
+									}
+									else if (Code.ArgSZ[2] == L'8' && Code.ArgSZ[3] == L';')
+									{
+										DoPrintEnv(Code.ArgSZ+4, Code.cchArgSZ - 4);
 									}
 								}
 								break;

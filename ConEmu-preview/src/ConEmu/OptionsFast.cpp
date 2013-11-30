@@ -341,16 +341,16 @@ static INT_PTR CALLBACK CheckOptionsFastProc(HWND hDlg, UINT messg, WPARAM wPara
 }
 
 
-void CheckOptionsFast(LPCWSTR asTitle, bool abCreatingVanilla /*= false*/)
+void CheckOptionsFast(LPCWSTR asTitle, SettingsLoadedFlags slfFlags)
 {
 	if (gpConEmu->IsFastSetupDisabled())
 	{
 		gpConEmu->LogString(L"CheckOptionsFast was skipped due to '/basic' or '/resetdefault' switch");
 
-		goto checkTasks;
+		goto checkDefaults;
 	}
 
-	bVanilla = abCreatingVanilla;
+	bVanilla = (slfFlags & slf_NeedCreateVanilla) != slf_None;
 
 	bCheckHooks = (gpSet->m_isKeyboardHooks == 0);
 
@@ -416,9 +416,14 @@ void CheckOptionsFast(LPCWSTR asTitle, bool abCreatingVanilla /*= false*/)
 		DialogBoxParam(g_hInstance, MAKEINTRESOURCE(IDD_FAST_CONFIG), NULL, CheckOptionsFastProc, (LPARAM)asTitle);
 	}
 
-checkTasks:
-	// Just run
-	CreateDefaultTasks();
+checkDefaults:
+	// Always check, if task list is empty - fill with defaults
+	CreateDefaultTasks(); 
+	// Some other settings, which must be filled with predefined values
+	if (slfFlags & slf_DefaultSettings)
+	{
+		gpSet->CreatePredefinedPalettes(0);
+	}
 }
 
 
@@ -555,7 +560,13 @@ void CreateDefaultTasks(bool bForceAdd /*= false*/)
 		{L"PowerShell (Admin)",  L"powershell.exe",                    L" -new_console:a"},
 
 		// Bash
+
+		// For cygwin we can check registry keys (todo?)
+		// HKLM\SOFTWARE\Wow6432Node\Cygwin\setup\rootdir
+		// HKLM\SOFTWARE\Cygwin\setup\rootdir
+		// HKCU\Software\Cygwin\setup\rootdir
 		{L"CygWin bash",    L"\\CygWin\\bin\\sh.exe",                  L" --login -i"},
+
 //		{L"CygWin mintty",  L"\\CygWin\\bin\\mintty.exe",              L" -"},
 		{L"MinGW bash",     L"\\MinGW\\msys\\1.0\\bin\\sh.exe",        L" --login -i"},
 //		{L"MinGW mintty",   L"\\MinGW\\msys\\1.0\\bin\\mintty.exe",    L" -"},

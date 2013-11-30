@@ -620,13 +620,13 @@ CConEmuMain::CConEmuMain()
 	}
 	NonPortable:
 
-	mb_BlockChildrenDebuggers = false;
+	ZeroStruct(m_DbgInfo);
 	if (IsDebuggerPresent())
 	{
 		wchar_t szDebuggers[32];
 		if (GetEnvironmentVariable(ENV_CONEMU_BLOCKCHILDDEBUGGERS, szDebuggers, countof(szDebuggers)))
 		{
-			mb_BlockChildrenDebuggers = (lstrcmp(szDebuggers, ENV_CONEMU_BLOCKCHILDDEBUGGERS_YES) == 0);
+			m_DbgInfo.bBlockChildrenDebuggers = (lstrcmp(szDebuggers, ENV_CONEMU_BLOCKCHILDDEBUGGERS_YES) == 0);
 		}
 	}
 	// И сразу сбросить ее, чтобы не было мусора
@@ -744,7 +744,7 @@ CConEmuMain::CConEmuMain()
 	mn_MsgUpdateTitle = RegisterMessage("UpdateTitle");
 	//mn_MsgAttach = RegisterMessage(...,CONEMUMSG_ATTACH);
 	mn_MsgSrvStarted = RegisterMessage("SrvStarted"); //RegisterWindowMessage(CONEMUMSG_SRVSTARTED);
-	mn_MsgVConTerminated = RegisterMessage("VConTerminated");
+	//mn_MsgVConTerminated = RegisterMessage("VConTerminated");
 	mn_MsgUpdateScrollInfo = RegisterMessage("UpdateScrollInfo");
 	mn_MsgUpdateTabs = RegisterMessage("UpdateTabs"); //RegisterWindowMessage(CONEMUMSG_UPDATETABS);
 	mn_MsgOldCmdVer = RegisterMessage("OldCmdVer"); mb_InShowOldCmdVersion = FALSE;
@@ -1354,7 +1354,7 @@ bool CConEmuMain::IsFastSetupDisabled()
 
 bool CConEmuMain::IsAllowSaveSettingsOnExit()
 {
-	return !(gpSetCls->ibDisableSaveSettingsOnExit || gpSetCls->ibExitAfterDefTermSetup);
+	return !(gpSetCls->ibDisableSaveSettingsOnExit || gpSetCls->ibExitAfterDefTermSetup || IsResetBasicSettings());
 }
 
 void CConEmuMain::OnUseGlass(bool abEnableGlass)
@@ -2600,7 +2600,7 @@ void CConEmuMain::FinalizePortableReg()
 void CConEmuMain::GetComSpecCopy(ConEmuComspec& ComSpec)
 {
 	_ASSERTE(m_GuiInfo.ComSpec.csType==gpSet->ComSpec.csType);
-	_ASSERTE(m_GuiInfo.ComSpec.csBits==(mb_BlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits));
+	_ASSERTE(m_GuiInfo.ComSpec.csBits==(m_DbgInfo.bBlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits));
 	ComSpec = m_GuiInfo.ComSpec;
 }
 
@@ -2640,6 +2640,7 @@ void CConEmuMain::UpdateGuiInfoMapping()
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_ProcessAnsi,(gpSet->isProcessAnsi ? CECF_ProcessAnsi : 0));
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_SuppressBells,(gpSet->isSuppressBells ? CECF_SuppressBells : 0));
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_ConExcHandler,(gpSet->isConsoleExceptionHandler ? CECF_ConExcHandler : 0));
+	SetConEmuFlags(m_GuiInfo.Flags,CECF_ProcessNewCon,(gpSet->isProcessNewConArg ? CECF_ProcessNewCon : 0));
 	// использовать расширение командной строки (ReadConsole). 0 - нет, 1 - старая версия (0.1.1), 2 - новая версия
 	switch (gpSet->isUseClink())
 	{
@@ -2654,7 +2655,7 @@ void CConEmuMain::UpdateGuiInfoMapping()
 		SetConEmuFlags(m_GuiInfo.Flags,CECF_UseClink_Any,CECF_Empty);
 	}
 
-	SetConEmuFlags(m_GuiInfo.Flags,CECF_BlockChildDbg,(mb_BlockChildrenDebuggers ? CECF_BlockChildDbg : 0));
+	SetConEmuFlags(m_GuiInfo.Flags,CECF_BlockChildDbg,(m_DbgInfo.bBlockChildrenDebuggers ? CECF_BlockChildDbg : 0));
 	
 	SetConEmuFlags(m_GuiInfo.Flags,CECF_SleepInBackg,(gpSet->isSleepInBackground ? CECF_SleepInBackg : 0));
 	m_GuiInfo.bGuiActive = isMeForeground(true, true);
@@ -2723,7 +2724,7 @@ void CConEmuMain::UpdateGuiInfoMapping()
 		// Теперь перенести в мэппинг, для информирования других процессов
 		ComSpecType csType = gpSet->ComSpec.csType;
 		// Если мы в режиме "отладки дерева процессов" - предпочитать ComSpec битности приложения!
-		ComSpecBits csBits = mb_BlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits;
+		ComSpecBits csBits = m_DbgInfo.bBlockChildrenDebuggers ? csb_SameApp : gpSet->ComSpec.csBits;
 		//m_GuiInfo.ComSpec.csType = gpSet->ComSpec.csType;
 		//m_GuiInfo.ComSpec.csBits = gpSet->ComSpec.csBits;
 		wchar_t szExpand[MAX_PATH] = {}, szFull[MAX_PATH] = {}, *pszFile;
@@ -14523,6 +14524,14 @@ LRESULT CConEmuMain::OnLangChangeConsole(CVirtualConsole *apVCon, const DWORD ad
 	// bypass x64 debugger bug
 	DWORD dwLayoutName = adwLayoutName;
 
+	if (!dwLayoutName)
+	{
+		// Ubuntu, Wine. Get 0 here.
+		_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"CConEmuMain::OnLangChangeConsole (0x%08X), Wine=%i", dwLayoutName, (int)gbIsWine);
+		LogString(szInfo);
+		return 0;
+	}
+
 	if (!isMainThread())
 	{
 		// --> не "нравится" руслату обращение к раскладкам из фоновых потоков. Поэтому выполяется в основном потоке
@@ -17321,6 +17330,17 @@ void CConEmuMain::OnInfo_ReportBug()
 
 void CConEmuMain::OnInfo_ReportCrash(LPCWSTR asDumpWasCreatedMsg)
 {
+	if (m_DbgInfo.nLastCrashReported)
+	{
+		// if previous gsReportCrash was opened less than 60 sec ago
+		DWORD nLast = GetTickCount() - m_DbgInfo.nLastCrashReported;
+		if (nLast < 60000)
+		{
+			// Skip this time
+			return;
+		}
+	}
+
 	if (asDumpWasCreatedMsg && !*asDumpWasCreatedMsg)
 	{
 		asDumpWasCreatedMsg = NULL;
@@ -17335,6 +17355,8 @@ void CConEmuMain::OnInfo_ReportCrash(LPCWSTR asDumpWasCreatedMsg)
 	{
 		MessageBox(asDumpWasCreatedMsg, MB_OK|MB_ICONEXCLAMATION|MB_SYSTEMMODAL);
 	}
+
+	m_DbgInfo.nLastCrashReported = GetTickCount();
 }
 
 void CConEmuMain::OnInfo_ThrowTrapException(bool bMainThread)
@@ -18159,48 +18181,6 @@ void CConEmuMain::OnRConStartedSuccess(CRealConsole* apRCon)
 	}
 }
 
-LRESULT CConEmuMain::OnVConClosed(CVirtualConsole* apVCon, BOOL abPosted /*= FALSE*/)
-{
-	_ASSERTE(apVCon);
-
-	if (!apVCon)
-		return 0;
-
-	if (!abPosted)
-	{
-		ShutdownGuiStep(L"OnVConClosed - repost");
-		PostMessage(ghWnd, mn_MsgVConTerminated, 0, (LPARAM)apVCon);
-		return 0;
-	}
-
-	CVConGroup::OnVConClosed(apVCon);
-
-	// Теперь перетряхнуть заголовок (табы могут быть отключены и в заголовке отображается количество консолей)
-	UpdateTitle(); // сам перечитает
-	//
-	mp_TabBar->Update(); // Иначе не будет обновлены закладки
-	// А теперь можно обновить активную закладку
-	int nActiveConNum = ActiveConNum();
-	mp_TabBar->OnConsoleActivated(nActiveConNum/*, FALSE*/);
-	// StatusBar
-	CVConGuard VCon;
-	mp_Status->OnActiveVConChanged(nActiveConNum, (GetActiveVCon(&VCon) >= 0) ? VCon->RCon() : NULL);
-
-	ShutdownGuiStep(L"OnVConClosed - done");
-
-	// Передернуть главный таймер, а то GUI долго думает, если ни одной консоли уже не осталось
-	//if (mp_VCon[0] == NULL)
-	if (!GetVCon(0))
-		OnTimer(TIMER_MAIN_ID, 0);
-
-	return 0;
-}
-
-//void CConEmuMain::PostSetBackground(CVirtualConsole* apVCon, CESERVER_REQ_SETBACKGROUND* apImgData)
-//{
-//	PostMessage(ghWnd, mn_MsgPostSetBackground, (WPARAM)apVCon, (LPARAM)apImgData);
-//}
-
 void CConEmuMain::LogWindowPos(LPCWSTR asPrefix)
 {
 	if (gpSetCls->isAdvLogging)
@@ -18299,10 +18279,8 @@ LRESULT CConEmuMain::MainWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lP
 
 	if (hWnd == ghWnd)
 		result = gpConEmu->WndProc(hWnd, messg, wParam, lParam);
-	else //if (hWnd == 'ghWnd DC')
+	else
 		result = CConEmuChild::ChildWndProc(hWnd, messg, wParam, lParam);
-	//else if (messg)
-	//	result = DefWindowProc(hWnd, messg, wParam, lParam);
 
 	return result;
 }
@@ -18409,6 +18387,23 @@ UINT CConEmuMain::RegisterMessage(LPCSTR asLocal, LPCWSTR asGlobal)
 		nMsg = ++mn__FirstAppMsg;
 	m__AppMsgs.Set(nMsg, asLocal);
 	return nMsg;
+}
+
+UINT CConEmuMain::GetRegisteredMessage(LPCSTR asLocal)
+{
+	UINT nMsg = 0; LPCSTR pszMsg = NULL;
+	if (m__AppMsgs.GetNext(NULL, &nMsg, &pszMsg))
+	{
+		while (nMsg)
+		{
+			if (pszMsg && lstrcmpA(pszMsg, asLocal) == 0)
+				return nMsg;
+
+			if (!m__AppMsgs.GetNext(&nMsg, &nMsg, &pszMsg))
+				break;
+		}
+	}
+	return RegisterMessage(asLocal);
 }
 
 // Window procedure for ghWnd
@@ -18896,6 +18891,7 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			{
 				ShutdownGuiStep(L"DestroyWindow");
 				//this->OnDestroy(hWnd);
+				_ASSERTE(hWnd == ghWnd);
 				DestroyWindow(hWnd);
 				return 0;
 			}
@@ -18965,31 +18961,6 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 				}
 
 				return (LRESULT)hWndDC;
-			}
-			else if (messg == this->mn_MsgVConTerminated)
-			{
-				#ifdef _DEBUG
-				int i = -100;
-				wchar_t szDbg[200];
-				{
-					lstrcpy(szDbg, L"OnVConClosed");
-					CVirtualConsole* pVCon = (CVirtualConsole*)lParam;
-
-					i = isVConValid(pVCon);
-					if (i >= 1)
-					{
-						ConEmuTab tab = {0};
-						pVCon->RCon()->GetTab(0, &tab);
-						tab.Name[128] = 0; // чтобы не вылезло из szDbg
-						wsprintf(szDbg+_tcslen(szDbg), L": #%i: %s", i, tab.Name);
-					}
-
-					lstrcat(szDbg, L"\n");
-					DEBUGSTRCONS(szDbg);
-				}
-				#endif
-
-				return this->OnVConClosed((CVirtualConsole*)lParam, TRUE);
 			}
 			else if (messg == this->mn_MsgUpdateScrollInfo)
 			{

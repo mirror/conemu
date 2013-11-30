@@ -15,6 +15,56 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 *****************
 
 
+2013.11.25
+[%] Issue 1367: ConEmuArgs, ConEmuBaseDir, ConEmuConfig, ConEmuDir was not initialized.
+[%] Excess confirmations when closing Far consoles.
+
+
+2013.11.24
+[%] Crash fix on tabs closing.
+[%] Initialize predefined palettes with "/reset" or "/basic" switches.
+[*] Setupper. Featute name «clink readme» and «Show git branch».
+[*] Issue1354. Checkbox «Process new_console switches».
+[*] New possible env values "ConEmuHooks=OFF,NOARG".
+[*] Clear "ConEmuFakeDT", "ConEmuHooks" on ConEmu.exe startup.
+[*] ConEmuRelyDT renamed to ConEmuFakeDT.
+[%] Some fixes in CSettings::GetString.
+[*] Settings, FarMacro. Edits -> ComboBoxes.
+[*] Contributors. ForNeVeR.
+[*] Fix stack overflow using #Close(0) in SafeFarClose.
+[*] Internal. Storing event handles in ConEmuHk.DllMain
+[*] Internal. Some changed for Wine (dwLayoutName).
+
+
+2013.11.19
+[+] (Pull#2, ForNeVeR) ConEmuBg: Fit background text width.
+[%] VConGroup.SetConsoleSizes fails on more than 2 splits.
+[*] Fix close confirmation msg on WinXP.
+[*] Default button set to Cancel in Assertion dialog.
+[*] Issue 1345: Menu shortcuts &Edit and Sett&ings.
+
+
+2013.11.17
+[%] Live preview peeks were broken in Windows 8.
+[+] New ConEmu specific ANSI OSC.
+    ESC ] 9 ; 7 ; "cmd" ST - Run some process with arguments
+    ESC ] 9 ; 8 ; "env" ST - Output value of environment variable
+    Usage example:
+    prompt $P$E]9;7;"cmd /cGitExportBranch.cmd"$e\$E]9;8;"gitbranch"$e\$g
+[*] Don't print "nothing to export" when exported variable is not defined.
+    ConEmuC /export=CON gitbranch
+[*] 60 sec delay between each OnInfo_ReportCrash.
+[+] Helper batch file «cecho.cmd» may be used to colored print from batches.
+    Call "cecho /?" for usage examples.
+
+
+2013.11.15
+[%] Issue 1339: Crash on close ConEmu window (multiple assertions actually, regression of 131114).
+[+] ConEmuSetup.exe: `/p:x[86|64],adm` starts MSI as admin right away.
+
+
+2013.11.14
+[!] Issue 1333: Internal changes in WndProc, GWLP_USERDATA is not used anymore.
 [*] Minor fix in "ConEmuC /export". Don't try to export to (a) direct parent of ConEmuC.exe process and (b) conhost.exe.
 [%] Issue 581: Task "/dir" switch was ignored when starting second tab.
 [*] Far Manager macros settings are moved to «Far macros» page.
@@ -24,6 +74,13 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 [+] New hotkeys on «Keys & Macro» page: Maximize width and Maximize height.
 [%] Issue 1329: Support env.vars in the "/icon" task argument when creating Jump lists.
 [%] Issue 1165: Scroll console (don't send wheel events) if console mode has ENABLE_QUICK_EDIT_MODE.
+[+] New Environment variable "ConEmuRelyDT". That will cheat system and local current time for console processes.
+    Use carefully! Console applications will think that time was freezed! «Inject ConEmuHk» must be on!
+    Some examples (cmd):
+    set ConEmuRelyDT=%DATE% %TIME%
+    set ConEmuRelyDT=2013-12-31T23:59:59.99
+    set ConEmuRelyDT=2013-01-31 9:0:0
+    set ConEmuRelyDT=2013-11-30
 
 
 2013.11.07

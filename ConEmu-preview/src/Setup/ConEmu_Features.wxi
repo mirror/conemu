@@ -54,6 +54,7 @@
       <ComponentRef Id="ClsEx.cmd" />
       <ComponentRef Id="Cmd_Autorun.cmd" />
       <ComponentRef Id="ColorPrompt.cmd" />
+      <ComponentRef Id="cecho.cmd" />
       <ComponentRef Id="csudo.cmd" />
       <ComponentRef Id="IsConEmu.cmd" />
       <ComponentRef Id="RenameTab.cmd" />
@@ -175,9 +176,14 @@
         <ComponentRef Id="Disable_ConIme.reg"/>
         <ComponentRef Id="CallPlugin.txt"/>
       </Feature>
-      <Feature Id="FDosBox" AllowAdvertise="no" Title="DosBox" Level="1"
+      <Feature Id="FDosBox" AllowAdvertise="no" Title="DosBox example" Level="1"
                Description="Sample DosBox configuration file">
         <ComponentRef Id="DosBox_Sample.conf"/>
+      </Feature>
+      <Feature Id="FGit" AllowAdvertise="no" Title="Git show branch" Level="1"
+               Description="How to show git branch in cmd and Far prompt">
+        <ComponentRef Id="GitShowBranch.cmd"/>
+        <ComponentRef Id="git.cmd"/>
       </Feature>
       <!--
       <Feature Id="FPortable" AllowAdvertise="no" Title="Portable registry" Level="1"
@@ -186,7 +192,7 @@
       </Feature>
       -->
     </Feature>
-    <Feature Id="FClink" AllowAdvertise="no" Title="clink" Level="1"
+    <Feature Id="FClink" AllowAdvertise="no" Title="clink readme" Level="1"
              Description="clink - bash style completion readme.txt">
       <ComponentRef Id="clink_readme.txt"/>
     </Feature>
