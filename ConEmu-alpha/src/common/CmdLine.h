@@ -28,67 +28,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-class CRefRelease
-{
-private:
-	LONG volatile mn_RefCount;
-	static const LONG REF_FINALIZE = 0x7FFFFFFF;
+int NextArg(const wchar_t** asCmdLine, wchar_t (&rsArg)[MAX_PATH+1], const wchar_t** rsArgStart=NULL);
+//int NextArg(const char** asCmdLine, char (&rsArg)[MAX_PATH+1], const char** rsArgStart=NULL);
+const wchar_t* SkipNonPrintable(const wchar_t* asParams);
+bool CompareFileMask(const wchar_t* asFileName, const wchar_t* asMask);
+LPCWSTR GetDrive(LPCWSTR pszPath, wchar_t* szDrive, int/*countof(szDrive)*/ cchDriveMax);
 
-protected:
-	virtual void FinalRelease() = 0;
-
-public:
-	CRefRelease()
-	{
-		mn_RefCount = 1;
-	};
-	
-	void AddRef()
-	{
-		if (!this)
-		{
-			_ASSERTE(this!=NULL);
-			return;
-		}
-	
-		_ASSERTE(mn_RefCount != REF_FINALIZE);
-		InterlockedIncrement(&mn_RefCount);
-	};
-
-	int Release()
-	{
-		if (!this)
-			return 0;
-
-		if (mn_RefCount == REF_FINALIZE)
-		{
-			_ASSERTE(FALSE && "Must not be destroyed yet?");
-			return 0;
-		}
-		InterlockedDecrement(&mn_RefCount);
-	
-		_ASSERTE(mn_RefCount>=0);
-		if (mn_RefCount <= 0)
-		{
-			mn_RefCount = REF_FINALIZE; // принудительно, чтобы не было повторных срабатываний delete при вызове деструкторов
-			FinalRelease();
-			//CVirtualConsole* pVCon = (CVirtualConsole*)this;
-			//delete pVCon;
-			return 0;
-		}
-
-		return mn_RefCount;
-	};
-
-#ifdef _DEBUG
-	int RefCount()
-	{
-		return mn_RefCount;
-	}
-#endif
-protected:
-	virtual ~CRefRelease()
-	{
-		_ASSERTE(mn_RefCount==REF_FINALIZE);
-	};
-};
+bool IsExecutable(LPCWSTR aszFilePathName, wchar_t** rsExpandedVars = NULL);
+bool IsFarExe(LPCWSTR asModuleName);
+BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
+			   wchar_t (&szExe)[MAX_PATH+1],
+			   BOOL& rbRootIsCmdExe, BOOL& rbAlwaysConfirmExit, BOOL& rbAutoDisableConfirmExit);

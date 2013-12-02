@@ -26,69 +26,45 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#pragma once
 
-class CRefRelease
+#define HIDE_USE_EXCEPTION_INFO
+#include <windows.h>
+#include "common.hpp"
+#include "MStrSafe.h"
+
+void SetConEmuEnvHWND(LPCWSTR pszVarName, HWND hWnd)
 {
-private:
-	LONG volatile mn_RefCount;
-	static const LONG REF_FINALIZE = 0x7FFFFFFF;
-
-protected:
-	virtual void FinalRelease() = 0;
-
-public:
-	CRefRelease()
+	if (hWnd)
 	{
-		mn_RefCount = 1;
-	};
-	
-	void AddRef()
-	{
-		if (!this)
-		{
-			_ASSERTE(this!=NULL);
-			return;
-		}
-	
-		_ASSERTE(mn_RefCount != REF_FINALIZE);
-		InterlockedIncrement(&mn_RefCount);
-	};
-
-	int Release()
-	{
-		if (!this)
-			return 0;
-
-		if (mn_RefCount == REF_FINALIZE)
-		{
-			_ASSERTE(FALSE && "Must not be destroyed yet?");
-			return 0;
-		}
-		InterlockedDecrement(&mn_RefCount);
-	
-		_ASSERTE(mn_RefCount>=0);
-		if (mn_RefCount <= 0)
-		{
-			mn_RefCount = REF_FINALIZE; // принудительно, чтобы не было повторных срабатываний delete при вызове деструкторов
-			FinalRelease();
-			//CVirtualConsole* pVCon = (CVirtualConsole*)this;
-			//delete pVCon;
-			return 0;
-		}
-
-		return mn_RefCount;
-	};
-
-#ifdef _DEBUG
-	int RefCount()
-	{
-		return mn_RefCount;
+		// Установить переменную среды с дескриптором окна
+		wchar_t szVar[16];
+		msprintf(szVar, countof(szVar), L"0x%08X", (DWORD)(DWORD_PTR)hWnd); //-V205
+		SetEnvironmentVariable(pszVarName, szVar);
 	}
-#endif
-protected:
-	virtual ~CRefRelease()
+	else
 	{
-		_ASSERTE(mn_RefCount==REF_FINALIZE);
-	};
-};
+		SetEnvironmentVariable(pszVarName, NULL);
+	}
+}
+
+void SetConEmuEnvVar(HWND hConEmuWnd)
+{
+	SetConEmuEnvHWND(ENV_CONEMUHWND_VAR_W, hConEmuWnd);
+	if (hConEmuWnd)
+	{
+		DWORD nPID = 0; GetWindowThreadProcessId(hConEmuWnd, &nPID);
+		wchar_t szVar[16];
+		msprintf(szVar, countof(szVar), L"%u", nPID);
+		SetEnvironmentVariable(ENV_CONEMUPID_VAR_W, szVar);
+	}
+	else
+	{
+		SetEnvironmentVariable(ENV_CONEMUPID_VAR_W, NULL);
+	}
+}
+
+void SetConEmuEnvVarChild(HWND hDcWnd, HWND hBackWnd)
+{
+	SetConEmuEnvHWND(ENV_CONEMUDRAW_VAR_W, hDcWnd);
+	SetConEmuEnvHWND(ENV_CONEMUBACK_VAR_W, hBackWnd);
+}
