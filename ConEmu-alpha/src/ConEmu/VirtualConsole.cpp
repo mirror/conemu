@@ -2009,28 +2009,26 @@ bool CVirtualConsole::CheckTransparentRgn(bool abHasChildWindows)
 
 							if (nRectCount>=nMaxRects)
 							{
-								nMaxRects += TextHeight;
+								int nNewMaxRects = nMaxRects + max((int)TextHeight,(int)(nRectCount-nMaxRects+1));
+								_ASSERTE(nNewMaxRects > nRectCount);
+
 								HEAPVAL;
-								POINT *lpTmpPoints = (POINT*)Alloc(nMaxRects*4,sizeof(POINT)); // 4 угла
-								//INT   *lpTmpCounts = (INT*)Alloc(nMaxRects,sizeof(INT));
+								POINT *lpTmpPoints = (POINT*)Alloc(nNewMaxRects*4,sizeof(POINT)); // 4 угла
 								HEAPVAL;
 
-								if (!lpTmpPoints /*|| !lpTmpCounts*/)
+								if (!lpTmpPoints)
 								{
-									_ASSERTE(/*lpTmpCounts &&*/ lpTmpPoints);
-									//Free(lpAllCounts);
+									_ASSERTE(lpTmpPoints);
 									Free(lpAllPoints);
 									return false;
 								}
 
-								memmove(lpTmpPoints, lpAllPoints, nRectCount*4*sizeof(POINT));
-								//memmove(lpTmpCounts, lpAllCounts, nRectCount*sizeof(INT));
+								memmove(lpTmpPoints, lpAllPoints, nMaxRects*4*sizeof(POINT));
 								HEAPVAL;
 								lpPoints = lpTmpPoints + (lpPoints - lpAllPoints);
-								//Free(lpAllCounts);
 								Free(lpAllPoints);
 								lpAllPoints = lpTmpPoints;
-								//lpAllCounts = lpTmpCounts;
+								nMaxRects = nNewMaxRects;
 								HEAPVAL;
 							}
 
@@ -4778,7 +4776,7 @@ void CVirtualConsole::OnConsoleSizeChanged()
 void CVirtualConsole::OnConsoleSizeReset(USHORT sizeX, USHORT sizeY)
 {
 	// Это должно быть только на этапе создания новой консоли (например, появилась панель табов)
-	_ASSERTE((mp_RCon && mp_RCon->ConWnd()==NULL) || mp_RCon->mb_InCloseConsole);
+	_ASSERTE(mp_RCon && ((mp_RCon->ConWnd()==NULL) || mp_RCon->mb_InCloseConsole));
 	// И по идее, DC еще создан быть не должен был
 	if (Width==0 && Height==0)
 	{

@@ -501,6 +501,8 @@ BOOL CDragDropData::AddFmt_SHELLIDLIST(wchar_t* pszDraggedPath, UINT nFilesCount
 				{
 					nMaxSize += nItemSize;
 					CIDA* pNew = (CIDA*)GlobalAlloc(GPTR, nMaxSize);
+					if (!pNew)
+						break;
 					memmove(pNew, file_PIDLs, nCurSize);
 					GlobalFree(file_PIDLs);
 					file_PIDLs = pNew;
@@ -519,6 +521,11 @@ BOOL CDragDropData::AddFmt_SHELLIDLIST(wchar_t* pszDraggedPath, UINT nFilesCount
 			{
 				CoTaskMemFree(pItem); pItem = NULL;
 			}
+		}
+
+		if (pItem)
+		{
+			CoTaskMemFree(pItem);
 		}
 	}
 	SAFECATCH //__except(EXCEPTION_EXECUTE_HANDLER)
@@ -891,6 +898,8 @@ template <class T> void PidlDump(
 // Если передан hDumpFile - запись полной информации в текстовый файл
 void CDragDropData::EnumDragFormats(IDataObject * pDataObject, HANDLE hDumpFile /*= NULL*/)
 {
+	//=== codeanalyze: Excessive stack usage
+
 	//BOOL lbDoEnum = FALSE;
 	//if (!lbDoEnum) return;
 	HRESULT hr = S_OK;
