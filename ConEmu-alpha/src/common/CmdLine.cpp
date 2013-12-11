@@ -33,10 +33,69 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "MStrSafe.h"
 #include "WinObjects.h"
 
-// Возвращает 0, если успешно, иначе - ошибка
-int NextArg(const wchar_t** asCmdLine, wchar_t (&rsArg)[MAX_PATH+1], const wchar_t** rsArgStart/*=NULL*/)
+
+CmdArg::CmdArg()
 {
-	if (!asCmdLine)
+	mn_MaxLen = 0; ms_Arg = NULL;
+}
+CmdArg::~CmdArg()
+{
+	SafeFree(ms_Arg);
+}
+wchar_t* CmdArg::GetBuffer(INT_PTR cchMaxLen)
+{
+	if (cchMaxLen <= 0)
+	{
+		_ASSERTE(cchMaxLen>0);
+		return NULL;
+	}
+	if (!ms_Arg || (cchMaxLen >= mn_MaxLen))
+	{
+		INT_PTR nNewMaxLen = cchMaxLen+1;
+		if (ms_Arg)
+		{
+			ms_Arg = (wchar_t*)realloc(ms_Arg, nNewMaxLen*sizeof(*ms_Arg));
+		}
+		else
+		{
+			ms_Arg = (wchar_t*)malloc(nNewMaxLen*sizeof(*ms_Arg));
+		}
+		mn_MaxLen = nNewMaxLen;
+	}
+	if (ms_Arg)
+	{
+		_ASSERTE(cchMaxLen>0 && mn_MaxLen>1);
+		ms_Arg[min(cchMaxLen,mn_MaxLen-1)] = 0;
+	}
+	return ms_Arg;
+}
+void CmdArg::Empty()
+{
+	if (ms_Arg)
+		*ms_Arg = 0;
+}
+LPCWSTR CmdArg::Set(LPCWSTR asNewValue, int anChars /*= -1*/)
+{
+	if (asNewValue)
+	{
+		int nNewLen = (anChars == -1) ? lstrlen(asNewValue) : anChars;
+		if (GetBuffer(nNewLen))
+		{
+			_wcscpyn_c(ms_Arg, mn_MaxLen, asNewValue, nNewLen);
+		}
+	}
+	else
+	{
+		Empty();
+	}
+	return ms_Arg;
+}
+
+
+// Возвращает 0, если успешно, иначе - ошибка
+int NextArg(const wchar_t** asCmdLine, CmdArg &rsArg, const wchar_t** rsArgStart/*=NULL*/)
+{
+	if (!asCmdLine || !*asCmdLine)
 		return CERR_CMDLINEEMPTY;
 
 	LPCWSTR psCmdLine = *asCmdLine, pch = NULL;
@@ -82,14 +141,12 @@ int NextArg(const wchar_t** asCmdLine, wchar_t (&rsArg)[MAX_PATH+1], const wchar
 
 	nArgLen = pch - psCmdLine;
 
-	if (nArgLen > MAX_PATH) return CERR_CMDLINE;
-
 	// Вернуть аргумент
-	memcpy(rsArg, psCmdLine, nArgLen*sizeof(*rsArg));
+	if (!rsArg.Set(psCmdLine, nArgLen))
+		return CERR_CMDLINE;
 
 	if (rsArgStart) *rsArgStart = psCmdLine;
 
-	rsArg[nArgLen] = 0;
 	psCmdLine = pch;
 	// Finalize
 	ch = *psCmdLine; // может указывать на закрывающую кавычку
@@ -102,70 +159,7 @@ int NextArg(const wchar_t** asCmdLine, wchar_t (&rsArg)[MAX_PATH+1], const wchar
 	return 0;
 }
 
-//int NextArg(const char** asCmdLine, char (&rsArg)[MAX_PATH+1], const char** rsArgStart/*=NULL*/)
-//{
-//	LPCSTR psCmdLine = *asCmdLine, pch = NULL;
-//	char ch = *psCmdLine;
-//	size_t nArgLen = 0;
-//	bool lbQMode = false;
-//
-//	while (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') ch = *(++psCmdLine);
-//
-//	if (ch == 0) return CERR_CMDLINEEMPTY;
-//
-//	// аргумент начинается с "
-//	if (ch == '"')
-//	{
-//		lbQMode = true;
-//		psCmdLine++;
-//		pch = strchr(psCmdLine, '"');
-//
-//		if (!pch) return CERR_CMDLINE;
-//
-//		while (pch[1] == '"')
-//		{
-//			pch += 2;
-//			pch = strchr(pch, '"');
-//
-//			if (!pch) return CERR_CMDLINE;
-//		}
-//
-//		// Теперь в pch ссылка на последнюю "
-//	}
-//	else
-//	{
-//		// До конца строки или до первого пробела
-//		//pch = wcschr(psCmdLine, ' ');
-//		// 09.06.2009 Maks - обломался на: cmd /c" echo Y "
-//		pch = psCmdLine;
-//
-//		// Ищем обычным образом (до пробела/кавычки)
-//		while (*pch && *pch!=' ' && *pch!='"') pch++;
-//
-//		//if (!pch) pch = psCmdLine + lstrlenW(psCmdLine); // до конца строки
-//	}
-//
-//	nArgLen = pch - psCmdLine;
-//
-//	if (nArgLen > MAX_PATH) return CERR_CMDLINE;
-//
-//	// Вернуть аргумент
-//	memcpy(rsArg, psCmdLine, nArgLen*sizeof(*rsArg));
-//
-//	if (rsArgStart) *rsArgStart = psCmdLine;
-//
-//	rsArg[nArgLen] = 0;
-//	psCmdLine = pch;
-//	// Finalize
-//	ch = *psCmdLine; // может указывать на закрывающую кавычку
-//
-//	if (lbQMode && ch == '"') ch = *(++psCmdLine);
-//
-//	while(ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') ch = *(++psCmdLine);
-//
-//	*asCmdLine = psCmdLine;
-//	return 0;
-//}
+
 
 const wchar_t* SkipNonPrintable(const wchar_t* asParams)
 {
@@ -186,7 +180,7 @@ bool CompareFileMask(const wchar_t* asFileName, const wchar_t* asMask)
 		return true;
 
 	int iCmp = -1;
-	
+
 	wchar_t sz1[MAX_PATH+1], sz2[MAX_PATH+1];
 	lstrcpyn(sz1, asFileName, countof(sz1));
 	size_t nLen1 = lstrlen(sz1);
@@ -256,7 +250,7 @@ LPCWSTR GetDrive(LPCWSTR pszPath, wchar_t* szDrive, int/*countof(szDrive)*/ cchD
 const wchar_t* gsInternalCommands = L"ACTIVATE\0ALIAS\0ASSOC\0ATTRIB\0BEEP\0BREAK\0CALL\0CDD\0CHCP\0COLOR\0COPY\0DATE\0DEFAULT\0DEL\0DELAY\0DESCRIBE\0DETACH\0DIR\0DIRHISTORY\0DIRS\0DRAWBOX\0DRAWHLINE\0DRAWVLINE\0ECHO\0ECHOERR\0ECHOS\0ECHOSERR\0ENDLOCAL\0ERASE\0ERRORLEVEL\0ESET\0EXCEPT\0EXIST\0EXIT\0FFIND\0FOR\0FREE\0FTYPE\0GLOBAL\0GOTO\0HELP\0HISTORY\0IF\0IFF\0INKEY\0INPUT\0KEYBD\0KEYS\0LABEL\0LIST\0LOG\0MD\0MEMORY\0MKDIR\0MOVE\0MSGBOX\0NOT\0ON\0OPTION\0PATH\0PAUSE\0POPD\0PROMPT\0PUSHD\0RD\0REBOOT\0REN\0RENAME\0RMDIR\0SCREEN\0SCRPUT\0SELECT\0SET\0SETDOS\0SETLOCAL\0SHIFT\0SHRALIAS\0START\0TEE\0TIME\0TIMER\0TITLE\0TOUCH\0TREE\0TRUENAME\0TYPE\0UNALIAS\0UNSET\0VER\0VERIFY\0VOL\0VSCRPUT\0WINDOW\0Y\0\0";
 
 BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbNeedCutStartEndQuot,
-			   wchar_t (&szExe)[MAX_PATH+1],
+			   CmdArg &szExe,
 			   BOOL& rbRootIsCmdExe, BOOL& rbAlwaysConfirmExit, BOOL& rbAutoDisableConfirmExit)
 {
 	_ASSERTE(asCmdLine && *asCmdLine);
@@ -264,7 +258,7 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 
 	#ifdef _DEBUG
 	// Это минимальные проверки, собственно к коду - не относятся
-	wchar_t szDbgFirst[MAX_PATH+1];
+	CmdArg szDbgFirst;
 	bool bIsBatch = false;
 	{
 		LPCWSTR psz = asCmdLine;
@@ -275,14 +269,19 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 	}
 	#endif
 
-	memset(szExe, 0, sizeof(szExe));
+	if (!szExe.GetBuffer(MAX_PATH))
+	{
+		_ASSERTE(FALSE && "Failed to allocate MAX_PATH");
+		return TRUE;
+	}
+	szExe.Empty();
 
 	if (!asCmdLine || *asCmdLine == 0)
 	{
 		_ASSERTE(asCmdLine && *asCmdLine);
 		return TRUE;
 	}
-		
+
 	//110202 перенес вниз, т.к. это уже может быть cmd.exe, и тогда у него сносит крышу
 	//// Если есть одна из команд перенаправления, или слияния - нужен CMD.EXE
 	//if (wcschr(asCmdLine, L'&') ||
@@ -337,7 +336,7 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 				#endif
 				return TRUE;
 			}
-			
+
 			if (lstrcmpiW(szExe, L"start") == 0)
 			{
 				// Команду start обрабатывает только процессор
@@ -357,7 +356,7 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 
 				if (pszExpand)
 				{
-					lstrcpyn(szExe, pszExpand, countof(szExe));
+					szExe.Set(pszExpand);
 					SafeFree(pszExpand);
 					if (rsArguments)
 						*rsArguments = pwszQ;
@@ -371,7 +370,7 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 	// Получим первую команду (исполняемый файл?)
 	if (!lbFirstWasGot)
 	{
-		szExe[0] = 0;
+		szExe.Empty();
 		// 17.10.2010 - поддержка переданного исполняемого файла без параметров, но с пробелами в пути
 		LPCWSTR pchEnd = pwszCopy + lstrlenW(pwszCopy);
 
@@ -379,8 +378,9 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 
 		if ((pchEnd - pwszCopy) < MAX_PATH)
 		{
-			memcpy(szExe, pwszCopy, (pchEnd - pwszCopy)*sizeof(wchar_t));
-			szExe[(pchEnd - pwszCopy)] = 0;
+
+			szExe.Set(pwszCopy, (pchEnd - pwszCopy));
+			_ASSERTE(szExe[(pchEnd - pwszCopy)] == 0);
 
 			if (lstrcmpiW(szExe, L"start") == 0)
 			{
@@ -392,14 +392,14 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 			}
 
 			// Обработка переменных окружения и поиск в PATH
-			if (FileExistsSearch(/*IN|OUT*/szExe, countof(szExe)))
+			if (FileExistsSearch(/*IN|OUT*/szExe.GetBuffer(MAX_PATH), MAX_PATH))
 			{
 				if (rsArguments)
 					*rsArguments = pchEnd;
 			}
 			else
 			{
-				szExe[0] = 0;
+				szExe.Empty();
 			}
 		}
 
@@ -424,14 +424,14 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 			}
 
 			// Обработка переменных окружения и поиск в PATH
-			if (FileExistsSearch(/*IN|OUT*/szExe, countof(szExe)))
+			if (FileExistsSearch(/*IN|OUT*/szExe.GetBuffer(MAX_PATH), MAX_PATH))
 			{
 				if (rsArguments)
 					*rsArguments = pwszCopy;
 			}
 		}
 	}
-	
+
 	if (!*szExe)
 	{
 		_ASSERTE(szExe[0] != 0);
@@ -448,9 +448,9 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 			rbRootIsCmdExe = TRUE; // запуск через "процессор"
 			return TRUE; // добавить "cmd.exe"
 		}
-		
+
 		// если "путь" не указан
-		if (wcschr(szExe, L'\\') == NULL) 
+		if (wcschr(szExe, L'\\') == NULL)
 		{
 			bool bHasExt = (wcschr(szExe, L'.') != NULL);
 			// Проверим, может это команда процессора (типа "DIR")?
@@ -467,7 +467,7 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 						if (*p >= L'a' && *p <= 'z')
 							*p -= 0x20;
 					}
-					
+
 					const wchar_t* pszFind = gsInternalCommands;
 					while (*pszFind)
 					{
@@ -489,9 +489,9 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 					return TRUE; // добавить "cmd.exe"
 				}
 			}
-			
+
 			// Пробуем найти "по путям" соответствующий exe-шник.
-			DWORD nCchMax = countof(szExe); // выделить память, длинее чем szExe вернуть не сможем
+			DWORD nCchMax = szExe.mn_MaxLen; // выделить память, длинее чем szExe вернуть не сможем
 			wchar_t* pszSearch = (wchar_t*)malloc(nCchMax*sizeof(wchar_t));
 			if (pszSearch)
 			{
@@ -503,11 +503,11 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 				if (nRc && (nRc < nCchMax))
 				{
 					// Нашли, возвращаем что нашли
-					wcscpy_c(szExe, pszSearch);
+					szExe.Set(pszSearch);
 				}
 				free(pszSearch);
 			}
-		} // end: if (wcschr(szExe, L'\\') == NULL) 
+		} // end: if (wcschr(szExe, L'\\') == NULL)
 	}
 
 	// Если szExe не содержит путь к файлу - запускаем через cmd
@@ -524,7 +524,7 @@ BOOL IsNeedCmd(BOOL bRootCmd, LPCWSTR asCmdLine, LPCWSTR* rsArguments, BOOL *rbN
 	//pwszCopy = wcsrchr(szArg, L'\\'); if (!pwszCopy) pwszCopy = szArg; else pwszCopy ++;
 	pwszCopy = PointToName(szExe);
 	//2009-08-27
-	wchar_t *pwszEndSpace = szExe + lstrlenW(szExe) - 1;
+	wchar_t *pwszEndSpace = szExe.ms_Arg + lstrlenW(szExe) - 1;
 
 	while ((*pwszEndSpace == L' ') && (pwszEndSpace > szExe))
 	{
@@ -672,4 +672,96 @@ bool IsFarExe(LPCWSTR asModuleName)
 		}
 	}
 	return false;
+}
+
+// Return true if "SetEnvironmentVariable" was processed
+// if (bDoSet==false) - just skip all "set" commands
+bool ProcessSetEnvCmd(LPCWSTR& asCmdLine, bool bDoSet)
+{
+	LPCWSTR lsCmdLine = asCmdLine;
+	bool bEnvChanged = false;
+	CmdArg lsSet, lsVal, lsAmp;
+
+	// Example: "set PATH=C:\Program Files;%PATH%" & set abc=def & cmd
+	while (NextArg(&lsCmdLine, lsSet) == 0)
+	{
+		bool bTokenOk = false;
+		wchar_t* lsNameVal = NULL;
+
+		// It may contains only "set" if was not quoted
+		if (lstrcmpi(lsSet, L"set") == 0)
+		{
+			// Now we shell get in lsVal "abc=def" token
+			if ((NextArg(&lsCmdLine, lsVal) == 0) && (wcschr(lsVal, L'=') > lsVal.ms_Arg))
+			{
+				lsNameVal = lsVal.ms_Arg;
+			}
+		}
+		// Or full "set PATH=C:\Program Files;%PATH%" command (without quotes ATM)
+		else if (lstrcmpni(lsSet, L"set ", 4) == 0)
+		{
+			LPCWSTR psz = SkipNonPrintable(lsSet.ms_Arg+4);
+			if (wcschr(psz, L'=') > psz)
+			{
+				lsNameVal = (wchar_t*)psz;
+			}
+		}
+
+		// Well, "set name=val" command detected. What is next?
+		if (lsNameVal)
+		{
+			if (NextArg(&lsCmdLine, lsAmp) != 0)
+			{
+				// End of command? Use may call only "set" without following app? Run simple "cmd" in that case
+				_ASSERTE(lsCmdLine!=NULL && *lsCmdLine==0);
+				bTokenOk = true; // And process SetEnvironmentVariable
+			}
+			else if (lstrcmp(lsAmp, L"&") == 0)
+			{
+				// Only simple conveyer is supported!
+				bTokenOk = true; // And process SetEnvironmentVariable
+			}
+		}
+
+		if (!bTokenOk)
+		{
+			break; // Stop processing command line
+		}
+		else
+		{
+			// Remember processed position
+			asCmdLine = lsCmdLine;
+
+			// And split name/value
+			_ASSERTE(lsNameVal!=NULL);
+
+			wchar_t* pszEq = wcschr(lsNameVal, L'=');
+			if (!pszEq)
+			{
+				_ASSERTE(pszEq!=NULL);
+				break;
+			}
+
+			if (bDoSet)
+			{
+				*(pszEq++) = 0;
+				// Expand value
+				wchar_t* pszExpanded = ExpandEnvStr(pszEq);
+				LPCWSTR pszSet = pszExpanded ? pszExpanded : pszEq;
+				SetEnvironmentVariable(lsNameVal, (pszSet && *pszSet) ? pszSet : NULL);
+				SafeFree(pszExpanded);
+			}
+
+			bEnvChanged = true;
+		}
+	}
+
+	// Fin
+	if (!asCmdLine || !*asCmdLine)
+	{
+		static wchar_t szSimple[] = L"cmd";
+		asCmdLine = szSimple;
+	}
+
+	return bEnvChanged;
 }
