@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1395,8 +1395,8 @@ void CDragDropData::RetrieveDragToInfo(POINTL pt)
 	{
 		DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> (!pRCon->isAlive())\n");
 		gpConEmu->DebugStep(_T("DnD: Far is not alive, drop disabled"));
-		_ASSERTE(FALSE && "DnD: Far is not alive, drop disabled");
-		//SetDragToInfo(NULL, 0, pRCon);
+		//Don't show assert (debug) - simple text may be dropped
+		//_ASSERTE(FALSE && "DnD: Far is not alive, drop disabled");
 	}
 	else
 	{

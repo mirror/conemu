@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -387,7 +387,7 @@ LRESULT CConEmuChild::ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM 
 				HWND hGui = pVCon->GuiWnd();
 				if (hGui)
 				{
-					_ASSERTE((wParam==0) && "Show DC while GuiWnd exists");
+					_ASSERTE(((wParam==0) || pVCon->RCon()->isGuiForceConView()) && "Show DC while GuiWnd exists");
 				}
 				#endif
 				result = DefWindowProc(hWnd, messg, wParam, lParam);
@@ -1394,6 +1394,12 @@ BOOL CConEmuChild::TrackMouse()
 
 	CVirtualConsole* pVCon = (CVirtualConsole*)this;
 	CVConGuard guard(pVCon);
+
+	if (pVCon->WasHighlightRowColChanged())
+	{
+		_ASSERTE(gpConEmu->isVisible(pVCon));
+		pVCon->Invalidate();
+	}
 
 	#ifdef _DEBUG
 	CRealConsole* pRCon = pVCon->RCon();

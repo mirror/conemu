@@ -550,6 +550,8 @@ LPWSTR CConEmuMacro::ExecuteMacro(LPWSTR asMacro, CRealConsole* apRCon, bool abF
 			pszResult = FontSetSize(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"FontSetName"))
 			pszResult = FontSetName(p, apRCon);
+		else if (!lstrcmpi(szFunction, L"HighlightMouse"))
+			pszResult = HighlightMouse(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"IsRealVisible"))
 			pszResult = IsRealVisible(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"IsConsoleActive"))
@@ -574,6 +576,8 @@ LPWSTR CConEmuMacro::ExecuteMacro(LPWSTR asMacro, CRealConsole* apRCon, bool abF
 			pszResult = Tab(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"Task"))
 			pszResult = Task(p, apRCon);
+		else if (!lstrcmpi(szFunction, L"Transparency"))
+			pszResult = Transparency(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"Status") || !lstrcmpi(szFunction, L"StatusBar") || !lstrcmpi(szFunction, L"StatusControl"))
 			pszResult = Status(p, apRCon);
 		else if (!lstrcmpi(szFunction, L"Splitter") || !lstrcmpi(szFunction, L"Split"))
@@ -2113,4 +2117,52 @@ LPWSTR CConEmuMacro::Task(GuiMacro* p, CRealConsole* apRCon)
 	}
 
 	return pszResult ? lstrdup(pszResult) : lstrdup(L"InvalidArg");
+}
+
+// Change 'Highlight row/col' under mouse. Locally in current VCon.
+LPWSTR CConEmuMacro::HighlightMouse(GuiMacro* p, CRealConsole* apRCon)
+{
+	if (!apRCon)
+		return lstrdup(L"NoActiveCon");
+
+	int nWhat, nSwitch;
+	if (!p->GetIntArg(0, nWhat))
+		return lstrdup(L"InvalidArg");
+
+	if (!p->GetIntArg(1, nSwitch))
+		nSwitch = 2;
+
+	apRCon->VCon()->ChangeHighlightMouse(nWhat, nSwitch);
+	return lstrdup(L"OK");
+}
+
+LPWSTR CConEmuMacro::Transparency(GuiMacro* p, CRealConsole* apRCon)
+{
+	int nCmd, nValue;
+	if (!p->GetIntArg(0, nCmd) || !(nCmd == 0 || nCmd == 1))
+		return lstrdup(L"InvalidArg");
+	if (!p->GetIntArg(1, nValue))
+		return lstrdup(L"InvalidArg");
+
+	int newV = gpSet->nTransparent;
+
+	switch (nCmd)
+	{
+	case 0:
+		// Absolute value
+		newV = max(MIN_ALPHA_VALUE, min(MAX_ALPHA_VALUE, nValue));
+		break;
+	case 1:
+		// Relative value
+		newV = max(MIN_ALPHA_VALUE, min(MAX_ALPHA_VALUE, newV+nValue));
+		break;
+	}
+
+	if (newV != gpSet->nTransparent)
+	{
+		gpSet->nTransparent = newV;
+		gpConEmu->OnTransparent();
+	}
+
+	return lstrdup(L"OK");
 }
