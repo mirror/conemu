@@ -291,8 +291,21 @@ static const wchar_t szAnalogues[32] =
 
 /*static*/ SHORT CEAnsi::GetDefaultTextAttr()
 {
-	TODO("Default console colors");
-	return 7;
+	// Default console colors
+	static SHORT clrDefault = 0;
+	if (clrDefault)
+		return clrDefault;
+
+	HANDLE hIn = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
+	if (!GetConsoleScreenBufferInfo(hIn, &csbi))
+		return (clrDefault = 7);
+
+	static DWORD Con2Ansi[16] = {0,4,2,6,1,5,3,7,8|0,8|4,8|2,8|6,8|1,8|5,8|3,8|7};
+	clrDefault = Con2Ansi[CONFORECOLOR(csbi.wAttributes)]
+		| (Con2Ansi[CONBACKCOLOR(csbi.wAttributes)] << 4);
+
+	return clrDefault;
 }
 
 
@@ -505,6 +518,98 @@ void CEAnsi::DumpEscape(LPCWSTR buf, size_t cchLen, int iUnknown)
 #define DumpUnknownEscape(buf,cchLen)
 #endif
 
+
+// When user type smth in the prompt, screen buffer may be scrolled
+void CEAnsi::OnReadConsoleBefore(HANDLE hConOut, const CONSOLE_SCREEN_BUFFER_INFO& csbi)
+{
+	CEAnsi* pObj = CEAnsi::Object();
+	if (!pObj)
+		return;
+
+	static LONG nLastReadId = 0;
+
+	WORD NewRowId;
+	CEConsoleMark Test = {};
+
+	COORD crPos[] = {{4,csbi.dwCursorPosition.Y-1},csbi.dwCursorPosition};
+	_ASSERTEX(countof(crPos)==countof(pObj->m_RowMarks.SaveRow) && countof(crPos)==countof(pObj->m_RowMarks.RowId));
+
+	pObj->m_RowMarks.csbi = csbi;
+
+	for (int i = 0; i < 2; i++)
+	{
+		pObj->m_RowMarks.SaveRow[i] = -1;
+		pObj->m_RowMarks.RowId[i] = 0;
+		
+		if (crPos[i].X < 4 || crPos[i].Y < 0)
+			continue;
+
+		if (ReadConsoleRowId(hConOut, crPos[i].Y, &Test))
+		{
+			pObj->m_RowMarks.SaveRow[i] = crPos[i].Y;
+			pObj->m_RowMarks.RowId[i] = Test.RowId;
+		}
+		else
+		{
+			NewRowId = LOWORD(InterlockedIncrement(&nLastReadId));
+			if (!NewRowId) NewRowId = LOWORD(InterlockedIncrement(&nLastReadId));
+
+			if (WriteConsoleRowId(hConOut, crPos[i].Y, NewRowId))
+			{
+				pObj->m_RowMarks.SaveRow[i] = crPos[i].Y;
+				pObj->m_RowMarks.RowId[i] = NewRowId;
+			}
+		}
+	}
+
+	// Succeesfull mark?
+	_ASSERTEX((pObj->m_RowMarks.RowId[0] || pObj->m_RowMarks.RowId[1]) && (pObj->m_RowMarks.RowId[0] != pObj->m_RowMarks.RowId[1]));
+}
+void CEAnsi::OnReadConsoleAfter(bool bFinal)
+{
+	CEAnsi* pObj = CEAnsi::Object();
+	if (!pObj)
+		return;
+
+	if (pObj->m_RowMarks.SaveRow[0] < 0 && pObj->m_RowMarks.SaveRow[1] < 0)
+		return;
+
+	CONSOLE_SCREEN_BUFFER_INFO csbi = {};
+	HANDLE hConOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	SHORT nMarkedRow = -1;
+	CEConsoleMark Test = {};
+
+	if (!GetConsoleScreenBufferInfo(hConOut, &csbi))
+		goto wrap;
+
+	if (!FindConsoleRowId(hConOut, csbi.dwCursorPosition.Y, &nMarkedRow, &Test))
+		goto wrap;
+
+	for (int i = 1; i >= 0; i--)
+	{
+		if ((pObj->m_RowMarks.SaveRow[i] >= 0) && (pObj->m_RowMarks.RowId[i] == Test.RowId))
+		{
+			if (pObj->m_RowMarks.SaveRow[i] == nMarkedRow)
+			{
+				_ASSERTEX((pObj->m_RowMarks.csbi.dwCursorPosition.Y < (pObj->m_RowMarks.csbi.dwSize.Y-2)) && "Nothing was changed? Strage, scrolling was expected");
+				goto wrap;
+			}
+			// Well, we get scroll distance
+			_ASSERTEX(nMarkedRow < pObj->m_RowMarks.SaveRow[i]); // Upside scroll expected
+			ExtScrollScreenParm scrl = {sizeof(scrl), essf_ExtOnly, hConOut, nMarkedRow - pObj->m_RowMarks.SaveRow[i]};
+			ExtScrollScreen(&scrl);
+			goto wrap;
+		}
+	}
+
+wrap:
+	// Clear it
+	for (int i = 0; i < 2; i++)
+	{
+		pObj->m_RowMarks.SaveRow[i] = -1;
+		pObj->m_RowMarks.RowId[i] = 0;
+	}
+}
 
 
 BOOL /*WINAPI*/ CEAnsi::OnScrollConsoleScreenBufferA(HANDLE hConsoleOutput, const SMALL_RECT *lpScrollRectangle, const SMALL_RECT *lpClipRectangle, COORD dwDestinationOrigin, const CHAR_INFO *lpFill)
@@ -2039,6 +2144,12 @@ BOOL CEAnsi::WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOut
 										free(pszNewTitle);
 									}
 								}
+								break;
+
+							case L'4':
+								// the following is suggestion for exact palette colors
+								// bug we are using standard xterm palette or truecolor 24bit palette
+								_ASSERTE(Code.ArgSZ[1] == L';');
 								break;
 
 							case L'9':

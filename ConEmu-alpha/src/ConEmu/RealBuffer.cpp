@@ -3803,7 +3803,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 	wchar_t sPreLineBreak[] =
 		{
 			ucBox25,ucBox50,ucBox75,ucBox100,ucUpScroll,ucDnScroll,ucLeftScroll,ucRightScroll,ucArrowUp,ucArrowDown,
-			ucNoBreakSpace,
+			//ucNoBreakSpace, -- this is space, why it was blocked?
 			ucBoxDblVert,ucBoxSinglVert,ucBoxDblDownRight,ucBoxDblDownLeft,ucBoxDblUpRight,ucBoxDblUpLeft,ucBoxSinglDownRight,
 			ucBoxSinglDownLeft,ucBoxSinglUpRight,ucBoxSinglUpLeft,ucBoxSinglDownDblHorz,ucBoxSinglUpDblHorz,ucBoxDblDownDblHorz,
 			ucBoxDblUpDblHorz,ucBoxSinglDownHorz,ucBoxSinglUpHorz,ucBoxDblDownSinglHorz,ucBoxDblUpSinglHorz,ucBoxDblVertRight,
@@ -3827,7 +3827,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 	int   nNewLineLen = 2; // max "\r\n"
 
 	int   nCharCount = GetSelectionCharCount(bStreamMode, srSelection_X1, srSelection_Y1, srSelection_X2, srSelection_Y2, &nSelWidth, &nSelHeight, nNewLineLen);
-	_ASSERTE((nSelWidth>0) && (nSelHeight>0) && (nCharCount>0));
+	_ASSERTE((nSelWidth>-(srSelection_X1-srSelection_X2)) && (nSelHeight>0) && (nCharCount>0));
 
 	HGLOBAL hUnicode = NULL;
 	hUnicode = GlobalAlloc(GMEM_MOVEABLE|GMEM_ZEROINIT, (nCharCount+1)*sizeof(wchar_t));
@@ -3836,7 +3836,7 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 	{
 		Assert(hUnicode != NULL);
 		return false;
-	}
+	} 
 
 	wchar_t *pch = (wchar_t*)GlobalLock(hUnicode);
 
@@ -4016,7 +4016,10 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 			{
 				bool bContinue = false;
 
-				if (bDetectLines && pszNextLine && (*pszNextLine != L' ')
+				if (bDetectLines && pszNextLine
+					// Allow maximum one space on the next line
+					&& ((pszNextLine[0] != L' ') || (pszNextLine[0] == L' ' && pszNextLine[1] != L' '))
+					// If right or left edge of screen is "Frame" - force to line break!
 					&& !wcschr(sPreLineBreak, *(pch - 1))
 					&& !wcschr(sPreLineBreak, *pszNextLine))
 				{
