@@ -509,8 +509,10 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 	BOOL lbWide = FALSE;
 	HRESULT hr = S_OK;
 	HRESULT hrStg = S_OK;
+	INT_PTR cchSubFolder = 32768;
+	wchar_t* pszSubFolder = (wchar_t*)calloc(cchSubFolder,sizeof(*pszSubFolder));
 
-	if (!cBuffer)
+	if (!cBuffer || !pszSubFolder)
 	{
 		_ASSERTE(cBuffer!=NULL);
 		goto wrap;
@@ -556,7 +558,7 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 
 			// Имена файлов теперь лежат в stgMedium, а для получения содержимого
 			fmtetc.cfFormat = RegisterClipboardFormat(CFSTR_FILECONTENTS);
-			wchar_t szSubFolder[32768]; szSubFolder[0] = 0;
+			pszSubFolder[0] = 0;
 
 			int nLastProgress = -1;
 
@@ -600,8 +602,8 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 					if (pszSlash)
 					{
 						INT_PTR nFolderLen = pszSlash - pszWideName; // БЕЗ слеша
-						INT_PTR nCurFolderLen = _tcslen(szSubFolder); // с учетом слеша
-						int nCmp = wcsncmp(pszWideName, szSubFolder, nCurFolderLen);
+						INT_PTR nCurFolderLen = _tcslen(pszSubFolder); // с учетом слеша
+						int nCmp = wcsncmp(pszWideName, pszSubFolder, nCurFolderLen);
 
 						if (((nFolderLen + 1) != nCurFolderLen) && (nCmp == 0))
 						{
@@ -613,7 +615,7 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 							
 							// Поместить новый путь в SubFolder
 
-							if ((nFolderLen + 1) >= (INT_PTR)countof(szSubFolder))
+							if ((nFolderLen + 1) >= cchSubFolder)
 							{
 								_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i contains too long path!", mn_CurFile+1);
 								DebugLog(sUnknownError, TRUE);
@@ -621,19 +623,19 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 								continue;
 							}
 
-							wmemmove(szSubFolder, pszWideName, (nFolderLen + 1)*sizeof(*szSubFolder));
-							szSubFolder[(nFolderLen + 1)] = 0;
+							wmemmove(pszSubFolder, pszWideName, (nFolderLen + 1));
+							pszSubFolder[(nFolderLen + 1)] = 0;
 
-							pszNewFolder = FileCreateName(abActive, true, NULL, szSubFolder);
+							pszNewFolder = FileCreateName(abActive, true, NULL, pszSubFolder);
 							_ASSERTE(pszNewFolder!=NULL);
 							bCreateFolder = (pszNewFolder != NULL);
 						}
 					}
 					else
 					{
-						_ASSERTE((szSubFolder[0]==0) && "Files in stream must contains local paths?");
+						_ASSERTE((pszSubFolder[0]==0) && "Files in stream must contains local paths?");
 						// Сброс папки. По идее, файлы должны указываться с относительными путями.
-						szSubFolder[0] = 0;
+						pszSubFolder[0] = 0;
 					}
 				}
 				else
@@ -659,13 +661,13 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 						continue;
 					}
 
-					// if !lbFolder - szSubFolder already processed
+					// if !lbFolder - pszSubFolder already processed
 					if (lbFolder)
 					{
 						// Запомнить текущий путь в SubFolder
 						INT_PTR nFolderLen = _tcslen(pszWideName);
 
-						if ((nFolderLen + 1) >= (INT_PTR)countof(szSubFolder))
+						if ((nFolderLen + 1) >= cchSubFolder)
 						{
 							_wsprintf(sUnknownError, SKIPLEN(countof(sUnknownError)) L"Drag item #%i contains too long path!", mn_CurFile+1);
 							DebugLog(sUnknownError, TRUE);
@@ -674,12 +676,12 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 							continue;
 						}
 
-						wcscpy_c(szSubFolder, pszWideName);
+						_wcscpy_c(pszSubFolder, cchSubFolder, pszWideName);
 
-						if (szSubFolder[nFolderLen-1] != L'\\')
+						if (pszSubFolder[nFolderLen-1] != L'\\')
 						{
-							szSubFolder[nFolderLen++] = L'\\';
-							szSubFolder[nFolderLen] = 0;
+							pszSubFolder[nFolderLen++] = L'\\';
+							pszSubFolder[nFolderLen] = 0;
 						}
 					}
 
@@ -716,7 +718,7 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 
 				// Files now
 
-				wchar_t* pszNewFileName = FileCreateName(abActive, false, szSubFolder, pszWideName);
+				wchar_t* pszNewFileName = FileCreateName(abActive, false, pszSubFolder, pszWideName);
 
 				SafeFree(pszWideBuf);
 
@@ -872,9 +874,37 @@ HRESULT CDragDrop::DropFromStream(IDataObject * pDataObject, BOOL abActive)
 	ReportUnknownData(pDataObject, L"Drag object does not contains known formats!");
 wrap:
 	SafeFree(cBuffer);
+	SafeFree(pszSubFolder);
 	gpConEmu->Taskbar_SetProgressState(0);
 	gpConEmu->UpdateTitle();
 	return S_OK;
+}
+
+HRESULT CDragDrop::DropFromText(IDataObject * pDataObject)
+{
+	CVConGuard VCon;
+	if ((CVConGroup::GetActiveVCon(&VCon) < 0) || !VCon->RCon())
+		return S_FALSE;
+
+	STGMEDIUM stgMedium = { 0 };
+	FORMATETC fmtetc = { CF_UNICODETEXT, 0, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+	// !! The caller then assumes responsibility for releasing the STGMEDIUM structure.
+	HRESULT hr = pDataObject->GetData(&fmtetc, &stgMedium);
+	if (SUCCEEDED(hr) && stgMedium.hGlobal)
+	{
+		LPCWSTR pszText = (LPCWSTR)GlobalLock(stgMedium.hGlobal);
+		if (pszText)
+		{
+			VCon->RCon()->Paste(false, pszText);
+			GlobalUnlock(stgMedium.hGlobal);
+		}
+		ReleaseStgMedium(&stgMedium);
+	}
+	else
+	{
+		hr = E_FAIL;
+	}
+	return hr;
 }
 
 HRESULT CDragDrop::DropNames(HDROP hDrop, int iQuantity, BOOL abActive)
@@ -911,9 +941,9 @@ HRESULT CDragDrop::DropNames(HDROP hDrop, int iQuantity, BOOL abActive)
 			idView,
 		};
 		AppendMenu(hPopup, MF_STRING | MF_ENABLED, idNamesOnly, L"Paste &no prefix");
-		AppendMenu(hPopup, MF_STRING | (iQuantity == 1) ? MF_ENABLED : MF_GRAYED, idGoto,      L"&Goto prefix");
-		AppendMenu(hPopup, MF_STRING | (iQuantity == 1) ? MF_ENABLED : MF_GRAYED, idEdit,      L"&Edit prefix");
-		AppendMenu(hPopup, MF_STRING | (iQuantity == 1) ? MF_ENABLED : MF_GRAYED, idView,      L"&View prefix");
+		AppendMenu(hPopup, MF_STRING | ((iQuantity == 1) ? MF_ENABLED : MF_GRAYED), idGoto,      L"&Goto prefix");
+		AppendMenu(hPopup, MF_STRING | ((iQuantity == 1) ? MF_ENABLED : MF_GRAYED), idEdit,      L"&Edit prefix");
+		AppendMenu(hPopup, MF_STRING | ((iQuantity == 1) ? MF_ENABLED : MF_GRAYED), idView,      L"&View prefix");
 
 		POINT ptCur = {}; ::GetCursorPos(&ptCur);
 
@@ -1237,6 +1267,11 @@ HRESULT STDMETHODCALLTYPE CDragDrop::Drop(IDataObject * pDataObject,DWORD grfKey
 	{
 		if (mb_selfdrag || lbDropFileNamesOnly)
 		{
+			if ((hr = DropFromText(pDataObject)) == S_OK)
+			{
+				return S_OK;
+			}
+
 			//MBoxA(_T("Drag object does not contains known formats!"));
 			ReportUnknownData(pDataObject, L"Drag object does not contains real file names!\nCan't drop here from containers like Zip or Outlook!");
 			return S_OK;

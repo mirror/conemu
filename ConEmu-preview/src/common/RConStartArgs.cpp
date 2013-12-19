@@ -147,6 +147,50 @@ void RConStartArgs::RunArgTests()
 			break;
 		}
 	}
+
+	CmdArg s;
+	s.Set(L"Abcdef", 3);
+	int nDbg = lstrcmp(s, L"Abc");
+	_ASSERTE(nDbg==0);
+	s.Set(L"qwerty");
+	nDbg = lstrcmp(s, L"qwerty");
+	_ASSERTE(nDbg==0);
+	s.Empty();
+	//s.Set(L""); // !! Set("") must trigger ASSERT !!
+	nDbg = s.ms_Arg ? lstrcmp(s, L"") : -2;
+	_ASSERTE(nDbg==0);
+
+	struct { LPCWSTR pszWhole; LPCWSTR pszCmp[5]; } lsArgTest[] = {
+		{L"\"This is test\" Next-arg \t\n \"Third Arg +++++++++++++++++++\" ++", {L"This is test", L"Next-arg", L"Third Arg +++++++++++++++++++"}},
+		{L"\"\"cmd\"\"", {L"cmd"}},
+		{L"\"\"c:\\Windows\\System32\\cmd.exe\" /?\"", {L"c:\\Windows\\System32\\cmd.exe", L"/?"}},
+		// Following example is crazy, but quotation issues may happens
+		//{L"First Sec\"\"ond \"Thi\"rd\" \"Fo\"\"rth\"", {L"First", L"Sec\"\"ond", L"Thi\"rd", L"Fo\"\"rth"}},
+		{L"First \"Fo\"\"rth\"", {L"First", L"Fo\"\"rth"}},
+		// Multiple commands
+		{L"set ConEmuReportExe=VIM.EXE & SH.EXE", {L"set", L"ConEmuReportExe=VIM.EXE", L"&", L"SH.EXE"}},
+		{NULL}
+	};
+	for (int i = 0; lsArgTest[i].pszWhole; i++)
+	{
+		s.Empty();
+		LPCWSTR pszTestCmd = lsArgTest[i].pszWhole;
+		int j = -1;
+		while (lsArgTest[i].pszCmp[++j])
+		{
+			if (NextArg(&pszTestCmd, s) != 0)
+			{
+				_ASSERTE(FALSE && "Fails on token!");
+			}
+			else
+			{
+				nDbg = lstrcmp(s, lsArgTest[i].pszCmp[j]);
+				_ASSERTE(nDbg==0);
+			}
+		}
+	}
+
+	nDbg = -1;
 }
 #endif
 
@@ -577,7 +621,7 @@ int RConStartArgs::ProcessNewConArg(bool bForceCurConsole /*= false*/)
 	// 120115 - ≈сли первый аргумент - "ConEmu.exe" или "ConEmu64.exe" - не обрабатывать "-cur_console" и "-new_console"
 	{
 		LPCWSTR pszTemp = pszSpecialCmd;
-		wchar_t szExe[MAX_PATH+1];
+		CmdArg szExe;
 		if (0 == NextArg(&pszTemp, szExe))
 		{
 			pszTemp = PointToName(szExe);

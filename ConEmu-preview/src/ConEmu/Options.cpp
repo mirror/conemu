@@ -620,6 +620,8 @@ void Settings::InitSettings()
 	nPasteConfirmLonger = 200;
 	isFarGotoEditor = true; //isFarGotoEditorVk = VK_LCONTROL;
 	sFarGotoEditor = lstrdup(L"far.exe /e%1:%2 \"%3\"");
+	isHighlightMouseRow = false; // Not turned on by default
+	isHighlightMouseCol = false; // Not turned on by default
 
 	isStatusBarShow = true;
 	isStatusBarFlags = csf_HorzDelim;
@@ -1559,7 +1561,7 @@ void Settings::SavePalettes(SettingsBase* reg)
 		bool bFound = false;
 		for (int i = 0; i < PaletteCount; i++)
 		{
-			if (Palettes[i]->pszName && (lstrcmpi(Apps[k]->szPaletteName, Palettes[i]->pszName) == 0))
+			if (Palettes[i] && Palettes[i]->pszName && (lstrcmpi(Apps[k]->szPaletteName, Palettes[i]->pszName) == 0))
 			{
 				//memmove(AppColors[k]->Colors, Palettes[i]->Colors, sizeof(Palettes[i]->Colors));
 				//AppColors[k]->FadeInitialized = false;
@@ -2080,7 +2082,12 @@ void Settings::FreeProgresses()
 
 void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 {
-	if (gpConEmu) gpConEmu->LogString(L"Settings::LoadSettings");
+	if (!gpConEmu)
+	{
+		_ASSERTE(gpConEmu);
+		return;
+	}
+	gpConEmu->LogString(L"Settings::LoadSettings");
 
 	MCHKHEAP
 	mb_CharSetWasSet = FALSE;
@@ -2439,6 +2446,9 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"FarGotoEditorOpt", isFarGotoEditor);
 		reg->Load(L"FarGotoEditorPath", &sFarGotoEditor);
 		//reg->Load(L"FarGotoEditorVk", isFarGotoEditorVk);
+
+		reg->Load(L"HighlightMouseRow", isHighlightMouseRow);
+		reg->Load(L"HighlightMouseCol", isHighlightMouseCol);
 
 		if (!reg->Load(L"FixFarBorders", isFixFarBorders))
 			reg->Load(L"Experimental", isFixFarBorders); //очень старое имя настройки
@@ -3121,7 +3131,12 @@ void Settings::SaveStatusSettings(SettingsBase* reg)
 
 BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* apStorage /*= NULL*/)
 {
-	if (gpConEmu) gpConEmu->LogString(L"Settings::SaveSettings");
+	if (!gpConEmu)
+	{
+		_ASSERTE(gpConEmu);
+		return FALSE;
+	}
+	gpConEmu->LogString(L"Settings::SaveSettings");
 
 	BOOL lbRc = FALSE;
 
@@ -3347,6 +3362,9 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"FarGotoEditorPath", sFarGotoEditor);
 		//reg->Save(L"FarGotoEditorVk", isFarGotoEditorVk);
 		
+		reg->Save(L"HighlightMouseRow", isHighlightMouseRow);
+		reg->Save(L"HighlightMouseCol", isHighlightMouseCol);
+
 		reg->Save(L"FixFarBorders", isFixFarBorders);
 		{
 		wchar_t* pszCharRanges = CreateCharRanges(mpc_FixFarBorderValues);
@@ -4707,6 +4725,12 @@ void Settings::CmdTaskSet(int anIndex, LPCWSTR asName, LPCWSTR asGuiArgs, LPCWST
 		CmdTasks = ppNew;
 
 		// CmdTaskCount накручивается в конце функции
+	}
+
+	if (!CmdTasks)
+	{
+		_ASSERTE(CmdTasks);
+		return;
 	}
 
 	if (CmdTasks[anIndex] == NULL)

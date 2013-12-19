@@ -571,7 +571,7 @@ BOOL createProcess(BOOL abSkipWowChange, LPCWSTR lpApplicationName, LPWSTR lpCom
 	if (lpApplicationName == NULL)
 	{
 		LPCWSTR pszTemp = lpCommandLine;
-		wchar_t szExe[MAX_PATH+1];
+		CmdArg szExe;
 		if (NextArg(&pszTemp, szExe) == 0)
 		{
 			LPCWSTR pszName = PointToName(szExe);
@@ -1223,7 +1223,7 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 
 				// Имеет смысл, только если окно хотят изначально спрятать
 				const wchar_t *psz = gpszRunCmd, *pszStart;
-				wchar_t szExe[MAX_PATH+1];
+				CmdArg szExe;
 				if (NextArg(&psz, szExe, &pszStart) == 0)
 				{
 					MWow64Disable wow;
@@ -1275,7 +1275,7 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 
 		#ifdef _DEBUG
 		LPCWSTR pszRunCmpApp = NULL;
-		wchar_t szExeName[MAX_PATH+1];
+		CmdArg szExeName;
 		{
 			LPCWSTR pszStart = gpszRunCmd;
 			if (NextArg(&pszStart, szExeName) == 0)
@@ -1429,7 +1429,8 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 			PRINT_COMSPEC(L"Vista+: The requested operation requires elevation (ErrCode=0x%08X).\n", dwErr);
 			// Vista: The requested operation requires elevation.
 			LPCWSTR pszCmd = gpszRunCmd;
-			wchar_t szVerb[10], szExec[MAX_PATH+1];
+			wchar_t szVerb[10];
+			CmdArg szExec;
 
 			if (NextArg(&pszCmd, szExec) == 0)
 			{
@@ -1437,7 +1438,7 @@ int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserv
 				sei.hwnd = ghConEmuWnd;
 				sei.fMask = SEE_MASK_NO_CONSOLE; //SEE_MASK_NOCLOSEPROCESS; -- смысла ждать завершения нет - процесс запускается в новой консоли
 				wcscpy_c(szVerb, L"open"); sei.lpVerb = szVerb;
-				sei.lpFile = szExec;
+				sei.lpFile = szExec.ms_Arg;
 				sei.lpParameters = pszCmd;
 				sei.lpDirectory = pszCurDir;
 				sei.nShow = SW_SHOWNORMAL;
@@ -3057,7 +3058,7 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 	}
 	else
 	{
-		wchar_t szTest[MAX_PATH+1];
+		CmdArg szTest;
 		while (0==NextArg(&asCmdArg, szTest))
 		{
 			if (!*szTest || *szTest == L'*')
@@ -3470,7 +3471,7 @@ void UpdateConsoleTitle(LPCWSTR lsCmdLine, BOOL& lbNeedCutStartEndQuot, bool bEx
 				if (lbCont && (*pszTitle != L'"') && ((*(pszEndQ-1) == L'.') ||(*(pszEndQ-1) == L' ')))
 				{
 					LPCWSTR pwszCopy = pszTitle;
-					wchar_t szTemp[MAX_PATH+1];
+					CmdArg szTemp;
 
 					if (NextArg(&pwszCopy, szTemp) == 0)
 					{
@@ -3558,7 +3559,8 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	//}
 	
 	int iRc = 0;
-	wchar_t szArg[MAX_PATH+1] = {0}, szExeTest[MAX_PATH+1];
+	CmdArg szArg;
+	CmdArg szExeTest;
 	LPCWSTR pszArgStarts = NULL;
 	//wchar_t szComSpec[MAX_PATH+1] = {0};
 	//LPCWSTR pwszCopy = NULL;
@@ -3648,7 +3650,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			// Могли указать PID или HWND требуемого инстанса
 			if (szArg[9] == L':' || szArg[9] == L'=')
 			{
-				wchar_t* pszID = szArg+10;
+				wchar_t* pszID = szArg.ms_Arg+10;
 				if (*pszID == L'0') pszID ++;
 				wchar_t* pszEnd;
 				if ((pszID[0] == L'0' && (pszID[1] == L'x' || pszID[1] == L'X'))
@@ -3800,7 +3802,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		{
 			// Для режима RM_COMSPEC нужно будет сохранить "длинный вывод"
 			wchar_t* pszEnd = NULL, *pszStart;
-			pszStart = szArg+14;
+			pszStart = szArg.ms_Arg+14;
 			gpSrv->dwParentFarPID = wcstoul(pszStart, &pszEnd, 10);
 		}
 		else if (wcsncmp(szArg, L"/PID=", 5)==0 || wcsncmp(szArg, L"/TRMPID=", 8)==0
@@ -3815,24 +3817,24 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			{
 				// This is called from *.vshost.exe when "AllocConsole" just created
 				gbDontInjectConEmuHk = TRUE;
-				pszStart = szArg+8;
+				pszStart = szArg.ms_Arg+8;
 			}
 			else if (wcsncmp(szArg, L"/FARPID=", 8)==0)
 			{
 				gbAttachFromFar = TRUE;
 				gbRootIsCmdExe = FALSE;
-				pszStart = szArg+8;
+				pszStart = szArg.ms_Arg+8;
 			}
 			else if (wcsncmp(szArg, L"/CONPID=", 8)==0)
 			{
 				_ASSERTE(FALSE && "Continue to alternative attach mode");
 				gbAlternativeAttach = TRUE;
 				gbRootIsCmdExe = FALSE;
-				pszStart = szArg+8;
+				pszStart = szArg.ms_Arg+8;
 			}
 			else
 			{
-				pszStart = szArg+5;
+				pszStart = szArg.ms_Arg+5;
 			}
 
 			gpSrv->dwRootProcess = wcstoul(pszStart, &pszEnd, 10);
@@ -3967,7 +3969,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 		}
 		else if (wcsncmp(szArg, L"/CINMODE=", 9)==0)
 		{
-			wchar_t* pszEnd = NULL, *pszStart = szArg+9;
+			wchar_t* pszEnd = NULL, *pszStart = szArg.ms_Arg+9;
 			gnConsoleModeFlags = wcstoul(pszStart, &pszEnd, 16);
 			// если передан 0 - включится (ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS|ENABLE_INSERT_MODE)
 			gbConsoleModeFlags = (gnConsoleModeFlags != 0);
@@ -4532,6 +4534,13 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	{
 		BOOL bAlwaysConfirmExit = gbAlwaysConfirmExit, bAutoDisableConfirmExit = gbAutoDisableConfirmExit;
 
+		if (gnRunMode == RM_SERVER)
+		{
+			// Console may be started as follows:
+			// "set PATH=C:\Program Files;%PATH%" & set abc=def & cmd
+			ProcessSetEnvCmd(lsCmdLine, true);
+		}
+
 		gpszCheck4NeedCmd = lsCmdLine; // Для отладки
 
 		gbRunViaCmdExe = IsNeedCmd((gnRunMode == RM_SERVER), lsCmdLine, &pszArguments4EnvVar, &lbNeedCutStartEndQuot, szExeTest, 
@@ -4551,7 +4560,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	if (IsWindows64())
 	{
 		LPCWSTR pszTest = lsCmdLine;
-		wchar_t szApp[MAX_PATH+1];
+		CmdArg szApp;
 
 		if (NextArg(&pszTest, szApp) == 0)
 		{
@@ -4571,7 +4580,7 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 
 				if (nAppLen > nLen)
 				{
-					szApp[nLen] = 0;
+					szApp.ms_Arg[nLen] = 0;
 
 					if (lstrcmpiW(szApp, szSysnative) == 0)
 					{
@@ -4768,105 +4777,6 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 	_ASSERTE(pwszStartCmdLine==asCmdLine);
 	return 0;
 }
-
-//int NextArg(LPCWSTR &asCmdLine, wchar_t* rsArg/*[MAX_PATH+1]*/)
-//{
-//    LPCWSTR psCmdLine = asCmdLine, pch = NULL;
-//    wchar_t ch = *psCmdLine;
-//    int nArgLen = 0;
-//
-//    while (ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n') ch = *(++psCmdLine);
-//    if (ch == 0) return CERR_CMDLINEEMPTY;
-//
-//    // аргумент начинается с "
-//    if (ch == L'"') {
-//        psCmdLine++;
-//        pch = wcschr(psCmdLine, L'"');
-//        if (!pch) return CERR_CMDLINE;
-//        while (pch[1] == L'"') {
-//            pch += 2;
-//            pch = wcschr(pch, L'"');
-//            if (!pch) return CERR_CMDLINE;
-//        }
-//        // Теперь в pch ссылка на последнюю "
-//    } else {
-//        // До конца строки или до первого пробела
-//        //pch = wcschr(psCmdLine, L' ');
-//        // 09.06.2009 Maks - обломался на: cmd /c" echo Y "
-//        pch = psCmdLine;
-//        while (*pch && *pch!=L' ' && *pch!=L'"') pch++;
-//        //if (!pch) pch = psCmdLine + lstrlen(psCmdLine); // до конца строки
-//    }
-//
-//    nArgLen = pch - psCmdLine;
-//    if (nArgLen > MAX_PATH) return CERR_CMDLINE;
-//
-//    // Вернуть аргумент
-//    memcpy(rsArg, psCmdLine, nArgLen*sizeof(wchar_t));
-//    rsArg[nArgLen] = 0;
-//
-//    psCmdLine = pch;
-//
-//    // Finalize
-//    ch = *psCmdLine; // может указывать на закрывающую кавычку
-//    if (ch == L'"') ch = *(++psCmdLine);
-//    while (ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n') ch = *(++psCmdLine);
-//    asCmdLine = psCmdLine;
-//
-//    return 0;
-//}
-
-//void CorrectConsolePos()
-//{
-//	RECT rcNew = {};
-//	if (GetWindowRect(ghConWnd, &rcNew))
-//	{
-//		HMONITOR hMon = MonitorFromWindow(ghConWnd, MONITOR_DEFAULTTOPRIMARY);
-//		MONITORINFO mi = {sizeof(mi)};
-//		int nMaxX = 0, nMaxY = 0;
-//		if (GetMonitorInfo(hMon, &mi))
-//		{
-//			int newW = (rcNew.right-rcNew.left), newH = (rcNew.bottom-rcNew.top);
-//			int newX = rcNew.left, newY = rcNew.top;
-//
-//			if (newX < mi.rcWork.left)
-//				newX = mi.rcWork.left;
-//			else if (rcNew.right > mi.rcWork.right)
-//				newX = max(mi.rcWork.left,(mi.rcWork.right-newW));
-//
-//			if (newY < mi.rcWork.top)
-//				newY = mi.rcWork.top;
-//			else if (rcNew.bottom > mi.rcWork.bottom)
-//				newY = max(mi.rcWork.top,(mi.rcWork.bottom-newH));
-//
-//			if ((newX != rcNew.left) || (newY != rcNew.top))
-//				SetWindowPos(ghConWnd, HWND_TOP, newX, newY,0,0, SWP_NOSIZE);
-//		}
-//	}
-//}
-//
-//void EmergencyShow()
-//{
-//	if (ghConWnd)
-//	{
-//		CorrectConsolePos();
-//
-//		if (!IsWindowVisible(ghConWnd))
-//		{
-//			SetWindowPos(ghConWnd, HWND_NOTOPMOST, 0,0,0,0, SWP_NOSIZE|SWP_NOMOVE);
-//			//SetWindowPos(ghConWnd, HWND_TOP, 50,50,0,0, SWP_NOSIZE);
-//			apiShowWindowAsync(ghConWnd, SW_SHOWNORMAL);
-//		}
-//		else
-//		{
-//			// Снять TOPMOST
-//			SetWindowPos(ghConWnd, HWND_NOTOPMOST, 0,0,0,0, SWP_NOSIZE|SWP_NOMOVE);
-//		}
-//
-//		if (!IsWindowEnabled(ghConWnd))
-//			EnableWindow(ghConWnd, true);
-//	}
-//}
 
 // Проверить, что nPID это "ConEmuC.exe" или "ConEmuC64.exe"
 bool IsMainServerPID(DWORD nPID)
@@ -5189,7 +5099,7 @@ void SendStarted()
 		// Перед запуском 16бит приложений нужно подресайзить консоль...
 		gnImageSubsystem = 0;
 		LPCWSTR pszTemp = gpszRunCmd;
-		wchar_t lsRoot[MAX_PATH+1] = {0};
+		CmdArg lsRoot;
 
 		if (gnRunMode == RM_SERVER && gpSrv->DbgInfo.bDebuggerActive)
 		{
@@ -8059,15 +7969,118 @@ BOOL cmd_UpdConMapHdr(CESERVER_REQ& in, CESERVER_REQ** out)
 	return lbRc;
 }
 
+BOOL cmd_SetConScrBuf(CESERVER_REQ& in, CESERVER_REQ** out)
+{
+	BOOL lbRc = TRUE;
+	DWORD nSafeWait = (DWORD)-1;
+	HANDLE hInEvent = NULL, hOutEvent = NULL, hWaitEvent = NULL;
+	char szLog[200];
+
+	size_t cbInSize = in.DataSize(), cbReqSize = sizeof(CESERVER_REQ_SETCONSCRBUF);
+	if (cbInSize == cbReqSize)
+	{
+		char* pszLogLbl;
+		if (gpLogSize)
+		{
+			msprintf(szLog, countof(szLog), "CECMD_SETCONSCRBUF x%08X {%i,%i} ",
+				(DWORD)(DWORD_PTR)in.SetConScrBuf.hRequestor, (int)in.SetConScrBuf.dwSize.X, (int)in.SetConScrBuf.dwSize.Y);
+			pszLogLbl = szLog + lstrlenA(szLog);
+		}
+
+		if (in.SetConScrBuf.bLock)
+		{
+			if (gpLogSize)
+			{
+				lstrcpynA(pszLogLbl, "Recvd", 10);
+				LogString(szLog);
+			}
+			// Блокируем нить чтения и дождемся пока она перейдет в режим ожидания
+			_ASSERTE(gpSrv->hInWaitForSetConBufThread==NULL);
+			gpSrv->hInWaitForSetConBufThread = hInEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+			gpSrv->hOutWaitForSetConBufThread = hOutEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+			gpSrv->hWaitForSetConBufThread = hWaitEvent = in.SetConScrBuf.hRequestor ? in.SetConScrBuf.hRequestor : INVALID_HANDLE_VALUE;
+			nSafeWait = WaitForSingleObject(hInEvent, WAIT_SETCONSCRBUF_MIN_TIMEOUT);
+			if (gpLogSize)
+			{
+				lstrcpynA(pszLogLbl, "Ready", 10);
+				LogString(szLog);
+			}
+		}
+		else
+		{
+			if (gpLogSize)
+			{
+				lstrcpynA(pszLogLbl, "Finish", 10);
+				LogString(szLog);
+			}
+			hOutEvent = gpSrv->hOutWaitForSetConBufThread;
+			// Otherwise - we must be in the call of ANOTHER thread!
+			if (hOutEvent == in.SetConScrBuf.hTemp)
+			{
+				SetEvent(hOutEvent);
+			}
+			else
+			{
+				// Timeout may be, or another process we are waiting for already...
+				_ASSERTE(hOutEvent == in.SetConScrBuf.hTemp);
+			}
+		}
+	}
+
+	size_t cbReplySize = sizeof(CESERVER_REQ_HDR) + sizeof(CESERVER_REQ_SETCONSCRBUF);
+	*out = ExecuteNewCmd(CECMD_SETCONSCRBUF, cbReplySize);
+	if ((*out) != NULL)
+	{
+		if (in.SetConScrBuf.bLock)
+		{
+			(*out)->SetConScrBuf.bLock = nSafeWait;
+			(*out)->SetConScrBuf.hTemp = hOutEvent;
+		}
+	}
+	else
+	{
+		lbRc = FALSE;
+	}
+
+	return lbRc;
+}
+
 bool ProcessAltSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out, BOOL& lbRc)
 {
 	bool lbProcessed = false;
 	// Если крутится альтернативный сервер - команду нужно выполнять в нем
 	if (gpSrv->dwAltServerPID && (gpSrv->dwAltServerPID != gnSelfPID))
 	{
+		HANDLE hSave = NULL, hDup = NULL; DWORD nDupError = (DWORD)-1;
+		if ((in.hdr.nCmd == CECMD_SETCONSCRBUF) && (in.DataSize() >= sizeof(in.SetConScrBuf)) && in.SetConScrBuf.bLock)
+		{
+			if (gpSrv->hAltServer)
+			{
+				hSave = in.SetConScrBuf.hRequestor;
+				if (!hSave)
+					nDupError = (DWORD)-3;
+				else if (!DuplicateHandle(GetCurrentProcess(), hSave, gpSrv->hAltServer, &hDup, 0, FALSE, DUPLICATE_SAME_ACCESS))
+					nDupError = GetLastError();
+				else
+					in.SetConScrBuf.hRequestor = hDup;
+			}
+			else
+			{
+				nDupError = (DWORD)-2;
+			}
+		}
+
 		(*out) = ExecuteSrvCmd(gpSrv->dwAltServerPID, &in, ghConWnd);
 		lbProcessed = ((*out) != NULL);
 		lbRc = lbProcessed;
+
+		if (hSave)
+		{
+			in.SetConScrBuf.hRequestor = hSave;
+			if (lbProcessed)
+				SafeCloseHandle(hSave);
+		}
+		UNREFERENCED_PARAMETER(nDupError);
 	}
 	return lbProcessed;
 }
@@ -8245,6 +8258,14 @@ BOOL ProcessSrvCommand(CESERVER_REQ& in, CESERVER_REQ** out)
 		case CECMD_UPDCONMAPHDR:
 		{
 			lbRc = cmd_UpdConMapHdr(in, out);
+		} break;
+		case CECMD_SETCONSCRBUF:
+		{
+			// Если крутится альтернативный сервер - команду нужно выполнять в нем
+			if (!ProcessAltSrvCommand(in, out, lbRc))
+			{
+				lbRc = cmd_SetConScrBuf(in, out);
+			}
 		} break;
 		default:
 		{
@@ -8494,29 +8515,40 @@ BOOL MyGetConsoleScreenBufferInfo(HANDLE ahConOut, PCONSOLE_SCREEN_BUFFER_INFO a
 		if ((nCP != CP_UTF8) && (nCP != CP_UTF7))
 		{
 			UINT MaxCharSize = 0;
-			LPCSTR szLeads = GetCpInfoLeads(nCP, &MaxCharSize);
-
-			if (szLeads && *szLeads && (MaxCharSize > 1))
+			if (AreCpInfoLeads(nCP, &MaxCharSize) && (MaxCharSize > 1))
 			{
-				_ASSERTE(MaxCharSize==2 || MaxCharSize==4);
-				char szLine[512];
+				_ASSERTE(MaxCharSize==2);
+				WORD Attrs[40];
+				LONG cchMax = countof(Attrs);
+				WORD* pAttrs = (csbi.dwCursorPosition.X <= cchMax) ? Attrs : (WORD*)calloc(csbi.dwCursorPosition.X, sizeof(*pAttrs));
+				if (pAttrs)
+					cchMax = csbi.dwCursorPosition.X;
+				else
+					pAttrs = Attrs; // memory allocation fail? try part of line?
 				COORD crRead = {0, csbi.dwCursorPosition.Y};
-				//120830 - DBCS uses 2 or 4 cells per hieroglyph
-				DWORD nRead = 0, cchMax = min((int)countof(szLine)-1, csbi.dwSize.X/* *cpinfo.MaxCharSize */);
-				if (ReadConsoleOutputCharacterA(ahConOut, szLine, cchMax, crRead, &nRead) && nRead)
+				//120830 - DBCS uses 2 cells per hieroglyph
+				DWORD nRead = 0;
+				if (ReadConsoleOutputAttribute(ahConOut, pAttrs, cchMax, crRead, &nRead) && nRead)
 				{
-					_ASSERTE(nRead<((int)countof(szLine)-1));
-					szLine[nRead] = 0;
-					char* pszEnd = szLine+min((int)nRead,csbi.dwCursorPosition.X);
-					char* psz = szLine;
+					_ASSERTE(nRead==cchMax);
 					int nXShift = 0;
-					while (((psz = strpbrk(psz, szLeads)) != NULL) && (psz < pszEnd))
+					LPWORD p = pAttrs, pEnd = pAttrs+nRead;
+					while (p < pEnd)
 					{
-						nXShift++;
-						psz += MaxCharSize;
+						if ((*p) & COMMON_LVB_LEADING_BYTE)
+						{
+							nXShift++;
+							p++;
+							_ASSERTE((p < pEnd) && ((*p) & COMMON_LVB_TRAILING_BYTE));
+						}
+						p++;
 					}
 					_ASSERTE(nXShift <= csbi.dwCursorPosition.X);
 					apsc->dwCursorPosition.X = max(0,(csbi.dwCursorPosition.X - nXShift));
+				}
+				if (pAttrs && (pAttrs != Attrs))
+				{
+					free(pAttrs);
 				}
 			}
 		}

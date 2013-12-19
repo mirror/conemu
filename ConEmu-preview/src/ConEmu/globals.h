@@ -61,21 +61,21 @@ extern HWND ghOpWnd;
 #ifdef _DEBUG
 extern HWND ghConWnd;
 #endif
-extern BOOL gbMessagingStarted, gbDontEnable;
+extern BOOL gbMessagingStarted;
+
 class DontEnable
 {
 private:
-	BOOL b;
+	LONG nPrev; // Informational!
+	static LONG gnDontEnable;
+	bool bLocked;
 public:
-	DontEnable()
-	{
-		b = gbDontEnable; gbDontEnable = TRUE;
-	};
-	~DontEnable()
-	{
-		gbDontEnable = b;
-	};
+	DontEnable();
+	~DontEnable();
+public:
+	static BOOL isDontEnable();
 };
+
 extern OSVERSIONINFO gOSVer;
 extern WORD gnOsVer;
 extern bool gbIsWine;

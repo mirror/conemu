@@ -136,6 +136,9 @@ CShellProc::CShellProc()
 	mb_TempConEmuWnd = FALSE;
 	mh_PreConEmuWnd = ghConEmuWnd; mh_PreConEmuWndDC = ghConEmuWndDC;
 
+	// Current application is GUI subsystem run in ConEmu tab?
+	CheckIsCurrentGuiClient();
+
 	if (gbPrepareDefaultTerminal)
 	{
 		ZeroStruct(m_GuiMapping);
@@ -531,7 +534,10 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 	BOOL lbComSpec = FALSE; // TRUE - если %COMSPEC% отбрасывается
 	int nCchSize = 0;
 	BOOL lbEndQuote = FALSE;
-	bool lbNewGuiConsole = false, lbNewConsoleFromGui = false;
+	#if 0
+	bool lbNewGuiConsole = false;
+	#endif
+	bool lbNewConsoleFromGui = false;
 	BOOL lbComSpecK = FALSE; // TRUE - если нужно запустить /K, а не /C
 
 	szConEmuC = (wchar_t*)malloc(cchConEmuC*sizeof(*szConEmuC)); // ConEmuC64.exe
@@ -621,7 +627,7 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 						if (pszFileOnly)
 						{
 							LPCWSTR pszCopy = pszParam;
-							wchar_t szFirst[MAX_PATH+1];
+							CmdArg  szFirst;
 							if (NextArg(&pszCopy, szFirst) != 0)
 							{
 								_ASSERTE(FALSE && "NextArg failed?");
@@ -653,7 +659,7 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 											asParam = pszCopy;
 											pszFileOnly = NULL;
 										}
-										else if ((pszExt = wcsrchr(szFirst, L'.')) != NULL)
+										else if (wcsrchr(szFirst, L'.'))
 										{
 											if (lstrcmpi(pszFirstName, szTmpFileOnly) == 0)
 											{
@@ -713,7 +719,7 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 						asParam = SkipNonPrintable(psz+2); // /C или /K добавляется к ConEmuC.exe
 						lbNewCmdCheck = FALSE;
 
-						wcscpy_c(ms_ExeTmp, szComspec);
+						ms_ExeTmp.Set(szComspec);
 						DWORD nCheckSybsystem1 = 0, nCheckBits1 = 0, nFileAttrs1 = 0;
 						if (FindImageSubsystem(ms_ExeTmp, nCheckSybsystem1, nCheckBits1, nFileAttrs1))
 						{
@@ -784,7 +790,7 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 			BOOL lbRootIsCmdExe = FALSE, lbAlwaysConfirmExit = FALSE, lbAutoDisableConfirmExit = FALSE;
 			BOOL lbNeedCutStartEndQuot = FALSE;
 			DWORD nFileAttrs = (DWORD)-1;
-			ms_ExeTmp[0] = 0;
+			ms_ExeTmp.Empty();
 			IsNeedCmd(false, SkipNonPrintable(asParam), NULL, &lbNeedCutStartEndQuot, ms_ExeTmp, lbRootIsCmdExe, lbAlwaysConfirmExit, lbAutoDisableConfirmExit);
 			// это может быть команда ком.процессора!
 			// поэтому, наверное, искать и проверять битность будем только для
@@ -845,24 +851,11 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 		int nLen = lstrlen(asParam);
 
 		// Может это запускается Dos-приложение через "cmd /c ..."?
-		for (int i = 0; (i <= 1) && (ImageSubsystem != IMAGE_SUBSYSTEM_DOS_EXECUTABLE); i++)
+		if (ImageSubsystem != IMAGE_SUBSYSTEM_DOS_EXECUTABLE)
 		{
 			LPCWSTR pszCmdLine = asParam;
 
-			if (i == 0)
-			{
-				// Сначала отрезать кавычки, если так
-				// asFile='cmd.exe' asParam='/C "C:\Lan\Turbo.exe File.pas"'
-				// '/C' - уже отброшен при проверке lbComSpec
-				if (nLen > 2 && pszCmdLine[0] == L'"' && pszCmdLine[nLen-1] == L'"')
-					pszCmdLine++;
-				else
-					continue;
-			}
-			else
-			{
-			}
-
+			ms_ExeTmp.Empty();
 			if (NextArg(&pszCmdLine, ms_ExeTmp) == 0)
 			{
 				LPCWSTR pszExt = PointToExt(ms_ExeTmp);
@@ -973,9 +966,13 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 		*psFile = NULL;
 	}
 
-	// Если запускается новый GUI как вкладка, или консольное приложения из GUI как вкладки
+	#if 0
+	// Если запускается новый GUI как вкладка?
 	lbNewGuiConsole = (ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI) || (ghAttachGuiClient != NULL);
-	lbNewConsoleFromGui = (ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI) && (gbPrepareDefaultTerminal || (ghAttachGuiClient != NULL));
+	#endif
+
+	// Starting CONSOLE application from GUI tab? This affect "Default terminal" too.
+	lbNewConsoleFromGui = (ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI) && (gbPrepareDefaultTerminal || mb_isCurrentGuiClient);
 
 	#if 0
 	if (lbNewGuiConsole)
@@ -1160,7 +1157,7 @@ BOOL CShellProc::ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole
 				// exe-шника в asFile указано НЕ было, значит он в asParam, нужно его вытащить, и сформировать команду DosBox
 				BOOL lbRootIsCmdExe = FALSE, lbAlwaysConfirmExit = FALSE, lbAutoDisableConfirmExit = FALSE;
 				BOOL lbNeedCutStartEndQuot = FALSE;
-				ms_ExeTmp[0] = 0;
+				ms_ExeTmp.Empty();
 				IsNeedCmd(false, SkipNonPrintable(asParam), NULL, &lbNeedCutStartEndQuot, ms_ExeTmp, lbRootIsCmdExe, lbAlwaysConfirmExit, lbAutoDisableConfirmExit);
 
 				if (ms_ExeTmp[0])
@@ -1368,6 +1365,14 @@ wrap:
 	return TRUE;
 }
 
+void CShellProc::CheckIsCurrentGuiClient()
+{
+	// gbAttachGuiClient is TRUE if some application (GUI subsystem) was not created window yet
+	// this is, for example, CommandPromptPortable.exe
+	// ghAttachGuiClient is HWND of already created GUI child client window
+	mb_isCurrentGuiClient = ((gbAttachGuiClient != FALSE) || (ghAttachGuiClient != NULL));
+}
+
 // -1: if need to block execution
 //  0: continue
 //  1: continue, changes was made
@@ -1393,8 +1398,8 @@ int CShellProc::PrepareExecuteParms(
 
 		#ifdef _DEBUG
 		bool bAnsiConFound = false;
-		lstrcpyn(ms_ExeTmp, psz, countof(ms_ExeTmp));
-		CharUpperBuff(ms_ExeTmp, lstrlen(ms_ExeTmp));
+		ms_ExeTmp.Set(psz);
+		CharUpperBuff(ms_ExeTmp.ms_Arg, lstrlen(ms_ExeTmp));
 		if (wcsstr(ms_ExeTmp, L"ANSI-LLW") != NULL
 			|| wcsstr(ms_ExeTmp, L"ANSICON") != NULL)
 		{
@@ -1402,6 +1407,7 @@ int CShellProc::PrepareExecuteParms(
 		}
 		#endif
 
+		ms_ExeTmp.Empty();
 		if (NextArg(&psz, ms_ExeTmp) != 0)
 		{
 			// AnsiCon exists in command line?
@@ -1409,7 +1415,7 @@ int CShellProc::PrepareExecuteParms(
 			continue;
 		}
 
-		CharUpperBuff(ms_ExeTmp, lstrlen(ms_ExeTmp));
+		CharUpperBuff(ms_ExeTmp.ms_Arg, lstrlen(ms_ExeTmp));
 		psz = PointToName(ms_ExeTmp);
 		if ((lstrcmp(psz, L"ANSI-LLW.EXE") == 0) || (lstrcmp(psz, L"ANSI-LLW") == 0)
 			|| (lstrcmp(psz, L"ANSICON.EXE") == 0) || (lstrcmp(psz, L"ANSICON") == 0))
@@ -1435,7 +1441,7 @@ int CShellProc::PrepareExecuteParms(
 		WriteConsoleW(hStdOut, sErrMsg, nLen, &nLen, NULL);
 		return -1;
 	}
-	ms_ExeTmp[0] = 0;
+	ms_ExeTmp.Empty();
 
 
 	BOOL bGoChangeParm = FALSE;
@@ -1452,6 +1458,9 @@ int CShellProc::PrepareExecuteParms(
 	else if (aCmd == eCreateProcess)
 		bDetachedOrHidden = (anCreateFlags && (*anCreateFlags & (CREATE_NEW_CONSOLE|CREATE_NO_WINDOW|DETACHED_PROCESS)) && anShowCmd && *anShowCmd == 0);
 	BOOL bLongConsoleOutput = gFarMode.bFarHookMode && gFarMode.bLongConsoleOutput && !bDetachedOrHidden;
+
+	// Current application is GUI subsystem run in ConEmu tab?
+	CheckIsCurrentGuiClient();
 	
 	bool bNewConsoleArg = false, bForceNewConsole = false, bCurConsoleArg = false;
 	// Service object
@@ -1566,7 +1575,8 @@ int CShellProc::PrepareExecuteParms(
 #else
 		// Считаем, что один файл (*.exe, *.cmd, ...) или ярлык (*.lnk)
 		// это одна запускаемая консоль в ConEmu.
-		wchar_t szPart[MAX_PATH+1], szExe[MAX_PATH+1], szArguments[32768], szDir[MAX_PATH+1];
+		CmdArg szPart[MAX_PATH+1]
+		wchar_t szExe[MAX_PATH+1], szArguments[32768], szDir[MAX_PATH+1];
 		HRESULT hr = S_OK;
 		IShellLinkW* pShellLink = NULL;
 		IPersistFile* pFile = NULL;
@@ -1663,16 +1673,16 @@ int CShellProc::PrepareExecuteParms(
 			if (pszEnd)
 			{
 				size_t cchLen = (pszEnd - asFile) - 1;
-				_wcscpyn_c(ms_ExeTmp, countof(ms_ExeTmp), asFile+1, cchLen);
+				ms_ExeTmp.Set(asFile+1, cchLen);
 			}
 			else
 			{
-				_wcscpyn_c(ms_ExeTmp, countof(ms_ExeTmp), asFile+1, countof(ms_ExeTmp));
+				ms_ExeTmp.Set(asFile+1);
 			}
 		}
 		else
 		{
-			_wcscpyn_c(ms_ExeTmp, countof(ms_ExeTmp), asFile, countof(ms_ExeTmp));
+			ms_ExeTmp.Set(asFile);
 		}
 	}
 	else
@@ -1798,14 +1808,15 @@ int CShellProc::PrepareExecuteParms(
 		}
 	}
 	// Если GUI приложение работает во вкладке ConEmu - запускать консольные приложение в новой вкладке ConEmu
+	// Use mb_isCurrentGuiClient instead of ghAttachGuiClient, because of 'CommandPromptPortable.exe' for example
 	if (!bNewConsoleArg 
-		&& ghAttachGuiClient && (mn_ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI)
+		&& mb_isCurrentGuiClient && (mn_ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI)
 		&& ((anShowCmd == NULL) || (*anShowCmd != SW_HIDE)))
 	{
 		WARNING("Не забыть, что цеплять во вкладку нужно только если консоль запускается ВИДИМОЙ");
 		bForceNewConsole = true;
 	}
-	if (ghAttachGuiClient && (bNewConsoleArg || bForceNewConsole) && !lbGuiApp)
+	if (mb_isCurrentGuiClient && (bNewConsoleArg || bForceNewConsole) && !lbGuiApp)
 	{
 		lbGuiApp = true;
 	}

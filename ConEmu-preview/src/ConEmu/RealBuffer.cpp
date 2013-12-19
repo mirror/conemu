@@ -85,7 +85,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define Alloc calloc
 
 #ifdef _DEBUG
-#define HEAPVAL MCHKHEAP
+#define HEAPVAL //MCHKHEAP
 #else
 #define HEAPVAL
 #endif
@@ -1271,7 +1271,7 @@ BOOL CRealBuffer::isConsoleDataChanged()
 
 BOOL CRealBuffer::PreInit()
 {
-	MCHKHEAP;
+	HEAPVAL;
 	// Инициализировать переменные m_sbi, m_ci, m_sel
 	//RECT rcWnd; Get ClientRect(ghWnd, &rcWnd);
 	
@@ -1281,14 +1281,14 @@ BOOL CRealBuffer::PreInit()
 
 	if (bNeedBufHeight && !isScroll())
 	{
-		MCHKHEAP;
+		HEAPVAL;
 		SetBufferHeightMode(TRUE);
-		MCHKHEAP;
+		HEAPVAL;
 		_ASSERTE(mp_RCon->mn_DefaultBufferHeight>0);
 		BufferHeight(mp_RCon->mn_DefaultBufferHeight);
 	}
 
-	MCHKHEAP;
+	HEAPVAL;
 	RECT rcCon;
 
 	// "!(gpConEmu->isZoomed() || gpConEmu->isFullScreen())" дает не то...
@@ -1349,7 +1349,7 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 	BOOL lbRc = FALSE;
 	int nNewWidth = 0, nNewHeight = 0;
 	DWORD nScroll = 0;
-	MCHKHEAP;
+	HEAPVAL;
 
 	if (!GetConWindowSize(con.m_sbi, &nNewWidth, &nNewHeight, &nScroll))
 		return FALSE;
@@ -1382,7 +1382,7 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 		// Exclusive(!) Lock
 		MSectionLock sc; sc.Lock(&csCON, TRUE);
 
-		MCHKHEAP;
+		HEAPVAL;
 		con.LastStartInitBuffersTick = GetTickCount();
 
 		Assert(con.bInGetConsoleData==FALSE);
@@ -1398,7 +1398,7 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 
 		//if (con.pCmp)
 		//	{ Free(con.pCmp); con.pCmp = NULL; }
-		MCHKHEAP;
+		HEAPVAL;
 		int cchCharMax = nNewWidth * nNewHeight * 2;
 		con.pConChar = (TCHAR*)Alloc(cchCharMax, sizeof(*con.pConChar));
 		con.pConAttr = (WORD*)Alloc(cchCharMax, sizeof(*con.pConAttr));
@@ -1417,12 +1417,12 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 		_ASSERTE(con.pConAttr!=NULL);
 		_ASSERTE(con.pDataCmp!=NULL);
 		//_ASSERTE(con.pCmp!=NULL);
-		MCHKHEAP
+		HEAPVAL
 		lbRc = con.pConChar!=NULL && con.pConAttr!=NULL && con.pDataCmp!=NULL;
 	}
 	else if (con.nTextWidth!=nNewWidth || con.nTextHeight!=nNewHeight)
 	{
-		MCHKHEAP
+		HEAPVAL
 		MSectionLock sc; sc.Lock(&csCON);
 		int cchCharMax = nNewWidth * nNewHeight * 2;
 		memset(con.pConChar, 0, cchCharMax * sizeof(*con.pConChar));
@@ -1432,7 +1432,7 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 		memset(con.pDataCmp, 0, (nNewWidth * nNewHeight) * sizeof(CHAR_INFO));
 		//memset(con.pCmp->Buf, 0, (nNewWidth * nNewHeight) * sizeof(CHAR_INFO));
 		sc.Unlock();
-		MCHKHEAP
+		HEAPVAL
 		lbRc = TRUE;
 	}
 	else
@@ -1440,7 +1440,7 @@ BOOL CRealBuffer::InitBuffers(DWORD OneBufferSize)
 		lbRc = TRUE;
 	}
 
-	MCHKHEAP
+	HEAPVAL
 #ifdef _DEBUG
 
 	if (nNewHeight == 158)
@@ -1946,7 +1946,7 @@ BOOL CRealBuffer::LoadDataFromSrv(DWORD CharCount, CHAR_INFO* pData)
 		return FALSE; // Изменений нет
 	}
 
-	MCHKHEAP;
+	HEAPVAL;
 	BOOL lbScreenChanged = FALSE;
 	wchar_t* lpChar = con.pConChar;
 	WORD* lpAttr = con.pConAttr;
@@ -2001,7 +2001,7 @@ BOOL CRealBuffer::LoadDataFromSrv(DWORD CharCount, CHAR_INFO* pData)
 		//con.pCopy->crBufSize = con.pCmp->crBufSize;
 		//memmove(con.pCopy->Buf, con.pCmp->Buf, CharCount*sizeof(CHAR_INFO));
 		memmove(con.pDataCmp, pData, CharCount*sizeof(CHAR_INFO));
-		MCHKHEAP;
+		HEAPVAL;
 		CHAR_INFO* lpCur = con.pDataCmp;
 		//// Когда вернется возможность выделения - нужно сразу применять данные в атрибуты
 		//_ASSERTE(!bSelectionPresent); -- не нужно. Все сделает GetConsoleData
@@ -2019,7 +2019,7 @@ BOOL CRealBuffer::LoadDataFromSrv(DWORD CharCount, CHAR_INFO* pData)
 			*(lpChar++) = (ch < 32) ? gszAnalogues[(WORD)ch] : ch;
 		}
 
-		MCHKHEAP
+		HEAPVAL
 	}
 
 	return lbScreenChanged;
@@ -2214,7 +2214,7 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 
 		if (dwSbiSize != 0)
 		{
-			MCHKHEAP
+			HEAPVAL
 			_ASSERTE(dwSbiSize == sizeof(con.m_sbi));
 
 			if (memcmp(&con.m_sbi, &pInfo->sbi, sizeof(con.m_sbi))!=0)
@@ -2304,7 +2304,7 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 				con.nTopVisibleLine = con.m_sbi.srWindow.Top;
 			#endif
 
-			MCHKHEAP
+			HEAPVAL
 		}
 
 		//DWORD dwCharChanged = pInfo->ConInfo.RgnInfo.dwRgnInfoSize;
@@ -2355,7 +2355,7 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 
 				//MSectionLock sc2; sc2.Lock(&csCON);
 				sc.Lock(&csCON);
-				MCHKHEAP;
+				HEAPVAL;
 
 				if (InitBuffers(OneBufferSize))
 				{
@@ -2366,7 +2366,7 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 					}
 				}
 
-				MCHKHEAP;
+				HEAPVAL;
 			}
 		}
 
@@ -2414,7 +2414,7 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 		}
 
 		//_ASSERTE(lbDataValid);
-		MCHKHEAP;
+		HEAPVAL;
 #endif
 
 		// Проверка буфера TrueColor
@@ -2430,7 +2430,7 @@ BOOL CRealBuffer::ApplyConsoleInfo()
 		{
 			// По con.m_sbi проверяет, включена ли прокрутка
 			CheckBufferSize();
-			MCHKHEAP;
+			HEAPVAL;
 		}
 
 		sc.Unlock();
@@ -3701,6 +3701,46 @@ bool CRealBuffer::DoSelectionCopy(bool bCopyAll /*= false*/, BYTE nFormat /*= 0x
 	return bRc;
 }
 
+int CRealBuffer::GetSelectionCharCount(bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2, int* pnSelWidth, int* pnSelHeight, int nNewLineLen)
+{
+	int   nCharCount = 0;
+	int   nSelWidth = srSelection_X2 - srSelection_X1 + 1;
+	int   nSelHeight = srSelection_Y2 - srSelection_Y1 + 1;
+
+	_ASSERTE(nNewLineLen==0 || nNewLineLen==1 || nNewLineLen==2);
+
+	if (!bStreamMode)
+	{
+		nCharCount = ((nSelWidth+nNewLineLen/* "\r\n" */) * nSelHeight) - nNewLineLen; // после последней строки "\r\n" не ставится
+	}
+	else
+	{
+		if (nSelHeight == 1)
+		{
+			nCharCount = nSelWidth;
+		}
+		else if (nSelHeight == 2)
+		{
+			// На первой строке - до конца строки, вторая строка - до окончания блока, + "\r\n"
+			nCharCount = (con.nTextWidth - srSelection_X1) + (srSelection_X2 + 1) + nNewLineLen;
+		}
+		else
+		{
+			Assert(nSelHeight>2);
+			// На первой строке - до конца строки, последняя строка - до окончания блока, + "\r\n"
+			nCharCount = (con.nTextWidth - srSelection_X1) + (srSelection_X2 + 1) + nNewLineLen
+			             + ((nSelHeight - 2) * (con.nTextWidth + nNewLineLen)); // + серединка * (длину консоли + "\r\n")
+		}
+	}
+
+	if (pnSelWidth)
+		*pnSelWidth = nSelWidth;
+	if (pnSelHeight)
+		*pnSelHeight = nSelHeight;
+
+	return nCharCount;
+}
+
 bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2, BYTE nFormat /*= 0xFF*/ /* use gpSet->isCTSHtmlFormat */)
 {
 	// Warning!!! Здесь уже нельзя ориентироваться на con.m_sel !!!
@@ -3773,46 +3813,21 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 			0 /*ASCIIZ!!!*/
 		};
 
-
-	DWORD dwErr = 0;
-	BOOL  lbRc = FALSE;
-	bool  Result = false;
-	int   nSelWidth = srSelection_X2 - srSelection_X1;
-	int   nSelHeight = srSelection_Y2 - srSelection_Y1;
-
-
+	// Pre validations
 	if (srSelection_X1 > (srSelection_X2+(srSelection_Y2-srSelection_Y1)*nTextWidth))
 	{
 		Assert(srSelection_X1 <= (srSelection_X2+(srSelection_Y2-srSelection_Y1)*nTextWidth));
 		return false;
 	}
 
-	nSelWidth++; nSelHeight++;
-	int nCharCount = 0;
+	DWORD dwErr = 0;
+	BOOL  lbRc = FALSE;
+	bool  Result = false;
+	int   nSelWidth = 0, nSelHeight = 0;
+	int   nNewLineLen = 2; // max "\r\n"
 
-	if (!bStreamMode)
-	{
-		nCharCount = ((nSelWidth+2/* "\r\n" */) * nSelHeight) - 2; // после последней строки "\r\n" не ставится
-	}
-	else
-	{
-		if (nSelHeight == 1)
-		{
-			nCharCount = nSelWidth;
-		}
-		else if (nSelHeight == 2)
-		{
-			// На первой строке - до конца строки, вторая строка - до окончания блока, + "\r\n"
-			nCharCount = (con.nTextWidth - srSelection_X1) + (srSelection_X2 + 1) + 2;
-		}
-		else
-		{
-			Assert(nSelHeight>2);
-			// На первой строке - до конца строки, последняя строка - до окончания блока, + "\r\n"
-			nCharCount = (con.nTextWidth - srSelection_X1) + (srSelection_X2 + 1) + 2
-			             + ((nSelHeight - 2) * (con.nTextWidth + 2)); // + серединка * (длину консоли + "\r\n")
-		}
-	}
+	int   nCharCount = GetSelectionCharCount(bStreamMode, srSelection_X1, srSelection_Y1, srSelection_X2, srSelection_Y2, &nSelWidth, &nSelHeight, nNewLineLen);
+	_ASSERTE((nSelWidth>0) && (nSelHeight>0) && (nCharCount>0));
 
 	HGLOBAL hUnicode = NULL;
 	hUnicode = GlobalAlloc(GMEM_MOVEABLE|GMEM_ZEROINIT, (nCharCount+1)*sizeof(wchar_t));
@@ -4123,6 +4138,22 @@ bool CRealBuffer::DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSele
 // обновить на экране
 void CRealBuffer::UpdateSelection()
 {
+	// Show current selection state in the Status bar
+	wchar_t szSelInfo[128] = L"";
+	if (con.m_sel.dwFlags)
+	{
+		bool bStreamMode = isStreamSelection();
+		int  nCharCount = GetSelectionCharCount(bStreamMode, con.m_sel.srSelection.Left, con.m_sel.srSelection.Top,
+			con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom, NULL, NULL, 0);
+
+		_wsprintf(szSelInfo, SKIPLEN(countof(szSelInfo)) L"%s selection {%i,%i}-{%i,%i} total %i chars",
+			bStreamMode ? L"Stream" : L"Block",
+			con.m_sel.srSelection.Left, con.m_sel.srSelection.Top,
+			con.m_sel.srSelection.Right, con.m_sel.srSelection.Bottom,
+			nCharCount);
+	}
+	mp_RCon->SetConStatus(szSelInfo);
+
 	TODO("Это корректно? Нужно обновить VCon");
 	con.bConsoleDataChanged = TRUE; // А эта - при вызовах из CVirtualConsole
 	mp_RCon->mp_VCon->Update(true);
@@ -4696,7 +4727,7 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 					break;
 				}
 
-				if (nY == 1) lcaTable = lcaTableExt;
+				if (nY == nExtendStartsY) lcaTable = lcaTableExt;
 
 				// Текст
 				memmove(pszDst, pszSrc, cbLineSize);
@@ -5212,11 +5243,11 @@ void CRealBuffer::FindPanels()
 		             && (con.pConChar[nIdx+1]>=L'0' && con.pConChar[nIdx+1]<=L'9')) // открыто несколько редакторов/вьюверов
 		            ||
 		            ((bFirstCharOk || con.pConChar[nIdx] == ucBoxDblDownRight)
-		             && ((con.pConChar[nIdx+1] == ucBoxDblHorz && bFarShowColNames)
+		             && (((con.pConChar[nIdx+1] == ucBoxDblHorz || con.pConChar[nIdx+1] == L' ') && bFarShowColNames)
 		                 || con.pConChar[nIdx+1] == ucBoxSinglDownDblHorz // доп.окон нет, только рамка
 						 || con.pConChar[nIdx+1] == ucBoxDblDownDblHorz
 		                 || (con.pConChar[nIdx+1] == L'[' && con.pConChar[nIdx+2] == ucLeftScroll) // ScreenGadgets, default
-						 || (!bFarShowColNames && con.pConChar[nIdx+1] != ucBoxDblHorz
+						 || (!bFarShowColNames && !(con.pConChar[nIdx+1] == ucBoxDblHorz || con.pConChar[nIdx+1] == L' ')
 							&& con.pConChar[nIdx+1] != ucBoxSinglDownDblHorz && con.pConChar[nIdx+1] != ucBoxDblDownDblHorz)
 		                ))
 		        )
@@ -5226,7 +5257,7 @@ void CRealBuffer::FindPanels()
 			{
 				// Найти правый край левой панели
 				if (con.pConChar[nIdx+i] == ucBoxDblDownLeft
-				        && ((con.pConChar[nIdx+i-1] == ucBoxDblHorz)
+				        && ((con.pConChar[nIdx+i-1] == ucBoxDblHorz || con.pConChar[nIdx+i-1] == L' ')
 				            || con.pConChar[nIdx+i-1] == ucBoxSinglDownDblHorz // правый угол панели
 							|| con.pConChar[nIdx+i-1] == ucBoxDblDownDblHorz
 				            || (con.pConChar[nIdx+i-1] == L']' && con.pConChar[nIdx+i-2] == L'\\') // ScreenGadgets, default
@@ -5313,11 +5344,11 @@ void CRealBuffer::FindPanels()
 					{
 						// ищем левую границу правой панели
 						if (con.pConChar[nIdx+i] == ucBoxDblDownRight
-						        && ((con.pConChar[nIdx+i+1] == ucBoxDblHorz && bFarShowColNames)
+						        && (((con.pConChar[nIdx+i+1] == ucBoxDblHorz || con.pConChar[nIdx+i+1] == L' ') && bFarShowColNames)
 						            || con.pConChar[nIdx+i+1] == ucBoxSinglDownDblHorz // правый угол панели
 									|| con.pConChar[nIdx+i+1] == ucBoxDblDownDblHorz
 						            || (con.pConChar[nIdx+i-1] == L']' && con.pConChar[nIdx+i-2] == L'\\') // ScreenGadgets, default
-									|| (!bFarShowColNames && con.pConChar[nIdx+i+1] != ucBoxDblHorz 
+									|| (!bFarShowColNames && !(con.pConChar[nIdx+i+1] == ucBoxDblHorz || con.pConChar[nIdx+i+1] == L' ')
 										&& con.pConChar[nIdx+i+1] != ucBoxSinglDownDblHorz && con.pConChar[nIdx+i+1] != ucBoxDblDownDblHorz)
 									)
 						        // МОЖЕТ быть закрыто AltHistory

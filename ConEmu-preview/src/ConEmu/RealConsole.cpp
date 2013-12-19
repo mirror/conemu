@@ -284,7 +284,9 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	mn_LastInvalidateTick = 0;
 
 	hConWnd = NULL;
-	hGuiWnd = mh_GuiWndFocusStore = NULL; mb_GuiExternMode = FALSE; //mn_GuiApplicationPID = 0;
+	hGuiWnd = mh_GuiWndFocusStore = NULL;
+	mb_GuiExternMode = FALSE;
+	mb_GuiForceConView = false;
 	mn_GuiAttachInputTID = 0;
 	mn_GuiWndStyle = mn_GuiWndStylEx = 0; mn_GuiAttachFlags = 0;
 	ZeroStruct(mrc_LastGuiWnd);
@@ -2663,7 +2665,7 @@ void CRealConsole::PrepareDefaultColors(BYTE& nTextColorIdx, BYTE& nBackColorIdx
 	LPCWSTR pszPalette = (m_Args.pszPalette && *m_Args.pszPalette) ? m_Args.pszPalette
 		: (pApp->OverridePalette && *pApp->szPaletteName) ? pApp->szPaletteName
 		: NULL;
-	if (pszPalette && pszPalette)
+	if (pszPalette && *pszPalette)
 	{
 		int iPalIdx = gpSet->PaletteGetIndex(pszPalette);
 		if (iPalIdx >= 0)
@@ -3050,6 +3052,25 @@ LPCWSTR CRealConsole::GetStartupDir()
 	return lpszWorkDir;
 }
 
+void CRealConsole::ResetVarsOnStart()
+{
+	mb_InCloseConsole = FALSE;
+	mb_SwitchActiveServer = false;
+	//Drop flag after Restart console
+	mb_InPostCloseMacro = false;
+	//mb_WasStartDetached = FALSE; -- не сбрасывать, на него смотрит и isDetached()
+	ZeroStruct(m_ServerClosing);
+
+	hConWnd = NULL;
+	hGuiWnd = mh_GuiWndFocusStore = NULL;
+	mb_GuiExternMode = FALSE;
+	mb_GuiForceConView = false;
+	//mn_GuiApplicationPID = 0;
+	setGuiWndPID(0, NULL); // set mn_GuiWndPID to 0
+	mn_GuiWndStyle = mn_GuiWndStylEx = 0;
+	mn_GuiAttachFlags = 0;
+}
+
 BOOL CRealConsole::StartProcess()
 {
 	if (!this)
@@ -3090,13 +3111,14 @@ BOOL CRealConsole::StartProcess()
 
 	//ResetEvent(mh_CreateRootEvent);
 	CloseConfirmReset();
+
+	//Moved to function
+	ResetVarsOnStart();
+
+	//Ready!
 	mb_InCreateRoot = TRUE;
-	mb_InCloseConsole = FALSE;
-	mb_SwitchActiveServer = false;
-	//Drop flag after Restart console
-	mb_InPostCloseMacro = false;
-	//mb_WasStartDetached = FALSE; -- не сбрасывать, на него смотрит и isDetached()
-	ZeroStruct(m_ServerClosing);
+
+	//=====================================
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
 	wchar_t szInitConTitle[255];
@@ -3557,14 +3579,14 @@ BOOL CRealConsole::StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR
 				//	NORMAL_PRIORITY_CLASS|CREATE_DEFAULT_ERROR_MODE|CREATE_NEW_CONSOLE
 				//	, NULL, m_Args.pszStartupDir, &si, &pi))
 			nCreateEnd = GetTickCount();
-			if (lbRc)
+
+			if (!lbRc)
 			{
-				//mn_MainSrv_PID = pi.dwProcessId;
-				SetMainSrvPID(pi.dwProcessId, NULL);
+				dwLastError = GetLastError();
 			}
 			else
 			{
-				dwLastError = GetLastError();
+				SetMainSrvPID(pi.dwProcessId, pi.hProcess);
 			}
 
 			SecureZeroMemory(m_Args.szUserPassword, sizeof(m_Args.szUserPassword));
@@ -3578,10 +3600,13 @@ BOOL CRealConsole::StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR
 				                    , NULL, lpszWorkDir, &si, &pi, &dwLastError);
 			nCreateEnd = GetTickCount();
 
-			if (lbRc)
+			if (!lbRc)
 			{
-				//mn_MainSrv_PID = pi.dwProcessId;
-				SetMainSrvPID(pi.dwProcessId, NULL);
+				dwLastError = GetLastError();
+			}
+			else
+			{
+				SetMainSrvPID(pi.dwProcessId, pi.hProcess);
 			}
 
 		}
@@ -3601,8 +3626,7 @@ BOOL CRealConsole::StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR
 			}
 			else
 			{
-				//mn_MainSrv_PID = pi.dwProcessId;
-				SetMainSrvPID(pi.dwProcessId, NULL);
+				SetMainSrvPID(pi.dwProcessId, pi.hProcess);
 			}
 		}
 
@@ -3616,7 +3640,7 @@ BOOL CRealConsole::StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR
 	else // m_Args.bRunAsAdministrator
 	{
 		LPCWSTR pszCmd = psCurCmd;
-		wchar_t szExec[MAX_PATH+1];
+		CmdArg szExec;
 
 		if (NextArg(&pszCmd, szExec) != 0)
 		{
@@ -6067,7 +6091,7 @@ int CRealConsole::GetDefaultAppSettingsId()
 	LPCWSTR lpszCmd = NULL;
 	//wchar_t* pszBuffer = NULL;
 	LPCWSTR pszName = NULL;
-	wchar_t szExe[MAX_PATH+1];
+	CmdArg szExe;
 	wchar_t szName[MAX_PATH+1];
 	LPCWSTR pszTemp = NULL;
 	LPCWSTR pszIconFile = (m_Args.pszIconFile && *m_Args.pszIconFile) ? m_Args.pszIconFile : NULL;
@@ -6104,6 +6128,7 @@ int CRealConsole::GetDefaultAppSettingsId()
 	}
 
 	// Parse command line
+	ProcessSetEnvCmd(lpszCmd, false);
 	pszTemp = lpszCmd;
 
 	if (0 == NextArg(&pszTemp, szExe))
@@ -6867,11 +6892,13 @@ void CRealConsole::ShowGuiClientInt(bool bShow)
 {
 	if (bShow && hGuiWnd && IsWindow(hGuiWnd))
 	{
+		mb_GuiForceConView = false;
 		ShowOtherWindow(hGuiWnd, SW_SHOW);
 		ShowWindow(GetView(), SW_HIDE);
 	}
 	else
 	{
+		mb_GuiForceConView = true;
 		ShowWindow(GetView(), SW_SHOW);
 		if (hGuiWnd && IsWindow(hGuiWnd))
 			ShowOtherWindow(hGuiWnd, SW_HIDE);
@@ -7727,12 +7754,9 @@ BOOL CRealConsole::RecreateProcessStart()
 		StopThread(TRUE/*abRecreate*/);
 		ResetEvent(mh_TermEvent);
 		mn_TermEventTick = 0;
-		hConWnd = NULL;
-		hGuiWnd = mh_GuiWndFocusStore = NULL;
-		//mn_GuiApplicationPID = 0;
-		setGuiWndPID(0, NULL); // set mn_GuiWndPID to 0
-		mn_GuiWndStyle = mn_GuiWndStylEx = 0;
-		mn_GuiAttachFlags = 0;
+
+		//Moved to function
+		ResetVarsOnStart();
 
 		ms_VConServer_Pipe[0] = 0;
 		m_RConServer.Stop();
@@ -11218,6 +11242,10 @@ DWORD CRealConsole::GuiWndPID()
 		return 0;
 	return mn_GuiWndPID;
 }
+bool CRealConsole::isGuiForceConView()
+{
+	return mb_GuiForceConView;
+}
 
 // При движении окна ConEmu - нужно подергать дочерние окошки
 // Иначе PuTTY глючит с обработкой мышки
@@ -12802,7 +12830,8 @@ BOOL CRealConsole::GuiAppAttachAllowed(LPCWSTR asAppFileName, DWORD anAppPID)
 	LPCWSTR pszCmd = GetCmd();
 	if (pszCmd && *pszCmd && asAppFileName && *asAppFileName)
 	{
-		wchar_t szApp[MAX_PATH+1], szArg[MAX_PATH+1];
+		wchar_t szApp[MAX_PATH+1];
+		CmdArg  szArg;
 		LPCWSTR pszArg = NULL, pszApp = NULL, pszOnly = NULL;
 
 		while (pszCmd[0] == L'"' && pszCmd[1] == L'"')
@@ -12819,7 +12848,7 @@ BOOL CRealConsole::GuiAppAttachAllowed(LPCWSTR asAppFileName, DWORD anAppPID)
 		if (NextArg(&pszCmd, szArg, &pszApp) == 0)
 		{
 			// Что пытаемся запустить в консоли
-			CharUpperBuff(szArg, lstrlen(szArg));
+			CharUpperBuff(szArg.ms_Arg, lstrlen(szArg));
 			pszArg = PointToName(szArg);
 			if (lstrcmp(pszArg, szApp) == 0)
 				return true;
@@ -12833,8 +12862,8 @@ BOOL CRealConsole::GuiAppAttachAllowed(LPCWSTR asAppFileName, DWORD anAppPID)
 		}
 
 		// Может там кавычек нет, а путь с пробелом
-		lstrcpyn(szArg, pszOnly, countof(szArg));
-		CharUpperBuff(szArg, lstrlen(szArg));
+		szArg.Set(pszOnly);
+		CharUpperBuff(szArg.ms_Arg, lstrlen(szArg));
 		if (lstrcmp(szArg, szApp) == 0)
 			return true;
 		if (pszArg && !wcschr(pszArg, L'.') && pszDot)

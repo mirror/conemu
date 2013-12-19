@@ -115,13 +115,16 @@ WARNING("„асто после разблокировани€ компьютера размер консоли измен€етс€ (OK), 
 
 #ifdef _DEBUG
 //#undef HEAPVAL
-#define HEAPVAL HeapValidate(mh_Heap, 0, NULL);
+#define HEAPVAL //HeapValidate(mh_Heap, 0, NULL);
 #define CURSOR_ALWAYS_VISIBLE
 #else
 #define HEAPVAL
 #endif
 
 #define ISBGIMGCOLOR(a) (nBgImageColors & (1 << a))
+
+#define CURSOR_PAT_COLOR  0xC0C0C0
+#define HILIGHT_PAT_COLOR 0xC0C0C0
 
 #ifndef CONSOLE_SELECTION_NOT_EMPTY
 #define CONSOLE_SELECTION_NOT_EMPTY     0x0002   // non-null select rectangle
@@ -354,6 +357,9 @@ bool CVirtualConsole::Constructor(RConStartArgs *args)
 		Assert(gpConEmu->WndWidth.Value && gpConEmu->WndHeight.Value);
 	}
 
+	ZeroStruct(m_HighlightInfo);
+	m_HighlightInfo.m_Last.X = m_HighlightInfo.m_Last.Y = -1;
+	m_HighlightInfo.m_Cur.X = m_HighlightInfo.m_Cur.Y = -1;
 
 	DEBUGTEST(mb_DebugDumpDC = false);
 
@@ -1145,25 +1151,47 @@ void CVirtualConsole::PaintBackgroundImage(const RECT& rcText, const COLORREF cr
 
 	BackgroundOp op = (BackgroundOp)gpSet->bgOperation;
 
-	if ((op == eUpRight) || (op == eDownLeft) || (op == eDownRight))
+	if (op == eUpRight)
 	{
-		//HBRUSH hBr = NULL;
-		//#if 0
-		//hBr = PartBrush(L' ', crBack, 0);
-		//#else
-		//if (hBrush0 == NULL)
-		//{
-		//	hBrush0 = CreateSolidBrush(mp_Colors[0]);
-		//	SelectBrush(hBrush0);
-		//}
-		//hBr = hBrush0;
-		//#endif
+		int xShift = max(0,((int)Width - bgBmpSize.X));
+		bgX = inX - xShift; bgY = inY;
 
-		//FillRect((HDC)m_DC, &rcText, hBr);
+		if ((bgBmpSize.X < (int)Width) || (bgBmpSize.Y < (int)Height))
+		{
+			if (inY < bgBmpSize.Y)
+			{
+				rcFill1 = MakeRect(inX, inY, min(inX2,xShift), min(bgBmpSize.Y,inY2));
+				rcFill2 = MakeRect(inX, max(inY,bgBmpSize.Y), min(inX2,xShift), inY2);
+			}
+			else
+			{
+				rcFill1 = MakeRect(inX, inY, inX2, inY2);
+			}
+		}
+	}
+	else if (op == eDownLeft)
+	{
+		int yShift = max(0,((int)Height - bgBmpSize.Y));
+		bgX = inX; bgY = inY - yShift;
 
-		int xShift = ((gpSet->bgOperation == eUpRight) || (gpSet->bgOperation == eDownRight)) ? max(0,((int)Width - bgBmpSize.X)) : 0;
-		int yShift = ((gpSet->bgOperation == eDownLeft) || (gpSet->bgOperation == eDownRight)) ? max(0,((int)Height - bgBmpSize.Y)) : 0;
+		if ((bgBmpSize.X < (int)Width) || (bgBmpSize.Y < (int)Height))
+		{
+			if (inY2 >= yShift)
+			{
+				rcFill1 = MakeRect(inX, inY, inX2, min(yShift,inY2));
+				rcFill2 = MakeRect(bgBmpSize.X, max(inY,yShift), inX2, inY2);
+			}
+			else
+			{
+				rcFill1 = MakeRect(inX, inY, inX2, inY2);
+			}
+		}
 
+	}
+	else if (op == eDownRight)
+	{
+		int xShift = max(0,((int)Width - bgBmpSize.X));
+		int yShift = max(0,((int)Height - bgBmpSize.Y));
 		bgX = inX - xShift; bgY = inY - yShift;
 
 		if ((bgBmpSize.X < (int)Width) || (bgBmpSize.Y < (int)Height))
@@ -1172,17 +1200,11 @@ void CVirtualConsole::PaintBackgroundImage(const RECT& rcText, const COLORREF cr
 			rcFill2 = MakeRect(inX, max(inY,yShift), min(inX2,xShift), inY2);
 		}
 
-		//if (bgBmpSize.X>(inX-xShift) && bgBmpSize.Y>(inY-yShift))
-		//{
-		//	//BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-		//	BitBlt((HDC)m_DC, inX, inY, inWidth, inHeight, hBgDc, bgX /*inX-xShift*/, bgY /*inY-yShift*/, SRCCOPY);
-		//}
 	}
 	else if ((op == eFit) || (op == eFill) || (op == eCenter))
 	{
 		int xShift = ((int)Width - bgBmpSize.X)/2;
 		int yShift = ((int)Height - bgBmpSize.Y)/2;
-
 		bgX = inX - xShift; bgY = inY - yShift;
 
 		if (op == eFit)
@@ -1573,7 +1595,7 @@ bool CVirtualConsole::CheckChangedTextAttr()
 	RECT conLocked;
 	int nLocked = IsDcLocked(&conLocked);
 
-	if (isForce && !nLocked)
+	if ((isForce || m_HighlightInfo.mb_ChangeDetected) && !nLocked)
 	{
 		lbChanged = textChanged = attrChanged = true;
 	}
@@ -1794,6 +1816,12 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 
 	//gpSetCls->Performance(tPerfRender, FALSE);
 
+	// For optimization - remove highlights if they was painted
+	if (!isForce)
+	{
+		UndoHighlights();
+	}
+
 	if (updateText /*|| updateCursor*/)
 	{
 		lRes = true;
@@ -1830,9 +1858,17 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 	//SDC.Leave();
 	SCON.Unlock();
 
+	bool bVisible = gpConEmu->isVisible(this);
+
+	// Highlight row/col under mouse cursor
+	if (bVisible && (isHighlightMouseRow() || isHighlightMouseCol()))
+	{
+		UpdateHighlights();
+	}
+
 	// ѕосле успешного обновлени€ внутренних буферов (символы/атрибуты)
 	//
-	if (lRes && gpConEmu->isVisible(this))
+	if (lRes && bVisible)
 	{
 		if (mpsz_LogScreen && mp_RCon && mp_RCon->GetServerPID())
 		{
@@ -1861,6 +1897,8 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 		}
 	}
 
+	m_HighlightInfo.mb_ChangeDetected = false;
+
 	gpSetCls->Performance(tPerfRender, TRUE);
 	/* ***************************************** */
 	/*       Finalization, release objects       */
@@ -1881,6 +1919,222 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 	SelectFont(NULL);
 	HEAPVAL
 	return lRes;
+}
+
+void CVirtualConsole::PatInvertRect(HDC hPaintDC, const RECT& rect, HDC hFromDC, bool bFill)
+{
+	if (bFill)
+	{
+		BitBlt(hPaintDC, rect.left, rect.top, rect.right-rect.left, rect.bottom-rect.top, hFromDC, 0,0,
+			    PATINVERT);
+	}
+	else
+	{
+		BitBlt(hPaintDC, rect.left, rect.top, 1, rect.bottom-rect.top, hFromDC, 0,0,
+				PATINVERT);
+		BitBlt(hPaintDC, rect.left, rect.top, rect.right-rect.left, 1, hFromDC, 0,0,
+				PATINVERT);
+		BitBlt(hPaintDC, rect.right-1, rect.top, 1, rect.bottom-rect.top, hFromDC, 0,0,
+				PATINVERT);
+		BitBlt(hPaintDC, rect.left, rect.bottom-1, rect.right-rect.left, 1, hFromDC, 0,0,
+				PATINVERT);
+	}
+}
+
+bool CVirtualConsole::isHighlightMouseRow()
+{
+	return m_HighlightInfo.mb_SelfSettings ? m_HighlightInfo.mb_HighlightRow : gpSet->isHighlightMouseRow;
+}
+
+bool CVirtualConsole::isHighlightMouseCol()
+{
+	return m_HighlightInfo.mb_SelfSettings ? m_HighlightInfo.mb_HighlightCol : gpSet->isHighlightMouseCol;
+}
+
+void CVirtualConsole::ChangeHighlightMouse(int nWhat, int nSwitch)
+{
+	if (!m_HighlightInfo.mb_SelfSettings)
+	{
+		m_HighlightInfo.mb_SelfSettings = true;
+		m_HighlightInfo.mb_HighlightRow = gpSet->isHighlightMouseRow;
+		m_HighlightInfo.mb_HighlightCol = gpSet->isHighlightMouseCol;
+	}
+
+	if (nWhat <= 0)
+	{
+		if (!m_HighlightInfo.mb_HighlightRow && !m_HighlightInfo.mb_HighlightCol)
+		{
+			m_HighlightInfo.mb_HighlightRow = true;
+		}
+		else if (m_HighlightInfo.mb_HighlightRow && !m_HighlightInfo.mb_HighlightCol)
+		{
+			m_HighlightInfo.mb_HighlightRow = false; m_HighlightInfo.mb_HighlightCol = true;
+		}
+		else if (!m_HighlightInfo.mb_HighlightRow && m_HighlightInfo.mb_HighlightCol)
+		{
+			m_HighlightInfo.mb_HighlightRow = m_HighlightInfo.mb_HighlightCol = true;
+		}
+		else
+		{
+			m_HighlightInfo.mb_HighlightRow = m_HighlightInfo.mb_HighlightCol = false;
+		}
+	}
+	else
+	{
+		for (int i = 1; i <= 2; i++)
+		{
+			if (!(nWhat & i))
+				continue;
+			bool& bOpt = (i == 1) ? m_HighlightInfo.mb_HighlightRow : m_HighlightInfo.mb_HighlightCol;
+			switch (nSwitch)
+			{
+			case 0:
+				bOpt = false; break;
+			case 1:
+				bOpt = true;  break;
+			case 2:
+				bOpt = !bOpt; break;
+			}
+		}
+	}
+
+	Update(true);
+}
+
+// This is called from TrackMouse. It must NOT trigger more than one invalidate before next repaint
+bool CVirtualConsole::WasHighlightRowColChanged()
+{
+	// Invalidate already pended?
+	if (m_HighlightInfo.mb_ChangeDetected)
+		return false;
+
+	// If cursor goes out of VCon - leave row/col marks?
+	COORD crPos = {-1,-1};
+	if (!CalcHighlightRowCol(&crPos))
+		return false;
+
+	if ((isHighlightMouseRow() && (crPos.Y != m_HighlightInfo.m_Last.Y))
+		|| (isHighlightMouseCol() && (crPos.X != m_HighlightInfo.m_Last.X)))
+	{
+		m_HighlightInfo.mb_ChangeDetected = true;
+		return true;
+	}
+
+	return false;
+}
+
+bool CVirtualConsole::CalcHighlightRowCol(COORD* pcrPos)
+{
+	if (!(isHighlightMouseRow() || isHighlightMouseCol())
+		|| !gpConEmu->isMeForeground()
+		|| !gpConEmu->isVisible(this))
+	{
+		m_HighlightInfo.mb_Allowed = false;
+		m_HighlightInfo.m_Cur.X = m_HighlightInfo.m_Cur.Y = -1;
+		return false;
+	}
+
+	// Get SCREEN coordinates
+	POINT ptCursor = {}; GetCursorPos(&ptCursor);
+	RECT  rcDC = {}; GetWindowRect(mh_WndDC, &rcDC);
+	if (!PtInRect(&rcDC, ptCursor))
+	{
+		m_HighlightInfo.mb_Allowed = false;
+		m_HighlightInfo.m_Cur.X = m_HighlightInfo.m_Cur.Y = -1;
+		return false;
+	}
+
+	// Get COORDs (relative to upper-left visible pos)
+	COORD pos = ClientToConsole(ptCursor.x-rcDC.left, ptCursor.y-rcDC.top);
+	m_HighlightInfo.m_Cur = pos;
+	if (pos.X < 0 || pos.Y < 0)
+	{
+		m_HighlightInfo.mb_Allowed = false;
+		return false;
+	}
+	m_HighlightInfo.mb_Allowed = true;
+	if (pcrPos)
+		*pcrPos = pos;
+	return true;
+}
+
+void CVirtualConsole::UpdateHighlights()
+{
+	_ASSERTE(this && (isHighlightMouseRow() || isHighlightMouseCol()));
+	_ASSERTE(gpConEmu->isVisible(this));
+
+	ZeroStruct(m_HighlightInfo.mrc_LastRow);
+	ZeroStruct(m_HighlightInfo.mrc_LastCol);
+	m_HighlightInfo.m_Last.X = m_HighlightInfo.m_Last.Y = -1;
+
+	// Get COORDs (relative to upper-left visible pos)
+	COORD pos = {-1,-1};
+	if (!CalcHighlightRowCol(&pos))
+		return;
+
+	int CurChar = pos.Y * TextWidth + pos.X;
+	if (CurChar < 0 || CurChar>=(int)(TextWidth * TextHeight))
+	{
+		return; // может быть или глюк - или размер консоли был резко уменьшен и предыдуща€ позици€ курсора пропала с экрана
+	}
+
+	// And MARK! (nFontHeight or cell (nFontWidth))
+
+	COORD pix;
+	pix.X = pos.X * nFontWidth;
+	pix.Y = pos.Y * nFontHeight;
+
+	if (pos.X && ConCharX && ConCharX[CurChar-1])
+		pix.X = ConCharX[CurChar-1];
+
+	HDC hPaintDC = (HDC)m_DC;
+	HBRUSH hBr = CreateSolidBrush(HILIGHT_PAT_COLOR);
+	HBRUSH hOld = (HBRUSH)SelectObject(hPaintDC, hBr);
+
+	if (isHighlightMouseRow())
+	{
+		RECT rect = {0, pix.Y, Width, pix.Y+nFontHeight};
+		PatInvertRect(hPaintDC, rect, hPaintDC, false);
+		m_HighlightInfo.m_Last.Y = pos.Y;
+		m_HighlightInfo.mrc_LastRow = rect;
+	}
+
+	if (isHighlightMouseCol())
+	{
+		// This will be not "precise" on other rows if using proportional font...
+		RECT rect = {pix.X, 0, pix.X+nFontWidth, Height};
+		PatInvertRect(hPaintDC, rect, hPaintDC, false);
+		m_HighlightInfo.m_Last.X = pos.X;
+		m_HighlightInfo.mrc_LastCol = rect;
+	}
+
+	SelectObject(hPaintDC, hOld);
+	DeleteObject(hBr);
+}
+
+void CVirtualConsole::UndoHighlights()
+{
+	if (IsRectEmpty(&m_HighlightInfo.mrc_LastRow) && IsRectEmpty(&m_HighlightInfo.mrc_LastCol))
+		return;
+
+	HDC hPaintDC = (HDC)m_DC;
+	HBRUSH hBr = CreateSolidBrush(HILIGHT_PAT_COLOR);
+	HBRUSH hOld = (HBRUSH)SelectObject(hPaintDC, hBr);
+
+	if (!IsRectEmpty(&m_HighlightInfo.mrc_LastRow))
+	{
+		RECT rect = m_HighlightInfo.mrc_LastRow;
+		PatInvertRect(hPaintDC, rect, hPaintDC, false);
+	}
+
+	if (!IsRectEmpty(&m_HighlightInfo.mrc_LastCol))
+	{
+		RECT rect = m_HighlightInfo.mrc_LastCol;
+		PatInvertRect(hPaintDC, rect, hPaintDC, false);
+	}
+
+	SelectObject(hPaintDC, hOld);
+	DeleteObject(hBr);
 }
 
 bool CVirtualConsole::CheckTransparent()
@@ -2009,28 +2263,26 @@ bool CVirtualConsole::CheckTransparentRgn(bool abHasChildWindows)
 
 							if (nRectCount>=nMaxRects)
 							{
-								nMaxRects += TextHeight;
+								int nNewMaxRects = nMaxRects + max((int)TextHeight,(int)(nRectCount-nMaxRects+1));
+								_ASSERTE(nNewMaxRects > nRectCount);
+
 								HEAPVAL;
-								POINT *lpTmpPoints = (POINT*)Alloc(nMaxRects*4,sizeof(POINT)); // 4 угла
-								//INT   *lpTmpCounts = (INT*)Alloc(nMaxRects,sizeof(INT));
+								POINT *lpTmpPoints = (POINT*)Alloc(nNewMaxRects*4,sizeof(POINT)); // 4 угла
 								HEAPVAL;
 
-								if (!lpTmpPoints /*|| !lpTmpCounts*/)
+								if (!lpTmpPoints)
 								{
-									_ASSERTE(/*lpTmpCounts &&*/ lpTmpPoints);
-									//Free(lpAllCounts);
+									_ASSERTE(lpTmpPoints);
 									Free(lpAllPoints);
 									return false;
 								}
 
-								memmove(lpTmpPoints, lpAllPoints, nRectCount*4*sizeof(POINT));
-								//memmove(lpTmpCounts, lpAllCounts, nRectCount*sizeof(INT));
+								memmove(lpTmpPoints, lpAllPoints, nMaxRects*4*sizeof(POINT));
 								HEAPVAL;
 								lpPoints = lpTmpPoints + (lpPoints - lpAllPoints);
-								//Free(lpAllCounts);
 								Free(lpAllPoints);
 								lpAllPoints = lpTmpPoints;
-								//lpAllCounts = lpTmpCounts;
+								nMaxRects = nNewMaxRects;
 								HEAPVAL;
 							}
 
@@ -2773,10 +3025,8 @@ void CVirtualConsole::UpdateText()
 		m_DC.SetBkMode(TRANSPARENT);
 
 	int *nDX = (int*)malloc((TextWidth+1)*sizeof(int));
-	// rows
-	// зачем в isForceMonospace принудительно перерисовывать все?
-	// const bool skipNotChanged = !isForce /*&& !gpSet->isForceMonospace*/;
-	const bool skipNotChanged = !isForce; // && !((gpSetCls->FontItalic() || gpSet->FontClearType()));
+
+	bool skipNotChanged = !isForce;
 	bool bEnhanceGraphics = gpSet->isEnhanceGraphics;
 	bool bProportional = gpSet->isMonospace == 0;
 	bool bForceMonospace = gpSet->isMonospace == 2;
@@ -3629,6 +3879,11 @@ void CVirtualConsole::UpdateText()
 
 	free(nDX);
 
+	// Screen updated, reset until next "UpdateHighlights()" call
+	m_HighlightInfo.m_Last.X = m_HighlightInfo.m_Last.Y = -1;
+	ZeroStruct(m_HighlightInfo.mrc_LastRow);
+	ZeroStruct(m_HighlightInfo.mrc_LastCol);
+
 	return;
 }
 
@@ -3880,26 +4135,10 @@ void CVirtualConsole::UpdateCursorDraw(HDC hPaintDC, RECT rcClient, COORD pos, U
 	// “еперь в rect нужно отобразить курсор (XOR'ом попробуем?)
 	if (bCursorColor)
 	{
-		HBRUSH hBr = CreateSolidBrush(0xC0C0C0);
+		HBRUSH hBr = CreateSolidBrush(CURSOR_PAT_COLOR);
 		HBRUSH hOld = (HBRUSH)SelectObject(hPaintDC, hBr);
 
-		if (curStyle != cur_Rect)
-		{
-			BitBlt(hPaintDC, rect.left, rect.top, rect.right-rect.left, rect.bottom-rect.top, (HDC)m_DC, 0,0,
-			       PATINVERT);
-		}
-		else
-		{
-			// просто пр€моугольник рисовать
-			BitBlt(hPaintDC, rect.left, rect.top, 1, rect.bottom-rect.top, (HDC)m_DC, 0,0,
-			       PATINVERT);
-			BitBlt(hPaintDC, rect.left, rect.top, rect.right-rect.left, 1, (HDC)m_DC, 0,0,
-			       PATINVERT);
-			BitBlt(hPaintDC, rect.right-1, rect.top, 1, rect.bottom-rect.top, (HDC)m_DC, 0,0,
-			       PATINVERT);
-			BitBlt(hPaintDC, rect.left, rect.bottom-1, rect.right-rect.left, 1, (HDC)m_DC, 0,0,
-			       PATINVERT);
-		}
+		PatInvertRect(hPaintDC, rect, (HDC)m_DC, (curStyle != cur_Rect));
 
 		SelectObject(hPaintDC, hOld);
 		DeleteObject(hBr);
@@ -4204,15 +4443,6 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 	WARNING("TODO: Need to calculate mrc_Back = {0,0}-{BackWidth,BackHeight}");
 	mrc_Back = mrc_Client;
 
-//#ifdef _DEBUG
-//    if (this) {
-//        if (!mp_RCon || !mp_RCon->isPackets()) {
-//        	DEBUGSTRDRAW(L"*** Painting ***\n");
-//        } else {
-//            DEBUGSTRDRAW(L"*** Painting (!!! Non processed packets are queued !!!) ***\n");
-//        }
-//    }
-//#endif
 	BOOL lbSimpleBlack = FALSE, lbGuiVisible = FALSE;
 
 	if (!guard.VCon())
@@ -4233,56 +4463,84 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 
 	if (lbSimpleBlack)
 	{
-		// —брос блокировки, если была
-		LockDcRect(false);
+		guard.VCon()->PaintVConSimple(hPaintDc, rcClient, lbGuiVisible);
 
-		COLORREF *pColors = GetColors();
-		
-		bool lbDelBrush = false;
-		HBRUSH hBr = CreateBackBrush(lbGuiVisible, lbDelBrush, pColors);
-		
-		//#ifndef SKIP_ALL_FILLRECT
-		FillRect(hPaintDc, &rcClient, hBr);
-		//#endif
-		
-		TODO("ѕеределать на StatusBar, если gpSet->isStatusBarShow");
-		if (!lbGuiVisible)
-		{
-			CEDC cePaintDc(hPaintDc);
-			CEFONT hOldF = cePaintDc.SelectObject(gpSetCls->mh_Font[0]);
-			LPCWSTR pszStarting = L"Initializing ConEmu.";
-			
-			// 120721 - если показана статусна€ строка - не будем писать в саму консоль?
-			if (gpSet->isStatusBarShow)
-				pszStarting = NULL;
-			else if (gpConEmu->isProcessCreated())
-				pszStarting = L"No consoles";
-			else if (this && mp_RCon)
-				pszStarting = mp_RCon->GetConStatus();
-			else if (CRealConsole::ms_LastRConStatus[0])
-				pszStarting = CRealConsole::ms_LastRConStatus;
-
-			if (pszStarting != NULL)
-			{
-				UINT nFlags = ETO_CLIPPED;
-				cePaintDc.SetTextColor(pColors[7]);
-				cePaintDc.SetBkColor(pColors[0]);
-				cePaintDc.ExtTextOut(rcClient.left, rcClient.top, nFlags, &rcClient,
-				           pszStarting, _tcslen(pszStarting), 0);
-				cePaintDc.SelectObject(hOldF);
-			}
-		}
-
-		if (lbDelBrush)
-			DeleteObject(hBr);
-			
 		if (guard.VCon() && mp_Ghost)
-			mp_Ghost->UpdateTabSnapshoot(TRUE); //CreateTabSnapshoot(hPaintDc, rcClient.right-rcClient.left, rcClient.bottom-rcClient.top);
-		
-		//EndPaint('ghWnd DC', &ps);
+			mp_Ghost->UpdateTabSnapshoot(); //CreateTabSnapshoot(hPaintDc, rcClient.right-rcClient.left, rcClient.bottom-rcClient.top);
+	}
+	else
+	{
+		PaintVConNormal(hPaintDc, rcClient);
+
+		if (mp_Ghost)
+			mp_Ghost->UpdateTabSnapshoot(); //CreateTabSnapshoot(hPaintDc, rcClient.right-rcClient.left, rcClient.bottom-rcClient.top);
+
+		// Debug rects and (scrolllock)counter
+		PaintVConDebug(hPaintDc, rcClient);
+	}
+}
+
+void CVirtualConsole::PaintVConSimple(HDC hPaintDc, RECT rcClient, BOOL bGuiVisible)
+{
+	if (!this)
+	{
+		_ASSERTE(FALSE && "Called with NULL pVCon");
+		COLORREF crBack = gpSet->GetColors(-1, isFade)[0];
+		HBRUSH hBr = CreateSolidBrush(crBack);
+		FillRect(hPaintDc, &rcClient, hBr);
+		DeleteObject(hBr);
 		return;
 	}
 
+	// —брос блокировки, если была
+	LockDcRect(false);
+
+	COLORREF *pColors = GetColors();
+		
+	bool lbDelBrush = false;
+	HBRUSH hBr = CreateBackBrush(bGuiVisible, lbDelBrush, pColors);
+		
+	//#ifndef SKIP_ALL_FILLRECT
+	FillRect(hPaintDc, &rcClient, hBr);
+	//#endif
+		
+	TODO("ѕеределать на StatusBar, если gpSet->isStatusBarShow");
+	if (!bGuiVisible)
+	{
+		CEDC cePaintDc(hPaintDc);
+		CEFONT hOldF = cePaintDc.SelectObject(gpSetCls->mh_Font[0]);
+		LPCWSTR pszStarting = L"Initializing ConEmu.";
+			
+		// 120721 - если показана статусна€ строка - не будем писать в саму консоль?
+		if (gpSet->isStatusBarShow)
+			pszStarting = NULL;
+		else if (gpConEmu->isProcessCreated())
+			pszStarting = L"No consoles";
+		else if (this && mp_RCon)
+			pszStarting = mp_RCon->GetConStatus();
+		else if (CRealConsole::ms_LastRConStatus[0])
+			pszStarting = CRealConsole::ms_LastRConStatus;
+
+		if (pszStarting != NULL)
+		{
+			UINT nFlags = ETO_CLIPPED;
+			cePaintDc.SetTextColor(pColors[7]);
+			cePaintDc.SetBkColor(pColors[0]);
+			cePaintDc.ExtTextOut(rcClient.left, rcClient.top, nFlags, &rcClient,
+				        pszStarting, _tcslen(pszStarting), 0);
+			cePaintDc.SelectObject(hOldF);
+		}
+	}
+
+	if (lbDelBrush)
+		DeleteObject(hBr);
+			
+	if (mp_Ghost)
+		mp_Ghost->UpdateTabSnapshoot(TRUE); //CreateTabSnapshoot(hPaintDc, rcClient.right-rcClient.left, rcClient.bottom-rcClient.top);
+}
+
+void CVirtualConsole::PaintVConNormal(HDC hPaintDc, RECT rcClient)
+{
 	if (gpConEmu->isActive(this))
 		gpSetCls->Performance(tPerfFPS, TRUE); // считаетс€ по своему
 
@@ -4301,6 +4559,7 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 	else
 		Update(mb_RequiredForceUpdate);
 
+	m_HighlightInfo.mb_ChangeDetected = false;
 	mb_InPaintCall = FALSE;
 	//BOOL lbExcept = FALSE;
 	RECT client = rcClient;
@@ -4419,25 +4678,6 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 		// ќбычный режим
 		if (gpSetCls->isAdvLogging>=3) mp_RCon->LogString("Blitting to Display");
 
-		/*if (gpSet->isFadeInactive && !gpConEmu->isMeForeground()) {
-			// Fade-effect когда CE не в фокусе
-			DWORD dwFadeColor = gpSet->nFadeInactiveMask; //0xC0C0C0;
-			// пробовал средний между Colors[7] & Colors[8] - некрасиво
-
-			bFading = true;
-
-			HBRUSH hBr = CreateSolidBrush(dwFadeColor);
-			HBRUSH hOld = (HBRUSH)SelectObject ( hPaintDc, hBr );
-			DWORD dwEffect = MERGECOPY;
-
-			BitBlt(hPaintDc, client.left, client.top, client.right-client.left, client.bottom-client.top, (HDC)m_DC, 0, 0,
-				dwEffect);
-
-			SelectObject ( hPaintDc, hOld );
-			DeleteObject ( hBr );
-
-		} else {*/
-
 		BOOL lbBltRc;
 		if (!m_LockDc.bLocked)
 		{
@@ -4480,8 +4720,6 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 		//FillRect(hPaintDc, &rcClient, (HBRUSH)GetStockObject(WHITE_BRUSH));
 		//#endif
 
-		/*}*/
-
 		CheckTransparent();
 	}
 	else
@@ -4496,14 +4734,6 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 
 	// «апомнить последнюю битность диспле€
 	mn_LastBitsPixel = nBits;
-	//mb_LastFadeFlag = bFading;
-	//S.Unlock();
-
-	//if (lbPaintLocked)
-	//	mb_PaintLocked = FALSE;
-
-	// ѕалку курсора теперь рисуем только в окне
-	//UpdateCursor(hPaintDc);
 
 	if (gbNoDblBuffer) GdiSetBatchLimit(0);  // вернуть стандартный режим
 
@@ -4516,27 +4746,21 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 			MSectionLock SCON; SCON.Lock(&csCON);
 
 			int CurChar = csbi.dwCursorPosition.Y * TextWidth + csbi.dwCursorPosition.X;
-			//Cursor.ch[1] = 0;
-			//CVirtualConsole* p = this;
-			//GetCharAttr(mpsz_ConChar[CurChar], mpn_ConAttr[CurChar], Cursor.ch[0], Cursor.foreColorNum, Cursor.bgColorNum);
 			Cursor.ch = mpsz_ConChar[CurChar];
-			//GetCharAttr(mpn_ConAttr[CurChar], Cursor.foreColorNum, Cursor.bgColorNum, NULL);
-			//Cursor.foreColor = pColors[Cursor.foreColorNum];
-			//Cursor.bgColor = pColors[Cursor.bgColorNum];
 			Cursor.foreColor = mpn_ConAttrEx[CurChar].crForeColor;
 			Cursor.bgColor = mpn_ConAttrEx[CurChar].crBackColor;
 
 			UpdateCursorDraw(hPaintDc, rcClient, csbi.dwCursorPosition, cinf.dwSize);
+
 			Cursor.isVisiblePrev = Cursor.isVisible;
 			cePaintDc.SelectObject(hOldFont);
 			SCON.Unlock();
 		}
 	}
+}
 
-	if (mp_Ghost)
-		mp_Ghost->UpdateTabSnapshoot(); //CreateTabSnapshoot(hPaintDc, rcClient.right-rcClient.left, rcClient.bottom-rcClient.top);
-	
-	//#ifdef _DEBUG
+void CVirtualConsole::PaintVConDebug(HDC hPaintDc, RECT rcClient)
+{
 	if (mp_RCon)
 	{
 		#ifdef DEBUGDRAW_RCONPOS
@@ -4636,7 +4860,6 @@ void CVirtualConsole::PaintVCon(HDC hPaintDc)
 		}
 	}
 
-	//#endif
 
 	//if (lbExcept)
 	//{
@@ -4778,7 +5001,7 @@ void CVirtualConsole::OnConsoleSizeChanged()
 void CVirtualConsole::OnConsoleSizeReset(USHORT sizeX, USHORT sizeY)
 {
 	// Ёто должно быть только на этапе создани€ новой консоли (например, по€вилась панель табов)
-	_ASSERTE((mp_RCon && mp_RCon->ConWnd()==NULL) || mp_RCon->mb_InCloseConsole);
+	_ASSERTE(mp_RCon && ((mp_RCon->ConWnd()==NULL) || mp_RCon->mb_InCloseConsole));
 	// » по идее, DC еще создан быть не должен был
 	if (Width==0 && Height==0)
 	{
@@ -4834,7 +5057,7 @@ POINT CVirtualConsole::ConsoleToClient(LONG x, LONG y)
 	return pt;
 }
 
-// ‘ункци€ живет здесь, а не в gpSet, т.к. здесь мы может более точно опеределить знакоместо
+// Only here we can precisely calc exact coords
 COORD CVirtualConsole::ClientToConsole(LONG x, LONG y, bool StrictMonospace/*=false*/)
 {
 	COORD cr = {0,0};

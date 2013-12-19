@@ -284,7 +284,7 @@ CConEmuMain::CConEmuMain()
 	//HeapInitialize(); - уже
 	//#define D(N) (1##N-100)
 
-	_wsprintf(ms_ConEmuBuild, SKIPLEN(countof(ms_ConEmuBuild)) L"%02u%02u%02u%s", (MVV_1%100),MVV_2,MVV_3,_T(MVV_4a));
+	_wsprintf(ms_ConEmuBuild, SKIPLEN(countof(ms_ConEmuBuild)) L"%02u%02u%02u%s", (MVV_1%100),MVV_2,MVV_3,RELEASEDEBUGTEST(_T(MVV_4a),_T("dbg")));
 	wcscpy_c(ms_ConEmuDefTitle, L"ConEmu ");
 	wcscat_c(ms_ConEmuDefTitle, ms_ConEmuBuild);
 	wcscat_c(ms_ConEmuDefTitle, WIN3264TEST(L" [32]",L" [64]"));
@@ -987,7 +987,7 @@ bool CConEmuMain::CheckBaseDir()
 bool CConEmuMain::SetConfigFile(LPCWSTR asFilePath, bool abWriteReq /*= false*/)
 {
 	LPCWSTR pszExt = asFilePath ? PointToExt(asFilePath) : NULL;
-	int nLen = lstrlen(asFilePath);
+	int nLen = asFilePath ? lstrlen(asFilePath) : 0;
 
 	if (!asFilePath || !*asFilePath || !pszExt || !*pszExt || (nLen > MAX_PATH))
 	{
@@ -1080,38 +1080,31 @@ LPWSTR CConEmuMain::ConEmuXml()
 
 	TODO("Хорошо бы еще дать возможность пользователю использовать два файла - системный (предустановки) и пользовательский (настройки)");
 
-	// Ищем файл портабельных настроек
+	// Ищем файл портабельных настроек (возвращаем первый найденный, приоритет...)
+	LPWSTR pszSearchXml[] = {
+		ExpandEnvStr(L"%ConEmuDir%\\ConEmu.xml"),
+		ExpandEnvStr(L"%ConEmuBaseDir%\\ConEmu.xml"),
+		ExpandEnvStr(L"%APPDATA%\\ConEmu.xml"),
+		NULL
+	};
 
-	// Пробуем в %APPDATA%
-	wchar_t* pszAppDataXml = ExpandEnvStr(L"%APPDATA%\\ConEmu.xml");
-	if (pszAppDataXml && *pszAppDataXml)
+	for (size_t i = 0; pszSearchXml[i]; i++)
 	{
-		wcscpy_c(ms_ConEmuXml, pszAppDataXml);
-		if (FileExists(ms_ConEmuXml))
+		if (FileExists(pszSearchXml[i]))
 		{
+			wcscpy_c(ms_ConEmuXml, pszSearchXml[i]);
 			goto fin;
 		}
 	}
-	
-	// пробуем в BaseDir
+
+	// Но если _создавать_ новый, то в BaseDir! Чтобы в корне не мусорить
 	wcscpy_c(ms_ConEmuXml, ms_ConEmuBaseDir); wcscat_c(ms_ConEmuXml, L"\\ConEmu.xml");
 
-	if (!FileExists(ms_ConEmuXml))
-	{
-		if (lstrcmpi(ms_ConEmuBaseDir, ms_ConEmuExeDir))
-		{
-			wcscpy_c(ms_ConEmuXml, ms_ConEmuExeDir); wcscat_c(ms_ConEmuXml, L"\\ConEmu.xml");
-
-			if (!FileExists(ms_ConEmuXml))
-			{
-				// Если _создавать_ новый, то в BaseDir! Чтобы в корне не мусорить
-				wcscpy_c(ms_ConEmuXml, ms_ConEmuBaseDir); wcscat_c(ms_ConEmuXml, L"\\ConEmu.xml");
-			}
-		}
-	}
-
 fin:
-	SafeFree(pszAppDataXml);
+	for (size_t i = 0; i < countof(pszSearchXml); i++)
+	{
+		SafeFree(pszSearchXml[i]);
+	}
 	return ms_ConEmuXml;
 }
 
@@ -1125,23 +1118,31 @@ LPWSTR CConEmuMain::ConEmuIni()
 
 	TODO("Хорошо бы еще дать возможность пользователю использовать два файла - системный (предустановки) и пользовательский (настройки)");
 
-	// Ищем файл портабельных настроек. Сначала пробуем в BaseDir
-	wcscpy_c(ms_ConEmuIni, ms_ConEmuBaseDir); wcscat_c(ms_ConEmuIni, L"\\ConEmu.ini");
+	// Ищем файл портабельных настроек (возвращаем первый найденный, приоритет...)
+	LPWSTR pszSearchIni[] = {
+		ExpandEnvStr(L"%ConEmuDir%\\ConEmu.ini"),
+		ExpandEnvStr(L"%ConEmuBaseDir%\\ConEmu.ini"),
+		ExpandEnvStr(L"%APPDATA%\\ConEmu.ini"),
+		NULL
+	};
 
-	if (!FileExists(ms_ConEmuIni))
+	for (size_t i = 0; pszSearchIni[i]; i++)
 	{
-		if (lstrcmpi(ms_ConEmuBaseDir, ms_ConEmuExeDir))
+		if (FileExists(pszSearchIni[i]))
 		{
-			wcscpy_c(ms_ConEmuIni, ms_ConEmuExeDir); wcscat_c(ms_ConEmuIni, L"\\ConEmu.ini");
-
-			if (!FileExists(ms_ConEmuIni))
-			{
-				// Если _создавать_ новый, то в BaseDir! Чтобы в корне не мусорить
-				wcscpy_c(ms_ConEmuIni, ms_ConEmuBaseDir); wcscat_c(ms_ConEmuIni, L"\\ConEmu.ini");
-			}
+			wcscpy_c(ms_ConEmuIni, pszSearchIni[i]);
+			goto fin;
 		}
 	}
 
+	// Но если _создавать_ новый, то в BaseDir! Чтобы в корне не мусорить
+	wcscpy_c(ms_ConEmuIni, ms_ConEmuBaseDir); wcscat_c(ms_ConEmuIni, L"\\ConEmu.ini");
+
+fin:
+	for (size_t i = 0; i < countof(pszSearchIni); i++)
+	{
+		SafeFree(pszSearchIni[i]);
+	}
 	return ms_ConEmuIni;
 }
 
@@ -1167,7 +1168,8 @@ LPCWSTR CConEmuMain::ConEmuCExeFull(LPCWSTR asCmdLine/*=NULL*/)
 	{
 		// Проверить битность asCmdLine во избежание лишних запусков серверов для Inject
 		// и корректной битности запускаемого процессора по настройке
-		wchar_t szTemp[MAX_PATH+1], szExpand[MAX_PATH+1];
+		CmdArg szTemp;
+		wchar_t* pszExpand = NULL;
 		if (!FileExists(asCmdLine))
 		{
 			const wchar_t *psz = asCmdLine;
@@ -1181,9 +1183,9 @@ LPCWSTR CConEmuMain::ConEmuCExeFull(LPCWSTR asCmdLine/*=NULL*/)
 
 		if (wcschr(asCmdLine, L'%'))
 		{
-			DWORD nLen = ExpandEnvironmentStrings(asCmdLine, szExpand, countof(szExpand));
-			if (nLen && (nLen < countof(szExpand)))
-				asCmdLine = szExpand;
+			pszExpand = ExpandEnvStr(asCmdLine);
+			if (pszExpand)
+				asCmdLine = pszExpand;
 		}
 
 		// Если путь указан полностью - берем битность из него, иначе - проверяем "на cmd"
@@ -1257,6 +1259,8 @@ LPCWSTR CConEmuMain::ConEmuCExeFull(LPCWSTR asCmdLine/*=NULL*/)
 				}
 			}
 		}
+
+		SafeFree(pszExpand);
 	}
 
 	if (lbCmd)
@@ -3296,7 +3300,7 @@ void CConEmuMain::AskChangeBufferHeight()
 	HWND hGuiClient = pRCon->GuiWnd();
 	if (hGuiClient)
 	{
-		pRCon->ShowGuiClientInt(!pRCon->isGuiVisible());
+		pRCon->ShowGuiClientInt(pRCon->isGuiForceConView());
 		return;
 	}
 
@@ -8812,9 +8816,8 @@ bool CConEmuMain::StartDebugLogConsole()
 	WCHAR  szExe[MAX_PATH*2] = {0};
 	bool lbRc = false;
 	//DWORD nLen = 0;
-	PROCESS_INFORMATION pi; memset(&pi, 0, sizeof(pi));
-	STARTUPINFO si; memset(&si, 0, sizeof(si));
-	si.cb = sizeof(si);
+	PROCESS_INFORMATION pi = {NULL};
+	STARTUPINFO si = {sizeof(si)};
 	DWORD dwSelfPID = GetCurrentProcessId();
 	// "/ATTACH" - низя, а то заблокируемся при попытке подключения к "отлаживаемому" GUI
 	_wsprintf(szExe, SKIPLEN(countof(szExe)) L"\"%s\" /DEBUGPID=%u /BW=80 /BH=25 /BZ=%u",
@@ -8836,6 +8839,8 @@ bool CConEmuMain::StartDebugLogConsole()
 	else
 	{
 		gbDebugLogStarted = TRUE;
+		SafeCloseHandle(pi.hProcess);
+		SafeCloseHandle(pi.hThread);
 		lbRc = true;
 	}
 
@@ -8857,7 +8862,7 @@ bool CConEmuMain::StartDebugActiveProcess()
 	WCHAR  szExe[0x400] = {0};
 	bool lbRc = false;
 	//DWORD nLen = 0;
-	PROCESS_INFORMATION pi; memset(&pi, 0, sizeof(pi));
+	PROCESS_INFORMATION pi = {NULL};
 	STARTUPINFO si = {sizeof(si)};
 	WARNING("Наверное лучше переделать на CreateCon...");
 	si.dwFlags |= STARTF_USESHOWWINDOW;
@@ -8886,6 +8891,8 @@ bool CConEmuMain::StartDebugActiveProcess()
 	else
 	{
 		gbDebugLogStarted = TRUE;
+		SafeCloseHandle(pi.hProcess);
+		SafeCloseHandle(pi.hThread);
 		lbRc = true;
 	}
 
@@ -8907,7 +8914,7 @@ bool CConEmuMain::MemoryDumpActiveProcess()
 	WCHAR  szExe[0x400] = {0};
 	bool lbRc = false;
 	//DWORD nLen = 0;
-	PROCESS_INFORMATION pi; memset(&pi, 0, sizeof(pi));
+	PROCESS_INFORMATION pi = {NULL};
 	STARTUPINFO si = {sizeof(si)};
 	si.dwFlags |= STARTF_USESHOWWINDOW;
 	si.wShowWindow = SW_SHOWNORMAL;
@@ -8931,6 +8938,8 @@ bool CConEmuMain::MemoryDumpActiveProcess()
 	else
 	{
 		gbDebugLogStarted = TRUE;
+		SafeCloseHandle(pi.hProcess);
+		SafeCloseHandle(pi.hThread);
 		lbRc = true;
 	}
 
@@ -11018,7 +11027,8 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Drops(LPCWSTR asSource)
 
 		// Считаем, что один файл (*.exe, *.cmd, ...) или ярлык (*.lnk)
 		// это одна запускаемая консоль в ConEmu.
-		wchar_t szPart[MAX_PATH+1], szExe[MAX_PATH+1], szArguments[32768], szDir[MAX_PATH+1];
+		CmdArg szPart;
+		wchar_t szExe[MAX_PATH+1], szDir[MAX_PATH+1];
 		HRESULT hr = S_OK;
 		IShellLinkW* pShellLink = NULL;
 		IPersistFile* pFile = NULL;
@@ -11038,6 +11048,15 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Drops(LPCWSTR asSource)
 				return NULL;
 			}
 		}
+
+		INT_PTR cchArguments = 32768;
+		wchar_t* pszArguments = (wchar_t*)calloc(cchArguments,sizeof(pszArguments));
+		if (!pszArguments)
+		{
+			SafeRelease(pShellLink);
+			SafeRelease(pFile);
+			return NULL;
+		}
 		
 		// Поехали
 		LPWSTR pszConsoles[MAX_CONSOLE_COUNT] = {};
@@ -11053,19 +11072,19 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Drops(LPCWSTR asSource)
 					hr = pShellLink->GetPath(szExe, countof(szExe), NULL, 0);
 					if (SUCCEEDED(hr) && *szExe)
 					{
-						hr = pShellLink->GetArguments(szArguments, countof(szArguments));
+						hr = pShellLink->GetArguments(pszArguments, cchArguments);
 						if (FAILED(hr))
-							szArguments[0] = 0;
+							pszArguments[0] = 0;
 						hr = pShellLink->GetWorkingDirectory(szDir, countof(szDir));
 						if (FAILED(hr))
 							szDir[0] = 0;
 
 						cchLen = _tcslen(szExe)+3
-							+ _tcslen(szArguments)+1
+							+ _tcslen(pszArguments)+1
 							+ (*szDir ? (_tcslen(szDir)+32) : 0); // + "-new_console:d<Dir>
 						pszConsoles[iCount] = (wchar_t*)malloc(cchLen*sizeof(wchar_t));
 						_wsprintf(pszConsoles[iCount], SKIPLEN(cchLen) L"\"%s\"%s%s",
-							Unquote(szExe), *szArguments ? L" " : L"", szArguments);
+							Unquote(szExe), *pszArguments ? L" " : L"", pszArguments);
 						if (*szDir)
 						{
 							_wcscat_c(pszConsoles[iCount], cchLen, L" \"-new_console:d");
@@ -11088,6 +11107,8 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Drops(LPCWSTR asSource)
 				cchAllLen += cchLen+3;
 			}
 		}
+
+		SafeFree(pszArguments);
 
 		if (pShellLink)
 			pShellLink->Release();
@@ -14687,7 +14708,7 @@ LRESULT CConEmuMain::OnLangChangeConsole(CVirtualConsole *apVCon, const DWORD ad
 					}
 				}
 				lbFound = (iUnknownLeft == 1);
-				wsprintf(szInfo, L"hkl=0x%08X, dwLayout=" WIN3264TEST(L"0x%08X",L"0x%08X%08X") L" -- Warning, strange layout ID", dwLayoutName, hKeyb[i]);
+				wsprintf(szInfo, L"hkl=0x%08X, dwLayout=" WIN3264TEST(L"0x%08X",L"0x%08X%08X") L" -- Warning, strange layout ID", dwLayoutName, WIN3264WSPRINT(hKeyb[i]));
 				LogString(szInfo);
 				break;
 			//case 3:
@@ -17522,7 +17543,7 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 	#endif
 
 	//Maximus5. Hack - если какая-то зараза задизеблила окно
-	if (!gbDontEnable)
+	if (!DontEnable::isDontEnable())
 	{
 		DWORD dwStyle = GetWindowLong(ghWnd, GWL_STYLE);
 

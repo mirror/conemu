@@ -102,10 +102,34 @@ Settings  *gpSet = NULL;
 CSettings *gpSetCls = NULL;
 //TCHAR temp[MAX_PATH]; -- низзя, очень велик шанс нарваться при многопоточности
 HICON hClassIcon = NULL, hClassIconSm = NULL;
-BOOL gbDontEnable = FALSE;
 BOOL gbDebugLogStarted = FALSE;
 BOOL gbDebugShowRects = FALSE;
 CEStartupEnv* gpStartEnv = NULL;
+
+LONG DontEnable::gnDontEnable = 0;
+//LONG nPrev;   // Informational!
+//bool bLocked; // Proceed only main thread
+DontEnable::DontEnable()
+{
+	bLocked = gpConEmu->isMainThread();
+	if (bLocked)
+	{
+		_ASSERTE(gnDontEnable>=0);
+		nPrev = InterlockedIncrement(&gnDontEnable) - 1;
+	}
+};
+DontEnable::~DontEnable()
+{
+	if (bLocked)
+	{
+		InterlockedDecrement(&gnDontEnable);
+	}
+	_ASSERTE(gnDontEnable>=0);
+};
+BOOL DontEnable::isDontEnable()
+{
+	return (gnDontEnable > 0);
+};
 
 
 const TCHAR *const gsClassName = VirtualConsoleClass; // окна отрисовки
@@ -1070,7 +1094,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 	Assert(lpApplicationName==NULL);
 
 	LPCWSTR pszCmdArgs = lpCommandLine;
-	wchar_t szExe[MAX_PATH+1];
+	CmdArg szExe;
 	if (0 != NextArg(&pszCmdArgs, szExe))
 	{
 		DisplayLastError(L"Invalid cmd line. Executable not exists", -1);
@@ -2346,7 +2370,8 @@ HRESULT _CreateShellLink(PCWSTR pszArguments, PCWSTR pszPrefix, PCWSTR pszTitle,
             hr = psl->SetPath(szAppPath);
 
 			// Иконка
-			wchar_t szIcon[MAX_PATH+1], szTmp[MAX_PATH+1]; szIcon[0] = 0; szTmp[0] = 0;
+			CmdArg szTmp;
+			wchar_t szIcon[MAX_PATH+1] = L"";
 			LPCWSTR pszTemp = pszArguments, pszIcon = NULL;
 			wchar_t* pszBatch = NULL;
 			while (NextArg(&pszTemp, szTmp) == 0)
@@ -2898,12 +2923,35 @@ void UnitExpandTest()
 	FindComspec(&tcc, false);
 }
 
+void UnitModuleTest()
+{
+	wchar_t* pszConEmuCD = lstrmerge(gpConEmu->ms_ConEmuBaseDir, WIN3264TEST(L"\\ConEmuCD.dll",L"\\ConEmuCD64.dll"));
+	HMODULE hMod;
+	bool bTest;
+
+	_ASSERTE(!IsModuleValid((HMODULE)NULL));
+	_ASSERTE(!IsModuleValid((HMODULE)INVALID_HANDLE_VALUE));
+
+	hMod = GetModuleHandle(L"kernel32.dll");
+	bTest = IsModuleValid(hMod);
+	_ASSERTE(bTest);
+
+	hMod = LoadLibrary(pszConEmuCD);
+	bTest = IsModuleValid(hMod);
+	_ASSERTE(bTest);
+
+	FreeLibrary(hMod);
+	bTest = IsModuleValid(hMod);
+	_ASSERTE(!bTest);
+}
+
 void DebugUnitTests()
 {
 	RConStartArgs::RunArgTests();
 	UnitMaskTests();
 	UnitDriveTests();
 	UnitExpandTest();
+	UnitModuleTest();
 }
 #endif
 
@@ -3892,7 +3940,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	// Update package was dropped on ConEmu icon?
 	if (cmdNew && *cmdNew && (params == (uint)-1))
 	{
-		wchar_t szPath[MAX_PATH+1];
+		CmdArg szPath;
 		LPCWSTR pszCmdLine = cmdNew;
 		if (0 == NextArg(&pszCmdLine, szPath))
 		{
@@ -4002,7 +4050,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				// на иконку ConEmu, этот наброшенный путь прилепится
 				// к строке запуска фара.
 				pszDefCmd = gpSet->psStartSingleApp;
-				wchar_t szExe[MAX_PATH+1];
+				CmdArg szExe;
 				if (0 != NextArg(&pszDefCmd, szExe))
 				{
 					_ASSERTE(FALSE && "NextArg failed");

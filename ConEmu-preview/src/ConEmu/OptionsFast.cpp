@@ -70,9 +70,9 @@ static INT_PTR CALLBACK CheckOptionsFastProc(HWND hDlg, UINT messg, WPARAM wPara
 			gpSet->GetSettingsType(Storage, ReadOnly);
 			wchar_t* pszSettingsPlaces[] = {
 				lstrdup(L"HKEY_CURRENT_USER\\Software\\ConEmu"),
-				ExpandEnvStr(L"%ConEmuDir%\\ConEmu.xml"),
-				ExpandEnvStr(L"%ConEmuBaseDir%\\ConEmu.xml"),
 				ExpandEnvStr(L"%APPDATA%\\ConEmu.xml"),
+				ExpandEnvStr(L"%ConEmuBaseDir%\\ConEmu.xml"),
+				ExpandEnvStr(L"%ConEmuDir%\\ConEmu.xml"),
 				NULL
 			};
 			int iAllowed = 0;
@@ -638,7 +638,15 @@ void CreateDefaultTasks(bool bForceAdd /*= false*/)
 	}
 
 	// Chocolatey gallery
-	gpSet->CmdTaskSet(iCreatIdx++, L"Chocolatey", L"", L"*cmd /k powershell -NoProfile -ExecutionPolicy unrestricted -Command \"iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))\" && SET PATH=%PATH%;%systemdrive%\\chocolatey\\bin");
+	//-- gpSet->CmdTaskSet(iCreatIdx++, L"Chocolatey", L"", L"*cmd /k powershell -NoProfile -ExecutionPolicy unrestricted -Command \"iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))\" && SET PATH=%PATH%;%systemdrive%\\chocolatey\\bin");
+	// @echo If you don't know about Chocolatey - read about it here https://chocolatey.org/
+	// powershell -NoProfile -ExecutionPolicy unrestricted -Command "iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))" && SET PATH=%PATH%;%systemdrive%\chocolatey\bin
+	//-- that will be too long and unfriendly
+	// gpSet->CmdTaskSet(iCreatIdx++, L"Chocolatey (Admin)", L"", L"*cmd /k Title Chocolatey & @echo [1;32;40m******************************************************************** & @echo [1;32;40m** [0mIf you[1;31;40m don't know about Chocolatey [0m(apt-get style manager)     [1;32;40m** & @echo [1;32;40m** [1;31;40mread about it[0m here:[1;32;40m https://chocolatey.org/                    [1;32;40m** & @echo [1;32;40m** If you are sure about installing it, execute the following     [1;32;40m** & @echo [1;32;40m** [1;31;40mone-line command:                                              [1;32;40m** & @echo [1;32;40m** [1;37;40mpowershell -NoProfile -ExecutionPolicy unrestricted            [1;32;40m** & @echo [1;32;40m** [1;37;40m-Command @echo ^\"iex ((new-object net.webclient).DownloadString [1;32;40m** & @echo [1;32;40m** [1;37;40m('https://chocolatey.org/install.ps1'))^\"                       [1;32;40m** & @echo [1;32;40m** [1;37;40m^&^& SET PATH=^%PATH^%;^%systemdrive^%\\chocolatey\\bin                [1;32;40m** & @echo [1;32;40m********************************************************************[0m");
+	pszFull = ExpandEnvStr(L"%ConEmuBaseDir%\\Addons\\ChocolateyAbout.cmd");
+	if (pszFull && FileExists(pszFull))
+		gpSet->CmdTaskSet(iCreatIdx++, L"Chocolatey (Admin)", L"", L"*cmd /k Title Chocolatey & \"%ConEmuBaseDir%\\Addons\\ChocolateyAbout.cmd\"");
+	SafeFree(pszFull);
 
 	// Windows SDK
 	HKEY hk;

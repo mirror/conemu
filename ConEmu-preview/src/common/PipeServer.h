@@ -464,7 +464,13 @@ struct PipeServer
 
 			if (mb_Overlapped)
 			{
-				if (!fSuccess || !cbRead)
+				if (dwErr == ERROR_BROKEN_PIPE)
+				{
+					PLOG("PipeServerRead.ERROR_BROKEN_PIPE");
+					BreakConnection(pPipe);
+					return FALSE;
+				}
+				else if (!fSuccess || !cbRead)
 				{
 					PLOG("PipeServerRead.WaitOverlapped");
 					nOverRc = WaitOverlapped(pPipe, &cbRead);
@@ -550,7 +556,13 @@ struct PipeServer
 
 					if (mb_Overlapped)
 					{
-						if (!fSuccess || !cbRead)
+						if (dwErr == ERROR_BROKEN_PIPE)
+						{
+							PLOG("PipeServerRead.ERROR_BROKEN_PIPE (more)");
+							BreakConnection(pPipe);
+							return FALSE;
+						}
+						else if (!fSuccess || !cbRead)
 						{
 							nOverRc = WaitOverlapped(pPipe, &cbRead);
 							if (nOverRc == 1)
@@ -1321,6 +1333,7 @@ struct PipeServer
 				SetEvent(mh_TermEvent);
 
 			DWORD nTimeout = RELEASEDEBUGTEST(250,5000);
+			DEBUGTEST(DWORD nWarnTimeout = 500);
 			DWORD nStartTick = GetTickCount();
 			int nLeft = 0, nWaitLeft = 0;
 
@@ -1363,6 +1376,23 @@ struct PipeServer
 						}
 					}
 				}
+				#ifdef _DEBUG
+				if (nWarnTimeout && ((GetTickCount() - nStartTick) >= nWarnTimeout))
+				{
+					nWarnTimeout = 0;
+					for (int i = 0; i < mn_MaxCount; i++)
+					{
+						if (m_Pipes[i].hThread)
+							SuspendThread(m_Pipes[i].hThread);
+					}
+					_ASSERTE(FALSE && "StopPipeServer takes more than 500ms (debug mode), normal termination fails");
+					for (int i = 0; i < mn_MaxCount; i++)
+					{
+						if (m_Pipes[i].hThread)
+							ResumeThread(m_Pipes[i].hThread);
+					}
+				}
+				#endif
 			} while ((nWaitLeft > 0) && ((GetTickCount() - nStartTick) < nTimeout));
 
 			// Non terminated threads exists?

@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -501,6 +501,8 @@ BOOL CDragDropData::AddFmt_SHELLIDLIST(wchar_t* pszDraggedPath, UINT nFilesCount
 				{
 					nMaxSize += nItemSize;
 					CIDA* pNew = (CIDA*)GlobalAlloc(GPTR, nMaxSize);
+					if (!pNew)
+						break;
 					memmove(pNew, file_PIDLs, nCurSize);
 					GlobalFree(file_PIDLs);
 					file_PIDLs = pNew;
@@ -519,6 +521,11 @@ BOOL CDragDropData::AddFmt_SHELLIDLIST(wchar_t* pszDraggedPath, UINT nFilesCount
 			{
 				CoTaskMemFree(pItem); pItem = NULL;
 			}
+		}
+
+		if (pItem)
+		{
+			CoTaskMemFree(pItem);
 		}
 	}
 	SAFECATCH //__except(EXCEPTION_EXECUTE_HANDLER)
@@ -891,6 +898,8 @@ template <class T> void PidlDump(
 // Если передан hDumpFile - запись полной информации в текстовый файл
 void CDragDropData::EnumDragFormats(IDataObject * pDataObject, HANDLE hDumpFile /*= NULL*/)
 {
+	//=== codeanalyze: Excessive stack usage
+
 	//BOOL lbDoEnum = FALSE;
 	//if (!lbDoEnum) return;
 	HRESULT hr = S_OK;
@@ -1386,8 +1395,8 @@ void CDragDropData::RetrieveDragToInfo(POINTL pt)
 	{
 		DEBUGSTRFAR(L"CDragDropData::RetrieveDragFromInfo() -> (!pRCon->isAlive())\n");
 		gpConEmu->DebugStep(_T("DnD: Far is not alive, drop disabled"));
-		_ASSERTE(FALSE && "DnD: Far is not alive, drop disabled");
-		//SetDragToInfo(NULL, 0, pRCon);
+		//Don't show assert (debug) - simple text may be dropped
+		//_ASSERTE(FALSE && "DnD: Far is not alive, drop disabled");
 	}
 	else
 	{

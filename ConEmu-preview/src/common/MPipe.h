@@ -47,10 +47,13 @@ class MPipe
 		HANDLE mh_Pipe, mh_Heap, mh_TermEvent;
 		BOOL mb_Overlapped;
 		OVERLAPPED m_Ovl;
+		typedef BOOL (WINAPI* CancelIo_t)(HANDLE hFile);
+		CancelIo_t _CancelIo;
 		T_IN m_In; // для справки...
 		T_OUT* mp_Out; DWORD mn_OutSize, mn_MaxOutSize;
 		T_OUT m_Tmp;
 		DWORD mn_ErrCode;
+		LONG  mn_OpenCount, mn_CloseCount, mn_FailCount;
 		void SaveErrorCode(DWORD nCode)
 		{
 			mn_ErrCode = nCode;
@@ -64,10 +67,13 @@ class MPipe
 			mp_Out = NULL;
 			mn_OutSize = mn_MaxOutSize = 0;
 			mn_ErrCode = 0;
+			mn_OpenCount = mn_CloseCount = mn_FailCount = 0;
 			mh_Heap = GetProcessHeap();
 			mh_TermEvent = NULL;
 			mb_Overlapped = FALSE;
 			memset(&m_Ovl, 0, sizeof(m_Ovl));
+			HMODULE hKernel = GetModuleHandle(L"kernel32.dll");
+			_CancelIo = hKernel ? (CancelIo_t)GetProcAddress(hKernel,"CancelIo") : NULL;
 			_ASSERTE(mh_Heap!=NULL);
 		};
 		void SetTimeout(DWORD anTimeout)
@@ -88,11 +94,16 @@ class MPipe
 					_ASSERTE(mh_Heap!=NULL);
 			}
 			mp_Out = NULL;
+			_ASSERTE(mn_CloseCount==mn_OpenCount);
 		};
 		void Close()
 		{
 			if (mh_Pipe && mh_Pipe != INVALID_HANDLE_VALUE)
+			{
+				InterlockedIncrement(&mn_CloseCount);
+				if (_CancelIo) _CancelIo(mh_Pipe);
 				CloseHandle(mh_Pipe);
+			}
 
 			mh_Pipe = NULL;
 		};
@@ -122,10 +133,12 @@ class MPipe
 
 			if (mh_Pipe == INVALID_HANDLE_VALUE)
 			{
+				InterlockedIncrement(&mn_FailCount);
 				_ASSERTE(mh_Pipe != INVALID_HANDLE_VALUE);
 				mh_Pipe = NULL;
 			}
 
+			InterlockedIncrement(&mn_OpenCount);
 			return (mh_Pipe!=NULL);
 		};
 		BOOL Transact(const T_IN* apIn, DWORD anInSize, const T_OUT** rpOut)
@@ -189,6 +202,7 @@ class MPipe
 				if ((nOverlappedWait == WAIT_TIMEOUT) || (nOverlappedWait == (WAIT_OBJECT_0+1)))
 				{
 					// Ошибка ожидания или закрытие приложения
+					InterlockedIncrement(&mn_FailCount);
 					Close();
 					return FALSE;
 				}
@@ -213,6 +227,7 @@ class MPipe
 			if (!fSuccess && dwErr == ERROR_BROKEN_PIPE)
 			{
 				// Сервер не вернул данных, но обработал команду
+				InterlockedIncrement(&mn_FailCount);
 				Close(); // Раз пайп закрыт - прибиваем хэндл
 				return TRUE;
 			}
@@ -226,6 +241,7 @@ class MPipe
 					nCmd = ((CESERVER_REQ_HDR*)apIn)->nCmd;
 
 				msprintf(ms_Error, countof(ms_Error), L"%s: TransactNamedPipe failed, Cmd=%i, ErrCode=%u!", ms_Module, nCmd, dwErr);
+				InterlockedIncrement(&mn_FailCount);
 				Close(); // Поскольку произошла неизвестная ошибка - пайп лучше закрыть (чтобы потом переоткрыть)
 				return FALSE;
 			}
@@ -330,6 +346,7 @@ class MPipe
 						if ((nOverlappedWait == WAIT_TIMEOUT) || (nOverlappedWait == (WAIT_OBJECT_0+1)))
 						{
 							// Ошибка ожидания или закрытие приложения
+							InterlockedIncrement(&mn_FailCount);
 							Close();
 							return FALSE;
 						}

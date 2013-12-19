@@ -1,6 +1,6 @@
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2013 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -106,7 +106,7 @@ CConEmuChild::CConEmuChild()
 	mb_ScrollDisabled = FALSE;
 	m_LastAlwaysShowScrollbar = gpSet->isAlwaysShowScrollbar;
 	mb_ScrollRgnWasSet = false;
-	
+
 	ZeroStruct(m_LockDc);
 }
 
@@ -158,8 +158,12 @@ void CConEmuChild::PostOnVConClosed()
 		ShutdownGuiStep(L"ProcessVConClosed - repost");
 		PostMessage(this->mh_WndDC, gn_MsgVConTerminated, 0, (LPARAM)pVCon);
 	}
+
+#ifdef _DEBUG
 	// Must be guarded and thats why valid...
-	_ASSERTE(CVConGroup::isValid(pVCon));
+	int iRef = pVCon->RefCount();
+	_ASSERTE(CVConGroup::isValid(pVCon) || (iRef>=1 && iRef<10));
+#endif
 }
 
 void CConEmuChild::ProcessVConClosed(CVirtualConsole* apVCon, BOOL abPosted /*= FALSE*/)
@@ -217,7 +221,7 @@ HWND CConEmuChild::CreateView()
 	// Имя класса - то же самое, что и у главного окна
 	DWORD style = /*WS_VISIBLE |*/ WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
 	DWORD styleEx = 0;
-	
+
 	RECT rcBack = gpConEmu->CalcRect(CER_BACK, pVCon);
 	RECT rc = gpConEmu->CalcRect(CER_DC, rcBack, CER_BACK, pVCon);
 
@@ -383,7 +387,7 @@ LRESULT CConEmuChild::ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM 
 				HWND hGui = pVCon->GuiWnd();
 				if (hGui)
 				{
-					_ASSERTE((wParam==0) && "Show DC while GuiWnd exists");
+					_ASSERTE(((wParam==0) || pVCon->RCon()->isGuiForceConView()) && "Show DC while GuiWnd exists");
 				}
 				#endif
 				result = DefWindowProc(hWnd, messg, wParam, lParam);
@@ -487,7 +491,7 @@ LRESULT CConEmuChild::ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM 
 					}
 
 					DWORD curStyle = GetWindowLong(hWnd, GWL_STYLE);
-				
+
 					if ((curStyle & CRITICAL_DCWND_STYLES) != (pVCon->mn_WndDCStyle & CRITICAL_DCWND_STYLES))
 					{
 						// DC window styles was changed externally!
@@ -549,7 +553,7 @@ LRESULT CConEmuChild::ChildWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM 
 			}
 			// If an application processes this message, it should return TRUE to halt further processing or FALSE to continue.
 			break;
-			
+
 		case WM_SYSCOMMAND:
 			// -- лишние ограничения, похоже
 			result = DefWindowProc(hWnd, messg, wParam, lParam);
@@ -882,7 +886,7 @@ LRESULT CConEmuChild::BackWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM l
 			}
 			// If an application processes this message, it should return TRUE to halt further processing or FALSE to continue.
 			break;
-			
+
 		case WM_SYSCOMMAND:
 			// -- лишние ограничения, похоже
 			result = DefWindowProc(hWnd, messg, wParam, lParam);
@@ -1311,7 +1315,7 @@ void CConEmuChild::Invalidate()
 	if (mh_WndDC)
 	{
 		DEBUGSTRDRAW(L" +++ Invalidate on DC window called\n");
-		
+
 		if (!m_LockDc.bLocked)
 		{
 			InvalidateRect(mh_WndDC, NULL, FALSE);
@@ -1322,12 +1326,12 @@ void CConEmuChild::Invalidate()
 			HRGN hRgn = CreateRectRgn(0, 0, rcClient.right, rcClient.bottom);
 			HRGN hLock = CreateRectRgn(m_LockDc.rcScreen.left, m_LockDc.rcScreen.top, m_LockDc.rcScreen.right, m_LockDc.rcScreen.bottom);
 			int iRc = CombineRgn(hRgn, hRgn, hLock, RGN_DIFF);
-			
+
 			if (iRc == ERROR)
 				InvalidateRect(mh_WndDC, NULL, FALSE);
 			else if (iRc != NULLREGION)
 				InvalidateRgn(mh_WndDC, hRgn, FALSE);
-			
+
 			DeleteObject(hLock);
 			DeleteObject(hRgn);
 		}
@@ -1387,9 +1391,15 @@ BOOL CConEmuChild::TrackMouse()
 {
 	_ASSERTE(this);
 	BOOL lbCapture = FALSE; // По умолчанию - мышь не перехватывать
-	
+
 	CVirtualConsole* pVCon = (CVirtualConsole*)this;
 	CVConGuard guard(pVCon);
+
+	if (pVCon->WasHighlightRowColChanged())
+	{
+		_ASSERTE(gpConEmu->isVisible(pVCon));
+		pVCon->Invalidate();
+	}
 
 	#ifdef _DEBUG
 	CRealConsole* pRCon = pVCon->RCon();
@@ -1838,7 +1848,7 @@ int CConEmuChild::IsDcLocked(RECT* CurrentConLockedRect)
 {
 	if (!m_LockDc.bLocked)
 		return 0;
-	
+
 	if (CurrentConLockedRect)
 		*CurrentConLockedRect = m_LockDc.rcCon;
 	_ASSERTE(!(m_LockDc.rcCon.left < 0 || m_LockDc.rcCon.top < 0 || m_LockDc.rcCon.right < 0 || m_LockDc.rcCon.bottom < 0));
@@ -1870,7 +1880,7 @@ void CConEmuChild::LockDcRect(bool bLock, RECT* Rect)
 		CVConGuard guard(pVCon);
 
 		TODO("Хорошо бы здесь запомнить в CompatibleBitmap то, что нарисовали. Это нужно делать в MainThread!!");
-		
+
 		m_LockDc.rcScreen = *Rect;
 		COORD cr = pVCon->ClientToConsole(m_LockDc.rcScreen.left+1, m_LockDc.rcScreen.top+1, true);
 		m_LockDc.rcCon.left = cr.X; m_LockDc.rcCon.top = cr.Y;
@@ -1883,7 +1893,7 @@ void CConEmuChild::LockDcRect(bool bLock, RECT* Rect)
 			LockDcRect(false);
 			return;
 		}
-		
+
 		m_LockDc.nLockTick = GetTickCount();
 		m_LockDc.bLocked = TRUE;
 		ValidateRect(mh_WndDC, &m_LockDc.rcScreen);

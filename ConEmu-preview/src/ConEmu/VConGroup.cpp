@@ -539,8 +539,8 @@ void CVConGroup::GetAllTextSize(SIZE& sz, bool abMinimal /*= false*/)
 	}
 	else
 	{
-		CVConGuard VCon1(mp_Grp1->mp_Item);
-		CVConGuard VCon2(mp_Grp2->mp_Item);
+		CVConGuard VCon1(mp_Grp1 ? mp_Grp1->mp_Item : NULL);
+		CVConGuard VCon2(mp_Grp2 ? mp_Grp2->mp_Item : NULL);
 		SIZE sz1 = {MIN_CON_WIDTH,MIN_CON_HEIGHT}, sz2 = {MIN_CON_WIDTH,MIN_CON_HEIGHT};
 		
 		if (mp_Grp1)
@@ -1631,7 +1631,7 @@ void CVConGroup::Update(bool isForce /*= false*/)
 
 bool CVConGroup::isActive(CVirtualConsole* apVCon, bool abAllowGroup /*= true*/)
 {
-	if (!apVCon)
+	if (!isValid(apVCon))
 		return false;
 
 	if (apVCon == gp_VActive)
@@ -1651,6 +1651,9 @@ bool CVConGroup::isActive(CVirtualConsole* apVCon, bool abAllowGroup /*= true*/)
 
 bool CVConGroup::isActiveGroupVCon(CVirtualConsole* pVCon)
 {
+	if (!isValid(pVCon))
+		return false;
+
 	CVConGroup* pGr = GetRootOfVCon(pVCon);
 	if (!pGr)
 		return false;
@@ -1671,7 +1674,7 @@ bool CVConGroup::isActiveGroupVCon(CVirtualConsole* pVCon)
 
 bool CVConGroup::isVisible(CVirtualConsole* apVCon)
 {
-	if (!apVCon || !isValid(apVCon))
+	if (!isValid(apVCon))
 		return false;
 
 	if (apVCon == gp_VActive)
