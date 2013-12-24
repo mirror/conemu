@@ -1610,6 +1610,11 @@ wrap:
 	SetCursor(LoadCursor(NULL,IDC_ARROW));
 }
 
+void CSettings::InvalidateCtrl(HWND hCtrl, BOOL bErase)
+{
+	::InvalidateRect(hCtrl, NULL, bErase);
+}
+
 LRESULT CSettings::OnInitDialog()
 {
 	//_ASSERTE(!hMain && !hColors && !hCmdTasks && !hViews && !hExt && !hFar && !hInfo && !hDebug && !hUpdate && !hSelection);
@@ -5654,15 +5659,15 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 			break;
 		case rbThumbBackColorIdx: case rbThumbBackColorRGB:
 			gpSet->ThSet.crBackground.UseIndex = IsChecked(hWnd2, rbThumbBackColorIdx);
-			InvalidateRect(GetDlgItem(hWnd2, c32), 0, 1);
+			InvalidateCtrl(GetDlgItem(hWnd2, c32), TRUE);
 			break;
 		case rbThumbPreviewBoxColorIdx: case rbThumbPreviewBoxColorRGB:
 			gpSet->ThSet.crPreviewFrame.UseIndex = IsChecked(hWnd2, rbThumbPreviewBoxColorIdx);
-			InvalidateRect(GetDlgItem(hWnd2, c33), 0, 1);
+			InvalidateCtrl(GetDlgItem(hWnd2, c33), TRUE);
 			break;
 		case rbThumbSelectionBoxColorIdx: case rbThumbSelectionBoxColorRGB:
 			gpSet->ThSet.crSelectFrame.UseIndex = IsChecked(hWnd2, rbThumbSelectionBoxColorIdx);
-			InvalidateRect(GetDlgItem(hWnd2, c34), 0, 1);
+			InvalidateCtrl(GetDlgItem(hWnd2, c34), TRUE);
 			break;
 
 		case cbActivityReset:
@@ -6250,7 +6255,7 @@ LRESULT CSettings::OnButtonClicked(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 						checkRadioButton(hWnd2, rbThumbSelectionBoxColorIdx, rbThumbSelectionBoxColorRGB, rbThumbSelectionBoxColorRGB);
 					}
 
-					InvalidateRect(GetDlgItem(hWnd2, CB), 0, 1);
+					InvalidateCtrl(GetDlgItem(hWnd2, CB), TRUE);
 					// done
 				}
 			} // else if (CB >= c32 && CB <= c34)
@@ -7353,7 +7358,7 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 					{
 						if (gpSetCls->SetColorById(TB - (tc0-c0), color))
 						{
-							InvalidateRect(GetDlgItem(hWnd2, TB - (tc0-c0)), 0, 1);
+							InvalidateCtrl(GetDlgItem(hWnd2, TB - (tc0-c0)), TRUE);
 							// done
 						}
 					}
@@ -7392,7 +7397,7 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 						if (TB >= tc0 && TB <= tc31)
 							gpConEmu->Update(true);
 
-						InvalidateRect(GetDlgItem(hWnd2, TB - (tc0-c0)), 0, 1);
+						InvalidateCtrl(GetDlgItem(hWnd2, TB - (tc0-c0)), TRUE);
 					}
 				}
 			}
@@ -7408,7 +7413,7 @@ LRESULT CSettings::OnEditChanged(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				{
 					if (SetColorById(TB - (tc0-c0), color))
 					{
-						InvalidateRect(GetDlgItem(hWnd2, TB - (tc0-c0)), 0, 1);
+						InvalidateCtrl(GetDlgItem(hWnd2, TB - (tc0-c0)), TRUE);
 					}
 				}
 			}
@@ -7950,15 +7955,15 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 				{
 					case lbThumbBackColorIdx:
 						gpSet->ThSet.crBackground.ColorIdx = nSel;
-						InvalidateRect(GetDlgItem(hWnd2, c32), 0, 1);
+						InvalidateCtrl(GetDlgItem(hWnd2, c32), TRUE);
 						break;
 					case lbThumbPreviewBoxColorIdx:
 						gpSet->ThSet.crPreviewFrame.ColorIdx = nSel;
-						InvalidateRect(GetDlgItem(hWnd2, c33), 0, 1);
+						InvalidateCtrl(GetDlgItem(hWnd2, c33), TRUE);
 						break;
 					case lbThumbSelectionBoxColorIdx:
 						gpSet->ThSet.crSelectFrame.ColorIdx = nSel;
-						InvalidateRect(GetDlgItem(hWnd2, c34), 0, 1);
+						InvalidateCtrl(GetDlgItem(hWnd2, c34), TRUE);
 						break;
 					case tThumbsFontName:
 						SendDlgItemMessage(hWnd2, wId, CB_GETLBTEXT, nSel, (LPARAM)gpSet->ThSet.Thumbs.sFontName);
@@ -8072,7 +8077,7 @@ LRESULT CSettings::OnComboBox(HWND hWnd2, WPARAM wParam, LPARAM lParam)
 						gpSet->Colors[i] = pPal->Colors[i]; //-V108
 						_wsprintf(temp, SKIPLEN(countof(temp)) L"%i %i %i", getR(gpSet->Colors[i]), getG(gpSet->Colors[i]), getB(gpSet->Colors[i]));
 						SetDlgItemText(hWnd2, 1100 + i, temp);
-						InvalidateRect(GetDlgItem(hWnd2, c0+i), 0, 1);
+						InvalidateCtrl(GetDlgItem(hWnd2, c0+i), TRUE);
 					}
 
 					DWORD nVal;
@@ -8688,8 +8693,8 @@ INT_PTR CSettings::wndOpProc(HWND hWnd2, UINT messg, WPARAM wParam, LPARAM lPara
 							dwStyle = GetWindowLong(hSave, GWL_STYLE);
 							SetWindowLong(hSave, GWL_STYLE, dwStyle | BS_DEFPUSHBUTTON);
 						}
-						InvalidateRect(hSearch, NULL, FALSE);
-						InvalidateRect(hSave, NULL, FALSE);
+						InvalidateCtrl(hSearch, FALSE);
+						InvalidateCtrl(hSave, FALSE);
 					}
 				}
 				break;
@@ -9637,7 +9642,7 @@ INT_PTR CSettings::pageOpProc_Apps(HWND hWnd2, HWND hChild, UINT messg, WPARAM w
 				EnableDlgItems(hDlg, DistinctControls[i].nCtrls, countof(DistinctControls[i].nCtrls), bEnabled);
 			}
 
-			InvalidateRect(hChild, NULL, FALSE);
+			InvalidateCtrl(hChild, FALSE);
 		} // UM_DISTINCT_ENABLE
 		break;
 	case WM_COMMAND:
@@ -10499,7 +10504,7 @@ void CSettings::debugLogCommand(CESERVER_REQ* pInfo, BOOL abInput, DWORD anTick,
 	if ((m_ActivityLoggingType != glt_Commands) || (mh_Tabs[thi_Debug] == NULL))
 		return;
 
-	_ASSERTE(abInput==TRUE || pResult!=NULL || (pInfo->hdr.nCmd==CECMD_LANGCHANGE || pInfo->hdr.nCmd==CECMD_GUICHANGED || pInfo->hdr.nCmd==CMD_FARSETCHANGED));
+	_ASSERTE(abInput==TRUE || pResult!=NULL || (pInfo->hdr.nCmd==CECMD_LANGCHANGE || pInfo->hdr.nCmd==CECMD_GUICHANGED || pInfo->hdr.nCmd==CMD_FARSETCHANGED || pInfo->hdr.nCmd==CECMD_ONACTIVATION));
 		
 	LogCommandsData* pData = (LogCommandsData*)calloc(1,sizeof(LogCommandsData));
 	
@@ -11688,22 +11693,22 @@ void CSettings::RecreateBorderFont(const LOGFONT *inFont)
 				_wsprintf(szFontError+nCurLen, SKIPLEN(countof(szFontError)-nCurLen)
 				          L"Failed to create border font!\nRequested: %s\nCreated: ", LogFont2.lfFaceName);
 
-				// Если запрашивалась Люцида - оставляем (хотя это уже облом, должна быть)
-				if (lstrcmpi(LogFont2.lfFaceName, gsDefGuiFont) == 0)
+				// Lucida may be not installed too
+				// So, try to create Lucida or Courier (we need font with 'frames')
+				bool bCreated = false;
+				LPCWSTR szAltNames[] = {gsDefGuiFont, gsAltGuiFont};
+				for (int a = 0; a < countof(szAltNames); a++)
 				{
-					// только запомним что было реально создано
-					lstrcpyn(LogFont2.lfFaceName, szFontFace, countof(LogFont2.lfFaceName));
-				}
-				else
-				{
-					// Иначе - пробуем создать Люциду (нам нужен шрифт с рамками)
-					wcscpy_c(LogFont2.lfFaceName, gsDefGuiFont);
+					if (!a && lstrcmpi(LogFont2.lfFaceName, gsDefGuiFont) == 0)
+						continue; // It was already failed...
+
+					wcscpy_c(LogFont2.lfFaceName, szAltNames[a]);
 					SelectObject(hDC, hOldF);
 					mh_Font2.Delete();
 
 					mh_Font2 = CEFONT(CreateFont(LogFont2.lfHeight, LogFont2.lfWidth, 0, 0, FW_NORMAL,
-					                             0, 0, 0, DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
-					                             NONANTIALIASED_QUALITY/*ANTIALIASED_QUALITY*/, 0, LogFont2.lfFaceName));
+													0, 0, 0, DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
+													NONANTIALIASED_QUALITY/*ANTIALIASED_QUALITY*/, 0, LogFont2.lfFaceName));
 					hOldF = (HFONT)SelectObject(hDC, mh_Font2.hFont);
 					wchar_t szFontFace2[32];
 
@@ -11712,16 +11717,20 @@ void CSettings::RecreateBorderFont(const LOGFONT *inFont)
 						szFontFace2[31] = 0;
 
 						// Проверяем что создалось, и ругаемся, если что...
-						if (lstrcmpi(LogFont2.lfFaceName, szFontFace2) != 0)
+						if (lstrcmpi(LogFont2.lfFaceName, szFontFace2) == 0)
 						{
-							wcscat_c(szFontError, szFontFace2);
-						}
-						else
-						{
+							bCreated = true;
 							wcscat_c(szFontError, szFontFace);
-							wcscat_c(szFontError, L"\nUsing: Lucida Console");
+							wcscat_c(szFontError, L"\nUsing: ");
+							wcscat_c(szFontError, LogFont2.lfFaceName);
+							break;
 						}
 					}
+				}
+				// Font not istalled or available?
+				if (!bCreated)
+				{
+					wcscat_c(szFontError, szAltNames[0]);
 				}
 			}
 		}
@@ -13829,7 +13838,7 @@ bool CSettings::ColorEditDialog(HWND hWnd2, WORD c)
 		SetColorById(c, colornew);
 		_wsprintf(temp, SKIPLEN(countof(temp)) L"%i %i %i", getR(colornew), getG(colornew), getB(colornew));
 		SetDlgItemText(hWnd2, c + (tc0-c0), temp);
-		InvalidateRect(GetDlgItem(hWnd2, c), 0, 1);
+		InvalidateCtrl(GetDlgItem(hWnd2, c), TRUE);
 		bChanged = true;
 	}
 
@@ -14387,7 +14396,7 @@ bool CSettings::CheckConsoleFontRegistry(LPCWSTR asFaceName)
 
 // Вызывается при запуске ConEmu для быстрой проверки шрифта
 // EnumFontFamilies не вызывается, т.к. занимает время
-bool CSettings::CheckConsoleFontFast()
+bool CSettings::CheckConsoleFontFast(LPCWSTR asCheckName /*= NULL*/)
 {
 	// В ReactOS шрифт не меняется и в реестре не регистрируется
 	if (gpStartEnv->bIsReactOS)
@@ -14397,7 +14406,14 @@ bool CSettings::CheckConsoleFontFast()
 
 	//wchar_t szCreatedFaceName[32] = {0};
 	LOGFONT LF = gpSet->ConsoleFont;
+	BOOL bCheckStarted = FALSE;
+	DWORD nCheckResult = -1;
+	DWORD nCheckWait = -1;
+
 	gpSetCls->nConFontError = 0; //ConFontErr_NonSystem|ConFontErr_NonRegistry|ConFontErr_InvalidName;
+	if (asCheckName && *asCheckName)
+		wcscpy_c(LF.lfFaceName, asCheckName);
+
 	HFONT hf = CreateFontIndirect(&LF);
 
 	if (!hf)
@@ -14420,7 +14436,7 @@ bool CSettings::CheckConsoleFontFast()
 			if (pszFamilyName[0] != L'@'
 			        && (gbIsDBCS || IsAlmostMonospace(pszFamilyName, lpOutl->otmTextMetrics.tmMaxCharWidth, lpOutl->otmTextMetrics.tmAveCharWidth, lpOutl->otmTextMetrics.tmHeight))
 			        && lpOutl->otmPanoseNumber.bProportion == PAN_PROP_MONOSPACED
-			        && lstrcmpi(pszFamilyName, gpSet->ConsoleFont.lfFaceName) == 0
+			        && lstrcmpi(pszFamilyName, LF.lfFaceName) == 0
 			  )
 			{
 				BOOL lbNonSystem = FALSE;
@@ -14432,7 +14448,7 @@ bool CSettings::CheckConsoleFontFast()
 					const RegFont* iter = &(m_RegFonts[j]);
 
 					if (!iter->bAlreadyInSystem &&
-					        lstrcmpi(iter->szFontName, gpSet->ConsoleFont.lfFaceName) == 0)
+					        lstrcmpi(iter->szFontName, LF.lfFaceName) == 0)
 						lbNonSystem = TRUE;
 				}
 
@@ -14451,13 +14467,21 @@ bool CSettings::CheckConsoleFontFast()
 	// Если успешно - проверить зарегистрированность в реестре
 	if (gpSetCls->nConFontError == 0)
 	{
-		if (!CheckConsoleFontRegistry(gpSet->ConsoleFont.lfFaceName))
+		if (!CheckConsoleFontRegistry(LF.lfFaceName))
 			gpSetCls->nConFontError |= ConFontErr_NonRegistry;
 	}
 
-	BOOL bCheckStarted = FALSE;
-	DWORD nCheckResult = -1;
-	DWORD nCheckWait = -1;
+	// WinPE may not have "Lucida Console" preinstalled
+	if (gpSetCls->nConFontError && !asCheckName && gpStartEnv && gpStartEnv->bIsWinPE && (lstrcmpi(LF.lfFaceName, gsAltConFont) != 0))
+	{
+		DWORD errSave = gpSetCls->nConFontError;
+		if (CheckConsoleFontFast(gsAltConFont))
+		{
+			// But has "Courier New"
+			wcscpy_c(gpSet->ConsoleFont.lfFaceName, gsAltConFont);
+			goto wrap;
+		}
+	}
 
 	if ((gpSetCls->nConFontError & ConFontErr_NonRegistry)
 		|| (gbIsWine && gpSetCls->nConFontError))
@@ -14508,7 +14532,15 @@ bool CSettings::CheckConsoleFontFast()
 		}
 	}
 
+wrap:
 	bConsoleFontChecked = (gpSetCls->nConFontError == 0);
+	if (isAdvLogging)
+	{
+		wchar_t szInfo[128];
+		_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"CheckConsoleFontFast(`%s`,`%s`) = %u",
+			asCheckName ? asCheckName : L"NULL", LF.lfFaceName, gpSetCls->nConFontError);
+		LogString(szInfo);
+	}
 	return bConsoleFontChecked;
 }
 

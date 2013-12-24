@@ -368,7 +368,7 @@ void FIRST_ANSI_CALL(const BYTE* lpBuf, DWORD nNumberOfBytes)
 	static bool bTriggered = false;
 	if (!bTriggered)
 	{
-		if (lpBuf && nNumberOfBytes && *lpBuf == 0x1B)
+		if (lpBuf && nNumberOfBytes && (*lpBuf == 0x1B || *lpBuf == CTRL('E') || *lpBuf == DSC))
 		{
 			bTriggered = true;
 			ShowStartedMsgBox(L" First ansi call!");

@@ -558,9 +558,8 @@ class CConEmuMain :
 	protected:
 		friend class CConEmuCtrl;
 		friend class CRunQueue;
-		//BOOL LowLevelKeyHook(UINT nMsg, UINT nVkKeyCode);
-		//DWORD_PTR mn_CurrentKeybLayout;
-		// Registered messages
+		COLORREF mcr_BackBrush;
+		HBRUSH mh_BackBrush;
 		DWORD mn_MainThreadId;
 		// Registered messages
 		UINT mn__FirstAppMsg;
@@ -720,7 +719,7 @@ class CConEmuMain :
 		//LRESULT GuiShellExecuteEx(SHELLEXECUTEINFO* lpShellExecute, CVirtualConsole* apVCon);
 		BOOL Init();
 		void InitInactiveDC(CVirtualConsole* apVCon);
-		void Invalidate(CVirtualConsole* apVCon);
+		void Invalidate(LPRECT lpRect, BOOL bErase = TRUE);
 		void InvalidateAll();
 		void UpdateWindowChild(CVirtualConsole* apVCon);
 		void UpdateInsideRect(RECT rcNewPos);

@@ -39,6 +39,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CHILD_DESK_MODE
 #define REGPREPARE_EXTERNAL
 //#define CATCH_TOPMOST_SET
+#undef DEBUG_BK_COLORS
 
 #include "Header.h"
 #include "About.h"
@@ -280,6 +281,9 @@ CConEmuMain::CConEmuMain()
 
 	mb_CommCtrlsInitialized = false;
 	mh_AboutDlg = NULL;
+
+	mcr_BackBrush = 0;
+	mh_BackBrush = NULL;
 
 	//HeapInitialize(); - уже
 	//#define D(N) (1##N-100)
@@ -2057,23 +2061,29 @@ BOOL CConEmuMain::CreateMainWindow()
 		return FALSE;
 	}
 
+	HBRUSH hBlackBrush = (HBRUSH)GetStockObject(BLACK_BRUSH);
+	#if defined(_DEBUG) && defined(DEBUG_BK_COLORS)
+	hBlackBrush = (HBRUSH)GetStockObject(WHITE_BRUSH);
+	mh_BackBrush = CreateSolidBrush(255);
+	#endif
+
 	// 2009-06-11 ¬озможно, что CS_SAVEBITS приводит к глюкам отрисовки
 	// банально непрорисовываютс€ некоторые части экрана (драйвер видюхи глючит?)
 	WNDCLASSEX wc = {sizeof(WNDCLASSEX), CS_DBLCLKS|CS_OWNDC/*|CS_SAVEBITS*/, CConEmuMain::MainWndProc, 0, 16,
 	                 g_hInstance, hClassIcon, LoadCursor(NULL, IDC_ARROW),
-	                 NULL /*(HBRUSH)COLOR_BACKGROUND*/,
+	                 mh_BackBrush ? mh_BackBrush : hBlackBrush,
 	                 NULL, gsClassNameParent, hClassIconSm
 	                };// | CS_DROPSHADOW
 
 	WNDCLASSEX wcWork = {sizeof(WNDCLASSEX), CS_DBLCLKS|CS_OWNDC/*|CS_SAVEBITS*/, CConEmuMain::WorkWndProc, 0, 16,
 	                 g_hInstance, hClassIcon, LoadCursor(NULL, IDC_ARROW),
-	                 NULL /*(HBRUSH)COLOR_BACKGROUND*/,
+	                 mh_BackBrush ? mh_BackBrush : hBlackBrush,
 	                 NULL, gsClassNameWork, hClassIconSm
 	                };// | CS_DROPSHADOW
 
 	WNDCLASSEX wcBack = {sizeof(WNDCLASSEX), CS_DBLCLKS|CS_OWNDC/*|CS_SAVEBITS*/, CConEmuChild::BackWndProc, 0, 16,
 	                 g_hInstance, hClassIcon, LoadCursor(NULL, IDC_ARROW),
-	                 NULL /*(HBRUSH)COLOR_BACKGROUND*/,
+	                 mh_BackBrush ? mh_BackBrush : hBlackBrush,
 	                 NULL, gsClassNameBack, hClassIconSm
 	                };// | CS_DROPSHADOW
 
@@ -9494,16 +9504,19 @@ void CConEmuMain::InitInactiveDC(CVirtualConsole* apVCon)
 	PostMessage(ghWnd, mn_MsgInitInactiveDC, 0, (LPARAM)apVCon);
 }
 
-void CConEmuMain::Invalidate(CVirtualConsole* apVCon)
+void CConEmuMain::Invalidate(LPRECT lpRect, BOOL bErase /*= TRUE*/)
 {
-	if (!this || !apVCon || !apVCon->isVisible()) return;
-
-	apVCon->Invalidate();
+	#ifdef _DEBUG
+	static bool bSkip = false;
+	if (bSkip)
+		return;
+	#endif
+	::InvalidateRect(ghWnd, lpRect, bErase);
 }
 
 void CConEmuMain::InvalidateAll()
 {
-	InvalidateRect(ghWnd, NULL, TRUE);
+	Invalidate(NULL, TRUE);
 
 	CVConGroup::InvalidateAll();
 
@@ -9512,8 +9525,9 @@ void CConEmuMain::InvalidateAll()
 	if (mp_TabBar)
 		mp_TabBar->Invalidate();
 
-	if (mp_Status)
-		mp_Status->InvalidateStatusBar();
+	//-- No need to invalidate status due to Invalidate(NULL) called above
+	//if (mp_Status)
+	//	mp_Status->InvalidateStatusBar();
 }
 
 void CConEmuMain::UpdateWindowChild(CVirtualConsole* apVCon)
@@ -10936,11 +10950,11 @@ wchar_t* CConEmuMain::LoadConsoleBatch_File(LPCWSTR asSource)
 			wchar_t szCurDir[MAX_PATH*2]; szCurDir[0] = 0; GetCurrentDirectory(countof(szCurDir), szCurDir);
 			size_t cchMax = _tcslen(asSource)+100+_tcslen(szCurDir);
 			wchar_t* pszErrMsg = (wchar_t*)calloc(cchMax,2);
-			_wcscpy_c(pszErrMsg, cchMax, L"Can't open console batch file:\n\xAB"/*Ђ*/);
+			_wcscpy_c(pszErrMsg, cchMax, L"Can't open console batch file:\nС");
 			_wcscat_c(pszErrMsg, cchMax, asSource+1);
-			_wcscat_c(pszErrMsg, cchMax, L"\xBB"/*ї*/ L"\nCurrent directory:\n\xAB"/*Ђ*/);
+			_wcscat_c(pszErrMsg, cchMax, L"Т" L"\nCurrent directory:\nС");
 			_wcscat_c(pszErrMsg, cchMax, szCurDir);
-			_wcscat_c(pszErrMsg, cchMax, L"\xBB"/*ї*/);
+			_wcscat_c(pszErrMsg, cchMax, L"Т");
 			DisplayLastError(pszErrMsg, dwErr);
 			free(pszErrMsg);
 			//Destroy(); -- must caller
@@ -10954,7 +10968,7 @@ wchar_t* CConEmuMain::LoadConsoleBatch_File(LPCWSTR asSource)
 			DWORD dwErr = GetLastError();
 			CloseHandle(hFile);
 			wchar_t* pszErrMsg = (wchar_t*)calloc(_tcslen(asSource)+100,2);
-			lstrcpy(pszErrMsg, L"Console batch file is too large or empty:\n\xAB"/*Ђ*/); lstrcat(pszErrMsg, asSource+1); lstrcat(pszErrMsg, L"\xBB"/*ї*/);
+			lstrcpy(pszErrMsg, L"Console batch file is too large or empty:\nС"); lstrcat(pszErrMsg, asSource+1); lstrcat(pszErrMsg, L"Т");
 			DisplayLastError(pszErrMsg, dwErr);
 			free(pszErrMsg);
 			//Destroy(); -- must caller
@@ -10972,7 +10986,7 @@ wchar_t* CConEmuMain::LoadConsoleBatch_File(LPCWSTR asSource)
 		{
 			free(pszDataA);
 			wchar_t* pszErrMsg = (wchar_t*)calloc(_tcslen(asSource)+100,2);
-			lstrcpy(pszErrMsg, L"Reading console batch file failed:\n\xAB"/*Ђ*/); lstrcat(pszErrMsg, asSource+1); lstrcat(pszErrMsg, L"\xBB"/*ї*/);
+			lstrcpy(pszErrMsg, L"Reading console batch file failed:\nС"); lstrcat(pszErrMsg, asSource+1); lstrcat(pszErrMsg, L"Т");
 			DisplayLastError(pszErrMsg, dwErr);
 			free(pszErrMsg);
 			//Destroy(); -- must caller
@@ -11237,6 +11251,21 @@ void CConEmuMain::PostCreate(BOOL abReceived/*=FALSE*/)
 	// First ShowWindow forced to use nCmdShow. This may be weird...
 	SkipOneShowWindow();
 
+	#if 0
+	//TODO: This may be excess. Also, Work area is already covered by VCon
+	const Settings::ColorPalette* pPal = gpSet->PaletteGet(-1);
+	if (pPal && (!mh_BackBrush || (pPal->Colors[pPal->nBackColorIdx] != mcr_BackBrush)))
+	{
+		mcr_BackBrush = pPal->Colors[pPal->nBackColorIdx];
+		HBRUSH hNewBrush = CreateSolidBrush(mcr_BackBrush);
+		SetClassLongPtr(ghWnd, GCLP_HBRBACKGROUND, (LONG_PTR)hNewBrush);
+		SetClassLongPtr(ghWndWork, GCLP_HBRBACKGROUND, (LONG_PTR)hNewBrush);
+		if (mh_BackBrush)
+			DeleteObject(mh_BackBrush);
+		mh_BackBrush = hNewBrush;
+	}
+	#endif
+
 	if (!abReceived)
 	{
 		//if (gpConEmu->WindowMode == wmFullScreen || gpConEmu->WindowMode == wmMaximized) {
@@ -11322,7 +11351,7 @@ void CConEmuMain::PostCreate(BOOL abReceived/*=FALSE*/)
 
 		//SetWindowRgn(ghWnd, CreateWindowRgn(), TRUE);
 
-		if (gpSetCls->szFontError[0])
+		if (gpSetCls->szFontError[0] && !(gpStartEnv && (gpStartEnv->bIsWinPE || gpStartEnv->bIsWine)))
 		{
 			MBoxA(gpSetCls->szFontError);
 			gpSetCls->szFontError[0] = 0;
@@ -12589,7 +12618,7 @@ void CConEmuMain::OnHideCaption()
 		// Refresh JIC
 		RedrawFrame();
 		// Status bar and others
-		InvalidateRect(ghWnd, NULL, TRUE);
+		Invalidate(NULL, TRUE);
 	}
 
 	if (changeFromWindowMode == wmNotChanging)
@@ -16018,15 +16047,6 @@ LRESULT CConEmuMain::OnMouse_RBtnUp(CVirtualConsole* pVCon, HWND hWnd, UINT mess
 					//WARNING("!!! «аменить на CMD_LEFTCLKSYNC?");
 				}
 
-				//// —начала выделить файл под курсором
-				////POSTMESSAGE(ghConWnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM( mouse.RClkCon.X, mouse.RClkCon.Y ), TRUE);
-				//pVCon->RCon()->OnMouse(WM_LBUTTONDOWN, MK_LBUTTON, mouse.RClkDC.X, mouse.RClkDC.Y);
-				////POSTMESSAGE(ghConWnd, WM_LBUTTONUP, 0, MAKELPARAM( mouse.RClkCon.X, mouse.RClkCon.Y ), TRUE);
-				//pVCon->RCon()->OnMouse(WM_LBUTTONUP, 0, mouse.RClkDC.X, mouse.RClkDC.Y);
-				//
-				//pVCon->RCon()->FlushInputQueue();
-				//pVCon->Update(true);
-				//INVALIDATE(); //InvalidateRect(HDCWND, NULL, FALSE);
 				// ј теперь можно и Apps нажать
 				mouse.bSkipRDblClk=true; // чтобы пока FAR думает в консоль не проскочило мышиное сообщение
 				//POSTMESSAGE(ghConWnd, WM_KEYDOWN, VK_APPS, 0, TRUE);
@@ -16035,18 +16055,6 @@ LRESULT CConEmuMain::OnMouse_RBtnUp(CVirtualConsole* pVCon, HWND hWnd, UINT mess
 				if (dwFarPID)
 				{
 					AllowSetForegroundWindow(dwFarPID);
-					//if (gpSet->sRClickMacro && *gpSet->sRClickMacro) {
-					//    //// —начала выделить файл под курсором
-					//    ////POSTMESSAGE(ghConWnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM( mouse.RClkCon.X, mouse.RClkCon.Y ), TRUE);
-					//    //pVCon->RCon()->OnMouse(WM_LBUTTONDOWN, MK_LBUTTON, mouse.RClkDC.X, mouse.RClkDC.Y);
-					//    ////POSTMESSAGE(ghConWnd, WM_LBUTTONUP, 0, MAKELPARAM( mouse.RClkCon.X, mouse.RClkCon.Y ), TRUE);
-					//    //pVCon->RCon()->OnMouse(WM_LBUTTONUP, 0, mouse.RClkDC.X, mouse.RClkDC.Y);
-					//    //
-					//    //pVCon->RCon()->FlushInputQueue();
-					//
-					//    // ≈сли юзер задал свой макрос - выполн€ем его
-					//    PostMacro(gpSet->sRClickMacro);
-					//} else {
 					COORD crMouse = pVCon->RCon()->ScreenToBuffer(
 					                    pVCon->ClientToConsole(mouse.RClkDC.X, mouse.RClkDC.Y)
 					                );
@@ -17690,7 +17698,6 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 		// ѕосле скрыти€/закрыти€ PictureView нужно передернуть консоль - ее размер мог изменитьс€
 		isPiewUpdate = false;
 		CVConGroup::SyncConsoleToWindow();
-		//INVALIDATE(); //InvalidateRect(HDCWND, NULL, FALSE);
 		InvalidateAll();
 	}
 
@@ -17775,7 +17782,7 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 		if (bLastFade != bNewFade)
 		{
 			pVCon->mb_LastFadeFlag = bNewFade;
-			Invalidate(pVCon);
+			pVCon->Invalidate();
 		}
 	}
 
@@ -18520,22 +18527,6 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 		case WM_MENURBUTTONUP:
 			this->mp_Menu->OnMenuRClick((HMENU)lParam, (UINT)wParam);
 			return 0;
-		case WM_ERASEBKGND:
-			//return 0;
-			return 1; //2010-10-05
-		//case WM_NCPAINT:
-		//case WM_NCACTIVATE:
-		//case WM_NCCALCSIZE:
-		//case WM_NCHITTEST:
-		//case 0x31E: // WM_DWMCOMPOSITIONCHANGED:
-		//case 0xAE: // WM_NCUAHDRAWCAPTION:
-		//case 0xAF: // WM_NCUAHDRAWFRAME:
-		//	//result = this->OnNcPaint((HRGN)wParam);
-		//	result = this->OnNcMessage(hWnd, messg, wParam, lParam);
-		//	break;
-		//case WM_PAINT:
-		//	result = this->OnPaint(wParam, lParam);
-		//	break;
 		case WM_PRINTCLIENT:
 			DefWindowProc(hWnd, messg, wParam, lParam);
 			if (wParam && (hWnd == ghWnd) && gpSet->isStatusBarShow && (lParam & PRF_CLIENT))

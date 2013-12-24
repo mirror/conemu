@@ -149,8 +149,10 @@ bool gbIsWine = false;
 bool gbIsDBCS = false;
 // Drawing console font face name (default)
 wchar_t gsDefGuiFont[32] = L"Lucida Console"; // gbIsWine ? L"Liberation Mono" : L"Lucida Console"
+wchar_t gsAltGuiFont[32] = L"Courier New"; // "Lucida Console" is not installed?
 // Set this font (default) in real console window to enable unicode support
 wchar_t gsDefConFont[32] = L"Lucida Console"; // DBCS ? L"Liberation Mono" : L"Lucida Console"
+wchar_t gsAltConFont[32] = L"Courier New"; // "Lucida Console" is not installed?
 // Use this (default) in ConEmu interface, where allowed (tabs, status, panel views, ...)
 wchar_t gsDefMUIFont[32] = L"Tahoma";         // WindowsVista ? L"Segoe UI" : L"Tahoma"
 
@@ -2945,6 +2947,28 @@ void UnitModuleTest()
 	_ASSERTE(!bTest);
 }
 
+void DebugUnitMprintfTest()
+{
+	wchar_t szTest[80];
+	msprintf(szTest, countof(szTest), L"%u,%02u,%02u,%02u,%02x,%08x", 12345, 1, 23, 4567, 0xFE, 0xABCD1234);
+	int nDbg = lstrcmp(szTest, L"12345,01,23,4567,fe,abcd1234");
+	_ASSERTE(nDbg==0);
+}
+
+void DebugVersionTest()
+{
+	_ASSERTE(_WIN32_WINNT_WIN7==0x601);
+	OSVERSIONINFOEXW osvi = {sizeof(osvi), HIBYTE(_WIN32_WINNT_WIN7), LOBYTE(_WIN32_WINNT_WIN7)};
+	DWORDLONG const dwlConditionMask = VerSetConditionMask(VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL), VER_MINORVERSION, VER_GREATER_EQUAL);
+	bool bWin7 = VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask);
+
+	OSVERSIONINFOW osv = {sizeof(OSVERSIONINFOW)};
+    GetVersionExW(&osv);
+	bool bVerWin7 = ((osv.dwMajorVersion > 6) || ((osv.dwMajorVersion == 6) && (osv.dwMinorVersion >= 1)));
+
+	_ASSERTE(bWin7 == bVerWin7);
+}
+
 void DebugUnitTests()
 {
 	RConStartArgs::RunArgTests();
@@ -2952,6 +2976,8 @@ void DebugUnitTests()
 	UnitDriveTests();
 	UnitExpandTest();
 	UnitModuleTest();
+	DebugUnitMprintfTest();
+	DebugVersionTest();
 }
 #endif
 
