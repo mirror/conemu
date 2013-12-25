@@ -1,4 +1,4 @@
-
+п»ї
 /*
 Copyright (c) 2012 thecybershadow
 Copyright (c) 2012 Maximus5
@@ -389,9 +389,9 @@ public:
 			}
 			else if (memcmp(szLine, FONT, FONT_LEN) == 0)
 			{
-				// из строки
+				// РёР· СЃС‚СЂРѕРєРё
 				// FONT -Schumacher-Clean-Medium-R-Normal--12-120-75-75-C-60-ISO10646-1
-				// нам нужно выкусить "Clean"
+				// РЅР°Рј РЅСѓР¶РЅРѕ РІС‹РєСѓСЃРёС‚СЊ "Clean"
 				for (int n=0; n<3; n++)
 					NextWord(szLine, szWord);
 
@@ -727,7 +727,7 @@ BOOL CEDC::ExtTextOut(int X, int Y, UINT fuOptions, const RECT *lprc, LPCWSTR lp
 				//hOldBrush = ::SelectObject(hDC, m_BgBrush.Get(m_BkColor));
 				LONG w, h;
 				m_Font.pCustomFont->GetBoundingBox(&w, &h);
-				RECT r = {X, Y, X+w*cbCount, Y+h};
+				RECT r = {X, Y, (LONG)(X+w*cbCount), Y+h};
 				FillRect(hDC, &r, m_BgBrush.Get(m_BkColor));
 			}
 
@@ -765,7 +765,7 @@ BOOL CEDC::ExtTextOutA(int X, int Y, UINT fuOptions, const RECT *lprc, LPCSTR lp
 				//for (UINT cb=0; cb<cbCount; cb++)
 				//	lpWString[cb] = lpString[cb];  // WideCharToMultiByte?
 				MultiByteToWideChar(CP_OEMCP, 0, lpString, -1, lpWString, cbCount);
-				lpWString[cbCount] = 0; // AsciiZ в принципе не требуется, но для удобства.
+				lpWString[cbCount] = 0; // AsciiZ РІ РїСЂРёРЅС†РёРїРµ РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ, РЅРѕ РґР»СЏ СѓРґРѕР±СЃС‚РІР°.
 
 				lbRc = ExtTextOut(X, Y, fuOptions, lprc, lpWString, cbCount, lpDx);
 

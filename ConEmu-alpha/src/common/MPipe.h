@@ -1,4 +1,4 @@
-
+п»ї
 /*
 Copyright (c) 2013 Maximus5
 All rights reserved.
@@ -49,7 +49,7 @@ class MPipe
 		OVERLAPPED m_Ovl;
 		typedef BOOL (WINAPI* CancelIo_t)(HANDLE hFile);
 		CancelIo_t _CancelIo;
-		T_IN m_In; // для справки...
+		T_IN m_In; // РґР»СЏ СЃРїСЂР°РІРєРё...
 		T_OUT* mp_Out; DWORD mn_OutSize, mn_MaxOutSize;
 		T_OUT m_Tmp;
 		DWORD mn_ErrCode;
@@ -78,7 +78,7 @@ class MPipe
 		};
 		void SetTimeout(DWORD anTimeout)
 		{
-			//TODO: Если anTimeout!=-1 - создавать нить и выполнять команду в ней. Ожидать нить не более и прибить ее, если пришел Timeout
+			//TODO: Р•СЃР»Рё anTimeout!=-1 - СЃРѕР·РґР°РІР°С‚СЊ РЅРёС‚СЊ Рё РІС‹РїРѕР»РЅСЏС‚СЊ РєРѕРјР°РЅРґСѓ РІ РЅРµР№. РћР¶РёРґР°С‚СЊ РЅРёС‚СЊ РЅРµ Р±РѕР»РµРµ Рё РїСЂРёР±РёС‚СЊ РµРµ, РµСЃР»Рё РїСЂРёС€РµР» Timeout
 		};
 		void SetTermEvent(HANDLE hTermEvent)
 		{
@@ -154,14 +154,14 @@ class MPipe
 
 			DEBUGTEST(DWORD nOpenTick = GetTickCount());
 
-			if (!Open())  // Пайп может быть уже открыт, функция это учитывает
+			if (!Open())  // РџР°Р№Рї РјРѕР¶РµС‚ Р±С‹С‚СЊ СѓР¶Рµ РѕС‚РєСЂС‹С‚, С„СѓРЅРєС†РёСЏ СЌС‚Рѕ СѓС‡РёС‚С‹РІР°РµС‚
 				return FALSE;
 
 			_ASSERTE(sizeof(m_In) >= sizeof(CESERVER_REQ_HDR));
 			_ASSERTE(sizeof(T_OUT) >= sizeof(CESERVER_REQ_HDR));
 			BOOL fSuccess = FALSE;
 			DWORD cbRead, dwErr, cbReadBuf, nOverlappedWait;
-			// Для справки, информация о последнем запросе
+			// Р”Р»СЏ СЃРїСЂР°РІРєРё, РёРЅС„РѕСЂРјР°С†РёСЏ Рѕ РїРѕСЃР»РµРґРЅРµРј Р·Р°РїСЂРѕСЃРµ
 			cbReadBuf = min(anInSize, sizeof(m_In)); //-V105 //-V103
 			memmove(&m_In, apIn, cbReadBuf); //-V106
 			// Send a message to the pipe server and read the response.
@@ -187,7 +187,9 @@ class MPipe
 			DEBUGTEST(DWORD nStartTick2 = GetTickCount());
 			DEBUGTEST(DWORD nTickOvl = 0);
 
-			if (mb_Overlapped && (!fSuccess || !cbRead))
+			// MSDN: If the operation cannot be completed immediately,
+			// TransactNamedPipe returns FALSE and GetLastError returns ERROR_IO_PENDING.
+			if (mb_Overlapped && !fSuccess && dwErr == ERROR_IO_PENDING)
 			{
 				if (mh_TermEvent)
 				{
@@ -201,7 +203,7 @@ class MPipe
 
 				if ((nOverlappedWait == WAIT_TIMEOUT) || (nOverlappedWait == (WAIT_OBJECT_0+1)))
 				{
-					// Ошибка ожидания или закрытие приложения
+					// РћС€РёР±РєР° РѕР¶РёРґР°РЅРёСЏ РёР»Рё Р·Р°РєСЂС‹С‚РёРµ РїСЂРёР»РѕР¶РµРЅРёСЏ
 					InterlockedIncrement(&mn_FailCount);
 					Close();
 					return FALSE;
@@ -226,9 +228,9 @@ class MPipe
 
 			if (!fSuccess && dwErr == ERROR_BROKEN_PIPE)
 			{
-				// Сервер не вернул данных, но обработал команду
+				// РЎРµСЂРІРµСЂ РЅРµ РІРµСЂРЅСѓР» РґР°РЅРЅС‹С…, РЅРѕ РѕР±СЂР°Р±РѕС‚Р°Р» РєРѕРјР°РЅРґСѓ
 				InterlockedIncrement(&mn_FailCount);
-				Close(); // Раз пайп закрыт - прибиваем хэндл
+				Close(); // Р Р°Р· РїР°Р№Рї Р·Р°РєСЂС‹С‚ - РїСЂРёР±РёРІР°РµРј С…СЌРЅРґР»
 				return TRUE;
 			}
 
@@ -242,11 +244,11 @@ class MPipe
 
 				msprintf(ms_Error, countof(ms_Error), L"%s: TransactNamedPipe failed, Cmd=%i, ErrCode=%u!", ms_Module, nCmd, dwErr);
 				InterlockedIncrement(&mn_FailCount);
-				Close(); // Поскольку произошла неизвестная ошибка - пайп лучше закрыть (чтобы потом переоткрыть)
+				Close(); // РџРѕСЃРєРѕР»СЊРєСѓ РїСЂРѕРёР·РѕС€Р»Р° РЅРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° - РїР°Р№Рї Р»СѓС‡С€Рµ Р·Р°РєСЂС‹С‚СЊ (С‡С‚РѕР±С‹ РїРѕС‚РѕРј РїРµСЂРµРѕС‚РєСЂС‹С‚СЊ)
 				return FALSE;
 			}
 
-			// Пошли проверки заголовка
+			// РџРѕС€Р»Рё РїСЂРѕРІРµСЂРєРё Р·Р°РіРѕР»РѕРІРєР°
 			if (cbRead < sizeof(CESERVER_REQ_HDR))
 			{
 				_ASSERTE(cbRead >= sizeof(CESERVER_REQ_HDR));
@@ -322,14 +324,17 @@ class MPipe
 				{
 					DEBUGTEST(nMoreDataTick[1] = GetTickCount());
 					// Read from the pipe if there is more data in the message.
-					//WARNING: Если в буфере пайпа данных меньше чем nAllSize - повиснем!
-					fSuccess = ReadFile(mh_Pipe, ptrData, nAllSize, &cbRead, NULL);
+					//WARNING: Р•СЃР»Рё РІ Р±СѓС„РµСЂРµ РїР°Р№РїР° РґР°РЅРЅС‹С… РјРµРЅСЊС€Рµ С‡РµРј nAllSize - РїРѕРІРёСЃРЅРµРј!
+					fSuccess = ReadFile(mh_Pipe, ptrData, nAllSize, &cbRead, mb_Overlapped ? &m_Ovl : NULL);
 					dwErr = fSuccess ? 0 : GetLastError();
 					SaveErrorCode(dwErr);
 
 					DEBUGTEST(nMoreDataTick[2] = GetTickCount());
 
-					if (mb_Overlapped && (!fSuccess || !cbRead))
+					// MSDN: ReadFile may return before the read operation is complete.
+					// In this scenario, ReadFile returns FALSE and the GetLastError
+					// function returns ERROR_IO_PENDING.
+					if (mb_Overlapped && !fSuccess && dwErr == ERROR_IO_PENDING)
 					{
 						if (mh_TermEvent)
 						{
@@ -345,7 +350,7 @@ class MPipe
 
 						if ((nOverlappedWait == WAIT_TIMEOUT) || (nOverlappedWait == (WAIT_OBJECT_0+1)))
 						{
-							// Ошибка ожидания или закрытие приложения
+							// РћС€РёР±РєР° РѕР¶РёРґР°РЅРёСЏ РёР»Рё Р·Р°РєСЂС‹С‚РёРµ РїСЂРёР»РѕР¶РµРЅРёСЏ
 							InterlockedIncrement(&mn_FailCount);
 							Close();
 							return FALSE;
@@ -390,7 +395,7 @@ class MPipe
 
 				DEBUGTEST(nMoreDataTick[4] = GetTickCount());
 
-				// Надо ли это?
+				// РќР°РґРѕ Р»Рё СЌС‚Рѕ?
 				fSuccess = FlushFileBuffers(mh_Pipe);
 
 				DEBUGTEST(nMoreDataTick[5] = GetTickCount());
