@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //  #define SHOW_ROOT_STARTED
 	#define WINE_PRINT_PROC_INFO
 //	#define USE_PIPE_DEBUG_BOXES
+//	#define SHOW_SETCONTITLE_MSGBOX
 
 //	#define DEBUG_ISSUE_623
 
@@ -78,6 +79,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/CmdLine.h"
 #include "ConsoleHelp.h"
 #include "Debugger.h"
+#include "Downloader.h"
 #include "UnicodeTest.h"
 
 #define FULL_STARTUP_ENV
@@ -201,6 +203,7 @@ OSVERSIONINFO gOSVer;
 WORD gnOsVer = 0x500;
 bool gbIsWine = false;
 bool gbIsDBCS = false;
+bool gbIsDownloading = false;
 
 
 SrvInfo* gpSrv = NULL;
@@ -256,15 +259,6 @@ void ShutdownSrvStep(LPCWSTR asInfo, int nParm1 /*= 0*/, int nParm2 /*= 0*/, int
 #endif
 }
 
-
-#if 0
-// Current MinGW GCC doesn't require that anymore
-#if defined(__GNUC__)
-extern "C" {
-	BOOL WINAPI DllMain(HANDLE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved);
-};
-#endif
-#endif
 
 //extern UINT_PTR gfnLoadLibrary;
 //UINT gnMsgActivateCon = 0;
@@ -719,12 +713,6 @@ BOOL createProcess(BOOL abSkipWowChange, LPCWSTR lpApplicationName, LPWSTR lpCom
 	return lbRc;
 }
 
-#if defined(__GNUC__)
-extern "C" {
-	int __stdcall ConsoleMain2(int anWorkMode/*0-Server,1-AltServer,2-Reserved*/);
-};
-#endif
-
 // Возвращает текст с информацией о пути к сохраненному дампу
 // DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPWSTR pszComment = NULL);
 #include "../common/Dump.h"
@@ -777,6 +765,9 @@ void SetupCreateDumpOnException()
 
 
 // Main entry point for ConEmuC.exe
+#if defined(__GNUC__)
+extern "C"
+#endif
 int __stdcall ConsoleMain2(int anWorkMode/*0-Server&ComSpec,1-AltServer,2-Reserved*/)
 {
 	TODO("можно при ошибках показать консоль, предварительно поставив 80x25 и установив крупный шрифт");
@@ -1767,7 +1758,8 @@ wrap:
 	xf_validate(NULL);
 	#endif
 
-	if (iRc == CERR_GUIMACRO_SUCCEEDED)
+	if ((iRc == CERR_GUIMACRO_SUCCEEDED)
+		|| (iRc == CERR_DOWNLOAD_SUCCEEDED))
 	{
 		iRc = 0;
 	}
@@ -2006,6 +1998,12 @@ AltServerDone:
 	ShutdownSrvStep(L"Finalizing done");
 	UNREFERENCED_PARAMETER(gpszCheck4NeedCmd);
 	UNREFERENCED_PARAMETER(nWaitDebugExit);
+#if 0
+	if (gnRunMode == RM_SERVER)
+	{
+		xf_dump();
+	}
+#endif
 	return iRc;
 }
 
@@ -2155,85 +2153,19 @@ void PrintVersion()
 void Help()
 {
 	PrintVersion();
+
+	// See definition in "ConEmuCD/ConsoleHelp.h"
 	_wprintf(pConsoleHelp);
 	_wprintf(pNewConsoleHelp);
-	
-	//_printf(
-	//	    "This is a console part of ConEmu product.\n"
-	//	    "Usage: ConEmuC [switches] [/U | /A] /C <command line, passed to %%COMSPEC%%>\n"
-	//	    "   or: ConEmuC [switches] /ROOT <program with arguments, far.exe for example>\n"
-	//	    "   or: ConEmuC /ATTACH /NOCMD\n"
-	//		"   or: ConEmuC /ATTACH /[FAR]PID=<PID>\n"
-	//	    "   or: ConEmuC /GUIMACRO <ConEmu GUI macro command>\n"
-	//		"   or: ConEmuC /DEBUGPID=<Debugging PID>\n"
-	//#ifdef _DEBUG
-	//		"   or: ConEmuC /REGCONFONT=<FontName> -> RegisterConsoleFontHKLM\n"
-	//#endif
-	//	    "   or: ConEmuC /?\n"
-	//	    "Switches:\n"
-	//	    "     /[NO]CONFIRM    - [don't] confirm closing console on program termination\n"
-	//	    "     /ATTACH         - auto attach to ConEmu GUI\n"
-	//	    "     /NOCMD          - attach current (existing) console to GUI\n"
-	//		"     /[FAR]PID=<PID> - use <PID> as root process\n"
-	//	    "     /B{W|H|Z}       - define window width, height and buffer height\n"
-	//#ifdef _DEBUG
-	//		"     /BW=<WndX> /BH=<WndY> /BZ=<BufY>\n"
-	//#endif
-	//	    "     /F{N|W|H}    - define console font name, width, height\n"
-	//#ifdef _DEBUG
-	//		"     /FN=<ConFontName> /FH=<FontHeight> /FW=<FontWidth>\n"
-	//#endif
-	//	    "     /LOG[N]      - create (debug) log file, N is number from 0 to 3\n"
-	//#ifdef _DEBUG
-	//		"     /CINMODE==<hex:gnConsoleModeFlags>\n"
-	//		"     /HIDE -> gbForceHideConWnd=TRUE\n"
-	//		"     /GID=<ConEmu.exe PID>\n"
-	//		"     /SETHOOKS=HP{16},PID{10},HT{16},TID{10},ForceGui\n"
-	//		"     /INJECT=PID{10}\n"
-	//		"     /DOSBOX -> use DosBox\n"
-	//#endif
-	//	    "\n"
-	//	    "When you run application from ConEmu console, you may use\n"
-	//        "  Switch: -new_console[:abch[N]rx[N]y[N]u[:user:pwd]]\n"
-	//        "     a - RunAs shell verb (as Admin on Vista+, login/passw in Win2k and WinXP)\n"
-	//        "     b - Create background tab\n"
-	//        "     c - force enable 'Press Enter or Esc to close console' (default)\n"
-	//        "     h<height> - i.e., h0 - turn buffer off, h9999 - switch to 9999 lines\n"
-	//        "     l - lock console size, do not sync it to ConEmu window\n"
-	//        "     n - disable 'Press Enter or Esc to close console'\n"
-	//        "     r - run as restricted user\n"
-	//        "     x<width>, y<height> - change size of visible area, use with 'l'\n"
-	//        "     u - ConEmu choose user dialog\n"
-	//        "     u:<user>:<pwd> - specify user/pwd in args, MUST BE LAST OPTION\n"
-	//        "  Warning: Option 'Inject ConEmuHk' must be enabled in ConEmu settings!\n"
-	//        "  Example: dir \"-new_console:bh9999c\" c:\\ /s\n");
+
+	// Don't ask keypress before exit
+	gbInShutdown = TRUE;
 }
 
 void DosBoxHelp()
 {
+	// See definition in "ConEmuCD/ConsoleHelp.h"
 	_wprintf(pDosBoxHelp);
-	//_printf(
-	//	"Starting DosBox, You may use following default combinations in DosBox window\n"
-	//	"ALT-ENTER     Switch to full screen and back.\n"
-	//	"ALT-PAUSE     Pause emulation (hit ALT-PAUSE again to continue).\n"
-	//	"CTRL-F1       Start the keymapper.\n"
-	//	"CTRL-F4       Change between mounted floppy/CD images. Update directory cache \n"
-	//	"              for all drives.\n"
-	//	"CTRL-ALT-F5   Start/Stop creating a movie of the screen. (avi video capturing)\n"
-	//	"CTRL-F5       Save a screenshot. (PNG format)\n"
-	//	"CTRL-F6       Start/Stop recording sound output to a wave file.\n"
-	//	"CTRL-ALT-F7   Start/Stop recording of OPL commands. (DRO format)\n"
-	//	"CTRL-ALT-F8   Start/Stop the recording of raw MIDI commands.\n"
-	//	"CTRL-F7       Decrease frameskip.\n"
-	//	"CTRL-F8       Increase frameskip.\n"
-	//	"CTRL-F9       Kill DOSBox.\n"
-	//	"CTRL-F10      Capture/Release the mouse.\n"
-	//	"CTRL-F11      Slow down emulation (Decrease DOSBox Cycles).\n"
-	//	"CTRL-F12      Speed up emulation (Increase DOSBox Cycles).\n"
-	//	"ALT-F12       Unlock speed (turbo button/fast forward).\n"
-	//	"F11, ALT-F11  (machine=cga) change tint in NTSC output modes\n"
-	//	"F11           (machine=hercules) cycle through amber, green, white colouring\n"
-	//);
 }
 
 void PrintExecuteError(LPCWSTR asCmd, DWORD dwErr, LPCWSTR asSpecialInfo/*=NULL*/)
@@ -2721,6 +2653,7 @@ enum ConEmuExecAction
 	ea_ExportCon,  // export env.vars to processes of active console
 	ea_ExportGui,  // ea_ExportCon + ConEmu window
 	ea_ExportAll,  // export env.vars to all opened tabs of current ConEmu window
+	ea_Download,   // after "/download" switch may be unlimited pairs of {"url","file"},{"url","file"},...
 };
 
 int DoInjectHooks(LPWSTR asCmdArg)
@@ -3290,6 +3223,181 @@ wrap:
 	return iRc;
 }
 
+static void PrintTime(LPCWSTR asLabel)
+{
+	SYSTEMTIME st = {}; GetLocalTime(&st);
+	wchar_t szTime[80];
+	_wsprintf(szTime, SKIPLEN(countof(szTime)) L"%i:%02i:%02i.%03i{%u} %s",
+	           st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, GetCurrentThreadId(), asLabel);
+	_wprintf(szTime);
+	#if defined(_DEBUG)
+	OutputDebugString(szTime);
+	#endif
+}
+static void WINAPI DownloadCallback(const CEDownloadInfo* pInfo)
+{
+	wchar_t* pszInfo = pInfo->GetFormatted(true);
+	PrintTime(pInfo->lParam==(dc_ErrCallback+1) ? L"Error: " : pInfo->lParam==(dc_LogCallback+1) ? L"Info:  " : pInfo->lParam==(dc_ProgressCallback+1) ? L"Progr: " : L"");
+	_wprintf(pszInfo ? pszInfo : L"<NULL>\n");
+	#if defined(_DEBUG)
+	OutputDebugString(pszInfo);
+	#endif
+	SafeFree(pszInfo);
+}
+
+int DoDownload(LPCWSTR asCmdLine)
+{
+	int iRc = CERR_CARGUMENT;
+	DWORD_PTR drc;
+	CmdArg szArg;
+	wchar_t* pszUrl = NULL;
+	size_t iFiles = 0;
+	CEDownloadErrorArg args[4];
+	wchar_t* pszExpanded = NULL;
+	wchar_t szFullPath[MAX_PATH*2];
+	DWORD nFullRc;
+	wchar_t *pszProxy = NULL, *pszProxyLogin = NULL, *pszProxyPassword = NULL;
+	wchar_t *pszLogin = NULL, *pszPassword = NULL;
+	wchar_t *pszOTimeout = NULL, *pszTimeout = NULL;
+	wchar_t *pszAsync = NULL;
+
+	DownloadCommand(dc_Init, 0, NULL);
+
+	args[0].uintArg = (DWORD_PTR)DownloadCallback; args[0].argType = at_Uint;
+	args[1].argType = at_Uint;
+	_ASSERTE(dc_ErrCallback==0 && dc_LogCallback==2);
+	for (int i = dc_ErrCallback; i <= dc_LogCallback; i++)
+	{
+		args[1].uintArg = (i+1);
+		DownloadCommand((CEDownloadCommand)i, 2, args);
+	}
+
+	struct {
+		LPCWSTR   pszArgName;
+		wchar_t** ppszValue;
+	} KnownArgs[] = {
+		{L"login", &pszLogin},
+		{L"password", &pszPassword},
+		{L"proxy", &pszProxy},
+		{L"proxylogin", &pszProxyLogin},
+		{L"proxypassword", &pszProxyPassword},
+		{L"otimeout", &pszOTimeout},
+		{L"timeout", &pszTimeout},
+		{L"async", &pszAsync},
+		{NULL}
+	};
+
+	while (NextArg(&asCmdLine, szArg) == 0)
+	{
+		LPCWSTR psz = szArg;
+		if ((psz[0] == L'-') || (psz[0] == L'/'))
+		{
+			psz++;
+			bool bKnown = false;
+			for (size_t i = 0; KnownArgs[i].pszArgName; i++)
+			{
+				if (lstrcmpi(psz, KnownArgs[i].pszArgName) == 0)
+				{
+					SafeFree(*KnownArgs[i].ppszValue);
+					if (NextArg(&asCmdLine, szArg) == 0)
+						*KnownArgs[i].ppszValue = szArg.Detach();
+					bKnown = true;
+					break;
+				}
+			}
+			if (!bKnown)
+			{
+				_printf("Unknown argument '");
+				_wprintf(psz);
+				_printf("'\n");
+				iRc = CERR_CARGUMENT;
+				goto wrap;
+			}
+			continue;
+		}
+
+		SafeFree(pszUrl);
+		pszUrl = szArg.Detach();
+		if (NextArg(&asCmdLine, szArg) != 0)
+		{
+			iRc = CERR_CARGUMENT;
+			goto wrap;
+		}
+
+		// Proxy?
+		if (pszProxy || pszProxyLogin)
+		{
+			args[0].strArg = pszProxy;         args[0].argType = at_Str;
+			args[1].strArg = pszProxyLogin;    args[1].argType = at_Str;
+			args[2].strArg = pszProxyPassword; args[2].argType = at_Str;
+			DownloadCommand(dc_SetProxy, 3, args);
+		}
+		// Server login
+		if (pszLogin)
+		{
+			args[0].strArg = pszLogin;    args[0].argType = at_Str;
+			args[1].strArg = pszPassword; args[1].argType = at_Str;
+			DownloadCommand(dc_SetLogin, 2, args);
+		}
+		// Sync or Ansync mode?
+		if (pszAsync)
+		{
+			args[0].uintArg = *pszAsync && (pszAsync[0] != L'0') && (pszAsync[0] != L'N') && (pszAsync[0] != L'n'); args[0].argType = at_Uint;
+			DownloadCommand(dc_SetAsync, 1, args);
+		}
+		// Timeouts?
+		if (pszOTimeout)
+		{
+			wchar_t* pszEnd;
+			args[0].uintArg = 0; args[0].argType = at_Uint;
+			args[1].uintArg = wcstol(pszOTimeout, &pszEnd, 10); args[1].argType = at_Uint;
+			DownloadCommand(dc_SetTimeout, 2, args);
+		}
+		if (pszTimeout)
+		{
+			wchar_t* pszEnd;
+			args[0].uintArg = 1; args[0].argType = at_Uint;
+			args[1].uintArg = wcstol(pszTimeout, &pszEnd, 10); args[1].argType = at_Uint;
+			DownloadCommand(dc_SetTimeout, 2, args);
+		}
+
+		args[0].strArg = pszUrl; args[0].argType = at_Str;
+		args[1].strArg = szArg;  args[1].argType = at_Str;
+		args[2].uintArg = 0;     args[2].argType = at_Uint;
+		args[3].uintArg = TRUE;  args[3].argType = at_Uint;
+
+		// May be file name was specified relatively or even with env.vars?
+		SafeFree(pszExpanded);
+		pszExpanded = ExpandEnvStr(szArg);
+		nFullRc = GetFullPathName((pszExpanded && *pszExpanded) ? pszExpanded : szArg, countof(szFullPath), szFullPath, NULL);
+		if (nFullRc && nFullRc < countof(szFullPath))
+			args[1].strArg = szFullPath;
+
+		gbIsDownloading = true;
+		drc = DownloadCommand(dc_DownloadFile, 4, args);
+		gbIsDownloading = false;
+		if (drc == 0)
+		{
+			iRc = CERR_DOWNLOAD_FAILED;
+			_printf("Download failed\n");
+			goto wrap;
+		}
+
+		iFiles++;
+		_printf("File downloaded, size=%u, crc32=x%08X\n", (DWORD)args[0].uintArg, (DWORD)args[1].uintArg, NULL);
+	}
+
+	iRc = iFiles ? CERR_DOWNLOAD_SUCCEEDED : CERR_CARGUMENT;
+wrap:
+	DownloadCommand(dc_Deinit, 0, NULL);
+	SafeFree(pszExpanded);
+	for (size_t i = 0; KnownArgs[i].pszArgName; i++)
+	{
+		SafeFree(*KnownArgs[i].ppszValue);
+	}
+	return iRc;
+}
+
 int DoGuiMacro(LPCWSTR asCmdArg, HWND hMacroInstance = NULL)
 {
 	HWND hCallWnd = hMacroInstance ? hMacroInstance : ghConWnd;
@@ -3361,6 +3469,11 @@ int DoExecAction(ConEmuExecAction eExecAction, LPCWSTR asCmdArg /* rest of cmdli
 	case ea_ExportAll:
 		{
 			iRc = DoExportEnv(asCmdArg, eExecAction);
+			break;
+		}
+	case ea_Download:
+		{
+			iRc = DoDownload(asCmdArg);
 			break;
 		}
 	default:
@@ -3457,6 +3570,9 @@ wchar_t* ParseConEmuSubst(LPCWSTR asCmd, bool bUpdateTitle /*= false*/)
 BOOL SetTitle(bool bExpandVars, LPCWSTR lsTitle)
 {
 	wchar_t* pszExpanded = (bExpandVars && lsTitle) ? ParseConEmuSubst(lsTitle, false) : NULL;
+	#ifdef SHOW_SETCONTITLE_MSGBOX
+	MessageBox(NULL, pszExpanded ? pszExpanded : lsTitle ? lsTitle : L"", WIN3264TEST(L"ConEmuCD - set title",L"ConEmuCD64 - set title"), MB_SYSTEMMODAL);
+	#endif
 	BOOL bRc = SetConsoleTitle(pszExpanded ? pszExpanded : lsTitle ? lsTitle : L"");
 	SafeFree(pszExpanded);
 	return bRc;
@@ -3465,78 +3581,70 @@ BOOL SetTitle(bool bExpandVars, LPCWSTR lsTitle)
 void UpdateConsoleTitle(LPCWSTR lsCmdLine, BOOL& lbNeedCutStartEndQuot, bool bExpandVars)
 {
 	// Сменим заголовок консоли
-	if (*lsCmdLine == L'"')
+	if (*lsCmdLine == L'"' && lsCmdLine[1])
 	{
-		if (lsCmdLine[1])
+		wchar_t *pszBuffer = lstrdup(lsCmdLine);;
+		wchar_t *pszTitle = pszBuffer;
+		wchar_t *pszEndQ = pszTitle + lstrlenW(pszTitle) - 1;
+
+		if (pszEndQ > (pszTitle+1) && *pszEndQ == L'"'
+			    && wcschr(pszTitle+1, L'"') == pszEndQ)
 		{
-			wchar_t *pszTitle = gpszRunCmd;
-			wchar_t *pszEndQ = pszTitle + lstrlenW(pszTitle) - 1;
+			*pszEndQ = 0; pszTitle ++;
+			bool lbCont = true;
 
-			if (pszEndQ > (pszTitle+1) && *pszEndQ == L'"'
-			        && wcschr(pszTitle+1, L'"') == pszEndQ)
+			// "F:\Temp\1\ConsoleTest.exe ." - кавычки не нужны, после программы идут параметры
+			if (lbCont && (*pszTitle != L'"') && ((*(pszEndQ-1) == L'.') ||(*(pszEndQ-1) == L' ')))
 			{
-				*pszEndQ = 0; pszTitle ++;
-				bool lbCont = true;
+				LPCWSTR pwszCopy = pszTitle;
+				CmdArg szTemp;
 
-				// "F:\Temp\1\ConsoleTest.exe ." - кавычки не нужны, после программы идут параметры
-				if (lbCont && (*pszTitle != L'"') && ((*(pszEndQ-1) == L'.') ||(*(pszEndQ-1) == L' ')))
+				if (NextArg(&pwszCopy, szTemp) == 0)
 				{
-					LPCWSTR pwszCopy = pszTitle;
-					CmdArg szTemp;
-
-					if (NextArg(&pwszCopy, szTemp) == 0)
-					{
-						// В полученном пути к файлу (исполняемому) не должно быть пробелов?
-						if (!wcschr(szTemp, ' ') && IsFilePath(szTemp) && FileExists(szTemp))
-						{
-							lbCont = false;
-							lbNeedCutStartEndQuot = TRUE;
-						}
-					}
-				}
-
-				// "C:\Program Files\FAR\far.exe" - кавычки нужны, иначе не запустится
-				if (lbCont)
-				{
-					if (IsFilePath(pszTitle) && FileExists(pszTitle))
+					// В полученном пути к файлу (исполняемому) не должно быть пробелов?
+					if (!wcschr(szTemp, ' ') && IsFilePath(szTemp) && FileExists(szTemp))
 					{
 						lbCont = false;
-						lbNeedCutStartEndQuot = FALSE;
+						lbNeedCutStartEndQuot = TRUE;
 					}
-
-					//DWORD dwFileAttr = GetFileAttributes(pszTitle);
-					//if (dwFileAttr != INVALID_FILE_ATTRIBUTES && !(dwFileAttr & FILE_ATTRIBUTE_DIRECTORY))
-					//	lbNeedCutStartEndQuot = FALSE;
-					//else
-					//	lbNeedCutStartEndQuot = TRUE;
 				}
 			}
-			else
+
+			// "C:\Program Files\FAR\far.exe" - кавычки нужны, иначе не запустится
+			if (lbCont)
 			{
-				pszEndQ = NULL;
-			}
-
-			int nLen = 4096; //GetWindowTextLength(ghConWnd); -- KIS2009 гундит "Посылка оконного сообщения"...
-
-			if (nLen > 0)
-			{
-				gpszPrevConTitle = (wchar_t*)calloc(nLen+1,2);
-
-				if (gpszPrevConTitle)
+				if (IsFilePath(pszTitle) && FileExists(pszTitle))
 				{
-					if (!GetConsoleTitleW(gpszPrevConTitle, nLen+1))
-					{
-						free(gpszPrevConTitle); gpszPrevConTitle = NULL;
-					}
+					lbCont = false;
+					lbNeedCutStartEndQuot = FALSE;
 				}
 			}
-
-			SetTitle(bExpandVars/*true*/, pszTitle);
-
-			if (pszEndQ) *pszEndQ = L'"';
-
-			return; // Done
 		}
+		else
+		{
+			pszEndQ = NULL;
+		}
+
+		int nLen = 4096; //GetWindowTextLength(ghConWnd); -- KIS2009 гундит "Посылка оконного сообщения"...
+
+		if (nLen > 0)
+		{
+			gpszPrevConTitle = (wchar_t*)calloc(nLen+1,2);
+
+			if (gpszPrevConTitle)
+			{
+				if (!GetConsoleTitleW(gpszPrevConTitle, nLen+1))
+				{
+					free(gpszPrevConTitle); gpszPrevConTitle = NULL;
+				}
+			}
+		}
+
+		SetTitle(bExpandVars/*true*/, pszTitle);
+
+		SafeFree(pszBuffer);
+
+		return; // Done
 	}
 	
 	if (*lsCmdLine)
@@ -3617,8 +3725,11 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			return CERR_HELPREQUESTED;
 		}
 
-		// Далее - требуется чтобы у аргумента был "/"
-		if (szArg[0] != L'/')
+		// Following code wants '/'style arguments
+		// Change '-'style to '/'style
+		if (szArg[0] == L'-')
+			szArg.SetAt(0, L'/');
+		else if (szArg[0] != L'/')
 			continue;
 
 		#ifdef _DEBUG
@@ -3708,6 +3819,11 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 				eExecAction = ea_ExportCon;
 			else
 				eExecAction = ea_ExportGui;
+			break;
+		}
+		else if (lstrcmpi(szArg, L"/Download")==0)
+		{
+			eExecAction = ea_Download;
 			break;
 		}
 		else if (lstrcmpi(szArg, L"/IsConEmu")==0)
@@ -4064,14 +4180,18 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			}
 			else
 			{
-				gpSrv->hGuiWnd = (HWND)wcstoul(szArg+7, &pszEnd, 16);
+				LPCWSTR pszDescr = szArg+7;
+				if (pszDescr[0] == L'0' && (pszDescr[1] == L'x' || pszDescr[1] == L'X'))
+					pszDescr += 2; // That may be useful for calling from batch files
+				gpSrv->hGuiWnd = (HWND)wcstoul(pszDescr, &pszEnd, 16);
+				gpSrv->bRequestNewGuiWnd = FALSE;
 
 				if ((gpSrv->hGuiWnd) == NULL || !IsWindow(gpSrv->hGuiWnd))
 				{
 					_printf("Invalid GUI HWND specified:\n");
 					_wprintf(GetCommandLineW());
 					_printf("\n");
-					_ASSERTE(FALSE);
+					_ASSERTE(FALSE && "Invalid window was specified in /GHWND arg");
 					return CERR_CARGUMENT;
 				}
 			}
@@ -6514,6 +6634,11 @@ BOOL cmd_GetOutput(CESERVER_REQ& in, CESERVER_REQ** out)
 }
 #endif
 
+// Запрос к серверу - "Подцепись в ConEmu GUI".
+// Может придти из
+// * GUI (диалог аттача)
+// * из Far плагина (меню или команда "Attach to ConEmu")
+// * из "ConEmuC /ATTACH"
 BOOL cmd_Attach2Gui(CESERVER_REQ& in, CESERVER_REQ** out)
 {
 	BOOL lbRc = FALSE;
@@ -8903,13 +9028,17 @@ wrap:
 }
 
 #if defined(__GNUC__)
-extern "C" {
-	BOOL WINAPI HandlerRoutine(DWORD dwCtrlType);
-};
+extern "C"
 #endif
-
 BOOL WINAPI HandlerRoutine(DWORD dwCtrlType)
 {
+	if (gbIsDownloading
+		&& ((dwCtrlType == CTRL_CLOSE_EVENT) || (dwCtrlType == CTRL_LOGOFF_EVENT) || (dwCtrlType == CTRL_SHUTDOWN_EVENT)
+			|| (dwCtrlType == CTRL_C_EVENT) || (dwCtrlType == CTRL_BREAK_EVENT)))
+	{
+		DownloadCommand(dc_RequestTerminate, 0, NULL);
+	}
+
 	//PRINT_COMSPEC(L"HandlerRoutine triggered. Event type=%i\n", dwCtrlType);
 	if ((dwCtrlType == CTRL_CLOSE_EVENT)
 		|| (dwCtrlType == CTRL_LOGOFF_EVENT)
@@ -9154,7 +9283,29 @@ void _wprintf(LPCWSTR asBuffer)
 	int nAllLen = lstrlenW(asBuffer);
 	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	DWORD dwWritten = 0;
-	WriteConsoleW(hOut, asBuffer, nAllLen, &dwWritten, 0);
+
+	CONSOLE_SCREEN_BUFFER_INFO sbi = {};
+	BOOL bIsConsole = GetConsoleScreenBufferInfo(hOut, &sbi);
+
+	if (bIsConsole)
+	{
+		WriteConsoleW(hOut, asBuffer, nAllLen, &dwWritten, 0);
+	}
+	else
+	{
+		UINT  cp = GetConsoleOutputCP();
+		DWORD cchMax = (nAllLen * ((cp==CP_UTF8 || cp==CP_UTF7) ? 3 : 1)) + 1;
+		char* pszOem = (char*)malloc(cchMax);
+		if (pszOem)
+		{
+			int nWrite = WideCharToMultiByte(cp, 0, asBuffer, -1, pszOem, cchMax, NULL, NULL);
+			if (nWrite > 0)
+			{
+				WriteFile(hOut, pszOem, nWrite, &dwWritten, 0);
+			}
+			free(pszOem);
+		}
+	}
 	
 	//UINT nOldCP = GetConsoleOutputCP();
 	//char* pszOEM = (char*)malloc(nAllLen+1);

@@ -50,8 +50,10 @@ public:
 	operator LPCWSTR() const { return ms_Arg; };
 
 	wchar_t* GetBuffer(INT_PTR cchMaxLen);
+	wchar_t* Detach();
 	void Empty();
 	LPCWSTR Set(LPCWSTR asNewValue, int anChars = -1);
+	void SetAt(INT_PTR nIdx, wchar_t wc);
 
 	void GetPosFrom(const CmdArg& arg);
 

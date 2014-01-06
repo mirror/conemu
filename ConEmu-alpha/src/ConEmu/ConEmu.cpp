@@ -1156,6 +1156,9 @@ LPCWSTR CConEmuMain::ConEmuCExeFull(LPCWSTR asCmdLine/*=NULL*/)
 	}
 	else
 	{
+		// Strip from cmdline some commands, wich ConEmuC can process internally
+		ProcessSetEnvCmd(asCmdLine, false);
+
 		// Проверить битность asCmdLine во избежание лишних запусков серверов для Inject
 		// и корректной битности запускаемого процессора по настройке
 		CmdArg szTemp;
@@ -7078,11 +7081,6 @@ void CConEmuMain::AttachToDialog()
 	mp_AttachDlg->AttachDlg();
 }
 
-BOOL CConEmuMain::AttachRequested(HWND ahConWnd, const CESERVER_REQ_STARTSTOP* pStartStop, CESERVER_REQ_STARTSTOPRET* pRet)
-{
-	return CVConGroup::AttachRequested(ahConWnd, pStartStop, pRet);
-}
-
 CRealConsole* CConEmuMain::AttachRequestedGui(LPCWSTR asAppFileName, DWORD anAppPID)
 {
 	wchar_t szLogInfo[MAX_PATH];
@@ -11185,7 +11183,8 @@ wchar_t* CConEmuMain::LoadConsoleBatch_Task(LPCWSTR asSource, wchar_t** ppszStar
 		{
 			size_t cchMax = _tcslen(szName)+100;
 			wchar_t* pszErrMsg = (wchar_t*)calloc(cchMax,sizeof(*pszErrMsg));
-			_wsprintf(pszErrMsg, SKIPLEN(cchMax) L"Command group %s %s!\nChoose your shell?",
+			_wsprintf(pszErrMsg, SKIPLEN(cchMax) L"Command group %s %s!\n"
+				L"Choose your shell?",
 				szName, pszDataW ? L"is empty" : L"not found");
 
 			int nBtn = MessageBox(pszErrMsg, MB_YESNO|MB_ICONEXCLAMATION);
@@ -18914,11 +18913,8 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			}
 			else if (messg == this->mn_MsgUpdateTitle)
 			{
-				//this->UpdateTitle(TitleCmp);
-				this->UpdateTitle(/*mp_ VActive->RCon()->GetTitle()*/);
+				this->UpdateTitle();
 				return 0;
-				//} else if (messg == this->mn_MsgAttach) {
-				//    return this->AttachRequested ( (HWND)wParam, (DWORD)lParam );
 			}
 			else if (messg == this->mn_MsgSrvStarted)
 			{
