@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -554,51 +554,20 @@ BOOL RConStartArgs::CheckUserToken(HWND hPwd)
 
 HANDLE RConStartArgs::CheckUserToken()
 {
-	//SafeFree(pszUserProfile);
-
 	HANDLE hLogonToken = NULL;
-	BOOL lbRc = LogonUser(pszUserName, pszDomain, szUserPassword, LOGON32_LOGON_INTERACTIVE,
-	                      LOGON32_PROVIDER_DEFAULT, &hLogonToken);
-	//if (szUserPassword[0]) SecureZeroMemory(szUserPassword, sizeof(szUserPassword));
+	// Empty password? Really? Security hole? Are you sure?
+	// gpedit.msc - Конфигурация компьютера - Конфигурация Windows - Локальные политики - Параметры безопасности - Учетные записи
+	// Ограничить использование пустых паролей только для консольного входа -> "Отключить". 
+	LPCWSTR pszPassword = bUseEmptyPassword ? NULL : szUserPassword;
+	DWORD nFlags = LOGON32_LOGON_INTERACTIVE;
+	BOOL lbRc = LogonUser(pszUserName, pszDomain, pszPassword, nFlags, LOGON32_PROVIDER_DEFAULT, &hLogonToken);
 
 	if (!lbRc || !hLogonToken)
 	{
-		//MessageBox(GetParent(hPwd), L"Invalid user name or password specified!", L"ConEmu", MB_OK|MB_ICONSTOP);
 		return NULL;
 	}
 
 	return hLogonToken;
-
-	////HRESULT hr;
-	//wchar_t szPath[MAX_PATH+1] = {};
-	////OSVERSIONINFO osv = {sizeof(osv)};
-
-	//// Windows 2000 - hLogonToken - not supported
-	////if (!GetVersionEx(&osv) || (osv.dwMajorVersion <= 5 && osv.dwMinorVersion == 0))
-	////{
-	//if (ImpersonateLoggedOnUser(hLogonToken))
-	//{
-	//	//hr = SHGetFolderPath(NULL, CSIDL_PROFILE, hLogonToken, SHGFP_TYPE_CURRENT, szPath);
-	//	if (GetEnvironmentVariable(L"USERPROFILE", szPath, countof(szPath)))
-	//	{
-	//		pszUserProfile = lstrdup(szPath);
-	//	}
-	//	RevertToSelf();
-	//}
-	////}
-	////else
-	////{
-	////	hr = SHGetFolderPath(NULL, CSIDL_PROFILE, hLogonToken, SHGFP_TYPE_CURRENT, szPath);
-	////}
-
-	////if (SUCCEEDED(hr) && *szPath)
-	////{
-	////	pszUserProfile = lstrdup(szPath);
-	////}
-
-	//CloseHandle(hLogonToken);
-	////hLogonToken may be used for CreateProcessAsUser
-	//return TRUE;
 }
 
 // Returns ">0" - when changes was made
@@ -1026,11 +995,13 @@ int RConStartArgs::ProcessNewConArg(bool bForceCurConsole /*= false*/)
 											lstrcpyn(szUserPassword, pszPwd+1, countof(szUserPassword));
 											if (nPwdLen > 0)
 												SecureZeroMemory(pszPwd+1, nPwdLen);
+											bUseEmptyPassword = (nPwdLen == 0);
 										}
 										else
 										{
 											// Password was NOT specified, dialog prompt IS required
 											bForceUserDialog = TRUE;
+											bUseEmptyPassword = FALSE;
 										}
 										wchar_t* pszSlash = wcschr(lpszTemp, L'\\');
 										if (pszSlash)

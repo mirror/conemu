@@ -788,6 +788,8 @@ BOOL CRealConsole::AttachConemuC(HWND ahConWnd, DWORD anConemuC_PID, const CESER
 	DWORD dwErr = 0;
 	HANDLE hProcess = NULL;
 	_ASSERTE(pRet!=NULL);
+	DEBUGTEST(bool bAdmStateChanged = (rStartStop->bUserIsAdmin != m_Args.bRunAsAdministrator));
+	m_Args.bRunAsAdministrator = rStartStop->bUserIsAdmin;
 
 	// Процесс запущен через ShellExecuteEx под другим пользователем (Administrator)
 	if (mp_sei)
@@ -1805,7 +1807,7 @@ DWORD CRealConsole::MonitorThread(LPVOID lpParameter)
 		DWORD nWait = WaitForMultipleObjects(countof(hWait), hWait, FALSE, INFINITE);
 		if ((nWait == WAIT_OBJECT_0) || !pRCon->mb_StartResult)
 		{
-			_ASSERTE(FALSE && "Failed to start console?");
+			//_ASSERTE(FALSE && "Failed to start console?"); -- no need in debug
 			goto wrap;
 		}
 
@@ -2989,6 +2991,8 @@ wrap:
 		LogString(szInfo, TRUE);
 	}
 
+	if (mn_ConHost_PID)
+		gpConEmu->ReleaseConhostDelay();
 	return mn_ConHost_PID;
 }
 
@@ -3231,10 +3235,10 @@ BOOL CRealConsole::StartProcess()
 	DWORD dwLastError = 0;
 	DWORD nCreateBegin, nCreateEnd, nCreateDuration = 0;
 
-	bool bNeedConHostSearch = false;
 	// ConHost.exe появился в Windows 7. Но там он создается "от родительского csrss".
 	// А вот в Win8 - уже все хорошо, он создается от корневого консольного процесса.
-	bNeedConHostSearch = (gnOsVer == 0x0601);
+	bool bNeedConHostSearch = (gnOsVer == 0x0601);
+	bool bConHostLocked = false;
 	//DEBUGTEST(if (gnOsVer == 0x0602) bNeedConHostSearch = true); // В Win8 искать не надо, но для отладки пока
 	if (bNeedConHostSearch)
 	{
@@ -3248,11 +3252,16 @@ BOOL CRealConsole::StartProcess()
 			mp_ConHostSearch->Reset();
 		}
 	}
+	//
 	if (!bNeedConHostSearch)
 	{
 		if (mp_ConHostSearch)
 			mp_ConHostSearch->Release();
 		SafeFree(mp_ConHostSearch);
+	}
+	else
+	{
+		bConHostLocked = gpConEmu->LockConhostStart();
 	}
 
 
@@ -3422,6 +3431,12 @@ BOOL CRealConsole::StartProcess()
 			mp_ConHostSearch->Release();
 			SafeFree(mp_ConHostSearch);
 		}
+		// Do Unlock immediately
+		if (bConHostLocked)
+		{
+			gpConEmu->UnlockConhostStart();
+			bConHostLocked = false;
+		}
 	}
 
 	if (!m_Args.bRunAsAdministrator)
@@ -3440,6 +3455,12 @@ BOOL CRealConsole::StartProcess()
 
 wrap:
 	//SetEvent(mh_CreateRootEvent);
+
+	if (bConHostLocked)
+	{
+		gpConEmu->UnlockConhostStart();
+		bConHostLocked = false;
+	}
 
 	// В режиме "администратора" мы будем в "CreateRoot" до тех пор, пока нам не отчитается запущенный сервер
 	if (!lbRc || mn_MainSrv_PID)
@@ -3505,7 +3526,7 @@ BOOL CRealConsole::StartProcessInt(LPCWSTR& lpszCmd, wchar_t*& psCurCmd, LPCWSTR
 	if (m_Args.bRunAsAdministrator && !gpConEmu->mb_IsUacAdmin)
 	{
 		m_Args.bDetached = TRUE;
-		_wcscat_c(psCurCmd, nLen, L" /ATTACH ");
+		_wcscat_c(psCurCmd, nLen, L" /ADMIN ");
 	}
 
 	if ((gpSet->nConInMode != (DWORD)-1) || m_Args.bOverwriteMode)

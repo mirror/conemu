@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -275,16 +275,27 @@ CVirtualConsole* CVConGroup::CreateVCon(RConStartArgs *args, CVirtualConsole*& p
 	if (!pVCon->Constructor(args))
 	{
 		ppVConI = NULL;
+		bool bWasValid = isValid(pVCon);
 		CVConGroup::OnVConClosed(pVCon);
-		#ifdef _DEBUG
-		//-- must be already released!
-		#ifndef _WIN64
-		_ASSERTE((DWORD_PTR)pVCon->mp_RCon==0xFEEEFEEE);
-		#else
-		_ASSERTE((DWORD_PTR)pVCon->mp_RCon==0xFEEEFEEEFEEEFEEELL);
-		#endif
-		//pVCon->Release();
-		#endif
+		if (!bWasValid)
+		{
+			// If the VCon was not valid before OnVConClosed, it will not be released
+			// But we need to release it here to avoid mem leaks
+			_ASSERTE(pVCon->RefCount() == 1);
+			pVCon->Release();
+		}
+		else
+		{
+			#ifdef _DEBUG
+				//-- must be already released in CVConGroup::OnVConClosed!
+				#ifndef _WIN64
+				_ASSERTE((DWORD_PTR)pVCon->mp_RCon==0xFEEEFEEE);
+				#else
+				_ASSERTE((DWORD_PTR)pVCon->mp_RCon==0xFEEEFEEEFEEEFEEELL);
+				#endif
+				//pVCon->Release();
+			#endif
+		}
 		return NULL;
 	}
 
@@ -2646,6 +2657,7 @@ void CVConGroup::OnVConClosed(CVirtualConsole* apVCon)
 		}
 	}
 
+wrap: // Wrap to here, because gp_VActive may be invalid already and we need to check it
 	if (gp_VActive == apVCon)
 	{
 		// Сюда вообще попадать не должны, но на всякий случай, сбрасываем gp_VActive
@@ -2670,7 +2682,6 @@ void CVConGroup::OnVConClosed(CVirtualConsole* apVCon)
 		ShowActiveGroup(gp_VActive);
 	}
 
-wrap:
 	// Теперь перетряхнуть заголовок (табы могут быть отключены и в заголовке отображается количество консолей)
 	gpConEmu->UpdateTitle(); // сам перечитает
 	//

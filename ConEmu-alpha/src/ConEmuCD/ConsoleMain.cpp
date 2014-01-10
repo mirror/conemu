@@ -42,7 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#define SHOW_EXITWAITKEY_MSGBOX
 //	#define SHOW_INJECT_MSGBOX
 //	#define SHOW_INJECTREM_MSGBOX
-	#define SHOW_ATTACH_MSGBOX
+//	#define SHOW_ATTACH_MSGBOX
 //  #define SHOW_ROOT_STARTED
 	#define WINE_PRINT_PROC_INFO
 //	#define USE_PIPE_DEBUG_BOXES
@@ -153,6 +153,7 @@ BOOL    gbNonGuiMode = FALSE;
 DWORD   gnExitCode = 0;
 HANDLE  ghRootProcessFlag = NULL;
 HANDLE  ghExitQueryEvent = NULL; int nExitQueryPlace = 0, nExitPlaceStep = 0;
+#define EPS_WAITING4PROCESS 550
 SetTerminateEventPlace gTerminateEventPlace = ste_None;
 HANDLE  ghQuitEvent = NULL;
 bool    gbQuit = false;
@@ -499,6 +500,15 @@ BOOL WINAPI DllMain(HINSTANCE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 			//	ShutdownHooks();
 			//}
 
+			#ifdef _DEBUG
+			if ((gnRunMode == RM_SERVER) && (nExitPlaceStep == EPS_WAITING4PROCESS/*550*/))
+			{
+				// Это происходило после Ctrl+C если не был установлен HandlerRoutine
+				// Ни _ASSERT ни DebugBreak здесь позвать уже не получится - все закрывается и игнорируется
+				OutputDebugString(L"!!! Server was abnormally terminated !!!\n");
+				LogString("!!! Server was abnormally terminated !!!\n");
+			}
+			#endif
 
 			if ((gnRunMode == RM_APPLICATION) || (gnRunMode == RM_ALTSERVER))
 			{
@@ -1637,7 +1647,7 @@ wait:
 	} // (gnRunMode == RM_ALTSERVER)
 	else if (gnRunMode == RM_SERVER)
 	{
-		nExitPlaceStep = 550;
+		nExitPlaceStep = EPS_WAITING4PROCESS/*550*/;
 		// По крайней мере один процесс в консоли запустился. Ждем пока в консоли не останется никого кроме нас
 		nWait = WAIT_TIMEOUT; nWaitExitEvent = -2;
 
@@ -3852,6 +3862,20 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 			gnConfirmExitParm = 2;
 			gbAlwaysConfirmExit = FALSE; gbAutoDisableConfirmExit = FALSE;
 		}
+		else if (wcscmp(szArg, L"/ADMIN")==0)
+		{
+			#if defined(SHOW_ATTACH_MSGBOX)
+			if (!IsDebuggerPresent())
+			{
+				wchar_t szTitle[100]; _wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"ConEmuC (PID=%i) /ADMIN", gnSelfPID);
+				const wchar_t* pszCmdLine = GetCommandLineW();
+				MessageBox(NULL,pszCmdLine,szTitle,MB_SYSTEMMODAL);
+			}
+			#endif
+
+			gbAttachMode = am_Admin;
+			gnRunMode = RM_SERVER;
+		}
 		else if (wcscmp(szArg, L"/ATTACH")==0)
 		{
 			#if defined(SHOW_ATTACH_MSGBOX)
@@ -4080,6 +4104,10 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 
 				ghConWnd = GetConEmuHWND(2);
 				gbVisibleOnStartup = IsWindowVisible(ghConWnd);
+
+				// Need to be set, because of new console === new handler
+				SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerRoutine, true);
+
 				#ifdef _DEBUG
 				_ASSERTE(ghFarInExecuteEvent==NULL);
 				_ASSERTE(ghConWnd!=NULL);
@@ -4226,7 +4254,10 @@ int ParseCommandLine(LPCWSTR asCmdLine/*, wchar_t** psNewCmd, BOOL* pbRunInBackg
 						MY_CONSOLE_SCREEN_BUFFER_INFOEX csbi = {sizeof(csbi)};
 						if (apiGetConsoleScreenBufferInfoEx(hConOut, &csbi))
 						{
-							if ((!gnDefTextColors || (csbi.wAttributes = gnDefTextColors))
+							// Microsoft bug? When console is started elevated - it does NOT show
+							// required attributes, BUT GetConsoleScreenBufferInfoEx returns them.
+							if ((gbAttachMode != am_Admin)
+								&& (!gnDefTextColors || (csbi.wAttributes = gnDefTextColors))
 								&& (!gnDefPopupColors || (csbi.wPopupAttributes = gnDefPopupColors)))
 							{
 								bPassed = TRUE; // Менять не нужно, консоль соответствует
