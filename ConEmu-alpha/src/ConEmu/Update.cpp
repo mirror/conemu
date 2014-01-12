@@ -49,6 +49,10 @@ CConEmuUpdate* gpUpd = NULL;
 
 #define UPDATETHREADTIMEOUT 2500
 
+#define sectionConEmuStable  L"ConEmu_Stable_2"
+#define sectionConEmuPreview L"ConEmu_Preview_2"
+#define sectionConEmuDevel   L"ConEmu_Devel_2"
+
 
 
 CConEmuUpdate::CConEmuUpdate()
@@ -70,6 +74,7 @@ CConEmuUpdate::CConEmuUpdate()
 	mpsz_PendingPackageFile = mpsz_PendingBatchFile = NULL;
 	m_UpdateStep = us_NotStarted;
 	ms_NewVersion[0] = ms_CurVersion[0] = ms_SkipVersion[0] = 0;
+	ms_VerOnServer[0] = ms_CurVerInfo[0] = 0;
 
 	lstrcpyn(ms_DefaultTitle, gpConEmu->GetDefaultTitle(), countof(ms_DefaultTitle));
 
@@ -86,16 +91,16 @@ CConEmuUpdate::~CConEmuUpdate()
 			RequestTerminate();
 			nWait = WaitForSingleObject(mh_CheckThread, UPDATETHREADTIMEOUT);
 		}
-		
+
 		if (nWait != WAIT_OBJECT_0)
 		{
 			TerminateThread(mh_CheckThread, 100);
 		}
-		
+
 		CloseHandle(mh_CheckThread);
 		mh_CheckThread = NULL;
 	}
-	
+
 	//if (mh_StopThread)
 	//{
 	//	CloseHandle(mh_StopThread);
@@ -105,7 +110,7 @@ CConEmuUpdate::~CConEmuUpdate()
 	DeleteBadTempFiles();
 
 	Inet.Deinit(true);
-	
+
 	SafeFree(ms_LastErrorInfo);
 
 	if (mp_LastErrorSC)
@@ -157,7 +162,7 @@ CConEmuUpdate::~CConEmuUpdate()
 void CConEmuUpdate::StartCheckProcedure(BOOL abShowMessages)
 {
 	//DWORD nWait = WAIT_OBJECT_0;
-	
+
 	if (InUpdate() != us_NotStarted)
 	{
 		// Already in update procedure
@@ -180,17 +185,17 @@ void CConEmuUpdate::StartCheckProcedure(BOOL abShowMessages)
 
 	// Сразу проверим, как нужно будет запускаться
 	bNeedRunElevation = NeedRunElevation();
-	
+
 	mb_RequestTerminate = false;
 	//if (!mh_StopThread)
 	//	mh_StopThread = CreateEvent(NULL, TRUE/*manual*/, FALSE, NULL);
 	//ResetEvent(mh_StopThread);
-	
+
 	// Запомнить текущие параметры обновления
 	if (!mp_Set)
 		mp_Set = new ConEmuUpdateSettings;
 	mp_Set->LoadFrom(&gpSet->UpdSet);
-	
+
 	mb_ManualCallMode = abShowMessages;
 	{
 		MSectionLock SC; SC.Lock(mp_LastErrorSC, TRUE);
@@ -278,7 +283,7 @@ void CConEmuUpdate::ShowLastError()
 		ms_LastErrorInfo = NULL;
 		SC.Unlock();
 
-		MBoxA(pszError);
+		MessageBox(pszError, MB_ICONINFORMATION, gpConEmu?gpConEmu->GetDefaultTitle():L"ConEmu Update");
 		SafeFree(pszError);
 
 		mb_InShowLastError = false;
@@ -337,7 +342,7 @@ DWORD CConEmuUpdate::CheckThreadProc(LPVOID lpParameter)
 	DWORD nRc = 0;
 	CConEmuUpdate *pUpdate = (CConEmuUpdate*)lpParameter;
 	_ASSERTE(pUpdate!=NULL && pUpdate->mn_CheckThreadId==GetCurrentThreadId());
-	
+
 	SAFETRY
 	{
 		nRc = pUpdate->CheckProcInt();
@@ -346,7 +351,7 @@ DWORD CConEmuUpdate::CheckThreadProc(LPVOID lpParameter)
 	{
 		pUpdate->ReportError(L"Exception in CheckProcInt", 0);
 	}
-	
+
 	pUpdate->mb_InCheckProcedure = FALSE;
 	// May be null, if update package was dropped on ConEmu icon
 	if (gpConEmu && ghWnd)
@@ -376,7 +381,7 @@ bool CConEmuUpdate::CanUpdateInstallation()
 	wchar_t szTestFile[MAX_PATH*2];
 	wcscpy_c(szTestFile, gpConEmu->ms_ConEmuExeDir);
 	wcscat_c(szTestFile, L"\\ConEmuUpdate.check");
-	
+
 	HANDLE hFile = CreateFile(szTestFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL|FILE_ATTRIBUTE_TEMPORARY, NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
@@ -479,12 +484,12 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 		AssertMsg(L"Invalid asDownloadedPackage");
 		goto wrap;
 	}
-	
+
 	// Запомнить текущие параметры обновления
 	if (!mp_Set)
 		mp_Set = new ConEmuUpdateSettings;
 	mp_Set->LoadFrom(&gpSet->UpdSet);
-	
+
 	mb_ManualCallMode = TRUE;
 
 	// Clear possible last error
@@ -562,12 +567,12 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 	mb_InetMode = false;
 	mb_DroppedMode = true;
 
-	
-	
+
+
 	pszLocalPackage = CreateTempFile(mp_Set->szUpdateDownloadPath, PointToName(asDownloadedPackage), hTarget);
 	if (!pszLocalPackage)
 		goto wrap;
-	
+
 	lbDownloadRc = DownloadFile(asDownloadedPackage, pszLocalPackage, hTarget, nLocalCRC, TRUE);
 	CloseHandle(hTarget);
 	if (!lbDownloadRc)
@@ -580,7 +585,7 @@ bool CConEmuUpdate::StartLocalUpdate(LPCWSTR asDownloadedPackage)
 	pszBatchFile = CreateBatchFile(pszLocalPackage);
 	if (!pszBatchFile)
 		goto wrap;
-	
+
 	if (!QueryConfirmation(us_ConfirmUpdate))
 	{
 		goto wrap;
@@ -632,6 +637,59 @@ wrap:
 	return bRc;
 }
 
+void CConEmuUpdate::GetVersionsFromIni(LPCWSTR pszUpdateVerLocation, wchar_t (&szServer)[100], wchar_t (&szInfo)[100])
+{
+	wchar_t szTest[64]; // Дописать stable/preview/alpha
+	bool bDetected = false, bNewer;
+
+	wcscpy_c(szInfo, ms_CurVersion);
+
+	wcscpy_c(szServer, L"Stable:\t");
+	if (GetPrivateProfileString(sectionConEmuStable, L"version", L"", szTest, countof(szTest), pszUpdateVerLocation))
+	{
+		bNewer = (lstrcmp(szTest, ms_CurVersion) >= 0);
+		if (!bDetected && bNewer)
+		{
+			bDetected = true;
+			wcscat_c(szInfo, L" stable");
+		}
+		szTest[10] = 0; wcscat_c(szServer, szTest);
+		if (bNewer) wcscat_c(szServer, L" (newer)");
+	}
+	else
+		wcscat_c(szServer, L"<Not found>");
+
+	wcscat_c(szServer, L"\nPreview:\t");
+	if (GetPrivateProfileString(sectionConEmuPreview, L"version", L"", szTest, countof(szTest), pszUpdateVerLocation))
+	{
+		bNewer = (lstrcmp(szTest, ms_CurVersion) >= 0);
+		if (!bDetected && bNewer)
+		{
+			bDetected = true;
+			wcscat_c(szInfo, L" preview");
+		}
+		szTest[10] = 0; wcscat_c(szServer, szTest);
+		if (bNewer) wcscat_c(szServer, L" (newer)");
+	}
+	else
+		wcscat_c(szServer, L"<Not found>");
+
+	wcscat_c(szServer, L"\nDevel:\t");
+	if (GetPrivateProfileString(sectionConEmuDevel, L"version", L"", szTest, countof(szTest), pszUpdateVerLocation))
+	{
+		bNewer = (lstrcmp(szTest, ms_CurVersion) >= 0);
+		if (!bDetected && bNewer)
+		{
+			bDetected = true;
+			wcscat_c(szInfo, L" devel");
+		}
+		szTest[10] = 0; wcscat_c(szServer, szTest);
+		if (bNewer) wcscat_c(szServer, L" (newer)");
+	}
+	else
+		wcscat_c(szServer, L"<Not found>");
+}
+
 DWORD CConEmuUpdate::CheckProcInt()
 {
 	BOOL lbDownloadRc = FALSE, lbExecuteRc = FALSE;
@@ -640,6 +698,7 @@ DWORD CConEmuUpdate::CheckProcInt()
 	bool bTempUpdateVerLocation = false;
 	wchar_t szSection[64], szItem[64];
 	wchar_t szSourceFull[1024];
+	wchar_t szTemplFilename[128];
 	wchar_t *pszSource, *pszEnd, *pszFileName;
 	DWORD nSrcLen, nSrcCRC, nLocalCRC = 0;
 	bool lbSourceLocal;
@@ -673,9 +732,9 @@ DWORD CConEmuUpdate::CheckProcInt()
 	{
 		goto wrap;
 	}
-	
+
 	_wsprintf(ms_CurVersion, SKIPLEN(countof(ms_CurVersion)) L"%02u%02u%02u%s", (MVV_1%100),MVV_2,MVV_3,_T(MVV_4a));
-	
+
 	// Загрузить информацию о файлах обновления
 	if (IsLocalFile(pszUpdateVerLocationSet))
 	{
@@ -686,12 +745,13 @@ DWORD CConEmuUpdate::CheckProcInt()
 		HANDLE hInfo = NULL;
 		BOOL bInfoRc;
 		DWORD crc;
-		
+
+		TODO("Было бы хорошо избавиться от *ini-файла* и парсить данные в памяти");
 		pszUpdateVerLocation = CreateTempFile(mp_Set->szUpdateDownloadPath/*L"%TEMP%"*/, L"ConEmuVersion.ini", hInfo);
 		if (!pszUpdateVerLocation)
 			goto wrap;
 		bTempUpdateVerLocation = true;
-		
+
 		bInfoRc = DownloadFile(pszUpdateVerLocationSet, pszUpdateVerLocation, hInfo, crc);
 		CloseHandle(hInfo);
 		if (!bInfoRc)
@@ -704,25 +764,33 @@ DWORD CConEmuUpdate::CheckProcInt()
 			goto wrap;
 		}
 	}
-	
+
 	// Проверить версии
 	_wcscpy_c(szSection, countof(szSection),
-		(mp_Set->isUpdateUseBuilds==1) ? L"ConEmu_Stable" :
-		(mp_Set->isUpdateUseBuilds==3) ? L"ConEmu_Preview" : L"ConEmu_Devel");
+		(mp_Set->isUpdateUseBuilds==1) ? sectionConEmuStable :
+		(mp_Set->isUpdateUseBuilds==3) ? sectionConEmuPreview
+		: sectionConEmuDevel);
 	_wcscpy_c(szItem, countof(szItem), (mp_Set->UpdateDownloadSetup()==1) ? L"location_exe" : L"location_arc");
-	
-	if (!GetPrivateProfileString(szSection, L"version", ms_CurVersion, ms_NewVersion, countof(ms_NewVersion), pszUpdateVerLocation))
+
+	if (!GetPrivateProfileString(szSection, L"version", L"", ms_NewVersion, countof(ms_NewVersion), pszUpdateVerLocation) || !*ms_NewVersion)
 	{
-		ReportError(L"ProfileString(%s,version) failed, code=%u", szSection, GetLastError());
+		ReportBrokenIni(szSection, L"version", pszUpdateVerLocationSet);
 		goto wrap;
 	}
-	
+
+	// URL may not contain file name at all, compile it (predefined)
+	_wsprintf(szTemplFilename, SKIPLEN(countof(szTemplFilename))
+		(mp_Set->UpdateDownloadSetup()==1) ? L"ConEmuSetup.%s.exe" : L"ConEmuPack.%s.7z",
+		ms_NewVersion);
+
 	if (!GetPrivateProfileString(szSection, szItem, L"", szSourceFull, countof(szSourceFull), pszUpdateVerLocation) || !*szSourceFull)
 	{
-		ReportError(L"Version not available (%s,%s)", szSection, szItem, 0);
+		ReportBrokenIni(szSection, szItem, pszUpdateVerLocationSet);
 		goto wrap;
 	}
-	
+
+	GetVersionsFromIni(pszUpdateVerLocation, ms_VerOnServer, ms_CurVerInfo);
+
 	if ((lstrcmpi(ms_NewVersion, ms_CurVersion) <= 0)
 		// Если пользователь отказался от обновления в этом сеансе - не предлагать ту же версию при ежечасных проверках
 		|| (!mb_ManualCallMode && (lstrcmp(ms_NewVersion, ms_SkipVersion) == 0)))
@@ -730,24 +798,15 @@ DWORD CConEmuUpdate::CheckProcInt()
 		// Новых версий нет
 		if (mb_ManualCallMode)
 		{
-			wchar_t szInfo[100], szTest[64]; // Дописать stable/preview/alpha
+			wchar_t szFull[300];
 
-			wcscpy_c(szInfo, ms_CurVersion);
-	
-			if (GetPrivateProfileString(L"ConEmu_Stable", L"version", L"", szTest, countof(szTest), pszUpdateVerLocation)
-				&& (lstrcmp(szTest, ms_CurVersion) >= 0))
-				wcscat_c(szInfo, L" stable");
-			else if (GetPrivateProfileString(L"ConEmu_Preview", L"version", L"", szTest, countof(szTest), pszUpdateVerLocation)
-				&& (lstrcmp(szTest, ms_CurVersion) >= 0))
-				wcscat_c(szInfo, L" preview");
-			else if (GetPrivateProfileString(L"ConEmu_Devel", L"version", L"", szTest, countof(szTest), pszUpdateVerLocation)
-				&& (lstrcmp(szTest, ms_CurVersion) >= 0))
-				wcscat_c(szInfo, L" alpha");
-
-			DEBUGTEST(int iCmp = lstrcmp(szTest, ms_CurVersion));
-
-			ReportError(L"Your current ConEmu version is %s\nNo newer %s version is available", szInfo,
+			_wsprintf(szFull, SKIPLEN(countof(szFull)) 
+				L"Your current ConEmu version is %s\n\n"
+				L"Versions on server\n%s\n\n"
+				L"No newer %s version is available",
+				ms_CurVerInfo, ms_VerOnServer,
 				(mp_Set->isUpdateUseBuilds==1) ? L"stable" : (mp_Set->isUpdateUseBuilds==3) ? L"preview" : L"developer", 0);
+			ReportError(szFull, 0);
 		}
 
 		if (bTempUpdateVerLocation && pszUpdateVerLocation && *pszUpdateVerLocation)
@@ -775,7 +834,7 @@ DWORD CConEmuUpdate::CheckProcInt()
 	}
 	pszSource = pszEnd+1;
 	lbSourceLocal = IsLocalFile(pszSource);
-	
+
 	if (mb_RequestTerminate)
 		goto wrap;
 
@@ -808,13 +867,13 @@ DWORD CConEmuUpdate::CheckProcInt()
 	{
 		// Загрузить пакет обновления
 		pszFileName++; // пропустить слеш
-		
+
 		HANDLE hTarget = NULL;
-		
-		pszLocalPackage = CreateTempFile(mp_Set->szUpdateDownloadPath, pszFileName, hTarget);
+
+		pszLocalPackage = CreateTempFile(mp_Set->szUpdateDownloadPath, szTemplFilename, hTarget);
 		if (!pszLocalPackage)
 			goto wrap;
-		
+
 		lbDownloadRc = DownloadFile(pszSource, pszLocalPackage, hTarget, nLocalCRC, TRUE);
 		if (lbDownloadRc)
 		{
@@ -837,7 +896,7 @@ DWORD CConEmuUpdate::CheckProcInt()
 		if (!lbDownloadRc)
 			goto wrap;
 	}
-	
+
 	Inet.Deinit(true);
 
 	if (mb_RequestTerminate)
@@ -846,7 +905,7 @@ DWORD CConEmuUpdate::CheckProcInt()
 	pszBatchFile = CreateBatchFile(pszLocalPackage);
 	if (!pszBatchFile)
 		goto wrap;
-	
+
 	/*
 	nShellRc = (INT_PTR)ShellExecute(ghWnd, bNeedRunElevation ? L"runas" : L"open", pszBatchFile, NULL, NULL, SW_SHOWMINIMIZED);
 	if (nShellRc <= 32)
@@ -908,7 +967,7 @@ wrap:
 		m_UpdateStep = us_NotStarted;
 
 	Inet.Deinit(true);
-	
+
 	mb_InCheckProcedure = FALSE;
 	return 0;
 }
@@ -933,21 +992,21 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 	{
 		ReportError(L"CreateBatchFile failed, gpConEmu==NULL", 0); goto wrap;
 	}
-	
+
 	pszBatch = CreateTempFile(mp_Set->szUpdateDownloadPath, L"ConEmuUpdate.cmd", hBatch);
 	if (!pszBatch)
 		goto wrap;
-	
+
 	#define WRITE_BATCH_A(s) \
 		nLen = lstrlenA(s); \
 		lbWrite = WriteFile(hBatch, s, nLen, &nWritten, NULL); \
 		if (!lbWrite || (nLen != nWritten)) { ReportError(L"WriteBatch failed, code=%u", GetLastError()); goto wrap; }
-	
+
 	#define WRITE_BATCH_W(s) \
 		nLen = WideCharToMultiByte(CP_OEMCP, 0, s, -1, szOem, countof(szOem), NULL, NULL); \
 		if (!nLen) { ReportError(L"WideCharToMultiByte failed, len=%i", lstrlen(s)); goto wrap; } \
 		WRITE_BATCH_A(szOem);
-	
+
 	WRITE_BATCH_A("@echo off\r\n");
 
 	// "set ConEmuInUpdate=YES"
@@ -956,10 +1015,10 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 	WRITE_BATCH_A("cd /d \"");
 	WRITE_BATCH_W(gpConEmu->ms_ConEmuExeDir);
 	WRITE_BATCH_A("\\\"\r\necho Current folder\r\ncd\r\necho .\r\n\r\necho Starting update...\r\n");
-	
+
 	// Формат.
 	pszFormat = (mp_Set->UpdateDownloadSetup()==1) ? mp_Set->UpdateExeCmdLine() : mp_Set->UpdateArcCmdLine();
-	
+
 	// Замена %1 и т.п.
 	for (int s = 0; s < 2; s++)
 	{
@@ -1033,7 +1092,7 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 		if (s)
 			*pDst = 0;
 	}
-	
+
 	// Выполнить команду обновления
 	WRITE_BATCH_A("echo ");
 	WRITE_BATCH_W(pszCommand);
@@ -1068,7 +1127,7 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 	}
 	// Fin
 	WRITE_BATCH_A("\r\ngoto fin\r\n");
-	
+
 	// Сообщение об ошибке?
 	WRITE_BATCH_A("\r\n:err\r\n");
 	WRITE_BATCH_A((mp_Set->UpdateDownloadSetup()==1) ? "echo \7Installation failed\7" : "echo \7Extraction failed\7\r\n");
@@ -1088,7 +1147,7 @@ wchar_t* CConEmuUpdate::CreateBatchFile(LPCWSTR asPackage)
 
 	//// Для отладки
 	//WRITE_BATCH_A("\r\npause\r\n");
-	
+
 	// Succeeded
 	lbRc = TRUE;
 wrap:
@@ -1115,7 +1174,7 @@ CConEmuUpdate::UpdateStep CConEmuUpdate::InUpdate()
 	}
 
 	DWORD nWait = WAIT_OBJECT_0;
-	
+
 	if (mh_CheckThread)
 		nWait = WaitForSingleObject(mh_CheckThread, 0);
 
@@ -1133,7 +1192,7 @@ CConEmuUpdate::UpdateStep CConEmuUpdate::InUpdate()
 	default:
 		;
 	}
-	
+
 	return m_UpdateStep;
 }
 
@@ -1142,12 +1201,12 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 {
 	wchar_t szFile[MAX_PATH*2+2];
 	wchar_t szName[128];
-	
+
 	if (!asDir || !*asDir)
 		asDir = L"%TEMP%\\ConEmu";
 	if (!asFileNameTempl || !*asFileNameTempl)
 		asFileNameTempl = L"ConEmu.tmp";
-	
+
 	if (wcschr(asDir, L'%'))
 	{
 		DWORD nExp = ExpandEnvironmentStrings(asDir, szFile, MAX_PATH);
@@ -1172,7 +1231,7 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 			return NULL;
 		}
 	}
-	
+
 	int nLen = lstrlen(szFile);
 	if (nLen <= 0)
 	{
@@ -1186,8 +1245,8 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 	wchar_t* pszFilePart = szFile + nLen;
 
 	wchar_t* pszDirectory = lstrdup(szFile);
-	
-	
+
+
 	LPCWSTR pszName = PointToName(asFileNameTempl);
 	_ASSERTE(pszName == asFileNameTempl);
 	if (!pszName || !*pszName || (*pszName == L'.'))
@@ -1195,29 +1254,29 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 		_ASSERTE(pszName && *pszName && (*pszName != L'.'));
 		pszName = L"ConEmu";
 	}
-	
+
 	LPCWSTR pszExt = PointToExt(pszName);
 	if (pszExt == NULL)
 	{
 		_ASSERTE(pszExt != NULL);
 		pszExt = L".tmp";
 	}
-	
+
 	lstrcpyn(szName, pszName, countof(szName)-16);
 	wchar_t* psz = wcsrchr(szName, L'.');
 	if (psz)
 		*psz = 0;
-	
+
 	wchar_t* pszResult = NULL;
 	DWORD dwErr = 0;
 
-	for (UINT i = 0; i < 9999; i++)
+	for (UINT i = 0; i <= 9999; i++)
 	{
 		_wcscpy_c(pszFilePart, MAX_PATH, szName);
 		if (i)
 			_wsprintf(pszFilePart+_tcslen(pszFilePart), SKIPLEN(16) L"(%u)", i);
 		_wcscat_c(pszFilePart, MAX_PATH, pszExt);
-		
+
 		hFile = CreateFile(szFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL|FILE_ATTRIBUTE_TEMPORARY, NULL);
 		//ERROR_PATH_NOT_FOUND?
 		if (!hFile || (hFile == INVALID_HANDLE_VALUE))
@@ -1246,7 +1305,7 @@ wchar_t* CConEmuUpdate::CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, H
 			goto wrap;
 		}
 	}
-	
+
 	ReportError(L"Can't create temp file(%s), code=%u", szFile, dwErr);
 	hFile = NULL;
 wrap:
@@ -1276,12 +1335,12 @@ bool CConEmuUpdate::IsLocalFile(LPWSTR& asPathOrUrl)
 		_ASSERTE(asPathOrUrl && *asPathOrUrl);
 		return true;
 	}
-	
+
 	if (asPathOrUrl[0] == L'\\' && asPathOrUrl[1] == L'\\')
 		return true; // network or UNC
 	if (asPathOrUrl[1] == L':')
 		return true; // Local drive
-	
+
 	wchar_t szPrefix[8]; // "file:"
 	lstrcpyn(szPrefix, asPathOrUrl, countof(szPrefix));
 	if (lstrcmpi(szPrefix, L"file://") == 0)
@@ -1289,7 +1348,7 @@ bool CConEmuUpdate::IsLocalFile(LPWSTR& asPathOrUrl)
 		asPathOrUrl += 7;
 		return true; // "file:" protocol
 	}
-	
+
 	return false;
 }
 
@@ -1349,6 +1408,7 @@ void CConEmuUpdate::ReportErrorInt(wchar_t* asErrorInfo)
 	ms_LastErrorInfo = asErrorInfo;
 	SC.Unlock();
 
+	// This will call back ShowLastError
 	if (gpConEmu)
 		gpConEmu->ReportUpdateError();
 }
@@ -1357,7 +1417,7 @@ void CConEmuUpdate::ReportError(LPCWSTR asFormat, DWORD nErrCode)
 {
 	if (!asFormat)
 		return;
-	
+
 	size_t cchMax = _tcslen(asFormat) + 32;
 	wchar_t* pszErrInfo = (wchar_t*)malloc(cchMax*sizeof(wchar_t));
 	if (pszErrInfo)
@@ -1371,7 +1431,7 @@ void CConEmuUpdate::ReportError(LPCWSTR asFormat, LPCWSTR asArg, DWORD nErrCode)
 {
 	if (!asFormat || !asArg)
 		return;
-	
+
 	size_t cchMax = _tcslen(asFormat) + _tcslen(asArg) + 32;
 	wchar_t* pszErrInfo = (wchar_t*)malloc(cchMax*sizeof(wchar_t));
 	if (pszErrInfo)
@@ -1385,7 +1445,7 @@ void CConEmuUpdate::ReportError(LPCWSTR asFormat, LPCWSTR asArg1, LPCWSTR asArg2
 {
 	if (!asFormat || !asArg1 || !asArg2)
 		return;
-	
+
 	size_t cchMax = _tcslen(asFormat) + _tcslen(asArg1) + _tcslen(asArg2) + 32;
 	wchar_t* pszErrInfo = (wchar_t*)malloc(cchMax*sizeof(wchar_t));
 	if (pszErrInfo)
@@ -1393,6 +1453,32 @@ void CConEmuUpdate::ReportError(LPCWSTR asFormat, LPCWSTR asArg1, LPCWSTR asArg2
 		_wsprintf(pszErrInfo, SKIPLEN(cchMax) asFormat, asArg1, asArg2, nErrCode);
 		ReportErrorInt(pszErrInfo);
 	}
+}
+
+void CConEmuUpdate::ReportBrokenIni(LPCWSTR asSection, LPCWSTR asName, LPCWSTR asIni)
+{
+	wchar_t szInfo[140];
+	DWORD nErr = GetLastError();
+	_wsprintf(szInfo, SKIPLEN(countof(szInfo)) L"[%s] \"%s\"", asSection, asName);
+
+	wchar_t* pszIni = (wchar_t*)asIni;
+	int nLen = lstrlen(asIni);
+	LPCWSTR pszSlash = (nLen > 50) ? wcschr(asIni+10, L'/') : NULL;
+	if (pszSlash)
+	{
+		pszIni = (wchar_t*)malloc((nLen+3)*sizeof(*pszIni));
+		if (pszIni)
+		{
+			lstrcpyn(pszIni, asIni, (pszSlash - asIni + 2));
+			_wcscat_c(pszIni, nLen+3, L"\n");
+			_wcscat_c(pszIni, nLen+3, pszSlash+1);
+		}
+	}
+
+	ReportError(L"Version update information is broken (not found)\n%s\n\n%s\n\nError code=%u", szInfo, pszIni?pszIni:L"<NULL>", nErr);
+
+	if (pszIni && pszIni != asIni)
+		free(pszIni);
 }
 
 bool CConEmuUpdate::NeedRunElevation()
@@ -1408,7 +1494,7 @@ bool CConEmuUpdate::NeedRunElevation()
 	wchar_t szTestFile[MAX_PATH+20];
 	wcscpy_c(szTestFile, gpConEmu->ms_ConEmuExeDir);
 	wcscat_c(szTestFile, L"\\");
-	
+
 	if (gOSVer.dwMajorVersion >= 6)
 	{
 		if (IsUserAdmin())
@@ -1517,7 +1603,7 @@ bool CConEmuUpdate::QueryConfirmation(CConEmuUpdate::UpdateStep step, LPCWSTR as
 	{
 	case us_ConfirmDownload:
 		{
-			cchMax = _tcslen(asParm)+255;
+			cchMax = _tcslen(asParm)+300;
 			pszMsg = (wchar_t*)malloc(cchMax*sizeof(*pszMsg));
 
 			if (mb_ManualCallMode == 2)
@@ -1535,9 +1621,12 @@ bool CConEmuUpdate::QueryConfirmation(CConEmuUpdate::UpdateStep step, LPCWSTR as
 					asParm = pszDup;
 				}
 
-				_wsprintf(pszMsg, SKIPLEN(cchMax) L"New %s version available: %s\n\n%s\n%s\n\nDownload?",
+				_wsprintf(pszMsg, SKIPLEN(cchMax) L"New %s version available: %s\n\nVersions on server\n%s\n\n%s\n%s\n\nDownload?",
 					(mp_Set->isUpdateUseBuilds==1) ? L"stable" : (mp_Set->isUpdateUseBuilds==3) ? L"preview" : L"developer",
-					ms_NewVersion, asParm ? asParm : L"", pszFile ? pszFile : L"");
+					ms_NewVersion,
+					ms_VerOnServer,
+					asParm ? asParm : L"",
+					pszFile ? pszFile : L"");
 				SafeFree(pszDup);
 
 				m_UpdateStep = step;

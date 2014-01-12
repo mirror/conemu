@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -512,6 +512,7 @@ class CRealConsole
 		bool isNtvdm();
 		//bool isPackets();
 		const RConStartArgs& GetArgs();
+		void SetPaletteName(LPCWSTR asPaletteName);
 		LPCWSTR GetCmd(bool bThisOnly = false);
 		LPCWSTR GetStartupDir();
 		wchar_t* CreateCommandLine(bool abForTasks = false);
@@ -631,7 +632,7 @@ class CRealConsole
 		static DWORD WINAPI MonitorThread(LPVOID lpParameter);
 		DWORD MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCreated);
 		static int WorkerExFilter(unsigned int code, struct _EXCEPTION_POINTERS *ep, LPCTSTR szFile, UINT nLine);
-		HANDLE mh_MonitorThread; DWORD mn_MonitorThreadID;
+		HANDLE mh_MonitorThread; DWORD mn_MonitorThreadID; BOOL mb_WasForceTerminated;
 		HANDLE mh_MonitorThreadEvent;
 		HANDLE mh_UpdateServerActiveEvent;
 		DWORD mn_ServerActiveTick1, mn_ServerActiveTick2;

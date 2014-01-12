@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -448,7 +448,7 @@ enum TrackMenuPlace
 	tmp_System,
 	tmp_VCon,
 	tmp_Cmd, // Tasks & Last commands
-	tmp_CmdPopup, // Task contents (RClick) -- 4del
+	tmp_CmdPopup, // Task contents (RClick, when menu was created without cmd-submenus)
 	tmp_KeyBar,
 	tmp_TabsList,
 	tmp_PasteCmdLine,

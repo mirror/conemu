@@ -194,7 +194,7 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	mn_AppProgressState = mn_AppProgress = 0;
 	mn_LastConProgrTick = mn_LastWarnCheckTick = 0;
 	hPictureView = NULL; mb_PicViewWasHidden = FALSE;
-	mh_MonitorThread = NULL; mn_MonitorThreadID = 0;
+	mh_MonitorThread = NULL; mn_MonitorThreadID = 0; mb_WasForceTerminated = FALSE;
 	mh_PostMacroThread = NULL; mn_PostMacroThreadID = 0;
 	//mh_InputThread = NULL; mn_InputThreadID = 0;
 	mp_sei = NULL;
@@ -1848,15 +1848,15 @@ wrap:
 		if (nExitCode == 0)
 		{
 			pRCon->SetConStatus(NULL);
-			// А это чтобы не осталось висеть окно ConEmu, раз сервер завершился корректно
-			if (!lbChildProcessCreated)
-				pRCon->OnStartedSuccess();
 		}
 		else
 		{
 			pRCon->SetConStatus(szErrInfo);
 		}
 	}
+
+	// А это чтобы не осталось висеть окно ConEmu, раз всё уже закрыто
+	gpConEmu->OnRConStartedSuccess(NULL);
 
 	ShutdownGuiStep(L"StopSignal");
 
@@ -2032,7 +2032,10 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 				nSrvPID = getProcessId(hEvents[IDEVENT_SERVERPH]);
 			#endif
 
-			break; // требование завершения нити
+			// Чтобы однозначность кода в MonitorThread была
+			nWait = IDEVENT_SERVERPH;
+			// требование завершения нити
+			break;
 		}
 
 		if ((nWait == IDEVENT_SWITCHSRV) || mb_SwitchActiveServer)
@@ -2343,6 +2346,8 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 					_ASSERTE(mp_RBuf==mp_ABuf);
 					if (mb_InCloseConsole && mh_MainSrv && (WaitForSingleObject(mh_MainSrv, 0) == WAIT_OBJECT_0))
 					{
+						// Чтобы однозначность кода в MonitorThread была
+						nWait = IDEVENT_SERVERPH;
 						// Основной сервер закрылся (консоль закрыта), идем на выход
 						break;
 					}
@@ -3072,6 +3077,7 @@ void CRealConsole::ResetVarsOnStart()
 	setGuiWndPID(0, NULL); // set mn_GuiWndPID to 0
 	mn_GuiWndStyle = mn_GuiWndStylEx = 0;
 	mn_GuiAttachFlags = 0;
+	mb_WasForceTerminated = FALSE;
 }
 
 BOOL CRealConsole::StartProcess()
@@ -4751,7 +4757,11 @@ void CRealConsole::StopThread(BOOL abRecreating)
 		// А теперь можно ждать завершения
 		if (WaitForSingleObject(mh_MonitorThread, 300) != WAIT_OBJECT_0)
 		{
+			// А это чтобы не осталось висеть окно ConEmu, раз всё уже закрыто
+			gpConEmu->OnRConStartedSuccess(NULL);
+			LogString(L"### Main Thread wating timeout, terminating...\n");
 			DEBUGSTRPROC(L"### Main Thread wating timeout, terminating...\n");
+			mb_WasForceTerminated = TRUE;
 			TerminateThread(mh_MonitorThread, 1);
 		}
 		else
@@ -10011,7 +10021,7 @@ void CRealConsole::CloseConsole(bool abForceTerminate, bool abConfirm, bool abAl
 	{
 		if (!IsWindow(hConWnd))
 		{
-			_ASSERTE(FALSE && "Console window was abnormally terminated?");
+			_ASSERTE(FALSE && !mb_WasForceTerminated && "Console window was abnormally terminated?");
 			return;
 		}
 
@@ -10744,6 +10754,16 @@ bool CRealConsole::isNtvdm()
 const RConStartArgs& CRealConsole::GetArgs()
 {
 	return m_Args;
+}
+
+void CRealConsole::SetPaletteName(LPCWSTR asPaletteName)
+{
+	wchar_t* pszOld = m_Args.pszPalette;
+	wchar_t* pszNew = NULL;
+	if (asPaletteName && *asPaletteName)
+		pszNew = lstrdup(asPaletteName);
+	m_Args.pszPalette = pszNew;
+	SafeFree(pszOld);
 }
 
 LPCWSTR CRealConsole::GetCmd(bool bThisOnly /*= false*/)
@@ -12598,7 +12618,7 @@ void CRealConsole::PostMacro(LPCWSTR asMacro, BOOL abAsync /*= FALSE*/)
 		if (asMacro[1])
 		{
 			LPWSTR pszGui = lstrdup(asMacro+1);
-			LPWSTR pszRc = CConEmuMacro::ExecuteMacro(pszGui, this);
+			LPWSTR pszRc = ConEmuMacro::ExecuteMacro(pszGui, this);
 			TODO("Показать результат в статусной строке?");
 			SafeFree(pszGui);
 			SafeFree(pszRc);

@@ -45,7 +45,7 @@ protected:
 	BOOL mb_InCheckProcedure;
 	DWORD mn_CheckThreadId;
 	HANDLE mh_CheckThread;
-	
+
 	//HANDLE mh_StopThread;
 
 	bool mb_InetMode, mb_DroppedMode;
@@ -64,10 +64,10 @@ protected:
 	static void WINAPI ProgressCallback(const CEDownloadInfo* pError);
 	static void WINAPI ErrorCallback(const CEDownloadInfo* pError);
 	static void WINAPI LogCallback(const CEDownloadInfo* pError);
-	
+
 	BOOL mb_ManualCallMode;
 	ConEmuUpdateSettings* mp_Set;
-	
+
 	bool mb_InShowLastError;
 	wchar_t* ms_LastErrorInfo;
 	MSection* mp_LastErrorSC;
@@ -79,36 +79,38 @@ protected:
 
 	wchar_t* mpsz_PendingPackageFile;
 	wchar_t* mpsz_PendingBatchFile;
-	
+
 	static DWORD WINAPI CheckThreadProc(LPVOID lpParameter);
 	DWORD CheckProcInt();
-	
+	void GetVersionsFromIni(LPCWSTR pszUpdateVerLocation, wchar_t (&szServer)[100], wchar_t (&szInfo)[100]);
+
 	wchar_t* CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, HANDLE& hFile);
 	wchar_t* CreateBatchFile(LPCWSTR asPackage);
-	
+
 	bool IsLocalFile(LPWSTR& asPathOrUrl);
 	bool IsLocalFile(LPCWSTR& asPathOrUrl);
 
 	bool bNeedRunElevation;
 	bool NeedRunElevation();
-	
+
 	BOOL DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDstFile, DWORD& crc, BOOL abPackage = FALSE);
-	
+
 	void ReportError(LPCWSTR asFormat, DWORD nErrCode);
 	void ReportError(LPCWSTR asFormat, LPCWSTR asArg, DWORD nErrCode);
 	void ReportError(LPCWSTR asFormat, LPCWSTR asArg1, LPCWSTR asArg2, DWORD nErrCode);
+	void ReportBrokenIni(LPCWSTR asSection, LPCWSTR asName, LPCWSTR asIni);
 
 	void ReportErrorInt(wchar_t* asErrorInfo);
 
 public:
 	CConEmuUpdate();
 	~CConEmuUpdate();
-	
+
 	void StartCheckProcedure(BOOL abShowMessages);
 	void StopChecking();
 	void ShowLastError();
 	bool ShowConfirmation();
-	
+
 	static bool LocalUpdate(LPCWSTR asDownloadedPackage);
 	static bool IsUpdatePackage(LPCWSTR asFilePath);
 
@@ -130,6 +132,8 @@ protected:
 	bool mb_RequestTerminate;
 	UpdateStep m_UpdateStep;
 	wchar_t ms_NewVersion[64], ms_CurVersion[64], ms_SkipVersion[64];
+	wchar_t ms_VerOnServer[100]; // Information about available server versions
+	wchar_t ms_CurVerInfo[100];  // Version + stable/preview/alpha
 	wchar_t ms_DefaultTitle[128];
 	bool QueryConfirmation(UpdateStep step, LPCWSTR asParm = NULL);
 	bool QueryConfirmationInt(LPCWSTR asConfirmInfo);

@@ -153,7 +153,8 @@ BOOL    gbNonGuiMode = FALSE;
 DWORD   gnExitCode = 0;
 HANDLE  ghRootProcessFlag = NULL;
 HANDLE  ghExitQueryEvent = NULL; int nExitQueryPlace = 0, nExitPlaceStep = 0;
-#define EPS_WAITING4PROCESS 550
+#define EPS_WAITING4PROCESS  550
+#define EPS_ROOTPROCFINISHED 560
 SetTerminateEventPlace gTerminateEventPlace = ste_None;
 HANDLE  ghQuitEvent = NULL;
 bool    gbQuit = false;
@@ -1688,6 +1689,7 @@ wait:
 		// Получить ExitCode
 		GetExitCodeProcess(gpSrv->hRootProcess, &gnExitCode);
 
+		nExitPlaceStep = EPS_ROOTPROCFINISHED/*560*/;
 
 		#ifdef _DEBUG
 		if (nWait == WAIT_OBJECT_0)
@@ -3433,6 +3435,9 @@ int DoGuiMacro(LPCWSTR asCmdArg, HWND hMacroInstance = NULL)
 
 			// Show macro result in StdOutput	
 			_wprintf(pOut->GuiMacro.sMacro);
+			// PowerShell... it does not insert linefeed
+			if (!IsOutputRedirected())
+				_wprintf(L"\n");
 			iRc = CERR_GUIMACRO_SUCCEEDED; // OK
 		}
 		ExecuteFreeResult(pOut);
@@ -9307,6 +9312,31 @@ void _printf(LPCSTR asBuffer)
 
 #endif
 
+bool IsOutputRedirected()
+{
+	static int isRedirected = 0;
+	if (isRedirected)
+	{
+		return (isRedirected == 2);
+	}
+
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD dwWritten = 0;
+
+	CONSOLE_SCREEN_BUFFER_INFO sbi = {};
+	BOOL bIsConsole = GetConsoleScreenBufferInfo(hOut, &sbi);
+	if (bIsConsole)
+	{
+		isRedirected = 1;
+		return false;
+	}
+	else
+	{
+		isRedirected = 2;
+		return true;
+	}
+}
+
 void _wprintf(LPCWSTR asBuffer)
 {
 	if (!asBuffer) return;
@@ -9315,10 +9345,7 @@ void _wprintf(LPCWSTR asBuffer)
 	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	DWORD dwWritten = 0;
 
-	CONSOLE_SCREEN_BUFFER_INFO sbi = {};
-	BOOL bIsConsole = GetConsoleScreenBufferInfo(hOut, &sbi);
-
-	if (bIsConsole)
+	if (!IsOutputRedirected())
 	{
 		WriteConsoleW(hOut, asBuffer, nAllLen, &dwWritten, 0);
 	}
@@ -9330,9 +9357,10 @@ void _wprintf(LPCWSTR asBuffer)
 		if (pszOem)
 		{
 			int nWrite = WideCharToMultiByte(cp, 0, asBuffer, -1, pszOem, cchMax, NULL, NULL);
-			if (nWrite > 0)
+			if (nWrite > 1)
 			{
-				WriteFile(hOut, pszOem, nWrite, &dwWritten, 0);
+				// Don't write terminating '\0' to redirected output
+				WriteFile(hOut, pszOem, nWrite-1, &dwWritten, 0);
 			}
 			free(pszOem);
 		}

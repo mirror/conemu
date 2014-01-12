@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -230,7 +230,7 @@ struct Settings
 			bool OverridePalette; // Palette+Extend
 			wchar_t szPaletteName[128];
 			//TODO: Тут хорошо бы индекс палитры хранить...
-			int GetPaletteIndex();
+			int GetPaletteIndex() const;
 			void SetPaletteName(LPCWSTR asNewPaletteName);
 			void ResetPaletteIndex();
 
@@ -553,7 +553,9 @@ struct Settings
 		void CmdTaskSet(int anIndex, LPCWSTR asName, LPCWSTR asGuiArgs, LPCWSTR asCommands); // 0-based, index of CmdTasks
 		bool CmdTaskXch(int anIndex1, int anIndex2); // 0-based, index of CmdTasks
 
-		const ColorPalette* PaletteGet(int anIndex); // 0-based, index of Palettes
+		const ColorPalette* PaletteGet(int anIndex); // 0-based, index of Palettes, or -1 for "<Current color scheme>"
+		const ColorPalette* PaletteGetByName(LPCWSTR asName);
+		const ColorPalette* PaletteFindCurrent(bool bMatchAttributes);
 		int PaletteGetIndex(LPCWSTR asName);
 		void PaletteSaveAs(LPCWSTR asName); // Save active colors to named palette
 		void PaletteDelete(LPCWSTR asName); // Delete named palette
