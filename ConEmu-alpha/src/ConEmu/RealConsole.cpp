@@ -12334,12 +12334,15 @@ void CRealConsole::SetConStatus(LPCWSTR asStatus, bool abResetOnConsoleReady /*=
 			// Перерисовать сразу
 			gpConEmu->mp_Status->UpdateStatusBar(true, true);
 		}
-		else if (!abDontUpdate)
+		else if (!abDontUpdate && mp_VCon->GetView())
 		{
 			mp_VCon->Update(true);
 		}
 
-		mp_VCon->Invalidate();
+		if (mp_VCon->GetView())
+		{
+			mp_VCon->Invalidate();
+		}
 	}
 }
 

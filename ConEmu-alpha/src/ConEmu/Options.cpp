@@ -37,6 +37,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Header.h"
 #include "version.h"
 
+#ifdef _DEBUG
+#include <TlHelp32.h>
+#endif
 #include "../ConEmuCD/GuiHooks.h"
 #include "../ConEmuPlugin/FarDefaultMacros.h"
 #include "Background.h"
@@ -3673,9 +3676,55 @@ DWORD Settings::isUseClink(bool abCheckVersion /*= false*/)
 
 bool Settings::isKeyboardHooks(bool abNoDisable /*= false*/)
 {
-	// Если хуки запрещены ключом "/nokeyhooks"
-	if (gpConEmu->DisableKeybHooks && !abNoDisable)
-		return false;
+	if (!abNoDisable)
+	{
+		#ifdef _DEBUG
+		static int iAsked = 0;
+		if (!gpConEmu->DisableKeybHooks)
+		{
+			if (IsDebuggerPresent())
+			{
+				// May be it is remote debugger? Check if "devenv.exe" or "WDExpress.exe" processes exists
+				if (!iAsked)
+				{
+					bool bFound = false;
+					HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+					if (h && (h != INVALID_HANDLE_VALUE))
+					{
+						PROCESSENTRY32 PI = {sizeof(PI)};
+						if (Process32First(h, &PI))
+						{
+							do {
+								LPCWSTR pszName = PointToName(PI.szExeFile);
+								if (lstrcmpi(pszName, L"devenv.exe") == 0 || lstrcmpi(pszName, L"DWExpress.exe") == 0)
+								{
+									bFound = true;
+									break;
+								}
+							} while (Process32Next(h, &PI));
+						}
+						CloseHandle(h);
+						if (!bFound)
+							iAsked = IDNO; // No VisualStudio, No lags?
+					}
+				}
+
+				if (!iAsked)
+					iAsked = MessageBox(L"Debugger was detected!\nDo you want to disable hooks to avoid lags?", MB_YESNO|MB_ICONEXCLAMATION, gpConEmu->GetDefaultTitle());
+				if (iAsked == IDYES)
+					return false;
+			}
+			else
+			{
+				iAsked = 0;
+			}
+		}
+		#endif
+
+		// Hooks was disabled? Switch "/nokeyhooks" for example
+		if (gpConEmu->DisableKeybHooks)
+			return false;
+	}
 
 	return (m_isKeyboardHooks == 0) || (m_isKeyboardHooks == 1);
 }
