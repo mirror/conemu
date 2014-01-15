@@ -105,7 +105,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define pAboutLicense \
 	L"\x00A9 2006-2008 Zoin (based on console emulator by SEt)\r\n" \
-	CECOPYRIGHTSTRING_W /*\x00A9 2009-2011 ConEmu.Maximus5@gmail.com*/ L"\r\n" \
+	CECOPYRIGHTSTRING_W /*© 2009-2014 ConEmu.Maximus5@gmail.com*/ L"\r\n" \
 	L"\r\n" \
 	L"Permission to use, copy, modify, and distribute this software for any\r\n" \
 	L"purpose with or without fee is hereby granted, provided that the above\r\n" \
@@ -202,6 +202,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"MsgBox(\"<Text>\",\"<Title>\",<ButtonType>)\r\n" \
 	L"  - Show modal GUI MessageBox, returns clicked button name (\"Ok\", \"Cancel\", \"Retry\", etc.),\r\n" \
 	L"     ButtonType (number) is from Windows SDK.\r\n" \
+	L"Palette([<Cmd>[,\"<NewPalette>\"|<NewPaletteIndex>]])\r\n" \
+	L"  - Returns current palette name, change if <Cmd> specified\r\n" \
+	L"     Cmd==0: return palette from ConEmu settings\r\n" \
+	L"     Cmd==1: change palette in ConEmu settings, returns prev palette\r\n" \
+	L"     Cmd==2: return palette from current console\r\n" \
+	L"     Cmd==3: change palette in current console, returns prev palette\r\n" \
+	L"     NewPalette: palette name (string)\r\n" \
+	L"     NewPaletteIndex: 0-based index (number)\r\n" \
 	L"Paste(<Cmd>[,\"<Text>])\r\n" \
 	L"  - When <Text> is omitted - paste from Windows clipboard, otherwise - paste <Text>\r\n" \
 	L"     Cmd==0: paste all lines\r\n" \
