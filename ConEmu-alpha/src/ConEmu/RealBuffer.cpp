@@ -751,11 +751,10 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 		ResetLastMousePos();
 	}
 
-	//}
+	char szInfo[128], szSizeCmd[32];
 
 	if (gpSetCls->isAdvLogging)
 	{
-		char szInfo[128], szSizeCmd[32];
 		switch (anCmdID)
 		{
 		case CECMD_SETSIZESYNC:
@@ -818,6 +817,7 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 					fSuccess = (pOut != NULL);
 				}
 				// Inform user
+				mp_RCon->LogString(L"Maximum real console size was reached, lesser size was applyed");
 				Icon.ShowTrayIcon(L"Maximum real console size was reached\nDecrease font size in the real console properties", tsa_Console_Size);
 			}
 		}
@@ -829,7 +829,7 @@ BOOL CRealBuffer::SetConsoleSizeSrv(USHORT sizeX, USHORT sizeY, USHORT sizeBuffe
 	{
 		if (gpSetCls->isAdvLogging)
 		{
-			char szInfo[128]; DWORD dwErr = GetLastError();
+			DWORD dwErr = GetLastError();
 			_wsprintfA(szInfo, SKIPLEN(countof(szInfo)) "SetConsoleSizeSrv.ExecuteCmd FAILED!!! ErrCode=0x%08X, Bytes read=%i", dwErr, pOut ? pOut->hdr.cbSize : 0);
 			mp_RCon->LogString(szInfo);
 		}
@@ -6251,6 +6251,8 @@ short CRealBuffer::CheckProgressInConsole(const wchar_t* pszCurLine)
 	//"Completed: 25%"
 	//Rar
 	// ...       Vista x86\Vista x86.7z         6%
+	//aria2c
+	//[#1 SIZE:0B/9.1MiB(0%) CN:1 SPD:1.2KiBs ETA:2h1m11s]
 	int nIdx = 0;
 	bool bAllowDot = false;
 	short nProgress = -1;
@@ -6300,6 +6302,14 @@ short CRealBuffer::CheckProgressInConsole(const wchar_t* pszCurLine)
 			if (pszCurLine[nIdx] == L' ') nIdx++;
 
 			bAllowDot = true;
+		}
+		else if (!wcsncmp(pszCurLine, L"[#", 2))
+		{
+			wchar_t p = wcsstr(pszCurLine, L"%) ");
+			while (p > pszCurLine && p[-1] != L'(')
+				p--;
+			if (p > pszCurLine)
+				nIdx = p - pszCurLine;
 		}
 
 		// Известных префиксов не найдено, проверяем, может процент есть в конце строки?
