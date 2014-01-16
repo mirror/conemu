@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -289,12 +289,6 @@ void TabBarClass::Retrieve()
 	//  }
 	//}
 }
-
-//int TabBarClass::GetTabIcon(bool bAdmin)
-//{
-//	int iIconIdx = (bAdmin && gpSet->bAdminShield) ? mn_AdminIcon : -1;
-//	return iIconIdx;
-//}
 
 int TabBarClass::CreateTabIcon(LPCWSTR asIconDescr, bool bAdmin)
 {
@@ -2485,36 +2479,7 @@ int TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 		lstrcpyn(fileName, pTab->Name, countof(fileName));
 		if (gpSet->pszTabSkipWords && *gpSet->pszTabSkipWords)
 		{
-			LPCWSTR pszWord = gpSet->pszTabSkipWords;
-			while (pszWord && *pszWord)
-			{
-				LPCWSTR pszNext = wcschr(pszWord, L'|');
-				if (!pszNext) pszNext = pszWord + _tcslen(pszWord);
-				
-				int nLen = (int)(pszNext - pszWord);
-				if (nLen > 0)
-				{
-					lstrcpyn(dummy, pszWord, min((int)countof(dummy),(nLen+1)));
-					wchar_t* pszFound;
-					while ((pszFound = StrStrI(fileName, dummy)) != NULL)
-					{
-						size_t nLeft = _tcslen(pszFound);
-						if (nLeft <= (size_t)nLen)
-						{
-							*pszFound = 0;
-							break;
-						}
-						else
-						{
-							wmemmove(pszFound, pszFound+(size_t)nLen, nLeft - nLen + 1);
-						}
-					}
-				}
-
-				if (!*pszNext)
-					break;
-				pszWord = pszNext + 1;
-			}
+			StripWords(fileName, gpSet->pszTabSkipWords);
 		}
 		origLength = _tcslen(fileName);
 		//if (origLength>6) {
@@ -2600,6 +2565,7 @@ int TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 	//wcscpy(pTab->Name, fileName);
 	const TCHAR* pszFmt = szFormat;
 	TCHAR* pszDst = pTab->Name;
+	TCHAR* pszStart = pszDst;
 	TCHAR* pszEnd = pTab->Name + countof(pTab->Name) - 1; // в конце еще нужно зарезервировать место для '\0'
 	
 	if (!pszFmt || !*pszFmt)
@@ -2621,6 +2587,7 @@ int TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 	}
 	
 	TCHAR szTmp[64];
+	bool  bAppendAdmin = gpSet->isAdminSuffix() && (pTab->Type & fwt_Elevated);
 	
 	while (*pszFmt && pszDst < pszEnd)
 	{
@@ -2665,6 +2632,10 @@ int TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 						pszText = szTmp;
 					}
 					break;
+				case _T('a'): case _T('A'):
+					pszText = bAppendAdmin ? gpSet->szAdminTitleSuffix : NULL;
+					bAppendAdmin = false;
+					break;
 				case _T('%'):
 					pszText = L"%";
 					break;
@@ -2675,17 +2646,37 @@ int TabBarClass::PrepareTab(ConEmuTab* pTab, CVirtualConsole *apVCon)
 			pszFmt++;
 			if (pszText)
 			{
+				if ((*(pszDst-1) == L' ') && (*pszText == L' '))
+					pszText = SkipNonPrintable(pszText);
 				while (*pszText && pszDst < pszEnd)
 				{
 					*(pszDst++) = *(pszText++);
 				}
 			}
 		}
+		else if ((pszDst > pszStart) && (*(pszDst-1) == L' ') && (*pszFmt == L' '))
+		{
+			pszFmt++; // Avoid adding sequential spaces (e.g. if some macros was empty)
+		}
 		else
 		{
 			*(pszDst++) = *(pszFmt++);
 		}
 	}
+
+	// Fin. Append smth else?
+	if (bAppendAdmin)
+	{
+		LPCTSTR pszText = gpSet->szAdminTitleSuffix;
+		if (pszText)
+		{
+			while (*pszText && pszDst < pszEnd)
+			{
+				*(pszDst++) = *(pszText++);
+			}
+		}
+	}
+
 	*pszDst = 0;
 	
 	MCHKHEAP;
