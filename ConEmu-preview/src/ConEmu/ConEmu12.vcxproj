@@ -274,7 +274,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_C|Win32'">
     <OutDir>C:\ConEmu\</OutDir>
     <IntDir>C:\Temp\CE\$(ProjectName).$(Platform).$(Configuration)\</IntDir>
-    <TargetName>conemu</TargetName>
+    <TargetName>ConEmu</TargetName>
     <TargetExt>.exe</TargetExt>
     <LinkIncremental>true</LinkIncremental>
     <LinkKeyFile />
@@ -891,6 +891,7 @@
   <ItemGroup>
     <ClCompile Include="..\common\CmdLine.cpp" />
     <ClCompile Include="..\common\SetEnvVar.cpp" />
+    <ClCompile Include="AboutDlg.cpp" />
     <ClCompile Include="Attach.cpp" />
     <ClCompile Include="Background.cpp" />
     <ClCompile Include="BaseDragDrops.cpp" />
@@ -958,6 +959,7 @@
     <ClInclude Include="..\common\SetEnvVar.h" />
     <ClInclude Include="..\ConEmuCD\ConsoleHelp.h" />
     <ClInclude Include="About.h" />
+    <ClInclude Include="AboutDlg.h" />
     <ClInclude Include="Attach.h" />
     <ClInclude Include="Background.h" />
     <ClInclude Include="BaseDragDrops.h" />
@@ -1081,6 +1083,8 @@
   <ItemGroup>
     <Image Include="Copy24.bmp" />
     <Image Include="Copy4.bmp" />
+    <Image Include="donate.bmp" />
+    <Image Include="flattr.bmp" />
     <Image Include="Scroll.bmp" />
     <Image Include="Shield16.bmp" />
   </ItemGroup>

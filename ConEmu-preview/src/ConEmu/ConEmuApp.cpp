@@ -1,6 +1,6 @@
-
+п»ї
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -46,8 +46,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../common/MMap.h"
 #include "../common/execute.h"
 //#include "../common/TokenHelper.h"
+#include "AboutDlg.h"
 #include "Options.h"
 #include "ConEmu.h"
+#ifdef _DEBUG
+#include "Macro.h"
+#endif
 #include "Inside.h"
 #include "TaskBar.h"
 #include "DwmHelper.h"
@@ -72,7 +76,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DEBUGSTRTIMER(s) //DEBUGSTR(s)
 #define DEBUGSTRSETHOTKEY(s) DEBUGSTR(s)
 
-WARNING("Заменить все MBoxAssert, _ASSERT, _ASSERTE на WaitForSingleObject(CreateThread(out,Title,dwMsgFlags),INFINITE);");
+WARNING("Р—Р°РјРµРЅРёС‚СЊ РІСЃРµ MBoxAssert, _ASSERT, _ASSERTE РЅР° WaitForSingleObject(CreateThread(out,Title,dwMsgFlags),INFINITE);");
 
 
 #ifdef MSGLOGGER
@@ -91,7 +95,7 @@ BOOL gbMessagingStarted = FALSE;
 //externs
 HINSTANCE g_hInstance=NULL;
 HWND ghWnd=NULL, ghWndWork=NULL, ghWndApp=NULL, ghWndDrag=NULL;
-// Если для ярлыка назначен shortcut - может случиться, что в главное окно он не дойдет
+// Р•СЃР»Рё РґР»СЏ СЏСЂР»С‹РєР° РЅР°Р·РЅР°С‡РµРЅ shortcut - РјРѕР¶РµС‚ СЃР»СѓС‡РёС‚СЊСЃСЏ, С‡С‚Рѕ РІ РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ РѕРЅ РЅРµ РґРѕР№РґРµС‚
 WPARAM gnWndSetHotkey = 0, gnWndSetHotkeyOk = 0;
 #ifdef _DEBUG
 HWND ghConWnd=NULL;
@@ -100,7 +104,7 @@ CConEmuMain *gpConEmu = NULL;
 //CVirtualConsole *pVCon=NULL;
 Settings  *gpSet = NULL;
 CSettings *gpSetCls = NULL;
-//TCHAR temp[MAX_PATH]; -- низзя, очень велик шанс нарваться при многопоточности
+//TCHAR temp[MAX_PATH]; -- РЅРёР·Р·СЏ, РѕС‡РµРЅСЊ РІРµР»РёРє С€Р°РЅСЃ РЅР°СЂРІР°С‚СЊСЃСЏ РїСЂРё РјРЅРѕРіРѕРїРѕС‚РѕС‡РЅРѕСЃС‚Рё
 HICON hClassIcon = NULL, hClassIconSm = NULL;
 BOOL gbDebugLogStarted = FALSE;
 BOOL gbDebugShowRects = FALSE;
@@ -132,10 +136,10 @@ BOOL DontEnable::isDontEnable()
 };
 
 
-const TCHAR *const gsClassName = VirtualConsoleClass; // окна отрисовки
-const TCHAR *const gsClassNameParent = VirtualConsoleClassMain; // главное окно
-const TCHAR *const gsClassNameWork = VirtualConsoleClassWork; // Holder для всех VCon
-const TCHAR *const gsClassNameBack = VirtualConsoleClassBack; // Подложка (со скроллерами) для каждого VCon
+const TCHAR *const gsClassName = VirtualConsoleClass; // РѕРєРЅР° РѕС‚СЂРёСЃРѕРІРєРё
+const TCHAR *const gsClassNameParent = VirtualConsoleClassMain; // РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ
+const TCHAR *const gsClassNameWork = VirtualConsoleClassWork; // Holder РґР»СЏ РІСЃРµС… VCon
+const TCHAR *const gsClassNameBack = VirtualConsoleClassBack; // РџРѕРґР»РѕР¶РєР° (СЃРѕ СЃРєСЂРѕР»Р»РµСЂР°РјРё) РґР»СЏ РєР°Р¶РґРѕРіРѕ VCon
 const TCHAR *const gsClassNameApp = VirtualConsoleClassApp;
 
 
@@ -149,8 +153,10 @@ bool gbIsWine = false;
 bool gbIsDBCS = false;
 // Drawing console font face name (default)
 wchar_t gsDefGuiFont[32] = L"Lucida Console"; // gbIsWine ? L"Liberation Mono" : L"Lucida Console"
+wchar_t gsAltGuiFont[32] = L"Courier New"; // "Lucida Console" is not installed?
 // Set this font (default) in real console window to enable unicode support
 wchar_t gsDefConFont[32] = L"Lucida Console"; // DBCS ? L"Liberation Mono" : L"Lucida Console"
+wchar_t gsAltConFont[32] = L"Courier New"; // "Lucida Console" is not installed?
 // Use this (default) in ConEmu interface, where allowed (tabs, status, panel views, ...)
 wchar_t gsDefMUIFont[32] = L"Tahoma";         // WindowsVista ? L"Segoe UI" : L"Tahoma"
 
@@ -438,6 +444,29 @@ void LogString(LPCWSTR asInfo, bool abWriteTime /*= true*/, bool abWriteLine /*=
 	gpConEmu->LogString(asInfo, abWriteTime, abWriteLine);
 }
 
+LPCWSTR GetWindowModeName(ConEmuWindowMode wm)
+{
+	static wchar_t swmCurrent[] = L"wmCurrent";
+	static wchar_t swmNotChanging[] = L"wmNotChanging";
+	static wchar_t swmNormal[] = L"wmNormal";
+	static wchar_t swmMaximized[] = L"wmMaximized";
+	static wchar_t swmFullScreen[] = L"wmFullScreen";
+	switch (wm)
+	{
+	case wmCurrent:
+		return swmCurrent;
+	case wmNotChanging:
+		return swmNotChanging;
+	case wmNormal:
+		return swmNormal;
+	case wmMaximized:
+		return swmMaximized;
+	case wmFullScreen:
+		return swmFullScreen;
+	}
+	return L"INVALID";
+}
+
 void ShutdownGuiStep(LPCWSTR asInfo, int nParm1 /*= 0*/, int nParm2 /*= 0*/, int nParm3 /*= 0*/, int nParm4 /*= 0*/)
 {
 #ifdef _DEBUG
@@ -459,7 +488,7 @@ void ShutdownGuiStep(LPCWSTR asInfo, int nParm1 /*= 0*/, int nParm2 /*= 0*/, int
 #endif
 }
 
-/* Используются как extern в ConEmuCheck.cpp */
+/* РСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РєР°Рє extern РІ ConEmuCheck.cpp */
 /*
 LPVOID _calloc(size_t nCount,size_t nSize) {
 	return calloc(nCount,nSize);
@@ -542,7 +571,7 @@ size_t MyGetDlgItemText(HWND hDlg, WORD nID, size_t& cchMax, wchar_t*& pszText/*
 			pszText = (wchar_t*)calloc(cchMax,sizeof(*pszText));
 			_ASSERTE(pszText);
 		}
-		
+
 
 		if (pszText)
 		{
@@ -699,7 +728,7 @@ wchar_t* EscapeString(bool bSet, LPCWSTR pszSrc)
 		// This func is used mostly for print("...") GuiMacro, So, we don't need to set escapes on quotas
 
 		wchar_t* pszDst = pszBuf;
-		
+
 		LPCWSTR  pszCtrl = L"rntae\\\"";
 
 		while (*pszSrc)
@@ -744,7 +773,7 @@ BOOL MySetDlgItemText(HWND hDlg, int nIDDlgItem, LPCTSTR lpString/*, bool bEscap
 	//{
 	//	pszBuf = EscapeString(true, lpString);
 	//	if (!pszBuf)
-	//		return FALSE; // Уже ругнулись
+	//		return FALSE; // РЈР¶Рµ СЂСѓРіРЅСѓР»РёСЃСЊ
 	//	lpString = pszBuf;
 	//}
 
@@ -767,12 +796,12 @@ bool GetColorRef(LPCWSTR pszText, COLORREF* pCR)
 	if ((pszText[0] == L'#') || (pszText[0] == L'x' || pszText[0] == L'X') || (pszText[0] == L'0' && (pszText[1] == L'x' || pszText[1] == L'X')))
 	{
 		pch = (pszText[0] == L'0') ? (pszText+2) : (pszText+1);
-		// Считаем значение 16-ричным rgb кодом
+		// РЎС‡РёС‚Р°РµРј Р·РЅР°С‡РµРЅРёРµ 16-СЂРёС‡РЅС‹Рј rgb РєРѕРґРѕРј
 		pchEnd = NULL;
 		COLORREF clr = wcstoul(pch, &pchEnd, 16);
 		if (clr && (pszText[0] == L'#'))
 		{
-			// "#rrggbb", обменять местами rr и gg, нам нужен COLORREF (bbggrr)
+			// "#rrggbb", РѕР±РјРµРЅСЏС‚СЊ РјРµСЃС‚Р°РјРё rr Рё gg, РЅР°Рј РЅСѓР¶РµРЅ COLORREF (bbggrr)
 			clr = ((clr & 0xFF)<<16) | ((clr & 0xFF00)) | ((clr & 0xFF0000)>>16);
 		}
 		// Done
@@ -808,7 +837,7 @@ bool GetColorRef(LPCWSTR pszText, COLORREF* pCR)
 				r &= 0xFF;
 			}
 
-			// Достаточно ввода одной компоненты
+			// Р”РѕСЃС‚Р°С‚РѕС‡РЅРѕ РІРІРѕРґР° РѕРґРЅРѕР№ РєРѕРјРїРѕРЅРµРЅС‚С‹
 			if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255 && *pCR != RGB(r, g, b))
 			{
 				*pCR = RGB(r, g, b);
@@ -859,7 +888,7 @@ wchar_t* DupCygwinPath(LPCWSTR asWinPath, bool bAutoQuote)
 	}
 	else
 	{
-		// А bash понимает сетевые пути?
+		// Рђ bash РїРѕРЅРёРјР°РµС‚ СЃРµС‚РµРІС‹Рµ РїСѓС‚Рё?
 		_ASSERTE((psz[0] == L'\\' && psz[1] == L'\\') || (wcschr(psz, L'\\')==NULL));
 	}
 
@@ -875,7 +904,7 @@ wchar_t* DupCygwinPath(LPCWSTR asWinPath, bool bAutoQuote)
 			*(psz++) = *(asWinPath++);
 		}
 	}
-	
+
 	if (bAutoQuote)
 		*(psz++) = L'"';
 	*psz = 0;
@@ -1013,6 +1042,46 @@ bool NextLine(const wchar_t*& pszFrom, wchar_t** pszLine)
 	return bFound;
 }
 
+// pszWords - '|'separated
+void StripWords(wchar_t* pszText, const wchar_t* pszWords)
+{
+	wchar_t dummy[MAX_PATH];
+	LPCWSTR pszWord = pszWords;
+	while (pszWord && *pszWord)
+	{
+		LPCWSTR pszNext = wcschr(pszWord, L'|');
+		if (!pszNext) pszNext = pszWord + _tcslen(pszWord);
+
+		int nLen = (int)(pszNext - pszWord);
+		if (nLen > 0)
+		{
+			lstrcpyn(dummy, pszWord, min((int)countof(dummy),(nLen+1)));
+			wchar_t* pszFound;
+			while ((pszFound = StrStrI(pszText, dummy)) != NULL)
+			{
+				size_t nLeft = _tcslen(pszFound);
+				size_t nCurLen = nLen;
+				// Strip spaces after replaced token
+				while (pszFound[nCurLen] == L' ')
+					nCurLen++;
+				if (nLeft <= nCurLen)
+				{
+					*pszFound = 0;
+					break;
+				}
+				else
+				{
+					wmemmove(pszFound, pszFound+nCurLen, nLeft - nCurLen + 1);
+				}
+			}
+		}
+
+		if (!*pszNext)
+			break;
+		pszWord = pszNext + 1;
+	}
+}
+
 BOOL CreateProcessRestricted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 							 LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes,
 							 BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment,
@@ -1041,7 +1110,7 @@ BOOL CreateProcessRestricted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 		{
 			{pAdmSid}
 		};
-		
+
 		#ifdef __GNUC__
 		HMODULE hAdvApi = GetModuleHandle(L"AdvApi32.dll");
 		CreateRestrictedToken_t CreateRestrictedToken = (CreateRestrictedToken_t)GetProcAddress(hAdvApi, "CreateRestrictedToken");
@@ -1101,13 +1170,14 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 		return 100;
 	}
 
-	// Task не выносит окна созданных задач "наверх"
-	HWND hPrevEmu = FindWindowEx(NULL, NULL, VirtualConsoleClassMain, NULL);
-	HWND hCreated = NULL;
-	
-
 
 #if !defined(__GNUC__)
+
+	// Task РЅРµ РІС‹РЅРѕСЃРёС‚ РѕРєРЅР° СЃРѕР·РґР°РЅРЅС‹С… Р·Р°РґР°С‡ "РЅР°РІРµСЂС…"
+	HWND hPrevEmu = FindWindowEx(NULL, NULL, VirtualConsoleClassMain, NULL);
+	HWND hCreated = NULL;
+
+
 	// Really working method: Run cmd-line via task sheduler
 	// But there is one caveat: Task sheduler may be disable on PC!
 
@@ -1285,7 +1355,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 		DisplayLastError(L"Error saving the Task : 0x%08X", hr);
 		goto wrap;
 	}
-	
+
 	// Success! Task successfully registered.
 	// Give 20 seconds for the task to start
 	nTickStart = GetTickCount();
@@ -1302,7 +1372,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 		Sleep(100);
 		nDuration = (GetTickCount() - nTickStart);
 	}
-	
+
 	if (taskState != TASK_STATE_RUNNING)
 	{
 		wchar_t* pszErr = lstrmerge(L"Failed to start task in user mode, timeout!\n", lpCommandLine);
@@ -1311,7 +1381,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 	}
 	else
 	{	
-		// OK, считаем что успешно запустились
+		// OK, СЃС‡РёС‚Р°РµРј С‡С‚Рѕ СѓСЃРїРµС€РЅРѕ Р·Р°РїСѓСЃС‚РёР»РёСЃСЊ
 		lbRc = TRUE;
 
 		// Success! Program was started.
@@ -1323,7 +1393,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 			nDuration = 0;
 			_ASSERTE(hCreated==NULL);
 			hCreated = NULL;
-			
+
 			while (nDuration <= nMaxWindowWait/*20000*/)
 			{
 				HWND hTop = NULL;
@@ -1331,7 +1401,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 				{
 					if (!IsWindowVisible(hTop) || (hTop == hPrevEmu))
 						continue;
-					
+
 					hCreated = hTop;
 					SetForegroundWindow(hCreated);
 					break;
@@ -1358,7 +1428,7 @@ BOOL CreateProcessDemoted(LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
 		goto wrap;
 	}
 	// Task successfully deleted
-	
+
 wrap:
 	// Clean up
 	SysFreeString(bsTaskName);
@@ -1391,7 +1461,6 @@ wrap:
 	}
 	#endif
 
-
 #if 0
 	// There is IShellDispatch2::ShellExecute but explorer does not create/connect OutProcess servers...
 
@@ -1416,7 +1485,7 @@ wrap:
     	VARIANT vtDir; vtDir.vt = VT_BSTR; vtDir.bstrVal = SysAllocString(gpConEmu->ms_ConEmuExeDir);
     	VARIANT vtOper; vtOper.vt = VT_BSTR; vtOper.bstrVal = SysAllocString(L"open");
     	VARIANT vtShow; vtShow.vt = VT_I4; vtShow.lVal = SW_SHOWNORMAL;
-		
+
 		hr = pshl->ShellExecute(bsFile, vtArgs, vtDir, vtOper, vtShow);
 		b = SUCCEEDED(hr);
 
@@ -1456,7 +1525,7 @@ wrap:
 		{
 			{pAdmSid, SE_GROUP_USE_FOR_DENY_ONLY}
 		};
-		
+
 		#ifdef __GNUC__
 		//HMODULE hAdvApi = GetModuleHandle(L"AdvApi32.dll");
 		//CreateRestrictedToken_t CreateRestrictedToken = (CreateRestrictedToken_t)GetProcAddress(hAdvApi, "CreateRestrictedToken");
@@ -1511,7 +1580,7 @@ wrap:
 	// Trying to use Token from Shell (explorer/desktop)
 	// Fails. Create process returns error.
 
-	// GetDesktopWindow() - это не то, оно к CSRSS принадлежит (Win8 по крайней мере)
+	// GetDesktopWindow() - СЌС‚Рѕ РЅРµ С‚Рѕ, РѕРЅРѕ Рє CSRSS РїСЂРёРЅР°РґР»РµР¶РёС‚ (Win8 РїРѕ РєСЂР°Р№РЅРµР№ РјРµСЂРµ)
 	HWND hDesktop = GetShellWindow();
 	if (!hDesktop)
 	{
@@ -1586,7 +1655,7 @@ wrap:
 				if (pdwLastError) *pdwLastError = 0;
 			}
 
-			
+
 		}
 
 		CloseHandle(hTokenDesktop);
@@ -1702,9 +1771,9 @@ LRESULT CALLBACK AppWndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam)
 	return result;
 }
 
-// z120713 - В потоке CRealConsole::MonitorThread возвращаются 
-// отличные от основного потока HWND. В результате, а также из-за
-// отложенного выполнения, UpdateServerActive передавал Thaw==FALSE
+// z120713 - Р’ РїРѕС‚РѕРєРµ CRealConsole::MonitorThread РІРѕР·РІСЂР°С‰Р°СЋС‚СЃСЏ 
+// РѕС‚Р»РёС‡РЅС‹Рµ РѕС‚ РѕСЃРЅРѕРІРЅРѕРіРѕ РїРѕС‚РѕРєР° HWND. Р’ СЂРµР·СѓР»СЊС‚Р°С‚Рµ, Р° С‚Р°РєР¶Рµ РёР·-Р·Р°
+// РѕС‚Р»РѕР¶РµРЅРЅРѕРіРѕ РІС‹РїРѕР»РЅРµРЅРёСЏ, UpdateServerActive РїРµСЂРµРґР°РІР°Р» Thaw==FALSE
 HWND ghLastForegroundWindow = NULL;
 HWND getForegroundWindow()
 {
@@ -1726,10 +1795,10 @@ BOOL CheckCreateAppWindow()
 {
 	if (!gpSet->NeedCreateAppWindow())
 	{
-		// Если окно не требуется
+		// Р•СЃР»Рё РѕРєРЅРѕ РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ
 		if (ghWndApp)
 		{
-			// Вызов DestroyWindow(ghWndApp); закроет и "дочернее" ghWnd
+			// Р’С‹Р·РѕРІ DestroyWindow(ghWndApp); Р·Р°РєСЂРѕРµС‚ Рё "РґРѕС‡РµСЂРЅРµРµ" ghWnd
 			_ASSERTE(ghWnd==NULL);
 			if (ghWnd)
 				gpConEmu->SetParent(NULL);
@@ -1756,7 +1825,7 @@ BOOL CheckCreateAppWindow()
 	DWORD style = WS_OVERLAPPEDWINDOW | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE;
 	int nWidth=100, nHeight=100, nX = -32000, nY = -32000;
 	DWORD exStyle = WS_EX_TOOLWINDOW|WS_EX_ACCEPTFILES;
-	// cRect.right - cRect.left - 4, cRect.bottom - cRect.top - 4; -- все равно это было не правильно
+	// cRect.right - cRect.left - 4, cRect.bottom - cRect.top - 4; -- РІСЃРµ СЂР°РІРЅРѕ СЌС‚Рѕ Р±С‹Р»Рѕ РЅРµ РїСЂР°РІРёР»СЊРЅРѕ
 	ghWndApp = CreateWindowEx(exStyle, gsClassNameApp, gpConEmu->GetDefaultTitle(), style, nX, nY, nWidth, nHeight, NULL, NULL, (HINSTANCE)g_hInstance, NULL);
 
 	if (!ghWndApp)
@@ -1820,13 +1889,13 @@ void SkipOneShowWindow()
 {
 	static bool bProcessed = false;
 	if (bProcessed)
-		return; // уже
+		return; // СѓР¶Рµ
 	bProcessed = true;
 
 	STARTUPINFO si = {sizeof(si)};
 	GetStartupInfo(&si);
 	if (si.wShowWindow == SW_SHOWNORMAL)
-		return; // финты не требуются
+		return; // С„РёРЅС‚С‹ РЅРµ С‚СЂРµР±СѓСЋС‚СЃСЏ
 
 	const wchar_t szSkipClass[] = L"ConEmuSkipShowWindow";
 	WNDCLASSEX wc = {sizeof(WNDCLASSEX), 0, SkipShowWindowProc, 0, 0,
@@ -1867,7 +1936,7 @@ void SkipOneShowWindow()
 		}
 	}
 
-	// Класс более не нужен
+	// РљР»Р°СЃСЃ Р±РѕР»РµРµ РЅРµ РЅСѓР¶РµРЅ
 	UnregisterClass(szSkipClass, g_hInstance);
 
 	return;
@@ -1884,7 +1953,7 @@ int MessageBox(LPCTSTR lpText, UINT uType, LPCTSTR lpCaption /*= NULL*/, HWND hP
 }
 
 
-// Возвращает текст с информацией о пути к сохраненному дампу
+// Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РµРєСЃС‚ СЃ РёРЅС„РѕСЂРјР°С†РёРµР№ Рѕ РїСѓС‚Рё Рє СЃРѕС…СЂР°РЅРµРЅРЅРѕРјСѓ РґР°РјРїСѓ
 // DWORD CreateDumpForReport(LPEXCEPTION_POINTERS ExceptionInfo, wchar_t (&szFullInfo)[1024], LPCWSTR pszComment = NULL);
 #include "../common/Dump.h"
 
@@ -1930,7 +1999,7 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 			bInAssert = false;
 			nPostCode = GetLastError();
 		}
-		
+
 		_wsprintf(szCodes, SKIPLEN(countof(szCodes)) L"\r\nPreError=%i, PostError=%i, Result=%i", nPreCode, nPostCode, nRet);
 		_wcscat_c(pszFull, cchMax, szCodes);
 	}
@@ -1947,7 +2016,7 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 
 		if (!bProcessed)
 		{
-			//-- Не нужно, да и дамп некорректно формируется, если "руками" ex формировать.
+			//-- РќРµ РЅСѓР¶РЅРѕ, РґР° Рё РґР°РјРї РЅРµРєРѕСЂСЂРµРєС‚РЅРѕ С„РѕСЂРјРёСЂСѓРµС‚СЃСЏ, РµСЃР»Рё "СЂСѓРєР°РјРё" ex С„РѕСЂРјРёСЂРѕРІР°С‚СЊ.
 			//EXCEPTION_RECORD er0 = {0xC0000005}; er0.ExceptionAddress = AssertBox;
 			//EXCEPTION_POINTERS ex0 = {&er0};
 			//if (!ExceptionInfo) ExceptionInfo = &ex0;
@@ -1966,7 +2035,7 @@ void AssertBox(LPCTSTR szText, LPCTSTR szFile, UINT nLine, LPEXCEPTION_POINTERS 
 			CopyToClipboard(pszFull);
 		}
 
-		gpConEmu->OnInfo_ReportCrash(szFullInfo[0] ? szFullInfo : NULL);
+		ConEmuAbout::OnInfo_ReportCrash(szFullInfo[0] ? szFullInfo : NULL);
 	}
 
 	if (pszFull && pszFull != szAssertInfo)
@@ -1997,7 +2066,7 @@ int DisplayLastError(LPCTSTR asLabel, DWORD dwError /* =0 */, DWORD dwMsgFlags /
 
 	if (!dwMsgFlags) dwMsgFlags = MB_SYSTEMMODAL | MB_ICONERROR;
 
-	WARNING("!!! Заменить MessageBox на WaitForSingleObject(CreateThread(out,Title,dwMsgFlags),INFINITE);");
+	WARNING("!!! Р—Р°РјРµРЅРёС‚СЊ MessageBox РЅР° WaitForSingleObject(CreateThread(out,Title,dwMsgFlags),INFINITE);");
 
 	BOOL lb = gbInDisplayLastError; gbInDisplayLastError = TRUE;
 	nBtn = MessageBox(out ? out : asLabel, dwMsgFlags, asTitle, hParent);
@@ -2057,7 +2126,7 @@ void MessageLoop()
 
 	while (GetMessage(&Msg, NULL, 0, 0))
 	{
-		// Может быть некоторые дублирование с логированием в самих функциях
+		// РњРѕР¶РµС‚ Р±С‹С‚СЊ РЅРµРєРѕС‚РѕСЂС‹Рµ РґСѓР±Р»РёСЂРѕРІР°РЅРёРµ СЃ Р»РѕРіРёСЂРѕРІР°РЅРёРµРј РІ СЃР°РјРёС… С„СѓРЅРєС†РёСЏС…
 		ConEmuMsgLogger::Log(Msg, ConEmuMsgLogger::msgCommon);
 
 		#ifdef _DEBUG
@@ -2089,7 +2158,7 @@ void MessageLoop()
 	gbMessagingStarted = FALSE;
 }
 
-/* С командной строкой (GetCommandLineW) у нас засада */
+/* РЎ РєРѕРјР°РЅРґРЅРѕР№ СЃС‚СЂРѕРєРѕР№ (GetCommandLineW) Сѓ РЅР°СЃ Р·Р°СЃР°РґР° */
 /*
 
 ShellExecute("open", "ShowArg.exe", "\"test1\" test2");
@@ -2138,11 +2207,11 @@ void SplitCommandLine(wchar_t *str, uint *n)
 }
 
 //Result:
-//  cmdLine - указатель на буфер с аргументами (!) он будет освобожден через free(cmdLine)
-//  cmdNew  - то что запускается (после аргумента /cmd)
-//  params  - количество аргументов
-//            0 - ком.строка пустая
-//            ((uint)-1) - весь cmdNew должен быть ПРИКЛЕЕН к строке запуска по умолчанию
+//  cmdLine - СѓРєР°Р·Р°С‚РµР»СЊ РЅР° Р±СѓС„РµСЂ СЃ Р°СЂРіСѓРјРµРЅС‚Р°РјРё (!) РѕРЅ Р±СѓРґРµС‚ РѕСЃРІРѕР±РѕР¶РґРµРЅ С‡РµСЂРµР· free(cmdLine)
+//  cmdNew  - С‚Рѕ С‡С‚Рѕ Р·Р°РїСѓСЃРєР°РµС‚СЃСЏ (РїРѕСЃР»Рµ Р°СЂРіСѓРјРµРЅС‚Р° /cmd)
+//  params  - РєРѕР»РёС‡РµСЃС‚РІРѕ Р°СЂРіСѓРјРµРЅС‚РѕРІ
+//            0 - РєРѕРј.СЃС‚СЂРѕРєР° РїСѓСЃС‚Р°СЏ
+//            ((uint)-1) - РІРµСЃСЊ cmdNew РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РџР РРљР›Р•Р•Рќ Рє СЃС‚СЂРѕРєРµ Р·Р°РїСѓСЃРєР° РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& params)
 {
 	params = 0;
@@ -2152,7 +2221,7 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 	LPCWSTR pszCmdLine = GetCommandLine();
 	int nInitLen = _tcslen(pszCmdLine);
 	cmdLine = lstrdup(pszCmdLine);
-	// Имя исполняемого файла (conemu.exe)
+	// РРјСЏ РёСЃРїРѕР»РЅСЏРµРјРѕРіРѕ С„Р°Р№Р»Р° (conemu.exe)
 	const wchar_t* pszExeName = PointToName(gpConEmu->ms_ConEmuExe);
 	wchar_t* pszExeNameOnly = lstrdup(pszExeName);
 	wchar_t* pszDot = (wchar_t*)PointToExt(pszExeNameOnly);
@@ -2163,12 +2232,12 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 
 	if (*cmdLine == L' ')
 	{
-		// Исполняемого файла нет - сразу начинаются аргументы
+		// РСЃРїРѕР»РЅСЏРµРјРѕРіРѕ С„Р°Р№Р»Р° РЅРµС‚ - СЃСЂР°Р·Сѓ РЅР°С‡РёРЅР°СЋС‚СЃСЏ Р°СЂРіСѓРјРµРЅС‚С‹
 		pszNext = NULL;
 	}
 	else if (*cmdLine == L'"')
 	{
-		// Имя между кавычками
+		// РРјСЏ РјРµР¶РґСѓ РєР°РІС‹С‡РєР°РјРё
 		pszStart = cmdLine+1;
 		pszNext = wcschr(pszStart, L'"');
 
@@ -2197,12 +2266,12 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 		wchar_t* pszFN = wcsrchr(pszStart, L'\\');
 		if (pszFN) pszFN++; else pszFN = pszStart;
 
-		// Если первый параметр - наш conemu.exe или его путь - нужно его выбросить
+		// Р•СЃР»Рё РїРµСЂРІС‹Р№ РїР°СЂР°РјРµС‚СЂ - РЅР°С€ conemu.exe РёР»Рё РµРіРѕ РїСѓС‚СЊ - РЅСѓР¶РЅРѕ РµРіРѕ РІС‹Р±СЂРѕСЃРёС‚СЊ
 		if (!lstrcmpi(pszFN, pszExeName) || !lstrcmpi(pszFN, pszExeNameOnly))
 		{
-			// Нужно отрезать
+			// РќСѓР¶РЅРѕ РѕС‚СЂРµР·Р°С‚СЊ
 			INT_PTR nCopy = (nInitLen - (pszNext - cmdLine)) * sizeof(wchar_t);
-			TODO("Проверить, чтобы длину корректно посчитать");
+			TODO("РџСЂРѕРІРµСЂРёС‚СЊ, С‡С‚РѕР±С‹ РґР»РёРЅСѓ РєРѕСЂСЂРµРєС‚РЅРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ");
 
 			if (nCopy > 0)
 				memmove(cmdLine, pszNext+1, nCopy);
@@ -2215,29 +2284,29 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 		}
 	}
 
-	// AI. Если первый аргумент начинается НЕ с '/' - считаем что эта строка должна полностью передаваться в
-	// запускаемую программу (прилепляться к концу ком.строки по умолчанию)
+	// AI. Р•СЃР»Рё РїРµСЂРІС‹Р№ Р°СЂРіСѓРјРµРЅС‚ РЅР°С‡РёРЅР°РµС‚СЃСЏ РќР• СЃ '/' - СЃС‡РёС‚Р°РµРј С‡С‚Рѕ СЌС‚Р° СЃС‚СЂРѕРєР° РґРѕР»Р¶РЅР° РїРѕР»РЅРѕСЃС‚СЊСЋ РїРµСЂРµРґР°РІР°С‚СЊСЃСЏ РІ
+	// Р·Р°РїСѓСЃРєР°РµРјСѓСЋ РїСЂРѕРіСЂР°РјРјСѓ (РїСЂРёР»РµРїР»СЏС‚СЊСЃСЏ Рє РєРѕРЅС†Сѓ РєРѕРј.СЃС‚СЂРѕРєРё РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ)
 	pszStart = cmdLine;
 
-	while(*pszStart == L' ' || *pszStart == L'"') pszStart++;  // пропустить пробелы и кавычки
+	while(*pszStart == L' ' || *pszStart == L'"') pszStart++;  // РїСЂРѕРїСѓСЃС‚РёС‚СЊ РїСЂРѕР±РµР»С‹ Рё РєР°РІС‹С‡РєРё
 
 	if (*pszStart == 0)
 	{
 		params = 0;
 		*cmdLine = 0;
 		cmdNew = NULL;
-		// Эта переменная нужна для того, чтобы conemu можно было перезапустить
-		// из cmd файла с теми же аргументами (selfupdate)
+		// Р­С‚Р° РїРµСЂРµРјРµРЅРЅР°СЏ РЅСѓР¶РЅР° РґР»СЏ С‚РѕРіРѕ, С‡С‚РѕР±С‹ conemu РјРѕР¶РЅРѕ Р±С‹Р»Рѕ РїРµСЂРµР·Р°РїСѓСЃС‚РёС‚СЊ
+		// РёР· cmd С„Р°Р№Р»Р° СЃ С‚РµРјРё Р¶Рµ Р°СЂРіСѓРјРµРЅС‚Р°РјРё (selfupdate)
 		SetEnvironmentVariableW(L"ConEmuArgs", L"");
 	}
 	else
 	{
-		// Эта переменная нужна для того, чтобы conemu можно было перезапустить
-		// из cmd файла с теми же аргументами (selfupdate)
+		// Р­С‚Р° РїРµСЂРµРјРµРЅРЅР°СЏ РЅСѓР¶РЅР° РґР»СЏ С‚РѕРіРѕ, С‡С‚РѕР±С‹ conemu РјРѕР¶РЅРѕ Р±С‹Р»Рѕ РїРµСЂРµР·Р°РїСѓСЃС‚РёС‚СЊ
+		// РёР· cmd С„Р°Р№Р»Р° СЃ С‚РµРјРё Р¶Рµ Р°СЂРіСѓРјРµРЅС‚Р°РјРё (selfupdate)
 		gpConEmu->mpsz_ConEmuArgs = lstrdup(SkipNonPrintable(cmdLine));
 		SetEnvironmentVariableW(L"ConEmuArgs", gpConEmu->mpsz_ConEmuArgs);
 
-		// Теперь проверяем наличие слеша
+		// РўРµРїРµСЂСЊ РїСЂРѕРІРµСЂСЏРµРј РЅР°Р»РёС‡РёРµ СЃР»РµС€Р°
 		if (*pszStart != L'/' && *pszStart != L'-' && !wcschr(pszStart, L'/'))
 		{
 			params = (uint)-1;
@@ -2245,9 +2314,10 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 		}
 		else
 		{
-			// Если ком.строка содержит "/cmd" - все что после него используется для создания нового процесса
-			// или "/cmdlist cmd1 | cmd2 | ..."
+			// Р•СЃР»Рё РєРѕРј.СЃС‚СЂРѕРєР° СЃРѕРґРµСЂР¶РёС‚ "/cmd" - РІСЃРµ С‡С‚Рѕ РїРѕСЃР»Рµ РЅРµРіРѕ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РЅРѕРІРѕРіРѕ РїСЂРѕС†РµСЃСЃР°
+			// РёР»Рё "/cmdlist cmd1 | cmd2 | ..."
 			cmdNew = wcsstr(cmdLine, L"/cmd");
+			if (!cmdNew) cmdNew = wcsstr(cmdLine, L"-cmd");
 
 			if (cmdNew)
 			{
@@ -2264,11 +2334,11 @@ BOOL PrepareCommandLine(TCHAR*& cmdLine, TCHAR*& cmdNew, bool& isScript, uint& p
 					cmdNew += 3;
 				}
 
-				// Пропустить пробелы
+				// РџСЂРѕРїСѓСЃС‚РёС‚СЊ РїСЂРѕР±РµР»С‹
 				cmdNew = (wchar_t*)SkipNonPrintable(cmdNew);
 			}
 
-			// cmdLine готов к разбору
+			// cmdLine РіРѕС‚РѕРІ Рє СЂР°Р·Р±РѕСЂСѓ
 			SplitCommandLine(cmdLine, &params);
 		}
 	}
@@ -2281,8 +2351,8 @@ void ResetConman()
 	HKEY hk = 0;
 	DWORD dw = 0;
 
-	// 24.09.2010 Maks - Только если ключ конмана уже создан!
-	// сбрость CreateInNewEnvironment для ConMan
+	// 24.09.2010 Maks - РўРѕР»СЊРєРѕ РµСЃР»Рё РєР»СЋС‡ РєРѕРЅРјР°РЅР° СѓР¶Рµ СЃРѕР·РґР°РЅ!
+	// СЃР±СЂРѕСЃС‚СЊ CreateInNewEnvironment РґР»СЏ ConMan
 	//if (0 == RegCreateKeyEx(HKEY_CURRENT_USER, _T("Software\\HoopoePG_2x"),
 	//        NULL, NULL, NULL, KEY_ALL_ACCESS, NULL, &hk, &dw))
 	if (0 == RegOpenKeyEx(HKEY_CURRENT_USER, _T("Software\\HoopoePG_2x"), 0, KEY_ALL_ACCESS, &hk))
@@ -2369,7 +2439,7 @@ HRESULT _CreateShellLink(PCWSTR pszArguments, PCWSTR pszPrefix, PCWSTR pszTitle,
         {
             hr = psl->SetPath(szAppPath);
 
-			// Иконка
+			// РРєРѕРЅРєР°
 			CmdArg szTmp;
 			wchar_t szIcon[MAX_PATH+1] = L"";
 			LPCWSTR pszTemp = pszArguments, pszIcon = NULL;
@@ -2496,14 +2566,14 @@ HRESULT _CreateSeparatorLink(IShellLink **ppsl)
 
 bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 {
-	// Добаляем Tasks, они есть только в Win7+
+	// Р”РѕР±Р°Р»СЏРµРј Tasks, РѕРЅРё РµСЃС‚СЊ С‚РѕР»СЊРєРѕ РІ Win7+
 	if (gnOsVer < 0x601)
 		return false;
 
-	// -- т.к. работа с TaskList занимает некоторое время - обновление будет делать только по запросу
+	// -- С‚.Рє. СЂР°Р±РѕС‚Р° СЃ TaskList Р·Р°РЅРёРјР°РµС‚ РЅРµРєРѕС‚РѕСЂРѕРµ РІСЂРµРјСЏ - РѕР±РЅРѕРІР»РµРЅРёРµ Р±СѓРґРµС‚ РґРµР»Р°С‚СЊ С‚РѕР»СЊРєРѕ РїРѕ Р·Р°РїСЂРѕСЃСѓ
 	//if (!bForce && !gpSet->isStoreTaskbarkTasks && !gpSet->isStoreTaskbarCommands)
 	if (!bForce)
-		return false; // сохранять не просили
+		return false; // СЃРѕС…СЂР°РЅСЏС‚СЊ РЅРµ РїСЂРѕСЃРёР»Рё
 
 	bool bSucceeded = false;
 
@@ -2520,7 +2590,7 @@ bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 
 	if (gpSet->isStoreTaskbarCommands)
 	{
-		// gpConEmu->mpsz_ConEmuArgs хранит аргументы с "/cmd"
+		// gpConEmu->mpsz_ConEmuArgs С…СЂР°РЅРёС‚ Р°СЂРіСѓРјРµРЅС‚С‹ СЃ "/cmd"
 		pszCurCmd = SkipNonPrintable(gpConEmu->mpsz_ConEmuArgs);
 		pszCurCmdTitle = pszCurCmd;
 		if (pszCurCmdTitle && (*pszCurCmdTitle == L'/'))
@@ -2535,13 +2605,13 @@ bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 			pszCurCmd = pszCurCmdTitle = NULL;
 		}
 
-		// Теперь команды из истории
+		// РўРµРїРµСЂСЊ РєРѕРјР°РЅРґС‹ РёР· РёСЃС‚РѕСЂРёРё
 		LPCWSTR pszCommand = gpSet->HistoryGet();
 		if (pszCommand)
 		{
 			while (*pszCommand && (nHistoryCount < countof(pszHistory)))
 			{
-				// Текущую - к pszCommand не добавляем. Ее в конец
+				// РўРµРєСѓС‰СѓСЋ - Рє pszCommand РЅРµ РґРѕР±Р°РІР»СЏРµРј. Р•Рµ РІ РєРѕРЅРµС†
 				if (!pszCurCmdTitle || (lstrcmpi(pszCurCmdTitle, pszCommand) != 0))
 				{
 					pszHistory[nHistoryCount++] = pszCommand;
@@ -2593,10 +2663,10 @@ bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 			if (cMinSlots < 3)
 				cMinSlots = 3;
 
-			// Вся история и все команды - скорее всего в TaskList не поместятся. Нужно подрезать.
+			// Р’СЃСЏ РёСЃС‚РѕСЂРёСЏ Рё РІСЃРµ РєРѕРјР°РЅРґС‹ - СЃРєРѕСЂРµРµ РІСЃРµРіРѕ РІ TaskList РЅРµ РїРѕРјРµСЃС‚СЏС‚СЃСЏ. РќСѓР¶РЅРѕ РїРѕРґСЂРµР·Р°С‚СЊ.
 			if (cMinSlots < (nTasksCount + nHistoryCount + (pszCurCmdTitle ? 1 : 0)))
 			{
-				// Минимум одну позицию - оставить под историю/текущую команду
+				// РњРёРЅРёРјСѓРј РѕРґРЅСѓ РїРѕР·РёС†РёСЋ - РѕСЃС‚Р°РІРёС‚СЊ РїРѕРґ РёСЃС‚РѕСЂРёСЋ/С‚РµРєСѓС‰СѓСЋ РєРѕРјР°РЅРґСѓ
 				if (nTasksCount && (cMinSlots < (nTasksCount + 1)))
 				{
 					nTasksCount = cMinSlots-1;
@@ -2625,7 +2695,7 @@ bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 				bool bNeedSeparator = false;
 				bool bEmpty = true;
 
-				// Если просили - добавляем наши внутренние "Tasks"
+				// Р•СЃР»Рё РїСЂРѕСЃРёР»Рё - РґРѕР±Р°РІР»СЏРµРј РЅР°С€Рё РІРЅСѓС‚СЂРµРЅРЅРёРµ "Tasks"
 				if (SUCCEEDED(hr) && gpSet->isStoreTaskbarkTasks && nTasksCount)
 				{
 					for (size_t i = 0; (i < countof(pszTasks)) && pszTasks[i]; i++)
@@ -2651,12 +2721,12 @@ bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 					}
 				}
 
-				// И команды из истории
+				// Р РєРѕРјР°РЅРґС‹ РёР· РёСЃС‚РѕСЂРёРё
 				if (SUCCEEDED(hr) && gpSet->isStoreTaskbarCommands && (nHistoryCount || pszCurCmdTitle))
 				{
 					if (bNeedSeparator)
 					{
-						bNeedSeparator = false; // один раз
+						bNeedSeparator = false; // РѕРґРёРЅ СЂР°Р·
 						hr = _CreateSeparatorLink(&psl);
 						if (SUCCEEDED(hr))
 						{
@@ -2757,10 +2827,10 @@ bool UpdateWin7TaskList(bool bForce, bool bNoSuccMsg /*= false*/)
 
 
 
-    // В Win7 можно также показывать в JumpList "документы" (ярлыки, пути, и т.п.)
-    // Но это не то... Похоже, чтобы добавить такой "путь" в Recent/Frequent list
-    // нужно создавать физический файл (например, с расширением ".conemu"),
-    // и (!) регистрировать для него обработчиком conemu.exe
+    // Р’ Win7 РјРѕР¶РЅРѕ С‚Р°РєР¶Рµ РїРѕРєР°Р·С‹РІР°С‚СЊ РІ JumpList "РґРѕРєСѓРјРµРЅС‚С‹" (СЏСЂР»С‹РєРё, РїСѓС‚Рё, Рё С‚.Рї.)
+    // РќРѕ СЌС‚Рѕ РЅРµ С‚Рѕ... РџРѕС…РѕР¶Рµ, С‡С‚РѕР±С‹ РґРѕР±Р°РІРёС‚СЊ С‚Р°РєРѕР№ "РїСѓС‚СЊ" РІ Recent/Frequent list
+    // РЅСѓР¶РЅРѕ СЃРѕР·РґР°РІР°С‚СЊ С„РёР·РёС‡РµСЃРєРёР№ С„Р°Р№Р» (РЅР°РїСЂРёРјРµСЂ, СЃ СЂР°СЃС€РёСЂРµРЅРёРµРј ".conemu"),
+    // Рё (!) СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊ РґР»СЏ РЅРµРіРѕ РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРј conemu.exe
 	#if 0
 	//SHAddToRecentDocs(SHARD_PATHW, pszTemp);
 
@@ -2808,7 +2878,7 @@ bool GetCfgParm(uint& i, TCHAR*& curCommand, bool& Prm, TCHAR*& Val, int nMaxLen
 		return false;
 	}
 
-	// Сохраним, может для сообщения об ошибке понадобится
+	// РЎРѕС…СЂР°РЅРёРј, РјРѕР¶РµС‚ РґР»СЏ СЃРѕРѕР±С‰РµРЅРёСЏ РѕР± РѕС€РёР±РєРµ РїРѕРЅР°РґРѕР±РёС‚СЃСЏ
 	TCHAR* pszName = curCommand;
 
 	curCommand += _tcslen(curCommand) + 1; i++;
@@ -2945,6 +3015,47 @@ void UnitModuleTest()
 	_ASSERTE(!bTest);
 }
 
+void DebugUnitMprintfTest()
+{
+	wchar_t szTest[80];
+	msprintf(szTest, countof(szTest), L"%u,%02u,%02u,%02u,%02x,%08x", 12345, 1, 23, 4567, 0xFE, 0xABCD1234);
+	int nDbg = lstrcmp(szTest, L"12345,01,23,4567,fe,abcd1234");
+	_ASSERTE(nDbg==0);
+}
+
+void DebugVersionTest()
+{
+	DWORDLONG const dwlConditionMask = VerSetConditionMask(VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL), VER_MINORVERSION, VER_GREATER_EQUAL);
+
+	_ASSERTE(_WIN32_WINNT_WIN7==0x601);
+	OSVERSIONINFOEXW osvi7 = {sizeof(osvi7), HIBYTE(_WIN32_WINNT_WIN7), LOBYTE(_WIN32_WINNT_WIN7)};
+	bool bWin7 = VerifyVersionInfoW(&osvi7, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask);
+
+	_ASSERTE(_WIN32_WINNT_VISTA==0x600);
+	OSVERSIONINFOEXW osvi6 = {sizeof(osvi6), HIBYTE(_WIN32_WINNT_VISTA), LOBYTE(_WIN32_WINNT_VISTA)};
+	bool bWin6 = VerifyVersionInfoW(&osvi6, VER_MAJORVERSION | VER_MINORVERSION, dwlConditionMask);
+
+	OSVERSIONINFOW osv = {sizeof(OSVERSIONINFOW)};
+    GetVersionExW(&osv);
+	bool bVerWin7 = ((osv.dwMajorVersion > 6) || ((osv.dwMajorVersion == 6) && (osv.dwMinorVersion >= 1)));
+	bool bVerWin6 = (osv.dwMajorVersion >= 6);
+
+	_ASSERTE(bWin7 == bVerWin7);
+	_ASSERTE(bWin6 == bVerWin6);
+}
+
+void DebugFileExistTests()
+{
+	bool b;
+	b = DirectoryExists(L"C:\\Documents and Settings\\Maks\\.ipython\\");
+	b = DirectoryExists(L"C:\\Documents and Settings\\Maks\\.ipython\\.");
+	b = DirectoryExists(L"C:\\Documents and Settings\\Maks\\.ipython");
+	b = DirectoryExists(L"C:\\Documents and Settings\\Maks\\.ipython-qq");
+	b = FileExists(L"C:\\Documents and Settings\\Maks\\.ipython");
+	b = FileExists(L"C:\\Documents and Settings\\Maks\\.ipython\\README");
+	b = FileExists(L"C:\\Documents and Settings\\Maks\\.ipython\\.");
+}
+
 void DebugUnitTests()
 {
 	RConStartArgs::RunArgTests();
@@ -2952,6 +3063,24 @@ void DebugUnitTests()
 	UnitDriveTests();
 	UnitExpandTest();
 	UnitModuleTest();
+	DebugUnitMprintfTest();
+	DebugVersionTest();
+	DebugFileExistTests();
+	ConEmuMacro::UnitTests();
+}
+#endif
+
+#if defined(__GNUC__) || defined(_DEBUG)
+void GnuUnitTests()
+{
+	int nRegW = RegisterClipboardFormatW(CFSTR_FILENAMEW/*L"FileNameW"*/);
+	int nRegA = RegisterClipboardFormatA("FileNameW");
+	Assert(nRegW && nRegA && nRegW==nRegA);
+
+	wchar_t szHex[] = L"\x2018"/*пїЅ*/ L"\x2019"/*пїЅ*/;
+	wchar_t szNum[] = {0x2018, 0x2019, 0};
+	int iDbg = lstrcmp(szHex, szNum);
+	Assert(iDbg==0);
 }
 #endif
 
@@ -2967,7 +3096,7 @@ LONG WINAPI CreateDumpOnException(LPEXCEPTION_POINTERS ExceptionInfo)
 	if (nBtn == IDYES)
 	{
 		CopyToClipboard(szFull);
-		gpConEmu->OnInfo_ReportCrash(NULL);
+		ConEmuAbout::OnInfo_ReportCrash(NULL);
 	}
 
 	return EXCEPTION_EXECUTE_HANDLER;
@@ -3010,7 +3139,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	gpStartEnv = LoadStartupEnv();
 	/* *** DEBUG PURPOSES */
 
-	gbIsWine = IsWine(); // В общем случае, на флажок ориентироваться нельзя. Это для информации.
+	gbIsWine = IsWine(); // Р’ РѕР±С‰РµРј СЃР»СѓС‡Р°Рµ, РЅР° С„Р»Р°Р¶РѕРє РѕСЂРёРµРЅС‚РёСЂРѕРІР°С‚СЊСЃСЏ РЅРµР»СЊР·СЏ. Р­С‚Рѕ РґР»СЏ РёРЅС„РѕСЂРјР°С†РёРё.
 	if (gbIsWine)
 	{
 		wcscpy_c(gsDefGuiFont, L"Liberation Mono");
@@ -3078,7 +3207,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	//msprintf(szDbg, countof(szDbg), L"xx=0x%X.", 0);
 	#endif
 
-	DEBUGTEST(DebugUnitTests());
+	#if defined(_DEBUG)
+	DebugUnitTests();
+	#endif
+	#if defined(__GNUC__) || defined(_DEBUG)
+	GnuUnitTests();
+	#endif
+
 
 //#ifdef _DEBUG
 //	wchar_t* pszShort = GetShortFileNameEx(L"T:\\VCProject\\FarPlugin\\ConEmu\\Maximus5\\Debug\\Far2x86\\ConEmu\\ConEmu.exe");
@@ -3097,7 +3232,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 //	msprintf(szDebug, countof(szDebug), L"Test %u %i %s 0x%X %c 0x%08X*",
 //		987654321, -1234, L"abcdef", 0xAB1298, L'Z', 0xAB1298);
 //	msprintf(szDebug, countof(szDebug), L"<%c%c>%u.%s",
-//		'я', (wchar_t)0x44F, 0x44F, L"End");
+//		'СЏ', (wchar_t)0x44F, 0x44F, L"End");
 //#endif
 
 #if defined(SHOW_STARTED_MSGBOX)
@@ -3140,10 +3275,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	bool WindowPrm = false; int WindowModeVal = 0;
 	bool LoadCfgFilePrm = false; TCHAR* LoadCfgFile = NULL;
 	bool SaveCfgFilePrm = false; TCHAR* SaveCfgFile = NULL;
+	bool UpdateSrcSetPrm = false; TCHAR* UpdateSrcSet = NULL;
 	bool SetUpDefaultTerminal = false;
 	bool ExitAfterActionPrm = false;
 #if 0
-	//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
+	//120714 - Р°РЅР°Р»РѕРіРёС‡РЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ СЂР°Р±РѕС‚Р°СЋС‚ РІ ConEmuC.exe, Р° РІ GUI РѕРЅРё Рё РЅРµ СЂР°Р±РѕС‚Р°Р»Рё. СѓР±СЂР°Р» РїРѕРєР°
 	bool AttachPrm = false; LONG AttachVal=0;
 #endif
 	bool MultiConPrm = false, MultiConValue = false;
@@ -3160,8 +3296,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	//gOSVer.dwOSVersionInfoSize = sizeof(gOSVer);
 	//GetVersionEx(&gOSVer);
 	//DisableIME();
-	//Windows7 - SetParent для консоли валится
-	//gpConEmu->setParent = false; // PictureView теперь идет через Wrapper
+	//Windows7 - SetParent РґР»СЏ РєРѕРЅСЃРѕР»Рё РІР°Р»РёС‚СЃСЏ
+	//gpConEmu->setParent = false; // PictureView С‚РµРїРµСЂСЊ РёРґРµС‚ С‡РµСЂРµР· Wrapper
 	//if ((gOSVer.dwMajorVersion>6) || (gOSVer.dwMajorVersion==6 && gOSVer.dwMinorVersion>=1))
 	//{
 	//    setParentDisabled = true;
@@ -3180,16 +3316,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	uint  params = 0;
 	bool  isScript = false;
 
-	// [OUT] params = (uint)-1, если в первый аргумент не начинается с '/'
-	// т.е. комстрока такая "ConEmu.exe c:\tools\far.exe", 
-	// а не такая "ConEmu.exe /cmd c:\tools\far.exe", 
+	// [OUT] params = (uint)-1, РµСЃР»Рё РІ РїРµСЂРІС‹Р№ Р°СЂРіСѓРјРµРЅС‚ РЅРµ РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃ '/'
+	// С‚.Рµ. РєРѕРјСЃС‚СЂРѕРєР° С‚Р°РєР°СЏ "ConEmu.exe c:\tools\far.exe", 
+	// Р° РЅРµ С‚Р°РєР°СЏ "ConEmu.exe /cmd c:\tools\far.exe", 
 	if (!PrepareCommandLine(/*OUT*/cmdLine, /*OUT*/cmdNew, /*OUT*/isScript, /*OUT*/params))
 		return 100;
 
 	if (params && params != (uint)-1)
 	{
 		TCHAR *curCommand = cmdLine;
-		TODO("Если первый (после запускаемого файла) аргумент начинается НЕ с '/' - завершить разбор параметров и не заменять '""' на пробелы");
+		TODO("Р•СЃР»Рё РїРµСЂРІС‹Р№ (РїРѕСЃР»Рµ Р·Р°РїСѓСЃРєР°РµРјРѕРіРѕ С„Р°Р№Р»Р°) Р°СЂРіСѓРјРµРЅС‚ РЅР°С‡РёРЅР°РµС‚СЃСЏ РќР• СЃ '/' - Р·Р°РІРµСЂС€РёС‚СЊ СЂР°Р·Р±РѕСЂ РїР°СЂР°РјРµС‚СЂРѕРІ Рё РЅРµ Р·Р°РјРµРЅСЏС‚СЊ '""' РЅР° РїСЂРѕР±РµР»С‹");
 		//uint params; SplitCommandLine(curCommand, &params);
 		//if (params < 1) {
 		//    curCommand = NULL;
@@ -3244,34 +3380,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 					if (lbTurnOn)
 					{
-						//BOOL bNeedFree = FALSE;
-
-						//if (*curCommand!=_T('"') && _tcschr(curCommand, _T(' ')))
-						//{
-						//	TCHAR* psz = (TCHAR*)calloc(_tcslen(curCommand)+3, sizeof(TCHAR));
-						//	*psz = _T('"');
-						//	_tcscpy(psz+1, curCommand);
-						//	_tcscat(psz, _T("\""));
-						//	curCommand = psz;
-						//}
-
 						size_t cchMax = _tcslen(curCommand);
 						LPCWSTR pszArg1 = NULL;
 						if ((i + 1) < params)
 						{
-							// Здесь может быть "/GHWND=NEW"
+							// Р—РґРµСЃСЊ РјРѕР¶РµС‚ Р±С‹С‚СЊ "/GHWND=NEW"
 							pszArg1 = curCommand + cchMax + 1;
 							if (!*pszArg1)
 								pszArg1 = NULL;
 							else
 								cchMax += _tcslen(pszArg1);
 						}
-						cchMax += 16; // + кавычки и пробелы всякие
+						cchMax += 16; // + РєР°РІС‹С‡РєРё Рё РїСЂРѕР±РµР»С‹ РІСЃСЏРєРёРµ
 
 						wchar_t* pszCmd = (wchar_t*)calloc(cchMax, sizeof(*pszCmd));
 						_wsprintf(pszCmd, SKIPLEN(cchMax) L"\"%s\"%s%s%s", curCommand,
 							pszArg1 ? L" \"" : L"", pszArg1 ? pszArg1 : L"", pszArg1 ? L"\"" : L"");
-						
+
 
 						if (0 == RegSetValueEx(hk, _T("AutoRun"), 0, REG_SZ, (LPBYTE)pszCmd,
 											(DWORD)sizeof(TCHAR)*(_tcslen(pszCmd)+1))) //-V220
@@ -3286,17 +3411,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					}
 
 					RegCloseKey(hk);
-					// сбрость CreateInNewEnvironment для ConMan
+					// СЃР±СЂРѕСЃС‚СЊ CreateInNewEnvironment РґР»СЏ ConMan
 					ResetConman();
 					return nSetupRc;
 				}
 				else if (!klstricmp(curCommand, _T("/bypass")))
 				{
-					// Этот ключик был придуман для прозрачного запуска консоли
-					// в режиме администратора
-					// (т.е. чтобы окно UAC нормально всплывало, но не мелькало консольное окно)
-					// Но не получилось, пока требуются хэндлы процесса, а их не получается
-					// передать в НЕ приподнятый процесс (исходный ConEmu GUI).
+					// Р­С‚РѕС‚ РєР»СЋС‡РёРє Р±С‹Р» РїСЂРёРґСѓРјР°РЅ РґР»СЏ РїСЂРѕР·СЂР°С‡РЅРѕРіРѕ Р·Р°РїСѓСЃРєР° РєРѕРЅСЃРѕР»Рё
+					// РІ СЂРµР¶РёРјРµ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
+					// (С‚.Рµ. С‡С‚РѕР±С‹ РѕРєРЅРѕ UAC РЅРѕСЂРјР°Р»СЊРЅРѕ РІСЃРїР»С‹РІР°Р»Рѕ, РЅРѕ РЅРµ РјРµР»СЊРєР°Р»Рѕ РєРѕРЅСЃРѕР»СЊРЅРѕРµ РѕРєРЅРѕ)
+					// РќРѕ РЅРµ РїРѕР»СѓС‡РёР»РѕСЃСЊ, РїРѕРєР° С‚СЂРµР±СѓСЋС‚СЃСЏ С…СЌРЅРґР»С‹ РїСЂРѕС†РµСЃСЃР°, Р° РёС… РЅРµ РїРѕР»СѓС‡Р°РµС‚СЃСЏ
+					// РїРµСЂРµРґР°С‚СЊ РІ РќР• РїСЂРёРїРѕРґРЅСЏС‚С‹Р№ РїСЂРѕС†РµСЃСЃ (РёСЃС…РѕРґРЅС‹Р№ ConEmu GUI).
 
 					if (!cmdNew || !*cmdNew)
 					{
@@ -3329,11 +3454,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				else if (!klstricmp(curCommand, _T("/demote")))
 				{
-					// Этот ключик был придуман для "скрытого" запуска консоли
-					// в режиме администратора
-					// (т.е. чтобы окно UAC нормально всплывало, но не мелькало консольное окно)
-					// Но не получилось, пока требуются хэндлы процесса, а их не получается
-					// передать в НЕ приподнятый процесс (исходный ConEmu GUI).
+					// Р—Р°РїСѓСЃРє РїСЂРѕС†РµСЃСЃР° (РєРѕРј.СЃС‚СЂРѕРєР° РїРѕСЃР»Рµ "/demote") РІ СЂРµР¶РёРјРµ РїСЂРѕСЃС‚РѕРіРѕ СЋР·РµСЂР°,
+					// РєРѕРіРґР° С‚РµРєСѓС‰РёР№ РїСЂРѕС†РµСЃСЃ СѓР¶Рµ Р·Р°РїСѓС‰РµРЅ "РїРѕРґ Р°РґРјРёРЅРѕРј". "РџРѕРЅРёР·РёС‚СЊ" С‚РµРєСѓС‰РёРµ
+					// РїСЂРёРІРёР»РµРіРёРё РїСЂРѕСЃС‚Рѕ С‚Р°Рє РЅРµР»СЊР·СЏ, РїРѕСЌС‚РѕРјСѓ Р·Р°РїСѓСЃРє РёРґРµС‚ С‡РµСЂРµР· TaskSheduler.
 
 					if (!cmdNew || !*cmdNew)
 					{
@@ -3358,7 +3481,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 					BOOL b;
 					DWORD nErr = 0;
-					
+
 
 					b = CreateProcessDemoted(NULL, cmdNew, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS, NULL,
 							szCurDir, &si, &pi, &nErr);
@@ -3401,7 +3524,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						ClearTypeVal = CLEARTYPE_NATURAL_QUALITY;
 					}
 				}
-				// имя шрифта
+				// РёРјСЏ С€СЂРёС„С‚Р°
 				else if (!klstricmp(curCommand, _T("/font")) && i + 1 < params)
 				{
 					curCommand += _tcslen(curCommand) + 1; i++;
@@ -3412,7 +3535,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						FontVal = curCommand;
 					}
 				}
-				// Высота шрифта
+				// Р’С‹СЃРѕС‚Р° С€СЂРёС„С‚Р°
 				else if (!klstricmp(curCommand, _T("/size")) && i + 1 < params)
 				{
 					curCommand += _tcslen(curCommand) + 1; i++;
@@ -3424,7 +3547,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					}
 				}
 				#if 0
-				//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
+				//120714 - Р°РЅР°Р»РѕРіРёС‡РЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ СЂР°Р±РѕС‚Р°СЋС‚ РІ ConEmuC.exe, Р° РІ GUI РѕРЅРё Рё РЅРµ СЂР°Р±РѕС‚Р°Р»Рё. СѓР±СЂР°Р» РїРѕРєР°
 				else if (!klstricmp(curCommand, _T("/attach")) /*&& i + 1 < params*/)
 				{
 					//curCommand += _tcslen(curCommand) + 1; i++;
@@ -3443,14 +3566,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 							}
 						}
 
-						// интеллектуальный аттач - если к текущей консоли уже подцеплена другая копия
+						// РёРЅС‚РµР»Р»РµРєС‚СѓР°Р»СЊРЅС‹Р№ Р°С‚С‚Р°С‡ - РµСЃР»Рё Рє С‚РµРєСѓС‰РµР№ РєРѕРЅСЃРѕР»Рё СѓР¶Рµ РїРѕРґС†РµРїР»РµРЅР° РґСЂСѓРіР°СЏ РєРѕРїРёСЏ
 						if (AttachVal == -1)
 						{
 							HWND hCon = GetForegroundWindow();
 
 							if (!hCon)
 							{
-								// консоли нет
+								// РєРѕРЅСЃРѕР»Рё РЅРµС‚
 								return 100;
 							}
 							else
@@ -3461,12 +3584,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 								{
 									if (_tcscmp(sClass, VirtualConsoleClassMain)==0)
 									{
-										// Сверху УЖЕ другая копия ConEmu
+										// РЎРІРµСЂС…Сѓ РЈР–Р• РґСЂСѓРіР°СЏ РєРѕРїРёСЏ ConEmu
 										return 1;
 									}
 
-									// Если на самом верху НЕ консоль - это может быть панель проводника,
-									// или другое плавающее окошко... Поищем ВЕРХНЮЮ консоль
+									// Р•СЃР»Рё РЅР° СЃР°РјРѕРј РІРµСЂС…Сѓ РќР• РєРѕРЅСЃРѕР»СЊ - СЌС‚Рѕ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїР°РЅРµР»СЊ РїСЂРѕРІРѕРґРЅРёРєР°,
+									// РёР»Рё РґСЂСѓРіРѕРµ РїР»Р°РІР°СЋС‰РµРµ РѕРєРѕС€РєРѕ... РџРѕРёС‰РµРј Р’Р•Р РҐРќР®Р® РєРѕРЅСЃРѕР»СЊ
 									if (isConsoleClass(sClass))
 									{
 										wcscpy_c(sClass, RealConsoleClass);
@@ -3480,21 +3603,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 									if (isConsoleClass(sClass))
 									{
-										// перебрать все ConEmu, может кто-то уже подцеплен?
+										// РїРµСЂРµР±СЂР°С‚СЊ РІСЃРµ ConEmu, РјРѕР¶РµС‚ РєС‚Рѕ-С‚Рѕ СѓР¶Рµ РїРѕРґС†РµРїР»РµРЅ?
 										HWND hEmu = NULL;
 
 										while ((hEmu = FindWindowEx(NULL, hEmu, VirtualConsoleClassMain, NULL)) != NULL)
 										{
 											if (hCon == (HWND)GetWindowLongPtr(hEmu, GWLP_USERDATA))
 											{
-												// к этой консоли уже подцеплен ConEmu
+												// Рє СЌС‚РѕР№ РєРѕРЅСЃРѕР»Рё СѓР¶Рµ РїРѕРґС†РµРїР»РµРЅ ConEmu
 												return 1;
 											}
 										}
 									}
 									else
 									{
-										// верхнее окно - НЕ консоль
+										// РІРµСЂС…РЅРµРµ РѕРєРЅРѕ - РќР• РєРѕРЅСЃРѕР»СЊ
 										return 100;
 									}
 								}
@@ -3589,7 +3712,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					bool bRunAsAdmin = isPressed(VK_SHIFT);
 
 					wchar_t* pszEnd;
-					// Здесь указывается PID, в который нужно внедриться.
+					// Р—РґРµСЃСЊ СѓРєР°Р·С‹РІР°РµС‚СЃСЏ PID, РІ РєРѕС‚РѕСЂС‹Р№ РЅСѓР¶РЅРѕ РІРЅРµРґСЂРёС‚СЊСЃСЏ.
 					DWORD nInsideParentPID = wcstol(curCommand, &pszEnd, 10);
 					if (nInsideParentPID)
 					{
@@ -3607,7 +3730,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					bool bRunAsAdmin = isPressed(VK_SHIFT);
 
 					wchar_t* pszEnd;
-					// Здесь указывается HWND, в котором нужно создаваться.
+					// Р—РґРµСЃСЊ СѓРєР°Р·С‹РІР°РµС‚СЃСЏ HWND, РІ РєРѕС‚РѕСЂРѕРј РЅСѓР¶РЅРѕ СЃРѕР·РґР°РІР°С‚СЊСЃСЏ.
 					HWND hParent = (HWND)wcstol(curCommand, &pszEnd, 16);
 					if (hParent && IsWindow(hParent))
 					{
@@ -3630,7 +3753,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 					if (*curCommand)
 					{
-						// Например, "%USERPROFILE%"
+						// РќР°РїСЂРёРјРµСЂ, "%USERPROFILE%"
 						wchar_t* pszExpand = NULL;
 						if (wcschr(curCommand, L'%') && ((pszExpand = ExpandEnvStr(curCommand)) != NULL))
 						{
@@ -3691,18 +3814,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				{
 					gpSetCls->isDontCascade = true;
 				}
-				//else if ( !klstricmp(curCommand, _T("/DontSetParent")) || !klstricmp(curCommand, _T("/Windows7")) )
-				//{
-				//    setParentDisabled = true;
-				//}
-				//else if ( !klstricmp(curCommand, _T("/SetParent")) )
-				//{
-				//    gpConEmu->setParent = true;
-				//}
-				//else if ( !klstricmp(curCommand, _T("/SetParent2")) )
-				//{
-				//    gpConEmu->setParent = true; gpConEmu->setParent2 = true;
-				//}
 				else if ((!klstricmp(curCommand, _T("/Buffer")) || !klstricmp(curCommand, _T("/BufferHeight")))
 					&& i + 1 < params)
 				{
@@ -3715,7 +3826,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 						if (BufferHeightVal < 0)
 						{
-							//setParent = true; -- Maximus5 - нефиг, все ручками
+							//setParent = true; -- Maximus5 - РЅРµС„РёРі, РІСЃРµ СЂСѓС‡РєР°РјРё
 							BufferHeightVal = -BufferHeightVal;
 						}
 
@@ -3727,7 +3838,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				else if (!klstricmp(curCommand, _T("/Config")) && i + 1 < params)
 				{
-					//if (!ConfigPrm) -- используем последний из параметров, если их несколько
+					//if (!ConfigPrm) -- РёСЃРїРѕР»СЊР·СѓРµРј РїРѕСЃР»РµРґРЅРёР№ РёР· РїР°СЂР°РјРµС‚СЂРѕРІ, РµСЃР»Рё РёС… РЅРµСЃРєРѕР»СЊРєРѕ
 					if (!GetCfgParm(i, curCommand, ConfigPrm, ConfigVal, 127))
 					{
 						return 100;
@@ -3735,7 +3846,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				else if (!klstricmp(curCommand, _T("/Palette")) && i + 1 < params)
 				{
-					//if (!ConfigPrm) -- используем последний из параметров, если их несколько
+					//if (!ConfigPrm) -- РёСЃРїРѕР»СЊР·СѓРµРј РїРѕСЃР»РµРґРЅРёР№ РёР· РїР°СЂР°РјРµС‚СЂРѕРІ, РµСЃР»Рё РёС… РЅРµСЃРєРѕР»СЊРєРѕ
 					if (!GetCfgParm(i, curCommand, PalettePrm, PaletteVal, MAX_PATH))
 					{
 						return 100;
@@ -3743,7 +3854,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				else if (!klstricmp(curCommand, _T("/LoadCfgFile")) && i + 1 < params)
 				{
-					// используем последний из параметров, если их несколько
+					// РёСЃРїРѕР»СЊР·СѓРµРј РїРѕСЃР»РµРґРЅРёР№ РёР· РїР°СЂР°РјРµС‚СЂРѕРІ, РµСЃР»Рё РёС… РЅРµСЃРєРѕР»СЊРєРѕ
 					if (!GetCfgParm(i, curCommand, LoadCfgFilePrm, LoadCfgFile, MAX_PATH, true))
 					{
 						return 100;
@@ -3751,8 +3862,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				else if (!klstricmp(curCommand, _T("/SaveCfgFile")) && i + 1 < params)
 				{
-					// используем последний из параметров, если их несколько
+					// РёСЃРїРѕР»СЊР·СѓРµРј РїРѕСЃР»РµРґРЅРёР№ РёР· РїР°СЂР°РјРµС‚СЂРѕРІ, РµСЃР»Рё РёС… РЅРµСЃРєРѕР»СЊРєРѕ
 					if (!GetCfgParm(i, curCommand, SaveCfgFilePrm, SaveCfgFile, MAX_PATH, true))
+					{
+						return 100;
+					}
+				}
+				else if (!klstricmp(curCommand, _T("/UpdateSrcSet")) && i + 1 < params)
+				{
+					// РёСЃРїРѕР»СЊР·СѓРµРј РїРѕСЃР»РµРґРЅРёР№ РёР· РїР°СЂР°РјРµС‚СЂРѕРІ, РµСЃР»Рё РёС… РЅРµСЃРєРѕР»СЊРєРѕ
+					if (!GetCfgParm(i, curCommand, UpdateSrcSetPrm, UpdateSrcSet, MAX_PATH*4, false))
 					{
 						return 100;
 					}
@@ -3781,7 +3900,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				else if (!klstricmp(curCommand, _T("/?")) || !klstricmp(curCommand, _T("/h")) || !klstricmp(curCommand, _T("/help")))
 				{
 					//MessageBox(NULL, pHelp, L"About ConEmu...", MB_ICONQUESTION);
-					gpConEmu->OnInfo_About();
+					ConEmuAbout::OnInfo_About();
 					free(cmdLine);
 					return -1;
 				}
@@ -3798,7 +3917,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 			if (lbNotFound && /*i>0 &&*/ !psUnknown && (*curCommand == L'-' || *curCommand == L'/'))
 			{
-				// ругнуться на неизвестную команду
+				// СЂСѓРіРЅСѓС‚СЊСЃСЏ РЅР° РЅРµРёР·РІРµСЃС‚РЅСѓСЋ РєРѕРјР°РЅРґСѓ
 				psUnknown = curCommand;
 			}
 
@@ -3839,13 +3958,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		gpSetCls->SetConfigName(ConfigVal);
 	}
 
-	// Сразу инициализировать событие для SingleInstance. Кто первый схватит.
+	// РЎСЂР°Р·Сѓ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ СЃРѕР±С‹С‚РёРµ РґР»СЏ SingleInstance. РљС‚Рѕ РїРµСЂРІС‹Р№ СЃС…РІР°С‚РёС‚.
 	gpConEmu->isFirstInstance();
 
 	// special config file
 	if (LoadCfgFilePrm)
 	{
-		// При ошибке - не выходим, просто покажем ее пользователю
+		// РџСЂРё РѕС€РёР±РєРµ - РЅРµ РІС‹С…РѕРґРёРј, РїСЂРѕСЃС‚Рѕ РїРѕРєР°Р¶РµРј РµРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ
 		gpConEmu->SetConfigFile(LoadCfgFile);
 		// Release mem
 		SafeFree(LoadCfgFile);
@@ -3865,15 +3984,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	SettingsLoadedFlags slfFlags = slf_OnStartupLoad | slf_AllowFastConfig
 		| (bNeedCreateVanilla ? slf_NeedCreateVanilla : slf_None)
 		| (ResetSettings ? slf_DefaultSettings : slf_None);
-	// выполнить дополнительные действия в классе настроек здесь
+	// РІС‹РїРѕР»РЅРёС‚СЊ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ РґРµР№СЃС‚РІРёСЏ РІ РєР»Р°СЃСЃРµ РЅР°СЃС‚СЂРѕРµРє Р·РґРµСЃСЊ
 	gpSetCls->SettingsLoaded(slfFlags, cmdNew);
 
-	// Для gpSet->isQuakeStyle - принудительно включается gpSetCls->SingleInstanceArg
+	// Р”Р»СЏ gpSet->isQuakeStyle - РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РІРєР»СЋС‡Р°РµС‚СЃСЏ gpSetCls->SingleInstanceArg
 
 	// When "/Palette <name>" is specified
 	if (PalettePrm)
 	{
 		gpSet->PaletteSetActive(PaletteVal);
+	}
+
+	// Set another update location (-UpdateSrcSet <URL>)
+	if (UpdateSrcSetPrm)
+	{
+		gpSet->UpdSet.SetUpdateVerLocation(UpdateSrcSet);
 	}
 
 	gpConEmu->LogString(L"SettingsLoaded");
@@ -3882,10 +4007,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 //------------------------------------------------------------------------
 ///| Processing actions |/////////////////////////////////////////////////
 //------------------------------------------------------------------------
-	// gpConEmu->mb_UpdateJumpListOnStartup - Обновить JumpLists
-	// SaveCfgFilePrm, SaveCfgFile - сохранить настройки в xml-файл (можно использовать вместе с ResetSettings)
-	// ExitAfterActionPrm - сразу выйти после выполнения действий
-	// не наколоться бы с isAutoSaveSizePos
+	// gpConEmu->mb_UpdateJumpListOnStartup - РћР±РЅРѕРІРёС‚СЊ JumpLists
+	// SaveCfgFilePrm, SaveCfgFile - СЃРѕС…СЂР°РЅРёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё РІ xml-С„Р°Р№Р» (РјРѕР¶РЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РІРјРµСЃС‚Рµ СЃ ResetSettings)
+	// ExitAfterActionPrm - СЃСЂР°Р·Сѓ РІС‹Р№С‚Рё РїРѕСЃР»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ РґРµР№СЃС‚РІРёР№
+	// РЅРµ РЅР°РєРѕР»РѕС‚СЊСЃСЏ Р±С‹ СЃ isAutoSaveSizePos
 
 	if (gpConEmu->mb_UpdateJumpListOnStartup && ExitAfterActionPrm)
 	{
@@ -3898,7 +4023,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	// special config file
 	if (SaveCfgFilePrm)
 	{
-		// Сохранять конфиг только если получилось сменить путь (создать файл)
+		// РЎРѕС…СЂР°РЅСЏС‚СЊ РєРѕРЅС„РёРі С‚РѕР»СЊРєРѕ РµСЃР»Рё РїРѕР»СѓС‡РёР»РѕСЃСЊ СЃРјРµРЅРёС‚СЊ РїСѓС‚СЊ (СЃРѕР·РґР°С‚СЊ С„Р°Р№Р»)
 		if (!gpConEmu->SetConfigFile(SaveCfgFile, true/*abWriteReq*/))
 		{
 			if (!iMainRc) iMainRc = 11;
@@ -3946,13 +4071,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{
 			if (CConEmuUpdate::IsUpdatePackage(szPath))
 			{
-				// Чтобы при запуске НОВОЙ версии опять не пошло обновление - грохнуть ком-строку
+				// Р§С‚РѕР±С‹ РїСЂРё Р·Р°РїСѓСЃРєРµ РќРћР’РћР™ РІРµСЂСЃРёРё РѕРїСЏС‚СЊ РЅРµ РїРѕС€Р»Рѕ РѕР±РЅРѕРІР»РµРЅРёРµ - РіСЂРѕС…РЅСѓС‚СЊ РєРѕРј-СЃС‚СЂРѕРєСѓ
 				SafeFree(gpConEmu->mpsz_ConEmuArgs);
 
-				// Создание скрипта обновления, запуск будет выполнен в деструкторе gpUpd
+				// РЎРѕР·РґР°РЅРёРµ СЃРєСЂРёРїС‚Р° РѕР±РЅРѕРІР»РµРЅРёСЏ, Р·Р°РїСѓСЃРє Р±СѓРґРµС‚ РІС‹РїРѕР»РЅРµРЅ РІ РґРµСЃС‚СЂСѓРєС‚РѕСЂРµ gpUpd
 				CConEmuUpdate::LocalUpdate(szPath);
 
-				// Перейти к завершению процесса и запуску обновления
+				// РџРµСЂРµР№С‚Рё Рє Р·Р°РІРµСЂС€РµРЅРёСЋ РїСЂРѕС†РµСЃСЃР° Рё Р·Р°РїСѓСЃРєСѓ РѕР±РЅРѕРІР»РµРЅРёСЏ
 				goto done;
 			}
 		}
@@ -3963,21 +4088,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 ///| Continue normal work mode  |/////////////////////////////////////////
 //------------------------------------------------------------------------
 
-	// Если в режиме "Inside" подходящего окна не нашли и юзер отказался от "обычного" режима
-	// mh_InsideParentWND инициализируется вызовом InsideFindParent из Settings::LoadSettings()
+	// Р•СЃР»Рё РІ СЂРµР¶РёРјРµ "Inside" РїРѕРґС…РѕРґСЏС‰РµРіРѕ РѕРєРЅР° РЅРµ РЅР°С€Р»Рё Рё СЋР·РµСЂ РѕС‚РєР°Р·Р°Р»СЃСЏ РѕС‚ "РѕР±С‹С‡РЅРѕРіРѕ" СЂРµР¶РёРјР°
+	// mh_InsideParentWND РёРЅРёС†РёР°Р»РёР·РёСЂСѓРµС‚СЃСЏ РІС‹Р·РѕРІРѕРј InsideFindParent РёР· Settings::LoadSettings()
 	if (gpConEmu->mp_Inside && (gpConEmu->mp_Inside->mh_InsideParentWND == INSIDE_PARENT_NOT_FOUND))
 	{
 		return 100;
 	}
 
 
-	// Проверить наличие необходимых файлов (перенес сверху, чтобы учитывался флажок "Inject ConEmuHk")
+	// РџСЂРѕРІРµСЂРёС‚СЊ РЅР°Р»РёС‡РёРµ РЅРµРѕР±С…РѕРґРёРјС‹С… С„Р°Р№Р»РѕРІ (РїРµСЂРµРЅРµСЃ СЃРІРµСЂС…Сѓ, С‡С‚РѕР±С‹ СѓС‡РёС‚С‹РІР°Р»СЃСЏ С„Р»Р°Р¶РѕРє "Inject ConEmuHk")
 	if (!gpConEmu->CheckRequiredFiles())
 	{
 		return 100;
 	}
-	
-	
+
+
 	//#pragma message("Win2k: CLEARTYPE_NATURAL_QUALITY")
 	//if (ClearTypePrm)
 	//    gpSet->LogFont.lfQuality = CLEARTYPE_NATURAL_QUALITY;
@@ -4008,18 +4133,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (VisValue)
 		gpSet->isConVisible = VisPrm;
 
-	// Если запускается conman (нафига?) - принудительно включить флажок "Обновлять handle"
-	//TODO("Deprecated: isUpdConHandle использоваться не должен");
+	// Р•СЃР»Рё Р·Р°РїСѓСЃРєР°РµС‚СЃСЏ conman (РЅР°С„РёРіР°?) - РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РІРєР»СЋС‡РёС‚СЊ С„Р»Р°Р¶РѕРє "РћР±РЅРѕРІР»СЏС‚СЊ handle"
+	//TODO("Deprecated: isUpdConHandle РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РЅРµ РґРѕР»Р¶РµРЅ");
 
 	if (gpSetCls->IsMulti() || StrStrI(gpSetCls->GetCmd(), L"conman.exe"))
 	{
 		//gpSet->isUpdConHandle = TRUE;
 
-		// сбрость CreateInNewEnvironment для ConMan
+		// СЃР±СЂРѕСЃС‚СЊ CreateInNewEnvironment РґР»СЏ ConMan
 		ResetConman();
 	}
 
-	// Установка параметров из командной строки
+	// РЈСЃС‚Р°РЅРѕРІРєР° РїР°СЂР°РјРµС‚СЂРѕРІ РёР· РєРѕРјР°РЅРґРЅРѕР№ СЃС‚СЂРѕРєРё
 	if (cmdNew)
 	{
 		MCHKHEAP
@@ -4039,16 +4164,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{
 			int nLen = _tcslen(cmdNew)+8;
 
-			// params = (uint)-1, если в первый аргумент не начинается с '/'
-			// т.е. комстрока такая "ConEmu.exe c:\tools\far.exe"
+			// params = (uint)-1, РµСЃР»Рё РІ РїРµСЂРІС‹Р№ Р°СЂРіСѓРјРµРЅС‚ РЅРµ РЅР°С‡РёРЅР°РµС‚СЃСЏ СЃ '/'
+			// С‚.Рµ. РєРѕРјСЃС‚СЂРѕРєР° С‚Р°РєР°СЏ "ConEmu.exe c:\tools\far.exe"
 			if ((params == (uint)-1)
 				&& (gpSet->nStartType == 0)
 				&& (gpSet->psStartSingleApp && *gpSet->psStartSingleApp))
 			{
-				// В psStartSingleApp может быть прописан путь к фару.
-				// Тогда, если в проводнике набросили, например, txt файл
-				// на иконку ConEmu, этот наброшенный путь прилепится
-				// к строке запуска фара.
+				// Р’ psStartSingleApp РјРѕР¶РµС‚ Р±С‹С‚СЊ РїСЂРѕРїРёСЃР°РЅ РїСѓС‚СЊ Рє С„Р°СЂСѓ.
+				// РўРѕРіРґР°, РµСЃР»Рё РІ РїСЂРѕРІРѕРґРЅРёРєРµ РЅР°Р±СЂРѕСЃРёР»Рё, РЅР°РїСЂРёРјРµСЂ, txt С„Р°Р№Р»
+				// РЅР° РёРєРѕРЅРєСѓ ConEmu, СЌС‚РѕС‚ РЅР°Р±СЂРѕС€РµРЅРЅС‹Р№ РїСѓС‚СЊ РїСЂРёР»РµРїРёС‚СЃСЏ
+				// Рє СЃС‚СЂРѕРєРµ Р·Р°РїСѓСЃРєР° С„Р°СЂР°.
 				pszDefCmd = gpSet->psStartSingleApp;
 				CmdArg szExe;
 				if (0 != NextArg(&pszDefCmd, szExe))
@@ -4057,11 +4182,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				else
 				{
-					// Только если szExe это Far.
+					// РўРѕР»СЊРєРѕ РµСЃР»Рё szExe СЌС‚Рѕ Far.
 					if (IsFarExe(szExe))
 						pszDefCmd = gpSet->psStartSingleApp;
 					else
-						pszDefCmd = NULL; // Запускать будем только то, что "набросили"
+						pszDefCmd = NULL; // Р—Р°РїСѓСЃРєР°С‚СЊ Р±СѓРґРµРј С‚РѕР»СЊРєРѕ С‚Рѕ, С‡С‚Рѕ "РЅР°Р±СЂРѕСЃРёР»Рё"
 				}
 
 				if (pszDefCmd)
@@ -4076,7 +4201,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				MBoxAssert(pszReady!=NULL);
 				return 100;
 			}
-			
+
 
 			if (pszDefCmd)
 			{
@@ -4086,18 +4211,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 				if (pszReady[0] != L'/' && pszReady[0] != L'-')
 				{
-					// Запомним в истории!
+					// Р—Р°РїРѕРјРЅРёРј РІ РёСЃС‚РѕСЂРёРё!
 					gpSet->HistoryAdd(pszReady);
 				}
 			}
 			else if (params == (uint)-1)
 			{
-				*pszReady = DropLnkPrefix; // Признак того, что это передача набрасыванием на ярлык
+				*pszReady = DropLnkPrefix; // РџСЂРёР·РЅР°Рє С‚РѕРіРѕ, С‡С‚Рѕ СЌС‚Рѕ РїРµСЂРµРґР°С‡Р° РЅР°Р±СЂР°СЃС‹РІР°РЅРёРµРј РЅР° СЏСЂР»С‹Рє
 				lstrcpy(pszReady+1, SkipNonPrintable(cmdNew));
 
 				if (pszReady[1] != L'/' && pszReady[1] != L'-')
 				{
-					// Запомним в истории!
+					// Р—Р°РїРѕРјРЅРёРј РІ РёСЃС‚РѕСЂРёРё!
 					gpSet->HistoryAdd(pszReady+1);
 				}
 			}
@@ -4107,7 +4232,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 				if (pszReady[0] != L'/' && pszReady[0] != L'-')
 				{
-					// Запомним в истории!
+					// Р—Р°РїРѕРјРЅРёРј РІ РёСЃС‚РѕСЂРёРё!
 					gpSet->HistoryAdd(pszReady);
 				}
 			}
@@ -4115,7 +4240,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 		MCHKHEAP
 
-		// Запоминаем
+		// Р—Р°РїРѕРјРёРЅР°РµРј
 		gpSetCls->SetCurCmd(pszReady, isScript);
 	}
 
@@ -4133,7 +4258,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	//}
 	// else if (gpSet->isSearchForFont && gpConEmu->ms_ConEmuExe[0]) {
 	//	if (FindFontInFolder(szTempFontFam)) {
-	//		// Шрифт уже зарегистрирован
+	//		// РЁСЂРёС„С‚ СѓР¶Рµ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ
 	//		FontFilePrm = true;
 	//		FontPrm = true;
 	//		FontVal = szTempFontFam;
@@ -4152,18 +4277,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 ///////////////////////////////////
 
-	// Нет смысла проверять и искать, если наш экземпляр - первый.
+	// РќРµС‚ СЃРјС‹СЃР»Р° РїСЂРѕРІРµСЂСЏС‚СЊ Рё РёСЃРєР°С‚СЊ, РµСЃР»Рё РЅР°С€ СЌРєР·РµРјРїР»СЏСЂ - РїРµСЂРІС‹Р№.
 	if (gpSetCls->IsSingleInstanceArg() && !gpConEmu->isFirstInstance())
 	{
 		gpConEmu->LogString(L"SingleInstanceArg");
 
 		HWND hConEmuHwnd = FindWindowExW(NULL, NULL, VirtualConsoleClassMain, NULL);
-		// При запуске серии закладок из cmd файла второму экземпляру лучше чуть-чуть подождать
-		// чтобы успело "появиться" главное окно ConEmu
+		// РџСЂРё Р·Р°РїСѓСЃРєРµ СЃРµСЂРёРё Р·Р°РєР»Р°РґРѕРє РёР· cmd С„Р°Р№Р»Р° РІС‚РѕСЂРѕРјСѓ СЌРєР·РµРјРїР»СЏСЂСѓ Р»СѓС‡С€Рµ С‡СѓС‚СЊ-С‡СѓС‚СЊ РїРѕРґРѕР¶РґР°С‚СЊ
+		// С‡С‚РѕР±С‹ СѓСЃРїРµР»Рѕ "РїРѕСЏРІРёС‚СЊСЃСЏ" РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ ConEmu
 		if ((hConEmuHwnd == NULL) && (gpSetCls->SingleInstanceShowHide == sih_None))
 		{
-			// Если окна нет, и других процессов (ConEmu.exe, ConEmu64.exe) нет
-			// то ждать смысла нет
+			// Р•СЃР»Рё РѕРєРЅР° РЅРµС‚, Рё РґСЂСѓРіРёС… РїСЂРѕС†РµСЃСЃРѕРІ (ConEmu.exe, ConEmu64.exe) РЅРµС‚
+			// С‚Рѕ Р¶РґР°С‚СЊ СЃРјС‹СЃР»Р° РЅРµС‚
 			bool bOtherExists = false;
 
 			gpConEmu->LogString(L"TH32CS_SNAPPROCESS");
@@ -4193,16 +4318,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				CloseHandle(h);
 			}
 
-			// Ждать имеет смысл только если есть другие процессы "ConEmu.exe"/"ConEmu64.exe"
+			// Р–РґР°С‚СЊ РёРјРµРµС‚ СЃРјС‹СЃР» С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РґСЂСѓРіРёРµ РїСЂРѕС†РµСЃСЃС‹ "ConEmu.exe"/"ConEmu64.exe"
 			if (bOtherExists)
 			{
-				Sleep(1000); // чтобы успело "появиться" главное окно ConEmu
+				Sleep(1000); // С‡С‚РѕР±С‹ СѓСЃРїРµР»Рѕ "РїРѕСЏРІРёС‚СЊСЃСЏ" РіР»Р°РІРЅРѕРµ РѕРєРЅРѕ ConEmu
 			}
 		}
 
 		gpConEmu->LogString(L"isFirstInstance");
 
-		// Поехали
+		// РџРѕРµС…Р°Р»Рё
 		DWORD dwStart = GetTickCount();
 
 		while (!gpConEmu->isFirstInstance())
@@ -4212,13 +4337,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			if (gpConEmu->RunSingleInstance())
 			{
 				gpConEmu->LogString(L"Passed to first instance, exiting");
-				return 0; // командная строка успешно запущена в существующем экземпляре
+				return 0; // РєРѕРјР°РЅРґРЅР°СЏ СЃС‚СЂРѕРєР° СѓСЃРїРµС€РЅРѕ Р·Р°РїСѓС‰РµРЅР° РІ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРј СЌРєР·РµРјРїР»СЏСЂРµ
 			}
 
-			// Если передать не удалось (может первый экземпляр еще в процессе инициализации?)
+			// Р•СЃР»Рё РїРµСЂРµРґР°С‚СЊ РЅРµ СѓРґР°Р»РѕСЃСЊ (РјРѕР¶РµС‚ РїРµСЂРІС‹Р№ СЌРєР·РµРјРїР»СЏСЂ РµС‰Рµ РІ РїСЂРѕС†РµСЃСЃРµ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё?)
 			Sleep(250);
 
-			// Если ожидание длится более 10 секунд - запускаемся самостоятельно
+			// Р•СЃР»Рё РѕР¶РёРґР°РЅРёРµ РґР»РёС‚СЃСЏ Р±РѕР»РµРµ 10 СЃРµРєСѓРЅРґ - Р·Р°РїСѓСЃРєР°РµРјСЃСЏ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ
 			if ((GetTickCount() - dwStart) > 10*1000)
 				break;
 		}
@@ -4229,7 +4354,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 //------------------------------------------------------------------------
 
 #if 0
-	//120714 - аналогичные параметры работают в ConEmuC.exe, а в GUI они и не работали. убрал пока
+	//120714 - Р°РЅР°Р»РѕРіРёС‡РЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ СЂР°Р±РѕС‚Р°СЋС‚ РІ ConEmuC.exe, Р° РІ GUI РѕРЅРё Рё РЅРµ СЂР°Р±РѕС‚Р°Р»Рё. СѓР±СЂР°Р» РїРѕРєР°
 	if (AttachPrm)
 	{
 		if (!AttachVal)
@@ -4249,7 +4374,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	gpConEmu->LogString(L"gpConEmu->Init");
 
-	// Тут загружаются иконки, Affinity, и т.п.
+	// РўСѓС‚ Р·Р°РіСЂСѓР¶Р°СЋС‚СЃСЏ РёРєРѕРЅРєРё, Affinity, Рё С‚.Рї.
 	if (!gpConEmu->Init())
 	{
 		return 100;
@@ -4259,7 +4384,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 ///| Create taskbar window |//////////////////////////////////////////////
 //------------------------------------------------------------------------
 
-	// Тут создается окошко чтобы не показывать кнопку на таскбаре
+	// РўСѓС‚ СЃРѕР·РґР°РµС‚СЃСЏ РѕРєРѕС€РєРѕ С‡С‚РѕР±С‹ РЅРµ РїРѕРєР°Р·С‹РІР°С‚СЊ РєРЅРѕРїРєСѓ РЅР° С‚Р°СЃРєР±Р°СЂРµ
 	if (!CheckCreateAppWindow())
 	{
 		return 100;
@@ -4293,7 +4418,7 @@ done:
 //------------------------------------------------------------------------
 	//KillTimer(ghWnd, 0);
 	//delete pVCon;
-	//CloseHandle(hChildProcess); -- он более не требуется
+	//CloseHandle(hChildProcess); -- РѕРЅ Р±РѕР»РµРµ РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ
 	//if (FontFilePrm) RemoveFontResourceEx(FontFile, FR_PRIVATE, NULL); //ADD fontname; by Mors
 	gpSetCls->UnregisterFonts();
 
@@ -4322,7 +4447,7 @@ done:
 	ShutdownGuiStep(L"Gui terminated");
 
 wrap:
-	// Нельзя. Еще живут глобальные объекты
+	// РќРµР»СЊР·СЏ. Р•С‰Рµ Р¶РёРІСѓС‚ РіР»РѕР±Р°Р»СЊРЅС‹Рµ РѕР±СЉРµРєС‚С‹
 	//HeapDeinitialize();
 	return iMainRc;
 }

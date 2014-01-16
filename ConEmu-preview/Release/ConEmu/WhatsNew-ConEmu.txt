@@ -15,6 +15,177 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 *****************
 
 
+2014.01.16
+[*] Also show ANSI color indexes on ‘Colors’ settings page.
+[*] Donate/flattr buttons in the ‘About’ dialog.
+[*] Some more logging information to LogFiles.
+[+] Issue 1430: Progress indicator for aria2 downloader (thecybershadow).
+[*] Tab Admin shield/suffix. Separate settings, Shield was not be able to disabled.
+[*] Tab templates. Avoid adding sequential spaces (e.g. if some vars was empty).
+[*] New tab template var: ‘%a’ - admin suffix.
+    1. Admin suffix must be enabled on ‘Tabs’ settings page;
+    2. If ‘%a’ was not specified explicitly, suffix appended at the end;
+    3. If you don't need suffix in tab at all - clear ‘suffix’ edit box.
+[*] Apply ‘Skip words from title’ to admin console titles, but not tabs only.
+[*] Some internal changes.
+
+
+2014.01.14a
+[%] Fix autoupdate msg box info.
+
+
+2014.01.14
+[%] Color artifacts in some cases after changing palette on-the-fly (cmd.exe).
+[%] Fix. ANSI. Wrong behavior of 'ESC [ n M' (VIM & xterm256).
+[*] GuiMacro. Add 'Palette' description to About dialog.
+[*] Some code refactoring.
+
+
+2014.01.13
+[%] Quake contents was not painted during animation (Revert 4d4fec3f35).
+[%] GuiMacro. Regression. Remove lags during Far F4 shell macro.
+[*] ConEmu.Editor.* - F4 in panels. Execute in QSearch too.
+[*] Issue 1214: MClick & RClick above tabs in fullscreen mode.
+[*] Protect code from infinite close confirmations.
+
+
+2014.01.12a
+[*] Just for testing autoupdate from SourceForge.
+
+
+2014.01.12
+[*] Allow change of active VCon palette on the fly from Tab menu.
+[*] GuiMacro. Palette function to change or get palette name
+    Palette([<Cmd>[,"<NewPalette>"]]) or Palette([<Cmd>[,<PaletteIndex>]])
+      Cmd=0 - return palette from ConEmu settings
+      Cmd=1 - change palette in ConEmu settings, returns prev palette
+      Cmd=2 - return palette from current console
+      Cmd=3 - change palette in current console, returns prev palette
+[*] Updater. Don't try to extract filename from URL, use predefined format.
+[*] Shutdown server logging fixes.
+[*] Issue 1396: ConEmu was not closed if console was terminated too fast.
+[*] Remove warnings on GetVersionEx and other internal code changes.
+[*] Memory leak in macro execution.
+[*] GuiMacro. Parser refactoring, new syntax allowed.
+    * Arguments may be delimited with spaces
+    * Several macros in one cmdline may be delimited with "-GuiMacro"
+    Usage example:
+    ConEmuC.exe -GuiMacro palette 1 "<Solarized>" -guimacro WindowMaximize
+[*] ConEmuC. Add linefeed after GuiMacro output if ConEmuC is not redirected.
+[*] ConEmuC. Don't write terminating '\0' to redirected output.
+[*] Show all (stable/preview/devel) versions when "Check for updates" called
+    and no newer version was detected.
+[*] Issue 1424: Show time in status bar (optional).
+[*] Ready to new version.ini location. New (debug) switch -SetUpdateSrc <URL>.
+
+
+2014.01.09
+[%] Palette was failed to be set properly for elevated consoles.
+[%] Elevated console was hidden even if "ConEmu /visible" was called.
+[+] Allow '-'style arguments in ConEmu.exe cmd line.
+[*] Default terminal. Remove real console flickering when starting console app from explorer.
+[*] Issue 1340: Alternatively attached console was closed by Ctrl+C.
+[*] Macro `Shell("new_console:a")` allowed.
+[%] Update/fix 'RunAsAdmin' state on tab after attach.
+[%] Crash if user cancelled console creation in some cases.
+[%] Memory leak if user cancelled console creation in some cases.
+[%] Excess logon dialog when running "cmd -new_console:u:<name>:".
+[*] Win v6.1: conhost PID detection improved.
+[*] Some internal changes.
+
+
+2014.01.06
+[%] Default terminal fixes.
+[*] Don't show excess paths and quotes in title.
+[%] Small memory leak while restaring tab on Win7.
+[%] Don't force ConEmuC64 as root server when using "set" before command.
+[+] Support "chcp ansi|oem|utf-8|<CodePageNumber>" internally by ConEmuC.
+[+] Support '-'style arguments in ConEmuC.
+[%] Issue 1421: PowerShell coloursed prompt displayed incorrectly.
+[+] Downloader. New internal commands, default to async, and new switches:
+    -otimeout <ms> - Our wait for async operation timeout
+    -timeout <ms>  - WinInet data receive timeout
+    -async Y|N     - Turn On/Off asynchronous mode.
+
+
+2014.01.04
+[+] All internet code (Updater) moved to ConEmuCD.dll.
+    Side effect - you may download from http/https/ftp without any external tools.
+    ConEmuC /download [-login <name> -password <pwd>]
+      [-proxy <address:port> [-proxylogin <name> -proxypassword <pwd>]]
+      "full_url_to_file" "local_path_name"
+[%] Fix DirectoryExist for symlinks.
+[+] Allow to choose another shell or directory if console startup failed.
+    For example, if your saved named task was created for some directory,
+    which was deleted at some moment. ConEmu will suggest to show standard
+    'Create new console' dialog where user can change command and directory.
+[+] ConEmu will check directory existence before creating new tab.
+    If you type wrong startup directory for new process
+    in the 'Create new console' dialog, ConEmu will check it,
+    show warning and allows to change it to smth better.
+[+] Issue 1410: Fix unexpected SetCurrentConsoleFontEx from PowerShell.
+[%] Issue 1415: Some console output of ConEmuC was not able to redirecting.
+[+] More information in "ConEmuC /?".
+[+] Allow "ConEmuC /AUTOATTACH /GHWND=0x???" - attach to exact ConEmu instance.
+
+
+2013.12.25
+[!] Issue 1406: Sources was converted to utf-8 (mostly by Rick Sladkey).
+[%] GCC makefiles and source fixes.
+[%] DllMain was not called when compiled with GCC.
+[%] InjectHookDLL cause crash in hooked process when compiled with GCC.
+[*] File ".editorconfig" added into "src" folder.
+[%] Issue 1404: Workaround for deadlock between AltServerStop and ReloadFullConsoleInfo (by Rick Sladkey).
+[%] Issue 1404: Fix overlapped I/O for ReadFile like TransactNamePipe (by Rick Sladkey).
+[%] Issue 1405: Don't wait for overlapped event unless the API assures us that I/O is pending (by Rick Sladkey).
+[%] If no desktop dir is available - save dump into %TEMP%.
+[*] Some internal code changes.
+
+
+2013.12.23
+[%] Issue 1379: Disable fade in effect on startup.
+[*] Console font dialog - 'restart may be required'.
+[%] Issue 1402: Prevent RM_ALTSERVER mode from warping CurrentDirectory (by Rick Sladkey).
+[+] New ANSI sequences supported:
+    "ESC [ n X" - erase n characters
+    "ESC [ > c" --> Report "ESC > 67 ; build ; 0 c"
+    "ESC [ c"   --> Report "ESC [ ? 1 ; 2 c"
+    "ESC [ 5 n" -> Report status as "CSI 0 n" (OK)
+    "ESC [ 6 n" -> Report Cursor Position as "ESC [ row ; col R"
+    "ESC [ 1 8 t" --> Report the size of the text area in characters as "ESC [ 8 ; height ; width t"
+    "ESC [ 1 9 t" --> Report the size of the screen in characters as "ESC [ 9 ; height ; width t"
+    "ESC [ 2 1 t" --> Report window’s title as "ESC ] l title ESC \"
+[%] ANSI xterm256. When line was wrapped (long prompt or output)
+    * extended atributes was not shifted properly;
+    * rest of line was printed char-by-char.
+[%] Issue 1403: Seamless start with default ConEmu config in WinPE.
+[%] Ready to create MiniDump in WinPE.
+[*] Try to use 'Courier New' as border font if 'Lucida Console' fails
+[%] Issue 1399: Angular quotation marks in the English translation.
+[%] Issue 1400: Environment variables dont't work in update path to 7zip
+[+] Portable_Test.cmd - creates simple one-file portable executable using WinRar.
+[*] Some internal changes.
+
+
+2013.12.19
+[!] ConEmuHk linked with flags /DYNAMICBASE:NO /FIXED:NO /BASE:0x7E110000.
+[*] GuiMacro Transparent&HighlightMouse described in the About dialog.
+[*] Hide cursor during mouse-selection, show half-horz cursor during keyboard selection.
+[%] Copy, Detect line ends. Allow one space on the next line beginning.
+[*] Some hotkeys descriptions was changed
+    * Highlighting: hyperlinks and compiler errors (FarGotoEditor modifier);
+    * Highlighting: Switch «Highlight row under mouse cursor».
+[%] ANSI & xterm256 improvements:
+    * Try to deal with ReadLine scrolling and xterm256;
+    * Clear extened attributes after cmd's cls.
+    * "ESC [ 0 m" set original colors instead of gray-on-black;
+      «Original» means colors was set in console before first
+      ANSI color change (first write to console actually)
+      in the current application (e.g. cmd.exe).
+[*] Addons\git.cmd -> Addons\git_sample.cmd.
+[*] Some internal and debug changes.
+
+
 2013.12.15
 [+] Issue 1362: Hotkeys for inc/dec transparency
     * GuiMacro: Transparency(<Cmd>,<Value>)

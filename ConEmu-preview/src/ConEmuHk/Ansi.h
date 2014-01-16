@@ -1,4 +1,4 @@
-
+п»ї
 /*
 Copyright (c) 2013 Maximus5
 All rights reserved.
@@ -35,6 +35,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern DWORD AnsiTlsIndex;
 //#include "../common/MMap.h"
+
+#include "../common/ConsoleMixAttr.h"
 
 typedef BOOL (WINAPI* OnWriteConsoleW_t)(HANDLE hConsoleOutput, const VOID *lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten, LPVOID lpReserved);
 
@@ -77,6 +79,7 @@ public:
 		if (!p)
 		{
 			p = (CEAnsi*)calloc(1,sizeof(*p));
+			if (p) p->GetDefaultTextAttr(); // Initialize "default attributes"
 			TlsSetValue(AnsiTlsIndex, p);
 		}
 
@@ -115,9 +118,11 @@ public:
 	static void StartVimTerm(bool bFromDllStart);
 	static void StopVimTerm();
 
+	static void OnReadConsoleBefore(HANDLE hConOut, const CONSOLE_SCREEN_BUFFER_INFO& csbi);
+	static void OnReadConsoleAfter(bool bFinal);
+
 	static bool IsAnsiCapable(HANDLE hFile, bool* bIsConsoleOutput = NULL);
 	static bool IsOutputHandle(HANDLE hFile, DWORD* pMode = NULL);
-	static bool IsSuppressBells();
 
 	static void GetFeatures(bool* pbAnsiAllowed, bool* pbSuppressBells);
 
@@ -138,7 +143,7 @@ public:
 		wchar_t  First;  // ESC (27)
 		wchar_t  Second; // any of 64 to 95 ('@' to '_')
 		wchar_t  Action; // any of 64 to 126 (@ to ~). this is terminator
-		wchar_t  Skip;   // Если !=0 - то эту последовательность нужно пропустить
+		wchar_t  Skip;   // Р•СЃР»Рё !=0 - С‚Рѕ СЌС‚Сѓ РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕСЃС‚СЊ РЅСѓР¶РЅРѕ РїСЂРѕРїСѓСЃС‚РёС‚СЊ
 		int      ArgC;
 		int      ArgV[16];
 		LPCWSTR  ArgSZ; // Reserved for key mapping
@@ -158,6 +163,13 @@ public:
 	/*         Working methods               */
 	/* ************************************* */
 	BOOL WriteAnsiCodes(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, LPCWSTR lpBuffer, DWORD nNumberOfCharsToWrite, LPDWORD lpNumberOfCharsWritten);
+protected:
+	void WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, AnsiEscCode& Code, BOOL& lbApply);
+	void WriteAnsiCode_OSC(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, AnsiEscCode& Code, BOOL& lbApply);
+	void WriteAnsiCode_VIM(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsoleOutput, AnsiEscCode& Code, BOOL& lbApply);
+	BOOL ReportString(LPCWSTR asRet);
+	void ReportConsoleTitle();
+public:
 
 	void ReSetDisplayParm(HANDLE hConsoleOutput, BOOL bReset, BOOL bApply);
 
@@ -220,7 +232,7 @@ protected:
 		BOOL  AutoLfNl; // LF/NL (default off): Automatically follow echo of LF, VT or FF with CR.
 		//
 		BOOL  ScrollRegion;
-		SHORT ScrollStart, ScrollEnd; // 1-based line indexes
+		SHORT ScrollStart, ScrollEnd; // 1-based line indexes (relative to VISIBLE area, these are not absolute buffer coords)
 	}; // gDisplayOpt;
 	// Bad thing again...
 	static DisplayOpt gDisplayOpt;
@@ -229,4 +241,17 @@ protected:
 	INT_PTR gnPrevAnsiPart; // = 0;
 	wchar_t gsPrevAnsiPart2[CEAnsi_MaxPrevPart]; // = {};
 	INT_PTR gnPrevAnsiPart2; // = 0;
+
+	bool mb_SuppressBells;
+
+	// In "ReadLine" we can't control scrolling
+	// thats why we need to mark some rows for identification
+	struct XtermStoreMarks
+	{
+		// [0] - above CursorPos, but if CursorPos was on FIRST line - it can't be...
+		// [1] - exactly on CursorPos, but if CursorX on the FIRST column - this will be illegal
+		SHORT SaveRow[2];
+		WORD  RowId[2];
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+	} m_RowMarks;
 };

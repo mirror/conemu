@@ -1,6 +1,6 @@
-
+п»ї
 /*
-Copyright (c) 2011-2012 Maximus5
+Copyright (c) 2011-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -35,27 +35,28 @@ public:
 	wchar_t *szUpdateVerLocation; // ConEmu latest version location info
 	LPCWSTR UpdateVerLocation();
 	LPCWSTR UpdateVerLocationDefault();
-	
+	void SetUpdateVerLocation(LPCWSTR asNewIniLocation);
+
 	bool isUpdateCheckOnStartup;
 	bool isUpdateCheckHourly;
 	bool isUpdateConfirmDownload; // true-Show MessageBox, false-notify via TSA only
-	BYTE isUpdateUseBuilds; // 0-спросить пользователя при первом запуске, 1-stable only, 2-latest, 3-preview
+	BYTE isUpdateUseBuilds; // 0-СЃРїСЂРѕСЃРёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РїСЂРё РїРµСЂРІРѕРј Р·Р°РїСѓСЃРєРµ, 1-stable only, 2-latest, 3-preview
 	BYTE isUpdateDownloadSetup; // 0-Auto, 1-Installer (ConEmuSetup.exe), 2-7z archieve (ConEmu.7z), WinRar or 7z required
-	BYTE isSetupDetected; // 0-пока не проверялся, 1-установлено через Installer, пути совпали, 2-Installer не запускался
+	BYTE isSetupDetected; // 0-РїРѕРєР° РЅРµ РїСЂРѕРІРµСЂСЏР»СЃСЏ, 1-СѓСЃС‚Р°РЅРѕРІР»РµРЅРѕ С‡РµСЂРµР· Installer, РїСѓС‚Рё СЃРѕРІРїР°Р»Рё, 2-Installer РЅРµ Р·Р°РїСѓСЃРєР°Р»СЃСЏ
 	BYTE UpdateDownloadSetup();
-	
+
 	bool isUpdateUseProxy;
 	wchar_t *szUpdateProxy; // "Server:port"
 	wchar_t *szUpdateProxyUser;
 	wchar_t *szUpdateProxyPassword;
-	
+
 	// "%1"-archive or setup file, "%2"-ConEmu.exe folder, "%3"-x86/x64, "%4"-ConEmu PID
 	wchar_t *szUpdateExeCmdLine, *szUpdateExeCmdLineDef; // isUpdateDownloadSetup==1
 	LPCWSTR UpdateExeCmdLine();
 	wchar_t *szUpdateArcCmdLine, *szUpdateArcCmdLineDef; // isUpdateDownloadSetup==2
 	LPCWSTR UpdateArcCmdLine();
 
-	wchar_t *szUpdatePostUpdateCmd; // Юзер может чего-то свое делать с распакованными файлами
+	wchar_t *szUpdatePostUpdateCmd; // Р®Р·РµСЂ РјРѕР¶РµС‚ С‡РµРіРѕ-С‚Рѕ СЃРІРѕРµ РґРµР»Р°С‚СЊ СЃ СЂР°СЃРїР°РєРѕРІР°РЅРЅС‹РјРё С„Р°Р№Р»Р°РјРё
 
 	wchar_t *szUpdateDownloadPath; // "%TEMP%\\ConEmu"
 	bool isUpdateLeavePackages;
@@ -65,7 +66,7 @@ public:
 public:
 	ConEmuUpdateSettings();
 	~ConEmuUpdateSettings();
-	
+
 	void ResetToDefaults();
 	void FreePointers();
 	void LoadFrom(ConEmuUpdateSettings* apFrom);

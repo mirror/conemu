@@ -1,6 +1,6 @@
-
+﻿
 /*
-Copyright (c) 2011 Maximus5
+Copyright (c) 2011-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -28,6 +28,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#define DOWNLOADER_IMPORTS
+#include "../ConEmuCD/Downloader.h"
+
 struct ConEmuUpdateSettings;
 class CConEmuUpdate;
 class MSection;
@@ -42,20 +45,29 @@ protected:
 	BOOL mb_InCheckProcedure;
 	DWORD mn_CheckThreadId;
 	HANDLE mh_CheckThread;
-	
+
 	//HANDLE mh_StopThread;
 
-	CWinInet* wi;
-	friend class CWinInet;
 	bool mb_InetMode, mb_DroppedMode;
-	HANDLE mh_Internet, mh_Connect, mh_SrcFile;
-	DWORD mn_InternetContentLen, mn_InternetContentReady, mn_PackageSize;
-	DWORD_PTR mn_Context;
-	void CloseInternet(bool bFull);
-	
+	DWORD mn_InternetContentReady, mn_PackageSize;
+
+	struct wininet
+	{
+		CConEmuUpdate* pUpd;
+		HMODULE hDll;
+		DownloadCommand_t DownloadCommand;
+		bool Init(CConEmuUpdate* apUpd);
+		bool Deinit(bool bFull);
+		void SetCallback(CEDownloadCommand cbk, FDownloadCallback pfnCallback, LPARAM lParam);
+	} Inet;
+
+	static void WINAPI ProgressCallback(const CEDownloadInfo* pError);
+	static void WINAPI ErrorCallback(const CEDownloadInfo* pError);
+	static void WINAPI LogCallback(const CEDownloadInfo* pError);
+
 	BOOL mb_ManualCallMode;
 	ConEmuUpdateSettings* mp_Set;
-	
+
 	bool mb_InShowLastError;
 	wchar_t* ms_LastErrorInfo;
 	MSection* mp_LastErrorSC;
@@ -68,39 +80,37 @@ protected:
 	wchar_t* mpsz_PendingPackageFile;
 	wchar_t* mpsz_PendingBatchFile;
 
-	DWORD mn_Timeout, mn_ConnTimeout, mn_DataTimeout, mn_FileTimeout;
-	
 	static DWORD WINAPI CheckThreadProc(LPVOID lpParameter);
 	DWORD CheckProcInt();
-	
+	void GetVersionsFromIni(LPCWSTR pszUpdateVerLocation, wchar_t (&szServer)[100], wchar_t (&szInfo)[100]);
+
 	wchar_t* CreateTempFile(LPCWSTR asDir, LPCWSTR asFileNameTempl, HANDLE& hFile);
 	wchar_t* CreateBatchFile(LPCWSTR asPackage);
-	
+
 	bool IsLocalFile(LPWSTR& asPathOrUrl);
 	bool IsLocalFile(LPCWSTR& asPathOrUrl);
 
 	bool bNeedRunElevation;
 	bool NeedRunElevation();
-	
+
 	BOOL DownloadFile(LPCWSTR asSource, LPCWSTR asTarget, HANDLE hDstFile, DWORD& crc, BOOL abPackage = FALSE);
-	BOOL ReadSource(LPCWSTR asSource, BOOL bInet, HANDLE hSource, BYTE* pData, DWORD cbData, DWORD* pcbRead);
-	BOOL WriteTarget(LPCWSTR asTarget, HANDLE hTarget, const BYTE* pData, DWORD cbData);
-	
+
 	void ReportError(LPCWSTR asFormat, DWORD nErrCode);
 	void ReportError(LPCWSTR asFormat, LPCWSTR asArg, DWORD nErrCode);
 	void ReportError(LPCWSTR asFormat, LPCWSTR asArg1, LPCWSTR asArg2, DWORD nErrCode);
+	void ReportBrokenIni(LPCWSTR asSection, LPCWSTR asName, LPCWSTR asIni);
 
 	void ReportErrorInt(wchar_t* asErrorInfo);
 
 public:
 	CConEmuUpdate();
 	~CConEmuUpdate();
-	
+
 	void StartCheckProcedure(BOOL abShowMessages);
 	void StopChecking();
 	void ShowLastError();
 	bool ShowConfirmation();
-	
+
 	static bool LocalUpdate(LPCWSTR asDownloadedPackage);
 	static bool IsUpdatePackage(LPCWSTR asFilePath);
 
@@ -118,9 +128,12 @@ public:
 	short GetUpdateProgress();
 
 protected:
-	BOOL mb_RequestTerminate;
+	void RequestTerminate();
+	bool mb_RequestTerminate;
 	UpdateStep m_UpdateStep;
 	wchar_t ms_NewVersion[64], ms_CurVersion[64], ms_SkipVersion[64];
+	wchar_t ms_VerOnServer[100]; // Information about available server versions
+	wchar_t ms_CurVerInfo[100];  // Version + stable/preview/alpha
 	wchar_t ms_DefaultTitle[128];
 	bool QueryConfirmation(UpdateStep step, LPCWSTR asParm = NULL);
 	bool QueryConfirmationInt(LPCWSTR asConfirmInfo);

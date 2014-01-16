@@ -1,6 +1,6 @@
-
+п»ї
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -28,10 +28,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #ifdef _DEBUG
-//  Раскомментировать, чтобы сразу после запуска процесса (conemuc.exe) показать MessageBox, чтобы прицепиться дебаггером
+//  Р Р°СЃРєРѕРјРјРµРЅС‚РёСЂРѕРІР°С‚СЊ, С‡С‚РѕР±С‹ СЃСЂР°Р·Сѓ РїРѕСЃР»Рµ Р·Р°РїСѓСЃРєР° РїСЂРѕС†РµСЃСЃР° (conemuc.exe) РїРѕРєР°Р·Р°С‚СЊ MessageBox, С‡С‚РѕР±С‹ РїСЂРёС†РµРїРёС‚СЊСЃСЏ РґРµР±Р°РіРіРµСЂРѕРј
 //	#define SHOW_STARTED_MSGBOX
 #elif defined(__GNUC__)
-//  Раскомментировать, чтобы сразу после запуска процесса (conemuc.exe) показать MessageBox, чтобы прицепиться дебаггером
+//  Р Р°СЃРєРѕРјРјРµРЅС‚РёСЂРѕРІР°С‚СЊ, С‡С‚РѕР±С‹ СЃСЂР°Р·Сѓ РїРѕСЃР»Рµ Р·Р°РїСѓСЃРєР° РїСЂРѕС†РµСЃСЃР° (conemuc.exe) РїРѕРєР°Р·Р°С‚СЊ MessageBox, С‡С‚РѕР±С‹ РїСЂРёС†РµРїРёС‚СЊСЃСЏ РґРµР±Р°РіРіРµСЂРѕРј
 //  #define SHOW_STARTED_MSGBOX
 #else
 //
@@ -50,7 +50,7 @@ BOOL WINAPI HandlerRoutine(DWORD dwCtrlType)
 {
 	if (gfHandlerRoutine)
 	{
-		// Вызов функи из ConEmuHk.dll
+		// Р’С‹Р·РѕРІ С„СѓРЅРєРё РёР· ConEmuHk.dll
 		gfHandlerRoutine(dwCtrlType);
 	}
 
@@ -95,17 +95,18 @@ int main(int argc, char** argv)
 	DWORD dwErr, dwOut;
 	typedef int (__stdcall* ConsoleMain2_t)(BOOL abAlternative);
 	ConsoleMain2_t lfConsoleMain2;
-	// Обязательно, иначе по CtrlC мы свалимся
-	SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerRoutine, true);
 
-	#if defined(SHOW_STARTED_MSGBOX) || defined(SHOW_COMSPEC_STARTED_MSGBOX)
+	#if defined(SHOW_STARTED_MSGBOX)
 	if (!IsDebuggerPresent())
 	{
-		wchar_t szTitle[100]; _wsprintf(szTitle, SKIPLEN(countof(szTitle)) L"ConEmuC Loaded (PID=%i)", GetCurrentProcessId());
+		wchar_t szTitle[100]; _wsprintf(szTitle, SKIPLEN(countof(szTitle)) WIN3264TEST(L"ConEmuC",L"ConEmuC64") L" Loaded (PID=%i)", GetCurrentProcessId());
 		const wchar_t* pszCmdLine = GetCommandLineW();
 		MessageBox(NULL,pszCmdLine,szTitle,0);
 	}
 	#endif
+
+	// РћР±СЏР·Р°С‚РµР»СЊРЅРѕ, РёРЅР°С‡Рµ РїРѕ CtrlC РјС‹ СЃРІР°Р»РёРјСЃСЏ
+	SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerRoutine, true);
 
 	#ifdef _DEBUG
 	UnitTests();
@@ -125,7 +126,7 @@ int main(int argc, char** argv)
 		return CERR_CONEMUHK_NOTFOUND;
 	}
 
-	// Загрузить функи из ConEmuHk
+	// Р—Р°РіСЂСѓР·РёС‚СЊ С„СѓРЅРєРё РёР· ConEmuHk
 	lfConsoleMain2 = (ConsoleMain2_t)GetProcAddress(hConEmu, "ConsoleMain2");
 	gfHandlerRoutine = (PHANDLER_ROUTINE)GetProcAddress(hConEmu, "HandlerRoutine");
 
@@ -145,7 +146,7 @@ int main(int argc, char** argv)
 	iRc = lfConsoleMain2(0/*WorkMode*/);
 	// Exiting
 	gfHandlerRoutine = NULL;
-	//FreeLibrary(hConEmu); -- Shutdown Server/Comspec уже выполнен
+	//FreeLibrary(hConEmu); -- Shutdown Server/Comspec СѓР¶Рµ РІС‹РїРѕР»РЅРµРЅ
 	ExitProcess(iRc);
 	return iRc;
 }

@@ -1,6 +1,6 @@
-
+п»ї
 /*
-Copyright (c) 2011 Maximus5
+Copyright (c) 2011-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -29,15 +29,18 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "../common/CmdLine.h"
+#include "../common/RConStartArgs.h"
 
 struct RConStartArgs;
 
 class CShellProc
 {
 private:
+	RConStartArgs m_Args;
+
 	UINT mn_CP; // = AreFileApisANSI() ? CP_ACP : CP_OEMCP;
 	
-	// Для конвертации параметров Ansi функций (работаем через Unicode для унификации)
+	// Р”Р»СЏ РєРѕРЅРІРµСЂС‚Р°С†РёРё РїР°СЂР°РјРµС‚СЂРѕРІ Ansi С„СѓРЅРєС†РёР№ (СЂР°Р±РѕС‚Р°РµРј С‡РµСЂРµР· Unicode РґР»СЏ СѓРЅРёС„РёРєР°С†РёРё)
 	LPWSTR mpwsz_TempAction; // = str2wcs(asAction, nCP);
 	LPWSTR mpwsz_TempFile; // = str2wcs(asFile, nCP);
 	LPWSTR mpwsz_TempParam; // = str2wcs(asParam, nCP);
@@ -49,14 +52,14 @@ private:
 	LPWSTR mpwsz_TempRetParam;
 	LPWSTR mpwsz_TempRetDir;
 	
-	// Копии для ShellExecuteEx - менять мы можем только свою память
+	// РљРѕРїРёРё РґР»СЏ ShellExecuteEx - РјРµРЅСЏС‚СЊ РјС‹ РјРѕР¶РµРј С‚РѕР»СЊРєРѕ СЃРІРѕСЋ РїР°РјСЏС‚СЊ
 	LPSHELLEXECUTEINFOA mlp_ExecInfoA, mlp_SaveExecInfoA;
 	LPSHELLEXECUTEINFOW mlp_ExecInfoW, mlp_SaveExecInfoW;
 	
-	// Информация о запускаемом процессе
+	// РРЅС„РѕСЂРјР°С†РёСЏ Рѕ Р·Р°РїСѓСЃРєР°РµРјРѕРј РїСЂРѕС†РµСЃСЃРµ
 	DWORD mn_ImageSubsystem, mn_ImageBits;
 	CmdArg ms_ExeTmp;
-	BOOL mb_WasSuspended; // Если TRUE - значит при вызове CreateProcessXXX уже был флаг CREATE_SUSPENDED
+	BOOL mb_WasSuspended; // Р•СЃР»Рё TRUE - Р·РЅР°С‡РёС‚ РїСЂРё РІС‹Р·РѕРІРµ CreateProcessXXX СѓР¶Рµ Р±С‹Р» С„Р»Р°Рі CREATE_SUSPENDED
 	BOOL mb_NeedInjects;
 	BOOL mb_DebugWasRequested;
 	BOOL mb_PostInjectWasRequested;
@@ -83,7 +86,7 @@ private:
 	int PrepareExecuteParms(
 				enum CmdOnCreateType aCmd,
 				LPCWSTR asAction, LPCWSTR asFile, LPCWSTR asParam,
-				DWORD* anShellFlags, DWORD* anCreateFlags, DWORD* anStartFlags, DWORD* anShowCmd, // или Shell & Create флаги
+				DWORD* anShellFlags, DWORD* anCreateFlags, DWORD* anStartFlags, DWORD* anShowCmd, // РёР»Рё Shell & Create С„Р»Р°РіРё
 				HANDLE* lphStdIn, HANDLE* lphStdOut, HANDLE* lphStdErr,
 				LPWSTR* psFile, LPWSTR* psParam, LPWSTR* psStartDir);
 	BOOL ChangeExecuteParms(enum CmdOnCreateType aCmd, BOOL abNewConsole,
@@ -103,21 +106,22 @@ public:
 	BOOL LoadSrvMapping(BOOL bLightCheck = FALSE);
 	DWORD GetUseInjects();
 	BOOL GetLogLibraries();
+	const RConStartArgs* GetArgs();
 public:
 	CShellProc();
 	~CShellProc();
 public:
-	// Эти функции возвращают TRUE, если команда обрабатывается (нужно будет делать Inject)
+	// Р­С‚Рё С„СѓРЅРєС†РёРё РІРѕР·РІСЂР°С‰Р°СЋС‚ TRUE, РµСЃР»Рё РєРѕРјР°РЅРґР° РѕР±СЂР°Р±Р°С‚С‹РІР°РµС‚СЃСЏ (РЅСѓР¶РЅРѕ Р±СѓРґРµС‚ РґРµР»Р°С‚СЊ Inject)
 	BOOL OnShellExecuteA(LPCSTR* asAction, LPCSTR* asFile, LPCSTR* asDir, LPCSTR* asParam, DWORD* anFlags, DWORD* anShowCmd);
 	BOOL OnShellExecuteW(LPCWSTR* asAction, LPCWSTR* asFile, LPCWSTR* asDir, LPCWSTR* asParam, DWORD* anFlags, DWORD* anShowCmd);
 	BOOL OnShellExecuteExA(LPSHELLEXECUTEINFOA* lpExecInfo);
 	BOOL OnShellExecuteExW(LPSHELLEXECUTEINFOW* lpExecInfo);
 	BOOL OnCreateProcessA(LPCSTR* asFile, LPCSTR* asCmdLine, LPCSTR* asDir, DWORD* anCreationFlags, LPSTARTUPINFOA lpSI);
 	BOOL OnCreateProcessW(LPCWSTR* asFile, LPCWSTR* asCmdLine, LPCWSTR* asDir, DWORD* anCreationFlags, LPSTARTUPINFOW lpSI);
-	// Вызывается после успешного создания процесса
+	// Р’С‹Р·С‹РІР°РµС‚СЃСЏ РїРѕСЃР»Рµ СѓСЃРїРµС€РЅРѕРіРѕ СЃРѕР·РґР°РЅРёСЏ РїСЂРѕС†РµСЃСЃР°
 	void OnCreateProcessFinished(BOOL abSucceeded, PROCESS_INFORMATION *lpPI);
 	void OnShellFinished(BOOL abSucceeded, HINSTANCE ahInstApp, HANDLE ahProcess);
-	// Или консоли (*.vshost.exe)
+	// РР»Рё РєРѕРЅСЃРѕР»Рё (*.vshost.exe)
 	void OnAllocConsoleFinished();
 public:
 	// Helper

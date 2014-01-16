@@ -1,6 +1,6 @@
-
+п»ї
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //};
 
 
-// Добавлять можно в любое место, настройки именованые
+// Р”РѕР±Р°РІР»СЏС‚СЊ РјРѕР¶РЅРѕ РІ Р»СЋР±РѕРµ РјРµСЃС‚Рѕ, РЅР°СЃС‚СЂРѕР№РєРё РёРјРµРЅРѕРІР°РЅС‹Рµ
 enum CEStatusItems
 {
 	csi_Info = 0,
@@ -79,6 +79,8 @@ enum CEStatusItems
 	csi_ActiveProcess,
 	csi_ConsoleTitle,
 
+	csi_Time,
+
 	csi_SizeGrip,
 
 	//
@@ -98,8 +100,8 @@ class CRealConsole;
 class CStatus
 {
 private:
-	// Warning!!! тут индекс не соответствует nID, т.к. некоторые элементы могут быть отключены
-	// Warning!!! а в этом векторе добавлены только видимые элементы!
+	// Warning!!! С‚СѓС‚ РёРЅРґРµРєСЃ РЅРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓРµС‚ nID, С‚.Рє. РЅРµРєРѕС‚РѕСЂС‹Рµ СЌР»РµРјРµРЅС‚С‹ РјРѕРіСѓС‚ Р±С‹С‚СЊ РѕС‚РєР»СЋС‡РµРЅС‹
+	// Warning!!! Р° РІ СЌС‚РѕРј РІРµРєС‚РѕСЂРµ РґРѕР±Р°РІР»РµРЅС‹ С‚РѕР»СЊРєРѕ РІРёРґРёРјС‹Рµ СЌР»РµРјРµРЅС‚С‹!
 	struct strItems {
 		BOOL bShow;
 		CEStatusItems nID;
@@ -107,10 +109,10 @@ private:
 		int nTextLen;
 		SIZE TextSize;
 		wchar_t szFormat[64];
-		RECT rcClient; // Координаты относительно клиентской области ghWnd
+		RECT rcClient; // РљРѕРѕСЂРґРёРЅР°С‚С‹ РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ РєР»РёРµРЅС‚СЃРєРѕР№ РѕР±Р»Р°СЃС‚Рё ghWnd
 	} m_Items[csi_Last];
 
-	// В этом векторе - nID уже не нужен, т.к. здесь это индекс
+	// Р’ СЌС‚РѕРј РІРµРєС‚РѕСЂРµ - nID СѓР¶Рµ РЅРµ РЅСѓР¶РµРЅ, С‚.Рє. Р·РґРµСЃСЊ СЌС‚Рѕ РёРЅРґРµРєСЃ
 	struct strData {
 		LPCWSTR sSettingName;
 		LPCWSTR sName;
@@ -140,13 +142,13 @@ private:
 
 	//bool mb_WasClick;
 
-	bool mb_InPopupMenu; // true - на время _любого_ PopupMenu
-	bool mb_InSetupMenu; // true - для ShowStatusSetupMenu
+	bool mb_InPopupMenu; // true - РЅР° РІСЂРµРјСЏ _Р»СЋР±РѕРіРѕ_ PopupMenu
+	bool mb_InSetupMenu; // true - РґР»СЏ ShowStatusSetupMenu
 	void ShowStatusSetupMenu();
 	void ShowVConMenu(POINT pt);
 	void ShowTransparencyMenu(POINT pt);
 
-	bool  mb_DataChanged; // данные изменились, нужна отрисовка
+	bool  mb_DataChanged; // РґР°РЅРЅС‹Рµ РёР·РјРµРЅРёР»РёСЃСЊ, РЅСѓР¶РЅР° РѕС‚СЂРёСЃРѕРІРєР°
 	//bool  mb_Invalidated;
 	DWORD mn_LastPaintTick;
 
@@ -162,6 +164,9 @@ private:
 	HWND mh_Fore, mh_Focus;
 	wchar_t ms_ForeInfo[1024], ms_FocusInfo[1024];
 	bool IsWindowChanged();
+
+	SYSTEMTIME mt_LastTime;
+	bool IsTimeChanged();
 
 	bool ProcessTransparentMenuId(WORD nCmd, bool abAlphaOnly);
 

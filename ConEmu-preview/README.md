@@ -11,10 +11,14 @@ Today, ConEmu can be used with any other console application or simple GUI tools
 (like PuTTY for example). ConEmu is an active project, open to
 [suggestions](http://code.google.com/p/conemu-maximus5/issues/list).
 
+<a href="http://www.fosshub.com/ConEmu.html">![Fosshub.com ConEmu mirror](https://github.com/Maximus5/ConEmu/wiki/Downloads.png)</a>
+
+Take a look at [screencast](http://dotnetsurfers.com/blog/2013/12/15/developer-tools-screencast-7-conemu/) about ConEmu.
+
 This fork grew up from ConEmu by Zoin.
 
 ### Some links
-Download: http://www.fosshub.com/ConEmu.html  
+Release stages: http://code.google.com/p/conemu-maximus5/wiki/StableVsPreview  
 Wiki: http://code.google.com/p/conemu-maximus5/wiki/ConEmu  
 What's new: http://code.google.com/p/conemu-maximus5/wiki/Whats_New  
 Donate this project: <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=3LV8XTRBK9K4E"><img src="https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif" alt="Donation" title="Donate ConEmu"/></a> <a href="http://flattr.com/thing/2002773/Maximus5ConEmu-on-GitHub" target="_blank"><img src="http://api.flattr.com/button/flattr-badge-large.png" alt="Flattr this" title="Flattr this" border="0" /></a>
@@ -73,6 +77,9 @@ are applied. You may easily use several named configurations (for different PCs 
 	it's home folder, or `cmd.exe` if Far Manager not found.
 	Alternatively, You may run any root command, specifying `/Cmd \<App with params\>`
 	argument in ConEmu shortcut or command line.
+
+## Building from sources
+https://github.com/Maximus5/ConEmu/blob/master/src/HowToBuild.txt
 
  
 ## Screenshots

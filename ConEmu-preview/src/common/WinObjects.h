@@ -1,4 +1,4 @@
-
+п»ї
 /*
 Copyright (c) 2009-2013 Maximus5
 All rights reserved.
@@ -70,13 +70,14 @@ bool IsPathNeedQuot(LPCWSTR asPath);
 bool IsUserAdmin();
 bool GetLogonSID (HANDLE hToken, wchar_t **ppszSID);
 bool IsWine();
+bool IsWinPE();
 bool IsDbcs();
 bool IsWindows64();
 bool IsHwFullScreenAvailable();
 bool IsVsNetHostExe(LPCWSTR asFilePatName);
 int GetProcessBits(DWORD nPID, HANDLE hProcess = NULL);
-bool CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL abCheckModuleInfo, BOOL abAllowNTDLL = FALSE);
-bool IsModuleValid(HMODULE module);
+bool CheckCallbackPtr(HMODULE hModule, size_t ProcCount, FARPROC* CallBack, BOOL abCheckModuleInfo, BOOL abAllowNTDLL = FALSE, BOOL abTestVirtual = TRUE);
+bool IsModuleValid(HMODULE module, BOOL abTestVirtual = TRUE);
 typedef struct tagPROCESSENTRY32W PROCESSENTRY32W;
 bool GetProcessInfo(DWORD nPID, PROCESSENTRY32W* Info);
 bool isTerminalMode();
@@ -124,7 +125,8 @@ struct CEStartupEnv
 	LPCWSTR pszWorkDir;
 	LPCWSTR pszPathEnv;
 	size_t  cchPathLen;
-	BOOL    bIsWine; // Информационно!
+	BOOL    bIsWine; // РРЅС„РѕСЂРјР°С†РёРѕРЅРЅРѕ!
+	BOOL    bIsWinPE; // РРЅС„РѕСЂРјР°С†РёРѕРЅРЅРѕ!
 	BOOL    bIsReactOS;
 	BOOL    bIsDbcs;
 	UINT    nAnsiCP, nOEMCP;
@@ -138,7 +140,7 @@ struct CEStartupEnv
 
 #ifndef CONEMU_MINIMAL
 HANDLE DuplicateProcessHandle(DWORD anTargetPID);
-void FindComspec(ConEmuComspec* pOpt, bool bCmdAlso = true); // используется в GUI при загрузке настроек
+void FindComspec(ConEmuComspec* pOpt, bool bCmdAlso = true); // РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РІ GUI РїСЂРё Р·Р°РіСЂСѓР·РєРµ РЅР°СЃС‚СЂРѕРµРє
 void UpdateComspec(ConEmuComspec* pOpt, bool DontModifyPath = false);
 void SetEnvVarExpanded(LPCWSTR asName, LPCWSTR asValue);
 wchar_t* GetEnvVar(LPCWSTR VarName, DWORD cchDefaultMax = 2000);
@@ -163,7 +165,7 @@ class MSection
 	protected:
 		CRITICAL_SECTION m_cs;
 		CRITICAL_SECTION m_lock_cs;
-		DWORD mn_TID; // устанавливается только после EnterCriticalSection
+		DWORD mn_TID; // СѓСЃС‚Р°РЅР°РІР»РёРІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РїРѕСЃР»Рµ EnterCriticalSection
 		HANDLE mh_ExclusiveThread;
 #ifdef _DEBUG
 		DWORD mn_UnlockedExclusiveTID;
@@ -250,7 +252,7 @@ class MConHandle
 		BOOL      mb_OpenFailed;
 		DWORD     mn_LastError;
 		DWORD     mn_StdMode;
-		HANDLE*   mpp_OutBuffer; // Устанавливается при SetConsoleActiveScreenBuffer
+		HANDLE*   mpp_OutBuffer; // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚СЃСЏ РїСЂРё SetConsoleActiveScreenBuffer
 
 		static const int HANDLE_BUFFER_SIZE = RELEASEDEBUGTEST(0x100,0x1000);   // Must be a power of 2
 		struct Event {
@@ -290,7 +292,7 @@ class MFileMapping
 {
 	protected:
 		HANDLE mh_Mapping;
-		T* mp_Data; //WARNING!!! Доступ может быть только на чтение!
+		T* mp_Data; //WARNING!!! Р”РѕСЃС‚СѓРї РјРѕР¶РµС‚ Р±С‹С‚СЊ С‚РѕР»СЊРєРѕ РЅР° С‡С‚РµРЅРёРµ!
 		BOOL mb_WriteAllowed;
 		DWORD mn_Size;
 		wchar_t ms_MapName[128];
@@ -334,7 +336,7 @@ class MFileMapping
 
 			if (nSize<0) nSize = sizeof(T);
 
-			//потому, что T может быть описан как const - (void*)
+			//РїРѕС‚РѕРјСѓ, С‡С‚Рѕ T РјРѕР¶РµС‚ Р±С‹С‚СЊ РѕРїРёСЃР°РЅ РєР°Рє const - (void*)
 			memmove((void*)pDst, mp_Data, nSize); //-V106
 			return true;
 		}
@@ -374,7 +376,7 @@ class MFileMapping
 			mn_Size = -1; mn_LastError = 0;
 		};
 	protected:
-		// mn_Size и nSize используется фактически только при CreateFileMapping или операциях копирования
+		// mn_Size Рё nSize РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С„Р°РєС‚РёС‡РµСЃРєРё С‚РѕР»СЊРєРѕ РїСЂРё CreateFileMapping РёР»Рё РѕРїРµСЂР°С†РёСЏС… РєРѕРїРёСЂРѕРІР°РЅРёСЏ
 		T* InternalOpenCreate(BOOL abCreate,BOOL abReadWrite,int nSize)
 		{
 			if (mh_Mapping) CloseMap();
@@ -435,7 +437,7 @@ class MFileMapping
 			return InternalOpenCreate(TRUE/*abCreate*/,TRUE/*abReadWrite*/,nSize);
 		};
 		#endif
-		T* Open(BOOL abReadWrite=FALSE/*FALSE - только Read*/,int nSize=-1)
+		T* Open(BOOL abReadWrite=FALSE/*FALSE - С‚РѕР»СЊРєРѕ Read*/,int nSize=-1)
 		{
 			_ASSERTE(nSize==-1 || nSize>=sizeof(T));
 			return InternalOpenCreate(FALSE/*abCreate*/,abReadWrite,nSize);
@@ -561,7 +563,7 @@ class MFileLog
 #endif
 
 #ifndef CONEMU_MINIMAL
-// Класс отключения редиректора системных библиотек.
+// РљР»Р°СЃСЃ РѕС‚РєР»СЋС‡РµРЅРёСЏ СЂРµРґРёСЂРµРєС‚РѕСЂР° СЃРёСЃС‚РµРјРЅС‹С… Р±РёР±Р»РёРѕС‚РµРє.
 class MWow64Disable
 {
 	protected:
@@ -615,7 +617,7 @@ class MWow64Disable
 #endif
 
 #ifndef CONEMU_MINIMAL
-// Обертка для таймера
+// РћР±РµСЂС‚РєР° РґР»СЏ С‚Р°Р№РјРµСЂР°
 class CTimer
 {
 	protected:

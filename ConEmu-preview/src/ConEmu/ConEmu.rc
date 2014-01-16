@@ -417,22 +417,22 @@ STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD
 EXSTYLE WS_EX_CONTROLPARENT
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    GROUPBOX        "Standard colors: «RRR GGG BBB» (dec), «#RRGGBB» (hex), «0xBBGGRR» (hex)",gbStandardColors,4,1,319,86
-    RTEXT           "0.",IDC_STATIC,12,15,8,8
+    GROUPBOX        "Standard colors: ‘RRR GGG BBB’ (dec), ‘#RRGGBB’ (hex), ‘0xBBGGRR’ (hex)",gbStandardColors,4,1,319,86
+    RTEXT           "0.",IDC_STATIC,7,15,14,8
     LTEXT           "",c0,24,12,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "1.",IDC_STATIC,12,28,8,8
+    RTEXT           "1/4.",IDC_STATIC,7,28,14,8
     LTEXT           "",c1,24,25,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "2.",IDC_STATIC,12,41,8,8
+    RTEXT           "2.",IDC_STATIC,7,41,14,8
     LTEXT           "",c2,24,38,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "3.",IDC_STATIC,12,54,8,8
+    RTEXT           "3/6.",IDC_STATIC,7,54,14,8
     LTEXT           "",c3,24,51,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "4.",IDC_STATIC,89,15,8,8
+    RTEXT           "4/1.",IDC_STATIC,86,15,14,8
     LTEXT           "",c4,101,12,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "5.",IDC_STATIC,89,28,8,8
+    RTEXT           "5.",IDC_STATIC,86,28,14,8
     LTEXT           "",c5,101,25,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "6.",IDC_STATIC,89,41,8,8
+    RTEXT           "6/3.",IDC_STATIC,86,41,14,8
     LTEXT           "",c6,101,38,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "7.",IDC_STATIC,89,54,8,8
+    RTEXT           "7.",IDC_STATIC,86,54,14,8
     LTEXT           "",c7,101,51,12,12,SS_NOTIFY | SS_SUNKEN
     EDITTEXT        tc0,37,12,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc1,37,25,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
@@ -442,11 +442,11 @@ BEGIN
     EDITTEXT        tc5,115,25,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc6,115,38,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc7,115,51,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
-    RTEXT           "8.",IDC_STATIC,167,15,8,8
+    RTEXT           "8.",IDC_STATIC,168,15,8,8
     LTEXT           "",c8,179,12,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "9.",IDC_STATIC,167,28,8,8
+    RTEXT           "9.",IDC_STATIC,168,28,8,8
     LTEXT           "",c9,179,25,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "10.",IDC_STATIC,162,41,13,8
+    RTEXT           "10.",IDC_STATIC,163,41,13,8
     LTEXT           "",c10,179,38,12,12,SS_NOTIFY | SS_SUNKEN
     LTEXT           "",c11,179,51,12,12,SS_NOTIFY | SS_SUNKEN
     LTEXT           "",c12,259,12,12,12,SS_NOTIFY | SS_SUNKEN
@@ -461,27 +461,27 @@ BEGIN
     EDITTEXT        tc13,271,25,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc14,271,38,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc15,271,51,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
-    RTEXT           "11.",IDC_STATIC,162,54,13,8
-    RTEXT           "12.",IDC_STATIC,239,15,13,8
-    RTEXT           "13.",IDC_STATIC,239,28,13,8
-    RTEXT           "14.",IDC_STATIC,239,41,13,8
-    RTEXT           "15.",IDC_STATIC,239,54,13,8
+    RTEXT           "11.",IDC_STATIC,163,54,13,8
+    RTEXT           "12.",IDC_STATIC,241,15,13,8
+    RTEXT           "13.",IDC_STATIC,241,28,13,8
+    RTEXT           "14.",IDC_STATIC,241,41,13,8
+    RTEXT           "15.",IDC_STATIC,241,54,13,8
     GROUPBOX        "Extended foreground colors (same format as Standard colors)",IDC_STATIC,4,92,319,83
-    RTEXT           "16.",IDC_STATIC,7,121,13,8
+    RTEXT           "16.",IDC_STATIC,8,121,13,8
     LTEXT           "",c16,24,118,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "17.",IDC_STATIC,7,134,13,8
+    RTEXT           "17.",IDC_STATIC,8,134,13,8
     LTEXT           "",c17,24,131,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "18.",IDC_STATIC,7,147,13,8
+    RTEXT           "18.",IDC_STATIC,8,147,13,8
     LTEXT           "",c18,24,144,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "19.",IDC_STATIC,7,160,13,8
+    RTEXT           "19.",IDC_STATIC,8,160,13,8
     LTEXT           "",c19,24,157,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "20.",IDC_STATIC,84,121,13,8
+    RTEXT           "20.",IDC_STATIC,87,121,13,8
     LTEXT           "",c20,102,118,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "21.",IDC_STATIC,84,134,13,8
+    RTEXT           "21.",IDC_STATIC,87,134,13,8
     LTEXT           "",c21,102,131,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "22.",IDC_STATIC,84,147,13,8
+    RTEXT           "22.",IDC_STATIC,87,147,13,8
     LTEXT           "",c22,102,144,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "23.",IDC_STATIC,84,160,13,8
+    RTEXT           "23.",IDC_STATIC,87,160,13,8
     LTEXT           "",c23,102,157,12,12,SS_NOTIFY | SS_SUNKEN
     EDITTEXT        tc16,38,118,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc17,38,131,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
@@ -491,11 +491,11 @@ BEGIN
     EDITTEXT        tc21,116,131,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc22,116,144,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc23,116,157,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
-    RTEXT           "24.",IDC_STATIC,162,121,13,8
+    RTEXT           "24.",IDC_STATIC,163,121,13,8
     LTEXT           "",c24,180,118,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "25.",IDC_STATIC,162,134,13,8
+    RTEXT           "25.",IDC_STATIC,163,134,13,8
     LTEXT           "",c25,180,131,12,12,SS_NOTIFY | SS_SUNKEN
-    RTEXT           "26.",IDC_STATIC,162,147,13,8
+    RTEXT           "26.",IDC_STATIC,163,147,13,8
     LTEXT           "",c26,180,144,12,12,SS_NOTIFY | SS_SUNKEN
     LTEXT           "",c27,180,157,12,12,SS_NOTIFY | SS_SUNKEN
     LTEXT           "",c28,260,118,12,12,SS_NOTIFY | SS_SUNKEN
@@ -510,11 +510,11 @@ BEGIN
     EDITTEXT        tc29,272,131,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc30,272,144,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
     EDITTEXT        tc31,272,157,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
-    RTEXT           "27.",IDC_STATIC,162,160,13,8
-    RTEXT           "28.",IDC_STATIC,240,121,13,8
-    RTEXT           "29.",IDC_STATIC,240,134,13,8
-    RTEXT           "30.",IDC_STATIC,240,147,13,8
-    RTEXT           "31.",IDC_STATIC,240,160,13,8
+    RTEXT           "27.",IDC_STATIC,163,160,13,8
+    RTEXT           "28.",IDC_STATIC,241,121,13,8
+    RTEXT           "29.",IDC_STATIC,241,134,13,8
+    RTEXT           "30.",IDC_STATIC,241,147,13,8
+    RTEXT           "31.",IDC_STATIC,241,160,13,8
     CONTROL         "Extend foreground colors with background",cbExtendColors,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,26,102,161,10
     COMBOBOX        lbExtendIdx,192,100,45,30,CBS_DROPDOWNLIST | CBS_SORT | WS_VSCROLL | WS_TABSTOP
@@ -557,8 +557,8 @@ BEGIN
     GROUPBOX        "Static transparency",IDC_STATIC,4,86,319,46
     LTEXT           "",c38,160,98,20,12,SS_NOTIFY | SS_SUNKEN
     EDITTEXT        tc38,111,98,45,12,ES_AUTOHSCROLL | NOT WS_BORDER,WS_EX_STATICEDGE
-    CONTROL         "«Color key» transparency",cbColorKeyTransparent,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,100,97,8
-    CONTROL         "«User screen» transparency (Far Manager feature)",cbUserScreenTransparent,
+    CONTROL         "‘Color key’ transparency",cbColorKeyTransparent,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,100,97,8
+    CONTROL         "‘User screen’ transparency (Far Manager feature)",cbUserScreenTransparent,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,116,309,8
 END
 
@@ -642,7 +642,7 @@ BEGIN
     CONTROL         "Use Clink in prompt",cbUseClink,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,231,74,75,8
     CONTROL         "Suppress bells",cbSuppressBells,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,231,105,87,8
     CONTROL         "Disable all flashing",cbDisableAllFlashing,"Button",BS_AUTO3STATE | WS_TABSTOP,132,41,89,8
-    CONTROL         "Show «was hidden» warning",cbShowWasHiddenMsg,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,41,119,8
+    CONTROL         "Show ‘was hidden’ warning",cbShowWasHiddenMsg,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,41,119,8
     GROUPBOX        "In-console options",IDC_STATIC,4,62,319,58
     CONTROL         "Focus in child windows",cbFocusInChildWindows,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,231,27,87,8
     PUSHBUTTON      "...",cbClinkWebPage,306,72,13,11
@@ -679,7 +679,7 @@ BEGIN
     CONTROL         "Support UNC paths in cmd.exe (\\\\server\\share\\folder)",cbComspecUncPaths,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,114,309,8
     GROUPBOX        "Automatic attach of cmd && Tcc/Le to ConEmu (new window will be started if not found)",IDC_STATIC,4,168,319,65
-    LTEXT           "[HKEY_CURRENT_USER\\Software\\Microsoft\\Command Processor]\nCurrent command stored in registry «AutoRun» (HKLM value is not processed here):",IDC_STATIC,11,178,308,16
+    LTEXT           "[HKEY_CURRENT_USER\\Software\\Microsoft\\Command Processor]\nCurrent command stored in registry ‘AutoRun’ (HKLM value is not processed here):",IDC_STATIC,11,178,308,16
     EDITTEXT        tCmdAutoAttach,9,197,308,13,ES_AUTOHSCROLL | ES_READONLY
     CONTROL         "Force new ConEmu window",cbCmdAutorunNewWnd,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,216,100,10
     PUSHBUTTON      "Register ConEmu autorun",bCmdAutoRegister,126,213,100,14
@@ -725,7 +725,7 @@ BEGIN
     EDITTEXT        tTabEditor,42,153,117,12,ES_AUTOHSCROLL
     RTEXT           "Modified:",IDC_STATIC,161,155,36,8
     EDITTEXT        tTabEditorMod,201,153,117,12,ES_AUTOHSCROLL
-    LTEXT           "%s - Title, %c - Console number, %p - Active PID, %n - Name of active process, %% - %,\n%i - Far window number (you can see it in standard F12 menu)",IDC_STATIC,10,116,309,17
+    LTEXT           "%s - Title, %c - Console #, %n - Active process name, %p - PID, %a - ‘Admin’, %% - %,\n%i - Far window number (you can see it in standard F12 menu)",IDC_STATIC,10,116,309,17
 END
 
 IDD_SPG_FARMACRO DIALOGEX 0, 0, 328, 235
@@ -891,14 +891,14 @@ BEGIN
     COMBOBOX        tTabFontCharset,264,83,54,67,CBS_DROPDOWNLIST | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
     GROUPBOX        "Tab templates",IDC_STATIC,4,107,319,85
     EDITTEXT        tTabConsole,46,137,141,12,ES_AUTOHSCROLL
-    LTEXT           "%s - Title, %c - Console number, %p - Active PID, %n - Name of active process, %% - %",IDC_STATIC,10,118,309,8
+    LTEXT           "%s - Title, %c - Console #, %n - Active process name, %p - PID, %a - ‘Admin’, %% - %",IDC_STATIC,10,118,309,8
     RTEXT           "Maximum tab width (in chars):",IDC_STATIC,7,176,107,8
     EDITTEXT        tTabLenMax,119,174,40,12,ES_AUTOHSCROLL
     EDITTEXT        tAdminSuffix,261,174,57,12,ES_AUTOHSCROLL
-    CONTROL         "«Host-key»+Number iterates Far windows",cbMultiIterate,
+    CONTROL         "‘Host-key’+Number iterates Far windows",cbMultiIterate,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,97,42,155,8
-    CONTROL         "Admin shield",rbAdminShield,"Button",BS_AUTORADIOBUTTON,167,176,55,8
-    CONTROL         "suffix",rbAdminSuffix,"Button",BS_AUTORADIOBUTTON,223,176,34,8
+    CONTROL         "Admin shield",cbAdminShield,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,167,176,55,8
+    CONTROL         "suffix",cbAdminSuffix,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,223,176,34,8
     RTEXT           "Template:",IDC_STATIC,8,139,35,8
     RTEXT           "Skip words from title:",IDC_STATIC,33,159,81,8
     EDITTEXT        tTabSkipWords,119,156,199,12,ES_AUTOHSCROLL
@@ -1055,13 +1055,13 @@ BEGIN
     RTEXT           "W:",IDC_STATIC,184,68,11,8
     CTEXT           "WARNING!!!",IDC_STATIC,4,4,228,8
     CTEXT           "Change these settings very carefully!!!",IDC_STATIC,4,16,228,8
-    CTEXT           "For example: True Type font «Lucida Console» 5x3",IDC_STATIC,4,40,228,8
+    CTEXT           "For example: True Type font ‘Lucida Console’ 5x3",IDC_STATIC,4,40,228,8
     GROUPBOX        "",IDC_STATIC,4,54,228,79
     LTEXT           "Font must be declared in: HKEY_LOCAL_MACHINE\\Software\\",IDC_STATIC,12,82,214,8
     LTEXT           "Microsoft\\Windows NT\\CurrentVersion\\Console\\TrueTypeFont",IDC_STATIC,12,91,214,8
-    PUSHBUTTON      "Add font to «...\\Console\\TrueTypeFont»",bConFontAdd2HKLM,11,102,214,14,WS_DISABLED
-    LTEXT           "Console restart required",tConsoleFontConsoleNote,12,141,110,8,WS_DISABLED
-    LTEXT           "NOTE!!! You must restart computer to apply registry changes",tConsoleFontHklmNote,12,120,213,8,WS_DISABLED
+    PUSHBUTTON      "Add font to ‘...\\Console\\TrueTypeFont’",bConFontAdd2HKLM,11,102,214,14,WS_DISABLED
+    LTEXT           "Console restart may be required",tConsoleFontConsoleNote,12,141,110,8,WS_DISABLED
+    LTEXT           "NOTE!!! Computer restart may be required to apply registry changes",tConsoleFontHklmNote,12,120,213,8,WS_DISABLED
 END
 
 IDD_MORE_DOSBOX DIALOGEX 0, 0, 210, 150
@@ -1172,7 +1172,7 @@ BEGIN
     EDITTEXT        tUpdateDownloadPath,10,69,160,13,ES_AUTOHSCROLL
     PUSHBUTTON      "...",cbUpdateDownloadPath,173,68,15,13
     CONTROL         "Leave downloaded packages",cbUpdateLeavePackages,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,195,70,113,10
-    GROUPBOX        "Post-update command, don't forget «call» for batches",IDC_STATIC,5,161,319,30
+    GROUPBOX        "Post-update command, don't forget ‘call’ for batches",IDC_STATIC,5,161,319,30
     EDITTEXT        tUpdatePostUpdateCmd,10,172,310,13,ES_AUTOHSCROLL
     GROUPBOX        "Update settings",IDC_STATIC,4,1,319,27
     EDITTEXT        tUpdateArcCmdLine,10,140,290,13,ES_AUTOHSCROLL
@@ -1202,13 +1202,13 @@ BEGIN
     GROUPBOX        "You can change settings on 'Update' page of Settings dialog later",IDC_STATIC,3,175,317,27
     CONTROL         " Enable automatic updates",cbEnableAutoUpdateFast,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,186,104,10
-    CONTROL         "«Stable»",rbAutoUpdateStableFast,"Button",BS_AUTORADIOBUTTON,120,186,46,10
-    CONTROL         "«Preview»",rbAutoUpdatePreviewFast,"Button",BS_AUTORADIOBUTTON,170,186,50,10
-    CONTROL         "«Developer» builds",rbAutoUpdateDeveloperFast,"Button",BS_AUTORADIOBUTTON,224,186,71,10
+    CONTROL         "‘Stable’",rbAutoUpdateStableFast,"Button",BS_AUTORADIOBUTTON,120,186,46,10
+    CONTROL         "‘Preview’",rbAutoUpdatePreviewFast,"Button",BS_AUTORADIOBUTTON,170,186,50,10
+    CONTROL         "‘Developer’ builds",rbAutoUpdateDeveloperFast,"Button",BS_AUTORADIOBUTTON,224,186,71,10
     GROUPBOX        "",gbDisableConImeFast,3,204,317,61
     CONTROL         " Disable ConIme.exe autorun (Vista only)",cbDisableConImeFast,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,8,212,295,10
-    LTEXT           "Unwanted value of «LoadConIme» registry parameter! This may cause hunging of other console applications! ConEmu may disable ConIme.exe via registry:",stDisableConImeFast1,20,224,292,19
+    LTEXT           "Unwanted value of ‘LoadConIme’ registry parameter! This may cause hunging of other console applications! ConEmu may disable ConIme.exe via registry:",stDisableConImeFast1,20,224,292,19
     LTEXT           "[HKEY_CURRENT_USER\\Console]",stDisableConImeFast2,20,243,292,8
     LTEXT           """LoadConIme""=dword:00000000",stDisableConImeFast3,20,252,292,8
     DEFPUSHBUTTON   "OK",IDOK,215,270,50,14
@@ -1225,7 +1225,7 @@ FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     GROUPBOX        "&Predefined tasks (command groups)",gbCmdTasks,4,1,319,230
     LISTBOX         lbCmdTasks,9,12,93,163,LBS_USETABSTOPS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP
-    LTEXT           "&Task name (alias), surrounded by {...}, used in «[+] menu», «Recreate dialog» or «/cmd» agrument of ConEmu.exe",stCmdGroupName,111,11,207,16
+    LTEXT           "&Task name (alias), surrounded by {...}, used in ‘[+] menu’, ‘Recreate dialog’ or ‘/cmd’ agrument of ConEmu.exe",stCmdGroupName,111,11,207,16
     EDITTEXT        tCmdGroupName,109,29,81,12,ES_AUTOHSCROLL
     LTEXT           "&Commands (application, arguments, ""-new_console"" params)\nDelimit commands with empty lines\nEach command creates tab in ConEmu when group started\nMark active console tab with '>' sign\nStart console 'As Administrator' with '*' sign",stCmdGroupCommands,111,71,208,41
     EDITTEXT        tCmdGroupCommands,109,113,208,97,ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL
@@ -1346,7 +1346,7 @@ CAPTION "Dialog"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,322,187,50,14
-    ICON            IDI_ICON1,IDC_STATIC,7,7,20,20,WS_DISABLED
+    ICON            IDI_ICON1,pIconCtrl,7,7,20,20,WS_DISABLED
     CONTROL         "",tbAboutTabs,"SysTabControl32",TCS_BUTTONS | WS_TABSTOP,6,33,366,16
     EDITTEXT        tAboutText,7,50,365,131,ES_MULTILINE | ES_AUTOVSCROLL | ES_NOHIDESEL | ES_READONLY | WS_VSCROLL
     LTEXT           "Console emulation program. Visit home page:",stConEmuAbout,104,7,268,8
@@ -1601,6 +1601,8 @@ IDB_RIGHTCLICKING       BITMAP                  "Circles.bmp"
 IDB_COPY4               BITMAP                  "Copy4.bmp"
 IDB_COPY24              BITMAP                  "Copy24.bmp"
 IDB_SCROLL              BITMAP                  "Scroll.bmp"
+DONATE                  BITMAP                  "donate.bmp"
+FLATTR                  BITMAP                  "flattr.bmp"
 
 /////////////////////////////////////////////////////////////////////////////
 //

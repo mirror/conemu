@@ -1,4 +1,4 @@
-
+ï»¿
 /*
 Copyright (c) 2009-2013 Maximus5
 All rights reserved.
@@ -37,7 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define pCmdLine \
 	L"Command line examples\r\n" \
-	VCGCCTEST(L"––––––––––––––––––––––\r\n",L"----------------------\r\n") \
+	VCGCCTEST(L"â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“\r\n",L"----------------------\r\n") \
 	L"ConEmu.exe /cmd Far.exe /w\r\n" \
 	L"ConEmu.exe /font \"Consolas\" /size 16 /bufferheight 9999 /cmd powershell\r\n" \
 	L"ConEmu.exe /config \"Hiew\" /cmd \"C:\\Tools\\HIEW32.EXE\"\r\n" \
@@ -88,7 +88,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"Thanks to all testers and reporters! You help to make the ConEmu better.\r\n" \
 	L"\r\n" \
 	L"Special Thanks\r\n" \
-	VCGCCTEST(L"––––––––––––––––––––––\r\n",L"----------------------\r\n") \
+	VCGCCTEST(L"â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“\r\n",L"----------------------\r\n") \
+	L"Rick Sladkey: bugfixes\r\n" \
 	L"ForNeVeR: some ConEmuBg improvements\r\n" \
 	L"thecybershadow: bdf support, Documentation\r\n" \
 	L"NightRoman: drawing optimization, BufferHeight and other fixes\r\n" \
@@ -104,7 +105,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define pAboutLicense \
 	L"\x00A9 2006-2008 Zoin (based on console emulator by SEt)\r\n" \
-	CECOPYRIGHTSTRING_W /*\x00A9 2009-2011 ConEmu.Maximus5@gmail.com*/ L"\r\n" \
+	CECOPYRIGHTSTRING_W /*Â© 2009-2014 ConEmu.Maximus5@gmail.com*/ L"\r\n" \
 	L"\r\n" \
 	L"Permission to use, copy, modify, and distribute this software for any\r\n" \
 	L"purpose with or without fee is hereby granted, provided that the above\r\n" \
@@ -151,13 +152,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define pDosBoxHelpFull \
 	L"ConEmu supports DosBox, read more online:\r\n" \
 	L"http://code.google.com/p/conemu-maximus5/wiki/DosBox\r\n" \
-	VCGCCTEST(L"––––––––––––––––––––––\r\n",L"----------------------\r\n") \
+	VCGCCTEST(L"â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“\r\n",L"----------------------\r\n") \
 	pDosBoxHelp
 
 #define pGuiMacro \
 	L"Sort of simple macro language, read more online:\r\n" \
 	L"http://code.google.com/p/conemu-maximus5/wiki/GuiMacro\r\n" \
-	VCGCCTEST(L"––––––––––––––––––––––\r\n",L"----------------------\r\n") \
+	VCGCCTEST(L"â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“â€“\r\n",L"----------------------\r\n") \
 	L"Close(<What>[,<Flags>])\r\n" \
 	L"  - close current console (0), without confirmation (0,1),\r\n" \
 	L"    terminate active process (1), without confirmation (1,1)\r\n" \
@@ -187,6 +188,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"     Relative==0: N - required font height in points\r\n" \
 	L"     Relative==1: N (+-1, +-2) - increase/decrease font height\r\n" \
 	L"     returns - \"OK\", or \"InvalidArg\"\r\n" \
+	L"HighlightMouse(<What>[,<Act>])\r\n" \
+	L"  - change highlighting int the ACTIVE console only\r\n" \
+	L"    What==0: switch off/row/col/row+col/off/...\r\n" \
+	L"    What==1: row, What==2 - col, What==3 - row+col\r\n" \
+	L"      Act==0 - off, Act==1 - on, Act==2 - switch (default)\r\n" \
 	L"IsConEmu\r\n" \
 	L"  - Returns \"Yes\" when console was started under !ConEmu\r\n" \
 	L"IsConsoleActive\r\n" \
@@ -196,6 +202,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"MsgBox(\"<Text>\",\"<Title>\",<ButtonType>)\r\n" \
 	L"  - Show modal GUI MessageBox, returns clicked button name (\"Ok\", \"Cancel\", \"Retry\", etc.),\r\n" \
 	L"     ButtonType (number) is from Windows SDK.\r\n" \
+	L"Palette([<Cmd>[,\"<NewPalette>\"|<NewPaletteIndex>]])\r\n" \
+	L"  - Returns current palette name, change if <Cmd> specified\r\n" \
+	L"     Cmd==0: return palette from ConEmu settings\r\n" \
+	L"     Cmd==1: change palette in ConEmu settings, returns prev palette\r\n" \
+	L"     Cmd==2: return palette from current console\r\n" \
+	L"     Cmd==3: change palette in current console, returns prev palette\r\n" \
+	L"     NewPalette: palette name (string)\r\n" \
+	L"     NewPaletteIndex: 0-based index (number)\r\n" \
 	L"Paste(<Cmd>[,\"<Text>])\r\n" \
 	L"  - When <Text> is omitted - paste from Windows clipboard, otherwise - paste <Text>\r\n" \
 	L"     Cmd==0: paste all lines\r\n" \
@@ -253,6 +267,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"     Cmd==10: switches visible split-panes, Parm=(1,-1)\r\n" \
 	L"Task(Index[,\"Dir\"])\r\n" \
 	L"  - start task with 1-based index\r\n" \
+	L"Transparency(<Cmd>,<Value>)\r\n" \
+	L"  - change ConEmu transparency level absolutely or relatively\r\n" \
+	L"    Cmd==0, Value=40..255 (255==Opaque)\r\n" \
+	L"    Cmd==1, Value=<relative inc/dec>\r\n" \
 	L"Task(\"Name\"[,\"Dir\"])\r\n" \
 	L"  - start task with specified name\r\n" \
 	L"WindowFullscreen()\r\n" \

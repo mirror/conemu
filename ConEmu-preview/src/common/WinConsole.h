@@ -1,4 +1,4 @@
-
+﻿
 /*
 Copyright (c) 2009-2012 Maximus5
 All rights reserved.
@@ -29,6 +29,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#ifndef COMMON_LVB_LEADING_BYTE
+#define COMMON_LVB_LEADING_BYTE    0x0100 // Leading Byte of DBCS
+#define COMMON_LVB_TRAILING_BYTE   0x0200 // Trailing Byte of DBCS
+#endif
+
+#ifndef CONSOLE_FULLSCREEN_HARDWARE
+#define CONSOLE_FULLSCREEN_HARDWARE 2   // console owns the hardware
+#endif
+
 struct MY_CONSOLE_SCREEN_BUFFER_INFOEX
 {
 	ULONG      cbSize;
@@ -42,6 +51,23 @@ struct MY_CONSOLE_SCREEN_BUFFER_INFOEX
 	COLORREF   ColorTable[16];
 };
 
+struct MY_CONSOLE_READCONSOLE_CONTROL
+{
+    ULONG nLength;
+    ULONG nInitialChars;
+    ULONG dwCtrlWakeupMask;
+    ULONG dwControlKeyState;
+};
+
+struct MY_CONSOLE_FONT_INFOEX
+{
+    ULONG cbSize;
+    DWORD nFont;
+    COORD dwFontSize;
+    UINT FontFamily;
+    UINT FontWeight;
+    WCHAR FaceName[LF_FACESIZE];
+};
 
 void ChangeScreenBufferSize(CONSOLE_SCREEN_BUFFER_INFO& sbi, SHORT VisibleX, SHORT VisibleY, SHORT BufferX, SHORT BufferY);
 BOOL GetConWindowSize(const CONSOLE_SCREEN_BUFFER_INFO& sbi, int nCurWidth, int nCurHeight, DWORD nCurScroll, int* pnNewWidth, int* pnNewHeight, DWORD* pnScroll);
@@ -54,4 +80,4 @@ BOOL apiSetConsoleScreenBufferInfoEx(HANDLE hConsoleOutput, MY_CONSOLE_SCREEN_BU
 
 BOOL apiGetConsoleFontSize(HANDLE hOutput, int &SizeY, int &SizeX, wchar_t (&rsFontName)[LF_FACESIZE]); //Vista+ only!
 BOOL apiSetConsoleFontSize(HANDLE hOutput, int inSizeY, int inSizeX, const wchar_t *asFontName); //Vista+ only!
-BOOL apiFixFontSizeForBufferSize(HANDLE hOutput, COORD dwSize);
+BOOL apiFixFontSizeForBufferSize(HANDLE hOutput, COORD dwSize, char* pszUtfLog = NULL, int cchLogMax = 0);

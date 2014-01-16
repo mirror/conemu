@@ -32,6 +32,7 @@ $(OBJDIR)\RegPrepare.obj \
 $(OBJDIR)\ConEmuCmd.obj \
 $(OBJDIR)\ConEmuSrv.obj \
 $(OBJDIR)\Debugger.obj \
+$(OBJDIR)\Downloader.obj \
 $(OBJDIR)\Injects.obj \
 $(OBJDIR)\Infiltrate.obj \
 $(OBJDIR)\InjectRemote.obj \
@@ -41,6 +42,7 @@ $(OBJDIR)\SrvPipes.obj \
 $(OBJDIR)\ExecPty.obj \
 $(OBJDIR)\execute.obj \
 $(OBJDIR)\ConEmuCheck.obj \
+$(OBJDIR)\ConsoleMixAttr.obj \
 $(OBJDIR)\ConsoleRead.obj \
 $(OBJDIR)\CmdLine.obj \
 $(OBJDIR)\Common.obj \
@@ -281,7 +283,9 @@ $(OBJDIR)\ConEmuCmd.obj: ConEmuCmd.cpp ../common/PipeServer.h
 
 $(OBJDIR)\ConEmuSrv.obj: ConEmuSrv.cpp ../common/PipeServer.h
 
-$(OBJDIR)\ConEmuSrv.obj: Debugger.cpp Debugger.h
+$(OBJDIR)\Debugger.obj: Debugger.cpp Debugger.h
+
+$(OBJDIR)\Downloader.obj: Downloader.cpp Downloader.h
 
 $(OBJDIR)\Injects.obj: ..\ConEmuHk\Injects.cpp
 
@@ -300,6 +304,8 @@ $(OBJDIR)\ExecPty.obj: ../common/ExecPty.cpp ../common/ExecPty.h
 $(OBJDIR)\execute.obj: ../common/execute.cpp ../common/execute.h
 
 $(OBJDIR)\ConEmuCheck.obj: ../common/ConEmuCheck.cpp ../common/ConEmuCheck.h
+
+$(OBJDIR)\ConsoleMixAttr.obj: ../common/ConsoleMixAttr.cpp ../common/ConsoleMixAttr.h
 
 $(OBJDIR)\ConsoleRead.obj: ../common/ConsoleRead.cpp ../common/ConsoleRead.h
 

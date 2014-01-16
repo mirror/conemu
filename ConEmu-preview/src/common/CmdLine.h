@@ -1,6 +1,6 @@
-
+п»ї
 /*
-Copyright (c) 2013 Maximus5
+Copyright (c) 2013-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ public:
 	int mn_TokenNo;
 
 	#ifdef _DEBUG
-	// Debug, для отлова "не сброшенных" вызовов
+	// Debug, РґР»СЏ РѕС‚Р»РѕРІР° "РЅРµ СЃР±СЂРѕС€РµРЅРЅС‹С…" РІС‹Р·РѕРІРѕРІ
 	LPCWSTR ms_LastTokenEnd;
 	wchar_t ms_LastTokenSave[32];
 	#endif
@@ -50,8 +50,10 @@ public:
 	operator LPCWSTR() const { return ms_Arg; };
 
 	wchar_t* GetBuffer(INT_PTR cchMaxLen);
+	wchar_t* Detach();
 	void Empty();
 	LPCWSTR Set(LPCWSTR asNewValue, int anChars = -1);
+	void SetAt(INT_PTR nIdx, wchar_t wc);
 
 	void GetPosFrom(const CmdArg& arg);
 

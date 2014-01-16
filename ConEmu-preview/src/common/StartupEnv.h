@@ -1,4 +1,4 @@
-
+п»ї
 /*
 Copyright (c) 2009-2012 Maximus5
 All rights reserved.
@@ -99,11 +99,11 @@ CEStartupEnv* LoadStartupEnv()
 
 	// Enum registered Console Fonts
 	// HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Console\TrueTypeFont
-	int nLenMax = 2048;
 	wchar_t* pszFonts;
 #ifndef FULL_STARTUP_ENV
 	pszFonts = NULL;
 #else
+	int nLenMax = 2048;
 	pszFonts = (wchar_t*)calloc(nLenMax,sizeof(*pszFonts));
 	wchar_t szName[64], szValue[64];
 	if (pszFonts)
@@ -168,6 +168,7 @@ CEStartupEnv* LoadStartupEnv()
 
 		pEnv->bIsDbcs = IsDbcs();
 		pEnv->bIsWine = IsWine();
+		pEnv->bIsWinPE = IsWinPE();
 
 		LPCWSTR pszReactCompare = L"ReactOS";
 		int nCmdLen = lstrlen(pszReactCompare);
@@ -206,7 +207,7 @@ CEStartupEnv* LoadStartupEnv()
 		HMODULE hKernel = GetModuleHandle(L"kernel32.dll");
 		if (hKernel)
 		{
-			// Функция есть только в Vista+
+			// Р¤СѓРЅРєС†РёСЏ РµСЃС‚СЊ С‚РѕР»СЊРєРѕ РІ Vista+
 			GetConsoleHistoryInfo_t _GetConsoleHistoryInfo = (GetConsoleHistoryInfo_t)GetProcAddress(hKernel, "GetConsoleHistoryInfo");
 			if (_GetConsoleHistoryInfo)
 			{
