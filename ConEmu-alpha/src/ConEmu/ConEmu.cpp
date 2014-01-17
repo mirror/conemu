@@ -772,6 +772,7 @@ CConEmuMain::CConEmuMain()
 	mn_MsgRequestRunProcess = RegisterMessage("RequestRunProcess");
 	mn_MsgDeleteVConMainThread = RegisterMessage("DeleteVConMainThread");
 	mn_MsgReqChangeCurPalette = RegisterMessage("ChangeCurrentPalette");
+	mn_MsgMacroExecSync = RegisterMessage("MacroExecSync");
 }
 
 bool CConEmuMain::isMingwMode()
@@ -7910,6 +7911,13 @@ void CConEmuMain::PostChangeCurPalette(LPCWSTR pszPalette, bool bChangeDropDown,
 	}
 }
 
+LRESULT CConEmuMain::SyncExecMacro(WPARAM wParam, LPARAM lParam)
+{
+	LRESULT lRc;
+	lRc = SendMessage(ghWnd, mn_MsgMacroExecSync, wParam, lParam);
+	return lRc;
+}
+
 void CConEmuMain::PostDisplayRConError(CRealConsole* apRCon, wchar_t* pszErrMsg)
 {
 	//CVConGuard VCon(apRCon->VCon());
@@ -9265,7 +9273,7 @@ void CConEmuMain::UpdateProgress()
 
 		//if (mp_TaskBar3)
 		//{
-		if (mn_Progress >= 0)
+		if ((mn_Progress >= 0) && gpSet->isTaskbarProgress)
 		{
 			hr = Taskbar_SetProgressValue(mn_Progress);
 
@@ -11725,11 +11733,30 @@ LRESULT CConEmuMain::OnDestroy(HWND hWnd)
 	return 0;
 }
 
-LRESULT CConEmuMain::OnFlashWindow(DWORD nFlags, DWORD nCount, HWND hCon)
+LRESULT CConEmuMain::OnFlashWindow(WPARAM wParam, LPARAM lParam)
 {
-	CVConGroup::OnFlashWindow(nFlags, nCount, hCon);
+	DWORD nOpt = ((DWORD)wParam & 0x00F00000) >> 20;
+	DWORD nFlags = ((DWORD)wParam & 0xFF000000) >> 24;
+	DWORD nCount = (DWORD)wParam & 0xFFFFF;
+	CVConGroup::OnFlashWindow(nOpt, nFlags, nCount, (HWND)lParam);
 
 	return 0;
+}
+
+void CConEmuMain::DoFlashWindow(CESERVER_REQ_FLASHWINFO* pFlash, bool bFromMacro)
+{
+	WPARAM wParam = 0;
+
+	if (pFlash->bSimple)
+	{
+		wParam = 0x00100000 | (pFlash->bInvert ? 0x00200000 : 0) | (bFromMacro ? 0x00400000 : 0);
+	}
+	else
+	{
+		wParam = ((pFlash->dwFlags & 0xFF) << 24) | (pFlash->uCount & 0xFFFFF) | (bFromMacro ? 0x00400000 : 0);
+	}
+
+	PostMessage(ghWnd, mn_MsgFlashWindow, wParam, (LPARAM)pFlash->hWnd.u);
 }
 
 void CConEmuMain::setFocus()
@@ -18709,7 +18736,7 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			}
 			else if (messg == this->mn_MsgFlashWindow)
 			{
-				return OnFlashWindow((DWORD)(wParam & 0xFF000000) >> 24, (DWORD)wParam & 0xFFFFFF, (HWND)lParam);
+				return OnFlashWindow(wParam, lParam);
 			}
 			else if (messg == this->mn_MsgPostAltF9)
 			{
@@ -18747,6 +18774,10 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			{
 				this->PostChangeCurPalette((LPCWSTR)lParam, (wParam!=0), true);
 				return 0;
+			}
+			else if (messg == this->mn_MsgMacroExecSync)
+			{
+				return ConEmuMacro::ExecuteMacroSync(wParam, lParam);
 			}
 			else if (messg == this->mn_MsgDisplayRConError)
 			{
