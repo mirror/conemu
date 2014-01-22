@@ -80,7 +80,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #define DEBUGSTRSYS(s) //DEBUGSTR(s)
-#define DEBUGSTRSIZE(s) DEBUGSTR(s)
+#define DEBUGSTRSIZE(s) //DEBUGSTR(s)
 #define DEBUGSTRCONS(s) //DEBUGSTR(s)
 #define DEBUGSTRTABS(s) //DEBUGSTR(s)
 #define DEBUGSTRLANG(s) DEBUGSTR(s)// ; Sleep(2000)
@@ -345,17 +345,10 @@ CConEmuMain::CConEmuMain()
 	mh_ShellWindow = NULL; mn_ShellWindowPID = 0;
 	mb_FocusOnDesktop = TRUE;
 	cursor.x=0; cursor.y=0; Rcursor=cursor;
-	//m_LastConSize = MakeCoord(0,0);
 	mp_DragDrop = NULL;
-	//mb_InConsoleResize = FALSE;
-	//ProgressBars = NULL;
-	//cBlinkShift=0;
-	//mh_DebugPopup = mh_EditPopup = mh_ActiveVConPopup = mh_TerminateVConPopup = mh_VConListPopup = mh_HelpPopup = NULL;
-	Title[0] = 0; //TitleCmp[0] = 0; /*MultiTitle[0] = 0;*/ mn_Progress = -1;
+	Title[0] = 0;
 	TitleTemplate[0] = 0;
 	mb_InTimer = FALSE;
-	//mb_InClose = FALSE;
-	//memset(m_ProcList, 0, 1000*sizeof(DWORD));
 	m_ProcCount = 0;
 	mb_ProcessCreated = false; /*mn_StartTick = 0;*/ mb_WorkspaceErasedOnClose = false;
 	mb_IgnoreSizeChange = false;
@@ -365,7 +358,6 @@ CConEmuMain::CConEmuMain()
 	mb_InImeComposition = false; mb_ImeMethodChanged = false;
 	ZeroStruct(mr_Ideal);
 	mn_InResize = 0;
-	//mb_InScMinimize = false;
 	mb_MouseCaptured = FALSE;
 	mb_HotKeyRegistered = false;
 	mh_LLKeyHookDll = NULL;
@@ -375,8 +367,6 @@ CConEmuMain::CConEmuMain()
 	m_RightClickingSize.x = m_RightClickingSize.y = m_RightClickingFrames = 0; m_RightClickingCurrent = -1;
 	mh_RightClickingWnd = NULL; mb_RightClickingRegistered = FALSE;
 	mb_WaitCursor = FALSE;
-	//mb_InTrackSysMenu = FALSE;
-	//mn_TrackMenuPlace = tmp_None;
 	mb_LastRgnWasNull = TRUE;
 	mb_LockWindowRgn = FALSE;
 	mb_LockShowWindow = FALSE;
@@ -15200,7 +15190,7 @@ LRESULT CConEmuMain::OnMouse(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	CVirtualConsole* pVCon = NULL;
 	CVConGuard VCon;
 
-	if ((messg == WM_LBUTTONUP) && (GetActiveVCon(&VCon) >= 0) && VCon->RCon()->isMouseSelectionPresent())
+	if ((GetActiveVCon(&VCon) >= 0) && VCon->RCon()->isMouseSelectionPresent())
 		pVCon = VCon.VCon();
 	else if (CVConGroup::GetVConFromPoint(ptCurScreen, &VCon))
 		pVCon = VCon.VCon();
@@ -17320,6 +17310,7 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 	}
 
 	// Чтобы не возникало "зависаний/блокировок" в потоке чтения консоли - проверяем "живость" сервера
+	// Кроме того, здесь проверяется "нужно ли скроллить консоль во время выделения мышкой"
 	CVConGroup::OnRConTimerCheck();
 
 	// TODO: поддержку SlideShow повесить на отдельный таймер

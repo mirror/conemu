@@ -66,17 +66,18 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DEBUGSTRSIZE(s) //DEBUGSTR(s)
 #define DEBUGSTRPROC(s) //DEBUGSTR(s)
 #define DEBUGSTRPKT(s) //DEBUGSTR(s)
-#define DEBUGSTRCON(s) DEBUGSTR(s)
-#define DEBUGSTRLANG(s) DEBUGSTR(s)// ; Sleep(2000)
-#define DEBUGSTRSENDMSG(s) DEBUGSTR(s)
+#define DEBUGSTRCON(s) //DEBUGSTR(s)
+#define DEBUGSTRLANG(s) //DEBUGSTR(s)// ; Sleep(2000)
+#define DEBUGSTRSENDMSG(s) //DEBUGSTR(s)
 #define DEBUGSTRLOG(s) //OutputDebugStringA(s)
 #define DEBUGSTRALIVE(s) //DEBUGSTR(s)
 #define DEBUGSTRTABS(s) //DEBUGSTR(s)
 #define DEBUGSTRMACRO(s) //DEBUGSTR(s)
-#define DEBUGSTRALTSRV(s) DEBUGSTR(s)
-#define DEBUGSTRSTOP(s) DEBUGSTR(s)
-#define DEBUGSTRFOCUS(s) LogFocusInfo(s)
-#define DEBUGSTRGUICHILDPOS(s) DEBUGSTR(s)
+#define DEBUGSTRALTSRV(s) //DEBUGSTR(s)
+#define DEBUGSTRSTOP(s) //DEBUGSTR(s)
+#define DEBUGSTRFOCUS(s) //LogFocusInfo(s)
+#define DEBUGSTRGUICHILDPOS(s) //DEBUGSTR(s)
+#define DEBUGSTRPROGRESS(s) DEBUGSTR(s)
 
 // Иногда не отрисовывается диалог поиска полностью - только бежит текущая сканируемая директория.
 // Иногда диалог отрисовался, но часть до текста "..." отсутствует
@@ -189,10 +190,9 @@ bool CRealConsole::Construct(CVirtualConsole* apVCon, RConStartArgs *args)
 	TitleAdmin[0] = 0;
 	wcscpy_c(ms_PanelTitle, Title);
 	mb_ForceTitleChanged = FALSE;
-	mn_Progress = mn_PreWarningProgress = mn_LastShownProgress = -1; // Процентов нет
-	mn_ConsoleProgress = mn_LastConsoleProgress = -1;
-	mn_AppProgressState = mn_AppProgress = 0;
-	mn_LastConProgrTick = mn_LastWarnCheckTick = 0;
+	ZeroStruct(m_Progress);
+	m_Progress.Progress = m_Progress.PreWarningProgress = m_Progress.LastShownProgress = -1; // Процентов нет
+	m_Progress.ConsoleProgress = m_Progress.LastConsoleProgress = -1;
 	hPictureView = NULL; mb_PicViewWasHidden = FALSE;
 	mh_MonitorThread = NULL; mn_MonitorThreadID = 0; mb_WasForceTerminated = FALSE;
 	mh_PostMacroThread = NULL; mn_PostMacroThreadID = 0;
@@ -1765,6 +1765,12 @@ void CRealConsole::OnTimerCheck()
 	}
 	#endif
 
+	// Кроме того, здесь проверяется "нужно ли скроллить консоль во время выделения мышкой"
+	if (mp_ABuf->isSelectionPresent())
+	{
+		mp_ABuf->OnTimerCheckSelection();
+	}
+
 	return;
 }
 
@@ -2399,7 +2405,7 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 				// Это может также произойти при извлечении файла из архива через MA.
 				// Проценты бегут (панелей нет), проценты исчезают, панели появляются, но
 				// пока не произойдет хоть каких-нибудь изменений в консоли - статус не обновлялся.
-				if (mn_LastWarnCheckTick || mn_FarStatus & (CES_WASPROGRESS|CES_OPER_ERROR))
+				if (m_Progress.LastWarnCheckTick || mn_FarStatus & (CES_WASPROGRESS|CES_OPER_ERROR))
 					bCheckStatesFindPanels = true;
 			}
 
@@ -2415,14 +2421,18 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 				mp_RBuf->FindPanels();
 			}
 
-			if (mn_ConsoleProgress == -1 && mn_LastConsoleProgress >= 0)
+			if (m_Progress.ConsoleProgress >= 0
+				&& m_Progress.LastConsoleProgress == -1
+				&& m_Progress.LastConProgrTick != 0)
 			{
 				// Пока бежит запаковка 7z - иногда попадаем в момент, когда на новой строке процентов еще нет
-				DWORD nDelta = GetTickCount() - mn_LastConProgrTick;
+				DWORD nDelta = GetTickCount() - m_Progress.LastConProgrTick;
 
 				if (nDelta >= CONSOLEPROGRESSTIMEOUT)
 				{
-					mn_LastConsoleProgress = -1; mn_LastConProgrTick = 0;
+					logProgress(L"Clearing console progress due timeout", -1);
+					setConsoleProgress(-1);
+					setLastConsoleProgress(-1, true);
 					lbForceUpdateProgress = true;
 				}
 			}
@@ -2443,11 +2453,9 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 			if (hConWnd || hGuiWnd)  // Если знаем хэндл окна -
 				GetWindowText(hGuiWnd ? hGuiWnd : hConWnd, TitleCmp, countof(TitleCmp)-2);
 
-			// возможно, требуется сбросить прогресс
-			//bool lbCheckProgress = (mn_PreWarningProgress != -1);
-
 			if (mb_ForceTitleChanged
-			        || wcscmp(Title, TitleCmp))
+				|| lbForceUpdateProgress
+				|| wcscmp(Title, TitleCmp))
 			{
 				mb_ForceTitleChanged = FALSE;
 				OnTitleChanged();
@@ -2458,20 +2466,6 @@ DWORD CRealConsole::MonitorThreadWorker(BOOL bDetached, BOOL& rbChildProcessCrea
 				// Если в консоли заголовок не менялся, но он отличается от заголовка в ConEmu
 				gpConEmu->CheckNeedUpdateTitle(GetTitle());
 			}
-
-			if (lbForceUpdateProgress)
-			{
-				gpConEmu->UpdateProgress();
-			}
-
-			//if (lbCheckProgress && mn_LastShownProgress >= 0) {
-			//	if (GetProgress(NULL) != -1) {
-			//		OnTitleChanged();
-			//	}
-			//	//DWORD nDelta = GetTickCount() - mn_LastProgressTick;
-			//	//if (nDelta >= 500) {
-			//	//}
-			//}
 
 			bool lbIsActive = isActive();
 			bool lbIsVisible = lbIsActive || isVisible();
@@ -10325,9 +10319,10 @@ void CRealConsole::CheckFarStates()
 	DWORD nLastState = mn_FarStatus;
 	DWORD nNewState = (mn_FarStatus & (~CES_FARFLAGS));
 
-	if (GetFarPID() == 0)
+	if (!isFar(true))
 	{
 		nNewState = 0;
+		setPreWarningProgress(-1);
 	}
 	else
 	{
@@ -10368,18 +10363,18 @@ void CRealConsole::CheckFarStates()
 			nNewState &= ~(CES_WASPROGRESS|CES_OPER_ERROR); // Значит СЕЙЧАС процесс копирования не идет
 		}
 
-		if (mn_Progress >= 0 && mn_Progress <= 100)
+		if (m_Progress.Progress >= 0 && m_Progress.Progress <= 100)
 		{
-			if (mn_ConsoleProgress == mn_Progress)
+			if (m_Progress.ConsoleProgress == m_Progress.Progress)
 			{
 				// При извлечении прогресса из текста консоли - Warning ловить смысла нет
-				mn_PreWarningProgress = -1;
+				setPreWarningProgress(-1);
 				nNewState &= ~CES_OPER_ERROR;
 				nNewState |= CES_WASPROGRESS; // Пометить статус, что прогресс был
 			}
 			else
 			{
-				mn_PreWarningProgress = mn_Progress;
+				setPreWarningProgress(m_Progress.Progress);
 
 				if ((nNewState & CES_MAYBEPANEL) == CES_MAYBEPANEL)
 					nNewState |= CES_WASPROGRESS; // Пометить статус, что прогресс был
@@ -10388,11 +10383,11 @@ void CRealConsole::CheckFarStates()
 			}
 		}
 		else if ((nNewState & (CES_WASPROGRESS|CES_MAYBEPANEL)) == (CES_WASPROGRESS|CES_MAYBEPANEL)
-		        && mn_PreWarningProgress != -1)
+		        && (m_Progress.PreWarningProgress != -1))
 		{
-			if (mn_LastWarnCheckTick == 0)
+			if (m_Progress.LastWarnCheckTick == 0)
 			{
-				mn_LastWarnCheckTick = GetTickCount();
+				m_Progress.LastWarnCheckTick = GetTickCount();
 			}
 			else if ((mn_FarStatus & CES_OPER_ERROR) == CES_OPER_ERROR)
 			{
@@ -10402,7 +10397,7 @@ void CRealConsole::CheckFarStates()
 			}
 			else
 			{
-				DWORD nDelta = GetTickCount() - mn_LastWarnCheckTick;
+				DWORD nDelta = GetTickCount() - m_Progress.LastWarnCheckTick;
 
 				if (nDelta > CONSOLEPROGRESSWARNTIMEOUT)
 				{
@@ -10413,17 +10408,17 @@ void CRealConsole::CheckFarStates()
 		}
 	}
 
-	if (mn_Progress == -1 && mn_PreWarningProgress != -1)
+	if (m_Progress.Progress == -1 && m_Progress.PreWarningProgress != -1)
 	{
 		if ((nNewState & CES_WASPROGRESS) == 0)
 		{
-			mn_PreWarningProgress = -1; mn_LastWarnCheckTick = 0;
+			setPreWarningProgress(-1); m_Progress.LastWarnCheckTick = 0;
 			gpConEmu->UpdateProgress();
 		}
 		else if (/*isFilePanel(true)*/ (nNewState & CES_FILEPANEL) == CES_FILEPANEL)
 		{
 			nNewState &= ~(CES_OPER_ERROR|CES_WASPROGRESS);
-			mn_PreWarningProgress = -1; mn_LastWarnCheckTick = 0;
+			setPreWarningProgress(-1); m_Progress.LastWarnCheckTick = 0;
 			gpConEmu->UpdateProgress();
 		}
 	}
@@ -10440,7 +10435,7 @@ void CRealConsole::CheckFarStates()
 	}
 }
 
-// mn_Progress не меняет, результат возвращает
+// m_Progress.Progress не меняет, результат возвращает
 short CRealConsole::CheckProgressInTitle()
 {
 	// Обработка прогресса NeroCMD и пр. консольных программ (если курсор находится в видимой области)
@@ -10495,6 +10490,9 @@ short CRealConsole::CheckProgressInTitle()
 		}
 	}
 
+	if (nNewProgress != m_Progress.Progress)
+		logProgress(L"RCon::ProgressInTitle: %i", nNewProgress);
+
 	return nNewProgress;
 }
 
@@ -10511,7 +10509,7 @@ void CRealConsole::OnTitleChanged()
 	SetWindowText(mp_VCon->GetView(), TitleCmp);
 
 	// Обработка прогресса операций
-	//short nLastProgress = mn_Progress;
+	//short nLastProgress = m_Progress.Progress;
 	short nNewProgress;
 	TitleFull[0] = 0;
 	nNewProgress = CheckProgressInTitle();
@@ -10521,15 +10519,18 @@ void CRealConsole::OnTitleChanged()
 		// mn_ConsoleProgress обновляется в FindPanels, должен быть уже вызван
 		// mn_AppProgress обновляется через Esc-коды, GuiMacro или через команду пайпа
 		short nConProgr =
-			((mn_AppProgressState == 1) || (mn_AppProgressState == 2)) ? mn_AppProgress
-			: (mn_AppProgressState == 3) ? 0 // Indeterminate
-			: mn_ConsoleProgress;
+			((m_Progress.AppProgressState == 1) || (m_Progress.AppProgressState == 2)) ? m_Progress.AppProgress
+			: (m_Progress.AppProgressState == 3) ? 0 // Indeterminate
+			: m_Progress.ConsoleProgress;
 
 		if ((nConProgr >= 0) && (nConProgr <= 100))
 		{
 			// Обработка прогресса NeroCMD и пр. консольных программ
 			// Если курсор находится в видимой области
-			nNewProgress = mn_ConsoleProgress;
+			// Use "m_Progress.ConsoleProgress" because "AppProgress" is not "our" detection
+			// thats why we are not storing it in (common) member variable
+			nNewProgress = m_Progress.ConsoleProgress;
+
 			// Если в заголовке нет процентов (они есть только в консоли)
 			// добавить их в наш заголовок
 			wchar_t szPercents[5];
@@ -10547,10 +10548,10 @@ void CRealConsole::OnTitleChanged()
 
 	wcscat_c(TitleFull, TitleCmp);
 	// Обновляем на что нашли
-	mn_Progress = nNewProgress;
+	setProgress(nNewProgress);
 
-	if (nNewProgress >= 0 && nNewProgress <= 100)
-		mn_PreWarningProgress = nNewProgress;
+	if ((nNewProgress >= 0 && nNewProgress <= 100) && isFar(true))
+		setPreWarningProgress(nNewProgress);
 
 	//SetProgress(nNewProgress);
 
@@ -10570,13 +10571,13 @@ void CRealConsole::OnTitleChanged()
 	if (gpConEmu->isActive(mp_VCon) && wcscmp(GetTitle(), gpConEmu->GetLastTitle(false)))
 	{
 		// Для активной консоли - обновляем заголовок. Прогресс обновится там же
-		mn_LastShownProgress = nNewProgress;
+		setLastShownProgress(nNewProgress);
 		gpConEmu->UpdateTitle();
 	}
-	else if (mn_LastShownProgress != nNewProgress)
+	else if (m_Progress.LastShownProgress != nNewProgress)
 	{
 		// Для НЕ активной консоли - уведомить главное окно, что у нас сменились проценты
-		mn_LastShownProgress = nNewProgress;
+		setLastShownProgress(nNewProgress);
 		gpConEmu->UpdateProgress();
 	}
 	
@@ -10745,16 +10746,102 @@ BOOL CRealConsole::GetUserPwd(const wchar_t** ppszUser, const wchar_t** ppszDoma
 	return FALSE;
 }
 
+void CRealConsole::logProgress(LPCWSTR asFormat, int V1, int V2)
+{
+	#ifndef _DEBUG
+	if (!mp_Log)
+		return;
+	#endif
+
+	wchar_t szInfo[100];
+	_wsprintf(szInfo, SKIPLEN(countof(szInfo)-1) asFormat, V1, V2);
+	if (*szInfo)
+	{
+		int nLen = lstrlen(szInfo);
+		if (szInfo[nLen-1] != L'\n')
+		{
+			szInfo[nLen++] = L'\n'; szInfo[nLen] = 0;
+		}
+	}
+
+	#ifdef _DEBUG
+	if (!mp_Log)
+	{
+		DEBUGSTRPROGRESS(szInfo);
+		return;
+	}
+	#endif
+	LogString(szInfo, TRUE);
+}
+
+void CRealConsole::setProgress(short value)
+{
+	DEBUGTEST(if (m_Progress.Progress != value))
+	{
+		logProgress(L"RCon::setProgress(%i)", value);
+		m_Progress.Progress = value;
+	}
+}
+
+void CRealConsole::setLastShownProgress(short value)
+{
+	DEBUGTEST(if (m_Progress.LastShownProgress != value))
+	{
+		logProgress(L"RCon::setLastShownProgress(%i)", value);
+		m_Progress.LastShownProgress = value;
+	}
+}
+
+void CRealConsole::setPreWarningProgress(short value)
+{
+	DEBUGTEST(if (m_Progress.PreWarningProgress != value))
+	{
+		logProgress(L"RCon::setPreWarningProgress(%i)", value);
+		m_Progress.PreWarningProgress = value;
+	}
+}
+
+void CRealConsole::setConsoleProgress(short value)
+{
+	DEBUGTEST(if (m_Progress.ConsoleProgress != value))
+	{
+		logProgress(L"RCon::setConsoleProgress(%i)", value);
+		m_Progress.ConsoleProgress = value;
+	}
+}
+
+void CRealConsole::setLastConsoleProgress(short value, bool UpdateTick)
+{
+	DEBUGTEST(if (m_Progress.LastConsoleProgress != value))
+	{
+		logProgress(L"RCon::setLastConsoleProgress(%i,%u)", value, UpdateTick);
+		m_Progress.LastConsoleProgress = value;
+	}
+
+	if (UpdateTick)
+		m_Progress.LastConProgrTick = (value >= 0) ? GetTickCount() : 0;
+}
+
+void CRealConsole::setAppProgress(short AppProgressState, short AppProgress)
+{
+	logProgress(L"RCon::setAppProgress(%i,%i)", AppProgressState, AppProgress);
+
+	DEBUGTEST(if (m_Progress.AppProgressState != AppProgressState))
+		m_Progress.AppProgressState = AppProgressState;
+	DEBUGTEST(if (m_Progress.AppProgress != AppProgress))
+		m_Progress.AppProgress = AppProgress;
+}
+
 short CRealConsole::GetProgress(int* rpnState/*1-error,2-ind*/, BOOL* rpbNotFromTitle)
 {
 	if (!this)
 		return -1;
 
-	if (mn_AppProgressState > 0)
+	if (m_Progress.AppProgressState > 0)
 	{
 		if (rpnState)
 		{
-			*rpnState = (mn_AppProgressState == 2) ? 1 : (mn_AppProgressState == 3) ? 2 : 0;
+			*rpnState = (m_Progress.AppProgressState == 2) ? 1 : (m_Progress.AppProgressState == 3) ? 2 : 0;
 		}
 		if (rpbNotFromTitle)
 		{
@@ -10764,7 +10851,7 @@ short CRealConsole::GetProgress(int* rpnState/*1-error,2-ind*/, BOOL* rpbNotFrom
 			//*rpbNotFromTitle = TRUE;
 			*rpbNotFromTitle = FALSE;
 		}
-		return mn_AppProgress;
+		return m_Progress.AppProgress;
 	}
 
 	if (rpbNotFromTitle)
@@ -10775,10 +10862,10 @@ short CRealConsole::GetProgress(int* rpnState/*1-error,2-ind*/, BOOL* rpbNotFrom
 		*rpbNotFromTitle = FALSE;
 	}
 
-	if (mn_Progress >= 0)
-		return mn_Progress;
+	if (m_Progress.Progress >= 0)
+		return m_Progress.Progress;
 
-	if (mn_PreWarningProgress >= 0)
+	if (m_Progress.PreWarningProgress >= 0)
 	{
 		// mn_PreWarningProgress - это последнее значение прогресса (0..100)
 		// по после завершения процесса - он может еще быть не сброшен
@@ -10793,7 +10880,7 @@ short CRealConsole::GetProgress(int* rpnState/*1-error,2-ind*/, BOOL* rpbNotFrom
 		//		if (rpbError) *rpbError = TRUE;
 		//	}
 		//}
-		return mn_PreWarningProgress;
+		return m_Progress.PreWarningProgress;
 	}
 
 	return -1;
@@ -10816,22 +10903,19 @@ bool CRealConsole::SetProgress(short nState, short nValue, LPCWSTR pszName /*= N
 	switch (nState)
 	{
 	case 0:
-		mn_AppProgressState = mn_AppProgress = 0;
+		setAppProgress(0, 0);
 		lbOk = true;
 		break;
 	case 1:
-		mn_AppProgressState = 1;
-        mn_AppProgress = min(max(nValue,0),100);
+		setAppProgress(1, min(max(nValue,0),100));
         lbOk = true;
         break;
     case 2:
-    	mn_AppProgressState = 2;
-    	if (nValue > 0)
-    		mn_AppProgress = min(max(nValue,0),100);
+		setAppProgress(2, (nValue > 0) ? min(max(nValue,0),100) : m_Progress.AppProgress);
     	lbOk = true;
     	break;
     case 3:
-    	mn_AppProgressState = 3;
+		setAppProgress(3, m_Progress.AppProgress);
     	lbOk = true;
     	break;
 	case 4:
@@ -10855,18 +10939,6 @@ bool CRealConsole::SetProgress(short nState, short nValue, LPCWSTR pszName /*= N
 
 	return lbOk;
 }
-
-//// установить переменную mn_Progress и mn_LastProgressTick
-//void CRealConsole::SetProgress(short anProgress)
-//{
-//	mn_Progress = anProgress;
-//	if (anProgress >= 0 && anProgress <= 100) {
-//		mn_PreWarningProgress = anProgress;
-//		mn_LastProgressTick = GetTickCount();
-//	} else {
-//		mn_LastProgressTick = 0;
-//	}
-//}
 
 void CRealConsole::UpdateGuiInfoMapping(const ConEmuGuiMapping* apGuiInfo)
 {

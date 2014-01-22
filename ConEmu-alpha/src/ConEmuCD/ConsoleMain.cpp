@@ -3196,8 +3196,10 @@ int DoExportEnv(LPCWSTR asCmdArg, ConEmuExecAction eExecAction, bool bSilent = f
 		}
 	}
 
-	// В корневом сервере тоже применить
+	// We are trying to apply environment to parent tree even if NO server or GUI was found
+	if (nSrvPID)
 	{
+		// Server found? Try to apply environment
 		CESERVER_REQ *pOut = ExecuteSrvCmd(nSrvPID, pIn, ghConWnd);
 
 		if (!pOut)
@@ -3382,7 +3384,7 @@ int DoDownload(LPCWSTR asCmdLine)
 		// May be file name was specified relatively or even with env.vars?
 		SafeFree(pszExpanded);
 		pszExpanded = ExpandEnvStr(szArg);
-		nFullRc = GetFullPathName((pszExpanded && *pszExpanded) ? pszExpanded : szArg, countof(szFullPath), szFullPath, NULL);
+		nFullRc = GetFullPathName((pszExpanded && *pszExpanded) ? pszExpanded : (LPCWSTR)szArg, countof(szFullPath), szFullPath, NULL);
 		if (nFullRc && nFullRc < countof(szFullPath))
 			args[1].strArg = szFullPath;
 
