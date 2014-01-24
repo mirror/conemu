@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1772,8 +1772,8 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 	// start timer before "Read Console Output*" calls, they do take time
 	//gpSetCls->Performance(tPerfRead, FALSE);
 	//if (gbNoDblBuffer) isForce = TRUE; // Debug, dblbuffer
-	isForeground = (gpConEmu->InQuakeAnimation() || gpConEmu->isMeForeground(false))
-		&& gpConEmu->isActive(this);
+	isForeground = (gpConEmu->InQuakeAnimation() || gpConEmu->isMeForeground(true))
+		&& gpConEmu->isActive(this, false);
 
 	if (isFade == isForeground && gpSet->isFadeInactive)
 		isForce = true;
@@ -3965,13 +3965,28 @@ HBRUSH CVirtualConsole::PartBrush(wchar_t ch, COLORREF nBackCol, COLORREF nForeC
 	//while (iter != m_PartBrushes.end()) {
 	PARTBRUSHES *pbr = m_PartBrushes;
 
-	for(UINT br=0; pbr->ch && br<MAX_COUNT_PART_BRUSHES; br++, pbr++)
+	for (UINT br=0; pbr->ch && br<MAX_COUNT_PART_BRUSHES; br++, pbr++)
 	{
 		if (pbr->ch == ch && pbr->nBackCol == nBackCol && pbr->nForeCol == nForeCol)
 		{
 			_ASSERTE(pbr->hBrush);
 			return pbr->hBrush;
 		}
+	}
+
+	if (pbr >= (m_PartBrushes + MAX_COUNT_PART_BRUSHES))
+	{
+		#ifdef _DEBUG
+		static bool bShown;
+		if (!bShown)
+		{
+			bShown = true;
+			_ASSERTE(FALSE && "Too much background brushes were created!");
+		}
+		#endif
+		pbr = &m_PartBrushes[MAX_COUNT_PART_BRUSHES-1];
+		DeleteObject(pbr->hBrush);
+		pbr->hBrush = NULL;
 	}
 
 	MYRGB clrBack, clrFore, clrMy;
