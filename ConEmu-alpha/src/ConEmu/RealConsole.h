@@ -448,7 +448,7 @@ class CRealConsole
 		bool isDetached();
 		BOOL AttachConemuC(HWND ahConWnd, DWORD anConemuC_PID, const CESERVER_REQ_STARTSTOP* rStartStop, CESERVER_REQ_STARTSTOPRET* pRet);
 		BOOL RecreateProcess(RConStartArgs *args);
-		void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight);
+		void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight, ConEmuTextRange& etr);
 		ExpandTextRangeType GetLastTextRangeType();
 	private:
 		bool PreCreate(RConStartArgs *args);
@@ -462,7 +462,6 @@ class CRealConsole
 		//};
 		//ExpandTextRangeType ExpandTextRange(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[Out]*/, ExpandTextRangeType etr, wchar_t* pszText = NULL, size_t cchTextMax = 0);
 		bool IsFarHyperlinkAllowed(bool abFarRequired);
-		bool ProcessFarHyperlink(UINT messg, COORD crFrom);
 		void UpdateTabFlags(/*IN|OUT*/ ConEmuTab* pTab);
 		static INT_PTR CALLBACK renameProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam);
 	public:

@@ -3820,13 +3820,6 @@ COORD CRealConsole::BufferToScreen(COORD crMouse, bool bVertOnly /*= false*/)
 	return mp_ABuf->BufferToScreen(crMouse, bVertOnly);
 }
 
-bool CRealConsole::ProcessFarHyperlink(UINT messg, COORD crFrom)
-{
-	if (!this)
-		return false;
-	return mp_ABuf->ProcessFarHyperlink(messg, crFrom);
-}
-
 // x,y - экранные координаты
 // Если abForceSend==true - не проверять на "повторность" события, и не проверять "isPressed(VK_?BUTTON)"
 void CRealConsole::OnMouse(UINT messg, WPARAM wParam, int x, int y, bool abForceSend /*= false*/, bool abFromTouch /*= false*/)
@@ -7866,14 +7859,14 @@ BOOL CRealConsole::GetConsoleLine(int nLine, wchar_t** pChar, /*CharAttr** pAttr
 }
 
 // nWidth и nHeight это размеры, которые хочет получить VCon (оно могло еще не среагировать на изменения?
-void CRealConsole::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight)
+void CRealConsole::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight, ConEmuTextRange& etr)
 {
 	if (!this) return;
 
 	if (mb_ABufChaged)
 		mb_ABufChaged = false; // сбросим
 
-	mp_ABuf->GetConsoleData(pChar, pAttr, nWidth, nHeight);
+	mp_ABuf->GetConsoleData(pChar, pAttr, nWidth, nHeight, etr);
 }
 
 bool CRealConsole::SetFullScreen()
@@ -12496,7 +12489,7 @@ DWORD CRealConsole::PostMacroThread(LPVOID lpParameter)
 		CConEmuPipe pipe(pArg->pRCon->GetFarPID(TRUE), CONEMUREADYTIMEOUT);
 		if (pipe.Init(_T("CRealConsole::PostMacroThread"), TRUE))
 		{
-			gpConEmu->DebugStep(_T("ProcessFarHyperlink: Waiting for result (10 sec)"));
+			gpConEmu->DebugStep(_T("PostMacroThread: Waiting for result (10 sec)"));
 			pipe.Execute(pArg->nCmdID, pArg->Data, pArg->nCmdSize);
 			gpConEmu->DebugStep(NULL);
 		}
