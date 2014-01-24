@@ -518,7 +518,7 @@ void RConStartArgs::AppendServerArgs(wchar_t* rsServerCmdLine, INT_PTR cchMax)
 		_wcscat_c(rsServerCmdLine, cchMax, L" /NOINJECT");
 }
 
-BOOL RConStartArgs::CheckUserToken(HWND hPwd)
+bool RConStartArgs::CheckUserToken(HWND hPwd)
 {
 	//SafeFree(pszUserProfile);
 	bUseEmptyPassword = FALSE;
@@ -546,19 +546,21 @@ BOOL RConStartArgs::CheckUserToken(HWND hPwd)
 	}
 
 	HANDLE hLogonToken = CheckUserToken();
+	bool bIsValid = (hLogonToken != NULL);
 	// Token itself is not needed now
-	CloseHandle(hLogonToken);
+	SafeCloseHandle(hLogonToken);
 
-	return (hLogonToken != NULL);
+	return bIsValid;
 }
 
 HANDLE RConStartArgs::CheckUserToken()
 {
 	HANDLE hLogonToken = NULL;
 	// Empty password? Really? Security hole? Are you sure?
+	// aka: code 1327 (ERROR_ACCOUNT_RESTRICTION)
 	// gpedit.msc - Конфигурация компьютера - Конфигурация Windows - Локальные политики - Параметры безопасности - Учетные записи
 	// Ограничить использование пустых паролей только для консольного входа -> "Отключить". 
-	LPCWSTR pszPassword = bUseEmptyPassword ? NULL : szUserPassword;
+	LPWSTR pszPassword = bUseEmptyPassword ? NULL : szUserPassword;
 	DWORD nFlags = LOGON32_LOGON_INTERACTIVE;
 	BOOL lbRc = LogonUser(pszUserName, pszDomain, pszPassword, nFlags, LOGON32_PROVIDER_DEFAULT, &hLogonToken);
 

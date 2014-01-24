@@ -181,6 +181,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"FindFarWindow(<WindowType>,\"<WindowTitle>\")\r\n" \
 	L"  - Returns \"Found:<index of RealConsole>\", \"Active:<Far window number>\",  \"Blocked\", or \"NotFound\"\r\n" \
 	L"     <WindowType> is number from Far Manager enum WINDOWINFO_TYPE\r\n" \
+	L"Flash(<Cmd>[,<Flags>[,<Count>]])\r\n" \
+	L"  - Allows to flash taskbar icon and/or window caption\r\n" \
+	L"    Flash(0) - Stop all flashing\r\n" \
+	L"    Flash(0,1) - Simple flashing (see MSDN FlashWindow)\r\n" \
+	L"Flash(1,<Flags>,<Count>)\r\n" \
+	L"  - Special flashing (see MSDN FlashWindowEx)\r\n" \
+	L"    Flags: 0 - stop, 1 - caption, 2 - taskbar, 3 - caption+taskbar, etc.\r\n" \
+	L"    Count: the number of times to flash the window\r\n" \
 	L"FontSetName(\"<FontFaceName>\"[,FontHeight[,FontWidth]])\r\n" \
 	L"  - Change font face name and (optionally) height/width.\r\n" \
 	L"FontSetSize(Relative,N)\r\n" \
@@ -232,10 +240,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"  - Rename tab (Type=0) or console title (Type=1)\r\n" \
 	L"SetOption(\"<Name>\",<Value>)\r\n" \
 	L"  - Name=one of allowed for changing ConEmu options\r\n" \
-	L"    \"QuakeAutoHide\": auto hide on focus lose, Quake mode\r\n" \
-	L"      Value: 2 - switch auto-hide, 1 - enable, 0 - disable\r\n" \
+	L"    \"AlwaysOnTop\": place ConEmu window above all non-topmost windows\r\n" \
+	L"      Value: 2 - toggle, 1 - enable, 0 - disable\r\n" \
 	L"    \"bgImageDarker\": darkening of background image\r\n" \
 	L"      Value: 0 .. 255\r\n" \
+	L"    \"QuakeAutoHide\": auto hide on focus lose, Quake mode\r\n" \
+	L"      Value: 2 - switch auto-hide, 1 - enable, 0 - disable\r\n" \
 	L"Shell(\"<Verb>\",\"<File>\"[,\"<Parms>\"[,\"<Dir>\"[,<ShowCmd>]]])\r\n" \
 	L"  - Verb can be \"open\", \"print\" and so on, or special value \"new_console\",\r\n" \
 	L"     which starts File in the new tab of ConEmu window. Examples:\r\n" \
@@ -287,5 +297,5 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	L"  - Returns or set current window mode\r\n" \
 	L"     \"NOR\", \"MAX\", \"FS\" (fullscreen), \"MIN\", \"TSA\",\r\n" \
     L"     \"TLEFT\", \"TRIGHT\" (tile to left/right), \"THEIGHT\",\r\n" \
-    L"     \"MPREF\", \"MNEXT\" (move ConEmu to prev/next monitor)\r\n" \
+    L"     \"MPREV\", \"MNEXT\" (move ConEmu to prev/next monitor)\r\n" \
 	L""

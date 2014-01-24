@@ -15,6 +15,47 @@ http://code.google.com/p/conemu-maximus5/wiki/Awards
 *****************
 
 
+2014.01.24
+[*] Checkbox 'New window' in create dialog was ignored in 'Single instance mode'.
+[*] Wrong error message was displayed if empty passwords are disabled in system policy.
+[*] Use 'Fade when inactive' option for inactive splits.
+[*] Ansi xterm 24-bit fails for RED=0..15.
+
+
+2014.01.23
+[*] Don't turn on ‘Quick edit mode’ in real console by default.
+[*] Underline hyperlinks internally (don't use fontmapper).
+[*] Some internal changes.
+
+
+2014.01.22
+[*] SetOption(AlwaysOnTop) described in the About dialog.
+[%] Issue 1336: Vim, xterm256 drawing issues (T,S,K,J,L,M CSI commands).
+[%] Don't try to export environment to ServerPID==0.
+[+] Issue 823: Autoscroll console while select text with mouse.
+[%] Some fixes in GitShowBranch.cmd.
+[%] Console progress detector stucks sometimes.
+[!] Issue 1441: Don't enable (ENABLE_QUICK_EDIT_MODE|ENABLE_INSERT_MODE) by default in new configs.
+[*] Some internal changes.
+
+
+2014.01.17
+[*] New option ‘Show progress indicator’ on ‘Task bar’ page.
+[*] GuiMacro. Some function must be executed in main thread.
+[%] Issue 1434: GuiMacro ‘Status(1,"TEST")’ toggles statusbar.
+[*] GuiMacro. Allow one-word string arguments with no quotas (powershell-style).
+[*] GuiMacro. ‘Flash’ function allows to flash taskbar icon and/or window caption.
+    Flash(0)
+      - Stop all flashing
+    Flash(0,1)
+      - Simple flashing (see MSDN FlashWindow)
+    Flash(1,<Flags>,<Count>)
+      - Special flashing (see MSDN FlashWindowEx)
+        Flags: 0 - stop, 1 - caption, 2 - taskbar, 3 - caption+taskbar, etc.
+        Count: the number of times to flash the window
+[%] Fix. ANSI. Wrong behavior of 'ESC [ n L' (VIM & xterm256)
+
+
 2014.01.16
 [*] Also show ANSI color indexes on ‘Colors’ settings page.
 [*] Donate/flattr buttons in the ‘About’ dialog.

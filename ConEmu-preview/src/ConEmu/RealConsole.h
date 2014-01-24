@@ -448,7 +448,7 @@ class CRealConsole
 		bool isDetached();
 		BOOL AttachConemuC(HWND ahConWnd, DWORD anConemuC_PID, const CESERVER_REQ_STARTSTOP* rStartStop, CESERVER_REQ_STARTSTOPRET* pRet);
 		BOOL RecreateProcess(RConStartArgs *args);
-		void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight);
+		void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight, ConEmuTextRange& etr);
 		ExpandTextRangeType GetLastTextRangeType();
 	private:
 		bool PreCreate(RConStartArgs *args);
@@ -462,7 +462,6 @@ class CRealConsole
 		//};
 		//ExpandTextRangeType ExpandTextRange(COORD& crFrom/*[In/Out]*/, COORD& crTo/*[Out]*/, ExpandTextRangeType etr, wchar_t* pszText = NULL, size_t cchTextMax = 0);
 		bool IsFarHyperlinkAllowed(bool abFarRequired);
-		bool ProcessFarHyperlink(UINT messg, COORD crFrom);
 		void UpdateTabFlags(/*IN|OUT*/ ConEmuTab* pTab);
 		static INT_PTR CALLBACK renameProc(HWND hDlg, UINT messg, WPARAM wParam, LPARAM lParam);
 	public:
@@ -608,10 +607,21 @@ class CRealConsole
 		// Здесь сохраняется заголовок окна (с панелями), когда FAR фокус с панелей уходит (переходит в редактор...).
 		WCHAR ms_PanelTitle[CONEMUTABMAX];
 		// Процентики
-		short mn_Progress, mn_LastShownProgress;
-		short mn_PreWarningProgress; DWORD mn_LastWarnCheckTick;
-		short mn_ConsoleProgress, mn_LastConsoleProgress; DWORD mn_LastConProgrTick;
-		short mn_AppProgressState, mn_AppProgress; // Может быть задан из консоли (Ansi codes, Macro)
+		struct {
+			short Progress, LastShownProgress;
+			short PreWarningProgress; DWORD LastWarnCheckTick;
+			short ConsoleProgress, LastConsoleProgress; DWORD LastConProgrTick;
+			short AppProgressState, AppProgress; // Может быть задан из консоли (Ansi codes, Macro)
+		} m_Progress;
+		// a-la properties
+		void setProgress(short value);
+		void setLastShownProgress(short value);
+		void setPreWarningProgress(short value);
+		void setConsoleProgress(short value);
+		void setLastConsoleProgress(short value, bool UpdateTick);
+		void setAppProgress(short AppProgressState, short AppProgress);
+		void logProgress(LPCWSTR asFormat, int V1, int V2 = 0);
+		// method
 		short CheckProgressInTitle();
 		//short CheckProgressInConsole(const wchar_t* pszCurLine);
 		//void SetProgress(short anProgress); // установить переменную mn_Progress и mn_LastProgressTick

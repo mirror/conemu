@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2012-2013 Maximus5
+Copyright (c) 2012-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -373,13 +373,17 @@ void CEAnsi::ReSetDisplayParm(HANDLE hConsoleOutput, BOOL bReset, BOOL bApply)
 
 		if (Text256)
 		{
-			if (TextColor > 15)
-				attr.Attributes.Flags |= CECF_FG_24BIT;
-
 			if (Text256 == 2)
+			{
+				attr.Attributes.Flags |= CECF_FG_24BIT;
 				attr.Attributes.ForegroundColor = TextColor&0xFFFFFF;
+			}
 			else
+			{
+				if (TextColor > 15)
+					attr.Attributes.Flags |= CECF_FG_24BIT;
 				attr.Attributes.ForegroundColor = RgbMap[TextColor&0xFF];
+			}
 
 			if (gDisplayParm.BrightOrBold)
 				attr.Attributes.Flags |= CECF_FG_BOLD;
@@ -396,13 +400,17 @@ void CEAnsi::ReSetDisplayParm(HANDLE hConsoleOutput, BOOL bReset, BOOL bApply)
 
 		if (Back256)
 		{
-			if (BackColor > 15)
-				attr.Attributes.Flags |= CECF_BG_24BIT;
-
 			if (Back256 == 2)
+			{
+				attr.Attributes.Flags |= CECF_BG_24BIT;
 				attr.Attributes.BackgroundColor = BackColor&0xFFFFFF;
+			}
 			else
+			{
+				if (BackColor > 15)
+					attr.Attributes.Flags |= CECF_BG_24BIT;
 				attr.Attributes.BackgroundColor = RgbMap[BackColor&0xFF];
+			}
 		}
 		else
 		{
@@ -1354,6 +1362,9 @@ BOOL CEAnsi::LinesInsert(HANDLE hConsoleOutput, const int LinesCount)
 		BottomLine = csbi.srWindow.Bottom - csbi.srWindow.Top;
 	}
 
+	// Apply default color before scrolling!
+	ReSetDisplayParm(hConsoleOutput, FALSE, TRUE);
+
 	ExtScrollScreenParm scrl = {
 		sizeof(scrl), essf_Current|essf_Commit|essf_Region, hConsoleOutput,
 		LinesCount, {}, L' ', {0, TopLine, 0, BottomLine}};
@@ -1824,12 +1835,12 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 			#endif
 			}
 
-			// �������� Row
+			// Check Row
 			if (crNewPos.Y < 0)
 				crNewPos.Y = 0;
 			else if (crNewPos.Y >= csbi.dwSize.Y)
 				crNewPos.Y = csbi.dwSize.Y - 1;
-			// �������� Col
+			// Check Col
 			if (crNewPos.X < 0)
 				crNewPos.X = 0;
 			else if (crNewPos.X >= csbi.dwSize.X)
@@ -1846,6 +1857,13 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 		// Clears the screen and moves the cursor to the home position (line 0, column 0).
 		if (GetConsoleScreenBufferInfoCached(hConsoleOutput, &csbi))
 		{
+			if (lbApply)
+			{
+				// Apply default color before scrolling!
+				ReSetDisplayParm(hConsoleOutput, FALSE, TRUE);
+				lbApply = FALSE;
+			}
+
 			int nCmd = (Code.ArgC > 0) ? Code.ArgV[0] : 0;
 			COORD cr0 = {};
 			int nChars = 0;
@@ -1903,6 +1921,13 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 		// (including the character at the cursor position).
 		if (GetConsoleScreenBufferInfoCached(hConsoleOutput, &csbi))
 		{
+			if (lbApply)
+			{
+				// Apply default color before scrolling!
+				ReSetDisplayParm(hConsoleOutput, FALSE, TRUE);
+				lbApply = FALSE;
+			}
+
 			TODO("Need to clear attributes?");
 			int nChars = 0;
 			int nCmd = (Code.ArgC > 0) ? Code.ArgV[0] : 0;
@@ -1963,6 +1988,12 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 
 	case L'S':
 		// Scroll whole page up by n (default 1) lines. New lines are added at the bottom.
+		if (lbApply)
+		{
+			// Apply default color before scrolling!
+			ReSetDisplayParm(hConsoleOutput, FALSE, TRUE);
+			lbApply = FALSE;
+		}
 		ScrollScreen(hConsoleOutput, (Code.ArgC > 0 && Code.ArgV[0] > 0) ? -Code.ArgV[0] : -1);
 		break;
 
@@ -1987,6 +2018,11 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 
 	case L'T':
 		// Scroll whole page down by n (default 1) lines. New lines are added at the top.
+		if (lbApply)
+		{
+			// Apply default color before scrolling!
+			ReSetDisplayParm(hConsoleOutput, FALSE, TRUE);
+		}
 		TODO("Define scrolling region");
 		ScrollScreen(hConsoleOutput, (Code.ArgC > 0 && Code.ArgV[0] > 0) ? Code.ArgV[0] : 1);
 		break;
@@ -2201,7 +2237,8 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 					gDisplayParm.WasSet = TRUE;
 					break;
 				case 38:
-					// 256 colors
+					// xterm-256 colors
+					// ESC [ 38 ; 5 ; I m -- set foreground to I (0..255) color from xterm palette
 					if (((i+2) < Code.ArgC) && (Code.ArgV[i+1] == 5))
 					{
 						gDisplayParm.TextColor = (Code.ArgV[i+2] & 0xFF);
@@ -2209,6 +2246,8 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 						gDisplayParm.WasSet = TRUE;
 						i += 2;
 					}
+					// xterm-256 colors
+					// ESC [ 38 ; 2 ; R ; G ; B m -- set foreground to RGB(R,G,B) 24-bit color
 					else if (((i+4) < Code.ArgC) && (Code.ArgV[i+1] == 2))
 					{
 						gDisplayParm.TextColor = RGB((Code.ArgV[i+2] & 0xFF),(Code.ArgV[i+3] & 0xFF),(Code.ArgV[i+4] & 0xFF));
@@ -2229,7 +2268,8 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 					gDisplayParm.WasSet = TRUE;
 					break;
 				case 48:
-					// 256 colors
+					// xterm-256 colors
+					// ESC [ 48 ; 5 ; I m -- set background to I (0..255) color from xterm palette
 					if (((i+2) < Code.ArgC) && (Code.ArgV[i+1] == 5))
 					{
 						gDisplayParm.BackColor = (Code.ArgV[i+2] & 0xFF);
@@ -2237,6 +2277,8 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 						gDisplayParm.WasSet = TRUE;
 						i += 2;
 					}
+					// xterm-256 colors
+					// ESC [ 48 ; 2 ; R ; G ; B m -- set background to RGB(R,G,B) 24-bit color
 					else if (((i+4) < Code.ArgC) && (Code.ArgV[i+1] == 2))
 					{
 						gDisplayParm.BackColor = RGB((Code.ArgV[i+2] & 0xFF),(Code.ArgV[i+3] & 0xFF),(Code.ArgV[i+4] & 0xFF));
@@ -2315,7 +2357,7 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 		if ((Code.PvtLen == 1) && (Code.Pvt[0] == L'>')
 			&& ((Code.ArgC < 1) || (Code.ArgV[0] == 0)))
 		{
-			// P s = 0 or omitted -> request the terminal�s identification code.
+			// P s = 0 or omitted -> request the terminal's identification code.
 			wchar_t szVerInfo[64];
 			// this will be "ESC > 67 ; build ; 0 c"
 			// 67 is ASCII code of 'C' (ConEmu, yeah)
@@ -2339,6 +2381,13 @@ void CEAnsi::WriteAnsiCode_CSI(OnWriteConsoleW_t _WriteConsoleW, HANDLE hConsole
 		// CSI P s X:  Erase P s Character(s) (default = 1) (ECH)
 		if (GetConsoleScreenBufferInfoCached(hConsoleOutput, &csbi))
 		{
+			if (lbApply)
+			{
+				// Apply default color before scrolling!
+				ReSetDisplayParm(hConsoleOutput, FALSE, TRUE);
+				lbApply = FALSE;
+			}
+
 			int nCount = (Code.ArgC > 0) ? Code.ArgV[0] : 1;
 			int nScreenLeft = csbi.dwSize.X - csbi.dwCursorPosition.X - 1 + (csbi.dwSize.X * (csbi.dwSize.Y - csbi.dwCursorPosition.Y - 1));
 			int nChars = min(nCount,nScreenLeft);

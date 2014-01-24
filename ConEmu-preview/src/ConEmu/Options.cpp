@@ -580,7 +580,17 @@ void Settings::InitSettings()
 	#else
 	isPortableReg = false;
 	#endif
-	nConInMode = (DWORD)-1; // по умолчанию, включится (ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS|ENABLE_INSERT_MODE)
+
+	// By default (ConInMode==-1, DisableMouse==false)
+	// ==> turn OFF "Quick edit mode", turn ON "Insert mode"
+	// User can change behavior using mask. E.g 0x00300000 - uncheck both
+	// HIWORD(nConInMode) - mask (for clearing bits), LOWORD(nConInMode) - OR operator
+	// ((ENABLE_QUICK_EDIT_MODE|ENABLE_INSERT_MODE)<<16) | (ENABLE_QUICK_EDIT_MODE|ENABLE_INSERT_MODE);
+	// Note, ENABLE_EXTENDED_FLAGS is always turned ON
+	// This (nConInMode) is passed to the ConEmuC (server) with "/CINMODE=" switch
+	nConInMode = (DWORD)-1;
+	isDisableMouse = false;
+
 	nSlideShowElapse = 2500;
 	nIconID = IDI_ICON1;
 	isRClickSendKey = 2;
@@ -661,6 +671,7 @@ void Settings::InitSettings()
 	ilDragHeight = 10;
 	m_isTabsOnTaskBar = 2;
 	isTaskbarShield = true;
+	isTaskbarProgress = true;
 
 	isTabsInCaption = false; //cbTabsInCaption
 	#if defined(CONEMU_TABBAR_EX)
@@ -678,7 +689,6 @@ void Settings::InitSettings()
 	bHideInactiveConsoleTabs = false;
 	bHideDisabledTabs = false;
 	bShowFarWindows = true;
-	isDisableMouse = false;
 	isRSelFix = true; isMouseSkipActivation = true; isMouseSkipMoving = true;
 	isFarHourglass = true; nFarHourglassDelay = 500;
 	isDisableFarFlashing = false; isDisableAllFlashing = false;
@@ -2689,6 +2699,7 @@ void Settings::LoadSettings(bool *rbNeedCreateVanilla)
 		reg->Load(L"TabBtnDblClick", nTabBtnDblClickAction); MinMax(nTabBtnDblClickAction, 4);
 		reg->Load(L"TabsOnTaskBar", m_isTabsOnTaskBar);
 		reg->Load(L"TaskBarOverlay", isTaskbarShield);
+		reg->Load(L"TaskbarProgress", isTaskbarProgress);
 
 		if (!reg->Load(L"TabCloseMacro", &sTabCloseMacro) || (sTabCloseMacro && !*sTabCloseMacro)) { SafeFree(sTabCloseMacro); }
 
@@ -3497,6 +3508,7 @@ BOOL Settings::SaveSettings(BOOL abSilent /*= FALSE*/, const SettingsStorage* ap
 		reg->Save(L"TabBtnDblClick", nTabBtnDblClickAction);
 		reg->Save(L"TabsOnTaskBar", m_isTabsOnTaskBar);
 		reg->Save(L"TaskBarOverlay", isTaskbarShield);
+		reg->Save(L"TaskbarProgress", isTaskbarProgress);
 		reg->Save(L"TabCloseMacro", sTabCloseMacro);
 		reg->Save(L"TabFontFace", sTabFontFace);
 		reg->Save(L"TabFontCharSet", nTabFontCharSet);

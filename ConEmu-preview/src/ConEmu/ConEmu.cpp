@@ -80,7 +80,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #define DEBUGSTRSYS(s) //DEBUGSTR(s)
-#define DEBUGSTRSIZE(s) DEBUGSTR(s)
+#define DEBUGSTRSIZE(s) //DEBUGSTR(s)
 #define DEBUGSTRCONS(s) //DEBUGSTR(s)
 #define DEBUGSTRTABS(s) //DEBUGSTR(s)
 #define DEBUGSTRLANG(s) DEBUGSTR(s)// ; Sleep(2000)
@@ -345,17 +345,10 @@ CConEmuMain::CConEmuMain()
 	mh_ShellWindow = NULL; mn_ShellWindowPID = 0;
 	mb_FocusOnDesktop = TRUE;
 	cursor.x=0; cursor.y=0; Rcursor=cursor;
-	//m_LastConSize = MakeCoord(0,0);
 	mp_DragDrop = NULL;
-	//mb_InConsoleResize = FALSE;
-	//ProgressBars = NULL;
-	//cBlinkShift=0;
-	//mh_DebugPopup = mh_EditPopup = mh_ActiveVConPopup = mh_TerminateVConPopup = mh_VConListPopup = mh_HelpPopup = NULL;
-	Title[0] = 0; //TitleCmp[0] = 0; /*MultiTitle[0] = 0;*/ mn_Progress = -1;
+	Title[0] = 0;
 	TitleTemplate[0] = 0;
 	mb_InTimer = FALSE;
-	//mb_InClose = FALSE;
-	//memset(m_ProcList, 0, 1000*sizeof(DWORD));
 	m_ProcCount = 0;
 	mb_ProcessCreated = false; /*mn_StartTick = 0;*/ mb_WorkspaceErasedOnClose = false;
 	mb_IgnoreSizeChange = false;
@@ -365,7 +358,6 @@ CConEmuMain::CConEmuMain()
 	mb_InImeComposition = false; mb_ImeMethodChanged = false;
 	ZeroStruct(mr_Ideal);
 	mn_InResize = 0;
-	//mb_InScMinimize = false;
 	mb_MouseCaptured = FALSE;
 	mb_HotKeyRegistered = false;
 	mh_LLKeyHookDll = NULL;
@@ -375,8 +367,6 @@ CConEmuMain::CConEmuMain()
 	m_RightClickingSize.x = m_RightClickingSize.y = m_RightClickingFrames = 0; m_RightClickingCurrent = -1;
 	mh_RightClickingWnd = NULL; mb_RightClickingRegistered = FALSE;
 	mb_WaitCursor = FALSE;
-	//mb_InTrackSysMenu = FALSE;
-	//mn_TrackMenuPlace = tmp_None;
 	mb_LastRgnWasNull = TRUE;
 	mb_LockWindowRgn = FALSE;
 	mb_LockShowWindow = FALSE;
@@ -772,6 +762,7 @@ CConEmuMain::CConEmuMain()
 	mn_MsgRequestRunProcess = RegisterMessage("RequestRunProcess");
 	mn_MsgDeleteVConMainThread = RegisterMessage("DeleteVConMainThread");
 	mn_MsgReqChangeCurPalette = RegisterMessage("ChangeCurrentPalette");
+	mn_MsgMacroExecSync = RegisterMessage("MacroExecSync");
 }
 
 bool CConEmuMain::isMingwMode()
@@ -7123,11 +7114,13 @@ void CConEmuMain::PostCreateCon(RConStartArgs *pArgs)
 
 bool CConEmuMain::CreateWnd(RConStartArgs *args)
 {
-	if (!args->pszSpecialCmd || !*args->pszSpecialCmd)
+	if (!args || !args->pszSpecialCmd || !*args->pszSpecialCmd)
 	{
-		_ASSERTE(args->pszSpecialCmd && *args->pszSpecialCmd);
+		_ASSERTE(args && args->pszSpecialCmd && *args->pszSpecialCmd);
 		return false;
 	}
+
+	_ASSERTE(args->aRecreate == cra_CreateWindow);
 
 	BOOL bStart = FALSE;
 
@@ -7139,7 +7132,7 @@ bool CConEmuMain::CreateWnd(RConStartArgs *args)
 	size_t cchMaxLen = _tcslen(ms_ConEmuExe)
 		+ _tcslen(args->pszSpecialCmd)
 		+ (pszConfig ? (_tcslen(pszConfig) + 32) : 0)
-		+ 128; // на всякие флажки и -new_console
+		+ 140; // на всякие флажки и -new_console
 	if ((pszCmdLine = (wchar_t*)malloc(cchMaxLen*sizeof(*pszCmdLine))) == NULL)
 	{
 		_ASSERTE(pszCmdLine);
@@ -7155,6 +7148,7 @@ bool CConEmuMain::CreateWnd(RConStartArgs *args)
 			_wcscat_c(pszCmdLine, cchMaxLen, pszConfig);
 			_wcscat_c(pszCmdLine, cchMaxLen, L"\" ");
 		}
+		_wcscat_c(pszCmdLine, cchMaxLen, L"/nosingle ");
 		_wcscat_c(pszCmdLine, cchMaxLen, L"/cmd ");
 		_wcscat_c(pszCmdLine, cchMaxLen, args->pszSpecialCmd);
 		if (args->bRunAsAdministrator || args->bRunAsRestricted || args->pszUserName)
@@ -7908,6 +7902,13 @@ void CConEmuMain::PostChangeCurPalette(LPCWSTR pszPalette, bool bChangeDropDown,
 		const Settings::ColorPalette* pPal = gpSet->PaletteGetByName(pszPalette);
 		gpSetCls->ChangeCurrentPalette(pPal, bChangeDropDown);
 	}
+}
+
+LRESULT CConEmuMain::SyncExecMacro(WPARAM wParam, LPARAM lParam)
+{
+	LRESULT lRc;
+	lRc = SendMessage(ghWnd, mn_MsgMacroExecSync, wParam, lParam);
+	return lRc;
 }
 
 void CConEmuMain::PostDisplayRConError(CRealConsole* apRCon, wchar_t* pszErrMsg)
@@ -8972,52 +8973,6 @@ bool CConEmuMain::MemoryDumpActiveProcess()
 	return lbRc;
 }
 
-//void CConEmuMain::StartLogCreateProcess()
-//{
-//    OPENFILENAME ofn; memset(&ofn,0,sizeof(ofn));
-//    ofn.lStructSize=sizeof(ofn);
-//    ofn.hwndOwner = ghWnd;
-//    ofn.lpstrFilter = _T("Log files (*.log)\0*.log\0\0");
-//    ofn.nFilterIndex = 1;
-//    ofn.lpstrFile = ms_LogCreateProcess;
-//    ofn.nMaxFile = MAX_PATH;
-//    ofn.lpstrTitle = L"Log CreateProcess...";
-//    ofn.lpstrDefExt = L"log";
-//    ofn.Flags = OFN_ENABLESIZING|OFN_NOCHANGEDIR
-//            | OFN_PATHMUSTEXIST|OFN_EXPLORER|OFN_HIDEREADONLY|OFN_OVERWRITEPROMPT;
-//    if (!GetSaveFileName(&ofn))
-//        return;
-//
-//	mb_CreateProcessLogged = true;
-//	UpdateLogCreateProcess();
-//}
-//
-//void CConEmuMain::StopLogCreateProcess()
-//{
-//	mb_CreateProcessLogged = false;
-//	UpdateLogCreateProcess();
-//}
-//
-//void CConEmuMain::UpdateLogCreateProcess()
-//{
-//	UpdateGuiInfoMapping();
-//
-//	for (size_t i = 0; i < countof(mp_VCon); i++)
-//	{
-//		if (mp_VCon[i] == NULL)
-//			continue;
-//
-//		DWORD nFarPID = mp_VCon[i]->RCon()->GetFarPID(TRUE);
-//		if (nFarPID)
-//		{
-//			// Выполнить в плагине
-//			CConEmuPipe pipe(nFarPID, 300);
-//			if (pipe.Init(L"LogShell", TRUE))
-//    			pipe.Execute(CMD_LOG_SHELL);
-//		}
-//	}
-//}
-
 void CConEmuMain::UpdateProcessDisplay(BOOL abForce)
 {
 	if (!ghOpWnd)
@@ -9265,7 +9220,7 @@ void CConEmuMain::UpdateProgress()
 
 		//if (mp_TaskBar3)
 		//{
-		if (mn_Progress >= 0)
+		if ((mn_Progress >= 0) && gpSet->isTaskbarProgress)
 		{
 			hr = Taskbar_SetProgressValue(mn_Progress);
 
@@ -11725,11 +11680,30 @@ LRESULT CConEmuMain::OnDestroy(HWND hWnd)
 	return 0;
 }
 
-LRESULT CConEmuMain::OnFlashWindow(DWORD nFlags, DWORD nCount, HWND hCon)
+LRESULT CConEmuMain::OnFlashWindow(WPARAM wParam, LPARAM lParam)
 {
-	CVConGroup::OnFlashWindow(nFlags, nCount, hCon);
+	DWORD nOpt = ((DWORD)wParam & 0x00F00000) >> 20;
+	DWORD nFlags = ((DWORD)wParam & 0xFF000000) >> 24;
+	DWORD nCount = (DWORD)wParam & 0xFFFFF;
+	CVConGroup::OnFlashWindow(nOpt, nFlags, nCount, (HWND)lParam);
 
 	return 0;
+}
+
+void CConEmuMain::DoFlashWindow(CESERVER_REQ_FLASHWINFO* pFlash, bool bFromMacro)
+{
+	WPARAM wParam = 0;
+
+	if (pFlash->bSimple)
+	{
+		wParam = 0x00100000 | (pFlash->bInvert ? 0x00200000 : 0) | (bFromMacro ? 0x00400000 : 0);
+	}
+	else
+	{
+		wParam = ((pFlash->dwFlags & 0xFF) << 24) | (pFlash->uCount & 0xFFFFF) | (bFromMacro ? 0x00400000 : 0);
+	}
+
+	PostMessage(ghWnd, mn_MsgFlashWindow, wParam, (LPARAM)pFlash->hWnd.u);
 }
 
 void CConEmuMain::setFocus()
@@ -15173,7 +15147,7 @@ LRESULT CConEmuMain::OnMouse(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	CVirtualConsole* pVCon = NULL;
 	CVConGuard VCon;
 
-	if ((messg == WM_LBUTTONUP) && (GetActiveVCon(&VCon) >= 0) && VCon->RCon()->isMouseSelectionPresent())
+	if ((GetActiveVCon(&VCon) >= 0) && VCon->RCon()->isMouseSelectionPresent())
 		pVCon = VCon.VCon();
 	else if (CVConGroup::GetVConFromPoint(ptCurScreen, &VCon))
 		pVCon = VCon.VCon();
@@ -17293,6 +17267,7 @@ void CConEmuMain::OnTimer_Main(CVirtualConsole* pVCon)
 	}
 
 	// Чтобы не возникало "зависаний/блокировок" в потоке чтения консоли - проверяем "живость" сервера
+	// Кроме того, здесь проверяется "нужно ли скроллить консоль во время выделения мышкой"
 	CVConGroup::OnRConTimerCheck();
 
 	// TODO: поддержку SlideShow повесить на отдельный таймер
@@ -18709,7 +18684,7 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			}
 			else if (messg == this->mn_MsgFlashWindow)
 			{
-				return OnFlashWindow((DWORD)(wParam & 0xFF000000) >> 24, (DWORD)wParam & 0xFFFFFF, (HWND)lParam);
+				return OnFlashWindow(wParam, lParam);
 			}
 			else if (messg == this->mn_MsgPostAltF9)
 			{
@@ -18747,6 +18722,10 @@ LRESULT CConEmuMain::WndProc(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 			{
 				this->PostChangeCurPalette((LPCWSTR)lParam, (wParam!=0), true);
 				return 0;
+			}
+			else if (messg == this->mn_MsgMacroExecSync)
+			{
+				return ConEmuMacro::ExecuteMacroSync(wParam, lParam);
 			}
 			else if (messg == this->mn_MsgDisplayRConError)
 			{

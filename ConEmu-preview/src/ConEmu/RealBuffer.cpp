@@ -6,7 +6,7 @@
 //TODO: ChangeXXX - послать в консоль и установить значение переменной
 
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -59,19 +59,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "VConGroup.h"
 #include "VirtualConsole.h"
 
-#define DEBUGSTRINPUT(s) //DEBUGSTR(s)
-#define DEBUGSTRINPUTPIPE(s) //DEBUGSTR(s)
 #define DEBUGSTRSIZE(s) //DEBUGSTR(s)
-#define DEBUGSTRPROC(s) DEBUGSTR(s)
-#define DEBUGSTRCMD(s) DEBUGSTR(s)
 #define DEBUGSTRPKT(s) //DEBUGSTR(s)
-#define DEBUGSTRCON(s) //DEBUGSTR(s)
-#define DEBUGSTRLANG(s) //DEBUGSTR(s)// ; Sleep(2000)
-#define DEBUGSTRLOG(s) //OutputDebugStringA(s)
-#define DEBUGSTRALIVE(s) //DEBUGSTR(s)
-#define DEBUGSTRTABS(s) DEBUGSTR(s)
-#define DEBUGSTRMACRO(s) //DEBUGSTR(s)
 #define DEBUGSTRCURSORPOS(s) //DEBUGSTR(s)
+#define DEBUGSTRMOUSE(s) //DEBUGSTR(s)
 
 // ANSI, without "\r\n"
 #define IFLOGCONSOLECHANGE gpSetCls->isAdvLogging>=2
@@ -80,6 +71,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef CONSOLE_MOUSE_DOWN
 #define CONSOLE_MOUSE_DOWN 8
 #endif
+
+#define SELMOUSEAUTOSCROLLDELTA 25
+#define SELMOUSEAUTOSCROLLPIX   2
 
 #define Free SafeFree
 #define Alloc calloc
@@ -1806,7 +1800,7 @@ void CRealBuffer::ChangeBufferHeightMode(BOOL abBufferHeight)
 		}
 	}
 
-	mcr_LastMousePos = MakeCoord(-1,-1);
+	ResetLastMousePos();
 
 	USHORT nNewBufHeightSize = abBufferHeight ? con.nBufferHeight : 0;
 	SetConsoleSize(TextWidth(), TextHeight(), nNewBufHeightSize, CECMD_SETSIZESYNC);
@@ -2522,7 +2516,7 @@ COORD CRealBuffer::ScreenToBuffer(COORD crMouse)
 	if (isScroll())
 	{
 		// Прокрутка может быть заблокирована?
-		_ASSERTE(con.nTopVisibleLine == con.m_sbi.srWindow.Top);
+		_ASSERTE((con.nTopVisibleLine == con.m_sbi.srWindow.Top) || (con.m_sel.dwFlags & CONSOLE_MOUSE_SELECTION));
 
 		crMouse.X += con.m_sbi.srWindow.Left;
 		crMouse.Y += con.m_sbi.srWindow.Top;
@@ -2550,25 +2544,19 @@ ExpandTextRangeType CRealBuffer::GetLastTextRangeType()
 {
 	if (!this)
 		return etr_None;
-	return con.etrLast;
+	return con.etr.etrLast;
 }
 
-void CRealBuffer::ResetLastMousePos()
+bool CRealBuffer::ResetLastMousePos()
 {
 	mcr_LastMousePos = MakeCoord(-1,-1);
-}
 
-bool CRealBuffer::ProcessFarHyperlink(UINT messg/*=WM_USER*/)
-{
-	if (mcr_LastMousePos.X == -1)
-	{
-		if (con.etrLast != etr_None)
-		{
-			StoreLastTextRange(etr_None);
-		}
-	}
+	bool bChanged = (con.etr.etrLast != etr_None);
 
-	return ProcessFarHyperlink(messg, mcr_LastMousePos);
+	if (bChanged)
+		StoreLastTextRange(etr_None);
+
+	return bChanged;
 }
 
 bool CRealBuffer::LookupFilePath(LPCWSTR asFileOrPath, wchar_t* pszPath, size_t cchPathMax)
@@ -2588,7 +2576,35 @@ bool CRealBuffer::LookupFilePath(LPCWSTR asFileOrPath, wchar_t* pszPath, size_t 
 	return false;
 }
 
-bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
+bool CRealBuffer::ProcessFarHyperlink(bool bUpdateScreen)
+{
+	// Console may scrolls after last check time
+	if (bUpdateScreen)
+	{
+		POINT ptCur = {}; GetCursorPos(&ptCur);
+		RECT rcClient = {}; GetWindowRect(mp_RCon->VCon()->GetView(), &rcClient);
+		if (!PtInRect(&rcClient, ptCur))
+		{
+			if (mcr_LastMousePos.X != -1)
+				ResetLastMousePos();
+		}
+		else
+		{
+			ptCur.x -= rcClient.left; ptCur.y -= rcClient.top;
+			COORD crMouse = ScreenToBuffer(mp_RCon->VCon()->ClientToConsole(ptCur.x, ptCur.y));
+			mcr_LastMousePos = crMouse;
+		}
+	}
+
+	if ((mcr_LastMousePos.X == -1) && (con.etr.etrLast != etr_None))
+	{
+		ResetLastMousePos();
+	}
+
+	return ProcessFarHyperlink(WM_MOUSEMOVE, mcr_LastMousePos, bUpdateScreen);
+}
+
+bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom, bool bUpdateScreen)
 {
 	if (!mp_RCon->IsFarHyperlinkAllowed(false))
 		return false;
@@ -2604,13 +2620,7 @@ bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
 	{
 		_ASSERTE((crStart.X==-1 && crStart.Y==-1) && "Must not get here");
 
-		bool bChanged = false;
-		ResetLastMousePos();
-		if (con.etrLast != etr_None)
-		{
-			StoreLastTextRange(etr_None);
-			bChanged = true;
-		}
+		bool bChanged = ResetLastMousePos();
 		return bChanged;
 	}
 
@@ -2620,13 +2630,13 @@ bool CRealBuffer::ProcessFarHyperlink(UINT messg, COORD crFrom)
 	ExpandTextRangeType rc = mp_RCon->isActive()
 		? ExpandTextRange(crStart, crEnd, etr_FileAndLine, szText, countof(szText))
 		: etr_None;
-	if (memcmp(&crStart, &con.mcr_FileLineStart, sizeof(crStart)) != 0
-		|| memcmp(&crEnd, &con.mcr_FileLineEnd, sizeof(crStart)) != 0)
+	if (memcmp(&crStart, &con.etr.mcr_FileLineStart, sizeof(crStart)) != 0
+		|| memcmp(&crEnd, &con.etr.mcr_FileLineEnd, sizeof(crStart)) != 0)
 	{
-		con.mcr_FileLineStart = crStart;
-		con.mcr_FileLineEnd = crEnd;
-		// WM_USER передается если вызов идет из GetConsoleData для коррекции отдаваемых координат
-		if (messg != WM_USER)
+		con.etr.mcr_FileLineStart = crStart;
+		con.etr.mcr_FileLineEnd = crEnd;
+		// bUpdateScreen если вызов идет из GetConsoleData для коррекции отдаваемых координат
+		if (bUpdateScreen)
 		{
 			UpdateSelection(); // обновить на экране
 		}
@@ -2791,6 +2801,101 @@ void CRealBuffer::ShowKeyBarHint(WORD nID)
 	}
 }
 
+// If console IN selection - do autoscroll when mouse if outside or near VCon edges
+// If NO selection present - ensure that coordinates are inside our VCon (otherwise - exit)
+bool CRealBuffer::PatchMouseCoords(int& x, int& y, COORD& crMouse)
+{
+	// Хорошо бы скроллить выделение если мышка рядом с краем, а не только 'за'. Иначе в Fullsreen может быть сложно...
+	bool bMouse = ((con.m_sel.dwFlags & CONSOLE_MOUSE_SELECTION) != 0);
+
+	if ((crMouse.X >= con.m_sbi.srWindow.Left) && (crMouse.X <= con.m_sbi.srWindow.Right)
+		&& ((!bMouse && (crMouse.Y >= con.m_sbi.srWindow.Top) && (crMouse.Y <= con.m_sbi.srWindow.Bottom))
+		|| (bMouse && (crMouse.Y > con.m_sbi.srWindow.Top) && (crMouse.Y < con.m_sbi.srWindow.Bottom))))
+	{
+		DEBUGSTRMOUSE(L"Nothing need to be patched, coordinates are OK (1)\n");
+		return true;
+	}
+
+	int nVConHeight = mp_RCon->VCon()->Height;
+
+	if (bMouse
+		&& ((crMouse.Y == con.m_sbi.srWindow.Top) && (y >= SELMOUSEAUTOSCROLLPIX))
+			|| ((crMouse.Y == con.m_sbi.srWindow.Bottom) && (y <= (nVConHeight-SELMOUSEAUTOSCROLLPIX))))
+	{
+		DEBUGSTRMOUSE(L"Nothing need to be patched, coordinates are OK (2)\n");
+		return true;
+	}
+
+	// In mouse selection only
+	if (!(con.m_sel.dwFlags & CONSOLE_MOUSE_SELECTION))
+	{
+		// No selection, mouse outside of VCon, skip this message!
+		DEBUGSTRMOUSE(L"!!! No mouse selection or mouse outside of VCon, message skipped !!!\n");
+		return false;
+	}
+
+	// Avoid too fast scrolling
+	DWORD nCurTick = GetTickCount();
+	DWORD nDelta = (nCurTick - con.m_SelLastScrollCheck);
+	if (nDelta < SELMOUSEAUTOSCROLLDELTA)
+	{
+		DEBUGSTRMOUSE(L"Mouse selection autoscroll skipped (waiting 100ms)\n");
+		return false;
+	}
+	con.m_SelLastScrollCheck = nCurTick;
+
+	// Lets scroll window content
+	if ((crMouse.Y < con.m_sbi.srWindow.Top) || (y < SELMOUSEAUTOSCROLLPIX))
+	{
+		DEBUGSTRMOUSE(L"Autoscrolling buffer one line up\n");
+		crMouse.Y = max(0,con.m_sbi.srWindow.Top-1);
+		OnScroll(SB_LINEUP);
+		y = 0;
+	}
+	else if ((crMouse.Y > con.m_sbi.srWindow.Bottom) || (y > (nVConHeight-SELMOUSEAUTOSCROLLPIX)))
+	{
+		DEBUGSTRMOUSE(L"Autoscrolling buffer one line down\n");
+		crMouse.Y = min(con.m_sbi.srWindow.Bottom+1,con.m_sbi.dwSize.Y-1);
+		OnScroll(SB_LINEDOWN);
+		y = (nVConHeight - 1);
+	}
+
+	// And patch X coords (while we are not support X scrolling yet)
+	if (crMouse.X < con.m_sbi.srWindow.Left)
+	{
+		crMouse.X = con.m_sbi.srWindow.Left;
+		x = 0;
+	}
+	else if (crMouse.X > con.m_sbi.srWindow.Right)
+	{
+		crMouse.X = con.m_sbi.srWindow.Right;
+		x = (mp_RCon->VCon()->Width - 1);
+	}
+
+	return true;
+}
+
+void CRealBuffer::OnTimerCheckSelection()
+{
+	// In mouse selection only
+	if (!(con.m_sel.dwFlags & CONSOLE_MOUSE_SELECTION))
+		return;
+
+	POINT ptCur = {}; GetCursorPos(&ptCur);
+	MapWindowPoints(NULL, mp_RCon->VCon()->GetView(), &ptCur, 1);
+	int nVConHeight = mp_RCon->VCon()->Height;
+	
+	if ((ptCur.y < SELMOUSEAUTOSCROLLPIX) || (ptCur.y > (nVConHeight-SELMOUSEAUTOSCROLLPIX)))
+	{
+		COORD crMouse = ScreenToBuffer(mp_RCon->VCon()->ClientToConsole(ptCur.x, ptCur.y));
+		int x = ptCur.x, y = ptCur.y;
+		WPARAM wParam = (isPressed(VK_LBUTTON) ? MK_LBUTTON : 0)
+			| (isPressed(VK_RBUTTON) ? MK_RBUTTON : 0)
+			| (isPressed(VK_MBUTTON) ? MK_MBUTTON : 0);
+		OnMouse(WM_MOUSEMOVE, wParam, x, y, crMouse);
+	}
+}
+
 // x,y - экранные координаты
 // crMouse - ScreenToBuffer
 // Возвращает true, если мышку обработал "сам буфер"
@@ -2799,6 +2904,21 @@ bool CRealBuffer::OnMouse(UINT messg, WPARAM wParam, int x, int y, COORD crMouse
 #ifndef WM_MOUSEHWHEEL
 #define WM_MOUSEHWHEEL                  0x020E
 #endif
+
+	#ifdef _DEBUG
+	wchar_t szDbgInfo[200]; _wsprintf(szDbgInfo, SKIPLEN(countof(szDbgInfo)) L"RBuf::OnMouse %s XY={%i,%i} CR={%i,%i}%s SelFlags=x%08X\n",
+		messg==WM_MOUSEMOVE?L"WM_MOUSEMOVE":
+		messg==WM_LBUTTONDOWN?L"WM_LBUTTONDOWN":messg==WM_LBUTTONUP?L"WM_LBUTTONUP":messg==WM_LBUTTONDBLCLK?L"WM_LBUTTONDBLCLK":
+		messg==WM_RBUTTONDOWN?L"WM_RBUTTONDOWN":messg==WM_RBUTTONUP?L"WM_RBUTTONUP":messg==WM_RBUTTONDBLCLK?L"WM_RBUTTONDBLCLK":
+		messg==WM_MBUTTONDOWN?L"WM_MBUTTONDOWN":messg==WM_MBUTTONUP?L"WM_MBUTTONUP":messg==WM_MBUTTONDBLCLK?L"WM_MBUTTONDBLCLK":
+		messg==WM_MOUSEWHEEL?L"WM_MOUSEWHEEL":messg==WM_MOUSEHWHEEL?L"WM_MOUSEHWHEEL":
+		L"{OtherMsg}", x,y, crMouse.X,crMouse.Y,(abFromTouch?L" Touch":L""), con.m_sel.dwFlags);
+	DEBUGSTRMOUSE(szDbgInfo);
+	#endif
+
+	// Ensure that coordinates are correct
+	if (!PatchMouseCoords(x, y, crMouse))
+		return false;
 
 	mcr_LastMousePos = crMouse;
 
@@ -2849,7 +2969,7 @@ bool CRealBuffer::OnMouse(UINT messg, WPARAM wParam, int x, int y, COORD crMouse
 	{
 		if (messg == WM_MOUSEMOVE || messg == WM_LBUTTONDOWN || messg == WM_LBUTTONUP || messg == WM_LBUTTONDBLCLK)
 		{
-			if (ProcessFarHyperlink(messg, crMouse))
+			if (ProcessFarHyperlink(messg, crMouse, true))
 			{
 				// Пускать или нет событие мыши в консоль?
 				// Лучше наверное не пускать, а то вьювер может заклинить на прокрутке, например
@@ -4315,7 +4435,7 @@ bool CRealBuffer::OnKeyboard(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam
 	{
 		if (gpSet->isFarGotoEditor && isKey(wParam, gpSet->GetHotkeyById(vkFarGotoEditorVk)))
 		{
-			if (ProcessFarHyperlink(WM_MOUSEMOVE))
+			if (ProcessFarHyperlink(true))
 				UpdateSelection();
 		}
 
@@ -4486,7 +4606,7 @@ void CRealBuffer::PrepareColorTable(bool bExtendFonts, CharAttr (&lcaTableExt)[0
 }
 
 // nWidth и nHeight это размеры, которые хочет получить VCon (оно могло еще не среагировать на изменения?
-void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight)
+void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight, ConEmuTextRange& etr)
 {
 	if (!this) return;
 
@@ -4510,8 +4630,9 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 	// формирование умолчательных цветов, по атрибутам консоли
 	//TODO("В принципе, это можно делать не всегда, а только при изменениях");
 	bool lbIsFar = (mp_RCon->GetFarPID() != 0);
-	bool lbAllowHilightFileLine = mp_RCon->IsFarHyperlinkAllowed(false);
-	if (!lbAllowHilightFileLine && (con.etrLast != etr_None))
+	// Don't highlight while selection is present
+	bool lbAllowHilightFileLine = (con.m_sel.dwFlags == 0) && mp_RCon->IsFarHyperlinkAllowed(false);
+	if (!lbAllowHilightFileLine && (con.etr.etrLast != etr_None))
 		StoreLastTextRange(etr_None);
 	WARNING("lbIsFar - хорошо бы заменить на привязку к конкретным приложениям?");
 	const Settings::AppSettings* pApp = gpSet->GetAppSettings(mp_RCon->GetActiveAppSettingsId());
@@ -4640,12 +4761,12 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 			{
 				// Если мышь сместиласть - нужно посчитать
 				// Даже если мышь не двигалась - текст мог измениться.
-				/*if ((con.mcr_FileLineStart.X == con.mcr_FileLineEnd.X)
-					|| (con.mcr_FileLineStart.Y != mcr_LastMousePos.Y)
-					|| (con.mcr_FileLineStart.X > mcr_LastMousePos.X || con.mcr_FileLineEnd.X < mcr_LastMousePos.X))*/
+				/*if ((con.etr.mcr_FileLineStart.X == con.etr.mcr_FileLineEnd.X)
+					|| (con.etr.mcr_FileLineStart.Y != mcr_LastMousePos.Y)
+					|| (con.etr.mcr_FileLineStart.X > mcr_LastMousePos.X || con.etr.mcr_FileLineEnd.X < mcr_LastMousePos.X))*/
 				if ((mp_RCon->mp_ABuf == this) && gpConEmu->isMeForeground())
 				{
-					ProcessFarHyperlink();
+					ProcessFarHyperlink(false);
 				}
 			}
 
@@ -4756,10 +4877,12 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 				}
 				else
 				{
+					#if 0
 					bool lbHilightFileLine = lbAllowHilightFileLine 
 							&& (con.m_sel.dwFlags == 0)
-							&& (nY == con.mcr_FileLineStart.Y)
-							&& (con.mcr_FileLineStart.X < con.mcr_FileLineEnd.X);
+							&& (nY == con.etr.mcr_FileLineStart.Y)
+							&& (con.etr.mcr_FileLineStart.X < con.etr.mcr_FileLineEnd.X);
+					#endif
 					for (nX = 0; nX < (int)cnSrcLineLen; nX++, pnSrc++, pcolSrc++)
 					{
 						atr = (*pnSrc) & 0xFF; // интересут только нижний байт - там индексы цветов
@@ -4823,7 +4946,7 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 							}
 						}
 
-						//if (lbHilightFileLine && (nX >= con.mcr_FileLineStart.X) && (nX <= con.mcr_FileLineEnd.X))
+						//if (lbHilightFileLine && (nX >= con.etr.mcr_FileLineStart.X) && (nX <= con.etr.mcr_FileLineEnd.X))
 						//	lca.nFontIndex |= 4; // Отрисовать его как Underline
 
 						TODO("OPTIMIZE: lca = lcaTable[atr];");
@@ -4831,15 +4954,17 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 						//memmove(pcaDst, pnSrc, cbLineSize);
 					}
 
+					#if 0
 					if (lbHilightFileLine)
 					{
-						int nFrom = con.mcr_FileLineStart.X;
-						int nTo = min(con.mcr_FileLineEnd.X,(int)cnSrcLineLen);
+						int nFrom = con.etr.mcr_FileLineStart.X;
+						int nTo = min(con.etr.mcr_FileLineEnd.X,(int)cnSrcLineLen);
 						for (nX = nFrom; nX <= nTo; nX++)
 						{
 							pcaDst[nX].nFontIndex |= 4; // Отрисовать его как Underline
 						}
 					}
+					#endif
 				}
 
 				// Залить остаток (если запрошен больший участок, чем есть консоль
@@ -4887,6 +5012,18 @@ void CRealBuffer::GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, in
 
 	// Чтобы безопасно использовать строковые функции - гарантированно делаем ASCIIZ. Хотя pChars может и \0 содержать?
 	*pszDst = 0;
+
+	// Update hyperlinks and other underlines
+	if (lbAllowHilightFileLine && (con.etr.etrLast != etr_None))
+	{
+		etr.mcr_FileLineStart = BufferToScreen(con.etr.mcr_FileLineStart);
+		etr.mcr_FileLineEnd = BufferToScreen(con.etr.mcr_FileLineEnd);
+		etr.etrLast = con.etr.etrLast;
+	}
+	else
+	{
+		etr.etrLast = etr_None;
+	}
 
 	if (bDataValid)
 	{
@@ -5156,7 +5293,7 @@ void CRealBuffer::FindPanels()
 	BOOL bMayBePanels = FALSE;
 	BOOL lbNeedUpdateSizes = FALSE;
 	BOOL lbPanelsChanged = FALSE;
-	short nLastProgress = mp_RCon->mn_ConsoleProgress;
+	short nLastProgress = mp_RCon->m_Progress.ConsoleProgress;
 	short nNewProgress = -1;
 	/*
 	Имеем облом. При ресайзе панелей CtrlLeft/CtrlRight иногда сервер считывает
@@ -5446,10 +5583,10 @@ void CRealBuffer::FindPanels()
 		}
 	}
 
-	if (mp_RCon->mn_ConsoleProgress != nNewProgress || nLastProgress != nNewProgress)
+	if (mp_RCon->m_Progress.ConsoleProgress != nNewProgress || nLastProgress != nNewProgress)
 	{
 		// Запомнить, что получили из консоли
-		mp_RCon->mn_ConsoleProgress = nNewProgress;
+		mp_RCon->setConsoleProgress(nNewProgress);
 		// Показать прогресс в заголовке
 		mp_RCon->mb_ForceTitleChanged = TRUE;
 	}
@@ -6181,12 +6318,12 @@ wrap:
 
 void CRealBuffer::StoreLastTextRange(ExpandTextRangeType etr)
 {
-	if (con.etrLast != etr)
+	if (con.etr.etrLast != etr)
 	{
-		con.etrLast = etr;
+		con.etr.etrLast = etr;
 		//if (etr == etr_None)
 		//{
-		//	con.mcr_FileLineStart = con.mcr_FileLineEnd = MakeCoord(0,0);
+		//	con.etr.mcr_FileLineStart = con.etr.mcr_FileLineEnd = MakeCoord(0,0);
 		//}
 
 		if ((mp_RCon->mp_ABuf == this) && mp_RCon->isVisible())
@@ -6420,15 +6557,14 @@ short CRealBuffer::CheckProgressInConsole(const wchar_t* pszCurLine)
 
 	if (nProgress != -1)
 	{
-		mp_RCon->mn_LastConProgrTick = GetTickCount();
-		mp_RCon->mn_LastConsoleProgress = nProgress; // его обновляем всегда
+		mp_RCon->setLastConsoleProgress(nProgress, true); // его обновляем всегда
 	}
 	else
 	{
-		DWORD nDelta = GetTickCount() - mp_RCon->mn_LastConProgrTick;
+		DWORD nDelta = GetTickCount() - mp_RCon->m_Progress.LastConProgrTick;
 		if (nDelta < CONSOLEPROGRESSTIMEOUT) // Если таймаут предыдущего значения еще не наступил
-			nProgress = mp_RCon->mn_ConsoleProgress; // возъмем предыдущее значение
-		mp_RCon->mn_LastConsoleProgress = -1; // его обновляем всегда
+			nProgress = mp_RCon->m_Progress.ConsoleProgress; // возъмем предыдущее значение
+		mp_RCon->setLastConsoleProgress(-1, false); // его обновляем всегда
 	}
 
 	return nProgress;

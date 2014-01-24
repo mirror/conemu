@@ -1,6 +1,6 @@
 ﻿
 /*
-Copyright (c) 2009-2013 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -643,6 +643,7 @@ void CVirtualConsole::PointersInit()
 	PolyText = NULL;
 	pbLineChanged = pbBackIsPic = NULL;
 	pnBackRGB = NULL;
+	ZeroStruct(m_etr);
 }
 
 void CVirtualConsole::PointersFree()
@@ -665,6 +666,7 @@ void CVirtualConsole::PointersFree()
 	SafeFree(pbLineChanged);
 	SafeFree(pbBackIsPic);
 	SafeFree(pnBackRGB);
+	ZeroStruct(m_etr);
 	HEAPVAL;
 	mb_PointersAllocated = false;
 }
@@ -722,6 +724,7 @@ void CVirtualConsole::PointersZero()
 	ZeroMemory(pbBackIsPic, nMaxTextHeight*sizeof(*pbBackIsPic));
 	ZeroMemory(pnBackRGB, nMaxTextHeight*sizeof(*pnBackRGB));
 	HEAPVAL;
+	ZeroStruct(m_etr);
 }
 
 
@@ -1769,8 +1772,8 @@ bool CVirtualConsole::Update(bool abForce, HDC *ahDc)
 	// start timer before "Read Console Output*" calls, they do take time
 	//gpSetCls->Performance(tPerfRead, FALSE);
 	//if (gbNoDblBuffer) isForce = TRUE; // Debug, dblbuffer
-	isForeground = (gpConEmu->InQuakeAnimation() || gpConEmu->isMeForeground(false))
-		&& gpConEmu->isActive(this);
+	isForeground = (gpConEmu->InQuakeAnimation() || gpConEmu->isMeForeground(true))
+		&& gpConEmu->isActive(this, false);
 
 	if (isFade == isForeground && gpSet->isFadeInactive)
 		isForce = true;
@@ -2401,7 +2404,7 @@ bool CVirtualConsole::LoadConsoleData()
 		gpConEmu->DebugStep(L"mp_RCon->GetConsoleData");
 		#endif
 
-		mp_RCon->GetConsoleData(mpsz_ConChar, mpn_ConAttrEx, TextWidth, TextHeight); //TextLen*2);
+		mp_RCon->GetConsoleData(mpsz_ConChar, mpn_ConAttrEx, TextWidth, TextHeight, m_etr); //TextLen*2);
 
 		#ifdef SHOWDEBUGSTEPS
 		gpConEmu->DebugStep(NULL);
@@ -3921,6 +3924,20 @@ void CVirtualConsole::UpdateText()
 
 	free(nDX);
 
+	if (m_etr.etrLast != etr_None)
+	{
+		POINT ptStart = ConsoleToClient(m_etr.mcr_FileLineStart.X, m_etr.mcr_FileLineStart.Y);
+		_ASSERTE(m_etr.mcr_FileLineStart.Y == m_etr.mcr_FileLineEnd.Y); // May it extends to next line?
+		POINT ptEnd = ConsoleToClient(m_etr.mcr_FileLineEnd.X+1, m_etr.mcr_FileLineStart.Y);
+		// Height of "underline"?
+		int nHeight = nFontHeight / 10;
+		if (nHeight < 1) nHeight = 1;
+		// Just fill it (with color of the text?)
+		RECT rc = {ptStart.x, ptStart.y+nFontHeight, ptEnd.x, ptEnd.y+nFontHeight-nHeight};
+		PatInvertRect((HDC)m_DC, rc, (HDC)m_DC, true);
+		//FillRect((HDC)m_DC, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));
+	}
+
 	// Screen updated, reset until next "UpdateHighlights()" call
 	m_HighlightInfo.m_Last.X = m_HighlightInfo.m_Last.Y = -1;
 	ZeroStruct(m_HighlightInfo.mrc_LastRow);
@@ -3948,13 +3965,28 @@ HBRUSH CVirtualConsole::PartBrush(wchar_t ch, COLORREF nBackCol, COLORREF nForeC
 	//while (iter != m_PartBrushes.end()) {
 	PARTBRUSHES *pbr = m_PartBrushes;
 
-	for(UINT br=0; pbr->ch && br<MAX_COUNT_PART_BRUSHES; br++, pbr++)
+	for (UINT br=0; pbr->ch && br<MAX_COUNT_PART_BRUSHES; br++, pbr++)
 	{
 		if (pbr->ch == ch && pbr->nBackCol == nBackCol && pbr->nForeCol == nForeCol)
 		{
 			_ASSERTE(pbr->hBrush);
 			return pbr->hBrush;
 		}
+	}
+
+	if (pbr >= (m_PartBrushes + MAX_COUNT_PART_BRUSHES))
+	{
+		#ifdef _DEBUG
+		static bool bShown;
+		if (!bShown)
+		{
+			bShown = true;
+			_ASSERTE(FALSE && "Too much background brushes were created!");
+		}
+		#endif
+		pbr = &m_PartBrushes[MAX_COUNT_PART_BRUSHES-1];
+		DeleteObject(pbr->hBrush);
+		pbr->hBrush = NULL;
 	}
 
 	MYRGB clrBack, clrFore, clrMy;

@@ -573,6 +573,7 @@ class CConEmuMain :
 		UINT mn_MsgRequestRunProcess;
 		UINT mn_MsgDeleteVConMainThread;
 		UINT mn_MsgReqChangeCurPalette;
+		UINT mn_MsgMacroExecSync;
 
 		void SetRunQueueTimer(bool bSet, UINT uElapse);
 
@@ -711,6 +712,7 @@ class CConEmuMain :
 		void PostMacroFontSetName(wchar_t* pszFontName, WORD anHeight /*= 0*/, WORD anWidth /*= 0*/, BOOL abPosted);
 		void PostDisplayRConError(CRealConsole* apRCon, wchar_t* pszErrMsg);
 		void PostChangeCurPalette(LPCWSTR pszPalette, bool bChangeDropDown, bool abPosted);
+		LRESULT SyncExecMacro(WPARAM wParam, LPARAM lParam);
 		bool PtDiffTest(POINT C, int aX, int aY, UINT D); //(((abs(C.x-LOWORD(lParam)))<D) && ((abs(C.y-HIWORD(lParam)))<D))
 		void RecreateAction(RecreateActionParm aRecreate, BOOL abConfirm, BOOL abRunAs = FALSE);
 		int RecreateDlg(RConStartArgs* apArg);
@@ -800,7 +802,8 @@ class CConEmuMain :
 		LRESULT OnCreate(HWND hWnd, LPCREATESTRUCT lpCreate);
 		void OnDesktopMode();
 		LRESULT OnDestroy(HWND hWnd);
-		LRESULT OnFlashWindow(DWORD nFlags, DWORD nCount, HWND hCon);
+		LRESULT OnFlashWindow(WPARAM wParam, LPARAM lParam);
+		void DoFlashWindow(CESERVER_REQ_FLASHWINFO* pFlash, bool bFromMacro);
 		LRESULT OnFocus(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam, LPCWSTR asMsgFrom = NULL, BOOL abForceChild = FALSE);
 		LRESULT OnGetMinMaxInfo(LPMINMAXINFO pInfo);
 		void OnHideCaption();

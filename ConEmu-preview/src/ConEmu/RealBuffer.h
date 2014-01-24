@@ -1,7 +1,7 @@
 ﻿
 
 /*
-Copyright (c) 2009-2012 Maximus5
+Copyright (c) 2009-2014 Maximus5
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -111,8 +111,8 @@ public:
 	
 	COORD ScreenToBuffer(COORD crMouse);
 	COORD BufferToScreen(COORD crMouse, bool bVertOnly = false);
-	bool ProcessFarHyperlink(UINT messg, COORD crFrom);
-	bool ProcessFarHyperlink(UINT messg=WM_USER);
+	bool ProcessFarHyperlink(UINT messg, COORD crFrom, bool bUpdateScreen);
+	bool ProcessFarHyperlink(bool bUpdateScreen);
 	ExpandTextRangeType GetLastTextRangeType();
 	
 	void ShowKeyBarHint(WORD nID);
@@ -126,8 +126,10 @@ private:
 	bool OnMouseSelection(UINT messg, WPARAM wParam, int x, int y);
 	bool DoSelectionCopyInt(bool bCopyAll, bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2, BYTE nFormat = 0xFF /* use gpSet->isCTSHtmlFormat */);
 	int  GetSelectionCharCount(bool bStreamMode, int srSelection_X1, int srSelection_Y1, int srSelection_X2, int srSelection_Y2, int* pnSelWidth, int* pnSelHeight, int nNewLineLen);
+	bool PatchMouseCoords(int& x, int& y, COORD& crMouse);
 
 public:
+	void OnTimerCheckSelection();
 	void MarkFindText(int nDirection, LPCWSTR asText, bool abCaseSensitive, bool abWholeWords); // <<== CRealConsole::DoFindText
 	void StartSelection(BOOL abTextMode, SHORT anX=-1, SHORT anY=-1, BOOL abByMouse=FALSE, UINT anFromMsg=0, COORD *pcrTo=NULL);
 	void ExpandSelection(SHORT anX, SHORT anY);
@@ -149,7 +151,7 @@ public:
 	//BOOL IsConsoleDataChanged();
 	
 	BOOL GetConsoleLine(int nLine, wchar_t** pChar, /*CharAttr** pAttr,*/ int* pLen, MSectionLock* pcsData = NULL);
-	void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight);
+	void GetConsoleData(wchar_t* pChar, CharAttr* pAttr, int nWidth, int nHeight, ConEmuTextRange& etr);
 	
 	DWORD_PTR GetKeybLayout();
 	void  SetKeybLayout(DWORD_PTR anNewKeyboardLayout);
@@ -204,7 +206,7 @@ private:
 
 	void PrepareColorTable(bool bExtendFonts, CharAttr (&lcaTableExt)[0x100], CharAttr (&lcaTableOrg)[0x100], const Settings::AppSettings* pApp = NULL);
 
-	void ResetLastMousePos();
+	bool ResetLastMousePos();
 
 protected:
 	CRealConsole* mp_RCon;
@@ -215,6 +217,8 @@ protected:
 	CRgnDetect m_Rgn; DWORD mn_LastRgnFlags;
 
 	BOOL mb_BuferModeChangeLocked;
+
+	// Informational
 	COORD mcr_LastMousePos;
 
 	struct {
@@ -229,7 +233,7 @@ protected:
 	struct RConInfo
 	{
 		CONSOLE_SELECTION_INFO m_sel;
-		DWORD m_SelClickTick, m_SelDblClickTick;
+		DWORD m_SelClickTick, m_SelDblClickTick, m_SelLastScrollCheck;
 		CONSOLE_CURSOR_INFO m_ci;
 		DWORD m_dwConsoleCP, m_dwConsoleOutputCP, m_dwConsoleMode;
 		CONSOLE_SCREEN_BUFFER_INFO m_sbi;
@@ -239,7 +243,6 @@ protected:
 		BOOL bInGetConsoleData;
 		wchar_t *pConChar;
 		WORD  *pConAttr;
-		COORD mcr_FileLineStart, mcr_FileLineEnd; // Подсветка строк ошибок компиляторов
 		//CESERVER_REQ_CONINFO_DATA *pCopy, *pCmp;
 		CHAR_INFO *pDataCmp;
 		int nTextWidth, nTextHeight, nBufferHeight;
@@ -258,8 +261,8 @@ protected:
 		COORD crRClick4KeyBar;
 		POINT ptRClick4KeyBar;
 		int nRClickVK; // VK_F1..F12
-		// Последний etr...
-		ExpandTextRangeType etrLast;
+		// Последний etr... (подсветка URL's и строк-ошибок-компиляторов)
+		ConEmuTextRange etr; // etrLast, mcr_FileLineStart, mcr_FileLineEnd
 	} con;
 	
 protected:
